@@ -145,6 +145,20 @@ import { ConversationEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Environment"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Project"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

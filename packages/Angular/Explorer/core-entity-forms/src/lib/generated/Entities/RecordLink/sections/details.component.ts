@@ -76,6 +76,20 @@ import { RecordLinkEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SourceEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TargetEntity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

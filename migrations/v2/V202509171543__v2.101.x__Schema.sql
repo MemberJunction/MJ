@@ -15681,3 +15681,6585 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
   
             
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+----- ADDITIONAL CODE GEN RUN 
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '1ebff46f-9f99-4e18-aef0-c00d03fcd0b9'  OR 
+               (EntityID = 'DD6EE217-00EC-4DE8-A2E6-489A08D4E524' AND Name = 'Task')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '1ebff46f-9f99-4e18-aef0-c00d03fcd0b9',
+            'DD6EE217-00EC-4DE8-A2E6-489A08D4E524', -- Entity: MJ: Task Dependencies
+            100007,
+            'Task',
+            'Task',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '28044698-7e43-4afa-9676-195b01fb5c54'  OR 
+               (EntityID = 'DD6EE217-00EC-4DE8-A2E6-489A08D4E524' AND Name = 'DependsOnTask')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '28044698-7e43-4afa-9676-195b01fb5c54',
+            'DD6EE217-00EC-4DE8-A2E6-489A08D4E524', -- Entity: MJ: Task Dependencies
+            100008,
+            'DependsOnTask',
+            'Depends On Task',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'f88abac1-d93f-49aa-8b63-7a2bd6e5d89f'  OR 
+               (EntityID = 'FA0D11D1-4E8D-44D6-8C2B-55EEB3208E3E' AND Name = 'Environment')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'f88abac1-d93f-49aa-8b63-7a2bd6e5d89f',
+            'FA0D11D1-4E8D-44D6-8C2B-55EEB3208E3E', -- Entity: MJ: Collections
+            100011,
+            'Environment',
+            'Environment',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'a029cbb6-215a-41d3-9f9c-25a60abfcb5c'  OR 
+               (EntityID = 'FA0D11D1-4E8D-44D6-8C2B-55EEB3208E3E' AND Name = 'Parent')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'a029cbb6-215a-41d3-9f9c-25a60abfcb5c',
+            'FA0D11D1-4E8D-44D6-8C2B-55EEB3208E3E', -- Entity: MJ: Collections
+            100012,
+            'Parent',
+            'Parent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'f03adac0-929f-49b6-812d-27f2f534e683'  OR 
+               (EntityID = 'E26C7855-B778-44F4-A110-56EFEE4F843B' AND Name = 'SourceEntity')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'f03adac0-929f-49b6-812d-27f2f534e683',
+            'E26C7855-B778-44F4-A110-56EFEE4F843B', -- Entity: MJ: Record Links
+            100011,
+            'SourceEntity',
+            'Source Entity',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '9d1a4058-d5fe-4e24-a7aa-7dacf2d4617a'  OR 
+               (EntityID = 'E26C7855-B778-44F4-A110-56EFEE4F843B' AND Name = 'TargetEntity')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '9d1a4058-d5fe-4e24-a7aa-7dacf2d4617a',
+            'E26C7855-B778-44F4-A110-56EFEE4F843B', -- Entity: MJ: Record Links
+            100012,
+            'TargetEntity',
+            'Target Entity',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '9cfa9762-fc03-42be-bd66-4962092fe4a0'  OR 
+               (EntityID = '05248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Environment')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '9cfa9762-fc03-42be-bd66-4962092fe4a0',
+            '05248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Dashboards
+            100019,
+            'Environment',
+            'Environment',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '54d5f848-be9c-4b4a-8df0-b53e2ea196e5'  OR 
+               (EntityID = '09248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Environment')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '54d5f848-be9c-4b4a-8df0-b53e2ea196e5',
+            '09248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Reports
+            100029,
+            'Environment',
+            'Environment',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '49a2d31e-331d-42c6-ba30-c96eb5a1310f'  OR 
+               (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Environment')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '49a2d31e-331d-42c6-ba30-c96eb5a1310f',
+            '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Conversations
+            100020,
+            'Environment',
+            'Environment',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'fe95fc8e-8a64-48d1-aa72-2f141c9199a2'  OR 
+               (EntityID = '13248F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'Project')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'fe95fc8e-8a64-48d1-aa72-2f141c9199a2',
+            '13248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Conversations
+            100021,
+            'Project',
+            'Project',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'fcb86ae4-4752-4c46-a1da-70c27f91a886'  OR 
+               (EntityID = 'F6B17CA4-F2D6-47E7-9F97-7B3D1C183826' AND Name = 'Entity')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'fcb86ae4-4752-4c46-a1da-70c27f91a886',
+            'F6B17CA4-F2D6-47E7-9F97-7B3D1C183826', -- Entity: MJ: Access Control Rules
+            100015,
+            'Entity',
+            'Entity',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '71704f77-b166-4735-b664-0fb9aa3bc1e9'  OR 
+               (EntityID = 'F6B17CA4-F2D6-47E7-9F97-7B3D1C183826' AND Name = 'GrantedByUser')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '71704f77-b166-4735-b664-0fb9aa3bc1e9',
+            'F6B17CA4-F2D6-47E7-9F97-7B3D1C183826', -- Entity: MJ: Access Control Rules
+            100016,
+            'GrantedByUser',
+            'Granted By User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '315adb2b-dea1-4a69-87da-1d656f97ea47'  OR 
+               (EntityID = '6BAB48BD-F197-4737-93A6-8081BBBAEB30' AND Name = 'User')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '315adb2b-dea1-4a69-87da-1d656f97ea47',
+            '6BAB48BD-F197-4737-93A6-8081BBBAEB30', -- Entity: MJ: Public Links
+            100013,
+            'User',
+            'User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'af3f142b-783a-40d2-adeb-4d3ccf57fbb7'  OR 
+               (EntityID = 'F48D2341-8667-40BB-BCA8-87D7F80E16CD' AND Name = 'Environment')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'af3f142b-783a-40d2-adeb-4d3ccf57fbb7',
+            'F48D2341-8667-40BB-BCA8-87D7F80E16CD', -- Entity: MJ: Artifacts
+            100010,
+            'Environment',
+            'Environment',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '8d079601-557c-48b3-8338-cb83ee62215d'  OR 
+               (EntityID = 'F48D2341-8667-40BB-BCA8-87D7F80E16CD' AND Name = 'Type')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '8d079601-557c-48b3-8338-cb83ee62215d',
+            'F48D2341-8667-40BB-BCA8-87D7F80E16CD', -- Entity: MJ: Artifacts
+            100011,
+            'Type',
+            'Type',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '200390e3-d499-42c7-ac38-b7744a0c8e36'  OR 
+               (EntityID = 'F48D2341-8667-40BB-BCA8-87D7F80E16CD' AND Name = 'User')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '200390e3-d499-42c7-ac38-b7744a0c8e36',
+            'F48D2341-8667-40BB-BCA8-87D7F80E16CD', -- Entity: MJ: Artifacts
+            100012,
+            'User',
+            'User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '2344e41b-6f21-419a-b80f-43636478a814'  OR 
+               (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'Parent')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '2344e41b-6f21-419a-b80f-43636478a814',
+            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
+            100018,
+            'Parent',
+            'Parent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'e1e5f477-3abe-4793-bc11-a719cb078463'  OR 
+               (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'Type')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'e1e5f477-3abe-4793-bc11-a719cb078463',
+            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
+            100019,
+            'Type',
+            'Type',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '9a8aeaf5-9065-4b87-8a63-b04f84e83886'  OR 
+               (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'Environment')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '9a8aeaf5-9065-4b87-8a63-b04f84e83886',
+            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
+            100020,
+            'Environment',
+            'Environment',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '65abf2b8-3355-4427-828b-e3082806c557'  OR 
+               (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'Project')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '65abf2b8-3355-4427-828b-e3082806c557',
+            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
+            100021,
+            'Project',
+            'Project',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '1efad61d-3a38-4cea-86fe-67463e887920'  OR 
+               (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'User')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '1efad61d-3a38-4cea-86fe-67463e887920',
+            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
+            100022,
+            'User',
+            'User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'e7951b0e-3f0a-45da-bfc3-a4abb3ac5e0c'  OR 
+               (EntityID = '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1' AND Name = 'Agent')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'e7951b0e-3f0a-45da-bfc3-a4abb3ac5e0c',
+            '64AD3C8D-0570-48AF-AF4C-D0A2B173FDE1', -- Entity: MJ: Tasks
+            100023,
+            'Agent',
+            'Agent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '7706742b-2840-4e0f-94d7-eb60cd17940c'  OR 
+               (EntityID = 'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A' AND Name = 'Environment')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '7706742b-2840-4e0f-94d7-eb60cd17940c',
+            'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A', -- Entity: MJ: Projects
+            100011,
+            'Environment',
+            'Environment',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'b7451aee-bc19-45fc-a716-c470db9c8653'  OR 
+               (EntityID = 'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A' AND Name = 'Parent')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'b7451aee-bc19-45fc-a716-c470db9c8653',
+            'B7E7DBA2-C9C1-4536-B71C-D50CDFE7673A', -- Entity: MJ: Projects
+            100012,
+            'Parent',
+            'Parent',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'e1a69905-07e6-4852-aa41-9d4e610b0aae'  OR 
+               (EntityID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01' AND Name = 'Artifact')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'e1a69905-07e6-4852-aa41-9d4e610b0aae',
+            'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', -- Entity: MJ: Artifact Versions
+            100010,
+            'Artifact',
+            'Artifact',
+            NULL,
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '315df2ed-fc5c-4337-b346-fc91afe461cc'  OR 
+               (EntityID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01' AND Name = 'User')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '315df2ed-fc5c-4337-b346-fc91afe461cc',
+            'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', -- Entity: MJ: Artifact Versions
+            100011,
+            'User',
+            'User',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* Index for Foreign Keys for TaskDependency */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Task Dependencies
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key TaskID in table TaskDependency
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_TaskDependency_TaskID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TaskDependency]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_TaskDependency_TaskID ON [${flyway:defaultSchema}].[TaskDependency] ([TaskID]);
+
+-- Index for foreign key DependsOnTaskID in table TaskDependency
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_TaskDependency_DependsOnTaskID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[TaskDependency]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_TaskDependency_DependsOnTaskID ON [${flyway:defaultSchema}].[TaskDependency] ([DependsOnTaskID]);
+
+/* Index for Foreign Keys for Collection */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Collections
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key EnvironmentID in table Collection
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Collection_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Collection]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Collection_EnvironmentID ON [${flyway:defaultSchema}].[Collection] ([EnvironmentID]);
+
+-- Index for foreign key ParentID in table Collection
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Collection_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Collection]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Collection_ParentID ON [${flyway:defaultSchema}].[Collection] ([ParentID]);
+
+/* Index for Foreign Keys for RecordLink */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Record Links
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key SourceEntityID in table RecordLink
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_RecordLink_SourceEntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[RecordLink]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_RecordLink_SourceEntityID ON [${flyway:defaultSchema}].[RecordLink] ([SourceEntityID]);
+
+-- Index for foreign key TargetEntityID in table RecordLink
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_RecordLink_TargetEntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[RecordLink]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_RecordLink_TargetEntityID ON [${flyway:defaultSchema}].[RecordLink] ([TargetEntityID]);
+
+/* Base View SQL for MJ: Task Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Task Dependencies
+-- Item: vwTaskDependencies
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Task Dependencies
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  TaskDependency
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwTaskDependencies]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwTaskDependencies]
+AS
+SELECT
+    t.*,
+    Task_TaskID.[Name] AS [Task],
+    Task_DependsOnTaskID.[Name] AS [DependsOnTask]
+FROM
+    [${flyway:defaultSchema}].[TaskDependency] AS t
+INNER JOIN
+    [${flyway:defaultSchema}].[Task] AS Task_TaskID
+  ON
+    [t].[TaskID] = Task_TaskID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Task] AS Task_DependsOnTaskID
+  ON
+    [t].[DependsOnTaskID] = Task_DependsOnTaskID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTaskDependencies] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Task Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Task Dependencies
+-- Item: Permissions for vwTaskDependencies
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTaskDependencies] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Task Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Task Dependencies
+-- Item: spCreateTaskDependency
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR TaskDependency
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateTaskDependency]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateTaskDependency]
+    @ID uniqueidentifier = NULL,
+    @TaskID uniqueidentifier,
+    @DependsOnTaskID uniqueidentifier,
+    @DependencyType nvarchar(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[TaskDependency]
+            (
+                [ID],
+                [TaskID],
+                [DependsOnTaskID],
+                [DependencyType]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @TaskID,
+                @DependsOnTaskID,
+                @DependencyType
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[TaskDependency]
+            (
+                [TaskID],
+                [DependsOnTaskID],
+                [DependencyType]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @TaskID,
+                @DependsOnTaskID,
+                @DependencyType
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwTaskDependencies] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTaskDependency] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Task Dependencies */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTaskDependency] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Task Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Task Dependencies
+-- Item: spUpdateTaskDependency
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR TaskDependency
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateTaskDependency]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateTaskDependency]
+    @ID uniqueidentifier,
+    @TaskID uniqueidentifier,
+    @DependsOnTaskID uniqueidentifier,
+    @DependencyType nvarchar(50)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[TaskDependency]
+    SET
+        [TaskID] = @TaskID,
+        [DependsOnTaskID] = @DependsOnTaskID,
+        [DependencyType] = @DependencyType
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwTaskDependencies] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwTaskDependencies]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTaskDependency] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the TaskDependency table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateTaskDependency
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateTaskDependency
+ON [${flyway:defaultSchema}].[TaskDependency]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[TaskDependency]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[TaskDependency] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Task Dependencies */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTaskDependency] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Task Dependencies */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Task Dependencies
+-- Item: spDeleteTaskDependency
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR TaskDependency
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteTaskDependency]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteTaskDependency]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[TaskDependency]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTaskDependency] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Task Dependencies */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTaskDependency] TO [cdp_Integration]
+
+
+
+/* Base View SQL for MJ: Collections */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Collections
+-- Item: vwCollections
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Collections
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  Collection
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwCollections]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwCollections]
+AS
+SELECT
+    c.*,
+    Environment_EnvironmentID.[Name] AS [Environment],
+    Collection_ParentID.[Name] AS [Parent]
+FROM
+    [${flyway:defaultSchema}].[Collection] AS c
+INNER JOIN
+    [${flyway:defaultSchema}].[Environment] AS Environment_EnvironmentID
+  ON
+    [c].[EnvironmentID] = Environment_EnvironmentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Collection] AS Collection_ParentID
+  ON
+    [c].[ParentID] = Collection_ParentID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwCollections] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Collections */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Collections
+-- Item: Permissions for vwCollections
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwCollections] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Collections */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Collections
+-- Item: spCreateCollection
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR Collection
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateCollection]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateCollection]
+    @ID uniqueidentifier = NULL,
+    @EnvironmentID uniqueidentifier,
+    @ParentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Icon nvarchar(50),
+    @Color nvarchar(7),
+    @Sequence int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[Collection]
+            (
+                [ID],
+                [EnvironmentID],
+                [ParentID],
+                [Name],
+                [Description],
+                [Icon],
+                [Color],
+                [Sequence]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ParentID,
+                @Name,
+                @Description,
+                @Icon,
+                @Color,
+                @Sequence
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[Collection]
+            (
+                [EnvironmentID],
+                [ParentID],
+                [Name],
+                [Description],
+                [Icon],
+                [Color],
+                [Sequence]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ParentID,
+                @Name,
+                @Description,
+                @Icon,
+                @Color,
+                @Sequence
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwCollections] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateCollection] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Collections */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateCollection] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Collections */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Collections
+-- Item: spUpdateCollection
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR Collection
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateCollection]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateCollection]
+    @ID uniqueidentifier,
+    @EnvironmentID uniqueidentifier,
+    @ParentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Icon nvarchar(50),
+    @Color nvarchar(7),
+    @Sequence int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Collection]
+    SET
+        [EnvironmentID] = @EnvironmentID,
+        [ParentID] = @ParentID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [Icon] = @Icon,
+        [Color] = @Color,
+        [Sequence] = @Sequence
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwCollections] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwCollections]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateCollection] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Collection table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateCollection
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateCollection
+ON [${flyway:defaultSchema}].[Collection]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Collection]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[Collection] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Collections */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateCollection] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Collections */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Collections
+-- Item: spDeleteCollection
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR Collection
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteCollection]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteCollection]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[Collection]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteCollection] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Collections */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteCollection] TO [cdp_Integration]
+
+
+
+/* Base View SQL for MJ: Record Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Record Links
+-- Item: vwRecordLinks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Record Links
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  RecordLink
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwRecordLinks]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwRecordLinks]
+AS
+SELECT
+    r.*,
+    Entity_SourceEntityID.[Name] AS [SourceEntity],
+    Entity_TargetEntityID.[Name] AS [TargetEntity]
+FROM
+    [${flyway:defaultSchema}].[RecordLink] AS r
+INNER JOIN
+    [${flyway:defaultSchema}].[Entity] AS Entity_SourceEntityID
+  ON
+    [r].[SourceEntityID] = Entity_SourceEntityID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Entity] AS Entity_TargetEntityID
+  ON
+    [r].[TargetEntityID] = Entity_TargetEntityID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwRecordLinks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Record Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Record Links
+-- Item: Permissions for vwRecordLinks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwRecordLinks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Record Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Record Links
+-- Item: spCreateRecordLink
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR RecordLink
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateRecordLink]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateRecordLink]
+    @ID uniqueidentifier = NULL,
+    @SourceEntityID uniqueidentifier,
+    @SourceRecordID nvarchar(500),
+    @TargetEntityID uniqueidentifier,
+    @TargetRecordID nvarchar(500),
+    @LinkType nvarchar(50),
+    @Sequence int,
+    @Metadata nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[RecordLink]
+            (
+                [ID],
+                [SourceEntityID],
+                [SourceRecordID],
+                [TargetEntityID],
+                [TargetRecordID],
+                [LinkType],
+                [Sequence],
+                [Metadata]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @SourceEntityID,
+                @SourceRecordID,
+                @TargetEntityID,
+                @TargetRecordID,
+                @LinkType,
+                @Sequence,
+                @Metadata
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[RecordLink]
+            (
+                [SourceEntityID],
+                [SourceRecordID],
+                [TargetEntityID],
+                [TargetRecordID],
+                [LinkType],
+                [Sequence],
+                [Metadata]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @SourceEntityID,
+                @SourceRecordID,
+                @TargetEntityID,
+                @TargetRecordID,
+                @LinkType,
+                @Sequence,
+                @Metadata
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwRecordLinks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateRecordLink] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Record Links */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateRecordLink] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Record Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Record Links
+-- Item: spUpdateRecordLink
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR RecordLink
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateRecordLink]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateRecordLink]
+    @ID uniqueidentifier,
+    @SourceEntityID uniqueidentifier,
+    @SourceRecordID nvarchar(500),
+    @TargetEntityID uniqueidentifier,
+    @TargetRecordID nvarchar(500),
+    @LinkType nvarchar(50),
+    @Sequence int,
+    @Metadata nvarchar(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[RecordLink]
+    SET
+        [SourceEntityID] = @SourceEntityID,
+        [SourceRecordID] = @SourceRecordID,
+        [TargetEntityID] = @TargetEntityID,
+        [TargetRecordID] = @TargetRecordID,
+        [LinkType] = @LinkType,
+        [Sequence] = @Sequence,
+        [Metadata] = @Metadata
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwRecordLinks] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwRecordLinks]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateRecordLink] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the RecordLink table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateRecordLink
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateRecordLink
+ON [${flyway:defaultSchema}].[RecordLink]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[RecordLink]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[RecordLink] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Record Links */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateRecordLink] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Record Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Record Links
+-- Item: spDeleteRecordLink
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR RecordLink
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteRecordLink]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteRecordLink]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[RecordLink]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteRecordLink] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Record Links */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteRecordLink] TO [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for Dashboard */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Dashboards
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key UserID in table Dashboard
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Dashboard_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Dashboard]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Dashboard_UserID ON [${flyway:defaultSchema}].[Dashboard] ([UserID]);
+
+-- Index for foreign key CategoryID in table Dashboard
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Dashboard_CategoryID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Dashboard]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Dashboard_CategoryID ON [${flyway:defaultSchema}].[Dashboard] ([CategoryID]);
+
+-- Index for foreign key ApplicationID in table Dashboard
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Dashboard_ApplicationID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Dashboard]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Dashboard_ApplicationID ON [${flyway:defaultSchema}].[Dashboard] ([ApplicationID]);
+
+-- Index for foreign key EnvironmentID in table Dashboard
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Dashboard_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Dashboard]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Dashboard_EnvironmentID ON [${flyway:defaultSchema}].[Dashboard] ([EnvironmentID]);
+
+/* Base View SQL for Dashboards */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Dashboards
+-- Item: vwDashboards
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      Dashboards
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  Dashboard
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwDashboards]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwDashboards]
+AS
+SELECT
+    d.*,
+    User_UserID.[Name] AS [User],
+    DashboardCategory_CategoryID.[Name] AS [Category],
+    Application_ApplicationID.[Name] AS [Application],
+    Environment_EnvironmentID.[Name] AS [Environment]
+FROM
+    [${flyway:defaultSchema}].[Dashboard] AS d
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [d].[UserID] = User_UserID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[DashboardCategory] AS DashboardCategory_CategoryID
+  ON
+    [d].[CategoryID] = DashboardCategory_CategoryID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Application] AS Application_ApplicationID
+  ON
+    [d].[ApplicationID] = Application_ApplicationID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Environment] AS Environment_EnvironmentID
+  ON
+    [d].[EnvironmentID] = Environment_EnvironmentID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwDashboards] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+    
+
+/* Base View Permissions SQL for Dashboards */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Dashboards
+-- Item: Permissions for vwDashboards
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwDashboards] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+
+/* spCreate SQL for Dashboards */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Dashboards
+-- Item: spCreateDashboard
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR Dashboard
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateDashboard]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateDashboard]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @UserID uniqueidentifier,
+    @CategoryID uniqueidentifier,
+    @UIConfigDetails nvarchar(MAX),
+    @Type nvarchar(20),
+    @Thumbnail nvarchar(MAX),
+    @Scope nvarchar(20),
+    @ApplicationID uniqueidentifier,
+    @DriverClass nvarchar(255),
+    @Code nvarchar(255),
+    @EnvironmentID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[Dashboard]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [UserID],
+                [CategoryID],
+                [UIConfigDetails],
+                [Type],
+                [Thumbnail],
+                [Scope],
+                [ApplicationID],
+                [DriverClass],
+                [Code],
+                [EnvironmentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                @Description,
+                @UserID,
+                @CategoryID,
+                @UIConfigDetails,
+                @Type,
+                @Thumbnail,
+                @Scope,
+                @ApplicationID,
+                @DriverClass,
+                @Code,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[Dashboard]
+            (
+                [Name],
+                [Description],
+                [UserID],
+                [CategoryID],
+                [UIConfigDetails],
+                [Type],
+                [Thumbnail],
+                [Scope],
+                [ApplicationID],
+                [DriverClass],
+                [Code],
+                [EnvironmentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                @Description,
+                @UserID,
+                @CategoryID,
+                @UIConfigDetails,
+                @Type,
+                @Thumbnail,
+                @Scope,
+                @ApplicationID,
+                @DriverClass,
+                @Code,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwDashboards] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateDashboard] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+    
+
+/* spCreate Permissions for Dashboards */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateDashboard] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+
+
+
+/* spUpdate SQL for Dashboards */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Dashboards
+-- Item: spUpdateDashboard
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR Dashboard
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateDashboard]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateDashboard]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @UserID uniqueidentifier,
+    @CategoryID uniqueidentifier,
+    @UIConfigDetails nvarchar(MAX),
+    @Type nvarchar(20),
+    @Thumbnail nvarchar(MAX),
+    @Scope nvarchar(20),
+    @ApplicationID uniqueidentifier,
+    @DriverClass nvarchar(255),
+    @Code nvarchar(255),
+    @EnvironmentID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Dashboard]
+    SET
+        [Name] = @Name,
+        [Description] = @Description,
+        [UserID] = @UserID,
+        [CategoryID] = @CategoryID,
+        [UIConfigDetails] = @UIConfigDetails,
+        [Type] = @Type,
+        [Thumbnail] = @Thumbnail,
+        [Scope] = @Scope,
+        [ApplicationID] = @ApplicationID,
+        [DriverClass] = @DriverClass,
+        [Code] = @Code,
+        [EnvironmentID] = @EnvironmentID
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwDashboards] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwDashboards]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateDashboard] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Dashboard table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateDashboard
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateDashboard
+ON [${flyway:defaultSchema}].[Dashboard]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Dashboard]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[Dashboard] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for Dashboards */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateDashboard] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+
+
+
+/* spDelete SQL for Dashboards */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Dashboards
+-- Item: spDeleteDashboard
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR Dashboard
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteDashboard]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteDashboard]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[Dashboard]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDashboard] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+    
+
+/* spDelete Permissions for Dashboards */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteDashboard] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+
+
+
+/* Index for Foreign Keys for Report */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Reports
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key CategoryID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_CategoryID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_CategoryID ON [${flyway:defaultSchema}].[Report] ([CategoryID]);
+
+-- Index for foreign key UserID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_UserID ON [${flyway:defaultSchema}].[Report] ([UserID]);
+
+-- Index for foreign key ConversationID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_ConversationID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_ConversationID ON [${flyway:defaultSchema}].[Report] ([ConversationID]);
+
+-- Index for foreign key ConversationDetailID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_ConversationDetailID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_ConversationDetailID ON [${flyway:defaultSchema}].[Report] ([ConversationDetailID]);
+
+-- Index for foreign key DataContextID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_DataContextID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_DataContextID ON [${flyway:defaultSchema}].[Report] ([DataContextID]);
+
+-- Index for foreign key OutputTriggerTypeID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_OutputTriggerTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_OutputTriggerTypeID ON [${flyway:defaultSchema}].[Report] ([OutputTriggerTypeID]);
+
+-- Index for foreign key OutputFormatTypeID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_OutputFormatTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_OutputFormatTypeID ON [${flyway:defaultSchema}].[Report] ([OutputFormatTypeID]);
+
+-- Index for foreign key OutputDeliveryTypeID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_OutputDeliveryTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_OutputDeliveryTypeID ON [${flyway:defaultSchema}].[Report] ([OutputDeliveryTypeID]);
+
+-- Index for foreign key OutputWorkflowID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_OutputWorkflowID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_OutputWorkflowID ON [${flyway:defaultSchema}].[Report] ([OutputWorkflowID]);
+
+-- Index for foreign key EnvironmentID in table Report
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Report_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Report]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Report_EnvironmentID ON [${flyway:defaultSchema}].[Report] ([EnvironmentID]);
+
+/* Base View SQL for Reports */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Reports
+-- Item: vwReports
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      Reports
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  Report
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwReports]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwReports]
+AS
+SELECT
+    r.*,
+    ReportCategory_CategoryID.[Name] AS [Category],
+    User_UserID.[Name] AS [User],
+    Conversation_ConversationID.[Name] AS [Conversation],
+    DataContext_DataContextID.[Name] AS [DataContext],
+    OutputTriggerType_OutputTriggerTypeID.[Name] AS [OutputTriggerType],
+    OutputFormatType_OutputFormatTypeID.[Name] AS [OutputFormatType],
+    OutputDeliveryType_OutputDeliveryTypeID.[Name] AS [OutputDeliveryType],
+    Workflow_OutputWorkflowID.[Name] AS [OutputWorkflow],
+    Environment_EnvironmentID.[Name] AS [Environment]
+FROM
+    [${flyway:defaultSchema}].[Report] AS r
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[ReportCategory] AS ReportCategory_CategoryID
+  ON
+    [r].[CategoryID] = ReportCategory_CategoryID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [r].[UserID] = User_UserID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Conversation] AS Conversation_ConversationID
+  ON
+    [r].[ConversationID] = Conversation_ConversationID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[DataContext] AS DataContext_DataContextID
+  ON
+    [r].[DataContextID] = DataContext_DataContextID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[OutputTriggerType] AS OutputTriggerType_OutputTriggerTypeID
+  ON
+    [r].[OutputTriggerTypeID] = OutputTriggerType_OutputTriggerTypeID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[OutputFormatType] AS OutputFormatType_OutputFormatTypeID
+  ON
+    [r].[OutputFormatTypeID] = OutputFormatType_OutputFormatTypeID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[OutputDeliveryType] AS OutputDeliveryType_OutputDeliveryTypeID
+  ON
+    [r].[OutputDeliveryTypeID] = OutputDeliveryType_OutputDeliveryTypeID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Workflow] AS Workflow_OutputWorkflowID
+  ON
+    [r].[OutputWorkflowID] = Workflow_OutputWorkflowID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Environment] AS Environment_EnvironmentID
+  ON
+    [r].[EnvironmentID] = Environment_EnvironmentID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwReports] TO [cdp_Developer], [cdp_UI]
+    
+
+/* Base View Permissions SQL for Reports */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Reports
+-- Item: Permissions for vwReports
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwReports] TO [cdp_Developer], [cdp_UI]
+
+/* spCreate SQL for Reports */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Reports
+-- Item: spCreateReport
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR Report
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateReport]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateReport]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @CategoryID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @SharingScope nvarchar(20),
+    @ConversationID uniqueidentifier,
+    @ConversationDetailID uniqueidentifier,
+    @DataContextID uniqueidentifier,
+    @Configuration nvarchar(MAX),
+    @OutputTriggerTypeID uniqueidentifier,
+    @OutputFormatTypeID uniqueidentifier,
+    @OutputDeliveryTypeID uniqueidentifier,
+    @OutputFrequency nvarchar(50),
+    @OutputTargetEmail nvarchar(255),
+    @OutputWorkflowID uniqueidentifier,
+    @Thumbnail nvarchar(MAX),
+    @EnvironmentID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[Report]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [CategoryID],
+                [UserID],
+                [SharingScope],
+                [ConversationID],
+                [ConversationDetailID],
+                [DataContextID],
+                [Configuration],
+                [OutputTriggerTypeID],
+                [OutputFormatTypeID],
+                [OutputDeliveryTypeID],
+                [OutputFrequency],
+                [OutputTargetEmail],
+                [OutputWorkflowID],
+                [Thumbnail],
+                [EnvironmentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                @Description,
+                @CategoryID,
+                @UserID,
+                @SharingScope,
+                @ConversationID,
+                @ConversationDetailID,
+                @DataContextID,
+                @Configuration,
+                @OutputTriggerTypeID,
+                @OutputFormatTypeID,
+                @OutputDeliveryTypeID,
+                @OutputFrequency,
+                @OutputTargetEmail,
+                @OutputWorkflowID,
+                @Thumbnail,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[Report]
+            (
+                [Name],
+                [Description],
+                [CategoryID],
+                [UserID],
+                [SharingScope],
+                [ConversationID],
+                [ConversationDetailID],
+                [DataContextID],
+                [Configuration],
+                [OutputTriggerTypeID],
+                [OutputFormatTypeID],
+                [OutputDeliveryTypeID],
+                [OutputFrequency],
+                [OutputTargetEmail],
+                [OutputWorkflowID],
+                [Thumbnail],
+                [EnvironmentID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                @Description,
+                @CategoryID,
+                @UserID,
+                @SharingScope,
+                @ConversationID,
+                @ConversationDetailID,
+                @DataContextID,
+                @Configuration,
+                @OutputTriggerTypeID,
+                @OutputFormatTypeID,
+                @OutputDeliveryTypeID,
+                @OutputFrequency,
+                @OutputTargetEmail,
+                @OutputWorkflowID,
+                @Thumbnail,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwReports] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateReport] TO [cdp_Developer], [cdp_UI]
+    
+
+/* spCreate Permissions for Reports */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateReport] TO [cdp_Developer], [cdp_UI]
+
+
+
+/* spUpdate SQL for Reports */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Reports
+-- Item: spUpdateReport
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR Report
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateReport]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateReport]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @CategoryID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @SharingScope nvarchar(20),
+    @ConversationID uniqueidentifier,
+    @ConversationDetailID uniqueidentifier,
+    @DataContextID uniqueidentifier,
+    @Configuration nvarchar(MAX),
+    @OutputTriggerTypeID uniqueidentifier,
+    @OutputFormatTypeID uniqueidentifier,
+    @OutputDeliveryTypeID uniqueidentifier,
+    @OutputFrequency nvarchar(50),
+    @OutputTargetEmail nvarchar(255),
+    @OutputWorkflowID uniqueidentifier,
+    @Thumbnail nvarchar(MAX),
+    @EnvironmentID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Report]
+    SET
+        [Name] = @Name,
+        [Description] = @Description,
+        [CategoryID] = @CategoryID,
+        [UserID] = @UserID,
+        [SharingScope] = @SharingScope,
+        [ConversationID] = @ConversationID,
+        [ConversationDetailID] = @ConversationDetailID,
+        [DataContextID] = @DataContextID,
+        [Configuration] = @Configuration,
+        [OutputTriggerTypeID] = @OutputTriggerTypeID,
+        [OutputFormatTypeID] = @OutputFormatTypeID,
+        [OutputDeliveryTypeID] = @OutputDeliveryTypeID,
+        [OutputFrequency] = @OutputFrequency,
+        [OutputTargetEmail] = @OutputTargetEmail,
+        [OutputWorkflowID] = @OutputWorkflowID,
+        [Thumbnail] = @Thumbnail,
+        [EnvironmentID] = @EnvironmentID
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwReports] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwReports]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateReport] TO [cdp_Developer], [cdp_UI]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Report table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateReport
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateReport
+ON [${flyway:defaultSchema}].[Report]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Report]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[Report] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for Reports */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateReport] TO [cdp_Developer], [cdp_UI]
+
+
+
+/* spDelete SQL for Reports */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Reports
+-- Item: spDeleteReport
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR Report
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteReport]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteReport]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade delete from ReportSnapshot using cursor to call spDeleteReportSnapshot
+    DECLARE @ReportSnapshotsID uniqueidentifier
+    DECLARE cascade_delete_ReportSnapshots_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[ReportSnapshot]
+        WHERE [ReportID] = @ID
+    
+    OPEN cascade_delete_ReportSnapshots_cursor
+    FETCH NEXT FROM cascade_delete_ReportSnapshots_cursor INTO @ReportSnapshotsID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${flyway:defaultSchema}].[spDeleteReportSnapshot] @ID = @ReportSnapshotsID
+        
+        FETCH NEXT FROM cascade_delete_ReportSnapshots_cursor INTO @ReportSnapshotsID
+    END
+    
+    CLOSE cascade_delete_ReportSnapshots_cursor
+    DEALLOCATE cascade_delete_ReportSnapshots_cursor
+    
+    -- Cascade delete from ReportUserState using cursor to call spDeleteReportUserState
+    DECLARE @MJ_ReportUserStatesID uniqueidentifier
+    DECLARE cascade_delete_MJ_ReportUserStates_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[ReportUserState]
+        WHERE [ReportID] = @ID
+    
+    OPEN cascade_delete_MJ_ReportUserStates_cursor
+    FETCH NEXT FROM cascade_delete_MJ_ReportUserStates_cursor INTO @MJ_ReportUserStatesID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${flyway:defaultSchema}].[spDeleteReportUserState] @ID = @MJ_ReportUserStatesID
+        
+        FETCH NEXT FROM cascade_delete_MJ_ReportUserStates_cursor INTO @MJ_ReportUserStatesID
+    END
+    
+    CLOSE cascade_delete_MJ_ReportUserStates_cursor
+    DEALLOCATE cascade_delete_MJ_ReportUserStates_cursor
+    
+    -- Cascade delete from ReportVersion using cursor to call spDeleteReportVersion
+    DECLARE @MJ_ReportVersionsID uniqueidentifier
+    DECLARE cascade_delete_MJ_ReportVersions_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[ReportVersion]
+        WHERE [ReportID] = @ID
+    
+    OPEN cascade_delete_MJ_ReportVersions_cursor
+    FETCH NEXT FROM cascade_delete_MJ_ReportVersions_cursor INTO @MJ_ReportVersionsID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${flyway:defaultSchema}].[spDeleteReportVersion] @ID = @MJ_ReportVersionsID
+        
+        FETCH NEXT FROM cascade_delete_MJ_ReportVersions_cursor INTO @MJ_ReportVersionsID
+    END
+    
+    CLOSE cascade_delete_MJ_ReportVersions_cursor
+    DEALLOCATE cascade_delete_MJ_ReportVersions_cursor
+    
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[Report]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReport] TO [cdp_Developer], [cdp_UI]
+    
+
+/* spDelete Permissions for Reports */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteReport] TO [cdp_Developer], [cdp_UI]
+
+
+
+/* Index for Foreign Keys for AIModelVendor */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Model Vendors
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ModelID in table AIModelVendor
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelVendor_ModelID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelVendor]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelVendor_ModelID ON [${flyway:defaultSchema}].[AIModelVendor] ([ModelID]);
+
+-- Index for foreign key VendorID in table AIModelVendor
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelVendor_VendorID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelVendor]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelVendor_VendorID ON [${flyway:defaultSchema}].[AIModelVendor] ([VendorID]);
+
+-- Index for foreign key TypeID in table AIModelVendor
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIModelVendor_TypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIModelVendor]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIModelVendor_TypeID ON [${flyway:defaultSchema}].[AIModelVendor] ([TypeID]);
+
+/* Base View SQL for MJ: AI Model Vendors */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Model Vendors
+-- Item: vwAIModelVendors
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: AI Model Vendors
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AIModelVendor
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAIModelVendors]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAIModelVendors]
+AS
+SELECT
+    a.*,
+    AIModel_ModelID.[Name] AS [Model],
+    AIVendor_VendorID.[Name] AS [Vendor],
+    AIVendorTypeDefinition_TypeID.[Name] AS [Type]
+FROM
+    [${flyway:defaultSchema}].[AIModelVendor] AS a
+INNER JOIN
+    [${flyway:defaultSchema}].[AIModel] AS AIModel_ModelID
+  ON
+    [a].[ModelID] = AIModel_ModelID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[AIVendor] AS AIVendor_VendorID
+  ON
+    [a].[VendorID] = AIVendor_VendorID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[AIVendorTypeDefinition] AS AIVendorTypeDefinition_TypeID
+  ON
+    [a].[TypeID] = AIVendorTypeDefinition_TypeID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIModelVendors] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: AI Model Vendors */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Model Vendors
+-- Item: Permissions for vwAIModelVendors
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIModelVendors] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: AI Model Vendors */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Model Vendors
+-- Item: spCreateAIModelVendor
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIModelVendor
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIModelVendor]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIModelVendor]
+    @ID uniqueidentifier = NULL,
+    @ModelID uniqueidentifier,
+    @VendorID uniqueidentifier,
+    @Priority int,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(100),
+    @DriverImportPath nvarchar(255),
+    @APIName nvarchar(100),
+    @MaxInputTokens int,
+    @MaxOutputTokens int,
+    @SupportedResponseFormats nvarchar(100),
+    @SupportsEffortLevel bit,
+    @SupportsStreaming bit,
+    @TypeID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AIModelVendor]
+            (
+                [ID],
+                [ModelID],
+                [VendorID],
+                [Priority],
+                [Status],
+                [DriverClass],
+                [DriverImportPath],
+                [APIName],
+                [MaxInputTokens],
+                [MaxOutputTokens],
+                [SupportedResponseFormats],
+                [SupportsEffortLevel],
+                [SupportsStreaming],
+                [TypeID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @ModelID,
+                @VendorID,
+                @Priority,
+                @Status,
+                @DriverClass,
+                @DriverImportPath,
+                @APIName,
+                @MaxInputTokens,
+                @MaxOutputTokens,
+                @SupportedResponseFormats,
+                @SupportsEffortLevel,
+                @SupportsStreaming,
+                @TypeID
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AIModelVendor]
+            (
+                [ModelID],
+                [VendorID],
+                [Priority],
+                [Status],
+                [DriverClass],
+                [DriverImportPath],
+                [APIName],
+                [MaxInputTokens],
+                [MaxOutputTokens],
+                [SupportedResponseFormats],
+                [SupportsEffortLevel],
+                [SupportsStreaming],
+                [TypeID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ModelID,
+                @VendorID,
+                @Priority,
+                @Status,
+                @DriverClass,
+                @DriverImportPath,
+                @APIName,
+                @MaxInputTokens,
+                @MaxOutputTokens,
+                @SupportedResponseFormats,
+                @SupportsEffortLevel,
+                @SupportsStreaming,
+                @TypeID
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIModelVendors] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIModelVendor] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: AI Model Vendors */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIModelVendor] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: AI Model Vendors */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Model Vendors
+-- Item: spUpdateAIModelVendor
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIModelVendor
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAIModelVendor]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIModelVendor]
+    @ID uniqueidentifier,
+    @ModelID uniqueidentifier,
+    @VendorID uniqueidentifier,
+    @Priority int,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(100),
+    @DriverImportPath nvarchar(255),
+    @APIName nvarchar(100),
+    @MaxInputTokens int,
+    @MaxOutputTokens int,
+    @SupportedResponseFormats nvarchar(100),
+    @SupportsEffortLevel bit,
+    @SupportsStreaming bit,
+    @TypeID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIModelVendor]
+    SET
+        [ModelID] = @ModelID,
+        [VendorID] = @VendorID,
+        [Priority] = @Priority,
+        [Status] = @Status,
+        [DriverClass] = @DriverClass,
+        [DriverImportPath] = @DriverImportPath,
+        [APIName] = @APIName,
+        [MaxInputTokens] = @MaxInputTokens,
+        [MaxOutputTokens] = @MaxOutputTokens,
+        [SupportedResponseFormats] = @SupportedResponseFormats,
+        [SupportsEffortLevel] = @SupportsEffortLevel,
+        [SupportsStreaming] = @SupportsStreaming,
+        [TypeID] = @TypeID
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIModelVendors] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAIModelVendors]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIModelVendor] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIModelVendor table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIModelVendor
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIModelVendor
+ON [${flyway:defaultSchema}].[AIModelVendor]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIModelVendor]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AIModelVendor] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: AI Model Vendors */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIModelVendor] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: AI Model Vendors */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: AI Model Vendors
+-- Item: spDeleteAIModelVendor
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIModelVendor
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAIModelVendor]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIModelVendor]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIModelVendor]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelVendor] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: AI Model Vendors */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIModelVendor] TO [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for AccessControlRule */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Access Control Rules
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key EntityID in table AccessControlRule
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AccessControlRule_EntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AccessControlRule]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AccessControlRule_EntityID ON [${flyway:defaultSchema}].[AccessControlRule] ([EntityID]);
+
+-- Index for foreign key GrantedByUserID in table AccessControlRule
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AccessControlRule_GrantedByUserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AccessControlRule]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AccessControlRule_GrantedByUserID ON [${flyway:defaultSchema}].[AccessControlRule] ([GrantedByUserID]);
+
+/* Index for Foreign Keys for PublicLink */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Public Links
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key UserID in table PublicLink
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_PublicLink_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[PublicLink]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_PublicLink_UserID ON [${flyway:defaultSchema}].[PublicLink] ([UserID]);
+
+/* Base View SQL for MJ: Access Control Rules */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Access Control Rules
+-- Item: vwAccessControlRules
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Access Control Rules
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AccessControlRule
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAccessControlRules]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAccessControlRules]
+AS
+SELECT
+    a.*,
+    Entity_EntityID.[Name] AS [Entity],
+    User_GrantedByUserID.[Name] AS [GrantedByUser]
+FROM
+    [${flyway:defaultSchema}].[AccessControlRule] AS a
+INNER JOIN
+    [${flyway:defaultSchema}].[Entity] AS Entity_EntityID
+  ON
+    [a].[EntityID] = Entity_EntityID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_GrantedByUserID
+  ON
+    [a].[GrantedByUserID] = User_GrantedByUserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAccessControlRules] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Access Control Rules */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Access Control Rules
+-- Item: Permissions for vwAccessControlRules
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAccessControlRules] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Access Control Rules */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Access Control Rules
+-- Item: spCreateAccessControlRule
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AccessControlRule
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAccessControlRule]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAccessControlRule]
+    @ID uniqueidentifier = NULL,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(500),
+    @GranteeType nvarchar(50),
+    @GranteeID uniqueidentifier,
+    @CanRead bit,
+    @CanCreate bit,
+    @CanUpdate bit,
+    @CanDelete bit,
+    @CanShare bit,
+    @ExpiresAt datetimeoffset,
+    @GrantedByUserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AccessControlRule]
+            (
+                [ID],
+                [EntityID],
+                [RecordID],
+                [GranteeType],
+                [GranteeID],
+                [CanRead],
+                [CanCreate],
+                [CanUpdate],
+                [CanDelete],
+                [CanShare],
+                [ExpiresAt],
+                [GrantedByUserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @EntityID,
+                @RecordID,
+                @GranteeType,
+                @GranteeID,
+                @CanRead,
+                @CanCreate,
+                @CanUpdate,
+                @CanDelete,
+                @CanShare,
+                @ExpiresAt,
+                @GrantedByUserID
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AccessControlRule]
+            (
+                [EntityID],
+                [RecordID],
+                [GranteeType],
+                [GranteeID],
+                [CanRead],
+                [CanCreate],
+                [CanUpdate],
+                [CanDelete],
+                [CanShare],
+                [ExpiresAt],
+                [GrantedByUserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @EntityID,
+                @RecordID,
+                @GranteeType,
+                @GranteeID,
+                @CanRead,
+                @CanCreate,
+                @CanUpdate,
+                @CanDelete,
+                @CanShare,
+                @ExpiresAt,
+                @GrantedByUserID
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAccessControlRules] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAccessControlRule] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Access Control Rules */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAccessControlRule] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Access Control Rules */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Access Control Rules
+-- Item: spUpdateAccessControlRule
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AccessControlRule
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAccessControlRule]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAccessControlRule]
+    @ID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @RecordID nvarchar(500),
+    @GranteeType nvarchar(50),
+    @GranteeID uniqueidentifier,
+    @CanRead bit,
+    @CanCreate bit,
+    @CanUpdate bit,
+    @CanDelete bit,
+    @CanShare bit,
+    @ExpiresAt datetimeoffset,
+    @GrantedByUserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AccessControlRule]
+    SET
+        [EntityID] = @EntityID,
+        [RecordID] = @RecordID,
+        [GranteeType] = @GranteeType,
+        [GranteeID] = @GranteeID,
+        [CanRead] = @CanRead,
+        [CanCreate] = @CanCreate,
+        [CanUpdate] = @CanUpdate,
+        [CanDelete] = @CanDelete,
+        [CanShare] = @CanShare,
+        [ExpiresAt] = @ExpiresAt,
+        [GrantedByUserID] = @GrantedByUserID
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAccessControlRules] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAccessControlRules]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAccessControlRule] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AccessControlRule table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAccessControlRule
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAccessControlRule
+ON [${flyway:defaultSchema}].[AccessControlRule]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AccessControlRule]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AccessControlRule] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Access Control Rules */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAccessControlRule] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Access Control Rules */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Access Control Rules
+-- Item: spDeleteAccessControlRule
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AccessControlRule
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAccessControlRule]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAccessControlRule]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AccessControlRule]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAccessControlRule] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Access Control Rules */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAccessControlRule] TO [cdp_Integration]
+
+
+
+/* Base View SQL for MJ: Public Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Public Links
+-- Item: vwPublicLinks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Public Links
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  PublicLink
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwPublicLinks]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwPublicLinks]
+AS
+SELECT
+    p.*,
+    User_UserID.[Name] AS [User]
+FROM
+    [${flyway:defaultSchema}].[PublicLink] AS p
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [p].[UserID] = User_UserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwPublicLinks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Public Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Public Links
+-- Item: Permissions for vwPublicLinks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwPublicLinks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Public Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Public Links
+-- Item: spCreatePublicLink
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR PublicLink
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreatePublicLink]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreatePublicLink]
+    @ID uniqueidentifier = NULL,
+    @ResourceType nvarchar(50),
+    @ResourceID uniqueidentifier,
+    @Token nvarchar(255),
+    @PasswordHash nvarchar(255),
+    @ExpiresAt datetimeoffset,
+    @MaxViews int,
+    @CurrentViews int,
+    @UserID uniqueidentifier,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[PublicLink]
+            (
+                [ID],
+                [ResourceType],
+                [ResourceID],
+                [Token],
+                [PasswordHash],
+                [ExpiresAt],
+                [MaxViews],
+                [CurrentViews],
+                [UserID],
+                [IsActive]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @ResourceType,
+                @ResourceID,
+                @Token,
+                @PasswordHash,
+                @ExpiresAt,
+                @MaxViews,
+                @CurrentViews,
+                @UserID,
+                @IsActive
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[PublicLink]
+            (
+                [ResourceType],
+                [ResourceID],
+                [Token],
+                [PasswordHash],
+                [ExpiresAt],
+                [MaxViews],
+                [CurrentViews],
+                [UserID],
+                [IsActive]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ResourceType,
+                @ResourceID,
+                @Token,
+                @PasswordHash,
+                @ExpiresAt,
+                @MaxViews,
+                @CurrentViews,
+                @UserID,
+                @IsActive
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwPublicLinks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreatePublicLink] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Public Links */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreatePublicLink] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Public Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Public Links
+-- Item: spUpdatePublicLink
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR PublicLink
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdatePublicLink]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdatePublicLink]
+    @ID uniqueidentifier,
+    @ResourceType nvarchar(50),
+    @ResourceID uniqueidentifier,
+    @Token nvarchar(255),
+    @PasswordHash nvarchar(255),
+    @ExpiresAt datetimeoffset,
+    @MaxViews int,
+    @CurrentViews int,
+    @UserID uniqueidentifier,
+    @IsActive bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[PublicLink]
+    SET
+        [ResourceType] = @ResourceType,
+        [ResourceID] = @ResourceID,
+        [Token] = @Token,
+        [PasswordHash] = @PasswordHash,
+        [ExpiresAt] = @ExpiresAt,
+        [MaxViews] = @MaxViews,
+        [CurrentViews] = @CurrentViews,
+        [UserID] = @UserID,
+        [IsActive] = @IsActive
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwPublicLinks] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwPublicLinks]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdatePublicLink] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the PublicLink table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdatePublicLink
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdatePublicLink
+ON [${flyway:defaultSchema}].[PublicLink]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[PublicLink]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[PublicLink] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Public Links */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdatePublicLink] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Public Links */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Public Links
+-- Item: spDeletePublicLink
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR PublicLink
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeletePublicLink]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeletePublicLink]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[PublicLink]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeletePublicLink] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Public Links */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeletePublicLink] TO [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for Artifact */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifacts
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key EnvironmentID in table Artifact
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Artifact_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Artifact]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Artifact_EnvironmentID ON [${flyway:defaultSchema}].[Artifact] ([EnvironmentID]);
+
+-- Index for foreign key TypeID in table Artifact
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Artifact_TypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Artifact]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Artifact_TypeID ON [${flyway:defaultSchema}].[Artifact] ([TypeID]);
+
+-- Index for foreign key UserID in table Artifact
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Artifact_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Artifact]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Artifact_UserID ON [${flyway:defaultSchema}].[Artifact] ([UserID]);
+
+/* Base View SQL for MJ: Artifacts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifacts
+-- Item: vwArtifacts
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Artifacts
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  Artifact
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwArtifacts]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwArtifacts]
+AS
+SELECT
+    a.*,
+    Environment_EnvironmentID.[Name] AS [Environment],
+    ArtifactType_TypeID.[Name] AS [Type],
+    User_UserID.[Name] AS [User]
+FROM
+    [${flyway:defaultSchema}].[Artifact] AS a
+INNER JOIN
+    [${flyway:defaultSchema}].[Environment] AS Environment_EnvironmentID
+  ON
+    [a].[EnvironmentID] = Environment_EnvironmentID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[ArtifactType] AS ArtifactType_TypeID
+  ON
+    [a].[TypeID] = ArtifactType_TypeID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [a].[UserID] = User_UserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwArtifacts] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Artifacts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifacts
+-- Item: Permissions for vwArtifacts
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwArtifacts] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Artifacts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifacts
+-- Item: spCreateArtifact
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR Artifact
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateArtifact]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateArtifact]
+    @ID uniqueidentifier = NULL,
+    @EnvironmentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @TypeID uniqueidentifier,
+    @Comments nvarchar(MAX),
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[Artifact]
+            (
+                [ID],
+                [EnvironmentID],
+                [Name],
+                [Description],
+                [TypeID],
+                [Comments],
+                [UserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @Name,
+                @Description,
+                @TypeID,
+                @Comments,
+                @UserID
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[Artifact]
+            (
+                [EnvironmentID],
+                [Name],
+                [Description],
+                [TypeID],
+                [Comments],
+                [UserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @Name,
+                @Description,
+                @TypeID,
+                @Comments,
+                @UserID
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwArtifacts] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifact] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Artifacts */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifact] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Artifacts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifacts
+-- Item: spUpdateArtifact
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR Artifact
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateArtifact]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifact]
+    @ID uniqueidentifier,
+    @EnvironmentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @TypeID uniqueidentifier,
+    @Comments nvarchar(MAX),
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Artifact]
+    SET
+        [EnvironmentID] = @EnvironmentID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [TypeID] = @TypeID,
+        [Comments] = @Comments,
+        [UserID] = @UserID
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwArtifacts] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwArtifacts]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifact] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Artifact table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateArtifact
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateArtifact
+ON [${flyway:defaultSchema}].[Artifact]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Artifact]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[Artifact] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Artifacts */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifact] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Artifacts */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifacts
+-- Item: spDeleteArtifact
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR Artifact
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteArtifact]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteArtifact]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[Artifact]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Artifacts */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifact] TO [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for Task */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tasks
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ParentID in table Task
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Task_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Task]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Task_ParentID ON [${flyway:defaultSchema}].[Task] ([ParentID]);
+
+-- Index for foreign key TypeID in table Task
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Task_TypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Task]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Task_TypeID ON [${flyway:defaultSchema}].[Task] ([TypeID]);
+
+-- Index for foreign key EnvironmentID in table Task
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Task_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Task]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Task_EnvironmentID ON [${flyway:defaultSchema}].[Task] ([EnvironmentID]);
+
+-- Index for foreign key ProjectID in table Task
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Task_ProjectID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Task]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Task_ProjectID ON [${flyway:defaultSchema}].[Task] ([ProjectID]);
+
+-- Index for foreign key ConversationDetailID in table Task
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Task_ConversationDetailID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Task]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Task_ConversationDetailID ON [${flyway:defaultSchema}].[Task] ([ConversationDetailID]);
+
+-- Index for foreign key UserID in table Task
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Task_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Task]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Task_UserID ON [${flyway:defaultSchema}].[Task] ([UserID]);
+
+-- Index for foreign key AgentID in table Task
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Task_AgentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Task]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Task_AgentID ON [${flyway:defaultSchema}].[Task] ([AgentID]);
+
+/* Index for Foreign Keys for Project */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Projects
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key EnvironmentID in table Project
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Project_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Project]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Project_EnvironmentID ON [${flyway:defaultSchema}].[Project] ([EnvironmentID]);
+
+-- Index for foreign key ParentID in table Project
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Project_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Project]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Project_ParentID ON [${flyway:defaultSchema}].[Project] ([ParentID]);
+
+/* Base View SQL for MJ: Tasks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tasks
+-- Item: vwTasks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Tasks
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  Task
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwTasks]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwTasks]
+AS
+SELECT
+    t.*,
+    Task_ParentID.[Name] AS [Parent],
+    TaskType_TypeID.[Name] AS [Type],
+    Environment_EnvironmentID.[Name] AS [Environment],
+    Project_ProjectID.[Name] AS [Project],
+    User_UserID.[Name] AS [User],
+    AIAgent_AgentID.[Name] AS [Agent]
+FROM
+    [${flyway:defaultSchema}].[Task] AS t
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Task] AS Task_ParentID
+  ON
+    [t].[ParentID] = Task_ParentID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[TaskType] AS TaskType_TypeID
+  ON
+    [t].[TypeID] = TaskType_TypeID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Environment] AS Environment_EnvironmentID
+  ON
+    [t].[EnvironmentID] = Environment_EnvironmentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Project] AS Project_ProjectID
+  ON
+    [t].[ProjectID] = Project_ProjectID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [t].[UserID] = User_UserID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS AIAgent_AgentID
+  ON
+    [t].[AgentID] = AIAgent_AgentID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTasks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Tasks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tasks
+-- Item: Permissions for vwTasks
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwTasks] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Tasks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tasks
+-- Item: spCreateTask
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR Task
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateTask]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateTask]
+    @ID uniqueidentifier = NULL,
+    @ParentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @TypeID uniqueidentifier,
+    @EnvironmentID uniqueidentifier,
+    @ProjectID uniqueidentifier,
+    @ConversationDetailID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @AgentID uniqueidentifier,
+    @Status nvarchar(50),
+    @PercentComplete int,
+    @DueAt datetimeoffset,
+    @StartedAt datetimeoffset,
+    @CompletedAt datetimeoffset
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[Task]
+            (
+                [ID],
+                [ParentID],
+                [Name],
+                [Description],
+                [TypeID],
+                [EnvironmentID],
+                [ProjectID],
+                [ConversationDetailID],
+                [UserID],
+                [AgentID],
+                [Status],
+                [PercentComplete],
+                [DueAt],
+                [StartedAt],
+                [CompletedAt]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @ParentID,
+                @Name,
+                @Description,
+                @TypeID,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ProjectID,
+                @ConversationDetailID,
+                @UserID,
+                @AgentID,
+                @Status,
+                @PercentComplete,
+                @DueAt,
+                @StartedAt,
+                @CompletedAt
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[Task]
+            (
+                [ParentID],
+                [Name],
+                [Description],
+                [TypeID],
+                [EnvironmentID],
+                [ProjectID],
+                [ConversationDetailID],
+                [UserID],
+                [AgentID],
+                [Status],
+                [PercentComplete],
+                [DueAt],
+                [StartedAt],
+                [CompletedAt]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ParentID,
+                @Name,
+                @Description,
+                @TypeID,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ProjectID,
+                @ConversationDetailID,
+                @UserID,
+                @AgentID,
+                @Status,
+                @PercentComplete,
+                @DueAt,
+                @StartedAt,
+                @CompletedAt
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwTasks] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTask] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Tasks */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateTask] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Tasks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tasks
+-- Item: spUpdateTask
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR Task
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateTask]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateTask]
+    @ID uniqueidentifier,
+    @ParentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @TypeID uniqueidentifier,
+    @EnvironmentID uniqueidentifier,
+    @ProjectID uniqueidentifier,
+    @ConversationDetailID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @AgentID uniqueidentifier,
+    @Status nvarchar(50),
+    @PercentComplete int,
+    @DueAt datetimeoffset,
+    @StartedAt datetimeoffset,
+    @CompletedAt datetimeoffset
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Task]
+    SET
+        [ParentID] = @ParentID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [TypeID] = @TypeID,
+        [EnvironmentID] = @EnvironmentID,
+        [ProjectID] = @ProjectID,
+        [ConversationDetailID] = @ConversationDetailID,
+        [UserID] = @UserID,
+        [AgentID] = @AgentID,
+        [Status] = @Status,
+        [PercentComplete] = @PercentComplete,
+        [DueAt] = @DueAt,
+        [StartedAt] = @StartedAt,
+        [CompletedAt] = @CompletedAt
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwTasks] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwTasks]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTask] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Task table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateTask
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateTask
+ON [${flyway:defaultSchema}].[Task]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Task]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[Task] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Tasks */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateTask] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Tasks */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Tasks
+-- Item: spDeleteTask
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR Task
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteTask]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteTask]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[Task]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTask] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Tasks */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteTask] TO [cdp_Integration]
+
+
+
+/* Base View SQL for MJ: Projects */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Projects
+-- Item: vwProjects
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Projects
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  Project
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwProjects]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwProjects]
+AS
+SELECT
+    p.*,
+    Environment_EnvironmentID.[Name] AS [Environment],
+    Project_ParentID.[Name] AS [Parent]
+FROM
+    [${flyway:defaultSchema}].[Project] AS p
+INNER JOIN
+    [${flyway:defaultSchema}].[Environment] AS Environment_EnvironmentID
+  ON
+    [p].[EnvironmentID] = Environment_EnvironmentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Project] AS Project_ParentID
+  ON
+    [p].[ParentID] = Project_ParentID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwProjects] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Projects */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Projects
+-- Item: Permissions for vwProjects
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwProjects] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Projects */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Projects
+-- Item: spCreateProject
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR Project
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateProject]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateProject]
+    @ID uniqueidentifier = NULL,
+    @EnvironmentID uniqueidentifier,
+    @ParentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Color nvarchar(7),
+    @Icon nvarchar(50),
+    @IsArchived bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[Project]
+            (
+                [ID],
+                [EnvironmentID],
+                [ParentID],
+                [Name],
+                [Description],
+                [Color],
+                [Icon],
+                [IsArchived]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ParentID,
+                @Name,
+                @Description,
+                @Color,
+                @Icon,
+                @IsArchived
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[Project]
+            (
+                [EnvironmentID],
+                [ParentID],
+                [Name],
+                [Description],
+                [Color],
+                [Icon],
+                [IsArchived]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ParentID,
+                @Name,
+                @Description,
+                @Color,
+                @Icon,
+                @IsArchived
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwProjects] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateProject] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Projects */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateProject] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Projects */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Projects
+-- Item: spUpdateProject
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR Project
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateProject]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateProject]
+    @ID uniqueidentifier,
+    @EnvironmentID uniqueidentifier,
+    @ParentID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Color nvarchar(7),
+    @Icon nvarchar(50),
+    @IsArchived bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Project]
+    SET
+        [EnvironmentID] = @EnvironmentID,
+        [ParentID] = @ParentID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [Color] = @Color,
+        [Icon] = @Icon,
+        [IsArchived] = @IsArchived
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwProjects] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwProjects]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateProject] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Project table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateProject
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateProject
+ON [${flyway:defaultSchema}].[Project]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Project]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[Project] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Projects */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateProject] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Projects */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Projects
+-- Item: spDeleteProject
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR Project
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteProject]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteProject]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[Project]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteProject] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Projects */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteProject] TO [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for ArtifactVersion */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Versions
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ArtifactID in table ArtifactVersion
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ArtifactVersion_ArtifactID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ArtifactVersion]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ArtifactVersion_ArtifactID ON [${flyway:defaultSchema}].[ArtifactVersion] ([ArtifactID]);
+
+-- Index for foreign key UserID in table ArtifactVersion
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_ArtifactVersion_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ArtifactVersion]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_ArtifactVersion_UserID ON [${flyway:defaultSchema}].[ArtifactVersion] ([UserID]);
+
+/* Base View SQL for MJ: Artifact Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Versions
+-- Item: vwArtifactVersions
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      MJ: Artifact Versions
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  ArtifactVersion
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwArtifactVersions]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwArtifactVersions]
+AS
+SELECT
+    a.*,
+    Artifact_ArtifactID.[Name] AS [Artifact],
+    User_UserID.[Name] AS [User]
+FROM
+    [${flyway:defaultSchema}].[ArtifactVersion] AS a
+INNER JOIN
+    [${flyway:defaultSchema}].[Artifact] AS Artifact_ArtifactID
+  ON
+    [a].[ArtifactID] = Artifact_ArtifactID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [a].[UserID] = User_UserID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwArtifactVersions] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for MJ: Artifact Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Versions
+-- Item: Permissions for vwArtifactVersions
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwArtifactVersions] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for MJ: Artifact Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Versions
+-- Item: spCreateArtifactVersion
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR ArtifactVersion
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateArtifactVersion]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateArtifactVersion]
+    @ID uniqueidentifier = NULL,
+    @ArtifactID uniqueidentifier,
+    @VersionNumber int,
+    @Content nvarchar(MAX),
+    @Configuration nvarchar(MAX),
+    @Comments nvarchar(MAX),
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[ArtifactVersion]
+            (
+                [ID],
+                [ArtifactID],
+                [VersionNumber],
+                [Content],
+                [Configuration],
+                [Comments],
+                [UserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @ArtifactID,
+                @VersionNumber,
+                @Content,
+                @Configuration,
+                @Comments,
+                @UserID
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[ArtifactVersion]
+            (
+                [ArtifactID],
+                [VersionNumber],
+                [Content],
+                [Configuration],
+                [Comments],
+                [UserID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ArtifactID,
+                @VersionNumber,
+                @Content,
+                @Configuration,
+                @Comments,
+                @UserID
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwArtifactVersions] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactVersion] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for MJ: Artifact Versions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateArtifactVersion] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for MJ: Artifact Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Versions
+-- Item: spUpdateArtifactVersion
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR ArtifactVersion
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateArtifactVersion]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateArtifactVersion]
+    @ID uniqueidentifier,
+    @ArtifactID uniqueidentifier,
+    @VersionNumber int,
+    @Content nvarchar(MAX),
+    @Configuration nvarchar(MAX),
+    @Comments nvarchar(MAX),
+    @UserID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ArtifactVersion]
+    SET
+        [ArtifactID] = @ArtifactID,
+        [VersionNumber] = @VersionNumber,
+        [Content] = @Content,
+        [Configuration] = @Configuration,
+        [Comments] = @Comments,
+        [UserID] = @UserID
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwArtifactVersions] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwArtifactVersions]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactVersion] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the ArtifactVersion table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateArtifactVersion
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateArtifactVersion
+ON [${flyway:defaultSchema}].[ArtifactVersion]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[ArtifactVersion]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[ArtifactVersion] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for MJ: Artifact Versions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateArtifactVersion] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for MJ: Artifact Versions */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: MJ: Artifact Versions
+-- Item: spDeleteArtifactVersion
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ArtifactVersion
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteArtifactVersion]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteArtifactVersion]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ArtifactVersion]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactVersion] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for MJ: Artifact Versions */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteArtifactVersion] TO [cdp_Integration]
+
+
+
+/* spDelete SQL for Conversation Details */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Conversation Details
+-- Item: spDeleteConversationDetail
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR ConversationDetail
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteConversationDetail]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteConversationDetail]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade update on AIAgentRun using cursor to call spUpdateAIAgentRun
+    DECLARE @MJ_AIAgentRunsID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_AgentID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_ParentRunID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_Status nvarchar(50)
+    DECLARE @MJ_AIAgentRuns_StartedAt datetimeoffset
+    DECLARE @MJ_AIAgentRuns_CompletedAt datetimeoffset
+    DECLARE @MJ_AIAgentRuns_Success bit
+    DECLARE @MJ_AIAgentRuns_ErrorMessage nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_ConversationID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_UserID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_Result nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_AgentState nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_TotalTokensUsed int
+    DECLARE @MJ_AIAgentRuns_TotalCost decimal(18, 6)
+    DECLARE @MJ_AIAgentRuns_TotalPromptTokensUsed int
+    DECLARE @MJ_AIAgentRuns_TotalCompletionTokensUsed int
+    DECLARE @MJ_AIAgentRuns_TotalTokensUsedRollup int
+    DECLARE @MJ_AIAgentRuns_TotalPromptTokensUsedRollup int
+    DECLARE @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup int
+    DECLARE @MJ_AIAgentRuns_TotalCostRollup decimal(19, 8)
+    DECLARE @MJ_AIAgentRuns_ConversationDetailID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_ConversationDetailSequence int
+    DECLARE @MJ_AIAgentRuns_CancellationReason nvarchar(30)
+    DECLARE @MJ_AIAgentRuns_FinalStep nvarchar(30)
+    DECLARE @MJ_AIAgentRuns_FinalPayload nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_Message nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_LastRunID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_StartingPayload nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_TotalPromptIterations int
+    DECLARE @MJ_AIAgentRuns_ConfigurationID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_OverrideModelID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_OverrideVendorID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_Data nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_Verbose bit
+    DECLARE @MJ_AIAgentRuns_EffortLevel int
+    DECLARE @MJ_AIAgentRuns_RunName nvarchar(255)
+    DECLARE @MJ_AIAgentRuns_Comments nvarchar(MAX)
+    DECLARE cascade_update_MJ_AIAgentRuns_cursor CURSOR FOR 
+        SELECT [ID], [AgentID], [ParentRunID], [Status], [StartedAt], [CompletedAt], [Success], [ErrorMessage], [ConversationID], [UserID], [Result], [AgentState], [TotalTokensUsed], [TotalCost], [TotalPromptTokensUsed], [TotalCompletionTokensUsed], [TotalTokensUsedRollup], [TotalPromptTokensUsedRollup], [TotalCompletionTokensUsedRollup], [TotalCostRollup], [ConversationDetailID], [ConversationDetailSequence], [CancellationReason], [FinalStep], [FinalPayload], [Message], [LastRunID], [StartingPayload], [TotalPromptIterations], [ConfigurationID], [OverrideModelID], [OverrideVendorID], [Data], [Verbose], [EffortLevel], [RunName], [Comments]
+        FROM [${flyway:defaultSchema}].[AIAgentRun]
+        WHERE [ConversationDetailID] = @ID
+    
+    OPEN cascade_update_MJ_AIAgentRuns_cursor
+    FETCH NEXT FROM cascade_update_MJ_AIAgentRuns_cursor INTO @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations, @MJ_AIAgentRuns_ConfigurationID, @MJ_AIAgentRuns_OverrideModelID, @MJ_AIAgentRuns_OverrideVendorID, @MJ_AIAgentRuns_Data, @MJ_AIAgentRuns_Verbose, @MJ_AIAgentRuns_EffortLevel, @MJ_AIAgentRuns_RunName, @MJ_AIAgentRuns_Comments
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJ_AIAgentRuns_ConversationDetailID = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentRun] @ID = @MJ_AIAgentRunsID, @AgentID = @MJ_AIAgentRuns_AgentID, @ParentRunID = @MJ_AIAgentRuns_ParentRunID, @Status = @MJ_AIAgentRuns_Status, @StartedAt = @MJ_AIAgentRuns_StartedAt, @CompletedAt = @MJ_AIAgentRuns_CompletedAt, @Success = @MJ_AIAgentRuns_Success, @ErrorMessage = @MJ_AIAgentRuns_ErrorMessage, @ConversationID = @MJ_AIAgentRuns_ConversationID, @UserID = @MJ_AIAgentRuns_UserID, @Result = @MJ_AIAgentRuns_Result, @AgentState = @MJ_AIAgentRuns_AgentState, @TotalTokensUsed = @MJ_AIAgentRuns_TotalTokensUsed, @TotalCost = @MJ_AIAgentRuns_TotalCost, @TotalPromptTokensUsed = @MJ_AIAgentRuns_TotalPromptTokensUsed, @TotalCompletionTokensUsed = @MJ_AIAgentRuns_TotalCompletionTokensUsed, @TotalTokensUsedRollup = @MJ_AIAgentRuns_TotalTokensUsedRollup, @TotalPromptTokensUsedRollup = @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @TotalCompletionTokensUsedRollup = @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @TotalCostRollup = @MJ_AIAgentRuns_TotalCostRollup, @ConversationDetailID = @MJ_AIAgentRuns_ConversationDetailID, @ConversationDetailSequence = @MJ_AIAgentRuns_ConversationDetailSequence, @CancellationReason = @MJ_AIAgentRuns_CancellationReason, @FinalStep = @MJ_AIAgentRuns_FinalStep, @FinalPayload = @MJ_AIAgentRuns_FinalPayload, @Message = @MJ_AIAgentRuns_Message, @LastRunID = @MJ_AIAgentRuns_LastRunID, @StartingPayload = @MJ_AIAgentRuns_StartingPayload, @TotalPromptIterations = @MJ_AIAgentRuns_TotalPromptIterations, @ConfigurationID = @MJ_AIAgentRuns_ConfigurationID, @OverrideModelID = @MJ_AIAgentRuns_OverrideModelID, @OverrideVendorID = @MJ_AIAgentRuns_OverrideVendorID, @Data = @MJ_AIAgentRuns_Data, @Verbose = @MJ_AIAgentRuns_Verbose, @EffortLevel = @MJ_AIAgentRuns_EffortLevel, @RunName = @MJ_AIAgentRuns_RunName, @Comments = @MJ_AIAgentRuns_Comments
+        
+        FETCH NEXT FROM cascade_update_MJ_AIAgentRuns_cursor INTO @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations, @MJ_AIAgentRuns_ConfigurationID, @MJ_AIAgentRuns_OverrideModelID, @MJ_AIAgentRuns_OverrideVendorID, @MJ_AIAgentRuns_Data, @MJ_AIAgentRuns_Verbose, @MJ_AIAgentRuns_EffortLevel, @MJ_AIAgentRuns_RunName, @MJ_AIAgentRuns_Comments
+    END
+    
+    CLOSE cascade_update_MJ_AIAgentRuns_cursor
+    DEALLOCATE cascade_update_MJ_AIAgentRuns_cursor
+    
+    -- Cascade update on Report using cursor to call spUpdateReport
+    DECLARE @ReportsID uniqueidentifier
+    DECLARE @Reports_Name nvarchar(255)
+    DECLARE @Reports_Description nvarchar(MAX)
+    DECLARE @Reports_CategoryID uniqueidentifier
+    DECLARE @Reports_UserID uniqueidentifier
+    DECLARE @Reports_SharingScope nvarchar(20)
+    DECLARE @Reports_ConversationID uniqueidentifier
+    DECLARE @Reports_ConversationDetailID uniqueidentifier
+    DECLARE @Reports_DataContextID uniqueidentifier
+    DECLARE @Reports_Configuration nvarchar(MAX)
+    DECLARE @Reports_OutputTriggerTypeID uniqueidentifier
+    DECLARE @Reports_OutputFormatTypeID uniqueidentifier
+    DECLARE @Reports_OutputDeliveryTypeID uniqueidentifier
+    DECLARE @Reports_OutputFrequency nvarchar(50)
+    DECLARE @Reports_OutputTargetEmail nvarchar(255)
+    DECLARE @Reports_OutputWorkflowID uniqueidentifier
+    DECLARE @Reports_Thumbnail nvarchar(MAX)
+    DECLARE @Reports_EnvironmentID uniqueidentifier
+    DECLARE cascade_update_Reports_cursor CURSOR FOR 
+        SELECT [ID], [Name], [Description], [CategoryID], [UserID], [SharingScope], [ConversationID], [ConversationDetailID], [DataContextID], [Configuration], [OutputTriggerTypeID], [OutputFormatTypeID], [OutputDeliveryTypeID], [OutputFrequency], [OutputTargetEmail], [OutputWorkflowID], [Thumbnail], [EnvironmentID]
+        FROM [${flyway:defaultSchema}].[Report]
+        WHERE [ConversationDetailID] = @ID
+    
+    OPEN cascade_update_Reports_cursor
+    FETCH NEXT FROM cascade_update_Reports_cursor INTO @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail, @Reports_EnvironmentID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @Reports_ConversationDetailID = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateReport] @ID = @ReportsID, @Name = @Reports_Name, @Description = @Reports_Description, @CategoryID = @Reports_CategoryID, @UserID = @Reports_UserID, @SharingScope = @Reports_SharingScope, @ConversationID = @Reports_ConversationID, @ConversationDetailID = @Reports_ConversationDetailID, @DataContextID = @Reports_DataContextID, @Configuration = @Reports_Configuration, @OutputTriggerTypeID = @Reports_OutputTriggerTypeID, @OutputFormatTypeID = @Reports_OutputFormatTypeID, @OutputDeliveryTypeID = @Reports_OutputDeliveryTypeID, @OutputFrequency = @Reports_OutputFrequency, @OutputTargetEmail = @Reports_OutputTargetEmail, @OutputWorkflowID = @Reports_OutputWorkflowID, @Thumbnail = @Reports_Thumbnail, @EnvironmentID = @Reports_EnvironmentID
+        
+        FETCH NEXT FROM cascade_update_Reports_cursor INTO @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail, @Reports_EnvironmentID
+    END
+    
+    CLOSE cascade_update_Reports_cursor
+    DEALLOCATE cascade_update_Reports_cursor
+    
+    -- Cascade update on Task using cursor to call spUpdateTask
+    DECLARE @MJ_TasksID uniqueidentifier
+    DECLARE @MJ_Tasks_ParentID uniqueidentifier
+    DECLARE @MJ_Tasks_Name nvarchar(255)
+    DECLARE @MJ_Tasks_Description nvarchar(MAX)
+    DECLARE @MJ_Tasks_TypeID uniqueidentifier
+    DECLARE @MJ_Tasks_EnvironmentID uniqueidentifier
+    DECLARE @MJ_Tasks_ProjectID uniqueidentifier
+    DECLARE @MJ_Tasks_ConversationDetailID uniqueidentifier
+    DECLARE @MJ_Tasks_UserID uniqueidentifier
+    DECLARE @MJ_Tasks_AgentID uniqueidentifier
+    DECLARE @MJ_Tasks_Status nvarchar(50)
+    DECLARE @MJ_Tasks_PercentComplete int
+    DECLARE @MJ_Tasks_DueAt datetimeoffset
+    DECLARE @MJ_Tasks_StartedAt datetimeoffset
+    DECLARE @MJ_Tasks_CompletedAt datetimeoffset
+    DECLARE cascade_update_MJ_Tasks_cursor CURSOR FOR 
+        SELECT [ID], [ParentID], [Name], [Description], [TypeID], [EnvironmentID], [ProjectID], [ConversationDetailID], [UserID], [AgentID], [Status], [PercentComplete], [DueAt], [StartedAt], [CompletedAt]
+        FROM [${flyway:defaultSchema}].[Task]
+        WHERE [ConversationDetailID] = @ID
+    
+    OPEN cascade_update_MJ_Tasks_cursor
+    FETCH NEXT FROM cascade_update_MJ_Tasks_cursor INTO @MJ_TasksID, @MJ_Tasks_ParentID, @MJ_Tasks_Name, @MJ_Tasks_Description, @MJ_Tasks_TypeID, @MJ_Tasks_EnvironmentID, @MJ_Tasks_ProjectID, @MJ_Tasks_ConversationDetailID, @MJ_Tasks_UserID, @MJ_Tasks_AgentID, @MJ_Tasks_Status, @MJ_Tasks_PercentComplete, @MJ_Tasks_DueAt, @MJ_Tasks_StartedAt, @MJ_Tasks_CompletedAt
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJ_Tasks_ConversationDetailID = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateTask] @ID = @MJ_TasksID, @ParentID = @MJ_Tasks_ParentID, @Name = @MJ_Tasks_Name, @Description = @MJ_Tasks_Description, @TypeID = @MJ_Tasks_TypeID, @EnvironmentID = @MJ_Tasks_EnvironmentID, @ProjectID = @MJ_Tasks_ProjectID, @ConversationDetailID = @MJ_Tasks_ConversationDetailID, @UserID = @MJ_Tasks_UserID, @AgentID = @MJ_Tasks_AgentID, @Status = @MJ_Tasks_Status, @PercentComplete = @MJ_Tasks_PercentComplete, @DueAt = @MJ_Tasks_DueAt, @StartedAt = @MJ_Tasks_StartedAt, @CompletedAt = @MJ_Tasks_CompletedAt
+        
+        FETCH NEXT FROM cascade_update_MJ_Tasks_cursor INTO @MJ_TasksID, @MJ_Tasks_ParentID, @MJ_Tasks_Name, @MJ_Tasks_Description, @MJ_Tasks_TypeID, @MJ_Tasks_EnvironmentID, @MJ_Tasks_ProjectID, @MJ_Tasks_ConversationDetailID, @MJ_Tasks_UserID, @MJ_Tasks_AgentID, @MJ_Tasks_Status, @MJ_Tasks_PercentComplete, @MJ_Tasks_DueAt, @MJ_Tasks_StartedAt, @MJ_Tasks_CompletedAt
+    END
+    
+    CLOSE cascade_update_MJ_Tasks_cursor
+    DEALLOCATE cascade_update_MJ_Tasks_cursor
+    
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[ConversationDetail]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+    
+
+/* spDelete Permissions for Conversation Details */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+
+
+
+/* Index for Foreign Keys for Conversation */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Conversations
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key UserID in table Conversation
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_UserID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_UserID ON [${flyway:defaultSchema}].[Conversation] ([UserID]);
+
+-- Index for foreign key LinkedEntityID in table Conversation
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_LinkedEntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_LinkedEntityID ON [${flyway:defaultSchema}].[Conversation] ([LinkedEntityID]);
+
+-- Index for foreign key DataContextID in table Conversation
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_DataContextID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_DataContextID ON [${flyway:defaultSchema}].[Conversation] ([DataContextID]);
+
+-- Index for foreign key EnvironmentID in table Conversation
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_EnvironmentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_EnvironmentID ON [${flyway:defaultSchema}].[Conversation] ([EnvironmentID]);
+
+-- Index for foreign key ProjectID in table Conversation
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_Conversation_ProjectID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[Conversation]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_Conversation_ProjectID ON [${flyway:defaultSchema}].[Conversation] ([ProjectID]);
+
+/* Base View SQL for Conversations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Conversations
+-- Item: vwConversations
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      Conversations
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  Conversation
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwConversations]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwConversations]
+AS
+SELECT
+    c.*,
+    User_UserID.[Name] AS [User],
+    Entity_LinkedEntityID.[Name] AS [LinkedEntity],
+    DataContext_DataContextID.[Name] AS [DataContext],
+    Environment_EnvironmentID.[Name] AS [Environment],
+    Project_ProjectID.[Name] AS [Project]
+FROM
+    [${flyway:defaultSchema}].[Conversation] AS c
+INNER JOIN
+    [${flyway:defaultSchema}].[User] AS User_UserID
+  ON
+    [c].[UserID] = User_UserID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Entity] AS Entity_LinkedEntityID
+  ON
+    [c].[LinkedEntityID] = Entity_LinkedEntityID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[DataContext] AS DataContext_DataContextID
+  ON
+    [c].[DataContextID] = DataContext_DataContextID.[ID]
+INNER JOIN
+    [${flyway:defaultSchema}].[Environment] AS Environment_EnvironmentID
+  ON
+    [c].[EnvironmentID] = Environment_EnvironmentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[Project] AS Project_ProjectID
+  ON
+    [c].[ProjectID] = Project_ProjectID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwConversations] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for Conversations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Conversations
+-- Item: Permissions for vwConversations
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwConversations] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+
+/* spCreate SQL for Conversations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Conversations
+-- Item: spCreateConversation
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR Conversation
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateConversation]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateConversation]
+    @ID uniqueidentifier = NULL,
+    @UserID uniqueidentifier,
+    @ExternalID nvarchar(500),
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Type nvarchar(50),
+    @IsArchived bit,
+    @LinkedEntityID uniqueidentifier,
+    @LinkedRecordID nvarchar(500),
+    @DataContextID uniqueidentifier,
+    @Status nvarchar(20),
+    @EnvironmentID uniqueidentifier,
+    @ProjectID uniqueidentifier,
+    @IsPinned bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[Conversation]
+            (
+                [ID],
+                [UserID],
+                [ExternalID],
+                [Name],
+                [Description],
+                [Type],
+                [IsArchived],
+                [LinkedEntityID],
+                [LinkedRecordID],
+                [DataContextID],
+                [Status],
+                [EnvironmentID],
+                [ProjectID],
+                [IsPinned]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @UserID,
+                @ExternalID,
+                @Name,
+                @Description,
+                @Type,
+                @IsArchived,
+                @LinkedEntityID,
+                @LinkedRecordID,
+                @DataContextID,
+                @Status,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ProjectID,
+                @IsPinned
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[Conversation]
+            (
+                [UserID],
+                [ExternalID],
+                [Name],
+                [Description],
+                [Type],
+                [IsArchived],
+                [LinkedEntityID],
+                [LinkedRecordID],
+                [DataContextID],
+                [Status],
+                [EnvironmentID],
+                [ProjectID],
+                [IsPinned]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @UserID,
+                @ExternalID,
+                @Name,
+                @Description,
+                @Type,
+                @IsArchived,
+                @LinkedEntityID,
+                @LinkedRecordID,
+                @DataContextID,
+                @Status,
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE @EnvironmentID END,
+                @ProjectID,
+                @IsPinned
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwConversations] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+    
+
+/* spCreate Permissions for Conversations */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+
+
+
+/* spUpdate SQL for Conversations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Conversations
+-- Item: spUpdateConversation
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR Conversation
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateConversation]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateConversation]
+    @ID uniqueidentifier,
+    @UserID uniqueidentifier,
+    @ExternalID nvarchar(500),
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @Type nvarchar(50),
+    @IsArchived bit,
+    @LinkedEntityID uniqueidentifier,
+    @LinkedRecordID nvarchar(500),
+    @DataContextID uniqueidentifier,
+    @Status nvarchar(20),
+    @EnvironmentID uniqueidentifier,
+    @ProjectID uniqueidentifier,
+    @IsPinned bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Conversation]
+    SET
+        [UserID] = @UserID,
+        [ExternalID] = @ExternalID,
+        [Name] = @Name,
+        [Description] = @Description,
+        [Type] = @Type,
+        [IsArchived] = @IsArchived,
+        [LinkedEntityID] = @LinkedEntityID,
+        [LinkedRecordID] = @LinkedRecordID,
+        [DataContextID] = @DataContextID,
+        [Status] = @Status,
+        [EnvironmentID] = @EnvironmentID,
+        [ProjectID] = @ProjectID,
+        [IsPinned] = @IsPinned
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwConversations] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwConversations]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the Conversation table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateConversation
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateConversation
+ON [${flyway:defaultSchema}].[Conversation]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[Conversation]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[Conversation] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for Conversations */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+
+
+
+/* spDelete SQL for Conversations */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Conversations
+-- Item: spDeleteConversation
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR Conversation
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteConversation]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteConversation]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- Cascade update on AIAgentRun using cursor to call spUpdateAIAgentRun
+    DECLARE @MJ_AIAgentRunsID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_AgentID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_ParentRunID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_Status nvarchar(50)
+    DECLARE @MJ_AIAgentRuns_StartedAt datetimeoffset
+    DECLARE @MJ_AIAgentRuns_CompletedAt datetimeoffset
+    DECLARE @MJ_AIAgentRuns_Success bit
+    DECLARE @MJ_AIAgentRuns_ErrorMessage nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_ConversationID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_UserID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_Result nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_AgentState nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_TotalTokensUsed int
+    DECLARE @MJ_AIAgentRuns_TotalCost decimal(18, 6)
+    DECLARE @MJ_AIAgentRuns_TotalPromptTokensUsed int
+    DECLARE @MJ_AIAgentRuns_TotalCompletionTokensUsed int
+    DECLARE @MJ_AIAgentRuns_TotalTokensUsedRollup int
+    DECLARE @MJ_AIAgentRuns_TotalPromptTokensUsedRollup int
+    DECLARE @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup int
+    DECLARE @MJ_AIAgentRuns_TotalCostRollup decimal(19, 8)
+    DECLARE @MJ_AIAgentRuns_ConversationDetailID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_ConversationDetailSequence int
+    DECLARE @MJ_AIAgentRuns_CancellationReason nvarchar(30)
+    DECLARE @MJ_AIAgentRuns_FinalStep nvarchar(30)
+    DECLARE @MJ_AIAgentRuns_FinalPayload nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_Message nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_LastRunID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_StartingPayload nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_TotalPromptIterations int
+    DECLARE @MJ_AIAgentRuns_ConfigurationID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_OverrideModelID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_OverrideVendorID uniqueidentifier
+    DECLARE @MJ_AIAgentRuns_Data nvarchar(MAX)
+    DECLARE @MJ_AIAgentRuns_Verbose bit
+    DECLARE @MJ_AIAgentRuns_EffortLevel int
+    DECLARE @MJ_AIAgentRuns_RunName nvarchar(255)
+    DECLARE @MJ_AIAgentRuns_Comments nvarchar(MAX)
+    DECLARE cascade_update_MJ_AIAgentRuns_cursor CURSOR FOR 
+        SELECT [ID], [AgentID], [ParentRunID], [Status], [StartedAt], [CompletedAt], [Success], [ErrorMessage], [ConversationID], [UserID], [Result], [AgentState], [TotalTokensUsed], [TotalCost], [TotalPromptTokensUsed], [TotalCompletionTokensUsed], [TotalTokensUsedRollup], [TotalPromptTokensUsedRollup], [TotalCompletionTokensUsedRollup], [TotalCostRollup], [ConversationDetailID], [ConversationDetailSequence], [CancellationReason], [FinalStep], [FinalPayload], [Message], [LastRunID], [StartingPayload], [TotalPromptIterations], [ConfigurationID], [OverrideModelID], [OverrideVendorID], [Data], [Verbose], [EffortLevel], [RunName], [Comments]
+        FROM [${flyway:defaultSchema}].[AIAgentRun]
+        WHERE [ConversationID] = @ID
+    
+    OPEN cascade_update_MJ_AIAgentRuns_cursor
+    FETCH NEXT FROM cascade_update_MJ_AIAgentRuns_cursor INTO @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations, @MJ_AIAgentRuns_ConfigurationID, @MJ_AIAgentRuns_OverrideModelID, @MJ_AIAgentRuns_OverrideVendorID, @MJ_AIAgentRuns_Data, @MJ_AIAgentRuns_Verbose, @MJ_AIAgentRuns_EffortLevel, @MJ_AIAgentRuns_RunName, @MJ_AIAgentRuns_Comments
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @MJ_AIAgentRuns_ConversationID = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateAIAgentRun] @ID = @MJ_AIAgentRunsID, @AgentID = @MJ_AIAgentRuns_AgentID, @ParentRunID = @MJ_AIAgentRuns_ParentRunID, @Status = @MJ_AIAgentRuns_Status, @StartedAt = @MJ_AIAgentRuns_StartedAt, @CompletedAt = @MJ_AIAgentRuns_CompletedAt, @Success = @MJ_AIAgentRuns_Success, @ErrorMessage = @MJ_AIAgentRuns_ErrorMessage, @ConversationID = @MJ_AIAgentRuns_ConversationID, @UserID = @MJ_AIAgentRuns_UserID, @Result = @MJ_AIAgentRuns_Result, @AgentState = @MJ_AIAgentRuns_AgentState, @TotalTokensUsed = @MJ_AIAgentRuns_TotalTokensUsed, @TotalCost = @MJ_AIAgentRuns_TotalCost, @TotalPromptTokensUsed = @MJ_AIAgentRuns_TotalPromptTokensUsed, @TotalCompletionTokensUsed = @MJ_AIAgentRuns_TotalCompletionTokensUsed, @TotalTokensUsedRollup = @MJ_AIAgentRuns_TotalTokensUsedRollup, @TotalPromptTokensUsedRollup = @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @TotalCompletionTokensUsedRollup = @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @TotalCostRollup = @MJ_AIAgentRuns_TotalCostRollup, @ConversationDetailID = @MJ_AIAgentRuns_ConversationDetailID, @ConversationDetailSequence = @MJ_AIAgentRuns_ConversationDetailSequence, @CancellationReason = @MJ_AIAgentRuns_CancellationReason, @FinalStep = @MJ_AIAgentRuns_FinalStep, @FinalPayload = @MJ_AIAgentRuns_FinalPayload, @Message = @MJ_AIAgentRuns_Message, @LastRunID = @MJ_AIAgentRuns_LastRunID, @StartingPayload = @MJ_AIAgentRuns_StartingPayload, @TotalPromptIterations = @MJ_AIAgentRuns_TotalPromptIterations, @ConfigurationID = @MJ_AIAgentRuns_ConfigurationID, @OverrideModelID = @MJ_AIAgentRuns_OverrideModelID, @OverrideVendorID = @MJ_AIAgentRuns_OverrideVendorID, @Data = @MJ_AIAgentRuns_Data, @Verbose = @MJ_AIAgentRuns_Verbose, @EffortLevel = @MJ_AIAgentRuns_EffortLevel, @RunName = @MJ_AIAgentRuns_RunName, @Comments = @MJ_AIAgentRuns_Comments
+        
+        FETCH NEXT FROM cascade_update_MJ_AIAgentRuns_cursor INTO @MJ_AIAgentRunsID, @MJ_AIAgentRuns_AgentID, @MJ_AIAgentRuns_ParentRunID, @MJ_AIAgentRuns_Status, @MJ_AIAgentRuns_StartedAt, @MJ_AIAgentRuns_CompletedAt, @MJ_AIAgentRuns_Success, @MJ_AIAgentRuns_ErrorMessage, @MJ_AIAgentRuns_ConversationID, @MJ_AIAgentRuns_UserID, @MJ_AIAgentRuns_Result, @MJ_AIAgentRuns_AgentState, @MJ_AIAgentRuns_TotalTokensUsed, @MJ_AIAgentRuns_TotalCost, @MJ_AIAgentRuns_TotalPromptTokensUsed, @MJ_AIAgentRuns_TotalCompletionTokensUsed, @MJ_AIAgentRuns_TotalTokensUsedRollup, @MJ_AIAgentRuns_TotalPromptTokensUsedRollup, @MJ_AIAgentRuns_TotalCompletionTokensUsedRollup, @MJ_AIAgentRuns_TotalCostRollup, @MJ_AIAgentRuns_ConversationDetailID, @MJ_AIAgentRuns_ConversationDetailSequence, @MJ_AIAgentRuns_CancellationReason, @MJ_AIAgentRuns_FinalStep, @MJ_AIAgentRuns_FinalPayload, @MJ_AIAgentRuns_Message, @MJ_AIAgentRuns_LastRunID, @MJ_AIAgentRuns_StartingPayload, @MJ_AIAgentRuns_TotalPromptIterations, @MJ_AIAgentRuns_ConfigurationID, @MJ_AIAgentRuns_OverrideModelID, @MJ_AIAgentRuns_OverrideVendorID, @MJ_AIAgentRuns_Data, @MJ_AIAgentRuns_Verbose, @MJ_AIAgentRuns_EffortLevel, @MJ_AIAgentRuns_RunName, @MJ_AIAgentRuns_Comments
+    END
+    
+    CLOSE cascade_update_MJ_AIAgentRuns_cursor
+    DEALLOCATE cascade_update_MJ_AIAgentRuns_cursor
+    
+    -- Cascade update on Report using cursor to call spUpdateReport
+    DECLARE @ReportsID uniqueidentifier
+    DECLARE @Reports_Name nvarchar(255)
+    DECLARE @Reports_Description nvarchar(MAX)
+    DECLARE @Reports_CategoryID uniqueidentifier
+    DECLARE @Reports_UserID uniqueidentifier
+    DECLARE @Reports_SharingScope nvarchar(20)
+    DECLARE @Reports_ConversationID uniqueidentifier
+    DECLARE @Reports_ConversationDetailID uniqueidentifier
+    DECLARE @Reports_DataContextID uniqueidentifier
+    DECLARE @Reports_Configuration nvarchar(MAX)
+    DECLARE @Reports_OutputTriggerTypeID uniqueidentifier
+    DECLARE @Reports_OutputFormatTypeID uniqueidentifier
+    DECLARE @Reports_OutputDeliveryTypeID uniqueidentifier
+    DECLARE @Reports_OutputFrequency nvarchar(50)
+    DECLARE @Reports_OutputTargetEmail nvarchar(255)
+    DECLARE @Reports_OutputWorkflowID uniqueidentifier
+    DECLARE @Reports_Thumbnail nvarchar(MAX)
+    DECLARE @Reports_EnvironmentID uniqueidentifier
+    DECLARE cascade_update_Reports_cursor CURSOR FOR 
+        SELECT [ID], [Name], [Description], [CategoryID], [UserID], [SharingScope], [ConversationID], [ConversationDetailID], [DataContextID], [Configuration], [OutputTriggerTypeID], [OutputFormatTypeID], [OutputDeliveryTypeID], [OutputFrequency], [OutputTargetEmail], [OutputWorkflowID], [Thumbnail], [EnvironmentID]
+        FROM [${flyway:defaultSchema}].[Report]
+        WHERE [ConversationID] = @ID
+    
+    OPEN cascade_update_Reports_cursor
+    FETCH NEXT FROM cascade_update_Reports_cursor INTO @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail, @Reports_EnvironmentID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Set the FK field to NULL
+        SET @Reports_ConversationID = NULL
+        
+        -- Call the update SP for the related entity
+        EXEC [${flyway:defaultSchema}].[spUpdateReport] @ID = @ReportsID, @Name = @Reports_Name, @Description = @Reports_Description, @CategoryID = @Reports_CategoryID, @UserID = @Reports_UserID, @SharingScope = @Reports_SharingScope, @ConversationID = @Reports_ConversationID, @ConversationDetailID = @Reports_ConversationDetailID, @DataContextID = @Reports_DataContextID, @Configuration = @Reports_Configuration, @OutputTriggerTypeID = @Reports_OutputTriggerTypeID, @OutputFormatTypeID = @Reports_OutputFormatTypeID, @OutputDeliveryTypeID = @Reports_OutputDeliveryTypeID, @OutputFrequency = @Reports_OutputFrequency, @OutputTargetEmail = @Reports_OutputTargetEmail, @OutputWorkflowID = @Reports_OutputWorkflowID, @Thumbnail = @Reports_Thumbnail, @EnvironmentID = @Reports_EnvironmentID
+        
+        FETCH NEXT FROM cascade_update_Reports_cursor INTO @ReportsID, @Reports_Name, @Reports_Description, @Reports_CategoryID, @Reports_UserID, @Reports_SharingScope, @Reports_ConversationID, @Reports_ConversationDetailID, @Reports_DataContextID, @Reports_Configuration, @Reports_OutputTriggerTypeID, @Reports_OutputFormatTypeID, @Reports_OutputDeliveryTypeID, @Reports_OutputFrequency, @Reports_OutputTargetEmail, @Reports_OutputWorkflowID, @Reports_Thumbnail, @Reports_EnvironmentID
+    END
+    
+    CLOSE cascade_update_Reports_cursor
+    DEALLOCATE cascade_update_Reports_cursor
+    
+    -- Cascade delete from ConversationDetail using cursor to call spDeleteConversationDetail
+    DECLARE @ConversationDetailsID uniqueidentifier
+    DECLARE cascade_delete_ConversationDetails_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[ConversationDetail]
+        WHERE [ConversationID] = @ID
+    
+    OPEN cascade_delete_ConversationDetails_cursor
+    FETCH NEXT FROM cascade_delete_ConversationDetails_cursor INTO @ConversationDetailsID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${flyway:defaultSchema}].[spDeleteConversationDetail] @ID = @ConversationDetailsID
+        
+        FETCH NEXT FROM cascade_delete_ConversationDetails_cursor INTO @ConversationDetailsID
+    END
+    
+    CLOSE cascade_delete_ConversationDetails_cursor
+    DEALLOCATE cascade_delete_ConversationDetails_cursor
+    
+    -- Cascade delete from ConversationArtifact using cursor to call spDeleteConversationArtifact
+    DECLARE @MJ_ConversationArtifactsID uniqueidentifier
+    DECLARE cascade_delete_MJ_ConversationArtifacts_cursor CURSOR FOR 
+        SELECT [ID]
+        FROM [${flyway:defaultSchema}].[ConversationArtifact]
+        WHERE [ConversationID] = @ID
+    
+    OPEN cascade_delete_MJ_ConversationArtifacts_cursor
+    FETCH NEXT FROM cascade_delete_MJ_ConversationArtifacts_cursor INTO @MJ_ConversationArtifactsID
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        -- Call the delete SP for the related entity, which handles its own cascades
+        EXEC [${flyway:defaultSchema}].[spDeleteConversationArtifact] @ID = @MJ_ConversationArtifactsID
+        
+        FETCH NEXT FROM cascade_delete_MJ_ConversationArtifacts_cursor INTO @MJ_ConversationArtifactsID
+    END
+    
+    CLOSE cascade_delete_MJ_ConversationArtifacts_cursor
+    DEALLOCATE cascade_delete_MJ_ConversationArtifacts_cursor
+    
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[Conversation]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+    
+
+/* spDelete Permissions for Conversations */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Developer], [cdp_UI], [cdp_Integration]
+
+
+

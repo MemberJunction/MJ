@@ -5221,6 +5221,14 @@ export class TaskDependency_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    Task: string;
+        
+    @Field() 
+    @MaxLength(510)
+    DependsOnTask: string;
+        
 }
 
 //****************************************************************************
@@ -5554,6 +5562,14 @@ export class Collection_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    Environment: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
     @Field(() => [Collection_])
     MJ_Collections_ParentIDArray: Collection_[]; // Link to MJ_Collections
     
@@ -5763,6 +5779,14 @@ export class RecordLink_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    SourceEntity: string;
+        
+    @Field() 
+    @MaxLength(510)
+    TargetEntity: string;
         
 }
 
@@ -20398,6 +20422,10 @@ export class Dashboard_ {
     @MaxLength(200)
     Application?: string;
         
+    @Field() 
+    @MaxLength(510)
+    Environment: string;
+        
     @Field(() => [DashboardUserState_])
     MJ_DashboardUserStates_DashboardIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
     
@@ -21214,6 +21242,10 @@ export class Report_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     OutputWorkflow?: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Environment: string;
         
     @Field(() => [ReportSnapshot_])
     ReportSnapshots_ReportIDArray: ReportSnapshot_[]; // Link to ReportSnapshots
@@ -23402,6 +23434,14 @@ export class Conversation_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     DataContext?: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Environment: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Project?: string;
         
     @Field(() => [ConversationDetail_])
     ConversationDetails_ConversationIDArray: ConversationDetail_[]; // Link to ConversationDetails
@@ -38202,9 +38242,9 @@ export class AIModelVendor_ {
     @MaxLength(100)
     Vendor: string;
         
-    @Field({nullable: true}) 
+    @Field() 
     @MaxLength(100)
-    Type?: string;
+    Type: string;
         
 }
 
@@ -39550,6 +39590,14 @@ export class AccessControlRule_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field() 
+    @MaxLength(510)
+    Entity: string;
+        
+    @Field() 
+    @MaxLength(200)
+    GrantedByUser: string;
+        
 }
 
 //****************************************************************************
@@ -39776,6 +39824,10 @@ export class PublicLink_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
         
 }
 
@@ -40349,6 +40401,18 @@ export class Artifact_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Environment: string;
+        
+    @Field() 
+    @MaxLength(200)
+    Type: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
         
     @Field(() => [ArtifactVersion_])
     MJ_ArtifactVersions_ArtifactIDArray: ArtifactVersion_[]; // Link to MJ_ArtifactVersions
@@ -45595,6 +45659,30 @@ export class Task_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Type: string;
+        
+    @Field() 
+    @MaxLength(510)
+    Environment: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Project?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    User?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Agent?: string;
+        
     @Field(() => [TaskDependency_])
     MJ_TaskDependencies_DependsOnTaskIDArray: TaskDependency_[]; // Link to MJ_TaskDependencies
     
@@ -45874,6 +45962,14 @@ export class Project_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Environment: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Parent?: string;
         
     @Field(() => [Project_])
     MJ_Projects_ParentIDArray: Project_[]; // Link to MJ_Projects
@@ -46439,6 +46535,14 @@ export class ArtifactVersion_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(510)
+    Artifact: string;
+        
+    @Field() 
+    @MaxLength(200)
+    User: string;
         
 }
 

@@ -3887,6 +3887,14 @@ export const ConversationSchema = z.object({
         * * Field Name: DataContext
         * * Display Name: Data Context
         * * SQL Data Type: nvarchar(255)`),
+    Environment: z.string().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
+    Project: z.string().nullable().describe(`
+        * * Field Name: Project
+        * * Display Name: Project
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ConversationEntityType = z.infer<typeof ConversationSchema>;
@@ -4042,6 +4050,10 @@ export const DashboardSchema = z.object({
         * * Field Name: Application
         * * Display Name: Application
         * * SQL Data Type: nvarchar(100)`),
+    Environment: z.string().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type DashboardEntityType = z.infer<typeof DashboardSchema>;
@@ -7585,6 +7597,14 @@ export const AccessControlRuleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Entity: z.string().describe(`
+        * * Field Name: Entity
+        * * Display Name: Entity
+        * * SQL Data Type: nvarchar(255)`),
+    GrantedByUser: z.string().describe(`
+        * * Field Name: GrantedByUser
+        * * Display Name: Granted By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type AccessControlRuleEntityType = z.infer<typeof AccessControlRuleSchema>;
@@ -8839,7 +8859,7 @@ export const AIModelVendorSchema = z.object({
         * * Field Name: Vendor
         * * Display Name: Vendor
         * * SQL Data Type: nvarchar(50)`),
-    Type: z.string().nullable().describe(`
+    Type: z.string().describe(`
         * * Field Name: Type
         * * Display Name: Type
         * * SQL Data Type: nvarchar(50)`),
@@ -9670,6 +9690,14 @@ export const ArtifactVersionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Artifact: z.string().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ArtifactVersionEntityType = z.infer<typeof ArtifactVersionSchema>;
@@ -9724,6 +9752,18 @@ export const ArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Environment: z.string().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ArtifactEntityType = z.infer<typeof ArtifactSchema>;
@@ -9783,6 +9823,14 @@ export const CollectionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Environment: z.string().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type CollectionEntityType = z.infer<typeof CollectionSchema>;
@@ -10615,6 +10663,14 @@ export const ProjectSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Environment: z.string().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ProjectEntityType = z.infer<typeof ProjectSchema>;
@@ -10689,6 +10745,10 @@ export const PublicLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type PublicLinkEntityType = z.infer<typeof PublicLinkSchema>;
@@ -10837,6 +10897,14 @@ export const RecordLinkSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SourceEntity: z.string().describe(`
+        * * Field Name: SourceEntity
+        * * Display Name: Source Entity
+        * * SQL Data Type: nvarchar(255)`),
+    TargetEntity: z.string().describe(`
+        * * Field Name: TargetEntity
+        * * Display Name: Target Entity
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type RecordLinkEntityType = z.infer<typeof RecordLinkSchema>;
@@ -10985,6 +11053,14 @@ export const TaskDependencySchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Task: z.string().describe(`
+        * * Field Name: Task
+        * * Display Name: Task
+        * * SQL Data Type: nvarchar(255)`),
+    DependsOnTask: z.string().describe(`
+        * * Field Name: DependsOnTask
+        * * Display Name: Depends On Task
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type TaskDependencyEntityType = z.infer<typeof TaskDependencySchema>;
@@ -11123,6 +11199,30 @@ export const TaskSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(255)`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(255)`),
+    Environment: z.string().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
+    Project: z.string().nullable().describe(`
+        * * Field Name: Project
+        * * Display Name: Project
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type TaskEntityType = z.infer<typeof TaskSchema>;
@@ -12602,6 +12702,10 @@ export const ReportSchema = z.object({
         * * Field Name: OutputWorkflow
         * * Display Name: Output Workflow
         * * SQL Data Type: nvarchar(100)`),
+    Environment: z.string().describe(`
+        * * Field Name: Environment
+        * * Display Name: Environment
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ReportEntityType = z.infer<typeof ReportSchema>;
@@ -25105,6 +25209,24 @@ export class ConversationEntity extends BaseEntity<ConversationEntityType> {
     get DataContext(): string | null {
         return this.Get('DataContext');
     }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Environment(): string {
+        return this.Get('Environment');
+    }
+
+    /**
+    * * Field Name: Project
+    * * Display Name: Project
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Project(): string | null {
+        return this.Get('Project');
+    }
 }
 
 
@@ -25496,6 +25618,15 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     */
     get Application(): string | null {
         return this.Get('Application');
+    }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Environment(): string {
+        return this.Get('Environment');
     }
 }
 
@@ -34469,6 +34600,24 @@ export class AccessControlRuleEntity extends BaseEntity<AccessControlRuleEntityT
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Entity
+    * * Display Name: Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Entity(): string {
+        return this.Get('Entity');
+    }
+
+    /**
+    * * Field Name: GrantedByUser
+    * * Display Name: Granted By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get GrantedByUser(): string {
+        return this.Get('GrantedByUser');
+    }
 }
 
 
@@ -37885,7 +38034,7 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Display Name: Type
     * * SQL Data Type: nvarchar(50)
     */
-    get Type(): string | null {
+    get Type(): string {
         return this.Get('Type');
     }
 }
@@ -40122,6 +40271,24 @@ export class ArtifactVersionEntity extends BaseEntity<ArtifactVersionEntityType>
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string {
+        return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
 }
 
 
@@ -40265,6 +40432,33 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Environment(): string {
+        return this.Get('Environment');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 
@@ -40422,6 +40616,24 @@ export class CollectionEntity extends BaseEntity<CollectionEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Environment(): string {
+        return this.Get('Environment');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
     }
 }
 
@@ -42610,6 +42822,24 @@ export class ProjectEntity extends BaseEntity<ProjectEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Environment(): string {
+        return this.Get('Environment');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
 }
 
 
@@ -42797,6 +43027,15 @@ export class PublicLinkEntity extends BaseEntity<PublicLinkEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 
@@ -43170,6 +43409,24 @@ export class RecordLinkEntity extends BaseEntity<RecordLinkEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SourceEntity
+    * * Display Name: Source Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceEntity(): string {
+        return this.Get('SourceEntity');
+    }
+
+    /**
+    * * Field Name: TargetEntity
+    * * Display Name: Target Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get TargetEntity(): string {
+        return this.Get('TargetEntity');
     }
 }
 
@@ -43608,6 +43865,24 @@ export class TaskDependencyEntity extends BaseEntity<TaskDependencyEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: Task
+    * * Display Name: Task
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Task(): string {
+        return this.Get('Task');
+    }
+
+    /**
+    * * Field Name: DependsOnTask
+    * * Display Name: Depends On Task
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DependsOnTask(): string {
+        return this.Get('DependsOnTask');
+    }
 }
 
 
@@ -43998,6 +44273,60 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Environment(): string {
+        return this.Get('Environment');
+    }
+
+    /**
+    * * Field Name: Project
+    * * Display Name: Project
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Project(): string | null {
+        return this.Get('Project');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
     }
 }
 
@@ -47907,6 +48236,15 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     */
     get OutputWorkflow(): string | null {
         return this.Get('OutputWorkflow');
+    }
+
+    /**
+    * * Field Name: Environment
+    * * Display Name: Environment
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Environment(): string {
+        return this.Get('Environment');
     }
 }
 

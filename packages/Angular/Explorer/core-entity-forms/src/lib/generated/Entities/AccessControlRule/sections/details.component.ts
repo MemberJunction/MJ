@@ -104,6 +104,20 @@ import { AccessControlRuleEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Entity"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="GrantedByUser"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>
