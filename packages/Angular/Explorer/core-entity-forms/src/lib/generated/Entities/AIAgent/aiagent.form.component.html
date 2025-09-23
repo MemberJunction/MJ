@@ -16,19 +16,6 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="AIAgent Models" [Visible]="record.IsSaved"> 
-                        AIAgent Models
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Models','AgentID')"  
-                            [NewRecordValues]="NewRecordValues('AI Agent Models')"
-                            [AllowLoad]="IsCurrentTab('AIAgent Models')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="AIAgent Actions" [Visible]="record.IsSaved"> 
                         AIAgent Actions
                     </mj-tab>
@@ -37,6 +24,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Actions','AgentID')"  
                             [NewRecordValues]="NewRecordValues('AI Agent Actions')"
                             [AllowLoad]="IsCurrentTab('AIAgent Actions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="AIAgent Models" [Visible]="record.IsSaved"> 
+                        AIAgent Models
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agent Models','AgentID')"  
+                            [NewRecordValues]="NewRecordValues('AI Agent Models')"
+                            [AllowLoad]="IsCurrentTab('AIAgent Models')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -154,6 +154,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Relationships','SubAgentID')"  
                             [NewRecordValues]="NewRecordValues('MJ: AI Agent Relationships')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Agent Relationships')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
+                        MJ: Tasks
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','AgentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                            [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
