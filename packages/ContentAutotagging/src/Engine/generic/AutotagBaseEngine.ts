@@ -367,14 +367,50 @@ export class AutotagBaseEngine extends AIEngine {
      */
     public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo) {
         const md = new Metadata()
+        
+        // First, get existing tags for this content item
+        const existingTags = await this.getExistingContentItemTags(contentItemID, contextUser);
+        const existingTagTexts = new Set(existingTags.map(tag => tag.Tag));
+        
+        // Process new keywords
         for (const keyword of LLMResults.keywords) {
+            if (!existingTagTexts.has(keyword)) {
+                // Only create tag if it doesn't already exist
+                const contentItemTags = await md.GetEntityObject<any>('Content Item Tags', contextUser)
+                contentItemTags.NewRecord()
+                
+                contentItemTags.ItemID = contentItemID
+                contentItemTags.Tag = keyword
+                await contentItemTags.Save()
+                console.log(`Added new tag '${keyword}' for ContentItem ${contentItemID}`);
+            } else {
+                console.log(`Tag '${keyword}' already exists for ContentItem ${contentItemID}, skipping`);
+            }
+        }
+    }
 
-            const contentItemTags = await md.GetEntityObject<any>('Content Item Tags', contextUser)
-            contentItemTags.NewRecord()
-            
-            contentItemTags.ItemID = contentItemID
-            contentItemTags.Tag = keyword
-            await contentItemTags.Save()
+    /**
+     * Helper method to get existing tags for a ContentItem
+     * @param contentItemID - The ContentItem ID
+     * @param contextUser - User context
+     * @returns Array of existing ContentItemTag entities
+     */
+    private async getExistingContentItemTags(contentItemID: string, contextUser: UserInfo): Promise<any[]> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'Content Item Tags',
+                ExtraFilter: `ItemID='${contentItemID}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (result.Success) {
+                return result.Results || [];
+            }
+            return [];
+        } catch (error) {
+            console.error(`Error getting existing tags for ContentItem ${contentItemID}:`, error.message);
+            return [];
         }
     }
 
@@ -397,17 +433,54 @@ export class AutotagBaseEngine extends AIEngine {
                 await contentItem.Save()
             }
             if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
-                const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
-                contentItemAttribute.NewRecord()
-                
                 //Value should be a string, if its a null or undefined value, set it to an empty string
                 const value = LLMResults[key] || ''
 
-                contentItemAttribute.ContentItemID = LLMResults.contentItemID
-                contentItemAttribute.Name = key
-                contentItemAttribute.Value = value
-                await contentItemAttribute.Save()
+                // Check if attribute already exists for this ContentItem and Name
+                const existingAttribute = await this.getExistingContentItemAttribute(LLMResults.contentItemID, key, contextUser);
+                
+                if (existingAttribute) {
+                    // Update existing attribute
+                    existingAttribute.Value = value;
+                    await existingAttribute.Save();
+                    console.log(`Updated existing attribute '${key}' for ContentItem ${LLMResults.contentItemID}`);
+                } else {
+                    // Create new attribute
+                    const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
+                    contentItemAttribute.NewRecord()
+                    contentItemAttribute.ContentItemID = LLMResults.contentItemID
+                    contentItemAttribute.Name = key
+                    contentItemAttribute.Value = value
+                    await contentItemAttribute.Save()
+                    console.log(`Created new attribute '${key}' for ContentItem ${LLMResults.contentItemID}`);
+                }
             }
+        }
+    }
+
+    /**
+     * Helper method to check if a ContentItemAttribute already exists
+     * @param contentItemID - The ContentItem ID
+     * @param attributeName - The attribute name
+     * @param contextUser - User context
+     * @returns Existing ContentItemAttribute or null if not found
+     */
+    private async getExistingContentItemAttribute(contentItemID: string, attributeName: string, contextUser: UserInfo): Promise<ContentItemAttributeEntity | null> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<ContentItemAttributeEntity>({
+                EntityName: 'Content Item Attributes',
+                ExtraFilter: `ContentItemID='${contentItemID}' AND Name='${attributeName}'`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (result.Success && result.Results.length > 0) {
+                return result.Results[0];
+            }
+            return null;
+        } catch (error) {
+            console.error(`Error checking for existing attribute ${attributeName}:`, error.message);
+            return null;
         }
     }
 
