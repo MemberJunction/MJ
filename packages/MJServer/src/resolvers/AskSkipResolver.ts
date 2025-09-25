@@ -1,4 +1,4 @@
-import { Arg, Ctx, Field, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
@@ -65,6 +65,18 @@ import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 import e from 'express';
+
+/**
+ * Skip API Endpoints Configuration
+ * Defines all available endpoints for the Skip API
+ */
+const SKIP_API_ENDPOINTS = {
+  CHAT: '/chat',
+  LEARNING: '/learning',
+  FEEDBACK_COMPONENT: '/feedback/component',
+  REGISTRY: '/registry',
+  // Add more endpoints as needed
+} as const;
 
 /**
  * Store for active conversation streams
@@ -347,6 +359,59 @@ export class StopLearningCycleResultType {
 }
 
 /**
+ * Input type for submitting component feedback
+ * Contains rating, comments, and component context information
+ */
+@InputType()
+export class ComponentFeedbackInput {
+  @Field()
+  componentName: string;
+
+  @Field()
+  componentNamespace: string;
+
+  @Field({ nullable: true })
+  componentVersion?: string;
+
+  @Field()
+  rating: number;
+
+  @Field({ nullable: true })
+  feedbackType?: string;
+
+  @Field({ nullable: true })
+  comments?: string;
+
+  @Field({ nullable: true })
+  conversationID?: string;
+
+  @Field({ nullable: true })
+  conversationDetailID?: string;
+
+  @Field({ nullable: true })
+  reportID?: string;
+
+  @Field({ nullable: true })
+  dashboardID?: string;
+}
+
+/**
+ * Response type for component feedback submission
+ * Contains success status and optional feedback ID or error message
+ */
+@ObjectType()
+export class ComponentFeedbackResponse {
+  @Field()
+  success: boolean;
+
+  @Field({ nullable: true })
+  feedbackID?: string;
+
+  @Field({ nullable: true })
+  error?: string;
+}
+
+/**
  * This function initializes the Skip learning cycle scheduler. It sets up an event listener for the server's setup complete event and starts the scheduler if learning cycles are enabled and a valid API endpoint is configured.
  */
 function initializeSkipLearningCycleScheduler() {
@@ -368,7 +433,9 @@ function initializeSkipLearningCycleScheduler() {
           }
           
           // Check if we have a valid endpoint when cycles are enabled
-          if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+          const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+                                      (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+          if (!hasLearningEndpoint) {
             LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no Learning Cycle API endpoint is configured');
             return;
           }
@@ -577,7 +644,9 @@ export class AskSkipResolver {
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+      const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+                                  (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+      if (!hasLearningEndpoint) {
         return {
           success: false,
           error: 'Learning cycle API endpoint is not configured',
@@ -729,9 +798,10 @@ export class AskSkipResolver {
     userPayload: UserPayload
   ): Promise<SkipAPILearningCycleResponse> {
     const skipConfigInfo = configInfo.askSkip;
-    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${skipConfigInfo.learningCycleURL}`);
+    const learningURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.LEARNING}` : skipConfigInfo.learningCycleURL;
+    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${learningURL}`);
 
-    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, this.buildSkipPostHeaders());
+    const response = await sendPostRequest(learningURL, input, true, this.buildSkipPostHeaders());
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -789,10 +859,11 @@ export class AskSkipResolver {
     userPayload: UserPayload = null
   ): Promise<AskSkipResultType> {
     const skipConfigInfo = configInfo.askSkip;
-    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
+    const chatURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.CHAT}` : skipConfigInfo.chatURL;
+    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${chatURL}`);
 
     try {
-      const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, this.buildSkipPostHeaders());
+      const response = await sendPostRequest(chatURL, input, true, this.buildSkipPostHeaders());
 
       if (response && response.length > 0) {
         // the last object in the response array is the final response from the Skip API
@@ -2428,7 +2499,8 @@ cycle.`);
     startTime: Date
   ): Promise<AskSkipResultType> {
     const skipConfigInfo = configInfo.askSkip;
-    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${skipConfigInfo.chatURL}`);
+    const chatURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.CHAT}` : skipConfigInfo.chatURL;
+    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${chatURL}`);
 
     if (conversationDetailCount > 10) {
       // Set status of conversation to Available since we still want to allow the user to ask questions
@@ -2459,7 +2531,7 @@ cycle.`);
     let response;
     try {
       response = await sendPostRequest(
-        skipConfigInfo.chatURL,
+        chatURL,
         input,
         true,
         this.buildSkipPostHeaders(),
@@ -3259,7 +3331,9 @@ cycle.`);
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+      const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+                                  (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+      if (!hasLearningEndpoint) {
         return {
           Success: false,
           Message: 'Learning cycle API endpoint is not configured'
@@ -3391,6 +3465,96 @@ cycle.`);
         Message: `Error stopping learning cycle: ${e}`,
         WasRunning: false,
         CycleDetails: null
+      };
+    }
+  }
+
+  /**
+   * Mutation to submit component feedback
+   * Collects user feedback for Skip-generated components and forwards to Skip-Brain API
+   */
+  @Mutation(() => ComponentFeedbackResponse)
+  async SubmitComponentFeedback(
+    @Arg('feedback') feedback: ComponentFeedbackInput,
+    @Ctx() { dataSource, userPayload }: AppContext
+  ): Promise<ComponentFeedbackResponse> {
+    try {
+      // Validate user authentication
+      if (!userPayload || !userPayload.userRecord) {
+        return {
+          success: false,
+          error: 'Authentication required'
+        };
+      }
+
+      // Get Skip API configuration
+      const baseSkipURL = configInfo.askSkip?.url;
+      const skipAPIKey = configInfo.askSkip?.apiKey;
+
+      if (!skipAPIKey || !baseSkipURL) {
+        LogError('Skip API key or base URL not configured for component feedback');
+        return {
+          success: false,
+          error: 'Skip API configuration error'
+        };
+      }
+
+      // Get user info from context
+      const userInfo = userPayload.userRecord as UserInfo;
+
+      // Prepare request to Skip API following the expected format
+      // Based on feedback README: uses camelCase field names and includes userEmail for context
+      const requestBody = {
+        componentName: feedback.componentName,
+        componentNamespace: feedback.componentNamespace,
+        componentVersion: feedback.componentVersion,  // Optional, defaults to latest if not provided
+        rating: feedback.rating,
+        feedbackType: feedback.feedbackType || 'Stars',
+        comments: feedback.comments,
+        conversationID: feedback.conversationID,
+        conversationDetailID: feedback.conversationDetailID,
+        reportID: feedback.reportID,
+        dashboardID: feedback.dashboardID,
+        userEmail: userInfo.Email  // Skip API will use this to determine ContactID if available
+      };
+
+      // Call Skip API endpoint using the base URL and correct endpoint path
+      const feedbackUrl = `${baseSkipURL}${SKIP_API_ENDPOINTS.FEEDBACK_COMPONENT}`;
+      LogStatus(`Submitting component feedback to: ${feedbackUrl}`);
+
+      // Use sendPostRequest for consistency with other Skip API calls
+      const response = await sendPostRequest(
+        feedbackUrl,
+        requestBody,
+        false, // Don't stream the response for feedback
+        this.buildSkipPostHeaders()
+      );
+
+      // sendPostRequest returns the response directly for non-streaming calls
+      const result = response as { success?: boolean; feedbackID?: string; error?: string };
+
+      if (!result || !result.success) {
+        const errorMessage = result?.error || 'Failed to submit feedback';
+        LogError(`Skip API error for component feedback: ${errorMessage}`);
+        return {
+          success: false,
+          error: errorMessage
+        };
+      }
+
+      // Log successful submission
+      LogStatus(`Component feedback submitted: ${result.feedbackID} by user ${userInfo.Email}`);
+
+      return {
+        success: true,
+        feedbackID: result.feedbackID  // Note: Skip API returns feedbackID (uppercase)
+      };
+
+    } catch (error) {
+      LogError(`Error in SubmitComponentFeedback mutation: ${error}`);
+      return {
+        success: false,
+        error: 'Internal server error'
       };
     }
   }
