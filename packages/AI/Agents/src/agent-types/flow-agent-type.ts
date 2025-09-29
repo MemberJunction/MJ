@@ -672,21 +672,48 @@ export class FlowAgentType extends BaseAgentType {
     
     /**
      * Helper method to get a value from a nested object path
-     * 
+     * Supports both dot notation (obj.prop) and array indexing (arr[0])
+     *
      * @private
      */
     private getValueFromPath(obj: any, path: string): unknown {
         const parts = path.split('.');
         let current = obj;
-        
+
         for (const part of parts) {
-            if (current && typeof current === 'object' && part in current) {
-                current = current[part];
+            if (!part) continue;
+
+            // Check if this part contains array indexing like "arrayName[0]"
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                // Extract array name and index
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                // Navigate to the array
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    // Access the array element
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
             } else {
-                return undefined;
+                // Regular property access
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
             }
         }
-        
+
         return current;
     }
     
