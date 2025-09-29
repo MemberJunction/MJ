@@ -1,0 +1,665 @@
+[
+  {
+    "fields": {
+      "Name": "File Storage Operations",
+      "Description": "Comprehensive action for performing file storage operations across different storage providers (Azure Blob, AWS S3, Google Cloud, Google Drive, Dropbox, Box, SharePoint). Supports listing, uploading, downloading, copying, moving, deleting files and directories.",
+      "DriverClass": "File Storage Operations",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Utilities",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-cloud"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Operation",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The operation to perform: ListObjects, GetMetadata, GetObject, GetDownloadUrl, GetUploadUrl, ObjectExists, DirectoryExists, CopyObject, MoveObject, DeleteObject, CreateDirectory, DeleteDirectory",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B87A7269-B21B-445F-9A6A-627B94745777"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.813Z",
+            "checksum": "580473caee25df9b58b5db98b7dd4fe174f28ec890efb7f88855f6dc17b60661"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider (e.g., 'Azure Blob Storage', 'AWS S3 Storage', 'Google Cloud Storage', 'Google Drive', 'Dropbox', 'Box.com', 'SharePoint Storage')",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0FED2AD0-0841-4271-BE18-58CA55DFFF5B"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.825Z",
+            "checksum": "a5d334f84e9b12e063f216e6da4593e3bdab08666393d34c0f3c626edab51875"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object (used by most operations)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C813855E-6BF1-488F-B6F2-FAF3B6D0F6BD"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.837Z",
+            "checksum": "037600dbcf1749fc57c6ea8004a517301cdd2208e54316fda40358e5a5a82625"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Path",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path for ListObjects operation",
+            "IsRequired": false,
+            "DefaultValue": "/"
+          },
+          "primaryKey": {
+            "ID": "FFE1D84E-83A0-45A6-A846-99582B29519F"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.893Z",
+            "checksum": "a830e17698e8f0de81f14df3f6ac2d8733c3fd2ebb4e75e062aadb57572e5df3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Delimiter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Path delimiter for ListObjects operation",
+            "IsRequired": false,
+            "DefaultValue": "/"
+          },
+          "primaryKey": {
+            "ID": "AC9187C9-D4B0-4C57-B96D-B85EC88FDC23"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.904Z",
+            "checksum": "bd2ac59ee40fd870605ca76010f85b8cbe874f9082216dc47866a2dacaa5823e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Source file path for CopyObject or MoveObject operations",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C6B8F51F-74EB-4474-8955-236E62DE88E3"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.852Z",
+            "checksum": "a63de3f92f28aad5816377447925fff93b85f799a4c7ce8544c5e535ec484e6e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DestinationObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Destination file path for CopyObject or MoveObject operations",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "280A62E7-F54F-4551-8D51-A88604C1EF8F"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.863Z",
+            "checksum": "439e54e2bbc3abdb7294a1fafabe74de0778d71eb6535a9bfa0284941cd3fb1a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DirectoryPath",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path for CreateDirectory, DeleteDirectory, or DirectoryExists operations",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AD6F05CE-AE88-48A6-BCDA-683C644C4BF8"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.873Z",
+            "checksum": "bf56ed515bb9dffc3ef4a34f4f5735d72efd4d37aa3ecaceae2474ca3e35d4eb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Recursive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean flag for recursive directory deletion",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "94E21D26-CD01-43C9-A311-ADA77B8213F8"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.913Z",
+            "checksum": "15e86ec18a700722b1916addb560c32d1fe46bb28fce2c1498b5dbbb6d33a35f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Objects",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of file objects returned by ListObjects operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4203FC8C-35B4-4E03-B49E-E34C0A65F8A0"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.884Z",
+            "checksum": "c89b16e058ba60f871b2165540066236a5fbc4f823ab8479ab172323194d97d7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Prefixes",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Array of directory prefixes returned by ListObjects operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "99C87E3B-A0E5-4352-A722-572C5E67211F"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.932Z",
+            "checksum": "71d6ac8c8ed0b67e87f4451f49598a3e3e1622d58d49358439e089a56f5563a4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of objects returned by ListObjects operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9F541958-3B0F-46B7-A32C-D77DA388E12F"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.942Z",
+            "checksum": "acf8c06dc8f9f9b962e266179d359ce00f00672ae834d016ee85d12d7125e07c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DirectoryCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of directories returned by ListObjects operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1AB01DBD-2DFD-40FE-AC85-2D46683E23AB"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.952Z",
+            "checksum": "99ca741ecf41e0e131a86f9ecc08aaf7c4fdf11543cbb10388485cf516f84dfa"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "File name from GetMetadata operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "601A8D87-0FB2-4EA5-AAC9-76DF5432A37B"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.962Z",
+            "checksum": "20d91da1f9ef95fbcecf16cb7a1d9f317277e26ff203a92aa47cf83cc8317b43"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FullPath",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Full path from GetMetadata operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D5B942A0-9F41-4FFA-8A58-B6DBDFA97B86"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.972Z",
+            "checksum": "6dd56e75efd9e5dd87a15e84f96c883cea68fb2f0e5f096720399aa905845cb9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Size",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "File size in bytes from GetMetadata or GetObject operations",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "33CE6E85-9814-434E-A913-B345E7AE720C"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.982Z",
+            "checksum": "8cf4bcdc30c36fdc66b5308a7b210dcd97443687aea9e72c7e181ff63e5337ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContentType",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Content MIME type from GetMetadata operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5F09E32A-367C-46C4-9139-D809E83813E0"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:24.994Z",
+            "checksum": "d83185b907465cffd796f561fdf0173abe0152821727941f6768b4dd139b1ac4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastModified",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Last modified timestamp from GetMetadata operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "719017A9-5211-4B42-829A-2B94D38EDA22"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.005Z",
+            "checksum": "f77704abc4cc152656ba3572b5be823d08e171c240cab344bc81e7b51dce9322"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsDirectory",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if object is a directory from GetMetadata operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "47035822-38B8-468E-BC55-065BF3B7AA9E"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.016Z",
+            "checksum": "1c82f4ce482828ca0a854a2b95f9899d7869752b23f860b6c65981c8af7e6c05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ETag",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity tag from GetMetadata operation (if available)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5484ADF1-47DA-4E69-81A5-67ADD4E365D9"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.025Z",
+            "checksum": "f79f76b9fbfbb88a6c4e22173876e14557173404d7b816f1d9e97e5b43bf24d0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CustomMetadata",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Custom metadata key-value pairs from GetMetadata operation (if available)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "406A1E53-0B8D-4AA5-A971-34800EF5D797"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.076Z",
+            "checksum": "2717a8b1bedd13d929d9625372c0166c3f1540d537b9e7e217a288cd338d777e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Base64-encoded file content from GetObject operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "69B0B335-7066-4B4A-9D8A-A866E45DD12A"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.086Z",
+            "checksum": "97b91c1b787ace17743bbca187950578caa5fc97b900918fbcd769e52f72282f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DownloadUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pre-authenticated download URL from GetDownloadUrl operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "116729B5-5B83-4C23-930C-F07E0C1932CA"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.098Z",
+            "checksum": "1601d87af69c9233b8ecdcdb90fdcf86ada6b1ee18ccdb530724f2cf814057f8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UploadUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pre-authenticated upload URL from GetUploadUrl operation",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "36AC27FC-3AE8-4DCB-AC52-30D1D3F7996C"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.108Z",
+            "checksum": "c1caa9631ad2a39b6dd062eef79053edcdac8442b6e6b3e9742a685d2e540166"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProviderKey",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider-specific key from GetUploadUrl operation (if returned by provider)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "32A95595-5A68-45C6-9D11-C158A3D05653"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.118Z",
+            "checksum": "5a60a217bed3c0b2a20bc8b26dd59aa236d6bc2b2e1504ec6f32481f68818b22"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Exists",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if object or directory exists from ObjectExists or DirectoryExists operations",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "355F4125-E27F-4E56-95BA-2E1D7D834DA7"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.128Z",
+            "checksum": "438d040e8e2615843f23bf9f66f858f905aad575e27043cf8e4e8c80bd0e452b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating success of CopyObject, MoveObject, DeleteObject, CreateDirectory, or DeleteDirectory operations",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D0E20C2E-11B6-421F-88C5-62B181A75CF6"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.137Z",
+            "checksum": "4ba5e38e782d94ca212339fb92714134c51c61d193963acb3b8a6a467913ad58"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "F3D8F60B-A036-4CB4-852E-6E5D0C94C4FE"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.049Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OPERATION",
+            "IsSuccess": false,
+            "Description": "Operation parameter is required"
+          },
+          "primaryKey": {
+            "ID": "B735F41D-166A-4007-B074-1107B47ED707"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.058Z",
+            "checksum": "f89124a75a003590b06548bf7b34d10fc443f853f379aa2f3fa6eea4be4f96dd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "2F91C94C-E71F-4541-B66C-87CA1943FD09"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.067Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "BB703E53-E159-466D-A13A-E990AF3D2120"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.149Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_OPERATION",
+            "IsSuccess": false,
+            "Description": "Unknown or invalid operation specified"
+          },
+          "primaryKey": {
+            "ID": "A84A4830-B191-4E34-BD28-745800BD2EB7"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.157Z",
+            "checksum": "b00bcb250815e83a6d0b4b3a443fcf912af81cdd5e71528f15fba8851e905df4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OBJECTNAME",
+            "IsSuccess": false,
+            "Description": "ObjectName parameter is required for this operation"
+          },
+          "primaryKey": {
+            "ID": "F26DB5CE-8ECF-4A21-AF9D-A736EF014323"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.167Z",
+            "checksum": "325f29f6cc7c351c0b8069816dac634642088e528f55855e867714c993892a9a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DIRECTORYPATH",
+            "IsSuccess": false,
+            "Description": "DirectoryPath parameter is required for this operation"
+          },
+          "primaryKey": {
+            "ID": "5CC97C27-0BEF-40F7-88DE-D88912D525CC"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.176Z",
+            "checksum": "69101dbee70d303b98b20845debe56f503b04ab055d8662bf7642704d04e5252"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_SOURCE",
+            "IsSuccess": false,
+            "Description": "SourceObjectName parameter is required for this operation"
+          },
+          "primaryKey": {
+            "ID": "082264A7-4335-4C45-BC05-C6424B6EAA25"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.186Z",
+            "checksum": "67319e3bf0fde56b28203b11f12a2fd965d583a1a454e764b14da10384d8d85c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DESTINATION",
+            "IsSuccess": false,
+            "Description": "DestinationObjectName parameter is required for this operation"
+          },
+          "primaryKey": {
+            "ID": "A9C8806F-EF73-485D-978A-F5F03E3A0909"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.196Z",
+            "checksum": "ec8e40f50205651a82a49be6d1dfab8523edbef3405682d963fb850decb59c08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "File storage operation failed"
+          },
+          "primaryKey": {
+            "ID": "115100C5-A26A-4CE0-96C0-4F77C616525E"
+          },
+          "sync": {
+            "lastModified": "2025-09-29T21:29:25.205Z",
+            "checksum": "6c8a864d739711bc0e1f1ccfc3a11e1477345d3c5cc2632c5036a3fb5efbe41f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "77D34B5A-F636-49E1-A20B-6446502BD65E"
+    },
+    "sync": {
+      "lastModified": "2025-09-29T21:29:24.783Z",
+      "checksum": "9940f969c6b9c6d67291b9fd717da7225353aeb8c5e1dcf1d955da8fcb74f2c5"
+    }
+  }
+]
