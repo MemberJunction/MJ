@@ -111,6 +111,18 @@ jobs:
         run: |
           EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
           npm run version:safe
+
+          # Commit post-hook changes (core/global restoration and dependency fixes)
+          if [[ -n $(git status -s) ]]; then
+            git add .
+            git commit -m "Post-changeset: Restore core and global to 2.100.3
+
+            Automatically restored pinned packages after changeset version bump."
+            echo "::notice::Committed post-hook changes"
+          else
+            echo "::notice::No post-hook changes to commit"
+          fi
+
           NEXT_VERSION=$(jq -r .version packages/MJServer/package.json)
           echo "::notice::Version to be published: $NEXT_VERSION"
           if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
@@ -135,13 +147,13 @@ jobs:
           fi
 
           # Count all @memberjunction packages EXCEPT core and global
-          MJ_PACKAGE_COUNT=$(grep --exclude-dir node_modules --include package.json -R '"name": "@memberjunction/' | grep -v '@memberjunction/core' | grep -v '@memberjunction/global' | wc -l)
-          NEXT_VERSION_PACKAGE_COUNT=$(grep --exclude-dir node_modules --include package.json -R '"version": "'$NEXT_VERSION'"' | grep -v packages/MJCore/package.json | grep -v packages/MJGlobal/package.json | wc -l)
+          MJ_PACKAGE_COUNT=$(grep --include package.json -R '"name": "@memberjunction/' packages/ | grep -v '@memberjunction/core' | grep -v '@memberjunction/global' | wc -l)
+          NEXT_VERSION_PACKAGE_COUNT=$(grep --include package.json -R '"version": "'$NEXT_VERSION'"' packages/ | grep -v packages/MJCore/package.json | grep -v packages/MJGlobal/package.json | wc -l)
 
           if [ "$MJ_PACKAGE_COUNT" != "$NEXT_VERSION_PACKAGE_COUNT" ]; then
             echo "::error::One or more packages (excluding core and global) would not be published with version ($NEXT_VERSION)"
             echo "Packages not at expected version:"
-            grep --exclude-dir node_modules --include package.json -RL '"version": "'$NEXT_VERSION'"' | grep -v packages/MJCore/package.json | grep -v packages/MJGlobal/package.json | xargs grep '"name": "@memberjunction/'
+            grep --include package.json -RL '"version": "'$NEXT_VERSION'"' packages/ | grep -v packages/MJCore/package.json | grep -v packages/MJGlobal/package.json | xargs grep '"name": "@memberjunction/'
             exit 1
           fi
 
