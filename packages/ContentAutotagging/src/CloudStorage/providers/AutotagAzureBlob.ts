@@ -45,8 +45,6 @@ export class AutotagAzureBlob extends CloudStorageBase {
         }
     }
     
-    // NEW CLOUD-FRIENDLY METHODS
-    
     /**
      * Discovery phase: List Azure Blob Storage items and identify new/modified blobs
      * @param contentSources - Azure Blob content sources to discover items from

@@ -56,11 +56,11 @@ async function main(): Promise<void> {
         const autotagger = new AutotagAzureBlob(connectionString, containerName);
 
         // Option 1: Full discovery and processing pipeline
-        // await fullPipelineExample(autotagger, systemUser);
+        await fullPipelineExample(autotagger, systemUser);
         
         // Option 2: Direct re-tagging of specific items
-        const filter = `ID='286EEFB4-1AEE-48FF-978A-C5F1B9793FC0'`
-        await retagItemsByFilter(autotagger, systemUser, filter);
+        // const filter = `ID='286EEFB4-1AEE-48FF-978A-C5F1B9793FC0'`
+        // await retagItemsByFilter(autotagger, systemUser, filter);
 
         console.log('✅ All processing completed successfully!');
         
@@ -76,57 +76,57 @@ async function main(): Promise<void> {
     }
 }
 
-// async function fullPipelineExample(autotagger: AutotagAzureBlob, systemUser: UserInfo): Promise<void> {
-//     console.log('\\n🔍 === FULL PIPELINE EXAMPLE ===');
+async function fullPipelineExample(autotagger: AutotagAzureBlob, systemUser: UserInfo): Promise<void> {
+    console.log('\\n🔍 === FULL PIPELINE EXAMPLE ===');
     
-//     // Get content sources and discover items using the engine directly
-//     const engine = AutotagBaseEngine.Instance;
-//     const contentSourceTypeID = await engine.setSubclassContentSourceType('Azure Blob Storage', systemUser);
-//     const contentSources = await engine.getAllContentSources(systemUser, contentSourceTypeID);
-//     console.log(`Found ${contentSources.length} Azure Blob content sources`);
+    // Get content sources and discover items using the engine directly
+    const engine = AutotagBaseEngine.Instance;
+    const contentSourceTypeID = await engine.setSubclassContentSourceType('Azure Blob Storage', systemUser);
+    const contentSources = await engine.getAllContentSources(systemUser, contentSourceTypeID);
+    console.log(`Found ${contentSources.length} Azure Blob content sources`);
 
-//     if (contentSources.length === 0) {
-//         console.log('No content sources found. Skipping pipeline example.');
-//         return;
-//     }
+    if (contentSources.length === 0) {
+        console.log('No content sources found. Skipping pipeline example.');
+        return;
+    }
 
-//     // Discover what needs processing
-//     const discoveredItems = await autotagger.DiscoverContentToProcess(contentSources, systemUser);
-//     console.log(`Discovered ${discoveredItems.length} items to process`);
+    // Discover what needs processing
+    const discoveredItems = await autotagger.DiscoverContentToProcess(contentSources, systemUser);
+    console.log(`Discovered ${discoveredItems.length} items to process`);
 
-//     if (discoveredItems.length === 0) {
-//         console.log('No items discovered for processing.');
-//         return;
-//     }
+    if (discoveredItems.length === 0) {
+        console.log('No items discovered for processing.');
+        return;
+    }
 
-//     // Phase 2: Create/update ContentItems with parsed text
-//     console.log('\\n📝 Creating ContentItems with parsed text...');
-//     const contentItems: ContentItemEntity[] = [];
+    // Phase 2: Create/update ContentItems with parsed text
+    console.log('\\n📝 Creating ContentItems with parsed text...');
+    const contentItems: ContentItemEntity[] = [];
 
-//     for (const [index, discoveryResult] of discoveredItems.entries()) {
-//         try {
-//             console.log(`Processing item ${index + 1}/${discoveredItems.length}: ${discoveryResult.identifier}`);
-//             const contentItem = await autotagger.SetSingleContentItem(discoveryResult, systemUser);
-//             contentItems.push(contentItem);
-//         } catch (error) {
-//             console.error(`Error processing item ${discoveryResult.identifier}:`, (error as Error).message);
-//             // Continue with other items
-//         }
-//     }
+    for (const [index, discoveryResult] of discoveredItems.entries()) {
+        try {
+            console.log(`Processing item ${index + 1}/${discoveredItems.length}: ${discoveryResult.identifier}`);
+            const contentItem = await autotagger.SetSingleContentItem(discoveryResult, systemUser);
+            contentItems.push(contentItem);
+        } catch (error) {
+            console.error(`Error processing item ${discoveryResult.identifier}:`, (error as Error).message);
+            // Continue with other items
+        }
+    }
 
-//     console.log(`Successfully processed ${contentItems.length} ContentItems`);
+    console.log(`Successfully processed ${contentItems.length} ContentItems`);
 
-//     // Phase 3: Apply LLM processing to extract tags
-//     console.log('\\n🤖 Applying LLM processing...');
-//     for (const contentItem of contentItems) {
-//         try {
-//             console.log(`Tagging item: ${contentItem.Name}`);
-//             await autotagger.TagSingleContentItem(contentItem, systemUser);
-//         } catch (error) {
-//             console.error(`Error tagging item ${contentItem.Name}:`, (error as Error).message);
-//         }
-//     }
-// }
+    // Phase 3: Apply LLM processing to extract tags
+    console.log('\\n🤖 Applying LLM processing...');
+    for (const contentItem of contentItems) {
+        try {
+            console.log(`Tagging item: ${contentItem.Name}`);
+            await autotagger.TagSingleContentItem(contentItem, systemUser);
+        } catch (error) {
+            console.error(`Error tagging item ${contentItem.Name}:`, (error as Error).message);
+        }
+    }
+}
 
 async function retagSpecificItems(autotagger: AutotagAzureBlob, systemUser: UserInfo): Promise<void> {
     console.log('\\n🏷️ === RETAG SPECIFIC ITEMS EXAMPLE ===');

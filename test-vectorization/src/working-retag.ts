@@ -79,15 +79,10 @@ async function workingRetag(): Promise<void> {
         for (const contentItem of contentItems) {
             try {
                 console.log(`🏷️ Re-tagging item: ${contentItem.ID} - ${contentItem.Name}`);
+    
+                await autotagger.TagSingleContentItem(contentItem, systemUser, ['DistrictName']);
+                console.log(`✅ Successfully re-tagged: ${contentItem.Name}`);
                 
-                // Check if the method exists on the autotagger
-                if (typeof autotaggerAny.TagSingleContentItem === 'function') {
-                    await autotaggerAny.TagSingleContentItem(contentItem, systemUser);
-                    console.log(`✅ Successfully re-tagged: ${contentItem.Name}`);
-                } else {
-                    console.error(`❌ TagSingleContentItem method not found on autotagger`);
-                    console.log('Available methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(autotagger)));
-                }
             } catch (error) {
                 console.error(`❌ Error re-tagging ${contentItem.Name}:`, (error as Error).message);
             }

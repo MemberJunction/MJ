@@ -39,13 +39,15 @@ export abstract class AutotagBase {
      * This method is generic and can be used by all subclasses
      * @param contentItem - ContentItem to process with LLM
      * @param contextUser - User context
+     * @param protectedFields - Array of ContentItem field names that should not be updated (e.g., ['Name', 'Description'])
      */
     public async TagSingleContentItem(
         contentItem: ContentItemEntity, 
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        protectedFields?: string[]
     ): Promise<void> {
         const contentItems = [contentItem];
-        await this.engine.ExtractTextAndProcessWithLLM(contentItems, contextUser);
+        await this.engine.ExtractTextAndProcessWithLLM(contentItems, contextUser, protectedFields);
     }
 
     // LEGACY METHODS (for backward compatibility)

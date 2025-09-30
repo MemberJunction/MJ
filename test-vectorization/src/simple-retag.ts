@@ -77,7 +77,7 @@ async function simpleRetag(): Promise<void> {
                 console.log(`🏷️ Re-tagging item: ${contentItem.ID} - ${contentItem.Name}`);
                 
                 // This uses the improved TagSingleContentItem method with update logic
-                await autotagger.TagSingleContentItem(contentItem, systemUser);
+                await autotagger.TagSingleContentItem(contentItem, systemUser, ['DistrictName']);
                 
                 console.log(`✅ Successfully re-tagged: ${contentItem.Name}`);
             } catch (error) {

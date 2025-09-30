@@ -35,7 +35,7 @@ export class AutotagBaseEngine extends AIEngine {
      * @param contentItems 
      * @returns 
      */
-    public async ExtractTextAndProcessWithLLM(contentItems: ContentItemEntity[], contextUser: UserInfo): Promise<void> {
+    public async ExtractTextAndProcessWithLLM(contentItems: ContentItemEntity[], contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
             console.log('No content items to process');
             return;
@@ -64,7 +64,7 @@ export class AutotagBaseEngine extends AIEngine {
                 processingParams.maxTags = maxTags;
                 processingParams.contentItemID = contentItem.ID;
 
-                await this.ProcessContentItemText(processingParams, contextUser);
+                await this.ProcessContentItemText(processingParams, contextUser, protectedFields);
 
             }
 
@@ -87,7 +87,8 @@ export class AutotagBaseEngine extends AIEngine {
     public async ExtractTextAndProcessWithLLMEnhanced(
         contentItems: ContentItemEntity[], 
         contextUser: UserInfo,
-        structuredDataMap?: Map<string, StructuredPDFContent>
+        structuredDataMap?: Map<string, StructuredPDFContent>,
+        protectedFields?: string[]
     ): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
             console.log('No content items to process');
@@ -126,7 +127,7 @@ export class AutotagBaseEngine extends AIEngine {
                 processingParams.contentItemID = contentItem.ID;
 
                 // Use enhanced processing method
-                await this.ProcessContentItemTextEnhanced(processingParams, contextUser);
+                await this.ProcessContentItemTextEnhanced(processingParams, contextUser, protectedFields);
 
             }
 
@@ -146,9 +147,9 @@ export class AutotagBaseEngine extends AIEngine {
      * @param params 
      * @returns 
      */
-    public async ProcessContentItemText(params: ContentItemProcessParams, contextUser: UserInfo): Promise<void> {
+    public async ProcessContentItemText(params: ContentItemProcessParams, contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
         const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
-        await this.saveLLMResults(LLMResults, contextUser);
+        await this.saveLLMResults(LLMResults, contextUser, protectedFields);
     }
 
     /**
@@ -156,7 +157,7 @@ export class AutotagBaseEngine extends AIEngine {
      * @param params Enhanced processing parameters that may include structured data
      * @param contextUser User context
      */
-    public async ProcessContentItemTextEnhanced(params: ContentItemProcessParamsExtended, contextUser: UserInfo): Promise<void> {
+    public async ProcessContentItemTextEnhanced(params: ContentItemProcessParamsExtended, contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
         let LLMResults: JsonObject;
 
         // Check if we should use vision processing for tabular content
@@ -191,7 +192,7 @@ export class AutotagBaseEngine extends AIEngine {
             LLMResults = await this.promptAndRetrieveResultsFromLLM(processParams, contextUser);
         }
 
-        await this.saveLLMResults(LLMResults, contextUser);
+        await this.saveLLMResults(LLMResults, contextUser, protectedFields);
     }
 
     public async promptAndRetrieveResultsFromLLM(params: ContentItemProcessParams, contextUser: UserInfo) { 
@@ -314,10 +315,10 @@ export class AutotagBaseEngine extends AIEngine {
         return { systemPrompt, userPrompt }
     }
 
-    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo) {
+    public async saveLLMResults(LLMResults: JsonObject, contextUser: UserInfo, protectedFields?: string[]) {
         if (LLMResults.isValidContent === true) {   
             // Only save results if the content is of the type that we expected. 
-            await this.saveResultsToContentItemAttribute(LLMResults, contextUser)
+            await this.saveResultsToContentItemAttribute(LLMResults, contextUser, protectedFields)
             await this.saveContentItemTags(LLMResults.contentItemID, LLMResults, contextUser)
             console.log(`Results for content item ${LLMResults.contentItemID} saved successfully`)
         }
@@ -414,45 +415,53 @@ export class AutotagBaseEngine extends AIEngine {
         }
     }
 
-    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo) {
+    public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo, protectedFields?: string[]) {
         const md = new Metadata()
+        const protectedFieldsSet = new Set(protectedFields || []);
+        
         for (const key in LLMResults) {
-            // Overwrite name of content item with title if it exists
             if (key === 'title') {
                 const ID = LLMResults.contentItemID
                 const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
                 await contentItem.Load(ID)
                 contentItem.Name = LLMResults.title
                 await contentItem.Save()
+                console.log(`Updated ContentItem Name from 'title' for ContentItem ${ID}`);
             }
-            if(key === 'description') {
+            else if(key === 'description') {
                 const ID = LLMResults.contentItemID
                 const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser)
                 await contentItem.Load(ID)
                 contentItem.Description = LLMResults.description
                 await contentItem.Save()
+                console.log(`Updated ContentItem Description from 'description' for ContentItem ${ID}`);
             }
-            if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
-                //Value should be a string, if its a null or undefined value, set it to an empty string
-                const value = LLMResults[key] || ''
+            // Handle custom ContentItemAttribute updates with protection
+            else if (key !== 'keywords' && key !== 'processStartTime' && key !== 'processEndTime' && key !== 'contentItemID' && key !== 'isValidContent') {
+                if (!protectedFieldsSet.has(key)) {
+                    //Value should be a string, if its a null or undefined value, set it to an empty string
+                    const value = LLMResults[key] || ''
 
-                // Check if attribute already exists for this ContentItem and Name
-                const existingAttribute = await this.getExistingContentItemAttribute(LLMResults.contentItemID, key, contextUser);
-                
-                if (existingAttribute) {
-                    // Update existing attribute
-                    existingAttribute.Value = value;
-                    await existingAttribute.Save();
-                    console.log(`Updated existing attribute '${key}' for ContentItem ${LLMResults.contentItemID}`);
+                    // Check if attribute already exists for this ContentItem and Name
+                    const existingAttribute = await this.getExistingContentItemAttribute(LLMResults.contentItemID, key, contextUser);
+                    
+                    if (existingAttribute) {
+                        // Update existing attribute
+                        existingAttribute.Value = value;
+                        await existingAttribute.Save();
+                        console.log(`Updated existing attribute '${key}' for ContentItem ${LLMResults.contentItemID}`);
+                    } else {
+                        // Create new attribute
+                        const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
+                        contentItemAttribute.NewRecord()
+                        contentItemAttribute.ContentItemID = LLMResults.contentItemID
+                        contentItemAttribute.Name = key
+                        contentItemAttribute.Value = value
+                        await contentItemAttribute.Save()
+                        console.log(`Created new attribute '${key}' for ContentItem ${LLMResults.contentItemID}`);
+                    }
                 } else {
-                    // Create new attribute
-                    const contentItemAttribute = await md.GetEntityObject<ContentItemAttributeEntity>('Content Item Attributes', contextUser)
-                    contentItemAttribute.NewRecord()
-                    contentItemAttribute.ContentItemID = LLMResults.contentItemID
-                    contentItemAttribute.Name = key
-                    contentItemAttribute.Value = value
-                    await contentItemAttribute.Save()
-                    console.log(`Created new attribute '${key}' for ContentItem ${LLMResults.contentItemID}`);
+                    console.log(`Skipped updating ContentItemAttribute '${key}' (protected field) for ContentItem ${LLMResults.contentItemID}`);
                 }
             }
         }
