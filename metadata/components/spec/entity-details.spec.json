@@ -356,6 +356,13 @@
   ],
   "exampleUsage": "<EntityDetails\n  entity={selectedEntity}\n  fields={entityFields}\n  relationships={entityRelationships}\n  isOpen={detailsPanelOpen}\n  onClose={handleCloseDetails}\n  onOpenRecord={handleOpenRecord}\n  utilities={utilities}\n  styles={styles}\n  components={components}\n  callbacks={callbacks}\n/>",
   "code": "@file:../code/entity-details.js",
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "OpenRecordButton",
+      "location": "registry",
+      "namespace": "Generic/Navigation",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": []
 }

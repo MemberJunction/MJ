@@ -1,7 +1,8 @@
 function InvoiceStatusDashboard({ utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
   // Extract AIInsightsPanel from components
   const AIInsightsPanel = components?.AIInsightsPanel;
-  
+  const DataExportPanel = components?.DataExportPanel;
+
   if (!AIInsightsPanel) {
     console.warn('AIInsightsPanel component not available');
   }
@@ -14,7 +15,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
   const [selectedData, setSelectedData] = useState(null);
   const [drillDownType, setDrillDownType] = useState(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
-  const [timePeriod, setTimePeriod] = useState(savedUserSettings?.timePeriod || 'month');
+  const [timePeriod, setTimePeriod] = useState(savedUserSettings?.timePeriod || 'all');
   const [startDate, setStartDate] = useState(savedUserSettings?.startDate || null);
   const [endDate, setEndDate] = useState(savedUserSettings?.endDate || null);
   
@@ -28,19 +29,20 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
   const [loadingInsights, setLoadingInsights] = useState(false);
   const [insightsError, setInsightsError] = useState(null);
 
-  useEffect(() => {
-    loadData();
-  }, [timePeriod, startDate, endDate]);
+  const getDateFilter = React.useCallback(() => {
+    // If showing all data, return empty filter
+    if (timePeriod === 'all') {
+      return '';
+    }
 
-  const getDateFilter = () => {
     // If custom dates are set, use them
     if (timePeriod === 'custom' && startDate && endDate) {
       return `InvoiceDate >= '${startDate}' AND InvoiceDate <= '${endDate}'`;
     }
-    
+
     const now = new Date();
     let filterStart, filterEnd;
-    
+
     switch (timePeriod) {
       case 'month':
         filterStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -78,17 +80,25 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
       return `InvoiceDate >= '${filterStart.toISOString().split('T')[0]}' AND InvoiceDate <= '${filterEnd.toISOString().split('T')[0]}'`;
     }
     return '';
-  };
+  }, [timePeriod, startDate, endDate]);
 
-  const loadData = async () => {
+  const loadData = React.useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const dateFilter = getDateFilter();
-      
+
+      // Check which API is available
+      const runViewsMethod = utilities?.RunViews || utilities?.rv?.RunViews;
+
+      if (!runViewsMethod) {
+        setError('Data loading method not available');
+        return;
+      }
+
       // Use RunViews for batch loading
-      const results = await utilities.rv.RunViews([
+      const results = await runViewsMethod([
         {
           EntityName: 'Invoices',
           ExtraFilter: dateFilter,
@@ -107,7 +117,7 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
 
       if (results && results.length === 3) {
         const [invoicesResult, paymentsResult, accountsResult] = results;
-        
+
         if (invoicesResult.Success) {
           setInvoices(invoicesResult.Results || []);
         }
@@ -117,20 +127,27 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
         if (accountsResult.Success) {
           setAccounts(accountsResult.Results || []);
         }
-        
+
         if (!invoicesResult.Success) {
-          setError('Failed to load invoice data');
+          setError('Failed to load invoice data: ' + (invoicesResult.ErrorMessage || 'Unknown error'));
         }
+      } else {
+        setError('Unexpected data format received');
       }
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, [getDateFilter, utilities]);
 
-  const calculateMetrics = () => {
-    const metrics = {
+  // Load data when component mounts or filters change
+  useEffect(() => {
+    loadData();
+  }, [loadData, timePeriod, startDate, endDate]);
+
+  const metrics = React.useMemo(() => {
+    const result = {
       total: invoices.length,
       totalAmount: 0,
       paid: 0,
@@ -159,47 +176,47 @@ function InvoiceStatusDashboard({ utilities, styles, components, callbacks, save
       const paidAmount = paidByInvoice[invoice.ID] || 0;
       const remainingAmount = amount - paidAmount;
       
-      metrics.totalAmount += amount;
-      
+      result.totalAmount += amount;
+
       if (invoice.Status === 'Paid' || remainingAmount <= 0) {
-        metrics.paid++;
-        metrics.paidAmount += amount;
+        result.paid++;
+        result.paidAmount += amount;
       } else if (invoice.Status === 'Cancelled') {
         // Skip cancelled invoices
       } else if (invoice.Status === 'Partial' || (paidAmount > 0 && remainingAmount > 0)) {
-        metrics.partial++;
-        metrics.partialAmount += remainingAmount;
+        result.partial++;
+        result.partialAmount += remainingAmount;
         if (new Date(invoice.DueDate) < today) {
-          metrics.overdue++;
-          metrics.overdueAmount += remainingAmount;
+          result.overdue++;
+          result.overdueAmount += remainingAmount;
         }
       } else if (new Date(invoice.DueDate) < today) {
-        metrics.overdue++;
-        metrics.overdueAmount += remainingAmount;
+        result.overdue++;
+        result.overdueAmount += remainingAmount;
       } else {
-        metrics.pending++;
-        metrics.pendingAmount += remainingAmount;
+        result.pending++;
+        result.pendingAmount += remainingAmount;
       }
     });
-    
-    return metrics;
-  };
 
-  const openDrillDown = (type, data) => {
+    return result;
+  }, [invoices, payments]);
+
+  const openDrillDown = React.useCallback((type, data) => {
     setDrillDownType(type);
     setSelectedData(data);
     setIsPanelOpen(true);
-  };
+  }, []);
   
   // Generate AI Insights
   // Format insights text using marked library for proper markdown rendering
 
-  const generateAIInsights = async () => {
+  const generateAIInsights = React.useCallback(async () => {
     setLoadingInsights(true);
     setInsightsError(null);
     
     try {
-      const metrics = calculateMetrics();
+      // metrics is already calculated via useMemo
       
       // Calculate aging breakdown
       const aging = { current: 0, '30days': 0, '60days': 0, '90days': 0, 'over90': 0 };
@@ -295,20 +312,77 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
     } finally {
       setLoadingInsights(false);
     }
-  };
+  }, [invoices, payments, metrics, utilities.ai]);
 
-  const closeDrillDown = () => {
+  const closeDrillDown = React.useCallback(() => {
     setIsPanelOpen(false);
     setTimeout(() => {
       setSelectedData(null);
       setDrillDownType(null);
     }, 300);
-  };
+  }, []);
+
+  // Prepare data for export - memoized to prevent re-computation
+  const prepareExportData = React.useMemo(() => {
+    // metrics is already calculated via useMemo
+    const today = new Date();
+    const paidByInvoice = {};
+    payments.forEach(payment => {
+      if (!paidByInvoice[payment.InvoiceID]) {
+        paidByInvoice[payment.InvoiceID] = 0;
+      }
+      paidByInvoice[payment.InvoiceID] += payment.Amount || 0;
+    });
+
+    return invoices.map(invoice => {
+      const paidAmount = paidByInvoice[invoice.ID] || 0;
+      const outstanding = (invoice.TotalAmount || 0) - paidAmount;
+      const dueDate = new Date(invoice.DueDate);
+      const daysPastDue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
+
+      let agingBucket = 'Current';
+      if (daysPastDue > 0) {
+        if (daysPastDue <= 30) agingBucket = '1-30 Days';
+        else if (daysPastDue <= 60) agingBucket = '31-60 Days';
+        else if (daysPastDue <= 90) agingBucket = '61-90 Days';
+        else agingBucket = 'Over 90 Days';
+      }
+
+      return {
+        InvoiceNumber: invoice.InvoiceNumber || '',
+        AccountName: invoice.AccountName || '',
+        InvoiceDate: invoice.InvoiceDate ? new Date(invoice.InvoiceDate).toLocaleDateString() : '',
+        DueDate: invoice.DueDate ? new Date(invoice.DueDate).toLocaleDateString() : '',
+        TotalAmount: `$${(invoice.TotalAmount || 0).toFixed(2)}`,
+        PaidAmount: `$${paidAmount.toFixed(2)}`,
+        Outstanding: `$${outstanding.toFixed(2)}`,
+        Status: invoice.Status || '',
+        DaysPastDue: Math.max(0, daysPastDue),
+        AgingBucket: agingBucket
+      };
+    });
+  }, [invoices, payments, metrics]);
+
+  // Define export columns - memoized to prevent re-creation
+  const getExportColumns = React.useMemo(() => {
+    return [
+      { key: 'InvoiceNumber', label: 'Invoice Number' },
+      { key: 'AccountName', label: 'Account Name' },
+      { key: 'InvoiceDate', label: 'Invoice Date' },
+      { key: 'DueDate', label: 'Due Date' },
+      { key: 'TotalAmount', label: 'Total Amount' },
+      { key: 'PaidAmount', label: 'Paid Amount' },
+      { key: 'Outstanding', label: 'Outstanding' },
+      { key: 'Status', label: 'Status' },
+      { key: 'DaysPastDue', label: 'Days Past Due' },
+      { key: 'AgingBucket', label: 'Aging Bucket' }
+    ];
+  }, []);
 
   // Status Distribution Chart with click handler
   useEffect(() => {
     if (!loading && statusChartRef.current && invoices.length > 0) {
-      const metrics = calculateMetrics();
+      // metrics is already calculated via useMemo
       const ctx = statusChartRef.current.getContext('2d');
       
       // Destroy existing chart
@@ -840,7 +914,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
     );
   }
 
-  const metrics = calculateMetrics();
+  // metrics is already calculated via useMemo above
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#F3F4F6', minHeight: '100%' }}>
@@ -891,6 +965,7 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
               cursor: 'pointer'
             }}
           >
+            <option value="all">All Time</option>
             <option value="month">This Month</option>
             <option value="lastMonth">Last Month</option>
             <option value="quarter">This Quarter</option>
@@ -948,6 +1023,38 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
             </>
           )}
           
+          {/* Export Button */}
+          {DataExportPanel && (
+            <DataExportPanel
+              key="export-panel"  // Add stable key
+              data={prepareExportData}
+              columns={getExportColumns}
+              filename={`invoice-status-dashboard-${new Date().toISOString().split('T')[0]}`}
+              formats={['csv', 'excel', 'pdf']}
+              buttonStyle="dropdown"
+              buttonText="Export"
+              icon="fa-download"
+              customStyles={{
+                button: {
+                  padding: '6px 12px',
+                  backgroundColor: '#10B981',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px'
+                }
+              }}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+            />
+          )}
+
           {/* AI Insights Button */}
           <button
             onClick={generateAIInsights}

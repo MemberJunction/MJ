@@ -302,7 +302,13 @@
   "dependencies": [
     "@include:entity-list.spec.json",
     "@include:entity-details.spec.json",
-    "@include:entity-filter.spec.json"
+    "@include:entity-filter.spec.json",
+    {
+      "name": "OpenRecordButton",
+      "location": "registry",
+      "namespace": "Generic/Navigation",
+      "version": "^1.0.0"
+    }
   ],
   "libraries": [],
   "code": "@file:../code/entity-browser.js"

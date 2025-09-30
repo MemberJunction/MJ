@@ -218,7 +218,7 @@ function SimpleDrilldownChart({
               <DataGrid
                 entityName={entityName}
                 data={getDrilldownData()}
-                fields={getGridFields()}
+                columns={getGridFields()}
                 sorting={true}
                 paging={true}
                 pageSize={10}

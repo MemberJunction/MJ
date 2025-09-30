@@ -29,20 +29,8 @@ function AIModelDetails({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
   
-  // Handle open record button
-  const handleOpenRecord = useCallback(() => {
-    console.log('AIModelDetails handleOpenRecord called', { model, onOpenRecord });
-    if (model?.Name) {
-      console.log('Calling onOpenRecord with model name:', model.Name);
-      if (onOpenRecord) {
-        onOpenRecord(model.Name);
-      } else {
-        console.error('onOpenRecord callback is not defined');
-      }
-    } else {
-      console.error('No model or model name available');
-    }
-  }, [model, onOpenRecord]);
+  // Load OpenRecordButton component
+  const OpenRecordButton = components['OpenRecordButton'];
   
   // Format token limit
   const formatTokens = (tokens) => {
@@ -640,15 +628,23 @@ function AIModelDetails({
         </div>
         
         {/* Footer with Open Record Button */}
-        {model && (
+        {model && OpenRecordButton && (
           <div style={{
             padding: styles.spacing.lg,
             borderTop: `1px solid ${styles.colors.border}`,
             backgroundColor: styles.colors.surface
           }}>
-            <button
-              onClick={handleOpenRecord}
-              style={{
+            <OpenRecordButton
+              entityName="AI Models"
+              record={model}
+              buttonText="Open Model Record"
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              savedUserSettings={savedUserSettings}
+              onSaveUserSettings={onSaveUserSettings}
+              buttonStyle={{
                 width: '100%',
                 padding: styles.spacing.md,
                 backgroundColor: styles.colors.primary,
@@ -660,15 +656,7 @@ function AIModelDetails({
                 cursor: 'pointer',
                 transition: 'background-color 0.2s'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = styles.colors.primaryHover || styles.colors.primary;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = styles.colors.primary;
-              }}
-            >
-              Open Model Record
-            </button>
+            />
           </div>
         )}
       </div>

@@ -571,14 +571,20 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
         {/* Main Visualization Area */}
         <div style={{ backgroundColor: 'white', borderRadius: '8px', padding: '20px', minWidth: 0 }}>
           {viewMode === 'treemap' && Treemap && (
-            <Treemap 
+            <Treemap
               products={products}
               lineItems={lineItems}
               invoices={invoices}
               onProductClick={handleProductClick}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              savedUserSettings={savedUserSettings}
+              onSaveUserSettings={onSaveUserSettings}
             />
           )}
-          
+
           {viewMode === 'matrix' && MatrixTable && (
             <MatrixTable
               products={products}
@@ -587,6 +593,12 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
               sortBy={sortBy}
               onSortChange={setSortBy}
               onProductClick={handleProductClick}
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              savedUserSettings={savedUserSettings}
+              onSaveUserSettings={onSaveUserSettings}
             />
           )}
         </div>
@@ -601,7 +613,12 @@ Use markdown formatting with headers (##), bullet points, and **bold** text. Ref
                 setIsPanelOpen(false);
                 setSelectedProduct(null);
               }}
+              utilities={utilities}
+              styles={styles}
+              components={components}
               callbacks={callbacks}
+              savedUserSettings={savedUserSettings}
+              onSaveUserSettings={onSaveUserSettings}
             />
           </div>
         )}

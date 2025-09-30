@@ -29,20 +29,8 @@ function EntityDetails({
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
   
-  // Handle open record button
-  const handleOpenRecord = useCallback(() => {
-    console.log('EntityDetails handleOpenRecord called', { entity, onOpenRecord });
-    if (entity?.Name) {
-      console.log('Calling onOpenRecord with entity name:', entity.Name);
-      if (onOpenRecord) {
-        onOpenRecord(entity.Name);
-      } else {
-        console.error('onOpenRecord callback is not defined');
-      }
-    } else {
-      console.error('No entity or entity name available');
-    }
-  }, [entity, onOpenRecord]);
+  // Load OpenRecordButton component
+  const OpenRecordButton = components['OpenRecordButton'];
   
   // Render field type badge
   const renderFieldType = (type) => {
@@ -571,15 +559,23 @@ function EntityDetails({
         </div>
         
         {/* Footer with Open Record Button */}
-        {entity && (
+        {entity && OpenRecordButton && (
           <div style={{
             padding: styles.spacing.lg,
             borderTop: `1px solid ${styles.colors.border}`,
             backgroundColor: styles.colors.surface
           }}>
-            <button
-              onClick={handleOpenRecord}
-              style={{
+            <OpenRecordButton
+              entityName="Entities"
+              record={entity}
+              buttonText="Open Entity Record"
+              utilities={utilities}
+              styles={styles}
+              components={components}
+              callbacks={callbacks}
+              savedUserSettings={savedUserSettings}
+              onSaveUserSettings={onSaveUserSettings}
+              buttonStyle={{
                 width: '100%',
                 padding: styles.spacing.md,
                 backgroundColor: styles.colors.primary,
@@ -591,15 +587,7 @@ function EntityDetails({
                 cursor: 'pointer',
                 transition: 'background-color 0.2s'
               }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = styles.colors.primaryHover || styles.colors.primary;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = styles.colors.primary;
-              }}
-            >
-              Open Entity Record
-            </button>
+            />
           </div>
         )}
       </div>

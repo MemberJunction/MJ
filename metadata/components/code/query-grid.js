@@ -50,11 +50,11 @@ function QueryGrid({
     loadQueries();
   }, [utilities]);
   
-  // Define which fields to display in the grid
+  // Define columns for the grid
   // These are optimized for query viewing - showing most relevant info
-  const displayFields = [
+  const columns = [
     'Name',
-    'Description', 
+    'Description',
     'Category',
     'Status',
     '__mj_UpdatedAt'
@@ -87,7 +87,7 @@ function QueryGrid({
       <DataGrid
         entityName="Queries"
         data={queries}  // null initially, then array of query objects
-        fields={displayFields}
+        columns={columns}
         filterFields={filterFields}
         utilities={utilities}
         styles={styles}

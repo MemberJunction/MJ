@@ -510,6 +510,32 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Public Links" [Visible]="record.IsSaved"> 
+                        MJ: Public Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Public Links','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Public Links')"
+                            [AllowLoad]="IsCurrentTab('MJ: Public Links')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Artifact Versions" [Visible]="record.IsSaved"> 
+                        MJ: Artifact Versions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Versions','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Artifact Versions')"
+                            [AllowLoad]="IsCurrentTab('MJ: Artifact Versions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="Resource Permissions" [Visible]="record.IsSaved"> 
                         Resource Permissions
                     </mj-tab>
@@ -549,6 +575,32 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Access Control Rules" [Visible]="record.IsSaved"> 
+                        MJ: Access Control Rules
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Access Control Rules','GrantedByUserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Access Control Rules')"
+                            [AllowLoad]="IsCurrentTab('MJ: Access Control Rules')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Artifacts" [Visible]="record.IsSaved"> 
+                        MJ: Artifacts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
+                            [AllowLoad]="IsCurrentTab('MJ: Artifacts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: AI Agent Runs" [Visible]="record.IsSaved"> 
                         MJ: AI Agent Runs
                     </mj-tab>
@@ -557,6 +609,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Runs','UserID')"  
                             [NewRecordValues]="NewRecordValues('MJ: AI Agent Runs')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Agent Runs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
+                        MJ: Tasks
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Tasks')"
+                            [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
