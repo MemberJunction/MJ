@@ -78,7 +78,11 @@ export default class ActionsRun extends Command {
         const spinner = ora();
         spinner.start(`Executing action: ${flags.name}`);
 
-        const result = await service.executeAction(flags.name, params);
+        const result = await service.executeAction(flags.name, {
+          parameters: params,
+          verbose: flags.verbose,
+          timeout: flags.timeout
+        });
 
         spinner.stop();
         this.log(formatter.formatActionResult(result));
