@@ -4333,9 +4333,20 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     });
                   }
                 }
+                else {
+                  // Missing QueryName property
+                  violations.push({
+                    rule: 'runquery-runview-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `RunQuery call is missing the required "QueryName" property.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                }
               }
             }
-            
+
             // RunView validation removed - handled by data-requirements-validation
           }
         });
@@ -7503,6 +7514,92 @@ const extendedCallbacks = { ...callbacks, onCustomEvent: handler };
         
         return violations;
       }
+    },
+
+    {
+      name: 'required-queries-not-called',
+      appliesTo: 'root',  // Only apply to root components
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Check the mode - only enforce for 'queries' or 'hybrid' mode
+        const mode = componentSpec?.dataRequirements?.mode;
+        if (mode !== 'queries' && mode !== 'hybrid') {
+          // Mode is not 'queries' or 'hybrid', so this rule doesn't apply
+          return violations;
+        }
+
+        // Check if there are any queries defined in dataRequirements
+        const hasQueries = componentSpec?.dataRequirements?.queries &&
+                          componentSpec.dataRequirements.queries.length > 0;
+
+        if (!hasQueries) {
+          // No queries defined, so no violation
+          return violations;
+        }
+
+        // Track whether RunQuery is called anywhere
+        let hasRunQueryCall = false;
+        const queryNames = componentSpec!.dataRequirements!.queries!.map(q => q.name).filter(Boolean);
+
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rq.RunQuery pattern
+            if (t.isMemberExpression(path.node.callee) &&
+                t.isMemberExpression(path.node.callee.object) &&
+                t.isIdentifier(path.node.callee.object.object) &&
+                path.node.callee.object.object.name === 'utilities' &&
+                t.isIdentifier(path.node.callee.object.property) &&
+                path.node.callee.object.property.name === 'rq' &&
+                t.isIdentifier(path.node.callee.property) &&
+                path.node.callee.property.name === 'RunQuery') {
+              hasRunQueryCall = true;
+            }
+
+            // Also check for destructured pattern: rq.RunQuery
+            if (t.isMemberExpression(path.node.callee) &&
+                t.isIdentifier(path.node.callee.object) &&
+                path.node.callee.object.name === 'rq' &&
+                t.isIdentifier(path.node.callee.property) &&
+                path.node.callee.property.name === 'RunQuery') {
+              hasRunQueryCall = true;
+            }
+          }
+        });
+
+        // If queries are defined but RunQuery is never called, that's a critical violation
+        if (!hasRunQueryCall) {
+          violations.push({
+            rule: 'required-queries-not-called',
+            severity: 'critical',
+            line: 1,
+            column: 0,
+            message: `Component has ${queryNames.length} defined ${queryNames.length === 1 ? 'query' : 'queries'} in dataRequirements (mode: '${mode}') but never calls RunQuery. Queries defined: ${queryNames.join(', ')}`,
+            suggestion: {
+              text: `When dataRequirements.mode is '${mode}' and includes queries, you must use utilities.rq.RunQuery to execute them, not RunView.`,
+              example: `// Your dataRequirements defines these queries: ${queryNames.join(', ')}
+// Mode is set to: '${mode}'
+
+// ❌ WRONG - Using RunView for a query:
+const result = await utilities.rv.RunView({
+  EntityName: '${queryNames[0] || 'QueryName'}'
+});
+
+// ✅ CORRECT - Using RunQuery for queries:
+const result = await utilities.rq.RunQuery({
+  QueryName: '${queryNames[0] || 'QueryName'}'
+});
+
+// Key differences:
+// - RunView: For entity-based data access (uses EntityName)
+// - RunQuery: For pre-defined queries (uses QueryName)
+// - dataRequirements.mode: '${mode}' requires RunQuery for queries`
+            }
+          });
+        }
+
+        return violations;
+      }
     }
   ];
   
@@ -7614,9 +7711,9 @@ const extendedCallbacks = { ...callbacks, onCustomEvent: handler };
         // Child components: include 'all' and 'child' rules
         rules = rules.filter(rule => rule.appliesTo === 'all' || rule.appliesTo === 'child');
       }
-      
+
       const violations: Violation[] = [];
-      
+
       // Run each rule
       for (const rule of rules) {
         const ruleViolations = rule.test(ast, componentName, componentSpec, options);

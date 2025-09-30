@@ -9769,6 +9769,53 @@ export const ArtifactSchema = z.object({
 export type ArtifactEntityType = z.infer<typeof ArtifactSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Collection Artifacts
+ */
+export const CollectionArtifactSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CollectionID: z.string().describe(`
+        * * Field Name: CollectionID
+        * * Display Name: Collection ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
+    ArtifactID: z.string().describe(`
+        * * Field Name: ArtifactID
+        * * Display Name: Artifact ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Sequence number for ordering artifacts within a collection`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Collection: z.string().describe(`
+        * * Field Name: Collection
+        * * Display Name: Collection
+        * * SQL Data Type: nvarchar(255)`),
+    Artifact: z.string().describe(`
+        * * Field Name: Artifact
+        * * Display Name: Artifact
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type CollectionArtifactEntityType = z.infer<typeof CollectionArtifactSchema>;
+
+/**
  * zod schema definition for the entity MJ: Collections
  */
 export const CollectionSchema = z.object({
@@ -40459,6 +40506,129 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
     */
     get User(): string {
         return this.Get('User');
+    }
+}
+
+
+/**
+ * MJ: Collection Artifacts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CollectionArtifact
+ * * Base View: vwCollectionArtifacts
+ * * @description Join table that establishes many-to-many relationships between Collections and Artifacts, allowing artifacts to be organized within collections
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Collection Artifacts')
+export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntityType> {
+    /**
+    * Loads the MJ: Collection Artifacts record from the database
+    * @param ID: string - primary key value to load the MJ: Collection Artifacts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CollectionArtifactEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CollectionID
+    * * Display Name: Collection ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+    */
+    get CollectionID(): string {
+        return this.Get('CollectionID');
+    }
+    set CollectionID(value: string) {
+        this.Set('CollectionID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactID
+    * * Display Name: Artifact ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
+    */
+    get ArtifactID(): string {
+        return this.Get('ArtifactID');
+    }
+    set ArtifactID(value: string) {
+        this.Set('ArtifactID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Sequence number for ordering artifacts within a collection
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Collection
+    * * Display Name: Collection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Collection(): string {
+        return this.Get('Collection');
+    }
+
+    /**
+    * * Field Name: Artifact
+    * * Display Name: Artifact
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Artifact(): string {
+        return this.Get('Artifact');
     }
 }
 
