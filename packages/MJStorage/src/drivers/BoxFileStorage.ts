@@ -1,13 +1,14 @@
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
 import * as https from 'https';
+import { getProviderConfig } from '../config';
 
 // Define types for Box items
 interface BoxItem {
@@ -141,20 +142,23 @@ export class BoxFileStorage extends FileStorageBase {
    */
   constructor() {
     super();
-    
+
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('box');
+
     // Box auth can be via access token or refresh token
-    this._accessToken = env.get('STORAGE_BOX_ACCESS_TOKEN').asString();
-    this._refreshToken = env.get('STORAGE_BOX_REFRESH_TOKEN').asString();
-    this._clientId = env.get('STORAGE_BOX_CLIENT_ID').asString();
-    this._clientSecret = env.get('STORAGE_BOX_CLIENT_SECRET').asString();
-    this._enterpriseId = env.get('STORAGE_BOX_ENTERPRISE_ID').asString();
+    this._accessToken = config?.accessToken || env.get('STORAGE_BOX_ACCESS_TOKEN').asString();
+    this._refreshToken = config?.refreshToken || env.get('STORAGE_BOX_REFRESH_TOKEN').asString();
+    this._clientId = config?.clientID || env.get('STORAGE_BOX_CLIENT_ID').asString();
+    this._clientSecret = config?.clientSecret || env.get('STORAGE_BOX_CLIENT_SECRET').asString();
+    this._enterpriseId = config?.enterpriseID || env.get('STORAGE_BOX_ENTERPRISE_ID').asString();
 
     if (this._refreshToken && (!this._clientId || !this._clientSecret)) {
       throw new Error('Box storage with refresh token requires STORAGE_BOX_CLIENT_ID and STORAGE_BOX_CLIENT_SECRET');
     }
-    
+
     // Root folder ID, optional (defaults to '0' which is root)
-    this._rootFolderId = env.get('STORAGE_BOX_ROOT_FOLDER_ID').default('0').asString();
+    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_BOX_ROOT_FOLDER_ID').default('0').asString();
   }
 
   /**

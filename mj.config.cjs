@@ -306,6 +306,7 @@ const mjServerConfig = {
   awsSecretAccessKey: process.env.STORAGE_AWS_SECRET_ACCESS_KEY,
   awsRegion: process.env.STORAGE_AWS_REGION || 'us-east-1',
   awsDefaultBucket: process.env.STORAGE_AWS_DEFAULT_BUCKET,
+  awsKeyPrefix: process.env.STORAGE_AWS_KEY_PREFIX,
 
   // Azure Blob Storage
   azureAccountName: process.env.STORAGE_AZURE_ACCOUNT_NAME,
@@ -316,32 +317,40 @@ const mjServerConfig = {
   // Google Cloud Storage
   googleCloudProjectID: process.env.STORAGE_GOOGLE_CLOUD_PROJECT_ID,
   googleCloudKeyFilename: process.env.STORAGE_GOOGLE_CLOUD_KEY_FILENAME,
+  googleCloudKeyJSON: process.env.STORAGE_GOOGLE_CLOUD_KEY_JSON,
   googleCloudDefaultBucket: process.env.STORAGE_GOOGLE_CLOUD_DEFAULT_BUCKET,
 
-  // Google Drive
-  googleDriveClientID: process.env.STORAGE_GOOGLE_DRIVE_CLIENT_ID,
-  googleDriveClientSecret: process.env.STORAGE_GOOGLE_DRIVE_CLIENT_SECRET,
-  googleDriveRefreshToken: process.env.STORAGE_GOOGLE_DRIVE_REFRESH_TOKEN,
-  googleDriveRedirectURI: process.env.STORAGE_GOOGLE_DRIVE_REDIRECT_URI,
+  // Google Drive (supports both service account and OAuth2 authentication)
+  googleDriveKeyFile: process.env.STORAGE_GDRIVE_KEY_FILE,
+  googleDriveCredentialsJSON: process.env.STORAGE_GDRIVE_CREDENTIALS_JSON,
+  googleDriveClientID: process.env.STORAGE_GDRIVE_CLIENT_ID,
+  googleDriveClientSecret: process.env.STORAGE_GDRIVE_CLIENT_SECRET,
+  googleDriveRefreshToken: process.env.STORAGE_GDRIVE_REFRESH_TOKEN,
+  googleDriveRedirectURI: process.env.STORAGE_GDRIVE_REDIRECT_URI,
+  googleDriveRootFolderID: process.env.STORAGE_GDRIVE_ROOT_FOLDER_ID,
 
   // Dropbox
   dropboxAccessToken: process.env.STORAGE_DROPBOX_ACCESS_TOKEN,
   dropboxRefreshToken: process.env.STORAGE_DROPBOX_REFRESH_TOKEN,
-  dropboxClientID: process.env.STORAGE_DROPBOX_CLIENT_ID,
-  dropboxClientSecret: process.env.STORAGE_DROPBOX_CLIENT_SECRET,
+  dropboxClientID: process.env.STORAGE_DROPBOX_APP_KEY,
+  dropboxClientSecret: process.env.STORAGE_DROPBOX_APP_SECRET,
+  dropboxRootPath: process.env.STORAGE_DROPBOX_ROOT_PATH,
 
-  // Box.com
+  // Box.com (supports access token, refresh token, and JWT/client credentials)
   boxClientID: process.env.STORAGE_BOX_CLIENT_ID,
   boxClientSecret: process.env.STORAGE_BOX_CLIENT_SECRET,
   boxAccessToken: process.env.STORAGE_BOX_ACCESS_TOKEN,
   boxRefreshToken: process.env.STORAGE_BOX_REFRESH_TOKEN,
   boxEnterpriseID: process.env.STORAGE_BOX_ENTERPRISE_ID,
+  boxRootFolderID: process.env.STORAGE_BOX_ROOT_FOLDER_ID,
 
   // SharePoint
-  sharePointSiteURL: process.env.STORAGE_SHAREPOINT_SITE_URL,
+  sharePointSiteID: process.env.STORAGE_SHAREPOINT_SITE_ID,
+  sharePointDriveID: process.env.STORAGE_SHAREPOINT_DRIVE_ID,
   sharePointTenantID: process.env.STORAGE_SHAREPOINT_TENANT_ID,
   sharePointClientID: process.env.STORAGE_SHAREPOINT_CLIENT_ID,
   sharePointClientSecret: process.env.STORAGE_SHAREPOINT_CLIENT_SECRET,
+  sharePointRootFolderID: process.env.STORAGE_SHAREPOINT_ROOT_FOLDER_ID,
 
   /**
    * Authentication Provider Configuration
