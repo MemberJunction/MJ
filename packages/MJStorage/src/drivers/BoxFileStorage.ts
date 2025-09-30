@@ -1375,7 +1375,7 @@ export class BoxFileStorage extends FileStorageBase {
         console.error(`Error uploading file: ${uploadError.message}`);
         if (uploadError.message && uploadError.message.includes('item_name_in_use')) {
           console.log(`File already exists (conflict): ${objectName}`);
-          return false;
+          return true;
         }
         return false;
       }
