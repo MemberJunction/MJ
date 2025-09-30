@@ -59,7 +59,7 @@
     "@memberjunction/ai-mistral": "2.101.0",
     "@memberjunction/ai-agents": "2.101.0",
     "@memberjunction/ai-prompts": "2.101.0",
-    "@memberjunction/core": "2.101.0",
+    "@memberjunction/core": "2.100.3",
     "@memberjunction/core-actions": "2.101.0",
     "@memberjunction/core-entities": "2.101.0",
     "@memberjunction/core-entities-server": "2.101.0",
