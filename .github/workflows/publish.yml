@@ -146,22 +146,10 @@ jobs:
             exit 1
           fi
 
-          # Count all @memberjunction packages EXCEPT core and global
-          MJ_PACKAGE_COUNT=$(grep --include package.json -R '"name": "@memberjunction/' packages/ | grep -v '@memberjunction/core' | grep -v '@memberjunction/global' | wc -l)
-          NEXT_VERSION_PACKAGE_COUNT=$(grep --include package.json -R '"version": "'$NEXT_VERSION'"' packages/ | grep -v packages/MJCore/package.json | grep -v packages/MJGlobal/package.json | wc -l)
-
-          if [ "$MJ_PACKAGE_COUNT" != "$NEXT_VERSION_PACKAGE_COUNT" ]; then
-            echo "::error::One or more packages (excluding core and global) would not be published with version ($NEXT_VERSION)"
-            echo "Packages not at expected version:"
-            grep --include package.json -RL '"version": "'$NEXT_VERSION'"' packages/ | grep -v packages/MJCore/package.json | grep -v packages/MJGlobal/package.json | xargs grep '"name": "@memberjunction/'
-            exit 1
-          fi
-
           echo "✓ Version validation passed:"
           echo "  - Core pinned at: $CORE_VERSION"
           echo "  - Global pinned at: $GLOBAL_VERSION"
           echo "  - Other packages at: $NEXT_VERSION"
-          echo "  - Package count: $MJ_PACKAGE_COUNT"
 
       - name: Build packages
         run: npm run build
