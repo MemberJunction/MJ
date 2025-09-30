@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["mj_*", "@memberjunction/core", "@memberjunction/global"]
+  "ignore": ["mj_*"]
 }
