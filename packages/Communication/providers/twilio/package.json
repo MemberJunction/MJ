@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/communication-twilio",
-  "version": "2.101.0",
+  "version": "2.102.0" ,
   "description": "Twilio provider for MemberJunction Communication framework",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,7 +12,7 @@
     "clean": "rimraf dist"
   },
   "dependencies": {
-    "@memberjunction/communication-types": "2.101.0",
+    "@memberjunction/communication-types": "2.102.0",
     "@memberjunction/core": "2.100.3",
     "@memberjunction/global": "2.100.3",
     "dotenv": "^16.3.1",
