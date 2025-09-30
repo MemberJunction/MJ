@@ -25,8 +25,8 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/global": "2.103.0",
-    "@memberjunction/core": "2.103.0",
+    "@memberjunction/global": "2.100.3",
+    "@memberjunction/core": "2.100.3",
     "@memberjunction/ng-shared": "2.103.0",
     "@memberjunction/ng-base-forms": "2.103.0",
     "@memberjunction/ng-ask-skip": "2.103.0",
