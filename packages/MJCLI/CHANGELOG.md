@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/cli
 
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- fcdc151: Modified bump command to skip core and global when bumping versions. Core and Global will be pinned at v2.100.3.
+- Updated dependencies [addf572]
+  - @memberjunction/sqlserver-dataprovider@2.103.0
+  - @memberjunction/metadata-sync@2.103.0
+  - @memberjunction/codegen-lib@2.103.0
+  - @memberjunction/ai-cli@2.103.0
+
 ## 2.100.3
 
 ### Patch Changes

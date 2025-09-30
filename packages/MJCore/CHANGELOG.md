@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/core
 
+## 2.103.0
+
+### Minor Changes
+
+- bd75336: ix: Improve React component system registry handling and chart
+  flexibility
+
+  - Enhanced component manager to optimize pre-registered component loading
+    by skipping redundant fetches
+  - Fixed SimpleChart component to accept any field for grouping, not just
+    numeric fields
+  - Removed backup metadata file to clean up repository
+  - Added support for components with pre-populated code in the registry
+  - Improved dependency resolution for local registry components
+  - Better logging for component loading optimization paths
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [addf572]
+  - @memberjunction/global@2.103.0
+
 ## 2.100.3
 
 ### Patch Changes

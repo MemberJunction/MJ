@@ -1,5 +1,29 @@
 # @memberjunction/ng-react
 
+## 2.103.0
+
+### Patch Changes
+
+- bd75336: ix: Improve React component system registry handling and chart
+  flexibility
+
+  - Enhanced component manager to optimize pre-registered component loading
+    by skipping redundant fetches
+  - Fixed SimpleChart component to accept any field for grouping, not just
+    numeric fields
+  - Removed backup metadata file to clean up repository
+  - Added support for components with pre-populated code in the registry
+  - Improved dependency resolution for local registry components
+  - Better logging for component loading optimization paths
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/react-runtime@2.103.0
+  - @memberjunction/ng-notifications@2.103.0
+  - @memberjunction/interactive-component-types@2.103.0
+
 ## 2.100.3
 
 ### Patch Changes

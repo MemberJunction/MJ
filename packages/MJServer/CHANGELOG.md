@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/server
 
+## 2.103.0
+
+### Minor Changes
+
+- 3ba01de: migration
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/entity-communications-server@2.103.0
+  - @memberjunction/ai-vectors-pinecone@2.103.0
+  - @memberjunction/ai-local-embeddings@2.103.0
+  - @memberjunction/actions-bizapps-accounting@2.103.0
+  - @memberjunction/component-registry-client-sdk@2.103.0
+  - @memberjunction/actions-apollo@2.103.0
+  - @memberjunction/ai-agent-manager-actions@2.103.0
+  - @memberjunction/ai-openrouter@2.103.0
+  - @memberjunction/external-change-detection@2.103.0
+  - @memberjunction/ai-anthropic@2.103.0
+  - @memberjunction/actions-bizapps-social@2.103.0
+  - @memberjunction/ai-cerebras@2.103.0
+  - @memberjunction/ai-lmstudio@2.103.0
+  - @memberjunction/sqlserver-dataprovider@2.103.0
+  - @memberjunction/ai-mistral@2.103.0
+  - @memberjunction/core-entities-server@2.103.0
+  - @memberjunction/ai-ollama@2.103.0
+  - @memberjunction/ai-openai@2.103.0
+  - @memberjunction/actions-bizapps-crm@2.103.0
+  - @memberjunction/actions-bizapps-lms@2.103.0
+  - @memberjunction/core-actions@2.103.0
+  - @memberjunction/graphql-dataprovider@2.103.0
+  - @memberjunction/data-context-server@2.103.0
+  - @memberjunction/ai-groq@2.103.0
+  - @memberjunction/templates@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/data-context@2.103.0
+  - @memberjunction/ai-core-plus@2.103.0
+  - @memberjunction/ai-prompts@2.103.0
+  - @memberjunction/ai-agents@2.103.0
+  - @memberjunction/aiengine@2.103.0
+  - @memberjunction/storage@2.103.0
+  - @memberjunction/skip-types@2.103.0
+  - @memberjunction/doc-utils@2.103.0
+  - @memberjunction/global@2.103.0
+  - @memberjunction/ai@2.103.0
+  - @memberjunction/queue@2.103.0
+
 ## 2.100.3
 
 ### Patch Changes
