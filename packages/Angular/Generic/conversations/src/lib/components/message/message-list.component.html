@@ -1,0 +1,8 @@
+<div class="message-list-container" #scrollContainer>
+  <ng-container #messageContainer></ng-container>
+
+  <div *ngIf="messages.length === 0" class="empty-state">
+    <i class="fas fa-comments"></i>
+    <p>No messages yet. Start a conversation!</p>
+  </div>
+</div>

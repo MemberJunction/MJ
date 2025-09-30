@@ -1,0 +1,46 @@
+<div class="conversation-workspace" [attr.data-layout]="layout">
+  <!-- Top Navigation Bar -->
+  <div class="workspace-navigation">
+    <mj-conversation-navigation
+      [activeTab]="activeTab"
+      [environmentId]="environmentId"
+      (tabChanged)="onTabChanged($event)"
+      (sidebarToggled)="toggleSidebar()">
+    </mj-conversation-navigation>
+  </div>
+
+  <div class="workspace-content">
+    <!-- Left Sidebar (hidden when Libraries view is active) -->
+    <div class="workspace-sidebar" *ngIf="isSidebarVisible && activeTab !== 'libraries'">
+      <mj-conversation-sidebar
+        [activeTab]="activeTab"
+        [environmentId]="environmentId"
+        [currentUser]="currentUser">
+      </mj-conversation-sidebar>
+    </div>
+
+    <!-- Libraries Full-Panel View -->
+    <div class="workspace-main" *ngIf="activeTab === 'libraries'">
+      <mj-library-full-view
+        [environmentId]="environmentId"
+        [currentUser]="currentUser">
+      </mj-library-full-view>
+    </div>
+
+    <!-- Main Chat Area (only shown when not in Libraries view) -->
+    <div class="workspace-main" *ngIf="activeTab !== 'libraries'">
+      <mj-conversation-chat-area
+        [environmentId]="environmentId"
+        [currentUser]="currentUser">
+      </mj-conversation-chat-area>
+    </div>
+
+    <!-- Right Artifact Panel -->
+    <div class="workspace-artifact-panel" *ngIf="isArtifactPanelOpen">
+      <mj-artifact-panel
+        [currentUser]="currentUser"
+        (close)="closeArtifactPanel()">
+      </mj-artifact-panel>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,186 @@
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  ViewChild,
+  ViewContainerRef,
+  OnInit,
+  OnDestroy,
+  ChangeDetectorRef,
+  ElementRef,
+  AfterViewChecked
+} from '@angular/core';
+import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { MessageItemComponent } from './message-item.component';
+
+/**
+ * Container component for displaying a list of messages
+ * Uses dynamic component creation (like skip-chat) to avoid Angular binding overhead
+ * This dramatically improves performance when messages are added/removed
+ */
+@Component({
+  selector: 'mj-conversation-message-list',
+  templateUrl: './message-list.component.html',
+  styleUrls: ['./message-list.component.css']
+})
+export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewChecked {
+  @Input() public messages: ConversationDetailEntity[] = [];
+  @Input() public conversation!: ConversationEntity | null;
+  @Input() public currentUser!: UserInfo;
+  @Input() public isProcessing: boolean = false;
+
+  @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
+  @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
+  @Output() public deleteMessage = new EventEmitter<ConversationDetailEntity>();
+  @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
+
+  @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
+  @ViewChild('scrollContainer') scrollContainer!: ElementRef;
+
+  private _renderedMessages = new Map<string, any>();
+  private _shouldScrollToBottom = false;
+
+  constructor(private cdRef: ChangeDetectorRef) {
+    super();
+  }
+
+  ngOnInit() {
+    // Initial render will happen in AfterViewInit
+  }
+
+  ngAfterViewChecked() {
+    if (this._shouldScrollToBottom) {
+      this.scrollToBottom();
+      this._shouldScrollToBottom = false;
+    }
+  }
+
+  ngOnDestroy() {
+    // Clean up all dynamically created components
+    this._renderedMessages.forEach((componentRef) => {
+      if (componentRef) {
+        componentRef.destroy();
+      }
+    });
+    this._renderedMessages.clear();
+
+    if (this.messageContainerRef) {
+      this.messageContainerRef.clear();
+    }
+  }
+
+  /**
+   * Called when messages array changes
+   * Efficiently updates the DOM without re-rendering everything
+   */
+  @Input()
+  set messagesUpdate(messages: ConversationDetailEntity[]) {
+    if (messages && this.messageContainerRef) {
+      this.updateMessages(messages);
+    }
+  }
+
+  /**
+   * Updates the message list using dynamic component creation
+   * Only adds/removes changed messages for optimal performance
+   */
+  private updateMessages(messages: ConversationDetailEntity[]): void {
+    // Temporarily detach change detection for performance
+    this.cdRef.detach();
+
+    try {
+      // Remove messages that no longer exist
+      const currentIds = new Set(messages.map(m => this.getMessageKey(m)));
+      this._renderedMessages.forEach((componentRef, key) => {
+        if (!currentIds.has(key)) {
+          componentRef.destroy();
+          this._renderedMessages.delete(key);
+        }
+      });
+
+      // Add or update messages
+      messages.forEach((message, index) => {
+        const key = this.getMessageKey(message);
+        const existing = this._renderedMessages.get(key);
+
+        if (existing) {
+          // Update existing component
+          const instance = existing.instance as MessageItemComponent;
+          instance.message = message;
+          instance.allMessages = messages;
+          instance.isProcessing = this.isProcessing;
+        } else {
+          // Create new component
+          const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
+          const instance = componentRef.instance;
+
+          // Set inputs
+          instance.message = message;
+          instance.conversation = this.conversation;
+          instance.currentUser = this.currentUser;
+          instance.allMessages = messages;
+          instance.isProcessing = this.isProcessing;
+
+          // Subscribe to outputs
+          instance.pinClicked.subscribe((msg) => this.pinMessage.emit(msg));
+          instance.editClicked.subscribe((msg) => this.editMessage.emit(msg));
+          instance.deleteClicked.subscribe((msg) => this.deleteMessage.emit(msg));
+          instance.artifactClicked.subscribe((data) => this.artifactClicked.emit(data));
+
+          // Store reference
+          this._renderedMessages.set(key, componentRef);
+
+          // Store reference on the message entity for later access (like skip-chat pattern)
+          (message as any)._componentRef = componentRef;
+        }
+      });
+
+      // Scroll to bottom if this is a new message
+      if (messages.length > 0) {
+        this._shouldScrollToBottom = true;
+      }
+    } finally {
+      // Re-attach change detection
+      this.cdRef.reattach();
+      this.cdRef.detectChanges();
+    }
+  }
+
+  /**
+   * Generates a unique key for a message
+   * Uses ID if available, otherwise uses a temporary key
+   */
+  private getMessageKey(message: ConversationDetailEntity): string {
+    return message.ID && message.ID.length > 0
+      ? message.ID
+      : `temp_${message.__mj_CreatedAt?.getTime() || Date.now()}`;
+  }
+
+  /**
+   * Scrolls the message list to the bottom
+   */
+  private scrollToBottom(): void {
+    if (this.scrollContainer && this.scrollContainer.nativeElement) {
+      Promise.resolve().then(() => {
+        const element = this.scrollContainer.nativeElement;
+        element.scrollTop = element.scrollHeight;
+      });
+    }
+  }
+
+  /**
+   * Removes a message from the rendered list
+   * Called externally when a message is deleted
+   */
+  public removeMessage(message: ConversationDetailEntity): void {
+    const key = this.getMessageKey(message);
+    const componentRef = this._renderedMessages.get(key);
+    if (componentRef) {
+      componentRef.destroy();
+      this._renderedMessages.delete(key);
+    }
+  }
+}

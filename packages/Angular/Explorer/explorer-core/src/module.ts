@@ -46,11 +46,13 @@ import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissio
 // Local Components
 import { AskSkipModule } from '@memberjunction/ng-ask-skip';
 import { SkipChatModule } from '@memberjunction/ng-skip-chat';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { DashboardsModule } from '@memberjunction/ng-dashboards';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { MemberJunctionSharedModule } from '@memberjunction/ng-shared';
 import { AuthButtonComponent } from './lib/auth-button/auth-button.component';
+import { ChatWrapperComponent } from './lib/chat-wrapper/chat-wrapper.component';
 import { DashboardBrowserComponent } from './lib/dashboard-browser-component/dashboard-browser.component';
 import { DataBrowserComponent } from './lib/data-browser-component/data-browser.component';
 import { FavoritesComponent } from './lib/favorites/favorites.component';
@@ -102,6 +104,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     FormToolbarComponent,
     ResourceContainerComponent,
     AuthButtonComponent,
+    ChatWrapperComponent,
     DashboardBrowserComponent,
     DataBrowserComponent,
     GenericBrowseListComponent,
@@ -180,6 +183,7 @@ import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test
     DropDownsModule,
     MemberJunctionSharedModule,
     AskSkipModule,
+    ConversationsModule,
     DashboardsModule,
     SkipChatModule,
     EntityPermissionsModule,

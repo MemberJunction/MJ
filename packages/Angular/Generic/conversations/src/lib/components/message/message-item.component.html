@@ -1,0 +1,38 @@
+<div [class]="messageClasses">
+  <div class="message-avatar">
+    <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
+      <i class="fas" [ngClass]="isAIMessage ? 'fa-robot' : 'fa-user'"></i>
+    </div>
+  </div>
+
+  <div class="message-content">
+    <div class="message-header">
+      <span class="message-sender">{{ isAIMessage ? 'AI Assistant' : currentUser.Name }}</span>
+      <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
+      <span *ngIf="isTemporaryMessage" class="message-elapsed">{{ _elapsedTimeFormatted }}</span>
+    </div>
+
+    <div class="message-body">
+      <div class="message-text">
+        {{ message.Message }}
+      </div>
+
+      <div *ngIf="hasArtifact" class="message-artifact-indicator" (click)="onArtifactClick()">
+        <i class="fas fa-file-code"></i>
+        <span>View Artifact</span>
+      </div>
+    </div>
+
+    <div class="message-actions" *ngIf="!isProcessing && !isTemporaryMessage">
+      <button class="message-action-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin' : 'Pin'">
+        <i class="fas" [ngClass]="message.IsPinned ? 'fa-thumbtack' : 'fa-thumbtack'"></i>
+      </button>
+      <button class="message-action-btn" (click)="onEditClick()" title="Edit" *ngIf="isUserMessage">
+        <i class="fas fa-edit"></i>
+      </button>
+      <button class="message-action-btn danger" (click)="onDeleteClick()" title="Delete">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+  </div>
+</div>
