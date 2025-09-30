@@ -10,6 +10,10 @@ import { dirname } from 'node:path';
 const semverRegex =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-((?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+([0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$/;
 
+// Pinned packages that should not be bumped
+const PINNED_VERSION = '2.100.3';
+const PINNED_PACKAGES = ['core', 'global'];
+
 const tagSchema = z
   .string()
   .optional()
@@ -95,7 +99,14 @@ export default class Bump extends Command {
         verboseLogger(`\tBumping ${dirname(packageJson)}`);
         spinner.text = `${banner} ${i + 1 - skipped.length}/${packageJsonFiles.length - skipped.length}`;
 
-        const bumpedPackageJson = packageJsonContents.replaceAll(mjRegx, `"@memberjunction/$1":$2"${targetVersion}"`);
+        const bumpedPackageJson = packageJsonContents.replaceAll(mjRegx, (match, packageName, spacing) => {
+          // Skip pinned packages
+          if (PINNED_PACKAGES.includes(packageName)) {
+            verboseLogger(`\t  Skipping pinned package: @memberjunction/${packageName} (${PINNED_VERSION})`);
+            return match; // Return original match unchanged
+          }
+          return `"@memberjunction/${packageName}":${spacing}"${targetVersion}"`;
+        });
         if (!flags.dry) {
           writeFileSync(packageJson, bumpedPackageJson);
         }
