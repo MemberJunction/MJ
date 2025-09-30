@@ -4981,5 +4981,352 @@
       "lastModified": "2025-09-30T17:38:22.129Z",
       "checksum": "c1ba38aaec6ba3ec4773066da9b77669da1fcacadedeb4630c1e4a13690e6227"
     }
+  },
+  {
+    "fields": {
+      "Name": "Gamma Generate Presentation",
+      "Type": "Generated",
+      "Description": "Generates presentations, documents, or social media posts using Gamma's AI-powered Generations API. Creates professional slides from text input with customizable themes, images, and export formats.",
+      "Status": "Active",
+      "DriverClass": "Gamma Generate Presentation"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InputText",
+            "Type": "Input",
+            "Description": "Text to generate content from (required, 1-750,000 characters). This is the main content that will be used to create the presentation.",
+            "IsRequired": true,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Format",
+            "Type": "Input",
+            "Description": "Output format - 'presentation' (default), 'document', or 'social'",
+            "IsRequired": false,
+            "DefaultValue": "presentation",
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextMode",
+            "Type": "Input",
+            "Description": "How to process text - 'generate' (default, AI creates new content), 'condense' (summarize), or 'preserve' (use as-is)",
+            "IsRequired": false,
+            "DefaultValue": "generate",
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ThemeName",
+            "Type": "Input",
+            "Description": "Visual theme name for the presentation (optional). Examples: Modern, Classic, Bold, etc.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NumCards",
+            "Type": "Input",
+            "Description": "Number of slides/cards to generate (1-75, depends on account tier)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CardSplit",
+            "Type": "Input",
+            "Description": "How to split content into cards - 'auto' (default, AI decides) or 'inputTextBreaks' (use line breaks from input)",
+            "IsRequired": false,
+            "DefaultValue": "auto",
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AdditionalInstructions",
+            "Type": "Input",
+            "Description": "Custom guidance for content generation (optional). Provide specific instructions to tailor the output.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExportAs",
+            "Type": "Input",
+            "Description": "Export format - 'pdf' or 'pptx' (optional). If specified, the presentation will be exported in this format.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextAmount",
+            "Type": "Input",
+            "Description": "Amount of text per slide - 'auto', 'minimal', 'moderate', or 'detailed'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextTone",
+            "Type": "Input",
+            "Description": "Tone of text - 'auto', 'professional', 'casual', or 'educational'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextAudience",
+            "Type": "Input",
+            "Description": "Target audience description (optional). Example: 'executives', 'students', 'technical team'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextLanguage",
+            "Type": "Input",
+            "Description": "Language for content (optional). Use ISO 639-1 codes like 'en', 'es', 'fr', etc.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageSource",
+            "Type": "Input",
+            "Description": "Image source - 'auto', 'web', 'ai', or 'none'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageModel",
+            "Type": "Input",
+            "Description": "AI image model - 'dall-e-3', 'sd-3-large', or 'firefly-3'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageStyle",
+            "Type": "Input",
+            "Description": "AI image style - 'auto', 'photographic', 'digital-art', or 'illustration'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PollStatus",
+            "Type": "Input",
+            "Description": "Poll for completion status (default: true). If false, returns immediately with generationId.",
+            "IsRequired": false,
+            "DefaultValue": "true",
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PollInterval",
+            "Type": "Input",
+            "Description": "Seconds between status checks when polling (default: 5)",
+            "IsRequired": false,
+            "DefaultValue": "5",
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxPollTime",
+            "Type": "Input",
+            "Description": "Maximum seconds to poll before timeout (default: 300)",
+            "IsRequired": false,
+            "DefaultValue": "300",
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GenerationId",
+            "Type": "Output",
+            "Description": "Unique identifier for the generation request. Can be used to check status later.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GammaUrl",
+            "Type": "Output",
+            "Description": "URL to the generated Gamma presentation (only present when generation completes)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "Description": "Status of the generation - 'pending', 'completed', or 'failed'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Credits",
+            "Type": "Output",
+            "Description": "Credits usage information object (only present when generation completes)",
+            "IsRequired": false,
+            "ValueType": "Simple Object",
+            "IsArray": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Presentation generated successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_STARTED",
+            "Description": "Generation started but polling disabled - use GenerationId to check status"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_INPUT_TEXT",
+            "Description": "InputText parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT_TEXT_LENGTH",
+            "Description": "InputText must be between 1 and 750,000 characters"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "Description": "Gamma API key not found. Set gammaApiKey in mj.config.cjs or GAMMA_API_KEY environment variable"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_API_KEY",
+            "Description": "Invalid Gamma API key. Verify your API key is correct and has proper permissions"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RATE_LIMITED",
+            "Description": "Gamma API rate limit exceeded (50 presentations per day during beta)"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETERS",
+            "Description": "Invalid request parameters"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_RESPONSE",
+            "Description": "Invalid response from Gamma API"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_FAILED",
+            "Description": "Failed to generate presentation"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_TIMEOUT",
+            "Description": "Generation timed out - use GenerationId to check status later"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "Description": "Gamma API error occurred"
+          }
+        }
+      ]
+    }
   }
 ]

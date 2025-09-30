@@ -296,6 +296,54 @@ const mjServerConfig = {
   },
   
   /**
+   * File Storage Provider Configuration (MJStorage package)
+   * Configure cloud storage providers for file upload/download operations
+   * Environment variables follow the pattern: STORAGE_[PROVIDER]_[FIELD]
+   */
+
+  // AWS S3
+  awsAccessKeyID: process.env.STORAGE_AWS_ACCESS_KEY_ID,
+  awsSecretAccessKey: process.env.STORAGE_AWS_SECRET_ACCESS_KEY,
+  awsRegion: process.env.STORAGE_AWS_REGION || 'us-east-1',
+  awsDefaultBucket: process.env.STORAGE_AWS_DEFAULT_BUCKET,
+
+  // Azure Blob Storage
+  azureAccountName: process.env.STORAGE_AZURE_ACCOUNT_NAME,
+  azureAccountKey: process.env.STORAGE_AZURE_ACCOUNT_KEY,
+  azureConnectionString: process.env.STORAGE_AZURE_CONNECTION_STRING,
+  azureDefaultContainer: process.env.STORAGE_AZURE_DEFAULT_CONTAINER,
+
+  // Google Cloud Storage
+  googleCloudProjectID: process.env.STORAGE_GOOGLE_CLOUD_PROJECT_ID,
+  googleCloudKeyFilename: process.env.STORAGE_GOOGLE_CLOUD_KEY_FILENAME,
+  googleCloudDefaultBucket: process.env.STORAGE_GOOGLE_CLOUD_DEFAULT_BUCKET,
+
+  // Google Drive
+  googleDriveClientID: process.env.STORAGE_GOOGLE_DRIVE_CLIENT_ID,
+  googleDriveClientSecret: process.env.STORAGE_GOOGLE_DRIVE_CLIENT_SECRET,
+  googleDriveRefreshToken: process.env.STORAGE_GOOGLE_DRIVE_REFRESH_TOKEN,
+  googleDriveRedirectURI: process.env.STORAGE_GOOGLE_DRIVE_REDIRECT_URI,
+
+  // Dropbox
+  dropboxAccessToken: process.env.STORAGE_DROPBOX_ACCESS_TOKEN,
+  dropboxRefreshToken: process.env.STORAGE_DROPBOX_REFRESH_TOKEN,
+  dropboxClientID: process.env.STORAGE_DROPBOX_CLIENT_ID,
+  dropboxClientSecret: process.env.STORAGE_DROPBOX_CLIENT_SECRET,
+
+  // Box.com
+  boxClientID: process.env.STORAGE_BOX_CLIENT_ID,
+  boxClientSecret: process.env.STORAGE_BOX_CLIENT_SECRET,
+  boxAccessToken: process.env.STORAGE_BOX_ACCESS_TOKEN,
+  boxRefreshToken: process.env.STORAGE_BOX_REFRESH_TOKEN,
+  boxEnterpriseID: process.env.STORAGE_BOX_ENTERPRISE_ID,
+
+  // SharePoint
+  sharePointSiteURL: process.env.STORAGE_SHAREPOINT_SITE_URL,
+  sharePointTenantID: process.env.STORAGE_SHAREPOINT_TENANT_ID,
+  sharePointClientID: process.env.STORAGE_SHAREPOINT_CLIENT_ID,
+  sharePointClientSecret: process.env.STORAGE_SHAREPOINT_CLIENT_SECRET,
+
+  /**
    * Authentication Provider Configuration
    * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)
    * Each provider encapsulates its issuer URL, audience, JWKS URI, and provider-specific config
@@ -461,6 +509,7 @@ const config = {
 
   // Used by Core Actions package
   perplexityApiKey: process.env.PERPLEXITY_API_KEY,
+  gammaApiKey: process.env.GAMMA_API_KEY,
 };
 
 module.exports = config;

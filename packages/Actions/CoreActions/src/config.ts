@@ -14,6 +14,14 @@ const apiIntegrationsSchema = z.object({
    * Get your API key from: https://www.perplexity.ai/settings/api
    */
   perplexityApiKey: z.string().optional(),
+
+  /**
+   * Gamma API Key for presentation generation
+   * Used by: Gamma Generate Presentation action
+   * Get your API key from: https://gamma.app/settings (requires Pro or higher account)
+   * API keys follow format: sk-gamma-xxxxxxxx
+   */
+  gammaApiKey: z.string().optional(),
 });
 
 /**
@@ -52,6 +60,7 @@ export function getCoreActionsConfig(): CoreActionsConfig {
     const rawConfig = {
       apiIntegrations: {
         perplexityApiKey: result.config.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
+        gammaApiKey: result.config.gammaApiKey || process.env.GAMMA_API_KEY,
       },
     };
 
