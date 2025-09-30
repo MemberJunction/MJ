@@ -458,6 +458,9 @@ const config = {
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
+
+  // Used by Core Actions package
+  perplexityApiKey: process.env.PERPLEXITY_API_KEY,
 };
 
 module.exports = config;
