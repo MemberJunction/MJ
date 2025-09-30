@@ -17,7 +17,6 @@ import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { CustomIconComponent } from '../shared/custom-icon/custom-icon.component';
 
 export interface Tab {
   id?: string;

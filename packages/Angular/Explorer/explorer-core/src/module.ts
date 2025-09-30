@@ -96,7 +96,6 @@ import {SingleListDetailComponent} from './lib/single-list-detail/single-list-de
 import { ListDetailResource } from './lib/resource-wrappers/list-detail-resource.component';
 import { SystemValidationBannerComponent } from './lib/system-validation/system-validation-banner.component';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
-import { CustomIconComponent } from './lib/shared/custom-icon/custom-icon.component';
 
 @NgModule({
   declarations: [
@@ -145,7 +144,6 @@ import { CustomIconComponent } from './lib/shared/custom-icon/custom-icon.compon
     StyleGuideTestComponent
   ],
   imports: [
-    CustomIconComponent, // Standalone component for custom icons
     AppRoutingModule,
     CommonModule,
     FormsModule,

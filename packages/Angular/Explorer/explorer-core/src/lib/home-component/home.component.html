@@ -22,7 +22,7 @@
                             (click)="navigate(item.Route)">
                     <kendo-card-body>
                         @if (item.Name === 'Ask Skip') {
-                            <mj-custom-icon iconName="skip" class="mj-card-icon-large-wrapper"></mj-custom-icon>
+                            <span class="skip-icon skip-icon-large"></span>
                         } @else {
                             <i [class]="'fa-solid ' + (item.IconCSSClass || 'fa-cube') + ' mj-card-icon-large'"></i>
                         }
