@@ -29,7 +29,8 @@ jobs:
       - name: Get current version
         id: get_version
         run: |
-          CURRENT_VERSION=$(jq -r .version packages/MJCore/package.json)
+          # Use MJServer package since core and global are pinned at 2.100.3
+          CURRENT_VERSION=$(jq -r .version packages/MJServer/package.json)
           echo "Current version: $CURRENT_VERSION"
           echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
