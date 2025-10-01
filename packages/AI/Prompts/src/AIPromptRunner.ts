@@ -173,25 +173,31 @@ export class AIPromptRunner {
     model?: AIModelEntityExtended;
     severity?: 'warning' | 'error' | 'critical';
   }): void {
-    const errorMessage = error instanceof Error ? error.message : error;
+    let errorMessage = error instanceof Error ? error.message : error;
     const errorObj = error instanceof Error ? error : undefined;
-    
+
+    // Truncate extremely long error messages (like Groq's failed_generation JSON dumps)
+    const MAX_ERROR_LENGTH = 500;
+    if (errorMessage.length > MAX_ERROR_LENGTH) {
+      errorMessage = errorMessage.substring(0, MAX_ERROR_LENGTH) + '... [truncated]';
+    }
+
     const metadata: Record<string, any> = {
       ...options?.metadata
     };
-    
+
     // Add prompt information if available
     if (options?.prompt) {
       metadata.promptId = options.prompt.ID;
       metadata.promptName = options.prompt.Name;
     }
-    
-    // Add model information if available  
+
+    // Add model information if available
     if (options?.model) {
       metadata.modelId = options.model.ID;
       metadata.modelName = options.model.Name;
     }
-    
+
     LogErrorEx({
       message: errorMessage,
       error: errorObj,
@@ -3474,11 +3480,23 @@ export class AIPromptRunner {
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        this.logError(`Failed to update AIPromptRun with results: ${promptRun.LatestResult?.Message || 'Unknown error'}`, {
+        // Safely extract error message - LatestResult.Message might be an Error object or string
+        let errorMsg = 'Unknown error';
+        try {
+          if (promptRun.LatestResult?.Message) {
+            errorMsg = typeof promptRun.LatestResult.Message === 'string'
+              ? promptRun.LatestResult.Message
+              : String(promptRun.LatestResult.Message);
+          }
+        } catch (msgError) {
+          errorMsg = 'Error accessing error message';
+        }
+
+        this.logError(`Failed to update AIPromptRun with results: ${errorMsg}`, {
           category: 'PromptRunUpdate',
           metadata: {
             promptRunId: promptRun.ID,
-            updateError: promptRun.LatestResult?.Message
+            updateError: errorMsg
           }
         });
       }

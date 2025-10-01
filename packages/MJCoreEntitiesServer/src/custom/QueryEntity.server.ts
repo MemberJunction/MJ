@@ -122,7 +122,7 @@ export class QueryEntityExtended extends QueryEntity {
     private async extractAndSyncDataAsync(): Promise<void> {
         try {
             await this.extractAndSyncData();
-            
+
             // Save the query again to update the UsesTemplate flag and any changes from AI processing
             // This is a separate, fast operation that doesn't involve AI
             const updateResult = await super.Save();
@@ -132,10 +132,13 @@ export class QueryEntityExtended extends QueryEntity {
         } catch (e) {
             LogError('Error in async AI processing:', e);
             // Set UsesTemplate to false on error and save
+            // This ensures the query is still usable even if AI extraction fails
             this.UsesTemplate = false;
-            await super.Save().catch(saveError => {
+            try {
+                await super.Save();
+            } catch (saveError) {
                 LogError('Failed to save query after AI processing error:', saveError);
-            });
+            }
         }
     }
     
@@ -191,38 +194,43 @@ export class QueryEntityExtended extends QueryEntity {
             params.contextUser = this.ContextCurrentUser;
             
             const result = await promptRunner.ExecutePrompt<ParameterExtractionResult>(params);
-            
+
             if (!result.success || !result.result) {
-                LogError('Failed to extract query parameters:', result.errorMessage);
-                // Set UsesTemplate to false if extraction fails
+                // AI extraction failed - this is common with complex queries or model limitations
+                // Not logging as error since it's expected behavior for some queries
                 this.UsesTemplate = false;
                 return;
             }
-            
+
+            // Validate that result.result has the expected structure
+            if (!result.result.parameters || !Array.isArray(result.result.parameters)) {
+                // AI returned malformed result - silently handle by marking as non-templated
+                this.UsesTemplate = false;
+                return;
+            }
+
             // Process the extracted data in parallel
             const syncPromises: Promise<void>[] = [
                 this.syncQueryParameters(result.result.parameters)
             ];
-            
-            if (result.result.selectClause) {
+
+            if (result.result.selectClause && Array.isArray(result.result.selectClause) && result.result.selectClause.length > 0) {
                 syncPromises.push(this.syncQueryFields(result.result.selectClause));
             }
-            
-            if (result.result.fromClause) {
+
+            if (result.result.fromClause && Array.isArray(result.result.fromClause) && result.result.fromClause.length > 0) {
                 syncPromises.push(this.syncQueryEntities(result.result.fromClause));
             }
-            
+
             await Promise.all(syncPromises);
-            
+
             // Update UsesTemplate flag based on whether parameters were found
             this.UsesTemplate = result.result.parameters.length > 0;
             
         } catch (e) {
-            LogError('Error extracting query parameters:', e);
-            // Set UsesTemplate to false on error
+            // Unexpected error during extraction - log for debugging but don't fail the save
+            LogError(`Query "${this.Name}" AI extraction error:`, e);
             this.UsesTemplate = false;
-            // Don't throw here - we don't want to fail the save if parameter extraction fails
-            // The user can still manually manage parameters if needed
         }
     }
     
@@ -334,8 +342,8 @@ export class QueryEntityExtended extends QueryEntity {
             }
             
         } catch (e) {
-            LogError('Failed to sync query parameters:', e);
-            throw e; // Re-throw since we're in a transaction
+            LogError(`Query "${this.Name}" - Failed to sync parameters:`, e);
+            throw e;
         }
     }
     
@@ -484,8 +492,8 @@ export class QueryEntityExtended extends QueryEntity {
             }
             
         } catch (e) {
-            LogError('Failed to sync query fields:', e);
-            throw e; // Re-throw since we're in a transaction
+            LogError(`Query "${this.Name}" - Failed to sync fields:`, e);
+            throw e;
         }
     }
     
@@ -567,8 +575,8 @@ export class QueryEntityExtended extends QueryEntity {
             }
             
         } catch (e) {
-            LogError('Failed to sync query entities:', e);
-            throw e; // Re-throw since we're in a transaction
+            LogError(`Query "${this.Name}" - Failed to sync entities:`, e);
+            throw e;
         }
     }
     
