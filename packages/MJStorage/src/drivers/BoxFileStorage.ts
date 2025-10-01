@@ -430,57 +430,83 @@ export class BoxFileStorage extends FileStorageBase {
    * @throws Error if the item does not exist
    */
   private async _getIdFromPath(path: string): Promise<string> {
+    const itemInfo = await this._getItemInfoFromPath(path);
+    return itemInfo?.id || null;
+  }
+
+  /**
+   * Gets both ID and type information for an item at the given path
+   *
+   * @param path - Path to the item
+   * @returns Object with id and type, or null if not found
+   */
+  private async _getItemInfoFromPath(path: string): Promise<{id: string, type: string} | null> {
     try {
       // Parse the path
       const parsedPath = this._parsePath(path);
-      
-      // If the id is already in the path, return it
+
+      // If the id is already in the path, we need to determine type separately
       if (parsedPath.id) {
-        return parsedPath.id;
+        // Try as file first, then folder
+        try {
+          const fileInfo = await this._apiRequest(`/files/${parsedPath.id}`, 'GET', null, {
+            'fields': 'id,type'
+          });
+          return { id: fileInfo.id, type: fileInfo.type };
+        } catch {
+          try {
+            const folderInfo = await this._apiRequest(`/folders/${parsedPath.id}`, 'GET', null, {
+              'fields': 'id,type'
+            });
+            return { id: folderInfo.id, type: folderInfo.type };
+          } catch {
+            return null;
+          }
+        }
       }
-      
+
       // If it's root, return root folder id
       if (!parsedPath.name) {
-        return this._rootFolderId;
+        return { id: this._rootFolderId, type: 'folder' };
       }
-      
+
       // First, find the parent folder ID
       let parentFolderId = this._rootFolderId;
       if (parsedPath.parent) {
         parentFolderId = await this._findFolderIdByPath(parsedPath.parent);
       }
-      
+
       // Search for the item with pagination support
       let offset = 0;
       let hasMoreItems = true;
       const LIMIT = 1000;
-      
+
       while (hasMoreItems) {
         const folderItems = await this._apiRequest(`/folders/${parentFolderId}/items`, 'GET', null, {
           'fields': 'name,type,id',
           'limit': `${LIMIT}`,
           'offset': `${offset}`
         });
-        
+
         // Look for the item by name
         const item = folderItems.entries.find((i: BoxItem) => i.name === parsedPath.name);
-        
+
         if (item) {
-          return item.id;
+          return { id: item.id, type: item.type };
         }
-        
+
         // Update pagination variables
         offset += folderItems.entries.length;
-        
+
         // Check if we've processed all items
         hasMoreItems = folderItems.entries.length === LIMIT && offset < folderItems.total_count;
       }
-      
+
       // If we get here, the item was not found
       console.log(`Item not found: ${parsedPath.name}`);
       return null;
     } catch (error) {
-      console.error('Error in _getIdFromPath', { path, error });
+      console.error('Error in _getItemInfoFromPath', { path, error });
       return null;
     }
   }
@@ -683,13 +709,17 @@ export class BoxFileStorage extends FileStorageBase {
   public async MoveObject(oldObjectName: string, newObjectName: string): Promise<boolean> {
     try {
       // Get source info
-      const sourceId = await this._getIdFromPath(oldObjectName);
-      const sourceInfo = await this._apiRequest(`/items/${sourceId}`);
-      
+      const sourceInfo = await this._getItemInfoFromPath(oldObjectName);
+
+      if (!sourceInfo) {
+        console.log(`Item not found: ${oldObjectName}`);
+        return false;
+      }
+
       // Get destination info
       const destPath = this._parsePath(newObjectName);
       let destParentId = this._rootFolderId;
-      
+
       if (destPath.parent) {
         try {
           destParentId = await this._getIdFromPath(destPath.parent);
@@ -699,10 +729,10 @@ export class BoxFileStorage extends FileStorageBase {
           destParentId = await this._getIdFromPath(destPath.parent);
         }
       }
-      
+
       // Move the item
       const endpoint = sourceInfo.type === 'folder' ? '/folders/' : '/files/';
-      await this._apiRequest(`${endpoint}${sourceId}`, 'PUT', {
+      await this._apiRequest(`${endpoint}${sourceInfo.id}`, 'PUT', {
         parent: { id: destParentId },
         name: destPath.name
       });
@@ -752,21 +782,25 @@ export class BoxFileStorage extends FileStorageBase {
         await this._apiRequest(`/files/upload_sessions/${sessionId}`, 'DELETE');
         return true;
       }
-      
-      const itemId = await this._getIdFromPath(objectName);
-      const itemInfo = await this._apiRequest(`/items/${itemId}`);
-      
+
+      const itemInfo = await this._getItemInfoFromPath(objectName);
+
+      if (!itemInfo) {
+        console.log(`Item not found: ${objectName}`);
+        return true; // Already deleted/doesn't exist
+      }
+
       // Delete the item
       const endpoint = itemInfo.type === 'folder' ? '/folders/' : '/files/';
-      await this._apiRequest(`${endpoint}${itemId}`, 'DELETE');
-      
+      await this._apiRequest(`${endpoint}${itemInfo.id}`, 'DELETE');
+
       return true;
     } catch (error) {
       // If the error is a 404, consider it already deleted
       if (error.message && error.message.includes('404')) {
         return true;
       }
-      
+
       console.error('Error deleting object', { objectName, error });
       return false;
     }
@@ -1153,20 +1187,22 @@ export class BoxFileStorage extends FileStorageBase {
    */
   public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
     try {
-      const itemId = await this._getIdFromPath(objectName);
-      
-      // Determine if it's a file or folder
-      const itemInfo = await this._apiRequest(`/items/${itemId}`);
-      const fullEndpoint = itemInfo.type === 'folder' ? `/folders/${itemId}` : `/files/${itemId}`;
-      
-      // Get full metadata
+      const itemInfo = await this._getItemInfoFromPath(objectName);
+
+      if (!itemInfo) {
+        throw new Error(`Object not found: ${objectName}`);
+      }
+
+      // Get full metadata using the correct endpoint based on type
+      const fullEndpoint = itemInfo.type === 'folder' ? `/folders/${itemInfo.id}` : `/files/${itemInfo.id}`;
+
       const metadata = await this._apiRequest(fullEndpoint, 'GET', null, {
         'fields': 'id,name,type,size,content_type,modified_at,created_at,etag,sequence_id'
       });
-      
+
       // Parse path to get parent path
       const parsedPath = this._parsePath(objectName);
-      
+
       return this._convertToMetadata(metadata, parsedPath.parent);
     } catch (error) {
       console.error('Error getting object metadata', { objectName, error });
@@ -1419,17 +1455,21 @@ export class BoxFileStorage extends FileStorageBase {
   public async CopyObject(sourceObjectName: string, destinationObjectName: string): Promise<boolean> {
     try {
       // Get source info
-      const sourceId = await this._getIdFromPath(sourceObjectName);
-      const sourceInfo = await this._apiRequest(`/items/${sourceId}`);
-      
+      const sourceInfo = await this._getItemInfoFromPath(sourceObjectName);
+
+      if (!sourceInfo) {
+        console.log(`Source item not found: ${sourceObjectName}`);
+        return false;
+      }
+
       if (sourceInfo.type !== 'file') {
         throw new Error('Only files can be copied with CopyObject');
       }
-      
+
       // Get destination info
       const destPath = this._parsePath(destinationObjectName);
       let destParentId = this._rootFolderId;
-      
+
       if (destPath.parent) {
         try {
           destParentId = await this._getIdFromPath(destPath.parent);
@@ -1439,13 +1479,13 @@ export class BoxFileStorage extends FileStorageBase {
           destParentId = await this._getIdFromPath(destPath.parent);
         }
       }
-      
+
       // Copy the file
-      await this._apiRequest(`/files/${sourceId}/copy`, 'POST', {
+      await this._apiRequest(`/files/${sourceInfo.id}/copy`, 'POST', {
         parent: { id: destParentId },
         name: destPath.name
       });
-      
+
       return true;
     } catch (error) {
       console.error('Error copying object', { sourceObjectName, destinationObjectName, error });
