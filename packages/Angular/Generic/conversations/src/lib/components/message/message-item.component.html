@@ -13,17 +13,61 @@
     </div>
 
     <div class="message-body">
-      <div class="message-text">
-        {{ message.Message }}
-      </div>
+      @if (!isEditing) {
+        <div class="message-text">
+          {{ messageTextWithoutArtifacts }}
+          @if (isMessageEdited) {
+            <span class="edited-badge">(edited)</span>
+          }
+        </div>
 
-      <div *ngIf="hasArtifact" class="message-artifact-indicator" (click)="onArtifactClick()">
-        <i class="fas fa-file-code"></i>
-        <span>View Artifact</span>
-      </div>
+        <!-- Inline artifact cards -->
+        @if (inlineArtifacts.length > 0) {
+          @for (artifact of inlineArtifacts; track artifact.id) {
+            <mj-inline-artifact
+              [artifactId]="artifact.id"
+              [versionNumber]="artifact.versionId ? +artifact.versionId : undefined"
+              [currentUser]="currentUser"
+              (actionPerformed)="onInlineArtifactAction($event)">
+            </mj-inline-artifact>
+          }
+        }
+
+        <!-- Legacy artifact indicator (for messages with ArtifactID field) -->
+        @if (hasArtifact && inlineArtifacts.length === 0) {
+          <div class="message-artifact-indicator" (click)="onArtifactClick()">
+            <i class="fas fa-file-code"></i>
+            <span>View Artifact</span>
+          </div>
+        }
+      }
+
+      @if (isEditing) {
+        <div class="message-edit-container">
+          <textarea
+            class="message-edit-textarea"
+            [(ngModel)]="editedText"
+            (keydown)="onEditKeydown($event)"
+            rows="4"
+            placeholder="Edit your message..."></textarea>
+          <div class="edit-actions">
+            <button class="edit-action-btn save" (click)="saveEdit()">
+              <i class="fas fa-check"></i>
+              Save
+            </button>
+            <button class="edit-action-btn cancel" (click)="cancelEditing()">
+              <i class="fas fa-times"></i>
+              Cancel
+            </button>
+          </div>
+          <div class="edit-hint">
+            Press Enter to save, Shift+Enter for new line, Escape to cancel
+          </div>
+        </div>
+      }
     </div>
 
-    <div class="message-actions" *ngIf="!isProcessing && !isTemporaryMessage">
+    <div class="message-actions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
       <button class="message-action-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin' : 'Pin'">
         <i class="fas" [ngClass]="message.IsPinned ? 'fa-thumbtack' : 'fa-thumbtack'"></i>
       </button>

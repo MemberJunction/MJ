@@ -14,7 +14,7 @@ import { ConversationStateService } from '../../services/conversation-state.serv
           [currentUser]="currentUser">
         </mj-conversation-list>
       </div>
-      <div *ngIf="activeTab === 'libraries'" class="sidebar-content">
+      <div *ngIf="activeTab === 'collections'" class="sidebar-content">
         <mj-collection-tree
           [environmentId]="environmentId"
           [currentUser]="currentUser">

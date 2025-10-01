@@ -146,3 +146,117 @@
   border-color: #DC2626;
   color: white;
 }
+
+/* Thread indicator badge */
+.thread-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-top: 8px;
+  background: #EFF6FF;
+  border: 1px solid #DBEAFE;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-size: 12px;
+  color: #1E40AF;
+  font-weight: 500;
+}
+
+.thread-indicator:hover {
+  background: #DBEAFE;
+  border-color: #93C5FD;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(30, 64, 175, 0.1);
+}
+
+.thread-indicator i {
+  font-size: 14px;
+}
+
+.thread-count {
+  font-weight: 600;
+}
+
+/* Edit mode styles */
+.message-item.editing {
+  background-color: rgba(255, 243, 205, 0.3);
+  border-left: 3px solid #FFA726;
+}
+
+.message-edit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-edit-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #D9D9D9;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 150ms ease;
+}
+
+.message-edit-textarea:focus {
+  outline: none;
+  border-color: #0076B6;
+  box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.1);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.edit-action-btn.save {
+  background-color: #0076B6;
+  color: white;
+}
+
+.edit-action-btn.save:hover {
+  background-color: #005A8F;
+}
+
+.edit-action-btn.cancel {
+  background-color: #F4F4F4;
+  color: #666;
+}
+
+.edit-action-btn.cancel:hover {
+  background-color: #E0E0E0;
+  color: #333;
+}
+
+.edit-hint {
+  font-size: 12px;
+  color: #AAA;
+  font-style: italic;
+}
+
+.edited-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #AAA;
+  font-style: italic;
+  font-weight: normal;
+}

@@ -1,0 +1,69 @@
+[
+  {
+    "fields": {
+      "Name": "Conversation Manager Agent",
+      "Description": "Ambient agent in MJ that is always present in all conversations to help the user navigate functionality in MJ, handle basic requests, and bring in other agents to delegate work to",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-comments"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Conversation Manager Agent - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          } 
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Check User Permission",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Validate Email Unique",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create User",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Employee",
+            "Status": "Active"
+          } 
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Assign User Roles",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Send Single Message",
+            "Status": "Active"
+          } 
+        }
+      ] 
+    } 
+  }
+]

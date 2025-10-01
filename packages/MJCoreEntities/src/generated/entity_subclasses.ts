@@ -3768,6 +3768,12 @@ export const ConversationDetailSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Indicates if this message is pinned within the conversation for easy reference`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+        * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -24925,6 +24931,20 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
     set IsPinned(value: boolean) {
         this.Set('IsPinned', value);
+    }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
     }
 
     /**

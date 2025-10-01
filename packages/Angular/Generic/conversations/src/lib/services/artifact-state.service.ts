@@ -2,9 +2,11 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 import { ArtifactEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 
 /**
  * State management for artifacts and the artifact panel
+ * Handles artifact CRUD operations and caching
  */
 @Injectable({
   providedIn: 'root'
@@ -94,5 +96,229 @@ export class ArtifactStateService {
    */
   clearCache(): void {
     this._artifacts$.next(new Map());
+  }
+
+  /**
+   * Loads artifacts for a conversation
+   * @param conversationId The conversation ID
+   * @param currentUser The current user context
+   * @returns Array of artifacts
+   */
+  async loadArtifactsForConversation(conversationId: string, currentUser: UserInfo): Promise<ArtifactEntity[]> {
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<ArtifactEntity>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ConversationID='${conversationId}'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        currentUser
+      );
+
+      if (result.Success && result.Results) {
+        // Cache all artifacts
+        result.Results.forEach(artifact => this.cacheArtifact(artifact));
+        return result.Results;
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading artifacts:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Loads artifacts for a collection
+   * @param collectionId The collection ID
+   * @param currentUser The current user context
+   * @returns Array of artifacts
+   */
+  async loadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<ArtifactEntity[]> {
+    try {
+      const rv = new RunView();
+      // Need to load through Collection Artifacts junction table
+      const result = await rv.RunView<any>(
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${collectionId}'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        currentUser
+      );
+
+      if (result.Success && result.Results) {
+        // Load full artifact entities
+        const artifactIds = result.Results.map((ca: any) => ca.ArtifactID);
+        if (artifactIds.length === 0) return [];
+
+        const artifactsResult = await rv.RunView<ArtifactEntity>(
+          {
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID IN ('${artifactIds.join("','")}')`,
+            OrderBy: '__mj_CreatedAt DESC',
+            ResultType: 'entity_object'
+          },
+          currentUser
+        );
+
+        if (artifactsResult.Success && artifactsResult.Results) {
+          artifactsResult.Results.forEach(artifact => this.cacheArtifact(artifact));
+          return artifactsResult.Results;
+        }
+      }
+      return [];
+    } catch (error) {
+      console.error('Error loading collection artifacts:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Loads a single artifact by ID
+   * @param id The artifact ID
+   * @param currentUser The current user context
+   * @returns The artifact entity or null
+   */
+  async loadArtifact(id: string, currentUser: UserInfo): Promise<ArtifactEntity | null> {
+    try {
+      const md = new Metadata();
+      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', currentUser);
+      const loaded = await artifact.Load(id);
+
+      if (loaded) {
+        this.cacheArtifact(artifact);
+        return artifact;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error loading artifact:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Creates a new artifact
+   * @param data Artifact data
+   * @param currentUser The current user context
+   * @returns The created artifact
+   */
+  async createArtifact(data: Partial<ArtifactEntity>, currentUser: UserInfo): Promise<ArtifactEntity> {
+    const md = new Metadata();
+    const artifact = await md.GetEntityObject<ArtifactEntity>('Artifacts', currentUser);
+
+    Object.assign(artifact, data);
+
+    const saved = await artifact.Save();
+    if (saved) {
+      this.cacheArtifact(artifact);
+      return artifact;
+    } else {
+      throw new Error(artifact.LatestResult?.Message || 'Failed to create artifact');
+    }
+  }
+
+  /**
+   * Updates an artifact
+   * @param id The artifact ID
+   * @param updates The fields to update
+   * @param currentUser The current user context
+   * @returns True if successful
+   */
+  async updateArtifact(id: string, updates: Partial<ArtifactEntity>, currentUser: UserInfo): Promise<boolean> {
+    const md = new Metadata();
+    const artifact = await md.GetEntityObject<ArtifactEntity>('Artifacts', currentUser);
+
+    const loaded = await artifact.Load(id);
+    if (!loaded) {
+      throw new Error('Artifact not found');
+    }
+
+    Object.assign(artifact, updates);
+
+    const saved = await artifact.Save();
+    if (saved) {
+      this.cacheArtifact(artifact);
+      return true;
+    } else {
+      throw new Error(artifact.LatestResult?.Message || 'Failed to update artifact');
+    }
+  }
+
+  /**
+   * Deletes an artifact
+   * @param id The artifact ID
+   * @param currentUser The current user context
+   * @returns True if successful
+   */
+  async deleteArtifact(id: string, currentUser: UserInfo): Promise<boolean> {
+    const md = new Metadata();
+    const artifact = await md.GetEntityObject<ArtifactEntity>('Artifacts', currentUser);
+
+    const loaded = await artifact.Load(id);
+    if (!loaded) {
+      throw new Error('Artifact not found');
+    }
+
+    const deleted = await artifact.Delete();
+    if (deleted) {
+      this.removeCachedArtifact(id);
+      if (this._activeArtifactId$.value === id) {
+        this.closeArtifact();
+      }
+      return true;
+    } else {
+      throw new Error(artifact.LatestResult?.Message || 'Failed to delete artifact');
+    }
+  }
+
+  /**
+   * Adds an artifact to a collection
+   * @param artifactId The artifact ID
+   * @param collectionId The collection ID
+   * @param currentUser The current user context
+   */
+  async addToCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+    const md = new Metadata();
+    const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', currentUser);
+
+    (collectionArtifact as any).CollectionID = collectionId;
+    (collectionArtifact as any).ArtifactID = artifactId;
+
+    const saved = await collectionArtifact.Save();
+    if (!saved) {
+      throw new Error('Failed to add artifact to collection');
+    }
+  }
+
+  /**
+   * Removes an artifact from a collection
+   * @param artifactId The artifact ID
+   * @param collectionId The collection ID
+   * @param currentUser The current user context
+   */
+  async removeFromCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+    const rv = new RunView();
+    const result = await rv.RunView<any>(
+      {
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${artifactId}'`,
+        MaxRows: 1,
+        ResultType: 'entity_object'
+      },
+      currentUser
+    );
+
+    if (result.Success && result.Results && result.Results.length > 0) {
+      const collectionArtifact = result.Results[0];
+      const deleted = await collectionArtifact.Delete();
+      if (!deleted) {
+        throw new Error('Failed to remove artifact from collection');
+      }
+    }
   }
 }

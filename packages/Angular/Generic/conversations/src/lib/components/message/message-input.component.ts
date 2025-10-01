@@ -1,6 +1,8 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef } from '@angular/core';
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { ConversationDetailEntity } from '@memberjunction/core-entities';
+import { DialogService } from '../../services/dialog.service';
+import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'mj-message-input',
@@ -110,6 +112,7 @@ export class MessageInputComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
+  @Input() parentMessageId?: string; // Optional: for replying in threads
 
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
 
@@ -117,6 +120,11 @@ export class MessageInputComponent {
 
   public messageText: string = '';
   public isSending: boolean = false;
+
+  constructor(
+    private dialogService: DialogService,
+    private toastService: ToastService
+  ) {}
 
   get canSend(): boolean {
     return !this.disabled && !this.isSending && this.messageText.trim().length > 0;
@@ -134,6 +142,11 @@ export class MessageInputComponent {
       detail.Message = this.messageText.trim();
       detail.Role = 'User';
 
+      // Set ParentID if this is a thread reply
+      if (this.parentMessageId) {
+        (detail as any).ParentID = this.parentMessageId; // TODO: ParentID field doesn't exist on ConversationDetailEntity yet
+      }
+
       const saved = await detail.Save();
       if (saved) {
         this.messageSent.emit(detail);
@@ -147,11 +160,11 @@ export class MessageInputComponent {
         }, 100);
       } else {
         console.error('Failed to send message:', detail.LatestResult?.Message);
-        alert('Failed to send message. Please try again.');
+        this.toastService.error('Failed to send message. Please try again.');
       }
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('Error sending message. Please try again.');
+      this.toastService.error('Error sending message. Please try again.');
     } finally {
       this.isSending = false;
     }

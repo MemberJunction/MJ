@@ -20,12 +20,15 @@ import { NavigationTab } from '../../models/conversation-state.model';
         </button>
         <button
           class="nav-tab"
-          [class.active]="activeTab === 'libraries'"
-          (click)="tabChanged.emit('libraries')">
-          Libraries
+          [class.active]="activeTab === 'collections'"
+          (click)="tabChanged.emit('collections')">
+          Collections
         </button>
       </div>
       <div class="nav-right">
+        <button class="nav-btn search-btn" (click)="searchTriggered.emit()" title="Search (Ctrl+K)">
+          <i class="fas fa-search"></i>
+        </button>
         <button class="nav-btn">
           <i class="fas fa-cog"></i>
         </button>
@@ -73,4 +76,5 @@ export class ConversationNavigationComponent {
   @Input() environmentId!: string;
   @Output() tabChanged = new EventEmitter<NavigationTab>();
   @Output() sidebarToggled = new EventEmitter<void>();
+  @Output() searchTriggered = new EventEmitter<void>();
 }

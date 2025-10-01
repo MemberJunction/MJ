@@ -1,8 +1,10 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { ConversationEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
-import { Observable } from 'rxjs';
+import { AgentStateService } from '../../services/agent-state.service';
+import { Observable, Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'mj-conversation-chat-area',
@@ -24,16 +26,12 @@ import { Observable } from 'rxjs';
             <span>{{ artifactCount }} artifact{{ artifactCount !== 1 ? 's' : '' }}</span>
           </button>
           <mj-tasks-dropdown [currentUser]="currentUser"></mj-tasks-dropdown>
-          <div class="active-agents" *ngIf="activeAgents.length > 0">
-            <span class="active-agents-label">Active:</span>
-            <div *ngFor="let agent of activeAgents"
-                 class="agent-indicator"
-                 [class.active]="agent.isActive"
-                 [style.background-color]="agent.color"
-                 [title]="agent.name">
-              {{ agent.initial }}
-            </div>
-          </div>
+          <mj-active-agent-indicator
+            [conversationId]="activeConversation?.ID"
+            [currentUser]="currentUser"
+            (togglePanel)="onToggleAgentPanel()"
+            (agentSelected)="onAgentSelected($event)">
+          </mj-active-agent-indicator>
         </div>
         <div class="chat-actions">
           <button class="action-btn" (click)="exportConversation()" title="Export conversation">
@@ -55,7 +53,10 @@ import { Observable } from 'rxjs';
           [messages]="messages"
           [conversation]="activeConversation"
           [currentUser]="currentUser"
-          [isProcessing]="isProcessing">
+          [isProcessing]="isProcessing"
+          (replyInThread)="onReplyInThread($event)"
+          (viewThread)="onViewThread($event)"
+          (messageEdited)="onMessageEdited($event)">
         </mj-conversation-message-list>
       </div>
 
@@ -67,6 +68,26 @@ import { Observable } from 'rxjs';
         (messageSent)="onMessageSent($event)">
       </mj-message-input>
     </div>
+
+    <!-- Thread Panel -->
+    @if (activeThreadId) {
+      <mj-thread-panel
+        [parentMessageId]="activeThreadId"
+        [conversationId]="activeConversation?.ID || ''"
+        [currentUser]="currentUser"
+        (closed)="onThreadClosed()"
+        (replyAdded)="onThreadReplyAdded($event)">
+      </mj-thread-panel>
+    }
+
+    <!-- Export Modal -->
+    <mj-export-modal
+      [isVisible]="showExportModal"
+      [conversation]="activeConversation || undefined"
+      [currentUser]="currentUser"
+      (cancelled)="onExportModalCancelled()"
+      (exported)="onExportModalComplete()">
+    </mj-export-modal>
   `,
   styles: [`
     .chat-area { display: flex; flex-direction: column; height: 100%; }
@@ -143,32 +164,6 @@ import { Observable } from 'rxjs';
     .artifact-indicator:hover {
       background: #1e3a8a;
     }
-    .active-agents {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .active-agents-label {
-      font-size: 13px;
-      color: #6B7280;
-    }
-    .agent-indicator {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 12px;
-      font-weight: 600;
-      color: white;
-      opacity: 0.5;
-      transition: opacity 150ms ease;
-    }
-    .agent-indicator.active {
-      opacity: 1;
-      box-shadow: 0 0 0 2px white, 0 0 0 4px currentColor;
-    }
     .chat-actions {
       display: flex;
       gap: 8px;
@@ -202,7 +197,7 @@ import { Observable } from 'rxjs';
     .chat-messages { flex: 1; overflow-y: auto; }
   `]
 })
-export class ConversationChatAreaComponent implements OnInit {
+export class ConversationChatAreaComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
@@ -213,22 +208,45 @@ export class ConversationChatAreaComponent implements OnInit {
   public memberCount: number = 1;
   public artifactCount: number = 0;
   public isShared: boolean = false;
-  public activeAgents: Array<{ name: string; initial: string; color: string; isActive: boolean }> = [];
+  public activeThreadId: string | null = null;
+  public showExportModal: boolean = false;
+  public showAgentPanel: boolean = false;
 
-  constructor(private conversationState: ConversationStateService) {}
+  private destroy$ = new Subject<void>();
+
+  constructor(
+    private conversationState: ConversationStateService,
+    private agentStateService: AgentStateService
+  ) {}
 
   ngOnInit() {
     this.activeConversation$ = this.conversationState.activeConversation$;
 
     // Subscribe to active conversation changes and load messages
-    this.activeConversation$.subscribe(async (conversation) => {
-      this.activeConversation = conversation;
-      if (conversation) {
-        await this.loadMessages(conversation.ID);
-      } else {
-        this.messages = [];
-      }
-    });
+    this.activeConversation$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(async (conversation) => {
+        this.activeConversation = conversation;
+        if (conversation) {
+          await this.loadMessages(conversation.ID);
+          // Start polling for agents when conversation is active
+          this.agentStateService.startPolling(this.currentUser, conversation.ID);
+        } else {
+          this.messages = [];
+        }
+      });
+
+    // Subscribe to thread state
+    this.conversationState.activeThreadId$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((threadId) => {
+        this.activeThreadId = threadId;
+      });
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   private async loadMessages(conversationId: string): Promise<void> {
@@ -273,12 +291,66 @@ export class ConversationChatAreaComponent implements OnInit {
   }
 
   exportConversation(): void {
-    // TODO: Implement export functionality
-    console.log('Export conversation');
+    if (this.activeConversation) {
+      this.showExportModal = true;
+    }
+  }
+
+  onExportModalCancelled(): void {
+    this.showExportModal = false;
+  }
+
+  onExportModalComplete(): void {
+    this.showExportModal = false;
   }
 
   shareConversation(): void {
     // TODO: Implement share functionality
     console.log('Share conversation');
+  }
+
+  onReplyInThread(message: ConversationDetailEntity): void {
+    // Open thread panel for this message
+    this.conversationState.openThread(message.ID);
+  }
+
+  onViewThread(message: ConversationDetailEntity): void {
+    // Open thread panel for this message
+    this.conversationState.openThread(message.ID);
+  }
+
+  onThreadClosed(): void {
+    // Close the thread panel
+    this.conversationState.closeThread();
+  }
+
+  onThreadReplyAdded(reply: ConversationDetailEntity): void {
+    // Optionally refresh the message list to update thread counts
+    // For now, we'll just log it
+    console.log('Thread reply added:', reply);
+
+    // Reload messages to get updated thread counts
+    if (this.activeConversation) {
+      this.loadMessages(this.activeConversation.ID);
+    }
+  }
+
+  onToggleAgentPanel(): void {
+    this.showAgentPanel = !this.showAgentPanel;
+    // The agent panel component handles its own visibility
+    // This could be used to toggle a modal or different view
+  }
+
+  onAgentSelected(agentRun: AIAgentRunEntity): void {
+    // When an agent is clicked in the indicator, could show details
+    console.log('Agent selected:', agentRun.ID);
+    // Could open a modal or navigate to agent details
+  }
+
+  onMessageEdited(message: ConversationDetailEntity): void {
+    // Message was edited and saved, trigger change detection
+    console.log('Message edited:', message.ID);
+    // The message entity is already updated in place, so no need to reload
+    // Just ensure the UI reflects the changes
   }
 }

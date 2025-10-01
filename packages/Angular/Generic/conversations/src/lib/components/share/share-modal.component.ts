@@ -1,13 +1,15 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { ConversationEntity } from '@memberjunction/core-entities';
+import { ConversationEntity, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { DialogService } from '../../services/dialog.service';
+import { ToastService } from '../../services/toast.service';
 
 interface SharePermission {
+  permissionId: string | null;
+  userId: string;
   userEmail: string;
   userName: string;
-  canView: boolean;
-  canEdit: boolean;
-  canShare: boolean;
+  permissionLevel: 'View' | 'Edit' | 'Owner';
 }
 
 @Component({
@@ -146,10 +148,17 @@ export class ShareModalComponent implements OnInit {
   public shareLink: string = '';
 
   public accessLevels = [
-    { label: 'Can View', value: 'view' },
-    { label: 'Can Edit', value: 'edit' },
-    { label: 'Can Share', value: 'share' }
+    { label: 'Can View', value: 'View' },
+    { label: 'Can Edit', value: 'Edit' },
+    { label: 'Owner', value: 'Owner' }
   ];
+
+  private readonly CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+
+  constructor(
+    private dialogService: DialogService,
+    private toastService: ToastService
+  ) {}
 
   ngOnInit() {
     if (this.conversation) {
@@ -159,23 +168,53 @@ export class ShareModalComponent implements OnInit {
   }
 
   private async loadPermissions(): Promise<void> {
-    // TODO: Load actual permissions from ConversationPermissions entity when available
-    // For now, using mock data
-    this.permissions = [];
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<ResourcePermissionEntity>({
+        EntityName: 'Resource Permissions',
+        ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.conversation.ID}' AND Status='Approved'`,
+        ResultType: 'entity_object'
+      });
+
+      if (result.Success && result.Results) {
+        const permissionPromises = result.Results.map(async (perm) => {
+          if (perm.UserID) {
+            const userRv = new RunView();
+            const userResult = await userRv.RunView<UserEntity>({
+              EntityName: 'Users',
+              ExtraFilter: `ID='${perm.UserID}'`,
+              ResultType: 'entity_object'
+            });
+
+            if (userResult.Success && userResult.Results && userResult.Results.length > 0) {
+              const user = userResult.Results[0];
+              return {
+                permissionId: perm.ID,
+                userId: perm.UserID,
+                userEmail: user.Email,
+                userName: user.Name,
+                permissionLevel: perm.PermissionLevel || 'View'
+              } as SharePermission;
+            }
+          }
+          return null;
+        });
+
+        const resolvedPermissions = await Promise.all(permissionPromises);
+        this.permissions = resolvedPermissions.filter(p => p !== null) as SharePermission[];
+      }
+    } catch (error) {
+      console.error('Failed to load permissions:', error);
+    }
   }
 
   getAccessLevel(permission: SharePermission): string {
-    if (permission.canShare) return 'share';
-    if (permission.canEdit) return 'edit';
-    return 'view';
+    return permission.permissionLevel;
   }
 
-  onAccessLevelChange(permission: SharePermission, level: string): void {
-    permission.canView = true;
-    permission.canEdit = level === 'edit' || level === 'share';
-    permission.canShare = level === 'share';
-
-    this.savePermission(permission);
+  async onAccessLevelChange(permission: SharePermission, level: 'View' | 'Edit' | 'Owner'): Promise<void> {
+    permission.permissionLevel = level;
+    await this.savePermission(permission);
   }
 
   async onAddUser(): Promise<void> {
@@ -184,52 +223,107 @@ export class ShareModalComponent implements OnInit {
 
     // Simple email validation
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      alert('Please enter a valid email address');
+      await this.dialogService.alert('Invalid Email', 'Please enter a valid email address');
       return;
     }
 
     // Check if user already has access
     if (this.permissions.some(p => p.userEmail === email)) {
-      alert('This user already has access');
+      await this.dialogService.alert('User Already Has Access', 'This user already has access');
       return;
     }
 
     try {
-      // TODO: Create ConversationPermission entity when available
+      // Look up user by email
+      const rv = new RunView();
+      const userResult = await rv.RunView<UserEntity>({
+        EntityName: 'Users',
+        ExtraFilter: `Email='${email}'`,
+        ResultType: 'entity_object'
+      });
+
+      if (!userResult.Success || !userResult.Results || userResult.Results.length === 0) {
+        await this.dialogService.alert('User Not Found', 'No user found with that email address');
+        return;
+      }
+
+      const user = userResult.Results[0];
       const newPermission: SharePermission = {
-        userEmail: email,
-        userName: email.split('@')[0],
-        canView: true,
-        canEdit: false,
-        canShare: false
+        permissionId: null,
+        userId: user.ID,
+        userEmail: user.Email,
+        userName: user.Name,
+        permissionLevel: 'View'
       };
 
+      await this.savePermission(newPermission);
       this.permissions.push(newPermission);
       this.newUserEmail = '';
-
-      await this.savePermission(newPermission);
+      this.toastService.success(`Access granted to ${user.Email}`);
     } catch (error) {
       console.error('Failed to add user:', error);
-      alert('Failed to add user');
+      this.toastService.error('Failed to add user');
     }
   }
 
   async onRemoveUser(permission: SharePermission): Promise<void> {
-    if (!confirm(`Remove access for ${permission.userEmail}?`)) return;
+    const confirmed = await this.dialogService.confirm({
+      title: 'Remove Access',
+      message: `Remove access for ${permission.userEmail}?`,
+      okText: 'Remove',
+      cancelText: 'Cancel'
+    });
+
+    if (!confirmed) return;
 
     try {
-      // TODO: Delete ConversationPermission entity when available
-      this.permissions = this.permissions.filter(p => p.userEmail !== permission.userEmail);
+      if (permission.permissionId) {
+        const md = new Metadata();
+        const permEntity = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+        await permEntity.Load(permission.permissionId);
+
+        const deleteResult = await permEntity.Delete();
+        if (!deleteResult) {
+          throw new Error('Failed to delete permission');
+        }
+      }
+
+      this.permissions = this.permissions.filter(p => p.userId !== permission.userId);
+      this.toastService.success(`Access removed for ${permission.userEmail}`);
     } catch (error) {
       console.error('Failed to remove user:', error);
-      alert('Failed to remove user');
+      this.toastService.error('Failed to remove user');
     }
   }
 
   private async savePermission(permission: SharePermission): Promise<void> {
     try {
-      // TODO: Save to ConversationPermissions entity when available
-      console.log('Saving permission:', permission);
+      const md = new Metadata();
+      const permEntity = await md.GetEntityObject<ResourcePermissionEntity>('Resource Permissions');
+
+      if (permission.permissionId) {
+        // Update existing permission
+        await permEntity.Load(permission.permissionId);
+        permEntity.PermissionLevel = permission.permissionLevel;
+      } else {
+        // Create new permission
+        permEntity.ResourceTypeID = this.CONVERSATIONS_RESOURCE_TYPE_ID;
+        permEntity.ResourceRecordID = this.conversation.ID;
+        permEntity.Type = 'User';
+        permEntity.UserID = permission.userId;
+        permEntity.PermissionLevel = permission.permissionLevel;
+        permEntity.Status = 'Approved';
+      }
+
+      const saveResult = await permEntity.Save();
+      if (!saveResult) {
+        throw new Error('Failed to save permission');
+      }
+
+      // Update the permission ID if it was a new permission
+      if (!permission.permissionId) {
+        permission.permissionId = permEntity.ID;
+      }
     } catch (error) {
       console.error('Failed to save permission:', error);
       throw error;
@@ -238,11 +332,13 @@ export class ShareModalComponent implements OnInit {
 
   async onTogglePublicLink(): Promise<void> {
     try {
-      // TODO: Update conversation PublicLink field when available
+      // Note: Public link functionality uses the conversation ID directly.
+      // For enhanced security with unique tokens, password protection, and expiration,
+      // future migration should add: PublicAccessToken, PublicAccessPassword, PublicAccessExpiresAt fields
       this.updateShareLink();
     } catch (error) {
       console.error('Failed to toggle public link:', error);
-      alert('Failed to update sharing settings');
+      await this.dialogService.alert('Error', 'Failed to update sharing settings');
     }
   }
 
@@ -256,13 +352,14 @@ export class ShareModalComponent implements OnInit {
     }
   }
 
-  onCopyLink(): void {
-    navigator.clipboard.writeText(this.shareLink).then(() => {
-      alert('Link copied to clipboard');
-    }).catch(err => {
+  async onCopyLink(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.shareLink);
+      this.toastService.success('Link copied to clipboard');
+    } catch (err) {
       console.error('Failed to copy link:', err);
-      alert('Failed to copy link');
-    });
+      this.toastService.error('Failed to copy link');
+    }
   }
 
   onClose(): void {

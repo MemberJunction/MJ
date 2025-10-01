@@ -32,10 +32,16 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
+  @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
+  @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
   public _elapsedTimeFormatted: string = '(0:00)';
+  public inlineArtifacts: {id: string; versionId?: string}[] = [];
+  public isEditing: boolean = false;
+  public editedText: string = '';
+  private originalText: string = '';
 
   constructor(private cdRef: ChangeDetectorRef) {
     super();
@@ -44,6 +50,7 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   ngAfterViewInit() {
     this._loadTime = Date.now();
     this.startElapsedTimeUpdater();
+    this.detectInlineArtifacts();
     this.cdRef.detectChanges();
   }
 
@@ -128,7 +135,19 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
     if (this.message.IsPinned) {
       classes.push('pinned');
     }
+    if (this.isEditing) {
+      classes.push('editing');
+    }
     return classes.join(' ');
+  }
+
+  public get isMessageEdited(): boolean {
+    // Check if the message was updated after creation
+    if (!this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt) {
+      return false;
+    }
+    // Allow 1 second difference for rounding
+    return this.message.__mj_UpdatedAt.getTime() - this.message.__mj_CreatedAt.getTime() > 1000;
   }
 
   public onPinClick(): void {
@@ -138,8 +157,69 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   }
 
   public onEditClick(): void {
-    if (!this.isProcessing) {
-      this.editClicked.emit(this.message);
+    if (!this.isProcessing && !this.isEditing) {
+      this.startEditing();
+    }
+  }
+
+  public startEditing(): void {
+    this.originalText = this.message.Message || '';
+    this.editedText = this.originalText;
+    this.isEditing = true;
+
+    // Focus textarea after Angular renders it
+    Promise.resolve().then(() => {
+      const textarea = document.querySelector('.message-edit-textarea') as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      }
+      this.cdRef.detectChanges();
+    });
+  }
+
+  public cancelEditing(): void {
+    this.isEditing = false;
+    this.editedText = '';
+    this.originalText = '';
+    this.cdRef.detectChanges();
+  }
+
+  public async saveEdit(): Promise<void> {
+    if (!this.editedText.trim() || this.editedText === this.originalText) {
+      this.cancelEditing();
+      return;
+    }
+
+    try {
+      // Update the message entity
+      this.message.Message = this.editedText;
+      const saveResult = await this.message.Save();
+
+      if (saveResult) {
+        this.isEditing = false;
+        this.editedText = '';
+        this.originalText = '';
+        this.messageEdited.emit(this.message);
+        this.detectInlineArtifacts(); // Re-detect artifacts in edited message
+        this.cdRef.detectChanges();
+      } else {
+        console.error('Failed to save message edit');
+        alert('Failed to save message. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error saving message edit:', error);
+      alert('Error saving message. Please try again.');
+    }
+  }
+
+  public onEditKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelEditing();
+    } else if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.saveEdit();
     }
   }
 
@@ -156,5 +236,74 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
         versionId: this.message.ArtifactVersionID || undefined
       });
     }
+  }
+
+  /**
+   * Detects artifact references in message content
+   * Looks for patterns like:
+   * - artifact:abc-123-def
+   * - artifact:abc-123-def:v2
+   * - [artifact](artifact:abc-123-def)
+   */
+  private detectInlineArtifacts(): void {
+    if (!this.message?.Message) {
+      this.inlineArtifacts = [];
+      return;
+    }
+
+    const artifacts: {id: string; versionId?: string}[] = [];
+    const text = this.message.Message;
+
+    // Pattern 1: artifact:id or artifact:id:vN
+    const simplePattern = /artifact:([a-f0-9\-]+)(?::v(\d+))?/gi;
+    let match;
+
+    while ((match = simplePattern.exec(text)) !== null) {
+      artifacts.push({
+        id: match[1],
+        versionId: match[2] || undefined
+      });
+    }
+
+    // Pattern 2: Markdown-style [text](artifact:id) or [text](artifact:id:vN)
+    const markdownPattern = /\[([^\]]+)\]\(artifact:([a-f0-9\-]+)(?::v(\d+))?\)/gi;
+
+    while ((match = markdownPattern.exec(text)) !== null) {
+      const id = match[2];
+      const versionId = match[3] || undefined;
+
+      // Avoid duplicates
+      if (!artifacts.some(a => a.id === id && a.versionId === versionId)) {
+        artifacts.push({ id, versionId });
+      }
+    }
+
+    this.inlineArtifacts = artifacts;
+  }
+
+  /**
+   * Gets the message text with artifact references removed
+   * This allows us to show the text separately from the artifact cards
+   */
+  public get messageTextWithoutArtifacts(): string {
+    if (!this.message?.Message) return '';
+
+    let text = this.message.Message;
+
+    // Remove artifact references
+    text = text.replace(/artifact:[a-f0-9\-]+(?::v\d+)?/gi, '');
+    text = text.replace(/\[([^\]]+)\]\(artifact:[a-f0-9\-]+(?::v\d+)?\)/gi, '$1');
+
+    return text.trim();
+  }
+
+  /**
+   * Handler for artifact actions from inline artifact component
+   */
+  public onInlineArtifactAction(event: {action: string; artifact: any}): void {
+    this.artifactActionPerformed.emit({
+      action: event.action,
+      artifactId: event.artifact.ID
+    });
   }
 }

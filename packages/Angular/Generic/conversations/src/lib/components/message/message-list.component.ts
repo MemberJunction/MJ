@@ -36,6 +36,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
+  @Output() public replyInThread = new EventEmitter<ConversationDetailEntity>();
+  @Output() public viewThread = new EventEmitter<ConversationDetailEntity>();
+  @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -125,10 +128,19 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.isProcessing = this.isProcessing;
 
           // Subscribe to outputs
-          instance.pinClicked.subscribe((msg) => this.pinMessage.emit(msg));
-          instance.editClicked.subscribe((msg) => this.editMessage.emit(msg));
-          instance.deleteClicked.subscribe((msg) => this.deleteMessage.emit(msg));
-          instance.artifactClicked.subscribe((data) => this.artifactClicked.emit(data));
+          instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));
+          instance.editClicked.subscribe((msg: ConversationDetailEntity) => this.editMessage.emit(msg));
+          instance.deleteClicked.subscribe((msg: ConversationDetailEntity) => this.deleteMessage.emit(msg));
+          instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
+          instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
+
+          // Handle artifact actions if the output exists
+          if (instance.artifactActionPerformed) {
+            instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
+              // Parent can handle artifact actions (save, fork, history, share)
+              console.log('Artifact action:', data);
+            });
+          }
 
           // Store reference
           this._renderedMessages.set(key, componentRef);

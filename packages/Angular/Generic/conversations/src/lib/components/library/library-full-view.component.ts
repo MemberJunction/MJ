@@ -3,18 +3,18 @@ import { UserInfo, RunView } from '@memberjunction/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
 
 /**
- * Full-panel Libraries view component
- * Replaces the main content area when Libraries tab is selected
+ * Full-panel Collections view component
+ * Replaces the main content area when Collections tab is selected
  */
 @Component({
   selector: 'mj-library-full-view',
   template: `
-    <div class="libraries-view">
-      <div class="libraries-header">
-        <div class="libraries-breadcrumb">
+    <div class="collections-view">
+      <div class="collections-header">
+        <div class="collections-breadcrumb">
           <div class="breadcrumb-item">
             <i class="fas fa-home"></i>
-            <a class="breadcrumb-link" (click)="navigateToRoot()">Libraries</a>
+            <a class="breadcrumb-link" (click)="navigateToRoot()">Collections</a>
           </div>
           <span class="breadcrumb-path" *ngIf="breadcrumbs.length > 0">
             <ng-container *ngFor="let crumb of breadcrumbs; let last = last">
@@ -27,28 +27,28 @@ import { CollectionEntity } from '@memberjunction/core-entities';
             </ng-container>
           </span>
         </div>
-        <div class="libraries-search">
+        <div class="collections-search">
           <i class="fas fa-search"></i>
           <input type="text"
                  [(ngModel)]="searchQuery"
                  (ngModelChange)="onSearchChange($event)"
-                 placeholder="Search libraries and artifacts..."
+                 placeholder="Search collections and artifacts..."
                  class="library-search-input">
         </div>
-        <div class="libraries-actions">
+        <div class="collections-actions">
           <button class="btn-secondary" (click)="refresh()" title="Refresh">
             <i class="fas fa-sync"></i>
           </button>
         </div>
       </div>
-      <div class="libraries-content">
+      <div class="collections-content">
         <div *ngIf="isLoading" class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
-          <p>Loading libraries...</p>
+          <p>Loading collections...</p>
         </div>
         <div *ngIf="!isLoading && filteredCollections.length === 0" class="empty-state">
           <i class="fas fa-folder-open"></i>
-          <p>{{ searchQuery ? 'No libraries found' : 'No libraries yet' }}</p>
+          <p>{{ searchQuery ? 'No collections found' : 'No collections yet' }}</p>
         </div>
         <div *ngIf="!isLoading && filteredCollections.length > 0" class="library-folders">
           <div *ngFor="let collection of filteredCollections"
@@ -69,14 +69,14 @@ import { CollectionEntity } from '@memberjunction/core-entities';
     </div>
   `,
   styles: [`
-    .libraries-view {
+    .collections-view {
       display: flex;
       flex-direction: column;
       height: 100%;
       background: white;
     }
 
-    .libraries-header {
+    .collections-header {
       display: flex;
       align-items: center;
       padding: 16px 24px;
@@ -84,7 +84,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       gap: 16px;
     }
 
-    .libraries-breadcrumb {
+    .collections-breadcrumb {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -133,7 +133,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       font-size: 10px;
     }
 
-    .libraries-search {
+    .collections-search {
       display: flex;
       align-items: center;
       gap: 8px;
@@ -144,7 +144,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       min-width: 300px;
     }
 
-    .libraries-search i {
+    .collections-search i {
       color: #9CA3AF;
       font-size: 14px;
     }
@@ -162,7 +162,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       color: #9CA3AF;
     }
 
-    .libraries-actions {
+    .collections-actions {
       display: flex;
       gap: 8px;
     }
@@ -182,7 +182,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       color: #111827;
     }
 
-    .libraries-content {
+    .collections-content {
       flex: 1;
       overflow-y: auto;
       padding: 24px;
@@ -298,7 +298,7 @@ export class LibraryFullViewComponent implements OnInit {
 
       const result = await rv.RunView<CollectionEntity>(
         {
-          EntityName: 'Collections',
+          EntityName: 'MJ: Collections',
           ExtraFilter: filter,
           OrderBy: 'Name ASC',
           MaxRows: 1000,

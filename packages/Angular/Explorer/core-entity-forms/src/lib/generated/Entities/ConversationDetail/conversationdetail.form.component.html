@@ -42,6 +42,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="Conversation Details" [Visible]="record.IsSaved"> 
+                        Conversation Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Conversation Details','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('Conversation Details')"
+                            [AllowLoad]="IsCurrentTab('Conversation Details')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
                         MJ: Tasks
                     </mj-tab>

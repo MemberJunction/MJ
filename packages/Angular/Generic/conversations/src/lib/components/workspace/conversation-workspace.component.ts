@@ -12,6 +12,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
+import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
 
 /**
@@ -38,6 +39,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
   public isArtifactPanelOpen: boolean = false;
+  public isSearchPanelOpen: boolean = false;
 
   private destroy$ = new Subject<void>();
 
@@ -72,7 +74,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
     // Handle context-based navigation
     if (this.activeContext === 'library') {
-      this.activeTab = 'libraries';
+      this.activeTab = 'collections';
     }
     // Task context will be handled by chat header dropdown, not navigation tabs
   }
@@ -92,5 +94,30 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   closeArtifactPanel(): void {
     this.artifactState.closeArtifact();
+  }
+
+  openSearch(): void {
+    this.isSearchPanelOpen = true;
+  }
+
+  closeSearch(): void {
+    this.isSearchPanelOpen = false;
+  }
+
+  handleSearchResult(result: SearchResult): void {
+    // Navigate to the conversation
+    if (result.conversationId) {
+      this.conversationState.setActiveConversation(result.conversationId);
+    }
+
+    // If it's an artifact, open it in the artifact panel
+    if (result.type === 'artifact') {
+      this.artifactState.openArtifact(result.id);
+    }
+
+    // If it's a message, we could scroll to it in the future
+    // For now, just open the conversation
+
+    this.closeSearch();
   }
 }
