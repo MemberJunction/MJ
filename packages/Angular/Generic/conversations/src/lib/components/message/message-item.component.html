@@ -1,13 +1,13 @@
 <div [class]="messageClasses">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
-      <i class="fas" [ngClass]="isAIMessage ? 'fa-robot' : 'fa-user'"></i>
+      <i class="fas" [ngClass]="isAIMessage ? (aiAgentInfo?.iconClass || 'fa-robot') : 'fa-user'"></i>
     </div>
   </div>
 
   <div class="message-content">
     <div class="message-header">
-      <span class="message-sender">{{ isAIMessage ? 'AI Assistant' : currentUser.Name }}</span>
+      <span class="message-sender">{{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : currentUser.Name }}</span>
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
       <span *ngIf="isTemporaryMessage" class="message-elapsed">{{ _elapsedTimeFormatted }}</span>
     </div>

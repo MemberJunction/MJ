@@ -3,6 +3,7 @@ import { UserInfo, RunView } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { AgentStateService } from '../../services/agent-state.service';
+import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { Observable, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -10,6 +11,7 @@ import { takeUntil } from 'rxjs/operators';
   selector: 'mj-conversation-chat-area',
   template: `
     <div class="chat-area">
+      <!-- Fixed Header -->
       <div class="chat-header" *ngIf="activeConversation$ | async as conversation">
         <div class="chat-info">
           <div class="chat-title">{{ conversation.Name }}</div>
@@ -32,6 +34,11 @@ import { takeUntil } from 'rxjs/operators';
             (togglePanel)="onToggleAgentPanel()"
             (agentSelected)="onAgentSelected($event)">
           </mj-active-agent-indicator>
+          <!-- Ambient agent processing indicator -->
+          <div class="ambient-agent-indicator" *ngIf="isAmbientAgentProcessing$ | async" title="Ambient agent is thinking...">
+            <i class="fas fa-circle-notch fa-spin"></i>
+            <span>Agent thinking...</span>
+          </div>
         </div>
         <div class="chat-actions">
           <button class="action-btn" (click)="exportConversation()" title="Export conversation">
@@ -48,7 +55,8 @@ import { takeUntil } from 'rxjs/operators';
         </div>
       </div>
 
-      <div class="chat-messages">
+      <!-- Scrollable Messages Area -->
+      <div class="chat-messages-container">
         <mj-conversation-message-list
           [messages]="messages"
           [conversation]="activeConversation"
@@ -60,13 +68,18 @@ import { takeUntil } from 'rxjs/operators';
         </mj-conversation-message-list>
       </div>
 
-      <mj-message-input
-        *ngIf="activeConversation"
-        [conversationId]="activeConversation.ID"
-        [currentUser]="currentUser"
-        [disabled]="isProcessing"
-        (messageSent)="onMessageSent($event)">
-      </mj-message-input>
+      <!-- Fixed Input Area -->
+      <div class="chat-input-container">
+        <mj-message-input
+          *ngIf="activeConversation"
+          [conversationId]="activeConversation.ID"
+          [currentUser]="currentUser"
+          [conversationHistory]="messages"
+          [disabled]="isProcessing"
+          (messageSent)="onMessageSent($event)"
+          (agentResponse)="onAgentResponse($event)">
+        </mj-message-input>
+      </div>
     </div>
 
     <!-- Thread Panel -->
@@ -90,14 +103,22 @@ import { takeUntil } from 'rxjs/operators';
     </mj-export-modal>
   `,
   styles: [`
-    .chat-area { display: flex; flex-direction: column; height: 100%; }
+    .chat-area {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      overflow: hidden;
+    }
     .chat-header {
+      flex-shrink: 0;
       padding: 16px 24px;
       border-bottom: 1px solid #E5E7EB;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 16px;
+      background: #FFF;
+      z-index: 10;
     }
     .chat-info {
       display: flex;
@@ -164,6 +185,25 @@ import { takeUntil } from 'rxjs/operators';
     .artifact-indicator:hover {
       background: #1e3a8a;
     }
+    .ambient-agent-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: #F3F4F6;
+      border: 1px solid #D1D5DB;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #6B7280;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .ambient-agent-indicator i {
+      color: #0076B6;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
     .chat-actions {
       display: flex;
       gap: 8px;
@@ -194,7 +234,18 @@ import { takeUntil } from 'rxjs/operators';
       background: #DBEAFE;
       color: #1e3a8a;
     }
-    .chat-messages { flex: 1; overflow-y: auto; }
+    .chat-messages-container {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      background: #FFF;
+      min-height: 0;
+    }
+    .chat-input-container {
+      flex-shrink: 0;
+      background: #FFF;
+      z-index: 10;
+    }
   `]
 })
 export class ConversationChatAreaComponent implements OnInit, OnDestroy {
@@ -204,6 +255,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
   public activeConversation$!: Observable<ConversationEntity | null>;
   public activeConversation: ConversationEntity | null = null;
   public messages: ConversationDetailEntity[] = [];
+  public isAmbientAgentProcessing$!: Observable<boolean>;
   public isProcessing: boolean = false;
   public memberCount: number = 1;
   public artifactCount: number = 0;
@@ -216,11 +268,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
 
   constructor(
     private conversationState: ConversationStateService,
-    private agentStateService: AgentStateService
+    private agentStateService: AgentStateService,
+    private conversationAgentService: ConversationAgentService
   ) {}
 
   ngOnInit() {
     this.activeConversation$ = this.conversationState.activeConversation$;
+    this.isAmbientAgentProcessing$ = this.conversationAgentService.isProcessing$;
 
     // Subscribe to active conversation changes and load messages
     this.activeConversation$
@@ -273,6 +327,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
   onMessageSent(message: ConversationDetailEntity): void {
     // Add the new message to the list
     this.messages = [...this.messages, message];
+  }
+
+  onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): void {
+    // Add the agent's response message to the conversation
+    this.messages = [...this.messages, event.message];
+    console.log('Agent responded:', event.agentResult);
   }
 
   showProjectSelector(): void {

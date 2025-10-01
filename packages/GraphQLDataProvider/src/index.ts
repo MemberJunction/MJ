@@ -9,9 +9,7 @@ export { GraphQLActionClient } from './graphQLActionClient';
 export { GraphQLAIClient } from './graphQLAIClient';
 export type { 
     RunAIPromptParams, 
-    RunAIPromptResult, 
-    RunAIAgentParams, 
-    RunAIAgentResult,
+    RunAIPromptResult,  
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,

@@ -7,6 +7,8 @@ import {
   ViewContainerRef,
   OnInit,
   OnDestroy,
+  OnChanges,
+  SimpleChanges,
   ChangeDetectorRef,
   ElementRef,
   AfterViewChecked
@@ -26,7 +28,7 @@ import { MessageItemComponent } from './message-item.component';
   templateUrl: './message-list.component.html',
   styleUrls: ['./message-list.component.css']
 })
-export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewChecked {
+export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
   @Input() public messages: ConversationDetailEntity[] = [];
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
@@ -52,6 +54,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   ngOnInit() {
     // Initial render will happen in AfterViewInit
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    // React to messages array changes
+    if (changes['messages'] && this.messages && this.messageContainerRef) {
+      this.updateMessages(this.messages);
+    }
   }
 
   ngAfterViewChecked() {

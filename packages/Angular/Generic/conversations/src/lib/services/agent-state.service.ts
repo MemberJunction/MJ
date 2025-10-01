@@ -23,7 +23,7 @@ export class AgentStateService implements OnDestroy {
   private _activeAgents$ = new BehaviorSubject<AgentWithStatus[]>([]);
   private pollSubscription?: Subscription;
   private currentUser?: UserInfo;
-  private pollInterval: number = 3000; // Poll every 3 seconds
+  private pollInterval: number = 30000; // Poll every 30 seconds (reduced from 3s to minimize DB load)
 
   // Public observable streams
   public readonly activeAgents$ = this._activeAgents$.asObservable();
@@ -124,6 +124,11 @@ export class AgentStateService implements OnDestroy {
         const runs = result.Results || [];
         const agentsWithStatus = runs.map(run => this.mapRunToAgentWithStatus(run));
         this._activeAgents$.next(agentsWithStatus);
+
+        // Stop polling if no active agents (optimization to reduce DB load)
+        if (runs.length === 0 && this.pollSubscription) {
+          this.stopPolling();
+        }
       }
     } catch (error) {
       console.error('Failed to load active agents:', error);

@@ -186,6 +186,7 @@ export class ConversationStateService {
 
     conversation.Name = name;
     conversation.EnvironmentID = environmentId;
+    conversation.UserID = currentUser.ID;
     if (description) conversation.Description = description;
     if (projectId) conversation.ProjectID = projectId;
 

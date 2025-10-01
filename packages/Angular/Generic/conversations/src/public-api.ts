@@ -13,6 +13,7 @@ export * from './lib/models/notification.model';
 export * from './lib/services/conversation-state.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
+export * from './lib/services/conversation-agent.service';
 export * from './lib/services/dialog.service';
 export * from './lib/services/export.service';
 export * from './lib/services/notification.service';

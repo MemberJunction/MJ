@@ -4,6 +4,7 @@ import { ConversationEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
+import { ToastService } from '../../services/toast.service';
 import { Observable } from 'rxjs';
 
 @Component({
@@ -94,7 +95,8 @@ export class ConversationListComponent implements OnInit {
   constructor(
     private conversationState: ConversationStateService,
     private dialogService: DialogService,
-    private notificationService: NotificationService
+    private notificationService: NotificationService,
+    private toastService: ToastService
   ) {}
 
   ngOnInit() {
@@ -118,27 +120,17 @@ export class ConversationListComponent implements OnInit {
 
   async createNewConversation(): Promise<void> {
     try {
-      const name = await this.dialogService.input({
-        title: 'New Conversation',
-        message: 'Enter a name for your new conversation',
-        inputLabel: 'Conversation Name',
-        placeholder: 'My Conversation',
-        required: true,
-        okText: 'Create',
-        cancelText: 'Cancel'
-      });
-
-      if (name) {
-        const conversation = await this.conversationState.createConversation(
-          name,
-          this.environmentId,
-          this.currentUser
-        );
-        this.conversationState.setActiveConversation(conversation.ID);
-      }
+      // Create conversation directly with default name
+      // Name will be updated automatically after first message
+      const conversation = await this.conversationState.createConversation(
+        'New Chat',
+        this.environmentId,
+        this.currentUser
+      );
+      this.conversationState.setActiveConversation(conversation.ID);
     } catch (error) {
       console.error('Error creating conversation:', error);
-      await this.dialogService.alert('Error', 'Failed to create conversation. Please try again.');
+      this.toastService.error('Failed to create conversation. Please try again.');
     }
   }
 

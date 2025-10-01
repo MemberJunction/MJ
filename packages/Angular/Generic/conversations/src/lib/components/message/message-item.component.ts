@@ -10,6 +10,7 @@ import {
 import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Component for displaying a single message in a conversation
@@ -100,6 +101,24 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
 
   public get isAIMessage(): boolean {
     return this.message.Role?.trim().toLowerCase() === 'ai';
+  }
+
+  public get aiAgentInfo(): { name: string; iconClass: string } | null {
+    if (!this.isAIMessage) return null;
+
+    const agentID = (this.message as any).AgentID;
+    if (!agentID) return null;
+
+    // Look up agent from AIEngineBase cache
+    const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === agentID);
+    if (agent) {
+      return {
+        name: agent.Name || 'AI Assistant',
+        iconClass: agent.IconClass || 'fa-robot'
+      };
+    }
+
+    return null;
   }
 
   public get isUserMessage(): boolean {

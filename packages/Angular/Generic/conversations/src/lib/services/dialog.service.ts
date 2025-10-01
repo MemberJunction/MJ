@@ -103,6 +103,7 @@ export class DialogService {
   input(options: InputDialogOptions): Promise<string | null> {
     return new Promise((resolve) => {
       let inputValue = options.inputValue || '';
+      let currentValue = inputValue;
 
       const content = `
         <div style="margin-bottom: 16px;">${options.message}</div>
@@ -149,27 +150,41 @@ export class DialogService {
         minWidth: 300
       });
 
-      // Get the input element after dialog opens
+      // Get the input element after dialog opens and track its value
       setTimeout(() => {
         const inputElement = document.getElementById('dialogInput') as HTMLInputElement | HTMLTextAreaElement;
         if (inputElement) {
           inputElement.focus();
           inputElement.select();
+
+          // Track value changes
+          inputElement.addEventListener('input', (e) => {
+            currentValue = (e.target as HTMLInputElement | HTMLTextAreaElement).value;
+          });
+
+          // Handle Enter key in input (not textarea)
+          if (options.inputType !== 'textarea') {
+            inputElement.addEventListener('keydown', (e) => {
+              const keyEvent = e as KeyboardEvent;
+              if (keyEvent.key === 'Enter') {
+                keyEvent.preventDefault();
+                const okButton = document.querySelector('.k-dialog-actions button.k-primary') as HTMLButtonElement;
+                if (okButton) {
+                  okButton.click();
+                }
+              }
+            });
+          }
         }
       }, 100);
 
       dialogRef.result.subscribe((result) => {
         if (result instanceof Object && 'text' in result && result.text === (options.okText || 'OK')) {
-          const inputElement = document.getElementById('dialogInput') as HTMLInputElement | HTMLTextAreaElement;
-          if (inputElement) {
-            const value = inputElement.value.trim();
-            if (options.required && !value) {
-              resolve(null);
-            } else {
-              resolve(value);
-            }
-          } else {
+          const value = currentValue.trim();
+          if (options.required && !value) {
             resolve(null);
+          } else {
+            resolve(value);
           }
         } else {
           resolve(null);
