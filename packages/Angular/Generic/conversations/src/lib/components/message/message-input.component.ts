@@ -144,7 +144,7 @@ export class MessageInputComponent {
 
       // Set ParentID if this is a thread reply
       if (this.parentMessageId) {
-        (detail as any).ParentID = this.parentMessageId; // TODO: ParentID field doesn't exist on ConversationDetailEntity yet
+        detail.ParentID = this.parentMessageId;
       }
 
       const saved = await detail.Save();

@@ -115,7 +115,7 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
       const reply = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
 
       reply.ConversationID = this.conversationId;
-      (reply as any).ParentID = this.parentMessageId; // TODO: ParentID field doesn't exist on ConversationDetailEntity yet
+      reply.ParentID = this.parentMessageId;
       reply.Message = this.replyText.trim();
       reply.Role = 'User';
 
