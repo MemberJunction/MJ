@@ -122,11 +122,12 @@ export class ConversationAgentService {
       const conversationMessages = this.buildAgentMessages(conversationHistory, message);
 
       // Prepare parameters using the correct ExecuteAgentParams type
+      const availAgents = AIEngineBase.Instance.Agents.filter(a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active');
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
         data: {
-          ALL_AVAILABLE_AGENTS: AIEngineBase.Instance.Agents.map(a => {
+          ALL_AVAILABLE_AGENTS: availAgents.map(a => {
             return {
               ID: a.ID,
               Name: a.Name,
