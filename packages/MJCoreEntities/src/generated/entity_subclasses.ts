@@ -3137,7 +3137,7 @@ export const CompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: LastRun
+        * * Display Name: Last Run ID
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -3774,6 +3774,23 @@ export const ConversationDetailSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
+    Status: z.union([z.literal('Complete'), z.literal('In-Progress'), z.literal('Error')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * In-Progress
+    *   * Error
+        * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
+    AgentRunID: z.string().nullable().describe(`
+        * * Field Name: AgentRunID
+        * * Display Name: Agent Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+        * * Description: Optional link to the AI Agent Run that is processing or processed this message. Used for tracking agent invocations and their status.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -6285,7 +6302,7 @@ export const EntityPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RoleSQLName: z.string().nullable().describe(`
         * * Field Name: RoleSQLName
-        * * Display Name: Role SQLName
+        * * Display Name: Role SQL Name
         * * SQL Data Type: nvarchar(250)`),
     CreateRLSFilter: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilter
@@ -7178,7 +7195,7 @@ export const IntegrationURLFormatSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
     FullURLFormat: z.string().nullable().describe(`
         * * Field Name: FullURLFormat
-        * * Display Name: Full URLFormat
+        * * Display Name: Full URL Format
         * * SQL Data Type: nvarchar(1000)`),
 });
 
@@ -14145,11 +14162,11 @@ export const UserViewRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     UserViewID: z.string().describe(`
         * * Field Name: UserViewID
-        * * Display Name: User View
+        * * Display Name: User View ID
         * * SQL Data Type: uniqueidentifier`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity
+        * * Display Name: Entity ID
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -23182,7 +23199,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: LastRun
+    * * Display Name: Last Run ID
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -24945,6 +24962,39 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
     set ParentID(value: string | null) {
         this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * In-Progress
+    *   * Error
+    * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.
+    */
+    get Status(): 'Complete' | 'In-Progress' | 'Error' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Complete' | 'In-Progress' | 'Error') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: AgentRunID
+    * * Display Name: Agent Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
+    * * Description: Optional link to the AI Agent Run that is processing or processed this message. Used for tracking agent invocations and their status.
+    */
+    get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
     }
 
     /**
@@ -31244,7 +31294,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
 
     /**
     * * Field Name: RoleSQLName
-    * * Display Name: Role SQLName
+    * * Display Name: Role SQL Name
     * * SQL Data Type: nvarchar(250)
     */
     get RoleSQLName(): string | null {
@@ -33568,7 +33618,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
 
     /**
     * * Field Name: FullURLFormat
-    * * Display Name: Full URLFormat
+    * * Display Name: Full URL Format
     * * SQL Data Type: nvarchar(1000)
     */
     get FullURLFormat(): string | null {
@@ -52106,7 +52156,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
 
     /**
     * * Field Name: UserViewID
-    * * Display Name: User View
+    * * Display Name: User View ID
     * * SQL Data Type: uniqueidentifier
     */
     get UserViewID(): string {
@@ -52115,7 +52165,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity
+    * * Display Name: Entity ID
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {

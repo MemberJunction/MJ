@@ -1750,6 +1750,9 @@ each time the agent processes a prompt step.`})
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_AgentRunIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
     
+    @Field(() => [ConversationDetail_])
+    ConversationDetails_AgentRunIDArray: ConversationDetail_[]; // Link to ConversationDetails
+    
 }
 
 //****************************************************************************
@@ -2078,6 +2081,17 @@ export class AIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [AgentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ConversationDetail_])
+    async ConversationDetails_AgentRunIDArray(@Root() aiagentrun_: AIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Conversation Details', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationDetails] WHERE [AgentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Conversation Details', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Conversation Details', rows);
         return result;
     }
         
@@ -23285,6 +23299,14 @@ export class ConversationDetail_ {
     @MaxLength(16)
     ParentID?: string;
         
+    @Field({description: `Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `Optional link to the AI Agent Run that is processing or processed this message. Used for tracking agent invocations and their status.`}) 
+    @MaxLength(16)
+    AgentRunID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Conversation?: string;
@@ -23366,6 +23388,12 @@ export class CreateConversationDetailInput {
 
     @Field({ nullable: true })
     ParentID: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AgentRunID: string | null;
 }
     
 
@@ -23424,6 +23452,12 @@ export class UpdateConversationDetailInput {
 
     @Field({ nullable: true })
     ParentID?: string | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    AgentRunID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
