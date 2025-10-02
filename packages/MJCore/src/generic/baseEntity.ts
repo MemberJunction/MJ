@@ -530,7 +530,42 @@ export class BaseEntityResult {
         this.StartedAt = new Date();
         this.EndedAt = new Date();
     }
+
+    /**
+     * Returns a complete message that includes the Message property (if present), the Error property (if present), and any Errors array items (if present).
+     */
+    public get CompleteMessage(): string {
+        let msg = undefined;
+
+        // first check the message property
+        if (this.Message && this.Message.trim().length > 0) {
+            msg = this.Message;
+        }   
+
+        // now check the simple Error property
+        if (this.Error) {
+            msg = (msg ? msg + '\n' : '')
+            if (typeof this.Error === 'string') {
+                msg += this.Error;
+            }
+            else if (this.Error.message) {
+                msg += this.Error.message;
+            }
+            else {
+                msg += JSON.stringify(this.Error);
+            }
+        }
+        
+        // now check the Errors array
+        if (this.Errors && this.Errors.length > 0) {
+            // append
+            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => err.message || JSON.stringify(err)).join('\n');
+        }
+
+        return msg;
+    }
 }
+ 
 
 /**
  * Event type that is used to raise events and provided structured callbacks for any caller that is interested in registering for events.
