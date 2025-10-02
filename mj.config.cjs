@@ -202,8 +202,7 @@ const codegenConfig = {
     {
       workingDirectory: './packages/MJAPI',
       command: 'npm',
-      args: ['start'],
-      timeout: 30000,
+      args: ['run', 'build'],
       when: 'after',
     },
   ],
