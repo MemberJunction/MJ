@@ -2,12 +2,13 @@ import { GetSignedUrlConfig, Storage } from '@google-cloud/storage';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * Google Cloud Storage implementation of the FileStorageBase interface.
@@ -54,9 +55,33 @@ export class GoogleFileStorage extends FileStorageBase {
    */
   constructor() {
     super();
-    const credentials = env.get('STORAGE_GOOGLE_KEY_JSON').required().asJsonObject();
-    this._client = new Storage({ credentials });
-    this._bucket = env.get('STORAGE_GOOGLE_BUCKET_NAME').required().asString();
+
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('googleCloud');
+
+    // Handle credentials from config or env vars
+    let credentials;
+    if (config?.keyJSON) {
+      // If keyJSON is a string, parse it
+      credentials = typeof config.keyJSON === 'string' ? JSON.parse(config.keyJSON) : config.keyJSON;
+    } else if (config?.keyFilename) {
+      // If keyFilename is provided, use it
+      this._client = new Storage({ keyFilename: config.keyFilename });
+      this._bucket = config?.defaultBucket || env.get('STORAGE_GOOGLE_BUCKET_NAME').required().asString();
+      return;
+    } else {
+      // Fall back to env vars
+      credentials = env.get('STORAGE_GOOGLE_KEY_JSON').required().asJsonObject();
+    }
+
+    // Initialize with credentials
+    const storageOptions: { credentials?: object; projectId?: string } = { credentials };
+    if (config?.projectID) {
+      storageOptions.projectId = config.projectID;
+    }
+
+    this._client = new Storage(storageOptions);
+    this._bucket = config?.defaultBucket || env.get('STORAGE_GOOGLE_BUCKET_NAME').required().asString();
   }
 
   /**

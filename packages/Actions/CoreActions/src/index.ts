@@ -32,6 +32,7 @@ export * from './custom/web/web-search.action';
 export * from './custom/web/web-page-content.action';
 export * from './custom/web/url-link-validator.action';
 export * from './custom/web/url-metadata-extractor.action';
+export * from './custom/web/perplexity-search.action';
 
 // Data Transformation Actions
 export * from './custom/data/csv-parser.action';
@@ -47,11 +48,15 @@ export * from './custom/files/excel-reader.action';
 export * from './custom/files/excel-writer.action';
 export * from './custom/files/file-compress.action';
 
+// File Storage Actions - Granular operations for cloud storage
+export * from './custom/files';
+
 // Integration Actions
 export * from './custom/integration/http-request.action';
 export * from './custom/integration/graphql-query.action';
 export * from './custom/integration/oauth-flow.action';
 export * from './custom/integration/api-rate-limiter.action';
+export * from './custom/integration/gamma-generate-presentation.action';
 
 // Security Actions
 export * from './custom/security/password-strength.action';
@@ -97,6 +102,7 @@ import { LoadWebSearchAction } from './custom/web/web-search.action';
 import { LoadWebPageContentAction } from './custom/web/web-page-content.action';
 import { LoadURLLinkValidatorAction } from './custom/web/url-link-validator.action';
 import { LoadURLMetadataExtractorAction } from './custom/web/url-metadata-extractor.action';
+import { LoadPerplexitySearchAction } from './custom/web/perplexity-search.action';
 import { LoadCSVParserAction } from './custom/data/csv-parser.action';
 import { LoadJSONTransformAction } from './custom/data/json-transform.action';
 import { LoadXMLParserAction } from './custom/data/xml-parser.action';
@@ -107,10 +113,23 @@ import { LoadPDFExtractorAction } from './custom/files/pdf-extractor.action';
 import { LoadExcelReaderAction } from './custom/files/excel-reader.action';
 import { LoadExcelWriterAction } from './custom/files/excel-writer.action';
 import { LoadFileCompressAction } from './custom/files/file-compress.action';
+import { LoadListObjectsAction } from './custom/files/list-objects.action';
+import { LoadGetMetadataAction } from './custom/files/get-metadata.action';
+import { LoadGetObjectAction } from './custom/files/get-object.action';
+import { LoadGetDownloadUrlAction } from './custom/files/get-download-url.action';
+import { LoadGetUploadUrlAction } from './custom/files/get-upload-url.action';
+import { LoadObjectExistsAction } from './custom/files/object-exists.action';
+import { LoadDirectoryExistsAction } from './custom/files/directory-exists.action';
+import { LoadCopyObjectAction } from './custom/files/copy-object.action';
+import { LoadMoveObjectAction } from './custom/files/move-object.action';
+import { LoadDeleteObjectAction } from './custom/files/delete-object.action';
+import { LoadCreateDirectoryAction } from './custom/files/create-directory.action';
+import { LoadDeleteDirectoryAction } from './custom/files/delete-directory.action';
 import { LoadHTTPRequestAction } from './custom/integration/http-request.action';
 import { LoadGraphQLQueryAction } from './custom/integration/graphql-query.action';
 import { LoadOAuthFlowAction } from './custom/integration/oauth-flow.action';
 import { LoadAPIRateLimiterAction } from './custom/integration/api-rate-limiter.action';
+import { LoadGammaGeneratePresentationAction } from './custom/integration/gamma-generate-presentation.action';
 import { LoadPasswordStrengthAction } from './custom/security/password-strength.action';
 import { LoadConditionalAction } from './custom/workflow/conditional.action';
 import { LoadLoopAction } from './custom/workflow/loop.action';
@@ -153,6 +172,7 @@ export function LoadAllCoreActions() {
     LoadWebPageContentAction();
     LoadURLLinkValidatorAction();
     LoadURLMetadataExtractorAction();
+    LoadPerplexitySearchAction();
     LoadCSVParserAction();
     LoadJSONTransformAction();
     LoadXMLParserAction();
@@ -163,10 +183,23 @@ export function LoadAllCoreActions() {
     LoadExcelReaderAction();
     LoadExcelWriterAction();
     LoadFileCompressAction();
+    LoadListObjectsAction();
+    LoadGetMetadataAction();
+    LoadGetObjectAction();
+    LoadGetDownloadUrlAction();
+    LoadGetUploadUrlAction();
+    LoadObjectExistsAction();
+    LoadDirectoryExistsAction();
+    LoadCopyObjectAction();
+    LoadMoveObjectAction();
+    LoadDeleteObjectAction();
+    LoadCreateDirectoryAction();
+    LoadDeleteDirectoryAction();
     LoadHTTPRequestAction();
     LoadGraphQLQueryAction();
     LoadOAuthFlowAction();
     LoadAPIRateLimiterAction();
+    LoadGammaGeneratePresentationAction();
     LoadPasswordStrengthAction();
     LoadConditionalAction();
     LoadLoopAction();

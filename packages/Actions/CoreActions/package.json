@@ -29,6 +29,7 @@
     "@memberjunction/external-change-detection": "2.103.0",
     "@memberjunction/ai-vector-sync": "2.103.0",
     "@memberjunction/content-autotagging": "2.103.0",
+    "@memberjunction/storage": "2.103.0",
     "axios": "^1.6.8",
     "rxjs": "^7.8.1",
     "nunjucks": "^3.2.4",
@@ -44,6 +45,8 @@
     "archiver": "^6.0.1",
     "unzipper": "^0.12.3",
     "marked": "^14.1.3",
-    "zxcvbn": "^4.4.2"
+    "zxcvbn": "^4.4.2",
+    "zod": "^3.24.2",
+    "cosmiconfig": "^9.0.0"
   }
 }
