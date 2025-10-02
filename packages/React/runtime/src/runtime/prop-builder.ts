@@ -283,7 +283,6 @@ export function wrapCallbacksWithLogging(
   Object.keys(callbacks).forEach(key => {
     if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && key !== 'CreateSimpleNotification' && typeof (callbacks as any)[key] === 'function') {
       (wrapped as any)[key] = (...args: any[]) => {
-        console.log(`[${componentName}] ${key} called with args:`, args);
         return (callbacks as any)[key](...args);
       };
     }
@@ -291,21 +290,18 @@ export function wrapCallbacksWithLogging(
 
   if (callbacks.OpenEntityRecord) {
     wrapped.OpenEntityRecord = (entityName: string, key: any) => {
-      console.log(`[${componentName}] OpenEntityRecord called:`, { entityName, key });
       callbacks.OpenEntityRecord!(entityName, key);
     };
   }
 
   if (callbacks.RegisterMethod) {
     wrapped.RegisterMethod = (methodName: any, handler: any) => {
-      console.log(`[${componentName}] RegisterMethod called for:`, methodName);
       callbacks.RegisterMethod!(methodName, handler);
     };
   }
 
   if (callbacks.CreateSimpleNotification) {
     wrapped.CreateSimpleNotification = (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
-      console.log(`[${componentName}] CreateSimpleNotification called:`, { message, style, hideAfter });
       callbacks.CreateSimpleNotification!(message, style, hideAfter);
     };
   }
