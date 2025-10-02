@@ -20,25 +20,32 @@
                 <!-- Empty for now - actions moved to individual tabs -->
               </div>
               <div class="tab-actions-right">
-                <button class="tab-action-button create-button" 
+                <button class="tab-action-button create-button"
                         *ngIf="ShowCreateReportButton && !matchingReportID"
                         (click)="createReportForOption(i)"
                         [disabled]="isCreatingReport">
                   <i class="fa-solid fa-save"></i>
                   <span>Save Report</span>
                 </button>
-                <button class="tab-action-button create-button" 
+                <button class="tab-action-button create-button"
                         *ngIf="ShowOpenSavedReportButton && matchingReportID"
                         (click)="openReportForOption(i)">
                   <i class="fa-solid fa-folder-open"></i>
                   <span>Open Saved Report</span>
                 </button>
-                <button class="tab-action-button print-button" 
-                        *ngIf="ShowPrintReport" 
+                <button class="tab-action-button print-button"
+                        *ngIf="ShowPrintReport"
                         (click)="PrintReport()"
                         title="Print Report">
                   <i class="fa-solid fa-print"></i>
                   <span>Print Report</span>
+                </button>
+                <button class="tab-action-button feedback-button"
+                        [class.active]="showFeedbackPanel"
+                        (click)="toggleFeedbackPanel()"
+                        [title]="showFeedbackPanel ? 'Close Feedback Panel' : 'Provide Component Feedback'">
+                  <i class="fa-solid" [class.fa-comment-dots]="!showFeedbackPanel" [class.fa-times]="showFeedbackPanel"></i>
+                  <span>{{ showFeedbackPanel ? 'Close' : 'Feedback' }}</span>
                 </button>
               </div>
             </div>
@@ -224,25 +231,32 @@
         <!-- Empty for now - actions moved to tabs -->
       </div>
       <div class="tab-actions-right">
-        <button class="tab-action-button create-button" 
+        <button class="tab-action-button create-button"
                 *ngIf="ShowCreateReportButton && !matchingReportID"
                 (click)="createReportForOption(0)"
                 [disabled]="isCreatingReport">
           <i class="fa-solid fa-save"></i>
           <span>Save Report</span>
         </button>
-        <button class="tab-action-button create-button" 
+        <button class="tab-action-button create-button"
                 *ngIf="ShowOpenSavedReportButton && matchingReportID"
                 (click)="openReportForOption(0)">
           <i class="fa-solid fa-folder-open"></i>
           <span>Open Saved Report</span>
         </button>
-        <button class="tab-action-button print-button" 
-                *ngIf="ShowPrintReport" 
+        <button class="tab-action-button print-button"
+                *ngIf="ShowPrintReport"
                 (click)="PrintReport()"
                 title="Print Report">
           <i class="fa-solid fa-print"></i>
           <span>Print Report</span>
+        </button>
+        <button class="tab-action-button feedback-button"
+                [class.active]="showFeedbackPanel"
+                (click)="toggleFeedbackPanel()"
+                [title]="showFeedbackPanel ? 'Close Feedback Panel' : 'Provide Component Feedback'">
+          <i class="fa-solid" [class.fa-comment-dots]="!showFeedbackPanel" [class.fa-times]="showFeedbackPanel"></i>
+          <span>{{ showFeedbackPanel ? 'Close' : 'Feedback' }}</span>
         </button>
       </div>
     </div>

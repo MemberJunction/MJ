@@ -37,6 +37,7 @@ import { SkipDynamicUIComponentComponent } from './dynamic-report/dynamic-ui-com
 import { SkipSplitPanelComponent } from './split-panel/skip-split-panel.component';
 import { SkipArtifactViewerComponent } from './artifacts/skip-artifact-viewer.component';
 import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counter.component';
+import { SkipComponentFeedbackPanelComponent } from './artifacts/skip-component-feedback-panel.component';
 
 
 @NgModule({
@@ -51,6 +52,7 @@ import { SkipArtifactsCounterComponent } from './artifacts/skip-artifacts-counte
     SkipArtifactsCounterComponent
   ],
   imports: [
+    SkipComponentFeedbackPanelComponent, // Standalone component
     CommonModule,
     LayoutModule,
     FormsModule,

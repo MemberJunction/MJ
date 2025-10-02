@@ -25,6 +25,8 @@ export class SkipDynamicUIComponentComponent implements AfterViewInit, OnDestroy
     @Input() ShowCreateReportButton: boolean = false;
     @Input() ShowOpenSavedReportButton: boolean = true;
     @Input() matchingReportID: string | null = null;
+    @Input() showFeedbackPanel: boolean = false;
+    @Input() toggleFeedbackPanel: () => void = () => {};
     @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
     @Output() CreateReportRequested = new EventEmitter<number>();
     @Output() NavigateToMatchingReportRequested = new EventEmitter<number>();

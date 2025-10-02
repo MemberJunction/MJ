@@ -3523,15 +3523,18 @@ cycle.`);
       LogStatus(`Submitting component feedback to: ${feedbackUrl}`);
 
       // Use sendPostRequest for consistency with other Skip API calls
-      const response = await sendPostRequest(
+      // Note: sendPostRequest always returns an array of JSON objects
+      const responseArray = await sendPostRequest(
         feedbackUrl,
         requestBody,
         false, // Don't stream the response for feedback
         this.buildSkipPostHeaders()
       );
 
-      // sendPostRequest returns the response directly for non-streaming calls
-      const result = response as { success?: boolean; feedbackID?: string; error?: string };
+      // Extract the first (and should be only) response object
+      const result = responseArray && responseArray.length > 0
+        ? responseArray[0] as { success?: boolean; feedbackID?: string; error?: string }
+        : null;
 
       if (!result || !result.success) {
         const errorMessage = result?.error || 'Failed to submit feedback';
