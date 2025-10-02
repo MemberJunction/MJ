@@ -294,64 +294,6 @@ const mjServerConfig = {
     autoCleanupEmptyFiles: true,
     sessionTimeout: 3600000 // 1 hour in ms, auto-close sessions after this
   },
-  
-  /**
-   * File Storage Provider Configuration (MJStorage package)
-   * Configure cloud storage providers for file upload/download operations
-   * Environment variables follow the pattern: STORAGE_[PROVIDER]_[FIELD]
-   */
-
-  // AWS S3
-  awsAccessKeyID: process.env.STORAGE_AWS_ACCESS_KEY_ID,
-  awsSecretAccessKey: process.env.STORAGE_AWS_SECRET_ACCESS_KEY,
-  awsRegion: process.env.STORAGE_AWS_REGION || 'us-east-1',
-  awsDefaultBucket: process.env.STORAGE_AWS_DEFAULT_BUCKET,
-  awsKeyPrefix: process.env.STORAGE_AWS_KEY_PREFIX,
-
-  // Azure Blob Storage
-  azureAccountName: process.env.STORAGE_AZURE_ACCOUNT_NAME,
-  azureAccountKey: process.env.STORAGE_AZURE_ACCOUNT_KEY,
-  azureConnectionString: process.env.STORAGE_AZURE_CONNECTION_STRING,
-  azureDefaultContainer: process.env.STORAGE_AZURE_DEFAULT_CONTAINER,
-
-  // Google Cloud Storage
-  googleCloudProjectID: process.env.STORAGE_GOOGLE_CLOUD_PROJECT_ID,
-  googleCloudKeyFilename: process.env.STORAGE_GOOGLE_CLOUD_KEY_FILENAME,
-  googleCloudKeyJSON: process.env.STORAGE_GOOGLE_CLOUD_KEY_JSON,
-  googleCloudDefaultBucket: process.env.STORAGE_GOOGLE_CLOUD_DEFAULT_BUCKET,
-
-  // Google Drive (supports both service account and OAuth2 authentication)
-  googleDriveKeyFile: process.env.STORAGE_GDRIVE_KEY_FILE,
-  googleDriveCredentialsJSON: process.env.STORAGE_GDRIVE_CREDENTIALS_JSON,
-  googleDriveClientID: process.env.STORAGE_GDRIVE_CLIENT_ID,
-  googleDriveClientSecret: process.env.STORAGE_GDRIVE_CLIENT_SECRET,
-  googleDriveRefreshToken: process.env.STORAGE_GDRIVE_REFRESH_TOKEN,
-  googleDriveRedirectURI: process.env.STORAGE_GDRIVE_REDIRECT_URI,
-  googleDriveRootFolderID: process.env.STORAGE_GDRIVE_ROOT_FOLDER_ID,
-
-  // Dropbox
-  dropboxAccessToken: process.env.STORAGE_DROPBOX_ACCESS_TOKEN,
-  dropboxRefreshToken: process.env.STORAGE_DROPBOX_REFRESH_TOKEN,
-  dropboxClientID: process.env.STORAGE_DROPBOX_APP_KEY,
-  dropboxClientSecret: process.env.STORAGE_DROPBOX_APP_SECRET,
-  dropboxRootPath: process.env.STORAGE_DROPBOX_ROOT_PATH,
-
-  // Box.com (supports access token, refresh token, and JWT/client credentials)
-  boxClientID: process.env.STORAGE_BOX_CLIENT_ID,
-  boxClientSecret: process.env.STORAGE_BOX_CLIENT_SECRET,
-  boxAccessToken: process.env.STORAGE_BOX_ACCESS_TOKEN,
-  boxRefreshToken: process.env.STORAGE_BOX_REFRESH_TOKEN,
-  boxEnterpriseID: process.env.STORAGE_BOX_ENTERPRISE_ID,
-  boxRootFolderID: process.env.STORAGE_BOX_ROOT_FOLDER_ID,
-
-  // SharePoint
-  sharePointSiteID: process.env.STORAGE_SHAREPOINT_SITE_ID,
-  sharePointDriveID: process.env.STORAGE_SHAREPOINT_DRIVE_ID,
-  sharePointTenantID: process.env.STORAGE_SHAREPOINT_TENANT_ID,
-  sharePointClientID: process.env.STORAGE_SHAREPOINT_CLIENT_ID,
-  sharePointClientSecret: process.env.STORAGE_SHAREPOINT_CLIENT_SECRET,
-  sharePointRootFolderID: process.env.STORAGE_SHAREPOINT_ROOT_FOLDER_ID,
-
   /**
    * Authentication Provider Configuration
    * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)
@@ -515,10 +457,6 @@ const config = {
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',
-
-  // Used by Core Actions package
-  perplexityApiKey: process.env.PERPLEXITY_API_KEY,
-  gammaApiKey: process.env.GAMMA_API_KEY,
 };
 
 module.exports = config;
