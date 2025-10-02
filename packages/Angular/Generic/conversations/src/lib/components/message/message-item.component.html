@@ -9,6 +9,14 @@
     <div class="message-header">
       <span class="message-sender">{{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : currentUser.Name }}</span>
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
+
+      <!-- Status indicator for user messages -->
+      <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">
+        <i class="fas" [ngClass]="messageStatus === 'Error' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'"></i>
+        <span class="status-text">{{ getStatusText() }}</span>
+      </span>
+
+      <!-- Elapsed time for AI messages still processing -->
       <span *ngIf="isTemporaryMessage" class="message-elapsed">{{ _elapsedTimeFormatted }}</span>
     </div>
 

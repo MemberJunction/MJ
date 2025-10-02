@@ -50,6 +50,7 @@ import { TaskFormModalComponent } from './components/task/task-form-modal.compon
 import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.component';
 import { AgentProcessPanelComponent } from './components/agent/agent-process-panel.component';
 import { ActiveAgentIndicatorComponent } from './components/agent/active-agent-indicator.component';
+import { ActiveTasksPanelComponent } from './components/active-tasks/active-tasks-panel.component';
 import { ShareModalComponent } from './components/share/share-modal.component';
 import { MembersModalComponent } from './components/members/members-modal.component';
 import { ExportModalComponent } from './components/export/export-modal.component';
@@ -91,6 +92,7 @@ const COMPONENTS = [
   TasksDropdownComponent,
   AgentProcessPanelComponent,
   ActiveAgentIndicatorComponent,
+  ActiveTasksPanelComponent,
   ShareModalComponent,
   MembersModalComponent,
   ExportModalComponent,

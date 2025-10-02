@@ -260,3 +260,40 @@
   font-style: italic;
   font-weight: normal;
 }
+
+/* Message status indicator */
+.message-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6B7280;
+  padding: 2px 8px;
+  background: #F3F4F6;
+  border-radius: 4px;
+  margin-left: 8px;
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+.message-status i {
+  color: #0076B6;
+  font-size: 11px;
+}
+
+.message-status.error {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.message-status.error i {
+  color: #DC2626;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}

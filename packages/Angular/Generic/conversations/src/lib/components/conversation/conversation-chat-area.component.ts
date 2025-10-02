@@ -101,6 +101,9 @@ import { takeUntil } from 'rxjs/operators';
       (cancelled)="onExportModalCancelled()"
       (exported)="onExportModalComplete()">
     </mj-export-modal>
+
+    <!-- Active Tasks Panel -->
+    <mj-active-tasks-panel></mj-active-tasks-panel>
   `,
   styles: [`
     .chat-area {

@@ -129,6 +129,21 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
     return this.isAIMessage && (!this.message.ID || this.message.ID.length === 0);
   }
 
+  public get messageStatus(): 'Complete' | 'In-Progress' | 'Error' {
+    return this.message.Status || 'Complete';
+  }
+
+  public getStatusText(): string {
+    switch (this.messageStatus) {
+      case 'In-Progress':
+        return 'Processing...';
+      case 'Error':
+        return 'Failed';
+      default:
+        return '';
+    }
+  }
+
   public get isFirstMessageInConversation(): boolean {
     return this.allMessages.indexOf(this.message) === 0;
   }

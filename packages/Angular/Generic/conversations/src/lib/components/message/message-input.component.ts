@@ -5,8 +5,10 @@ import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ConversationStateService } from '../../services/conversation-state.service';
+import { ActiveTasksService } from '../../services/active-tasks.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
 @Component({
   selector: 'mj-message-input',
@@ -146,7 +148,8 @@ export class MessageInputComponent {
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
-    private conversationState: ConversationStateService
+    private conversationState: ConversationStateService,
+    private activeTasks: ActiveTasksService
   ) {}
 
   get canSend(): boolean {
@@ -225,78 +228,220 @@ export class MessageInputComponent {
   }
 
   /**
-   * Process the message through the ambient agent (non-blocking)
+   * Process the message through agents (multi-stage: Conversation Manager -> possible sub-agent)
    */
-  private async processMessageThroughAgent(message: ConversationDetailEntity): Promise<void> {
-    this.isProcessing = true;
+  private async processMessageThroughAgent(userMessage: ConversationDetailEntity): Promise<void> {
+    let taskId: string | null = null;
+
     try {
+      // Stage 1: Conversation Manager evaluates the message
+      taskId = this.activeTasks.add({
+        agentName: 'Conversation Manager',
+        status: 'Evaluating message...',
+        relatedMessageId: userMessage.ID,
+        conversationDetailId: userMessage.ID
+      });
+
+      // Update user message status to In-Progress
+      userMessage.Status = 'In-Progress';
+      await userMessage.Save();
+      this.messageSent.emit(userMessage); // Trigger UI update
+
       const result = await this.agentService.processMessage(
         this.conversationId,
-        message,
+        userMessage,
         this.conversationHistory
       );
 
-      // Log the complete agent response for debugging
-      console.log('🤖 Ambient Agent Response:', {
-        success: result?.success,
-        payload: result?.payload,
-        agentRun: {
-          status: result?.agentRun?.Status,
-          finalStep: result?.agentRun?.FinalStep,
-          message: result?.agentRun?.Message,
-          errorMessage: result?.agentRun?.ErrorMessage,
-          startedAt: result?.agentRun?.StartedAt,
-          completedAt: result?.agentRun?.CompletedAt
-        },
-        fullResult: result
+      // Remove Conversation Manager from active tasks
+      if (taskId) {
+        this.activeTasks.remove(taskId);
+        taskId = null;
+      }
+
+      if (!result || !result.success) {
+        // Evaluation failed
+        userMessage.Status = 'Error';
+        userMessage.Error = result?.agentRun?.ErrorMessage || 'Agent evaluation failed';
+        await userMessage.Save();
+        this.messageSent.emit(userMessage);
+        console.warn('⚠️ Conversation Manager failed:', result?.agentRun?.ErrorMessage);
+        return;
+      }
+
+      console.log('🤖 Conversation Manager Response:', {
+        finalStep: result.agentRun.FinalStep,
+        hasPayload: !!result.payload,
+        hasMessage: !!result.agentRun.Message
       });
 
-      if (result && result.success && result.agentRun) {
-        console.log('✅ Agent responded successfully');
+      // Stage 2: Check for sub-agent invocation
+      if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
+        await this.handleSubAgentInvocation(userMessage, result);
+      }
+      // Stage 3: Direct chat response from Conversation Manager
+      else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
+        await this.handleAgentResponse(userMessage, result);
+      }
+      // Stage 4: Silent observation (no response needed)
+      else {
+        console.log('🔇 Conversation Manager chose to observe silently');
+        userMessage.Status = 'Complete';
+        await userMessage.Save();
+        this.messageSent.emit(userMessage);
+      }
 
-        // Check if agent has a response to display
-        // When finalStep is 'Chat', the agentRun.Message contains the response to show the user
-        if ((result.agentRun.FinalStep === 'Chat' || result.agentRun.FinalStep === 'Success') && result.agentRun.Message) {
-          console.log('💬 Agent has a message to display:', result.agentRun.Message);
+    } catch (error) {
+      console.error('❌ Error processing message through agents:', error);
 
-          // Create agent message entity
-          const md = new Metadata();
-          const agentMessage = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+      // Update message status to Error
+      userMessage.Status = 'Error';
+      userMessage.Error = String(error);
+      await userMessage.Save();
+      this.messageSent.emit(userMessage);
 
-          agentMessage.ConversationID = this.conversationId;
-          agentMessage.Message = result.agentRun.Message;
-          agentMessage.Role = 'AI';
+      // Clean up active task
+      if (taskId) {
+        this.activeTasks.remove(taskId);
+      }
+    }
+  }
 
-          // Store agent information if available
-          if (result.agentRun.ID) {
-            (agentMessage as any).AIAgentRunID = result.agentRun.ID;
-          }
-          if (result.agentRun.AgentID) {
-            (agentMessage as any).AgentID = result.agentRun.AgentID;
-          }
+  /**
+   * Handle sub-agent invocation based on Conversation Manager's payload
+   */
+  private async handleSubAgentInvocation(
+    userMessage: ConversationDetailEntity,
+    managerResult: ExecuteAgentResult
+  ): Promise<void> {
+    const payload = managerResult.payload;
+    const agentName = payload.invokeAgent;
+    const reasoning = payload.reasoning || 'Delegating to specialist agent';
 
-          // Save agent's response
-          const saved = await agentMessage.Save();
-          if (saved) {
-            console.log('💾 Agent message saved and emitted');
-            this.agentResponse.emit({
-              message: agentMessage,
-              agentResult: result
-            });
-          } else {
-            console.error('❌ Failed to save agent message');
-          }
+    console.log(`🎯 Sub-agent invocation requested: ${agentName}`, { reasoning });
+
+    // Create a status message showing agent invocation
+    const md = new Metadata();
+    const statusMessage = await md.GetEntityObject<ConversationDetailEntity>(
+      'Conversation Details',
+      this.currentUser
+    );
+
+    statusMessage.ConversationID = this.conversationId;
+    statusMessage.Role = 'AI';
+    statusMessage.Message = `🎯 Invoking **${agentName}**...\n_${reasoning}_`;
+    statusMessage.ParentID = userMessage.ID; // Thread under user message
+    statusMessage.Status = 'In-Progress';
+    statusMessage.HiddenToUser = false;
+
+    await statusMessage.Save();
+    this.messageSent.emit(statusMessage);
+
+    // Add sub-agent to active tasks
+    const taskId = this.activeTasks.add({
+      agentName: agentName,
+      status: 'Processing...',
+      relatedMessageId: userMessage.ID,
+      conversationDetailId: statusMessage.ID
+    });
+
+    try {
+      // Invoke the sub-agent
+      const subResult = await this.agentService.invokeSubAgent(
+        agentName,
+        this.conversationId,
+        userMessage,
+        this.conversationHistory,
+        reasoning
+      );
+
+      // Remove from active tasks
+      this.activeTasks.remove(taskId);
+
+      if (subResult && subResult.success) {
+        // Update status message to completed
+        statusMessage.Status = 'Complete';
+        statusMessage.Message = `✅ **${agentName}** completed`;
+        statusMessage.AgentRunID = subResult.agentRun.ID;
+        await statusMessage.Save();
+        this.messageSent.emit(statusMessage);
+
+        // Handle sub-agent's response
+        if (subResult.agentRun.Message) {
+          await this.handleAgentResponse(userMessage, subResult);
         } else {
-          console.log('🔇 Agent chose not to respond (finalStep:', result.agentRun.FinalStep, ')');
+          // Sub-agent completed but has no message
+          userMessage.Status = 'Complete';
+          await userMessage.Save();
+          this.messageSent.emit(userMessage);
         }
       } else {
-        console.warn('⚠️ Agent execution failed or returned no result:', result?.agentRun?.ErrorMessage || 'Unknown error');
+        // Sub-agent failed
+        statusMessage.Status = 'Error';
+        statusMessage.Message = `❌ **${agentName}** failed\n_${subResult?.agentRun?.ErrorMessage || 'Unknown error'}_`;
+        statusMessage.Error = subResult?.agentRun?.ErrorMessage || null;
+        await statusMessage.Save();
+        this.messageSent.emit(statusMessage);
+
+        userMessage.Status = 'Error';
+        await userMessage.Save();
+        this.messageSent.emit(userMessage);
       }
     } catch (error) {
-      console.error('❌ Error processing message through agent:', error);
-      // Don't show error to user - ambient agent failures should be silent
-    } finally {
-      this.isProcessing = false;
+      console.error(`❌ Error invoking sub-agent ${agentName}:`, error);
+
+      this.activeTasks.remove(taskId);
+
+      statusMessage.Status = 'Error';
+      statusMessage.Message = `❌ **${agentName}** failed\n_${String(error)}_`;
+      statusMessage.Error = String(error);
+      await statusMessage.Save();
+      this.messageSent.emit(statusMessage);
+
+      userMessage.Status = 'Error';
+      await userMessage.Save();
+      this.messageSent.emit(userMessage);
+    }
+  }
+
+  /**
+   * Handle agent response - create AI message from agent result
+   */
+  private async handleAgentResponse(
+    userMessage: ConversationDetailEntity,
+    result: ExecuteAgentResult
+  ): Promise<void> {
+    if (!result.agentRun.Message) return;
+
+    const md = new Metadata();
+    const agentMessage = await md.GetEntityObject<ConversationDetailEntity>(
+      'Conversation Details',
+      this.currentUser
+    );
+
+    agentMessage.ConversationID = this.conversationId;
+    agentMessage.Message = result.agentRun.Message;
+    agentMessage.Role = 'AI';
+    agentMessage.Status = 'Complete';
+    agentMessage.AgentRunID = result.agentRun.ID;
+
+    // Store which agent actually responded
+    if (result.agentRun.AgentID) {
+      (agentMessage as any).AgentID = result.agentRun.AgentID;
+    }
+
+    const saved = await agentMessage.Save();
+    if (saved) {
+      console.log('💾 Agent response saved');
+      this.agentResponse.emit({
+        message: agentMessage,
+        agentResult: result
+      });
+
+      // Mark user message as complete
+      userMessage.Status = 'Complete';
+      await userMessage.Save();
+      this.messageSent.emit(userMessage);
     }
   }
 

@@ -201,6 +201,67 @@ export class ConversationAgentService {
   }
 
   /**
+   * Invoke a sub-agent based on Conversation Manager Agent's payload.
+   * This is called when the Conversation Manager decides to delegate to a specialist agent.
+   *
+   * @param agentName Name of the agent to invoke
+   * @param conversationId The conversation ID
+   * @param message The user message that triggered this
+   * @param conversationHistory Recent conversation history for context
+   * @param reasoning Why this agent is being invoked
+   * @returns The agent's execution result, or null if agent not found
+   */
+  async invokeSubAgent(
+    agentName: string,
+    conversationId: string,
+    message: ConversationDetailEntity,
+    conversationHistory: ConversationDetailEntity[],
+    reasoning: string
+  ): Promise<ExecuteAgentResult | null> {
+    if (!this._aiClient) {
+      console.warn('AI Client not initialized, cannot invoke sub-agent');
+      return null;
+    }
+
+    try {
+      // Ensure AIEngineBase is configured
+      await AIEngineBase.Instance.Config(false);
+
+      // Find the agent by name
+      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+
+      if (!agent || !agent.ID) {
+        console.warn(`❌ Sub-agent "${agentName}" not found`);
+        return null;
+      }
+
+      console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning });
+
+      // Build conversation messages for the sub-agent
+      const conversationMessages = this.buildAgentMessages(conversationHistory, message);
+
+      // Prepare parameters
+      const params: ExecuteAgentParams = {
+        agent: agent,
+        conversationMessages: conversationMessages,
+        data: {
+          conversationId: conversationId,
+          latestMessageId: message.ID,
+          invocationReason: reasoning
+        }
+      };
+
+      // Run the sub-agent
+      const result = await this._aiClient.RunAIAgent(params);
+
+      return result;
+    } catch (error) {
+      console.error(`Error invoking sub-agent "${agentName}":`, error);
+      return null;
+    }
+  }
+
+  /**
    * Clear the session for a conversation (useful when starting a new topic)
    */
   clearSession(conversationId: string): void {
