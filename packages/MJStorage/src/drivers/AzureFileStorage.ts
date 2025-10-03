@@ -15,12 +15,13 @@ import {
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * Azure Blob Storage implementation of the FileStorageBase interface.
@@ -78,18 +79,22 @@ export class AzureFileStorage extends FileStorageBase {
   constructor() {
     super();
 
-    this._container = env.get('STORAGE_AZURE_CONTAINER').required().asString();
-    this._accountName = env.get('STORAGE_AZURE_ACCOUNT_NAME').required().asString();
-    const accountKey = env.get('STORAGE_AZURE_ACCOUNT_KEY').required().asString();
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('azure');
+
+    // Extract values from config, fall back to env vars
+    this._container = config?.defaultContainer || env.get('STORAGE_AZURE_CONTAINER').required().asString();
+    this._accountName = config?.accountName || env.get('STORAGE_AZURE_ACCOUNT_NAME').required().asString();
+    const accountKey = config?.accountKey || env.get('STORAGE_AZURE_ACCOUNT_KEY').required().asString();
 
     this._sharedKeyCredential = new StorageSharedKeyCredential(this._accountName, accountKey);
-    
+
     const blobServiceUrl = `https://${this._accountName}.blob.core.windows.net`;
     this._blobServiceClient = new BlobServiceClient(
       blobServiceUrl,
       this._sharedKeyCredential
     );
-    
+
     this._containerClient = this._blobServiceClient.getContainerClient(this._container);
   }
 

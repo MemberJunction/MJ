@@ -294,7 +294,6 @@ const mjServerConfig = {
     autoCleanupEmptyFiles: true,
     sessionTimeout: 3600000 // 1 hour in ms, auto-close sessions after this
   },
-  
   /**
    * Authentication Provider Configuration
    * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)
