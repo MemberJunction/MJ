@@ -15,42 +15,45 @@ export interface AIAgentDefinition {
   // Basic Information
   name: string;
   description: string;
-  readonly type: 'Loop' // ONLY LOOP FOR NOW | 'Sequential' | 'Graph';
+  readonly type: 'Loop'; // ONLY LOOP FOR NOW | 'Sequential' | 'Graph';
   purpose: string;
   
-  // Requirements & Specifications
-  requirements: {
-    businessGoal: string;
-    functionalRequirements: string;
-    technicalRequirements: string;
-    dataRequirements: string;
-    integrationRequirements: string;
-    assumptions: string;
-    risks: string;
-    outOfScope: string;
-  };
-  
-  successCriteria: string;
-  
-  // Design & Architecture
-  design: {
-    actions: [
-      {
-        id: string, // id of the action from the available actions in our system
-        name: string, // name of the action
-        reason: string // Why this action is needed
-      }
-    ];
-    // Sub-Agents (recursive structure for n-level depth)
-    subAgents?: AIAgentDefinition[];
-  };
+  // Actions this agent can use
+  actions: {
+    /** Action ID from the system action library */
+    id: string;
+    /** Human-readable name of the action */
+    name: string;
+    /** Justification for why this action is needed */
+    reason: string;
+  }[];
   
   // Prompt Configuration
   prompt: {
-    systemPrompt: string;
-    templateVariables: string;
-    promptNotes: string;
+    /** System prompt for this agent */
+    systemPrompt?: string;
+    /** Template variables documentation */
+    templateVariables?: string;
+    /** Prompt analysis and notes */
+    promptNotes?: string;
   };
+  
+  // Payload access control
+  payloadDownstreamPaths?: string[];
+  payloadUpstreamPaths?: string[];
+  
+  // Recursive sub-agents
+  subAgents?: AIAgentDefinition[];
+  
+  // Execution configuration
+  executionOrder?: number;
+  exposeAsAction?: boolean;
+  iconClass?: string;
+  
+  // Final payload validation
+  finalPayloadValidation?: string; // JSON validation schema
+  finalPayloadValidationMode?: 'Retry' | 'Fail' | 'Warn';
+  finalPayloadValidationMaxRetries?: number;
 }
 
 /**
@@ -77,5 +80,105 @@ export interface AIAgentManagerContext {
   validation?: {
     isValid: boolean;
     report: string;
+  };
+}
+
+/**
+ * Agent Manager Payload Definition
+ * This type defines the structure for data passed between Agent Manager sub-agents
+ */
+export interface AgentManagerPayload {
+  /**
+   * Metadata about the agent creation process
+   */
+  metadata: {
+    /** Unique identifier for this agent creation session */
+    sessionId: string;
+    /** Current status of the agent creation process */
+    status: 'requirements' | 'design' | 'prompting' | 'implementation' | 'validation' | 'complete';
+    /** Original user request for agent creation */
+    originalRequest: string;
+    /** The agent who last modified the payload */
+    lastModifiedBy: string;
+  };
+
+  /**
+   * Requirements Analyst agent section
+   */
+  requirements?: {
+    /** High-level business objective this agent will serve */
+    businessGoal: string;
+    /** Specific functional capabilities the agent must have */
+    functionalRequirements: string;
+    /** Technical constraints and requirements */
+    technicalRequirements: string;
+    /** Data sources and data handling requirements */
+    dataRequirements: string;
+    /** System integration requirements */
+    integrationRequirements: string;
+    /** Key assumptions made during requirements gathering */
+    assumptions: string;
+    /** Identified risks and mitigation strategies */
+    risks: string;
+    /** Explicitly defined scope boundaries */
+    outOfScope: string;
+    /** Measurable criteria for success */
+    successCriteria: string;
+  };
+
+  /**
+   * Planning Designer agent section
+   */
+  design?: {
+    /** Complete agent hierarchy structure */
+    agentHierarchy: AIAgentDefinition;
+    /** Architecture documentation */
+    architecture: {
+      /** How agents will execute in sequence/parallel */
+      executionFlow: string;
+      /** How data flows between agents */
+      dataFlow: string;
+      /** Error handling and recovery strategies */
+      errorHandling: string;
+    };
+  };
+
+  /**
+   * Prompt Designer agent section
+   */
+  prompts?: {
+    /** Map of agent names to their prompt configurations */
+    [agentName: string]: {
+      /** Complete system prompt for the agent */
+      systemPrompt: string;
+      /** Documentation of template variables used */
+      templateVariables: string;
+      /** Analysis and optimization notes */
+      promptNotes: string;
+    };
+  };
+
+  /**
+   * Agent Manager implementation section
+   */
+  implementation?: {
+    /** Agents that have been created in the system */
+    createdAgents: {
+      /** Database ID of the created agent */
+      id: string;
+      /** Name of the agent */
+      name: string;
+      /** Current status of the agent */
+      status: 'created' | 'configured' | 'validated' | 'active';
+    }[];
+    /** Validation results for the created agent system */
+    validationResults: {
+      /** ID of the agent that was validated */
+      agentId: string;
+      /** Whether the agent passed validation */
+      isValid: boolean;
+      /** Any issues found during validation */
+      issues: string[];
+    }[];
   };
 }
