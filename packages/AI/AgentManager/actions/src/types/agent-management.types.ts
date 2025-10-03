@@ -1,5 +1,5 @@
 import { ActionResultSimple } from "@memberjunction/actions-base";
-import { AIAgentEntity, AIAgentTypeEntity } from "@memberjunction/core-entities";
+import { AIAgentEntityExtended, AIAgentTypeEntity } from "@memberjunction/core-entities";
 
 /**
  * Result type for parameter extraction operations
@@ -20,8 +20,8 @@ export interface EntityLoadResult<T> {
 /**
  * Result type for agent loading operations
  */
-export interface AgentLoadResult extends EntityLoadResult<AIAgentEntity> {
-    agent?: AIAgentEntity;
+export interface AgentLoadResult extends EntityLoadResult<AIAgentEntityExtended> {
+    agent?: AIAgentEntityExtended;
 }
 
 /**
