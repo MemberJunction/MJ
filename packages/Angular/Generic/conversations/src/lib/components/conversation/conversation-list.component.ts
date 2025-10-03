@@ -34,7 +34,7 @@ import { Observable } from 'rxjs';
                 <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
               </div>
             </div>
-            <div class="conversation-info">
+            <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
               <div class="conversation-name">{{ conversation.Name }}</div>
               <div class="conversation-preview">{{ conversation.Description || 'No description' }}</div>
             </div>
@@ -44,8 +44,8 @@ import { Observable } from 'rxjs';
               }
             </div>
             <div class="conversation-actions" (click)="$event.stopPropagation()">
-              <button class="action-btn" (click)="togglePin(conversation)" [title]="conversation.IsPinned ? 'Unpin' : 'Pin'">
-                <i class="fas" [class.fa-thumbtack]="!conversation.IsPinned" [class.fa-times]="conversation.IsPinned"></i>
+              <button class="action-btn" (click)="togglePin(conversation)" [title]="conversation.IsPinned ? 'Unpin' : 'Pin'" [class.pinned]="conversation.IsPinned">
+                <i class="fas fa-thumbtack"></i>
               </button>
               <button class="action-btn" (click)="renameConversation(conversation)" title="Rename">
                 <i class="fas fa-edit"></i>
@@ -66,22 +66,26 @@ import { Observable } from 'rxjs';
     .btn-new { padding: 8px 12px; background: #0076B6; color: white; border: none; border-radius: 6px; cursor: pointer; }
     .btn-new:hover { background: #005A8C; }
     .list-content { flex: 1; overflow-y: auto; }
-    .conversation-item { padding: 12px 16px; border-bottom: 1px solid #F4F4F4; cursor: pointer; display: flex; gap: 12px; align-items: center; transition: background 150ms ease; }
+    .conversation-item { padding: 12px 16px; border-bottom: 1px solid #F4F4F4; cursor: pointer; display: flex; gap: 12px; align-items: center; transition: background 150ms ease; position: relative; }
     .conversation-item:hover { background: #F4F4F4; }
     .conversation-item:hover .conversation-actions { opacity: 1; }
     .conversation-item.active { background: #AAE7FD; }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { width: 36px; height: 36px; border-radius: 50%; background: #0076B6; color: white; display: flex; align-items: center; justify-content: center; }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
-    .conversation-info { flex: 1; min-width: 0; }
-    .conversation-name { font-weight: 600; font-size: 14px; }
-    .conversation-preview { font-size: 12px; color: #AAA; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .conversation-meta { display: flex; align-items: center; gap: 4px; }
-    .conversation-actions { display: flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 150ms ease; }
-    .conversation-item.active .conversation-actions { opacity: 1; }
+    .conversation-info { flex: 1; min-width: 0; padding-right: 8px; }
+    .conversation-name { font-weight: 600; font-size: 14px; color: #111827; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-preview { font-size: 12px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .conversation-actions { display: flex; align-items: center; gap: 4px; opacity: 0; transition: opacity 150ms ease; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); background: #F4F4F4; padding: 4px; border-radius: 6px; }
+    .conversation-item:hover .conversation-actions { background: #E5E7EB; }
+    .conversation-item.active .conversation-actions { opacity: 1; background: rgba(255, 255, 255, 0.9); }
+    .conversation-item:has(.pinned-icon) .conversation-actions { opacity: 1; }
     .pinned-icon { color: #0076B6; font-size: 12px; }
     .action-btn { padding: 6px 8px; background: transparent; border: none; border-radius: 4px; cursor: pointer; color: #666; transition: all 150ms ease; }
     .action-btn:hover { background: #E5E7EB; color: #111827; }
+    .action-btn.pinned { color: #0076B6; }
+    .action-btn.pinned:hover { color: #005A8C; }
     .action-btn.danger:hover { background: #FEE2E2; color: #DC2626; }
   `]
 })

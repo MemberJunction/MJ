@@ -3774,6 +3774,12 @@ export const ConversationDetailSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
         * * Description: Optional reference to parent message for threaded conversations. NULL for top-level messages.`),
+    AgentID: z.string().nullable().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+        * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun`),
     Status: z.union([z.literal('Complete'), z.literal('In-Progress'), z.literal('Error')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
@@ -3785,12 +3791,6 @@ export const ConversationDetailSchema = z.object({
     *   * In-Progress
     *   * Error
         * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
-    AgentRunID: z.string().nullable().describe(`
-        * * Field Name: AgentRunID
-        * * Display Name: Agent Run ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
-        * * Description: Optional link to the AI Agent Run that is processing or processed this message. Used for tracking agent invocations and their status.`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -3802,6 +3802,10 @@ export const ConversationDetailSchema = z.object({
     Artifact: z.string().nullable().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
+        * * SQL Data Type: nvarchar(255)`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -9713,6 +9717,11 @@ export const ArtifactVersionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ContentHash: z.string().nullable().describe(`
+        * * Field Name: ContentHash
+        * * Display Name: Content Hash
+        * * SQL Data Type: nvarchar(500)
+        * * Description: SHA-256 hash of the Content field for duplicate detection and version comparison`),
     Artifact: z.string().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
@@ -10517,6 +10526,51 @@ export const ConversationArtifactSchema = z.object({
 });
 
 export type ConversationArtifactEntityType = z.infer<typeof ConversationArtifactSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Conversation Detail Artifacts
+ */
+export const ConversationDetailArtifactSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationDetailID: z.string().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+        * * Description: Foreign key to ConversationDetail - the conversation message associated with this artifact`),
+    ArtifactVersionID: z.string().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: Foreign key to ArtifactVersion - the specific artifact version linked to this conversation message`),
+    Direction: z.union([z.literal('Input'), z.literal('Output')]).describe(`
+        * * Field Name: Direction
+        * * Display Name: Direction
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Output
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+        * * Description: Direction of artifact flow: Input (fed to agent) or Output (produced by agent)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ConversationDetailArtifactEntityType = z.infer<typeof ConversationDetailArtifactSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard User Preferences
@@ -24965,6 +25019,20 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: Denormalized agent ID for quick lookup of agent name and icon without joining through AgentRun
+    */
+    get AgentID(): string | null {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string | null) {
+        this.Set('AgentID', value);
+    }
+
+    /**
     * * Field Name: Status
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
@@ -24981,20 +25049,6 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
     set Status(value: 'Complete' | 'In-Progress' | 'Error') {
         this.Set('Status', value);
-    }
-
-    /**
-    * * Field Name: AgentRunID
-    * * Display Name: Agent Run ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: AI Agent Runs (vwAIAgentRuns.ID)
-    * * Description: Optional link to the AI Agent Run that is processing or processed this message. Used for tracking agent invocations and their status.
-    */
-    get AgentRunID(): string | null {
-        return this.Get('AgentRunID');
-    }
-    set AgentRunID(value: string | null) {
-        this.Set('AgentRunID', value);
     }
 
     /**
@@ -25022,6 +25076,15 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     */
     get Artifact(): string | null {
         return this.Get('Artifact');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
     }
 }
 
@@ -40390,6 +40453,19 @@ export class ArtifactVersionEntity extends BaseEntity<ArtifactVersionEntityType>
     }
 
     /**
+    * * Field Name: ContentHash
+    * * Display Name: Content Hash
+    * * SQL Data Type: nvarchar(500)
+    * * Description: SHA-256 hash of the Content field for duplicate detection and version comparison
+    */
+    get ContentHash(): string | null {
+        return this.Get('ContentHash');
+    }
+    set ContentHash(value: string | null) {
+        this.Set('ContentHash', value);
+    }
+
+    /**
     * * Field Name: Artifact
     * * Display Name: Artifact
     * * SQL Data Type: nvarchar(255)
@@ -42468,6 +42544,117 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
     */
     get ArtifactType(): string {
         return this.Get('ArtifactType');
+    }
+}
+
+
+/**
+ * MJ: Conversation Detail Artifacts - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationDetailArtifact
+ * * Base View: vwConversationDetailArtifacts
+ * * @description Junction table tracking many-to-many relationship between conversation messages and artifact versions, with directionality tracking
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Detail Artifacts')
+export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDetailArtifactEntityType> {
+    /**
+    * Loads the MJ: Conversation Detail Artifacts record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Detail Artifacts record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ConversationDetailArtifactEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    * * Description: Foreign key to ConversationDetail - the conversation message associated with this artifact
+    */
+    get ConversationDetailID(): string {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: Foreign key to ArtifactVersion - the specific artifact version linked to this conversation message
+    */
+    get ArtifactVersionID(): string {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
+    * * Field Name: Direction
+    * * Display Name: Direction
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Output
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Input
+    *   * Output
+    * * Description: Direction of artifact flow: Input (fed to agent) or Output (produced by agent)
+    */
+    get Direction(): 'Input' | 'Output' {
+        return this.Get('Direction');
+    }
+    set Direction(value: 'Input' | 'Output') {
+        this.Set('Direction', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 

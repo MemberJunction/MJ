@@ -23,29 +23,25 @@
     <div class="message-body">
       @if (!isEditing) {
         <div class="message-text">
-          {{ messageTextWithoutArtifacts }}
+          {{ message.Message }}
           @if (isMessageEdited) {
             <span class="edited-badge">(edited)</span>
           }
         </div>
 
-        <!-- Inline artifact cards -->
-        @if (inlineArtifacts.length > 0) {
-          @for (artifact of inlineArtifacts; track artifact.id) {
-            <mj-inline-artifact
-              [artifactId]="artifact.id"
-              [versionNumber]="artifact.versionId ? +artifact.versionId : undefined"
-              [currentUser]="currentUser"
-              (actionPerformed)="onInlineArtifactAction($event)">
-            </mj-inline-artifact>
-          }
-        }
-
-        <!-- Legacy artifact indicator (for messages with ArtifactID field) -->
-        @if (hasArtifact && inlineArtifacts.length === 0) {
-          <div class="message-artifact-indicator" (click)="onArtifactClick()">
-            <i class="fas fa-file-code"></i>
-            <span>View Artifact</span>
+        <!-- Artifact Card (ChatGPT/Claude.ai style) -->
+        @if (hasArtifact) {
+          <div class="artifact-card" (click)="onArtifactClick()">
+            <div class="artifact-card-icon">
+              <i class="fas fa-cube"></i>
+            </div>
+            <div class="artifact-card-content">
+              <div class="artifact-card-title">Artifact</div>
+              <div class="artifact-card-subtitle">Click to view in panel</div>
+            </div>
+            <div class="artifact-card-action">
+              <i class="fas fa-arrow-right"></i>
+            </div>
           </div>
         }
       }

@@ -39,7 +39,6 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
   public _elapsedTimeFormatted: string = '(0:00)';
-  public inlineArtifacts: {id: string; versionId?: string}[] = [];
   public isEditing: boolean = false;
   public editedText: string = '';
   private originalText: string = '';
@@ -51,7 +50,6 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   ngAfterViewInit() {
     this._loadTime = Date.now();
     this.startElapsedTimeUpdater();
-    this.detectInlineArtifacts();
     this.cdRef.detectChanges();
   }
 
@@ -106,19 +104,33 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   public get aiAgentInfo(): { name: string; iconClass: string } | null {
     if (!this.isAIMessage) return null;
 
+    // Get agent ID from enriched property (populated by looking up AgentRun)
     const agentID = (this.message as any).AgentID;
-    if (!agentID) return null;
 
     // Look up agent from AIEngineBase cache
-    const agent = AIEngineBase.Instance?.Agents?.find(a => a.ID === agentID);
-    if (agent) {
+    if (agentID && AIEngineBase.Instance?.Agents) {
+      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentID);
+      if (agent) {
+        return {
+          name: agent.Name || 'AI Assistant',
+          iconClass: agent.IconClass || 'fa-robot'
+        };
+      }
+    }
+
+    // If we have an AgentRunID but couldn't get the specific agent, show generic "Agent"
+    if (this.message.AgentRunID) {
       return {
-        name: agent.Name || 'AI Assistant',
-        iconClass: agent.IconClass || 'fa-robot'
+        name: 'Agent',
+        iconClass: 'fa-robot'
       };
     }
 
-    return null;
+    // Default fallback for AI messages without agent info
+    return {
+      name: 'AI Assistant',
+      iconClass: 'fa-robot'
+    };
   }
 
   public get isUserMessage(): boolean {
@@ -176,12 +188,16 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   }
 
   public get isMessageEdited(): boolean {
-    // Check if the message was updated after creation
-    if (!this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt) {
+    // Only show edited badge if user actually edited the message content
+    // Status updates don't count as edits - we need a more reliable indicator
+    // For now, we'll check if there's a significant time difference (more than 30 seconds)
+    // AND it's a user message (since AI messages get status updates frequently)
+    if (!this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt || !this.isUserMessage) {
       return false;
     }
-    // Allow 1 second difference for rounding
-    return this.message.__mj_UpdatedAt.getTime() - this.message.__mj_CreatedAt.getTime() > 1000;
+    // Allow 30 second threshold to avoid false positives from status updates
+    // Real edits will typically happen much later than creation
+    return this.message.__mj_UpdatedAt.getTime() - this.message.__mj_CreatedAt.getTime() > 30000;
   }
 
   public onPinClick(): void {
@@ -235,7 +251,6 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
         this.editedText = '';
         this.originalText = '';
         this.messageEdited.emit(this.message);
-        this.detectInlineArtifacts(); // Re-detect artifacts in edited message
         this.cdRef.detectChanges();
       } else {
         console.error('Failed to save message edit');
@@ -272,72 +287,4 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
     }
   }
 
-  /**
-   * Detects artifact references in message content
-   * Looks for patterns like:
-   * - artifact:abc-123-def
-   * - artifact:abc-123-def:v2
-   * - [artifact](artifact:abc-123-def)
-   */
-  private detectInlineArtifacts(): void {
-    if (!this.message?.Message) {
-      this.inlineArtifacts = [];
-      return;
-    }
-
-    const artifacts: {id: string; versionId?: string}[] = [];
-    const text = this.message.Message;
-
-    // Pattern 1: artifact:id or artifact:id:vN
-    const simplePattern = /artifact:([a-f0-9\-]+)(?::v(\d+))?/gi;
-    let match;
-
-    while ((match = simplePattern.exec(text)) !== null) {
-      artifacts.push({
-        id: match[1],
-        versionId: match[2] || undefined
-      });
-    }
-
-    // Pattern 2: Markdown-style [text](artifact:id) or [text](artifact:id:vN)
-    const markdownPattern = /\[([^\]]+)\]\(artifact:([a-f0-9\-]+)(?::v(\d+))?\)/gi;
-
-    while ((match = markdownPattern.exec(text)) !== null) {
-      const id = match[2];
-      const versionId = match[3] || undefined;
-
-      // Avoid duplicates
-      if (!artifacts.some(a => a.id === id && a.versionId === versionId)) {
-        artifacts.push({ id, versionId });
-      }
-    }
-
-    this.inlineArtifacts = artifacts;
-  }
-
-  /**
-   * Gets the message text with artifact references removed
-   * This allows us to show the text separately from the artifact cards
-   */
-  public get messageTextWithoutArtifacts(): string {
-    if (!this.message?.Message) return '';
-
-    let text = this.message.Message;
-
-    // Remove artifact references
-    text = text.replace(/artifact:[a-f0-9\-]+(?::v\d+)?/gi, '');
-    text = text.replace(/\[([^\]]+)\]\(artifact:[a-f0-9\-]+(?::v\d+)?\)/gi, '$1');
-
-    return text.trim();
-  }
-
-  /**
-   * Handler for artifact actions from inline artifact component
-   */
-  public onInlineArtifactAction(event: {action: string; artifact: any}): void {
-    this.artifactActionPerformed.emit({
-      action: event.action,
-      artifactId: event.artifact.ID
-    });
-  }
 }

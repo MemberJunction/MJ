@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -12,120 +12,8 @@ import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
 @Component({
   selector: 'mj-message-input',
-  template: `
-    <div class="message-input-container">
-      <textarea
-        #messageTextarea
-        class="message-input"
-        [(ngModel)]="messageText"
-        [placeholder]="placeholder"
-        [disabled]="disabled || isSending"
-        (keydown)="onKeyDown($event)"
-        rows="3">
-      </textarea>
-      <div class="input-actions">
-        <div class="processing-indicator" *ngIf="isProcessing">
-          <i class="fas fa-circle-notch fa-spin"></i>
-          <span>AI is responding...</span>
-        </div>
-        <button
-          class="btn-attach"
-          [disabled]="disabled"
-          title="Attach file (coming soon)">
-          <i class="fas fa-paperclip"></i>
-        </button>
-        <button
-          class="btn-send"
-          [disabled]="!canSend"
-          (click)="onSend()">
-          <i class="fas fa-paper-plane"></i>
-          <span>{{ isSending ? 'Sending...' : 'Send' }}</span>
-        </button>
-      </div>
-    </div>
-  `,
-  styles: [`
-    .message-input-container {
-      padding: 16px 24px;
-      border-top: 1px solid #D9D9D9;
-      background: #FFF;
-    }
-    .message-input {
-      width: 100%;
-      padding: 12px;
-      border: 1px solid #D9D9D9;
-      border-radius: 6px;
-      resize: vertical;
-      font-family: inherit;
-      font-size: 14px;
-      min-height: 80px;
-    }
-    .message-input:focus {
-      outline: none;
-      border-color: #0076B6;
-      box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.1);
-    }
-    .message-input:disabled {
-      background: #F4F4F4;
-      cursor: not-allowed;
-    }
-    .input-actions {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 12px;
-    }
-    .btn-attach {
-      padding: 8px 16px;
-      background: transparent;
-      border: 1px solid #D9D9D9;
-      border-radius: 6px;
-      cursor: pointer;
-      color: #333;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .btn-attach:hover:not(:disabled) {
-      background: #F4F4F4;
-      border-color: #AAA;
-    }
-    .btn-attach:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
-    .btn-send {
-      padding: 10px 24px;
-      background: #0076B6;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-weight: 600;
-      transition: background 150ms ease;
-    }
-    .btn-send:hover:not(:disabled) {
-      background: #005A8C;
-    }
-    .btn-send:disabled {
-      background: #D9D9D9;
-      cursor: not-allowed;
-    }
-    .processing-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 13px;
-      color: #6B7280;
-      margin-right: auto;
-    }
-    .processing-indicator i {
-      color: #0076B6;
-    }
-  `]
+  templateUrl: './message-input.component.html',
+  styleUrl: './message-input.component.scss'
 })
 export class MessageInputComponent {
   @Input() conversationId!: string;
@@ -361,7 +249,12 @@ export class MessageInputComponent {
       if (subResult && subResult.success) {
         // Update status message to completed
         statusMessage.Status = 'Complete';
-        statusMessage.Message = `✅ **${agentName}** completed`;
+        if (subResult.agentRun?.Message) {
+          statusMessage.Message = subResult.agentRun.Message;
+        }
+        else {
+          statusMessage.Message = `✅ **${agentName}** completed`;
+        }
         statusMessage.AgentRunID = subResult.agentRun.ID;
         await statusMessage.Save();
         this.messageSent.emit(statusMessage);
@@ -425,14 +318,16 @@ export class MessageInputComponent {
     agentMessage.Status = 'Complete';
     agentMessage.AgentRunID = result.agentRun.ID;
 
-    // Store which agent actually responded
-    if (result.agentRun.AgentID) {
-      (agentMessage as any).AgentID = result.agentRun.AgentID;
-    }
-
     const saved = await agentMessage.Save();
     if (saved) {
       console.log('💾 Agent response saved');
+
+      // If agent returned a payload, create an artifact version linked to this message
+      if (result.payload && Object.keys(result.payload).length > 0) {
+        await this.createArtifactFromPayload(result.payload, agentMessage, result.agentRun.AgentID);
+        console.log('🎨 Artifact created and linked to conversation detail:', agentMessage.ID);
+      }
+
       this.agentResponse.emit({
         message: agentMessage,
         agentResult: result
@@ -442,6 +337,58 @@ export class MessageInputComponent {
       userMessage.Status = 'Complete';
       await userMessage.Save();
       this.messageSent.emit(userMessage);
+    }
+  }
+
+  /**
+   * Creates an artifact from an agent's payload and links it to the conversation detail
+   * @param payload The agent's payload object
+   * @param message The conversation detail message to link to
+   * @param agentId The ID of the agent that produced the payload
+   */
+  private async createArtifactFromPayload(
+    payload: any,
+    message: ConversationDetailEntity,
+    agentId?: string
+  ): Promise<void> {
+    try {
+      const md = new Metadata();
+
+      // Create Artifact header
+      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+
+      // Generate artifact name based on agent name and timestamp
+      const agentName = agentId
+        ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)?.Name || 'Agent'
+        : 'Agent';
+      artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
+      artifact.Description = `Payload returned by ${agentName}`;
+
+      // Use JSON artifact type (hardcoded ID from migration)
+      artifact.TypeID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4'; // JSON type
+      artifact.UserID = this.currentUser.ID;
+      artifact.EnvironmentID = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+
+      const artifactSaved = await artifact.Save();
+      if (!artifactSaved) {
+        console.error('Failed to save artifact');
+        return;
+      }
+
+      // Create Artifact Version with content and link to conversation detail
+      const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
+      version.ArtifactID = artifact.ID;
+      version.VersionNumber = 1;
+      version.Content = JSON.stringify(payload, null, 2);
+      version.UserID = this.currentUser.ID;
+      (version as any).ConversationDetailID = message.ID; // Link to conversation message (property will exist after CodeGen)
+
+      const versionSaved = await version.Save();
+      if (!versionSaved) {
+        console.error('Failed to save artifact version');
+      }
+    } catch (error) {
+      console.error('Error creating artifact from payload:', error);
     }
   }
 

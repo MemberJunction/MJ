@@ -1,0 +1,150 @@
+.artifact-viewer-panel {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 600px;
+  background: white;
+  border-left: 1px solid #E5E7EB;
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.1);
+}
+
+.panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #E5E7EB;
+  background: #F9FAFB;
+}
+
+.panel-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-header h3 i {
+  color: #6366F1;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6B7280;
+  padding: 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.btn-close:hover {
+  background: #F3F4F6;
+  color: #111827;
+}
+
+.panel-content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: #6B7280;
+}
+
+.error-state {
+  color: #DC2626;
+}
+
+.loading-state i {
+  font-size: 24px;
+}
+
+.artifact-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #F9FAFB;
+  border-radius: 8px;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.meta-item label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.meta-item span {
+  font-size: 14px;
+  color: #111827;
+}
+
+.artifact-description {
+  padding: 12px;
+  margin-bottom: 20px;
+  background: #EFF6FF;
+  border-left: 3px solid #3B82F6;
+  border-radius: 4px;
+  color: #1E40AF;
+  font-size: 14px;
+}
+
+.json-viewer {
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.json-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 12px;
+  background: #F9FAFB;
+  border-bottom: 1px solid #E5E7EB;
+}
+
+.btn-icon {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: white;
+  border: 1px solid #D1D5DB;
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  color: #374151;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-icon:hover {
+  background: #F3F4F6;
+  border-color: #9CA3AF;
+}
+
+.btn-icon i {
+  font-size: 14px;
+}

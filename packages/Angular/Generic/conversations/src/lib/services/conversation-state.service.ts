@@ -64,6 +64,7 @@ export class ConversationStateService {
    * @param id The conversation ID to activate (or null to clear)
    */
   setActiveConversation(id: string | null): void {
+    console.log('🎯 Setting active conversation:', id);
     this._activeConversationId$.next(id);
   }
 
@@ -102,6 +103,7 @@ export class ConversationStateService {
     if (index >= 0) {
       current[index] = { ...current[index], ...updates } as ConversationEntity;
       this._conversations$.next([...current]);
+      console.log('📝 Updated conversation in state:', { id, updates, activeId: this._activeConversationId$.value });
     }
   }
 

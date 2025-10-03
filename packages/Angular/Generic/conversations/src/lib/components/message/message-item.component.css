@@ -89,28 +89,98 @@
   word-wrap: break-word;
 }
 
-.message-artifact-indicator {
-  display: inline-flex;
+/* Artifact Card - ChatGPT/Claude.ai style */
+.artifact-card {
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  margin-top: 8px;
-  background-color: #F4F4F4;
-  border: 1px solid #D9D9D9;
-  border-radius: 6px;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
   cursor: pointer;
+  transition: all 200ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.artifact-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, #6366F1 0%, #8B5CF6 100%);
+}
+
+.artifact-card:hover {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%);
+  border-color: #6366F1;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+  transform: translateY(-1px);
+}
+
+.artifact-card-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.artifact-card-icon i {
+  color: white;
+  font-size: 18px;
+}
+
+.artifact-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.artifact-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #111827;
+  margin-bottom: 2px;
+}
+
+.artifact-card-subtitle {
+  font-size: 12px;
+  color: #6B7280;
+}
+
+.artifact-card-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 6px;
+  flex-shrink: 0;
   transition: all 150ms ease;
-  font-size: 13px;
 }
 
-.message-artifact-indicator:hover {
-  background-color: #FFF;
-  border-color: #0076B6;
-  box-shadow: 0 2px 8px rgba(0, 118, 182, 0.1);
+.artifact-card:hover .artifact-card-action {
+  background: #6366F1;
+  border-color: #6366F1;
 }
 
-.message-artifact-indicator i {
-  color: #0076B6;
+.artifact-card-action i {
+  color: #6B7280;
+  font-size: 12px;
+  transition: color 150ms ease;
+}
+
+.artifact-card:hover .artifact-card-action i {
+  color: white;
 }
 
 .message-actions {

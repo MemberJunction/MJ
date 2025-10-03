@@ -29,6 +29,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Conversation Detail Artifacts" [Visible]="record.IsSaved"> 
+                        MJ: Conversation Detail Artifacts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Artifacts','ConversationDetailID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Artifacts')"
+                            [AllowLoad]="IsCurrentTab('MJ: Conversation Detail Artifacts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: AI Agent Runs" [Visible]="record.IsSaved"> 
                         MJ: AI Agent Runs
                     </mj-tab>
