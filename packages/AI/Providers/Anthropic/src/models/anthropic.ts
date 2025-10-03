@@ -170,10 +170,23 @@ export class AnthropicLLM extends BaseLLM {
             const systemMsgs = params.messages.filter(m => m.role === "system");
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
+            // Determine max_tokens and thinking budget
+            // When thinking is enabled, max_tokens must be greater than budget_tokens
+            let maxTokens = params.maxOutputTokens || 32000;
+            let thinkingBudget: number | undefined = undefined;
+
+            if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
+                thinkingBudget = params.reasoningBudgetTokens || 31000;
+                // Ensure max_tokens is greater than budget_tokens
+                if (maxTokens <= thinkingBudget) {
+                    maxTokens = thinkingBudget + 1000; // Add buffer to ensure max_tokens > budget_tokens
+                }
+            }
+
             // Create the request parameters
             const createParams: MessageCreateParams = {
                 model: params.model,
-                max_tokens: params.maxOutputTokens || 32000, // large default for max_tokens if not provided
+                max_tokens: maxTokens,
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
                 messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
@@ -207,25 +220,21 @@ export class AnthropicLLM extends BaseLLM {
             if (params.seed != null) {
                 console.warn('Anthropic provider does not support seed parameter, ignoring');
             }
- 
+
             // Add system message(s), if present
             if (systemMsgs) {
                 createParams.system = this.formatSystemMessagesWithCaching(
-                    systemMsgs, 
+                    systemMsgs,
                     params.enableCaching || true
                 );
             }
-            
+
             // Add thinking parameter if effort level is set
-            // Note: Requires minimum 1 tokens or not budget set
-            if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
+            if (thinkingBudget !== undefined) {
                 createParams.thinking = {
                     type: "enabled" as const,
-                    budget_tokens: params.reasoningBudgetTokens || 1000000 // default to 1000000 if not set
+                    budget_tokens: thinkingBudget
                 };
-                if (params.reasoningBudgetTokens) {
-                    createParams.thinking.budget_tokens = params.reasoningBudgetTokens;
-                }
             }
             
             const stream = this.AnthropicClient.messages.stream(createParams).on('text', (chunk: any) => {
