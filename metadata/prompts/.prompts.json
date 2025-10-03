@@ -881,31 +881,46 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Kimi K2",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 1
           },
           "primaryKey": {
             "ID": "DA560AA4-35DA-4EDA-81AC-A74D196E102F"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:42.786Z",
-            "checksum": "fe50a890cf18b87174e5be9c8078b1b46f8f60b17abab426738d72729ab42ccb"
+            "lastModified": "2025-10-03T18:42:52.748Z",
+            "checksum": "4a13cb0fd494ca5dc122856efc227b0a828ff927db12c23516166c6bd01d7ba7"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=GPT-OSS-20B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 10
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
           },
           "primaryKey": {
             "ID": "042CAE39-2AEB-4957-A5B3-7182B4D1D9C4"
           },
           "sync": {
-            "lastModified": "2025-09-02T21:21:19.346Z",
-            "checksum": "045275d858b91ec5a79d85acf787772953462dca85791f46e9cbd258f7dd34ce"
+            "lastModified": "2025-10-03T18:42:52.757Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "987933BC-9CB1-4A1F-8FCC-06950463C100"
+          },
+          "sync": {
+            "lastModified": "2025-10-03T18:42:52.717Z",
+            "checksum": "e90c340da291f8bb1eac84c5794585ae9d983ae515cb26ba767ec6eb8b32c929"
           }
         }
       ]
