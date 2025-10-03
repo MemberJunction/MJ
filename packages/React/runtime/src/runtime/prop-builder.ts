@@ -7,6 +7,7 @@
 import { ComponentStyles, ComponentCallbacks } from '@memberjunction/interactive-component-types';
 import { ComponentProps } from '../types';
 import { Subject, debounceTime, Subscription } from 'rxjs';
+import { LogStatus, GetProductionStatus } from '@memberjunction/core';
 
 /**
  * Options for building component props
@@ -283,6 +284,9 @@ export function wrapCallbacksWithLogging(
   Object.keys(callbacks).forEach(key => {
     if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && key !== 'CreateSimpleNotification' && typeof (callbacks as any)[key] === 'function') {
       (wrapped as any)[key] = (...args: any[]) => {
+        if (!GetProductionStatus()) {
+          LogStatus(`[${componentName}] ${key} called with args:`, undefined, args);
+        }
         return (callbacks as any)[key](...args);
       };
     }
@@ -290,18 +294,27 @@ export function wrapCallbacksWithLogging(
 
   if (callbacks.OpenEntityRecord) {
     wrapped.OpenEntityRecord = (entityName: string, key: any) => {
+      if (!GetProductionStatus()) {
+        LogStatus(`[${componentName}] OpenEntityRecord called:`, undefined, { entityName, key });
+      }
       callbacks.OpenEntityRecord!(entityName, key);
     };
   }
 
   if (callbacks.RegisterMethod) {
     wrapped.RegisterMethod = (methodName: any, handler: any) => {
+      if (!GetProductionStatus()) {
+        LogStatus(`[${componentName}] RegisterMethod called for:`, undefined, methodName);
+      }
       callbacks.RegisterMethod!(methodName, handler);
     };
   }
 
   if (callbacks.CreateSimpleNotification) {
     wrapped.CreateSimpleNotification = (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
+      if (!GetProductionStatus()) {
+        LogStatus(`[${componentName}] CreateSimpleNotification called:`, undefined, { message, style, hideAfter });
+      }
       callbacks.CreateSimpleNotification!(message, style, hideAfter);
     };
   }
