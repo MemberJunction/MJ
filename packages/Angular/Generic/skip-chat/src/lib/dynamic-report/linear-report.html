@@ -13,15 +13,17 @@
         <div style="flex: 1; min-height: 0; overflow: hidden;">
             @if (IsInteractive) {
                 <skip-dynamic-ui-component
-                    #theUIComponent 
+                    #theUIComponent
                     [SkipData]="SkipData"
                     [ShowCreateReportButton]="ShowCreateReportButton"
                     [matchingReportID]="matchingReportID"
+                    [showFeedbackPanel]="showFeedbackPanel"
+                    [toggleFeedbackPanel]="toggleFeedbackPanel"
                     (DrillDownEvent)="HandleDrillDownEvent($event)"
                     (CreateReportRequested)="handleCreateReportForOption($event)"
                     (NavigateToMatchingReportRequested)="clickMatchingReport()"
                     style="display:block; height: 100%;">
-                </skip-dynamic-ui-component>  
+                </skip-dynamic-ui-component>
             }
             @else {
                 <span>

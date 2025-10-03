@@ -13,6 +13,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 })
 export class SkipDynamicLinearReportComponent extends SkipDynamicReportBase {
   @Input() ExpandAll: boolean = true;
+  @Input() showFeedbackPanel: boolean = false;
+  @Input() toggleFeedbackPanel: () => void = () => {};
   @ViewChild('theUIComponent') theUIComponent?: SkipDynamicUIComponentComponent;
 
   constructor(

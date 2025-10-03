@@ -1,15 +1,17 @@
-import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
 import { UserInfo, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { ComponentEntity, ComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { 
+import {
     ComponentRegistryClient,
     ComponentResponse,
     ComponentSearchResult,
     DependencyTree,
     RegistryError,
-    RegistryErrorCode
+    RegistryErrorCode,
+    ComponentFeedbackParams as SDKComponentFeedbackParams,
+    ComponentFeedbackResponse as SDKComponentFeedbackResponse
 } from '@memberjunction/component-registry-client-sdk';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
@@ -94,6 +96,61 @@ class ComponentDependencyTreeType {
 
     @Field(() => [ComponentDependencyTreeType], { nullable: true })
     dependencies?: ComponentDependencyTreeType[];
+}
+
+/**
+ * Input type for submitting component feedback
+ * Registry-agnostic feedback collection for any component from any registry
+ */
+@InputType()
+class ComponentFeedbackInput {
+    @Field()
+    componentName: string;
+
+    @Field()
+    componentNamespace: string;
+
+    @Field({ nullable: true })
+    componentVersion?: string;
+
+    @Field({ nullable: true })
+    registryName?: string;
+
+    @Field()
+    rating: number;
+
+    @Field({ nullable: true })
+    feedbackType?: string;
+
+    @Field({ nullable: true })
+    comments?: string;
+
+    @Field({ nullable: true })
+    conversationID?: string;
+
+    @Field({ nullable: true })
+    conversationDetailID?: string;
+
+    @Field({ nullable: true })
+    reportID?: string;
+
+    @Field({ nullable: true })
+    dashboardID?: string;
+}
+
+/**
+ * Response type for component feedback submission
+ */
+@ObjectType()
+class ComponentFeedbackResponse {
+    @Field()
+    success: boolean;
+
+    @Field({ nullable: true })
+    feedbackID?: string;
+
+    @Field({ nullable: true })
+    error?: string;
 }
 
 /**
@@ -531,5 +588,76 @@ export class ComponentRegistryExtendedResolver {
             offset: result.offset,
             limit: result.limit
         };
+    }
+
+    /**
+     * Send feedback for a component from any registry
+     * This is a registry-agnostic mutation that allows feedback collection
+     * for components from any source registry (Skip, MJ Central, etc.)
+     */
+    @Mutation(() => ComponentFeedbackResponse)
+    async SendComponentFeedback(
+        @Arg('feedback') feedback: ComponentFeedbackInput,
+        @Ctx() { userPayload }: AppContext
+    ): Promise<ComponentFeedbackResponse> {
+        try {
+            // Get user from cache
+            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            if (!user) {
+                return {
+                    success: false,
+                    error: `User ${userPayload.email} not found in UserCache`
+                };
+            }
+
+            // Registry name is required for feedback submission
+            if (!feedback.registryName) {
+                return {
+                    success: false,
+                    error: 'Registry name is required for feedback submission'
+                };
+            }
+
+            // Get registry configuration
+            const registry = await this.getRegistryByName(feedback.registryName, user);
+            if (!registry) {
+                return {
+                    success: false,
+                    error: `Registry not found: ${feedback.registryName}`
+                };
+            }
+
+            // Check user permissions
+            await this.checkUserAccess(user, registry.ID);
+
+            // Create client using the same pattern as GetRegistryComponent
+            // This respects REGISTRY_URI_OVERRIDE_* and REGISTRY_API_KEY_* environment variables
+            const registryClient = this.createClientForRegistry(registry);
+
+            const sdkParams: SDKComponentFeedbackParams = {
+                componentName: feedback.componentName,
+                componentNamespace: feedback.componentNamespace,
+                componentVersion: feedback.componentVersion,
+                registryName: feedback.registryName,
+                rating: feedback.rating,
+                feedbackType: feedback.feedbackType,
+                comments: feedback.comments,
+                conversationID: feedback.conversationID,
+                conversationDetailID: feedback.conversationDetailID,
+                reportID: feedback.reportID,
+                dashboardID: feedback.dashboardID,
+                userEmail: user.Email  // Pass the authenticated user's email to the registry
+            };
+
+            const result = await registryClient.submitFeedback(sdkParams);
+
+            return result;
+        } catch (error) {
+            LogError(error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
     }
 }

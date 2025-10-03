@@ -4,7 +4,7 @@
  * @module @memberjunction/react-runtime/hierarchy
  */
 
-import { 
+import {
   CompilationResult,
   CompileOptions,
   RuntimeContext,
@@ -14,7 +14,7 @@ import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
 
 import { ComponentSpec, ComponentStyles } from '@memberjunction/interactive-component-types';
-import { UserInfo, Metadata } from '@memberjunction/core';
+import { UserInfo, Metadata, LogStatus, GetProductionStatus } from '@memberjunction/core';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 
 /**
@@ -95,9 +95,11 @@ export class ComponentHierarchyRegistrar {
         name: spec.name,
         version: spec.version || 'latest'
       });
-      
+
       if (fullSpec && fullSpec.code) {
-        console.log(`✅ [ComponentHierarchyRegistrar] Fetched external component ${spec.name} with code (${fullSpec.code.length} chars)`);
+        if (!GetProductionStatus()) {
+          LogStatus(`✅ [ComponentHierarchyRegistrar] Fetched external component ${spec.name} with code (${fullSpec.code.length} chars)`);
+        }
         return fullSpec;
       } else {
         console.warn(`⚠️ [ComponentHierarchyRegistrar] Failed to fetch external component ${spec.name} or no code`);
@@ -122,7 +124,9 @@ export class ComponentHierarchyRegistrar {
     // If this is an external registry component without code, fetch it first
     let resolvedRootSpec = rootSpec;
     if (rootSpec.location === 'registry' && rootSpec.registry && !rootSpec.code) {
-      console.log(`🌐 [ComponentHierarchyRegistrar] Fetching external registry component: ${rootSpec.registry}/${rootSpec.name}`);
+      if (!GetProductionStatus()) {
+        LogStatus(`🌐 [ComponentHierarchyRegistrar] Fetching external registry component: ${rootSpec.registry}/${rootSpec.name}`);
+      }
       resolvedRootSpec = await this.fetchExternalComponent(rootSpec, options.contextUser) || rootSpec;
     }
     const {
@@ -133,16 +137,17 @@ export class ComponentHierarchyRegistrar {
       allowOverride = true
     } = options;
 
-    console.log('🌳 ComponentHierarchyRegistrar.registerHierarchy:', {
-      rootComponent: resolvedRootSpec.name,
-      hasLibraries: !!(resolvedRootSpec.libraries && resolvedRootSpec.libraries.length > 0),
-      libraryCount: resolvedRootSpec.libraries?.length || 0,
-      libraries: resolvedRootSpec.libraries?.map(l => l.name)
-    });
-
     const registeredComponents: string[] = [];
     const errors: ComponentRegistrationError[] = [];
     const warnings: string[] = [];
+
+    if (!GetProductionStatus()) {
+      LogStatus('🌳 ComponentHierarchyRegistrar.registerHierarchy:', undefined, {
+        rootComponent: resolvedRootSpec.name,
+        hasLibraries: !!(resolvedRootSpec.libraries && resolvedRootSpec.libraries.length > 0),
+        libraryCount: resolvedRootSpec.libraries?.length || 0
+      });
+    }
 
     // PHASE 1: Compile all components first (but defer factory execution)
     const compiledMap = new Map<string, CompiledComponent>();
@@ -181,7 +186,9 @@ export class ComponentHierarchyRegistrar {
             result.loadedLibraries.forEach((value, key) => {
               if (!allLoadedLibraries.has(key)) {
                 allLoadedLibraries.set(key, value);
-                console.log(`📚 [registerHierarchy] Added library ${key} to accumulated libraries`);
+                if (!GetProductionStatus()) {
+                  LogStatus(`📚 [registerHierarchy] Added library ${key} to accumulated libraries`);
+                }
               }
             });
           }
@@ -249,7 +256,9 @@ export class ComponentHierarchyRegistrar {
       }
       allLoadedLibraries.forEach((value, key) => {
         this.runtimeContext.libraries![key] = value;
-        console.log(`✅ [registerHierarchy] Added ${key} to runtime context libraries`);
+        if (!GetProductionStatus()) {
+          LogStatus(`✅ [registerHierarchy] Added ${key} to runtime context libraries`);
+        }
       });
     }
     
@@ -335,7 +344,15 @@ export class ComponentHierarchyRegistrar {
         if (!lib.globalVariable || lib.globalVariable === 'undefined' || lib.globalVariable === 'null') return false;
         return true;
       });
-      
+
+      if (!GetProductionStatus()) {
+        LogStatus(`🔧 Compiling component ${spec.name} with libraries:`, undefined, {
+          originalCount: spec.libraries?.length || 0,
+          filteredCount: validLibraries?.length || 0,
+          libraries: validLibraries?.map(l => l.name) || []
+        });
+      }
+
       // Compile the component
       const compileOptions: CompileOptions = {
         componentName: spec.name,
@@ -345,12 +362,6 @@ export class ComponentHierarchyRegistrar {
         dependencies: spec.dependencies, // Pass along child component dependencies
         allLibraries: options.allLibraries
       };
-
-      console.log(`🔧 Compiling component ${spec.name} with libraries:`, {
-        originalCount: spec.libraries?.length || 0,
-        filteredCount: validLibraries?.length || 0,
-        validLibraries: validLibraries?.map(l => ({ name: l.name, globalVariable: l.globalVariable }))
-      });
 
       const compilationResult = await this.compiler.compile(compileOptions);
 
@@ -372,18 +383,22 @@ export class ComponentHierarchyRegistrar {
         }
         compilationResult.loadedLibraries.forEach((value, key) => {
           this.runtimeContext.libraries![key] = value;
-          console.log(`✅ [registerSingleComponent] Added ${key} to runtime context libraries`);
+          if (!GetProductionStatus()) {
+            LogStatus(`✅ [registerSingleComponent] Added ${key} to runtime context libraries`);
+          }
         });
       }
 
       // Call the factory to create the ComponentObject
       // IMPORTANT: We don't pass components here because child components may not be registered yet
       // Components are resolved later when the component is actually rendered
-      console.log(`🏭 Calling factory for ${spec.name} with runtime context:`, {
-        hasReact: !!this.runtimeContext.React,
-        hasReactDOM: !!this.runtimeContext.ReactDOM,
-        libraryKeys: Object.keys(this.runtimeContext.libraries || {})
-      });
+      if (!GetProductionStatus()) {
+        LogStatus(`🏭 Calling factory for ${spec.name} with runtime context:`, undefined, {
+          hasReact: !!this.runtimeContext.React,
+          hasReactDOM: !!this.runtimeContext.ReactDOM,
+          libraryCount: Object.keys(this.runtimeContext.libraries || {}).length
+        });
+      }
       const componentObject = compilationResult.component!.factory(this.runtimeContext, styles);
 
       // Register the full ComponentObject (not just the React component)
