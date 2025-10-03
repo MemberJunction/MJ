@@ -9,6 +9,7 @@ import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynami
 import { SkipAPIResponse, SkipAPIAnalysisCompleteResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
 import { ComponentNode, ComponentFeedback } from './skip-component-feedback-panel.component';
+import { GraphQLComponentRegistryClient } from '@memberjunction/graphql-dataprovider';
 
 @Component({
   selector: 'skip-artifact-viewer',
@@ -567,47 +568,36 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
     try {
       LogStatus('Submitting component feedback', JSON.stringify(feedback));
 
-      // Call the GraphQL mutation
-      const mutation = `
-        mutation SubmitComponentFeedback($feedback: ComponentFeedbackInput!) {
-          SubmitComponentFeedback(feedback: $feedback) {
-            success
-            feedbackID
-            error
-          }
-        }
-      `;
-
-      const variables = {
-        feedback: {
-          componentName: feedback.componentName,
-          componentNamespace: feedback.componentNamespace,
-          componentVersion: feedback.componentVersion,
-          rating: feedback.rating, // Already converted to 0-100 scale in the panel component
-          feedbackType: 'Stars',
-          comments: feedback.comments,
-          conversationID: feedback.conversationID,
-          conversationDetailID: feedback.conversationDetailID,
-          reportID: feedback.reportID,
-          dashboardID: feedback.dashboardID
-        }
-      };
-
+      // Use the GraphQLComponentRegistryClient for registry-agnostic feedback submission
       const provider = this.ProviderToUse as GraphQLDataProvider;
-      const result = await provider.ExecuteGQL(mutation, variables);
+      const registryClient = new GraphQLComponentRegistryClient(provider);
 
-      if (result?.SubmitComponentFeedback?.success) {
+      const result = await registryClient.SendComponentFeedback({
+        componentName: feedback.componentName,
+        componentNamespace: feedback.componentNamespace,
+        componentVersion: feedback.componentVersion,
+        registryName: this.selectedFeedbackComponent?.registry || 'Skip',
+        rating: feedback.rating, // Already converted to 0-100 scale in the panel component
+        feedbackType: 'Stars',
+        comments: feedback.comments,
+        conversationID: feedback.conversationID,
+        conversationDetailID: feedback.conversationDetailID,
+        reportID: feedback.reportID,
+        dashboardID: feedback.dashboardID
+      });
+
+      if (result?.success) {
         this.notificationService.CreateSimpleNotification(
           'Feedback submitted successfully!',
           'success',
           3000
         );
-        LogStatus('Component feedback submitted successfully', result.SubmitComponentFeedback.feedbackID);
+        LogStatus('Component feedback submitted successfully', result.feedbackID);
 
         // Close the feedback panel after successful submission
         this.closeFeedbackPanel();
       } else {
-        const errorMsg = result?.SubmitComponentFeedback?.error || 'Failed to submit feedback';
+        const errorMsg = result?.error || 'Failed to submit feedback';
         this.notificationService.CreateSimpleNotification(
           `Error: ${errorMsg}`,
           'error',
