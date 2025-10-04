@@ -33,10 +33,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
+  @Input() public artifactMap: Map<string, string> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteMessage = new EventEmitter<ConversationDetailEntity>();
+  @Output() public retryMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public replyInThread = new EventEmitter<ConversationDetailEntity>();
   @Output() public viewThread = new EventEmitter<ConversationDetailEntity>();
@@ -153,6 +155,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.message = message;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
+          instance.artifactVersionId = this.artifactMap.get(message.ID);
         } else {
           // Create new component
           const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
@@ -164,11 +167,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.currentUser = this.currentUser;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
+          instance.artifactVersionId = this.artifactMap.get(message.ID);
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));
           instance.editClicked.subscribe((msg: ConversationDetailEntity) => this.editMessage.emit(msg));
           instance.deleteClicked.subscribe((msg: ConversationDetailEntity) => this.deleteMessage.emit(msg));
+          instance.retryClicked.subscribe((msg: ConversationDetailEntity) => this.retryMessage.emit(msg));
           instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
           instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
 

@@ -125,7 +125,7 @@ const COMPONENTS = [
     DateInputsModule,
     ContainerDirectivesModule,
     CodeEditorModule,
-    MarkdownModule.forChild()
+    MarkdownModule.forRoot()
   ],
   exports: [
     ...COMPONENTS,

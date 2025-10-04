@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, OnDestroy, DoCheck } from '@angular/core';
-import { UserInfo, RunView } from '@memberjunction/core';
-import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
+import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ConversationDetailArtifactEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -28,7 +28,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
           </button>
           <mj-tasks-dropdown [currentUser]="currentUser"></mj-tasks-dropdown>
           <mj-active-agent-indicator
-            [conversationId]="conversationState.activeConversation?.ID"
+            [conversationId]="conversationState.activeConversation.ID"
             [currentUser]="currentUser"
             (togglePanel)="onToggleAgentPanel()"
             (agentSelected)="onAgentSelected($event)">
@@ -56,8 +56,10 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
           [conversation]="conversationState.activeConversation"
           [currentUser]="currentUser"
           [isProcessing]="isProcessing"
+          [artifactMap]="artifactsByDetailId"
           (replyInThread)="onReplyInThread($event)"
           (viewThread)="onViewThread($event)"
+          (retryMessage)="onRetryMessage($event)"
           (artifactClicked)="onArtifactClicked($event)"
           (messageEdited)="onMessageEdited($event)">
         </mj-conversation-message-list>
@@ -374,6 +376,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showArtifactPanel: boolean = false;
   public selectedArtifactId: string | null = null;
 
+  // Artifact mapping: ConversationDetailID -> ArtifactVersionID
+  public artifactsByDetailId = new Map<string, string>();
+
   constructor(
     public conversationState: ConversationStateService,
     private agentStateService: AgentStateService,
@@ -419,12 +424,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       const rv = new RunView();
 
       // Load messages and agent runs in parallel
-      const [messagesResult, agentRunsResult] = await Promise.all([
+      const md = new Metadata();
+      const convoDetailEntity = md.EntityByName("Conversation Details");
+      const [messagesResult, agentRunsResult, conversationDetailArtifacts] = await Promise.all([
         rv.RunView<ConversationDetailEntity>(
           {
             EntityName: 'Conversation Details',
             ExtraFilter: `ConversationID='${conversationId}'`,
-            OrderBy: '__mj_CreatedAt ASC',
+            OrderBy: '__mj_CreatedAt ASC', 
             ResultType: 'entity_object'
           },
           this.currentUser
@@ -432,7 +439,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         rv.RunView<AIAgentRunEntity>(
           {
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${conversationId}'`,
+            ExtraFilter: `ConversationID='${conversationId}'`, 
+            ResultType: 'entity_object'
+          },
+          this.currentUser
+        ),
+        rv.RunView<ConversationDetailArtifactEntity>(
+          {
+            EntityName: 'MJ: Conversation Detail Artifacts',
+            ExtraFilter: `ConversationDetailID IN (SELECT ConversationDetailID FROM [${convoDetailEntity.SchemaName}].[${convoDetailEntity.BaseView}] WHERE ConversationID='${conversationId}')`, 
             ResultType: 'entity_object'
           },
           this.currentUser
@@ -458,6 +473,24 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
               (message as any).AgentID = agentRun.AgentID;
             }
           }
+        }
+
+        // Now load artifacts using the message IDs we have
+        if (this.messages.length > 0) {
+          // Build artifact map from preloaded artifacts
+          this.artifactsByDetailId.clear();
+          if (conversationDetailArtifacts.Success && conversationDetailArtifacts.Results) {
+            for (const artifact of conversationDetailArtifacts.Results) {
+              if (artifact.ConversationDetailID && artifact.ArtifactVersionID) {
+                this.artifactsByDetailId.set(artifact.ConversationDetailID, artifact.ArtifactVersionID);
+              }
+            }
+            console.log(`📦 Preloaded ${conversationDetailArtifacts.Results.length} artifacts for conversation ${conversationId}`);
+            console.log('📦 Artifact map:', Array.from(this.artifactsByDetailId.entries()));
+          }
+
+          // Update artifact count for header display
+          this.artifactCount = this.artifactsByDetailId.size;
         }
       }
     } catch (error) {
@@ -620,6 +653,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Just ensure the UI reflects the changes
   }
 
+  onRetryMessage(message: ConversationDetailEntity): void {
+    // TODO: Implement retry logic
+    // This should find the parent user message and re-trigger the agent invocation
+    console.log('Retry requested for message:', message.ID);
+    // For now, just log it - full implementation would require refactoring agent invocation
+  }
+
   onArtifactClicked(data: {artifactId: string; versionId?: string}): void {
     this.selectedArtifactId = data.artifactId;
     this.showArtifactPanel = true;
@@ -628,5 +668,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   onCloseArtifactPanel(): void {
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
+  }
+
+  /**
+   * Helper method to check if a conversation detail has an artifact
+   * Used by message components to determine whether to show artifact card
+   */
+  public conversationDetailHasArtifact(conversationDetailId: string): boolean {
+    return this.artifactsByDetailId.has(conversationDetailId);
+  }
+
+  /**
+   * Get artifact version ID for a conversation detail
+   */
+  public getArtifactVersionId(conversationDetailId: string): string | undefined {
+    return this.artifactsByDetailId.get(conversationDetailId);
   }
 }

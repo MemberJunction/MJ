@@ -108,7 +108,7 @@
 }
 
 .message-body {
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .message-text {
@@ -116,6 +116,15 @@
   line-height: 1.6;
   white-space: pre-wrap;
   word-wrap: break-word;
+}
+
+/* Remove extra margin from markdown paragraphs */
+.message-text markdown > :first-child {
+  margin-top: 0;
+}
+
+.message-text markdown > :last-child {
+  margin-bottom: 0;
 }
 
 /* Asymmetric bubble shapes for message content */
@@ -131,7 +140,7 @@
 .message-reactions {
   display: flex;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 4px;
 }
 
 .reaction-btn {
@@ -316,6 +325,21 @@
 .message-action-btn.danger:hover {
   background-color: #DC2626;
   border-color: #DC2626;
+  color: white;
+}
+
+.message-action-btn.retry-btn {
+  color: #3B82F6;
+  border-color: #3B82F6;
+  background: white;
+  font-weight: 600;
+  gap: 6px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.message-action-btn.retry-btn:hover {
+  background-color: #3B82F6;
   color: white;
 }
 

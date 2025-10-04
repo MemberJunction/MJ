@@ -15,6 +15,7 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Top-level workspace component for conversations
@@ -52,7 +53,16 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     super();
   }
 
-  ngOnInit() {
+  async ngOnInit() {
+    // Initialize AI Engine to load agent metadata cache
+    // This ensures agent names and icons are available for display
+    try {
+      await AIEngineBase.Instance.Config(false);
+      console.log('✅ AI Engine initialized with', AIEngineBase.Instance.Agents?.length || 0, 'agents');
+    } catch (error) {
+      console.error('❌ Failed to initialize AI Engine:', error);
+    }
+
     // Subscribe to artifact panel state
     this.artifactState.isPanelOpen$
       .pipe(takeUntil(this.destroy$))

@@ -24,7 +24,7 @@
     <div class="message-body">
       @if (!isEditing) {
         <div class="message-text">
-          {{ message.Message }}
+          <markdown [data]="message.Message"></markdown>
           @if (isMessageEdited) {
             <span class="edited-badge">(edited)</span>
           }
@@ -87,6 +87,12 @@ Click to view full artifact in panel...</code>
     </div>
 
     <div class="message-actions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+      <!-- Retry button for failed AI messages -->
+      <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry" *ngIf="messageStatus === 'Error' && isAIMessage">
+        <i class="fas fa-redo"></i>
+        Retry
+      </button>
+
       <button class="message-action-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin' : 'Pin'">
         <i class="fas" [ngClass]="message.IsPinned ? 'fa-thumbtack' : 'fa-thumbtack'"></i>
       </button>
