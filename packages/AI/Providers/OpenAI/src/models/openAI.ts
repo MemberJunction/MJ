@@ -38,20 +38,6 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
-     * Check if the model supports reasoning_effort API parameter
-     * Currently only o1, o3, o4 series models and gpt 5 models support this parameter
-     * Note: GPT-OSS models use system prompt keywords instead
-     */
-    private supportsReasoningEffortParam(modelName: string): boolean {
-        const lowerModel = modelName.toLowerCase();
-        return lowerModel.includes('o1') ||
-               lowerModel.includes('o3') ||
-               lowerModel.includes('o4') ||
-               lowerModel.includes('gpt-5') ||
-               lowerModel.includes('gpt5');
-    }
-
-    /**
      * Check if the model supports reasoning via system prompt keywords
      * GPT-OSS models use "Reasoning: low/medium/high" in system prompt
      */
@@ -85,7 +71,9 @@ export class OpenAILLM extends BaseLLM {
         let messages = params.messages;
 
         // Handle reasoning for GPT-OSS models via system prompt
-        if (params.effortLevel && this.supportsReasoningViaSystemPrompt(params.model)) {
+        const supportsReasoningInSystemPrompt = this.supportsReasoningViaSystemPrompt(params.model);
+
+        if (params.effortLevel && supportsReasoningInSystemPrompt) {
             const reasoningLevel = this.getReasoningLevel(params.effortLevel);
             // Add or append to system message
             const systemMsg = messages.find(m => m.role === 'system');
@@ -113,8 +101,8 @@ export class OpenAILLM extends BaseLLM {
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
 
-        // Add reasoning_effort parameter for models that support it (o1, o3, o4 series)
-        if (params.effortLevel && this.supportsReasoningEffortParam(params.model)) {
+        //Reasoning effort level has been provided and it wasn't handled via system prompt
+        if (params.effortLevel && !supportsReasoningInSystemPrompt) {
             const reasoningLevel = this.getReasoningLevel(params.effortLevel);
             openAIParams.reasoning_effort = reasoningLevel;
         }
@@ -282,8 +270,7 @@ export class OpenAILLM extends BaseLLM {
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
 
-        // Add reasoning_effort parameter for models that support it (o1, o3, o4 series)
-        if (params.effortLevel && this.supportsReasoningEffortParam(params.model)) {
+        if (params.effortLevel) {
             const reasoningLevel = this.getReasoningLevel(params.effortLevel);
             openAIParams.reasoning_effort = reasoningLevel;
         }
