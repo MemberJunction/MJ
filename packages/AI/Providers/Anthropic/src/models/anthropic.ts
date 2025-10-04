@@ -243,18 +243,25 @@ export class AnthropicLLM extends BaseLLM {
             result = await stream.finalMessage();
             const endTime = new Date();
             
-            // Extract thinking content if present
-            let content: string = result.content[0].text;
+            // Extract thinking and text content from response
+            let content: string = '';
             let thinkingContent: string | undefined = undefined;
-            
-            // Check if content contains thinking tags
-            if (content.startsWith('<thinking>') && content.includes('</thinking>')) {
-                // Extract thinking content
+
+            // Process content blocks - can contain both thinking and text blocks
+            for (const block of result.content) {
+                if (block.type === 'thinking') {
+                    thinkingContent = block.thinking;
+                } else if (block.type === 'text') {
+                    content += block.text;
+                }
+            }
+
+            // Fallback: check for old-style thinking tags in content (for backward compatibility)
+            if (!thinkingContent && content.startsWith('<thinking>') && content.includes('</thinking>')) {
                 const thinkStart = content.indexOf('<thinking>') + '<thinking>'.length;
                 const thinkEnd = content.indexOf('</thinking>');
                 thinkingContent = content.substring(thinkStart, thinkEnd).trim();
-                // Remove thinking content from main content
-                content = content.substring(0, content.indexOf('<thinking>')) + 
+                content = content.substring(0, content.indexOf('<thinking>')) +
                          content.substring(thinkEnd + '</thinking>'.length);
                 content = content.trim();
             }
