@@ -111,7 +111,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.message.Role?.trim().toLowerCase() === 'ai';
   }
 
-  public get aiAgentInfo(): { name: string; iconClass: string } | null {
+  public get aiAgentInfo(): { name: string; iconClass: string; role: string } | null {
     if (!this.isAIMessage) return null;
 
     // Get agent ID from denormalized field (populated when message is created)
@@ -123,7 +123,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (agent) {
         return {
           name: agent.Name || 'AI Assistant',
-          iconClass: agent.IconClass || 'fa-robot'
+          iconClass: agent.IconClass || 'fa-robot',
+          role: agent.Description || 'AI Assistant'
         };
       }
     }
@@ -131,7 +132,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // Default fallback for AI messages without agent info
     return {
       name: 'AI Assistant',
-      iconClass: 'fa-robot'
+      iconClass: 'fa-robot',
+      role: 'AI Assistant'
     };
   }
 
@@ -288,6 +290,29 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         versionId: firstVersion.ID
       });
     }
+  }
+
+  public toggleReaction(type: 'like' | 'comment'): void {
+    // TODO: Implement reaction toggling
+    console.log('Toggle reaction:', type, 'for message:', this.message.ID);
+  }
+
+  public onSaveArtifact(event: Event): void {
+    event.stopPropagation();
+    // TODO: Implement artifact save
+    console.log('Save artifact for message:', this.message.ID);
+  }
+
+  public onShareArtifact(event: Event): void {
+    event.stopPropagation();
+    // TODO: Implement artifact share
+    console.log('Share artifact for message:', this.message.ID);
+  }
+
+  public onExportArtifact(event: Event): void {
+    event.stopPropagation();
+    // TODO: Implement artifact export
+    console.log('Export artifact for message:', this.message.ID);
   }
 
   /**

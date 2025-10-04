@@ -7,9 +7,9 @@
 
 .workspace-navigation {
   flex-shrink: 0;
-  height: 60px;
+  height: 48px;
   background-color: #092340;
-  border-bottom: 1px solid #D9D9D9;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .workspace-content {
@@ -20,8 +20,8 @@
 
 .workspace-sidebar {
   flex-shrink: 0;
-  width: 300px;
-  background-color: #FFF;
+  width: 260px;
+  background-color: #092340;
   border-right: 1px solid #D9D9D9;
   overflow-y: auto;
 }

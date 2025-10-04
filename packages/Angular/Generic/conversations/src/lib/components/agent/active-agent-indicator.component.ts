@@ -12,6 +12,7 @@ import { Subscription } from 'rxjs';
   selector: 'mj-active-agent-indicator',
   template: `
     <div class="active-agents-container" *ngIf="activeAgents.length > 0">
+      <span class="active-agents-label">Active:</span>
       <div class="agents-wrapper" [class.expanded]="isExpanded">
         @for (agent of displayAgents; track agent.run.ID) {
           <div class="agent-avatar"
@@ -54,10 +55,17 @@ import { Subscription } from 'rxjs';
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 4px 8px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
-      border-radius: 8px;
+      padding: 6px 12px;
+      background-color: #F4F4F4;
+      border-radius: 20px;
+      font-size: 12px;
+      color: #6B7280;
+      height: 32px;
+    }
+
+    .active-agents-label {
+      font-weight: 500;
+      color: #6B7280;
     }
 
     .agents-wrapper {
@@ -75,8 +83,8 @@ import { Subscription } from 'rxjs';
 
     .agent-avatar {
       position: relative;
-      width: 32px;
-      height: 32px;
+      width: 24px;
+      height: 24px;
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -84,6 +92,8 @@ import { Subscription } from 'rxjs';
       cursor: pointer;
       transition: all 200ms ease;
       flex-shrink: 0;
+      font-size: 10px;
+      font-weight: 600;
     }
 
     .agent-avatar:hover {

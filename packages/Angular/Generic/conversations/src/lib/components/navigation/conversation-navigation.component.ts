@@ -16,13 +16,15 @@ import { NavigationTab } from '../../models/conversation-state.model';
           class="nav-tab"
           [class.active]="activeTab === 'conversations'"
           (click)="tabChanged.emit('conversations')">
-          Conversations
+          <i class="fas fa-comments"></i>
+          <span>Chats</span>
         </button>
         <button
           class="nav-tab"
           [class.active]="activeTab === 'collections'"
           (click)="tabChanged.emit('collections')">
-          Collections
+          <i class="fas fa-folder"></i>
+          <span>Libraries</span>
         </button>
       </div>
       <div class="nav-right">
@@ -40,35 +42,60 @@ import { NavigationTab } from '../../models/conversation-state.model';
       display: flex;
       align-items: center;
       height: 100%;
-      padding: 0 16px;
+      padding: 0 20px;
       gap: 24px;
       color: white;
     }
     .nav-left { display: flex; align-items: center; gap: 12px; }
     .nav-title { margin: 0; font-size: 18px; font-weight: 600; }
-    .nav-tabs { display: flex; gap: 8px; flex: 1; }
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      flex: 1;
+      height: 100%;
+    }
     .nav-tab {
-      padding: 8px 16px;
+      padding: 0 20px;
+      height: 100%;
       background: transparent;
       border: none;
       color: rgba(255,255,255,0.7);
       cursor: pointer;
-      border-radius: 6px;
-      transition: all 150ms ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+      border-bottom: 3px solid transparent;
     }
-    .nav-tab:hover { background: rgba(255,255,255,0.1); color: white; }
-    .nav-tab.active { background: rgba(255,255,255,0.2); color: white; }
+    .nav-tab:hover {
+      background: rgba(255,255,255,0.05);
+      color: white;
+    }
+    .nav-tab.active {
+      color: white;
+      background: rgba(255,255,255,0.1);
+      border-bottom-color: #AAE7FD;
+    }
     .nav-right { display: flex; gap: 8px; }
     .nav-btn {
-      padding: 8px 12px;
+      width: 36px;
+      height: 36px;
+      border-radius: 6px;
       background: transparent;
       border: none;
-      color: white;
+      color: rgba(255,255,255,0.7);
       cursor: pointer;
-      border-radius: 6px;
-      transition: background 150ms ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
     }
-    .nav-btn:hover { background: rgba(255,255,255,0.1); }
+    .nav-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
   `]
 })
 export class ConversationNavigationComponent {

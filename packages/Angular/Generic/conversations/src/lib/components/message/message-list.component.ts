@@ -48,8 +48,37 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   private _renderedMessages = new Map<string, any>();
   private _shouldScrollToBottom = false;
 
+  public currentDateDisplay: string = 'Today';
+  public showDateNav: boolean = false;
+
   constructor(private cdRef: ChangeDetectorRef) {
     super();
+  }
+
+  public toggleDateNav(): void {
+    this.showDateNav = !this.showDateNav;
+  }
+
+  public jumpToDate(period: string): void {
+    // TODO: Implement date jumping logic
+    console.log('Jump to date:', period);
+    this.showDateNav = false;
+
+    // Update display based on period
+    switch(period) {
+      case 'today':
+        this.currentDateDisplay = 'Today';
+        break;
+      case 'yesterday':
+        this.currentDateDisplay = 'Yesterday';
+        break;
+      case 'last-week':
+        this.currentDateDisplay = 'Last week';
+        break;
+      case 'last-month':
+        this.currentDateDisplay = 'Last month';
+        break;
+    }
   }
 
   ngOnInit() {

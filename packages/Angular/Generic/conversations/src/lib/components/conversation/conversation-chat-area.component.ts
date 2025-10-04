@@ -149,14 +149,15 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
     }
     .chat-header {
       flex-shrink: 0;
-      padding: 16px 24px;
-      border-bottom: 1px solid #E5E7EB;
+      padding: 12px 20px;
+      border-bottom: 1px solid #D9D9D9;
       display: flex;
       justify-content: space-between;
       align-items: center;
       gap: 16px;
       background: #FFF;
       z-index: 10;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }
     .chat-info {
       display: flex;
@@ -166,9 +167,9 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
       min-width: 0;
     }
     .chat-title {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
-      color: #111827;
+      color: #333;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -177,42 +178,57 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 6px 12px;
-      background: #F3F4F6;
-      border: 1px solid #E5E7EB;
-      border-radius: 6px;
-      font-size: 13px;
-      color: #6B7280;
+      padding: 4px 10px;
+      background: #F4F4F4;
+      border: 1px solid #D9D9D9;
+      border-radius: 16px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #AAA;
       cursor: pointer;
-      transition: all 150ms ease;
+      transition: all 0.2s;
+      height: 28px;
+      margin-left: 12px;
     }
     .project-tag:hover {
-      background: #E5E7EB;
-      color: #111827;
+      background: #D9D9D9;
+      border-color: #AAA;
+    }
+    .project-tag i {
+      font-size: 10px;
     }
     .chat-members {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 8px;
       padding: 6px 12px;
-      background: transparent;
-      border: 1px solid #E5E7EB;
-      border-radius: 6px;
-      font-size: 13px;
-      color: #6B7280;
+      background: #F4F4F4;
+      border: none;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #AAA;
       cursor: pointer;
-      transition: all 150ms ease;
+      transition: all 0.2s;
+      height: 32px;
     }
     .chat-members:hover {
-      background: #F9FAFB;
-      color: #111827;
+      background: #D9D9D9;
+      color: #333;
+    }
+    .chat-members i {
+      font-size: 12px;
+    }
+    .chat-members span {
+      font-size: 12px;
+      font-weight: 500;
     }
     .artifact-indicator {
       display: flex;
       align-items: center;
       gap: 6px;
       padding: 6px 12px;
-      background: #1e40af;
+      background: #3B82F6;
       border: none;
       border-radius: 6px;
       font-size: 13px;
@@ -221,7 +237,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
       transition: all 150ms ease;
     }
     .artifact-indicator:hover {
-      background: #1e3a8a;
+      background: #2563EB;
     }
     .ambient-agent-indicator {
       display: flex;

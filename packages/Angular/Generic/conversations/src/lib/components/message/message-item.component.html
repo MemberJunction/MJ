@@ -8,6 +8,7 @@
   <div class="message-content">
     <div class="message-header">
       <span class="message-sender">{{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : currentUser.Name }}</span>
+      <span class="agent-badge" *ngIf="isAIMessage">{{ aiAgentInfo?.role || 'AI Assistant' }}</span>
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
 
       <!-- Status indicator for user messages -->
@@ -29,18 +30,32 @@
           }
         </div>
 
-        <!-- Artifact Card (ChatGPT/Claude.ai style) -->
+        <!-- Artifact Card (Prototype Style) -->
         @if (hasArtifact) {
           <div class="artifact-card" (click)="onArtifactClick()">
-            <div class="artifact-card-icon">
-              <i class="fas fa-cube"></i>
+            <div class="artifact-card-header">
+              <div class="artifact-card-icon">
+                <i class="fas fa-file-alt"></i>
+              </div>
+              <div class="artifact-card-title-area">
+                <div class="artifact-card-title">Artifact</div>
+                <div class="artifact-card-badge">markdown</div>
+              </div>
             </div>
-            <div class="artifact-card-content">
-              <div class="artifact-card-title">Artifact</div>
-              <div class="artifact-card-subtitle">Click to view in panel</div>
+            <div class="artifact-card-preview">
+              <code>## Generated Content
+Click to view full artifact in panel...</code>
             </div>
-            <div class="artifact-card-action">
-              <i class="fas fa-arrow-right"></i>
+            <div class="artifact-card-actions">
+              <button class="artifact-action-btn" (click)="onSaveArtifact($event)">
+                <i class="far fa-save"></i> Save
+              </button>
+              <button class="artifact-action-btn" (click)="onShareArtifact($event)">
+                <i class="far fa-share-square"></i> Share
+              </button>
+              <button class="artifact-action-btn" (click)="onExportArtifact($event)">
+                <i class="far fa-download"></i> Export
+              </button>
             </div>
           </div>
         }
@@ -80,6 +95,18 @@
       </button>
       <button class="message-action-btn danger" (click)="onDeleteClick()" title="Delete">
         <i class="fas fa-trash"></i>
+      </button>
+    </div>
+
+    <!-- Reaction Buttons -->
+    <div class="message-reactions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+      <button class="reaction-btn" (click)="toggleReaction('like')">
+        <i class="far fa-thumbs-up"></i>
+        <span class="reaction-count">0</span>
+      </button>
+      <button class="reaction-btn" (click)="toggleReaction('comment')">
+        <i class="far fa-comment"></i>
+        <span class="reaction-count">0</span>
       </button>
     </div>
   </div>

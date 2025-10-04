@@ -1,12 +1,25 @@
 .message-item {
   display: flex;
   gap: 12px;
-  padding: 16px;
+  padding: 8px 24px;
   transition: background-color 150ms ease;
+  animation: fadeIn 0.3s ease;
+  position: relative;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .message-item.ai-message {
-  background-color: rgba(0, 118, 182, 0.03);
+  background-color: transparent;
 }
 
 .message-item.user-message {
@@ -33,7 +46,6 @@
 .avatar-circle {
   width: 36px;
   height: 36px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -41,12 +53,16 @@
   color: white;
 }
 
-.avatar-circle.ai-avatar {
-  background-color: #0076B6;
+/* User avatars are circular */
+.avatar-circle.user-avatar {
+  border-radius: 50%;
+  background-color: #333;
 }
 
-.avatar-circle.user-avatar {
-  background-color: #333;
+/* Agent avatars are square with rounded corners */
+.avatar-circle.ai-avatar {
+  border-radius: 8px;
+  background-color: #9333EA; /* Purple for agents */
 }
 
 .message-content {
@@ -57,8 +73,8 @@
 .message-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 4px;
   font-size: 13px;
 }
 
@@ -67,9 +83,22 @@
   color: #333;
 }
 
+/* Agent role badge */
+.agent-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #F3F4F6;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #6B7280;
+  font-weight: 500;
+}
+
 .message-time {
-  color: #AAA;
+  margin-left: auto;
+  color: #9CA3AF;
   font-size: 12px;
+  font-weight: 400;
 }
 
 .message-elapsed {
@@ -89,98 +118,171 @@
   word-wrap: break-word;
 }
 
-/* Artifact Card - ChatGPT/Claude.ai style */
-.artifact-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #F9FAFB 0%, #F3F4F6 100%);
-  border: 1px solid #E5E7EB;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 200ms ease;
-  position: relative;
-  overflow: hidden;
+/* Asymmetric bubble shapes for message content */
+.message-item.user-message .message-content {
+  border-radius: 12px 12px 12px 4px;
 }
 
-.artifact-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 4px;
-  height: 100%;
-  background: linear-gradient(180deg, #6366F1 0%, #8B5CF6 100%);
+.message-item.ai-message .message-content {
+  border-radius: 4px 12px 12px 12px;
+}
+
+/* Reaction Buttons */
+.message-reactions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.reaction-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  font-size: 12px;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.reaction-btn:hover {
+  background: #F9FAFB;
+  border-color: #D1D5DB;
+}
+
+.reaction-btn.reacted {
+  background: #EFF6FF;
+  border-color: #3B82F6;
+  color: #3B82F6;
+}
+
+.reaction-btn i {
+  font-size: 12px;
+}
+
+.reaction-count {
+  font-weight: 500;
+  min-width: 12px;
+  text-align: center;
+}
+
+/* Artifact Card - Prototype Style */
+.artifact-card {
+  display: flex;
+  flex-direction: column;
+  margin-top: 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  background: #FAFAFA;
+  overflow: hidden;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
 .artifact-card:hover {
-  background: linear-gradient(135deg, #FFFFFF 0%, #F9FAFB 100%);
-  border-color: #6366F1;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
-  transform: translateY(-1px);
+  border-color: #D1D5DB;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.artifact-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: white;
+  border-bottom: 1px solid #E5E7EB;
+  position: relative;
 }
 
 .artifact-card-icon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
-  border-radius: 8px;
+  background: #F3F4F6;
+  border-radius: 6px;
+  color: #6B7280;
   flex-shrink: 0;
 }
 
 .artifact-card-icon i {
-  color: white;
-  font-size: 18px;
+  font-size: 16px;
 }
 
-.artifact-card-content {
+.artifact-card-title-area {
   flex: 1;
-  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .artifact-card-title {
   font-weight: 600;
   font-size: 14px;
   color: #111827;
-  margin-bottom: 2px;
 }
 
-.artifact-card-subtitle {
+.artifact-card-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #3B82F6;
+  color: white;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: lowercase;
+}
+
+.artifact-card-preview {
+  padding: 12px 16px;
+  background: #F9FAFB;
+  font-family: 'Courier New', monospace;
   font-size: 12px;
-  color: #6B7280;
+  color: #374151;
+  max-height: 120px;
+  overflow: hidden;
+  position: relative;
+  line-height: 1.5;
 }
 
-.artifact-card-action {
+.artifact-card-preview code {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.artifact-card-actions {
+  display: flex;
+  gap: 16px;
+  padding: 12px 16px;
+  background: white;
+  border-top: 1px solid #E5E7EB;
+}
+
+.artifact-action-btn {
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: white;
-  border: 1px solid #E5E7EB;
-  border-radius: 6px;
-  flex-shrink: 0;
-  transition: all 150ms ease;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #3B82F6;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
 }
 
-.artifact-card:hover .artifact-card-action {
-  background: #6366F1;
-  border-color: #6366F1;
+.artifact-action-btn:hover {
+  color: #2563EB;
 }
 
-.artifact-card-action i {
-  color: #6B7280;
-  font-size: 12px;
-  transition: color 150ms ease;
-}
-
-.artifact-card:hover .artifact-card-action i {
-  color: white;
+.artifact-action-btn i {
+  font-size: 14px;
 }
 
 .message-actions {
