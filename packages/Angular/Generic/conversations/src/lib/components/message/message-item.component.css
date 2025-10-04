@@ -1,7 +1,7 @@
 .message-item {
   display: flex;
   gap: 12px;
-  padding: 8px 24px;
+  padding: 12px 24px;
   transition: background-color 150ms ease;
   animation: fadeIn 0.3s ease;
   position: relative;

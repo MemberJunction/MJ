@@ -257,20 +257,21 @@ export class MessageInputComponent {
         }
         // Store the agent ID for display
         if (subResult.agentRun.AgentID) {
-          statusMessage.AgentID = subResult.agentRun.AgentID;
+          (statusMessage as any).AgentID = subResult.agentRun.AgentID;
         }
         await statusMessage.Save();
         this.messageSent.emit(statusMessage);
 
-        // Handle sub-agent's response
-        if (subResult.agentRun.Message) {
-          await this.handleAgentResponse(userMessage, subResult);
-        } else {
-          // Sub-agent completed but has no message
-          userMessage.Status = 'Complete';
-          await userMessage.Save();
-          this.messageSent.emit(userMessage);
+        // Handle artifacts from sub-agent if any
+        if (subResult.payload && Object.keys(subResult.payload).length > 0) {
+          await this.createArtifactFromPayload(subResult.payload, statusMessage, subResult.agentRun.AgentID);
+          console.log('🎨 Artifact created and linked to sub-agent message:', statusMessage.ID);
         }
+
+        // Mark user message as complete
+        userMessage.Status = 'Complete';
+        await userMessage.Save();
+        this.messageSent.emit(userMessage);
       } else {
         // Sub-agent failed
         statusMessage.Status = 'Error';

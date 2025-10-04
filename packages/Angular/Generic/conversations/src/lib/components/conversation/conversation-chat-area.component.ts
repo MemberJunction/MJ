@@ -417,18 +417,48 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   private async loadMessages(conversationId: string): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ConversationDetailEntity>(
-        {
-          EntityName: 'Conversation Details',
-          ExtraFilter: `ConversationID='${conversationId}'`,
-          OrderBy: '__mj_CreatedAt ASC',
-          ResultType: 'entity_object'
-        },
-        this.currentUser
-      );
 
-      if (result.Success) {
-        this.messages = result.Results || [];
+      // Load messages and agent runs in parallel
+      const [messagesResult, agentRunsResult] = await Promise.all([
+        rv.RunView<ConversationDetailEntity>(
+          {
+            EntityName: 'Conversation Details',
+            ExtraFilter: `ConversationID='${conversationId}'`,
+            OrderBy: '__mj_CreatedAt ASC',
+            ResultType: 'entity_object'
+          },
+          this.currentUser
+        ),
+        rv.RunView<AIAgentRunEntity>(
+          {
+            EntityName: 'MJ: AI Agent Runs',
+            ExtraFilter: `ConversationID='${conversationId}'`,
+            ResultType: 'entity_object'
+          },
+          this.currentUser
+        )
+      ]);
+
+      if (messagesResult.Success) {
+        this.messages = messagesResult.Results || [];
+
+        // Map AgentID from agent runs to messages
+        if (agentRunsResult.Success && agentRunsResult.Results) {
+          const agentRunsByDetailId = new Map<string, AIAgentRunEntity>();
+          for (const run of agentRunsResult.Results) {
+            if (run.ConversationDetailID) {
+              agentRunsByDetailId.set(run.ConversationDetailID, run);
+            }
+          }
+
+          // Populate AgentID on messages
+          for (const message of this.messages) {
+            const agentRun = agentRunsByDetailId.get(message.ID);
+            if (agentRun && agentRun.AgentID) {
+              (message as any).AgentID = agentRun.AgentID;
+            }
+          }
+        }
       }
     } catch (error) {
       console.error('Failed to load messages:', error);

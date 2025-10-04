@@ -63,17 +63,18 @@
   cursor: not-allowed;
 }
 .btn-send {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   background: #3B82F6;
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
+  flex-shrink: 0;
 }
 .btn-send:hover:not(:disabled) {
   background: #2563EB;
@@ -84,7 +85,7 @@
   cursor: not-allowed;
 }
 .btn-send i {
-  font-size: 14px;
+  font-size: 16px;
 }
 .processing-indicator {
   display: flex;

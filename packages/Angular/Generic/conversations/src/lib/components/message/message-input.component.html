@@ -22,9 +22,9 @@
     <button
       class="btn-send"
       [disabled]="!canSend"
-      (click)="onSend()">
+      (click)="onSend()"
+      [title]="isSending ? 'Sending...' : 'Send message'">
       <i class="fas fa-paper-plane"></i>
-      <span>{{ isSending ? 'Sending...' : 'Send' }}</span>
     </button>
   </div>
 </div>

@@ -9,7 +9,6 @@ import { NavigationTab } from '../../models/conversation-state.model';
         <button class="nav-btn sidebar-toggle" (click)="sidebarToggled.emit()">
           <i class="fas fa-bars"></i>
         </button>
-        <h1 class="nav-title">Conversations</h1>
       </div>
       <div class="nav-tabs">
         <button
