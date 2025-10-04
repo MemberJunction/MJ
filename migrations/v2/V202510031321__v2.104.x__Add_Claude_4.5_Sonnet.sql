@@ -114,7 +114,7 @@ SET
 SET
   @VendorID_f6838ac1 = 'D8A5CCEC-6A37-EF11-86D4-000D3A4E707E'
 SET
-  @Priority_f6838ac1 = 3
+  @Priority_f6838ac1 = 1
 SET
   @ExecutionGroup_f6838ac1 = 0
 SET
@@ -156,7 +156,7 @@ SET
 SET
   @VendorID_364f143d = '3EDA433E-F36B-1410-8DB6-00021F8B792E'
 SET
-  @Priority_364f143d = 1
+  @Priority_364f143d = 3
 SET
   @ExecutionGroup_364f143d = 0
 SET
