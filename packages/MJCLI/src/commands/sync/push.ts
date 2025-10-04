@@ -141,16 +141,18 @@ export default class Push extends Command {
               'File backups rolled back',
               'Failed to rollback file backups',
               'SQL logging requested but provider does not support it',
-              'Failed to close SQL logging session'
+              'Failed to close SQL logging session',
+              'WARNING: alwaysPush is enabled',
+              'WARNING: autoCreateMissingRecords is enabled'
             ];
-            
-            const isUserFriendly = userFriendlyPatterns.some(pattern => 
+
+            const isUserFriendly = userFriendlyPatterns.some(pattern =>
               message.includes(pattern)
             );
-            
+
             if (isUserFriendly) {
               // Log as a styled warning without stack trace
-              this.log(chalk.yellow(`⚠️  ${message}`));
+              this.log(chalk.yellow(message));
             } else {
               // Use standard warn for unexpected warnings that need debugging info
               this.warn(message);
