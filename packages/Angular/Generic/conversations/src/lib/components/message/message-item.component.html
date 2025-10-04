@@ -30,33 +30,13 @@
           }
         </div>
 
-        <!-- Artifact Card (Prototype Style) -->
+        <!-- Artifact Card (Claude.ai Style) -->
         @if (hasArtifact) {
           <div class="artifact-card" (click)="onArtifactClick()">
-            <div class="artifact-card-header">
-              <div class="artifact-card-icon">
-                <i class="fas fa-file-alt"></i>
-              </div>
-              <div class="artifact-card-title-area">
-                <div class="artifact-card-title">Artifact</div>
-                <div class="artifact-card-badge">markdown</div>
-              </div>
+            <div class="artifact-card-icon">
+              <i class="fas fa-file-code"></i>
             </div>
-            <div class="artifact-card-preview">
-              <code>## Generated Content
-Click to view full artifact in panel...</code>
-            </div>
-            <div class="artifact-card-actions">
-              <button class="artifact-action-btn" (click)="onSaveArtifact($event)">
-                <i class="far fa-save"></i> Save
-              </button>
-              <button class="artifact-action-btn" (click)="onShareArtifact($event)">
-                <i class="far fa-share-square"></i> Share
-              </button>
-              <button class="artifact-action-btn" (click)="onExportArtifact($event)">
-                <i class="far fa-download"></i> Export
-              </button>
-            </div>
+            <span class="artifact-card-label">View Artifact</span>
           </div>
         }
       }

@@ -29,6 +29,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public currentUser!: UserInfo;
   @Input() public allMessages!: ConversationDetailEntity[];
   @Input() public isProcessing: boolean = false;
+  @Input() public artifactId?: string;
   @Input() public artifactVersionId?: string;
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
@@ -290,9 +291,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public onArtifactClick(): void {
-    if (this.hasArtifact && this.artifactVersionId) {
+    if (this.hasArtifact && this.artifactId) {
       this.artifactClicked.emit({
-        artifactId: this.artifactVersionId, // For now using version ID - will need to load artifact ID
+        artifactId: this.artifactId,
         versionId: this.artifactVersionId
       });
     }

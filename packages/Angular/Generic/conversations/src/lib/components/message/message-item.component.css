@@ -138,160 +138,47 @@
 
 /* Reaction Buttons */
 .message-reactions {
-  display: flex;
-  gap: 8px;
-  margin-top: 4px;
+  display: none; /* Hide reactions for now - not implemented */
 }
 
-.reaction-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: transparent;
-  border: 1px solid #E5E7EB;
-  border-radius: 12px;
-  font-size: 12px;
-  color: #6B7280;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.reaction-btn:hover {
-  background: #F9FAFB;
-  border-color: #D1D5DB;
-}
-
-.reaction-btn.reacted {
-  background: #EFF6FF;
-  border-color: #3B82F6;
-  color: #3B82F6;
-}
-
-.reaction-btn i {
-  font-size: 12px;
-}
-
-.reaction-count {
-  font-weight: 500;
-  min-width: 12px;
-  text-align: center;
-}
-
-/* Artifact Card - Prototype Style */
+/* Artifact Card - Claude.ai Style */
 .artifact-card {
-  display: flex;
-  flex-direction: column;
-  margin-top: 12px;
-  border: 1px solid #E5E7EB;
-  border-radius: 8px;
-  background: #FAFAFA;
-  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  background: white;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
+  max-width: fit-content;
 }
 
 .artifact-card:hover {
-  border-color: #D1D5DB;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-}
-
-.artifact-card-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  background: white;
-  border-bottom: 1px solid #E5E7EB;
-  position: relative;
+  background: #F9FAFB;
+  border-color: #9CA3AF;
 }
 
 .artifact-card-icon {
-  width: 32px;
-  height: 32px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #F3F4F6;
-  border-radius: 6px;
   color: #6B7280;
   flex-shrink: 0;
 }
 
 .artifact-card-icon i {
-  font-size: 16px;
-}
-
-.artifact-card-title-area {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.artifact-card-title {
-  font-weight: 600;
   font-size: 14px;
-  color: #111827;
 }
 
-.artifact-card-badge {
-  display: inline-block;
-  padding: 2px 8px;
-  background: #3B82F6;
-  color: white;
-  border-radius: 10px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: lowercase;
-}
-
-.artifact-card-preview {
-  padding: 12px 16px;
-  background: #F9FAFB;
-  font-family: 'Courier New', monospace;
-  font-size: 12px;
-  color: #374151;
-  max-height: 120px;
-  overflow: hidden;
-  position: relative;
-  line-height: 1.5;
-}
-
-.artifact-card-preview code {
-  display: block;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.artifact-card-actions {
-  display: flex;
-  gap: 16px;
-  padding: 12px 16px;
-  background: white;
-  border-top: 1px solid #E5E7EB;
-}
-
-.artifact-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  color: #3B82F6;
+.artifact-card-label {
   font-size: 13px;
   font-weight: 500;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-
-.artifact-action-btn:hover {
-  color: #2563EB;
-}
-
-.artifact-action-btn i {
-  font-size: 14px;
+  color: #374151;
 }
 
 .message-actions {

@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, OnDestroy, DoCheck } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ConversationDetailArtifactEntity } from '@memberjunction/core-entities';
+import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -376,8 +376,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showArtifactPanel: boolean = false;
   public selectedArtifactId: string | null = null;
 
-  // Artifact mapping: ConversationDetailID -> ArtifactVersionID
-  public artifactsByDetailId = new Map<string, string>();
+  // Artifact mapping: ConversationDetailID -> {artifactId, versionId}
+  public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string}>();
 
   constructor(
     public conversationState: ConversationStateService,
@@ -447,7 +447,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         rv.RunView<ConversationDetailArtifactEntity>(
           {
             EntityName: 'MJ: Conversation Detail Artifacts',
-            ExtraFilter: `ConversationDetailID IN (SELECT ConversationDetailID FROM [${convoDetailEntity.SchemaName}].[${convoDetailEntity.BaseView}] WHERE ConversationID='${conversationId}')`, 
+            ExtraFilter: `ConversationDetailID IN (SELECT ConversationDetailID FROM [${convoDetailEntity.SchemaName}].[${convoDetailEntity.BaseView}] WHERE ConversationID='${conversationId}') AND Direction='Output'`,
             ResultType: 'entity_object'
           },
           this.currentUser
@@ -455,7 +455,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       ]);
 
       if (messagesResult.Success) {
-        this.messages = messagesResult.Results || [];
+        const loadedMessages = messagesResult.Results || [];
 
         // Map AgentID from agent runs to messages
         if (agentRunsResult.Success && agentRunsResult.Results) {
@@ -467,7 +467,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           }
 
           // Populate AgentID on messages
-          for (const message of this.messages) {
+          for (const message of loadedMessages) {
             const agentRun = agentRunsByDetailId.get(message.ID);
             if (agentRun && agentRun.AgentID) {
               (message as any).AgentID = agentRun.AgentID;
@@ -475,23 +475,46 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           }
         }
 
-        // Now load artifacts using the message IDs we have
-        if (this.messages.length > 0) {
-          // Build artifact map from preloaded artifacts
-          this.artifactsByDetailId.clear();
-          if (conversationDetailArtifacts.Success && conversationDetailArtifacts.Results) {
+        // Build artifact map from preloaded artifacts
+        this.artifactsByDetailId.clear();
+        if (conversationDetailArtifacts.Success && conversationDetailArtifacts.Results && conversationDetailArtifacts.Results.length > 0) {
+          // Load artifact versions to get ArtifactID
+          const versionIds = conversationDetailArtifacts.Results.map(a => `'${a.ArtifactVersionID}'`).join(',');
+          const versionsResult = await rv.RunView<ArtifactVersionEntity>(
+            {
+              EntityName: 'MJ: Artifact Versions',
+              ExtraFilter: `ID IN (${versionIds})`,
+              ResultType: 'entity_object'
+            },
+            this.currentUser
+          );
+
+          if (versionsResult.Success && versionsResult.Results) {
+            // Create map of versionId -> artifactId
+            const versionToArtifact = new Map<string, string>();
+            for (const version of versionsResult.Results) {
+              versionToArtifact.set(version.ID, version.ArtifactID);
+            }
+
+            // Build final artifact map with both IDs
             for (const artifact of conversationDetailArtifacts.Results) {
-              if (artifact.ConversationDetailID && artifact.ArtifactVersionID) {
-                this.artifactsByDetailId.set(artifact.ConversationDetailID, artifact.ArtifactVersionID);
+              const artifactId = versionToArtifact.get(artifact.ArtifactVersionID);
+              if (artifact.ConversationDetailID && artifactId) {
+                this.artifactsByDetailId.set(artifact.ConversationDetailID, {
+                  artifactId: artifactId,
+                  versionId: artifact.ArtifactVersionID
+                });
               }
             }
-            console.log(`📦 Preloaded ${conversationDetailArtifacts.Results.length} artifacts for conversation ${conversationId}`);
-            console.log('📦 Artifact map:', Array.from(this.artifactsByDetailId.entries()));
+            console.log(`📦 Preloaded ${this.artifactsByDetailId.size} artifacts for conversation ${conversationId}`);
           }
-
-          // Update artifact count for header display
-          this.artifactCount = this.artifactsByDetailId.size;
         }
+
+        // Update artifact count for header display
+        this.artifactCount = this.artifactsByDetailId.size;
+
+        // NOW set messages to trigger rendering (after artifacts are loaded)
+        this.messages = loadedMessages;
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
@@ -679,9 +702,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   /**
-   * Get artifact version ID for a conversation detail
+   * Get artifact info for a conversation detail
    */
-  public getArtifactVersionId(conversationDetailId: string): string | undefined {
+  public getArtifactInfo(conversationDetailId: string): {artifactId: string; versionId: string} | undefined {
     return this.artifactsByDetailId.get(conversationDetailId);
   }
 }

@@ -33,7 +33,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
-  @Input() public artifactMap: Map<string, string> = new Map();
+  @Input() public artifactMap: Map<string, {artifactId: string; versionId: string}> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
@@ -155,7 +155,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.message = message;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
-          instance.artifactVersionId = this.artifactMap.get(message.ID);
+          const artifactInfo = this.artifactMap.get(message.ID);
+          instance.artifactId = artifactInfo?.artifactId;
+          instance.artifactVersionId = artifactInfo?.versionId;
         } else {
           // Create new component
           const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
@@ -167,7 +169,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.currentUser = this.currentUser;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
-          instance.artifactVersionId = this.artifactMap.get(message.ID);
+          const artifactInfo = this.artifactMap.get(message.ID);
+          instance.artifactId = artifactInfo?.artifactId;
+          instance.artifactVersionId = artifactInfo?.versionId;
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));
