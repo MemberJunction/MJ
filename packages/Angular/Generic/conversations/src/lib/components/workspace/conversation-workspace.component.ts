@@ -4,7 +4,8 @@ import {
   Output,
   EventEmitter,
   OnInit,
-  OnDestroy
+  OnDestroy,
+  DoCheck
 } from '@angular/core';
 import { ConversationEntity, ArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
@@ -25,7 +26,7 @@ import { Subject, takeUntil } from 'rxjs';
   templateUrl: './conversation-workspace.component.html',
   styleUrls: ['./conversation-workspace.component.css']
 })
-export class ConversationWorkspaceComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+export class ConversationWorkspaceComponent extends BaseAngularComponent implements OnInit, OnDestroy, DoCheck {
   @Input() environmentId!: string;
   @Input() initialConversationId?: string;
   @Input() layout: WorkspaceLayout = 'full';
@@ -41,6 +42,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isArtifactPanelOpen: boolean = false;
   public isSearchPanelOpen: boolean = false;
 
+  private previousConversationId: string | null = null;
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -58,15 +60,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         this.isArtifactPanelOpen = isOpen;
       });
 
-    // Subscribe to active conversation changes
-    this.conversationState.activeConversation$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(conversation => {
-        if (conversation) {
-          this.conversationChanged.emit(conversation);
-        }
-      });
-
     // Set initial conversation if provided
     if (this.initialConversationId) {
       this.conversationState.setActiveConversation(this.initialConversationId);
@@ -77,6 +70,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.activeTab = 'collections';
     }
     // Task context will be handled by chat header dropdown, not navigation tabs
+  }
+
+  ngDoCheck() {
+    // Detect conversation changes and emit event
+    const currentId = this.conversationState.activeConversationId;
+    if (currentId !== this.previousConversationId) {
+      this.previousConversationId = currentId;
+      const conversation = this.conversationState.activeConversation;
+      if (conversation) {
+        this.conversationChanged.emit(conversation);
+      }
+    }
   }
 
   ngOnDestroy() {

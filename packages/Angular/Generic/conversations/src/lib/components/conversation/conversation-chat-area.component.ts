@@ -1,19 +1,17 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, DoCheck } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
-import { Observable, Subject } from 'rxjs';
-import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'mj-conversation-chat-area',
   template: `
     <div class="chat-area">
       <!-- Fixed Header -->
-      <div class="chat-header" *ngIf="activeConversation$ | async as conversation">
+      <div class="chat-header" *ngIf="conversationState.activeConversation as conversation">
         <div class="chat-info">
           <div class="chat-title">{{ conversation.Name }}</div>
           <button class="project-tag" (click)="openProjectSelector()" title="Assign to project" *ngIf="conversation.ProjectID">
@@ -30,16 +28,11 @@ import { takeUntil } from 'rxjs/operators';
           </button>
           <mj-tasks-dropdown [currentUser]="currentUser"></mj-tasks-dropdown>
           <mj-active-agent-indicator
-            [conversationId]="activeConversation?.ID"
+            [conversationId]="conversationState.activeConversation?.ID"
             [currentUser]="currentUser"
             (togglePanel)="onToggleAgentPanel()"
             (agentSelected)="onAgentSelected($event)">
           </mj-active-agent-indicator>
-          <!-- Ambient agent processing indicator -->
-          <div class="ambient-agent-indicator" *ngIf="isAmbientAgentProcessing$ | async" title="Ambient agent is thinking...">
-            <i class="fas fa-circle-notch fa-spin"></i>
-            <span>Agent thinking...</span>
-          </div>
         </div>
         <div class="chat-actions">
           <button class="action-btn" (click)="exportConversation()" title="Export conversation">
@@ -60,7 +53,7 @@ import { takeUntil } from 'rxjs/operators';
       <div class="chat-messages-container">
         <mj-conversation-message-list
           [messages]="messages"
-          [conversation]="activeConversation"
+          [conversation]="conversationState.activeConversation"
           [currentUser]="currentUser"
           [isProcessing]="isProcessing"
           (replyInThread)="onReplyInThread($event)"
@@ -73,8 +66,8 @@ import { takeUntil } from 'rxjs/operators';
       <!-- Fixed Input Area -->
       <div class="chat-input-container">
         <mj-message-input
-          *ngIf="activeConversation"
-          [conversationId]="activeConversation.ID"
+          *ngIf="conversationState.activeConversation"
+          [conversationId]="conversationState.activeConversation.ID"
           [currentUser]="currentUser"
           [conversationHistory]="messages"
           [disabled]="isProcessing"
@@ -85,10 +78,10 @@ import { takeUntil } from 'rxjs/operators';
     </div>
 
     <!-- Thread Panel -->
-    @if (activeThreadId) {
+    @if (conversationState.activeThreadId) {
       <mj-thread-panel
-        [parentMessageId]="activeThreadId"
-        [conversationId]="activeConversation?.ID || ''"
+        [parentMessageId]="conversationState.activeThreadId"
+        [conversationId]="conversationState.activeConversation?.ID || ''"
         [currentUser]="currentUser"
         (closed)="onThreadClosed()"
         (replyAdded)="onThreadReplyAdded($event)">
@@ -98,7 +91,7 @@ import { takeUntil } from 'rxjs/operators';
     <!-- Export Modal -->
     <mj-export-modal
       [isVisible]="showExportModal"
-      [conversation]="activeConversation || undefined"
+      [conversation]="conversationState.activeConversation || undefined"
       [currentUser]="currentUser"
       (cancelled)="onExportModalCancelled()"
       (exported)="onExportModalComplete()">
@@ -107,14 +100,14 @@ import { takeUntil } from 'rxjs/operators';
     <!-- Members Modal -->
     <mj-members-modal
       [isVisible]="showMembersModal"
-      [conversation]="activeConversation || undefined"
+      [conversation]="conversationState.activeConversation || undefined"
       [currentUser]="currentUser"
       (cancelled)="showMembersModal = false"
       (membersChanged)="showMembersModal = false">
     </mj-members-modal>
 
     <!-- Project Selector Modal -->
-    @if (showProjectSelector && activeConversation) {
+    @if (showProjectSelector && conversationState.activeConversation) {
       <div class="modal-overlay" (click)="showProjectSelector = false">
         <div class="modal-content project-selector-modal" (click)="$event.stopPropagation()">
           <div class="modal-header">
@@ -127,7 +120,7 @@ import { takeUntil } from 'rxjs/operators';
             <mj-project-selector
               [environmentId]="environmentId"
               [currentUser]="currentUser"
-              [selectedProjectId]="activeConversation.ProjectID"
+              [selectedProjectId]="conversationState.activeConversation.ProjectID"
               (projectSelected)="onProjectSelected($event)">
             </mj-project-selector>
           </div>
@@ -348,20 +341,16 @@ import { takeUntil } from 'rxjs/operators';
     }
   `]
 })
-export class ConversationChatAreaComponent implements OnInit, OnDestroy {
+export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  public activeConversation$!: Observable<ConversationEntity | null>;
-  public activeConversation: ConversationEntity | null = null;
   public messages: ConversationDetailEntity[] = [];
-  private currentConversationId: string | null = null;
-  public isAmbientAgentProcessing$!: Observable<boolean>;
+  private previousConversationId: string | null = null;
   public isProcessing: boolean = false;
   public memberCount: number = 1;
   public artifactCount: number = 0;
   public isShared: boolean = false;
-  public activeThreadId: string | null = null;
   public showExportModal: boolean = false;
   public showAgentPanel: boolean = false;
   public showMembersModal: boolean = false;
@@ -369,61 +358,44 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
   public showArtifactPanel: boolean = false;
   public selectedArtifactId: string | null = null;
 
-  private destroy$ = new Subject<void>();
-
   constructor(
-    private conversationState: ConversationStateService,
+    public conversationState: ConversationStateService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService
   ) {}
 
   ngOnInit() {
-    this.activeConversation$ = this.conversationState.activeConversation$;
-    this.isAmbientAgentProcessing$ = this.conversationAgentService.isProcessing$;
+    // Initial load if there's already an active conversation
+    if (this.conversationState.activeConversationId) {
+      this.onConversationChanged(this.conversationState.activeConversationId);
+    }
+  }
 
-    // Subscribe to active conversation changes
-    // This subscription handles BOTH ID changes (which trigger reload) and name/description updates (which just update the reference)
-    this.activeConversation$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(async (conversation) => {
-        // Always update the reference for UI display
-        this.activeConversation = conversation;
-
-        if (conversation) {
-          // Only reload messages if the conversation ID has changed
-          if (conversation.ID !== this.currentConversationId) {
-            // Clear tasks from the previous conversation
-            if (this.currentConversationId) {
-              this.activeTasks.clear();
-            }
-
-            this.currentConversationId = conversation.ID;
-            await this.loadMessages(conversation.ID);
-            // Restore any in-progress tasks for this conversation
-            await this.restoreActiveTasks(conversation.ID);
-            // Start polling for agents when conversation is active
-            this.agentStateService.startPolling(this.currentUser, conversation.ID);
-          }
-          // If it's the same conversation ID, just update the reference (for name/description changes)
-        } else {
-          this.currentConversationId = null;
-          this.messages = [];
-          this.activeTasks.clear();
-        }
-      });
-
-    // Subscribe to thread state
-    this.conversationState.activeThreadId$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe((threadId) => {
-        this.activeThreadId = threadId;
-      });
+  ngDoCheck() {
+    // Detect conversation ID changes using change detection
+    const currentId = this.conversationState.activeConversationId;
+    if (currentId !== this.previousConversationId) {
+      this.previousConversationId = currentId;
+      this.onConversationChanged(currentId);
+    }
   }
 
   ngOnDestroy() {
-    this.destroy$.next();
-    this.destroy$.complete();
+    // Stop polling when component is destroyed
+    this.agentStateService.stopPolling();
+  }
+
+  private async onConversationChanged(conversationId: string | null): Promise<void> {
+    this.activeTasks.clear();
+
+    if (conversationId) {
+      await this.loadMessages(conversationId);
+      await this.restoreActiveTasks(conversationId);
+      this.agentStateService.startPolling(this.currentUser, conversationId);
+    } else {
+      this.messages = [];
+    }
   }
 
   private async loadMessages(conversationId: string): Promise<void> {
@@ -441,49 +413,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
 
       if (result.Success) {
         this.messages = result.Results || [];
-        // Enrich messages with AgentID from AgentRunID
-        await this.enrichMessagesWithAgentInfo(this.messages);
       }
     } catch (error) {
       console.error('Failed to load messages:', error);
-    }
-  }
-
-  /**
-   * Enriches conversation detail messages with AgentID by looking up the AgentRun
-   * @param messages Array of conversation detail messages to enrich
-   */
-  private async enrichMessagesWithAgentInfo(messages: ConversationDetailEntity[]): Promise<void> {
-    const agentRunIds = messages
-      .filter(m => m.AgentRunID)
-      .map(m => m.AgentRunID)
-      .filter((id, index, self) => id && self.indexOf(id) === index); // Unique non-null IDs
-
-    if (agentRunIds.length === 0) return;
-
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: agentRunIds.map(id => `ID='${id}'`).join(' OR '),
-        ResultType: 'entity_object'
-      }, this.currentUser);
-
-      if (result.Success && result.Results) {
-        const agentRunMap = new Map(result.Results.map((run: any) => [run.ID, run.AgentID]));
-
-        // Enrich messages with AgentID
-        messages.forEach(msg => {
-          if (msg.AgentRunID) {
-            const agentId = agentRunMap.get(msg.AgentRunID);
-            if (agentId) {
-              (msg as any).AgentID = agentId;
-            }
-          }
-        });
-      }
-    } catch (error) {
-      console.error('Failed to enrich messages with agent info:', error);
     }
   }
 
@@ -550,7 +482,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
   }
 
   exportConversation(): void {
-    if (this.activeConversation) {
+    if (this.conversationState.activeConversation) {
       this.showExportModal = true;
     }
   }
@@ -564,10 +496,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
   }
 
   async onProjectSelected(project: any): Promise<void> {
-    if (this.activeConversation && project) {
+    const activeConv = this.conversationState.activeConversation;
+    if (activeConv && project) {
       try {
         await this.conversationState.saveConversation(
-          this.activeConversation.ID,
+          activeConv.ID,
           { ProjectID: project.ID },
           this.currentUser
         );
@@ -575,11 +508,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
       } catch (error) {
         console.error('Failed to assign project:', error);
       }
-    } else if (this.activeConversation && !project) {
+    } else if (activeConv && !project) {
       // Remove project assignment
       try {
         await this.conversationState.saveConversation(
-          this.activeConversation.ID,
+          activeConv.ID,
           { ProjectID: null },
           this.currentUser
         );
@@ -616,8 +549,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy {
     console.log('Thread reply added:', reply);
 
     // Reload messages to get updated thread counts
-    if (this.activeConversation) {
-      this.loadMessages(this.activeConversation.ID);
+    const activeConv = this.conversationState.activeConversation;
+    if (activeConv) {
+      this.loadMessages(activeConv.ID);
     }
   }
 

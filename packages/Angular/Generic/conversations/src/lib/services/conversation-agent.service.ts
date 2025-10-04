@@ -7,6 +7,7 @@ import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-
 import { ChatMessage } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentEntityExtended, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Service for managing agent interactions within conversations.
@@ -65,12 +66,16 @@ export class ConversationAgentService {
       ) || null;
 
       if (!this._conversationManagerAgent) {
-        console.warn('Conversation Manager Agent not found in AIEngineBase.Agents');
+        const errorMsg = 'Conversation Manager Agent not found in AIEngineBase.Agents';
+        console.warn(errorMsg);
+        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       }
 
       return this._conversationManagerAgent;
     } catch (error) {
+      const errorMsg = 'Error loading Conversation Manager Agent: ' + (error instanceof Error ? error.message : String(error));
       console.error('Error loading Conversation Manager Agent:', error);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       return null;
     }
   }
@@ -104,13 +109,17 @@ export class ConversationAgentService {
     // For now, we'll always send to the ambient agent
 
     if (!this._aiClient) {
-      console.warn('AI Client not initialized, cannot process message through agent');
+      const errorMsg = 'AI Client not initialized, cannot process message through agent';
+      console.warn(errorMsg);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
       return null;
     }
 
     const agent = await this.getConversationManagerAgent();
     if (!agent || !agent.ID) {
-      console.warn('Conversation Manager Agent not available');
+      const errorMsg = 'Conversation Manager Agent not available';
+      console.warn(errorMsg);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
       return null;
     }
 
@@ -144,7 +153,9 @@ export class ConversationAgentService {
 
       return result;
     } catch (error) {
+      const errorMsg = 'Error processing message through agent: ' + (error instanceof Error ? error.message : String(error));
       console.error('Error processing message through agent:', error);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       return null;
     } finally {
       // Always clear processing state
@@ -219,7 +230,9 @@ export class ConversationAgentService {
     reasoning: string
   ): Promise<ExecuteAgentResult | null> {
     if (!this._aiClient) {
-      console.warn('AI Client not initialized, cannot invoke sub-agent');
+      const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
+      console.warn(errorMsg);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
       return null;
     }
 
@@ -231,7 +244,9 @@ export class ConversationAgentService {
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       if (!agent || !agent.ID) {
-        console.warn(`❌ Sub-agent "${agentName}" not found`);
+        const errorMsg = `Sub-agent "${agentName}" not found`;
+        console.warn(`❌ ${errorMsg}`);
+        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
         return null;
       }
 
@@ -256,7 +271,9 @@ export class ConversationAgentService {
 
       return result;
     } catch (error) {
+      const errorMsg = `Error invoking sub-agent "${agentName}": ` + (error instanceof Error ? error.message : String(error));
       console.error(`Error invoking sub-agent "${agentName}":`, error);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       return null;
     }
   }

@@ -1,63 +1,53 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
-import { map, shareReplay } from 'rxjs/operators';
 import { ConversationEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 
 /**
- * Centralized state management for conversations
- * Provides reactive streams for UI components
- * Handles CRUD operations for conversations
+ * Simplified state management for conversations
+ * Uses simple arrays with Angular change detection instead of complex observables
+ * This prevents synchronization issues when updating conversation properties
  */
 @Injectable({
   providedIn: 'root'
 })
 export class ConversationStateService {
-  private _activeConversationId$ = new BehaviorSubject<string | null>(null);
-  private _conversations$ = new BehaviorSubject<ConversationEntity[]>([]);
-  private _searchQuery$ = new BehaviorSubject<string>('');
-  private _isLoading$ = new BehaviorSubject<boolean>(false);
-  private _activeThreadId$ = new BehaviorSubject<string | null>(null);
-
-  // Public observable streams
-  public readonly activeConversationId$ = this._activeConversationId$.asObservable();
-  public readonly conversations$ = this._conversations$.asObservable();
-  public readonly searchQuery$ = this._searchQuery$.asObservable();
-  public readonly isLoading$ = this._isLoading$.asObservable();
-  public readonly activeThreadId$ = this._activeThreadId$.asObservable();
-
-  // Derived observables
-  public readonly activeConversation$: Observable<ConversationEntity | null> = combineLatest([
-    this.activeConversationId$,
-    this.conversations$
-  ]).pipe(
-    map(([id, conversations]) => conversations.find(c => c.ID === id) || null),
-    shareReplay(1)
-  );
-
-  public readonly filteredConversations$: Observable<ConversationEntity[]> = combineLatest([
-    this.conversations$,
-    this.searchQuery$
-  ]).pipe(
-    map(([conversations, query]) => {
-      if (!query || query.trim() === '') {
-        return conversations;
-      }
-      const lowerQuery = query.toLowerCase();
-      return conversations.filter(c =>
-        (c.Name?.toLowerCase().includes(lowerQuery)) ||
-        (c.Description?.toLowerCase().includes(lowerQuery))
-      );
-    }),
-    shareReplay(1)
-  );
-
-  public readonly pinnedConversations$: Observable<ConversationEntity[]> = this.conversations$.pipe(
-    map(conversations => conversations.filter(c => c.IsPinned)),
-    shareReplay(1)
-  );
+  // Simple properties - Angular change detection will handle updates
+  public conversations: ConversationEntity[] = [];
+  public activeConversationId: string | null = null;
+  public searchQuery: string = '';
+  public isLoading: boolean = false;
+  public activeThreadId: string | null = null;
 
   constructor() {}
+
+  /**
+   * Gets the active conversation object
+   */
+  get activeConversation(): ConversationEntity | null {
+    if (!this.activeConversationId) return null;
+    return this.conversations.find(c => c.ID === this.activeConversationId) || null;
+  }
+
+  /**
+   * Gets filtered conversations based on search query
+   */
+  get filteredConversations(): ConversationEntity[] {
+    if (!this.searchQuery || this.searchQuery.trim() === '') {
+      return this.conversations;
+    }
+    const lowerQuery = this.searchQuery.toLowerCase();
+    return this.conversations.filter(c =>
+      (c.Name?.toLowerCase().includes(lowerQuery)) ||
+      (c.Description?.toLowerCase().includes(lowerQuery))
+    );
+  }
+
+  /**
+   * Gets pinned conversations
+   */
+  get pinnedConversations(): ConversationEntity[] {
+    return this.conversations.filter(c => c.IsPinned);
+  }
 
   /**
    * Sets the active conversation
@@ -65,22 +55,14 @@ export class ConversationStateService {
    */
   setActiveConversation(id: string | null): void {
     console.log('🎯 Setting active conversation:', id);
-    this._activeConversationId$.next(id);
+    this.activeConversationId = id;
   }
 
   /**
    * Gets the current active conversation ID
    */
   getActiveConversationId(): string | null {
-    return this._activeConversationId$.value;
-  }
-
-  /**
-   * Updates the conversations list
-   * @param conversations The new conversations array
-   */
-  setConversations(conversations: ConversationEntity[]): void {
-    this._conversations$.next(conversations);
+    return this.activeConversationId;
   }
 
   /**
@@ -88,22 +70,20 @@ export class ConversationStateService {
    * @param conversation The conversation to add
    */
   addConversation(conversation: ConversationEntity): void {
-    const current = this._conversations$.value;
-    this._conversations$.next([conversation, ...current]);
+    this.conversations = [conversation, ...this.conversations];
   }
 
   /**
-   * Updates a conversation in the list
+   * Updates a conversation in the list by directly modifying the entity object
+   * Angular change detection will pick up the changes automatically
    * @param id The conversation ID
-   * @param updates Partial updates to apply
+   * @param updates The fields to update
    */
-  updateConversation(id: string, updates: Partial<ConversationEntity>): void {
-    const current = this._conversations$.value;
-    const index = current.findIndex(c => c.ID === id);
-    if (index >= 0) {
-      current[index] = { ...current[index], ...updates } as ConversationEntity;
-      this._conversations$.next([...current]);
-      console.log('📝 Updated conversation in state:', { id, updates, activeId: this._activeConversationId$.value });
+  updateConversationInPlace(id: string, updates: Partial<ConversationEntity>): void {
+    const conversation = this.conversations.find(c => c.ID === id);
+    if (conversation) {
+      Object.assign(conversation, updates);
+      console.log('📝 Updated conversation in-place:', { id, updates });
     }
   }
 
@@ -112,8 +92,7 @@ export class ConversationStateService {
    * @param id The conversation ID to remove
    */
   removeConversation(id: string): void {
-    const current = this._conversations$.value;
-    this._conversations$.next(current.filter(c => c.ID !== id));
+    this.conversations = this.conversations.filter(c => c.ID !== id);
   }
 
   /**
@@ -121,14 +100,14 @@ export class ConversationStateService {
    * @param query The search query string
    */
   setSearchQuery(query: string): void {
-    this._searchQuery$.next(query);
+    this.searchQuery = query;
   }
 
   /**
    * Clears the search query
    */
   clearSearchQuery(): void {
-    this._searchQuery$.next('');
+    this.searchQuery = '';
   }
 
   /**
@@ -137,7 +116,7 @@ export class ConversationStateService {
    * @param currentUser The current user context
    */
   async loadConversations(environmentId: string, currentUser: UserInfo): Promise<void> {
-    this._isLoading$.next(true);
+    this.isLoading = true;
     try {
       const rv = new RunView();
       const filter = `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
@@ -154,16 +133,16 @@ export class ConversationStateService {
       );
 
       if (result.Success) {
-        this.setConversations(result.Results || []);
+        this.conversations = result.Results || [];
       } else {
         console.error('Failed to load conversations:', result.ErrorMessage);
-        this.setConversations([]);
+        this.conversations = [];
       }
     } catch (error) {
       console.error('Error loading conversations:', error);
-      this.setConversations([]);
+      this.conversations = [];
     } finally {
-      this._isLoading$.next(false);
+      this.isLoading = false;
     }
   }
 
@@ -229,7 +208,7 @@ export class ConversationStateService {
   }
 
   /**
-   * Updates a conversation
+   * Updates a conversation - saves to database AND updates in-place in the array
    * @param id The conversation ID
    * @param updates The fields to update
    * @param currentUser The current user context
@@ -253,7 +232,8 @@ export class ConversationStateService {
 
     const saved = await conversation.Save();
     if (saved) {
-      this.updateConversation(id, updates);
+      // Update the in-memory conversation directly
+      this.updateConversationInPlace(id, updates);
       return true;
     } else {
       throw new Error(conversation.LatestResult?.Message || 'Failed to update conversation');
@@ -266,8 +246,7 @@ export class ConversationStateService {
    * @param currentUser The current user context
    */
   async togglePin(id: string, currentUser: UserInfo): Promise<void> {
-    const conversations = this._conversations$.value;
-    const conversation = conversations.find(c => c.ID === id);
+    const conversation = this.conversations.find(c => c.ID === id);
     if (conversation) {
       await this.saveConversation(id, { IsPinned: !conversation.IsPinned }, currentUser);
     }
@@ -287,20 +266,20 @@ export class ConversationStateService {
    * @param messageId The parent message ID
    */
   openThread(messageId: string): void {
-    this._activeThreadId$.next(messageId);
+    this.activeThreadId = messageId;
   }
 
   /**
    * Closes the currently open thread panel
    */
   closeThread(): void {
-    this._activeThreadId$.next(null);
+    this.activeThreadId = null;
   }
 
   /**
    * Gets the currently active thread ID
    */
   getActiveThreadId(): string | null {
-    return this._activeThreadId$.value;
+    return this.activeThreadId;
   }
 }

@@ -1,8 +1,7 @@
-import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, DoCheck } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { TaskEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
-import { Subject, takeUntil } from 'rxjs';
 
 /**
  * Tasks dropdown component for chat header
@@ -254,35 +253,39 @@ import { Subject, takeUntil } from 'rxjs';
     }
   `]
 })
-export class TasksDropdownComponent implements OnInit, OnDestroy {
+export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
   @Input() currentUser!: UserInfo;
 
   public isOpen: boolean = false;
   public tasks: TaskEntity[] = [];
   public taskCount: number = 0;
-  private activeConversationId: string | null = null;
-  private destroy$ = new Subject<void>();
+  private previousConversationId: string | null = null;
 
   constructor(private conversationState: ConversationStateService) {}
 
   ngOnInit() {
-    // Subscribe to active conversation changes
-    this.conversationState.activeConversation$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(async (conversation) => {
-        this.activeConversationId = conversation?.ID || null;
-        if (this.activeConversationId) {
-          await this.loadTasks();
-        } else {
-          this.tasks = [];
-          this.taskCount = 0;
-        }
-      });
+    // Initial load if there's an active conversation
+    if (this.conversationState.activeConversationId) {
+      this.loadTasks();
+    }
+  }
+
+  ngDoCheck() {
+    // Detect conversation changes
+    const currentId = this.conversationState.activeConversationId;
+    if (currentId !== this.previousConversationId) {
+      this.previousConversationId = currentId;
+      if (currentId) {
+        this.loadTasks();
+      } else {
+        this.tasks = [];
+        this.taskCount = 0;
+      }
+    }
   }
 
   ngOnDestroy() {
-    this.destroy$.next();
-    this.destroy$.complete();
+    // Cleanup if needed
   }
 
   toggleDropdown(): void {
@@ -294,7 +297,8 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
   }
 
   private async loadTasks(): Promise<void> {
-    if (!this.activeConversationId) {
+    const activeId = this.conversationState.activeConversationId;
+    if (!activeId) {
       return;
     }
 
@@ -305,7 +309,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
       const detailsResult = await rv.RunView<ConversationDetailEntity>(
         {
           EntityName: 'Conversation Details',
-          ExtraFilter: `ConversationID='${this.activeConversationId}'`,
+          ExtraFilter: `ConversationID='${activeId}'`,
           OrderBy: '__mj_CreatedAt ASC',
           ResultType: 'entity_object'
         },

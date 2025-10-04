@@ -58,38 +58,8 @@ export class ConversationSidebarComponent implements OnInit {
   constructor(private conversationState: ConversationStateService) {}
 
   ngOnInit() {
-    // Load conversations when sidebar initializes
-    if (this.activeTab === 'conversations') {
-      this.loadConversations();
-    }
-
-    // Subscribe to active conversation for tasks view
-    this.conversationState.activeConversation$.subscribe(conversation => {
-      this.activeConversationId = conversation?.ID || null;
-    });
-  }
-
-  private async loadConversations(): Promise<void> {
-    try {
-      const rv = new RunView();
-      const filter = `EnvironmentID='${this.environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
-
-      const result = await rv.RunView<ConversationEntity>(
-        {
-          EntityName: 'Conversations',
-          ExtraFilter: filter,
-          OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
-          MaxRows: 100,
-          ResultType: 'entity_object'
-        },
-        this.currentUser
-      );
-
-      if (result.Success) {
-        this.conversationState.setConversations(result.Results || []);
-      }
-    } catch (error) {
-      console.error('Failed to load conversations:', error);
-    }
+    // Conversations are loaded by the conversation-list component
+    // No need to load here or subscribe to active conversation
+    // The conversation-list component handles its own state
   }
 }

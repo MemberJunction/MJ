@@ -5,10 +5,11 @@ import {
   EventEmitter,
   ChangeDetectorRef,
   OnDestroy,
-  AfterViewInit
+  AfterViewInit,
+  OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UserInfo, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -22,7 +23,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
   templateUrl: './message-item.component.html',
   styleUrls: ['./message-item.component.css']
 })
-export class MessageItemComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy {
+export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() public message!: ConversationDetailEntity;
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
@@ -42,9 +43,18 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   public isEditing: boolean = false;
   public editedText: string = '';
   private originalText: string = '';
+  public artifactVersions: ArtifactVersionEntity[] = [];
+  private artifactsLoaded: boolean = false;
 
   constructor(private cdRef: ChangeDetectorRef) {
     super();
+  }
+
+  async ngOnInit() {
+    // Load artifacts if this message has been saved (has an ID)
+    if (this.message.ID) {
+      await this.loadArtifacts();
+    }
   }
 
   ngAfterViewInit() {
@@ -104,8 +114,8 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   public get aiAgentInfo(): { name: string; iconClass: string } | null {
     if (!this.isAIMessage) return null;
 
-    // Get agent ID from enriched property (populated by looking up AgentRun)
-    const agentID = (this.message as any).AgentID;
+    // Get agent ID from denormalized field (populated when message is created)
+    const agentID = this.message.AgentID;
 
     // Look up agent from AIEngineBase cache
     if (agentID && AIEngineBase.Instance?.Agents) {
@@ -116,14 +126,6 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
           iconClass: agent.IconClass || 'fa-robot'
         };
       }
-    }
-
-    // If we have an AgentRunID but couldn't get the specific agent, show generic "Agent"
-    if (this.message.AgentRunID) {
-      return {
-        name: 'Agent',
-        iconClass: 'fa-robot'
-      };
     }
 
     // Default fallback for AI messages without agent info
@@ -165,7 +167,7 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   }
 
   public get hasArtifact(): boolean {
-    return !!this.message.ArtifactID && this.message.ArtifactID.length > 0;
+    return this.artifactVersions.length > 0;
   }
 
   public get messageClasses(): string {
@@ -279,11 +281,58 @@ export class MessageItemComponent extends BaseAngularComponent implements AfterV
   }
 
   public onArtifactClick(): void {
-    if (this.hasArtifact) {
+    if (this.hasArtifact && this.artifactVersions.length > 0) {
+      const firstVersion = this.artifactVersions[0];
       this.artifactClicked.emit({
-        artifactId: this.message.ArtifactID!,
-        versionId: this.message.ArtifactVersionID || undefined
+        artifactId: firstVersion.ArtifactID,
+        versionId: firstVersion.ID
       });
+    }
+  }
+
+  /**
+   * Load artifacts associated with this message via the M2M ConversationDetailArtifact table
+   */
+  private async loadArtifacts(): Promise<void> {
+    if (this.artifactsLoaded || !this.message.ID) {
+      return;
+    }
+
+    try {
+      const rv = new RunView();
+
+      // Load junction records for this conversation detail
+      const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ConversationDetailID='${this.message.ID}' AND Direction='Output'`,
+        OrderBy: '__mj_CreatedAt DESC',
+        ResultType: 'entity_object'
+      });
+
+      if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
+        // Get artifact version IDs from junction records
+        const versionIds = junctionResult.Results.map(j => `'${j.ArtifactVersionID}'`).join(',');
+
+        // Load the actual artifact versions
+        const versionsResult = await rv.RunView<ArtifactVersionEntity>({
+          EntityName: 'Artifact Versions',
+          ExtraFilter: `ID IN (${versionIds})`,
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'entity_object'
+        });
+
+        if (versionsResult.Success && versionsResult.Results) {
+          this.artifactVersions = versionsResult.Results;
+          this.artifactsLoaded = true;
+          this.cdRef.detectChanges();
+        }
+      } else {
+        // No artifacts found - mark as loaded to prevent repeated queries
+        this.artifactsLoaded = true;
+      }
+    } catch (error) {
+      console.error('Failed to load artifacts for message:', error);
+      this.artifactsLoaded = true; // Prevent retry on error
     }
   }
 

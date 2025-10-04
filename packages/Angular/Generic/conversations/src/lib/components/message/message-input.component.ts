@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -255,7 +255,10 @@ export class MessageInputComponent {
         else {
           statusMessage.Message = `✅ **${agentName}** completed`;
         }
-        statusMessage.AgentRunID = subResult.agentRun.ID;
+        // Store the agent ID for display
+        if (subResult.agentRun.AgentID) {
+          statusMessage.AgentID = subResult.agentRun.AgentID;
+        }
         await statusMessage.Save();
         this.messageSent.emit(statusMessage);
 
@@ -316,7 +319,11 @@ export class MessageInputComponent {
     agentMessage.Message = result.agentRun.Message;
     agentMessage.Role = 'AI';
     agentMessage.Status = 'Complete';
-    agentMessage.AgentRunID = result.agentRun.ID;
+
+    // Populate denormalized AgentID for fast lookup
+    if (result.agentRun.AgentID) {
+      agentMessage.AgentID = result.agentRun.AgentID;
+    }
 
     const saved = await agentMessage.Save();
     if (saved) {
@@ -375,17 +382,31 @@ export class MessageInputComponent {
         return;
       }
 
-      // Create Artifact Version with content and link to conversation detail
+      // Create Artifact Version with content
       const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
       version.ArtifactID = artifact.ID;
       version.VersionNumber = 1;
       version.Content = JSON.stringify(payload, null, 2);
       version.UserID = this.currentUser.ID;
-      (version as any).ConversationDetailID = message.ID; // Link to conversation message (property will exist after CodeGen)
 
       const versionSaved = await version.Save();
       if (!versionSaved) {
         console.error('Failed to save artifact version');
+        return;
+      }
+
+      // Create M2M relationship using ConversationDetailArtifact junction table
+      const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
+        'MJ: Conversation Detail Artifacts',
+        this.currentUser
+      );
+      junction.ConversationDetailID = message.ID;
+      junction.ArtifactVersionID = version.ID;
+      junction.Direction = 'Output'; // This artifact was produced as output from the agent
+
+      const junctionSaved = await junction.Save();
+      if (!junctionSaved) {
+        console.error('Failed to create artifact-message association');
       }
     } catch (error) {
       console.error('Error creating artifact from payload:', error);

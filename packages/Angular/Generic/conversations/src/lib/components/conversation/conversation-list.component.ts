@@ -5,7 +5,6 @@ import { ConversationStateService } from '../../services/conversation-state.serv
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ToastService } from '../../services/toast.service';
-import { Observable } from 'rxjs';
 
 @Component({
   selector: 'mj-conversation-list',
@@ -16,15 +15,15 @@ import { Observable } from 'rxjs';
           type="text"
           class="search-input"
           placeholder="Search conversations..."
-          (input)="onSearch($event)">
+          [(ngModel)]="conversationState.searchQuery">
         <button class="btn-new" (click)="createNewConversation()" title="New Conversation">
           <i class="fas fa-plus"></i>
         </button>
       </div>
       <div class="list-content">
-        @for (conversation of (conversations$ | async); track conversation.ID) {
+        @for (conversation of conversationState.filteredConversations; track conversation.ID) {
           <div class="conversation-item"
-               [class.active]="conversation.ID === (activeConversationId$ | async)"
+               [class.active]="conversation.ID === conversationState.activeConversationId"
                (click)="selectConversation(conversation)">
             <div class="conversation-icon-wrapper">
               <div class="conversation-icon">
@@ -93,20 +92,14 @@ export class ConversationListComponent implements OnInit {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
-  public conversations$!: Observable<ConversationEntity[]>;
-  public activeConversationId$!: Observable<string | null>;
-
   constructor(
-    private conversationState: ConversationStateService,
+    public conversationState: ConversationStateService,
     private dialogService: DialogService,
     private notificationService: NotificationService,
     private toastService: ToastService
   ) {}
 
   ngOnInit() {
-    this.conversations$ = this.conversationState.filteredConversations$;
-    this.activeConversationId$ = this.conversationState.activeConversationId$;
-
     // Load conversations on init
     this.conversationState.loadConversations(this.environmentId, this.currentUser);
   }
@@ -115,11 +108,6 @@ export class ConversationListComponent implements OnInit {
     this.conversationState.setActiveConversation(conversation.ID);
     // Clear unread notifications when conversation is opened
     this.notificationService.markConversationAsRead(conversation.ID);
-  }
-
-  onSearch(event: Event): void {
-    const query = (event.target as HTMLInputElement).value;
-    this.conversationState.setSearchQuery(query);
   }
 
   async createNewConversation(): Promise<void> {
