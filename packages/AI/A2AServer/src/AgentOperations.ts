@@ -154,7 +154,7 @@ export class AgentOperations {
             
             // Load the agent run from database
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', this.contextUser);
+            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {
@@ -202,7 +202,7 @@ export class AgentOperations {
             
             // Load the agent run from database
             const md = new Metadata();
-            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', this.contextUser);
+            const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {

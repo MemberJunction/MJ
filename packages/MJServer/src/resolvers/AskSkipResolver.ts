@@ -1,4 +1,4 @@
-import { Arg, Ctx, Field, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
+import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
@@ -65,6 +65,18 @@ import { CompositeKeyInputType } from '../generic/KeyInputOutputTypes.js';
 import { AIEngine } from '@memberjunction/aiengine';
 import { deleteAccessToken, GetDataAccessToken, registerAccessToken, tokenExists } from './GetDataResolver.js';
 import e from 'express';
+
+/**
+ * Skip API Endpoints Configuration
+ * Defines all available endpoints for the Skip API
+ */
+const SKIP_API_ENDPOINTS = {
+  CHAT: '/chat',
+  LEARNING: '/learning',
+  FEEDBACK_COMPONENT: '/feedback/component',
+  REGISTRY: '/registry',
+  // Add more endpoints as needed
+} as const;
 
 /**
  * Store for active conversation streams
@@ -368,7 +380,9 @@ function initializeSkipLearningCycleScheduler() {
           }
           
           // Check if we have a valid endpoint when cycles are enabled
-          if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+          const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+                                      (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+          if (!hasLearningEndpoint) {
             LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no Learning Cycle API endpoint is configured');
             return;
           }
@@ -577,7 +591,9 @@ export class AskSkipResolver {
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+      const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+                                  (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+      if (!hasLearningEndpoint) {
         return {
           success: false,
           error: 'Learning cycle API endpoint is not configured',
@@ -729,9 +745,10 @@ export class AskSkipResolver {
     userPayload: UserPayload
   ): Promise<SkipAPILearningCycleResponse> {
     const skipConfigInfo = configInfo.askSkip;
-    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${skipConfigInfo.learningCycleURL}`);
+    const learningURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.LEARNING}` : skipConfigInfo.learningCycleURL;
+    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${learningURL}`);
 
-    const response = await sendPostRequest(skipConfigInfo.learningCycleURL, input, true, this.buildSkipPostHeaders());
+    const response = await sendPostRequest(learningURL, input, true, this.buildSkipPostHeaders());
 
     if (response && response.length > 0) {
       // the last object in the response array is the final response from the Skip API
@@ -789,10 +806,11 @@ export class AskSkipResolver {
     userPayload: UserPayload = null
   ): Promise<AskSkipResultType> {
     const skipConfigInfo = configInfo.askSkip;
-    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${skipConfigInfo.chatURL}`);
+    const chatURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.CHAT}` : skipConfigInfo.chatURL;
+    LogStatus(`   >>> HandleSimpleSkipChatPostRequest Sending request to Skip API: ${chatURL}`);
 
     try {
-      const response = await sendPostRequest(skipConfigInfo.chatURL, input, true, this.buildSkipPostHeaders());
+      const response = await sendPostRequest(chatURL, input, true, this.buildSkipPostHeaders());
 
       if (response && response.length > 0) {
         // the last object in the response array is the final response from the Skip API
@@ -2428,7 +2446,8 @@ cycle.`);
     startTime: Date
   ): Promise<AskSkipResultType> {
     const skipConfigInfo = configInfo.askSkip;
-    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${skipConfigInfo.chatURL}`);
+    const chatURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.CHAT}` : skipConfigInfo.chatURL;
+    LogStatus(`   >>> HandleSkipRequest: Sending request to Skip API: ${chatURL}`);
 
     if (conversationDetailCount > 10) {
       // Set status of conversation to Available since we still want to allow the user to ask questions
@@ -2459,7 +2478,7 @@ cycle.`);
     let response;
     try {
       response = await sendPostRequest(
-        skipConfigInfo.chatURL,
+        chatURL,
         input,
         true,
         this.buildSkipPostHeaders(),
@@ -3259,7 +3278,9 @@ cycle.`);
       }
       
       // Check if we have a valid endpoint when cycles are enabled
-      if (!skipConfigInfo.learningCycleURL || skipConfigInfo.learningCycleURL.trim().length === 0) {
+      const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+                                  (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+      if (!hasLearningEndpoint) {
         return {
           Success: false,
           Message: 'Learning cycle API endpoint is not configured'
@@ -3394,6 +3415,7 @@ cycle.`);
       };
     }
   }
+
 }
 
 export default AskSkipResolver;

@@ -214,6 +214,17 @@ const codegenConfig = {
     convertCoreSchemaToFlywayMigrationFile: true,
     omitRecurringScriptsFromLog: true,
   },
+  forceRegeneration: {
+    enabled: false,  // Set to true to force regeneration even without schema changes
+    entityWhereClause: "", // example - can be any where clause you want "__mj_UpdatedAt>='2025-06-24 23:36:30.4900000 +00:00'",  // Optional WHERE clause to filter entities for regeneration
+    baseViews: false,
+    spCreate: false,  // Set this to true to regenerate all spCreate procedures
+    spUpdate: false,
+    spDelete: false,
+    allStoredProcedures: false,  // Overrides individual SP flags when true
+    indexes: false,
+    fullTextSearch: false,
+  },
 };
 
 /** @type {MJServerConfig} */
@@ -253,23 +264,42 @@ const mjServerConfig = {
     // excludeSchemas: ['internal', 'security', '__mj'] // Exclude entire schemas
   },
   askSkip: {
+    url: process.env.ASK_SKIP_URL, // Base URL for Skip API (e.g., http://localhost:3001)
     chatURL: process.env.ASK_SKIP_CHAT_URL,
     learningCycleURL: process.env.ASK_SKIP_LEARNING_URL,
     learningCycleIntervalInMinutes: process.env.ASK_SKIP_LEARNING_CYCLE_INTERVAL_IN_MINUTES,
     learningCycleEnabled: process.env.ASK_SKIP_RUN_LEARNING_CYCLES,
     learningCycleRunUponStartup: process.env.ASK_SKIP_RUN_LEARNING_CYCLES_UPON_STARTUP,
     orgID: process.env.ASK_SKIP_ORGANIZATION_ID,
-    apiKey: process.env.ASK_SKIP_API_KEY,  
+    apiKey: process.env.ASK_SKIP_API_KEY,
     organizationInfo: process.env.ASK_SKIP_ORGANIZATION_INFO,
     entitiesToSend: {
       excludeSchemas: [],
       includeEntitiesFromExcludedSchemas: [
       ],
     },
-  }, 
+  },
+  sqlLogging: {
+    enabled: true,  // Master switch for SQL logging capability
+    defaultOptions: {
+      formatAsMigration: false,
+      statementTypes: 'both', // 'queries' | 'mutations' | 'both'
+      batchSeparator: 'GO',
+      prettyPrint: true,
+      logRecordChangeMetadata: false,
+      retainEmptyLogFiles: false,
+      verboseOutput: false // Set to true to enable debug console output for SQL logging
+    },
+    allowedLogDirectory: './logs/sql', // Restrict where logs can be written
+    maxActiveSessions: 5, // Limit concurrent logging sessions
+    autoCleanupEmptyFiles: true,
+    sessionTimeout: 3600000 // 1 hour in ms, auto-close sessions after this
+  },
   
   /**
    * Authentication Provider Configuration
+   * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)
+   * Each provider encapsulates its issuer URL, audience, JWKS URI, and provider-specific config
    */
   authProviders: [
     // Microsoft Azure AD / Entra ID
@@ -295,18 +325,40 @@ const mjServerConfig = {
       domain: process.env.AUTH0_DOMAIN
     } : null,
     
-    // Okta
-    process.env.OKTA_DOMAIN && process.env.OKTA_CLIENT_ID ? {
-      name: 'okta',
-      type: 'okta',
-      issuer: `https://${process.env.OKTA_DOMAIN}/oauth2/default`,
-      audience: process.env.OKTA_CLIENT_ID,
-      jwksUri: `https://${process.env.OKTA_DOMAIN}/oauth2/default/v1/keys`,
-      clientId: process.env.OKTA_CLIENT_ID,
-      clientSecret: process.env.OKTA_CLIENT_SECRET,
-      domain: process.env.OKTA_DOMAIN
-    } : null,
-  ].filter(Boolean), // Remove any null entries from providers that aren't configured
+    // Okta (uncomment and configure if needed)
+    // process.env.OKTA_DOMAIN && process.env.OKTA_CLIENT_ID ? {
+    //   name: 'okta',
+    //   type: 'okta',
+    //   issuer: `https://${process.env.OKTA_DOMAIN}/oauth2/default`,
+    //   audience: process.env.OKTA_CLIENT_ID,
+    //   jwksUri: `https://${process.env.OKTA_DOMAIN}/oauth2/default/v1/keys`,
+    //   clientId: process.env.OKTA_CLIENT_ID,
+    //   domain: process.env.OKTA_DOMAIN
+    // } : null,
+    
+    // AWS Cognito (uncomment and configure if needed)
+    // process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID ? {
+    //   name: 'cognito',
+    //   type: 'cognito',
+    //   issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
+    //   audience: process.env.COGNITO_CLIENT_ID,
+    //   jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
+    //   clientId: process.env.COGNITO_CLIENT_ID,
+    //   userPoolId: process.env.COGNITO_USER_POOL_ID,
+    //   region: process.env.AWS_REGION
+    // } : null,
+    
+    // Google OAuth (uncomment and configure if needed)
+    // process.env.GOOGLE_CLIENT_ID ? {
+    //   name: 'google',
+    //   type: 'google',
+    //   issuer: 'https://accounts.google.com',
+    //   audience: process.env.GOOGLE_CLIENT_ID,
+    //   jwksUri: 'https://www.googleapis.com/oauth2/v3/certs',
+    //   clientId: process.env.GOOGLE_CLIENT_ID,
+    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET
+    // } : null
+  ].filter(Boolean) // Remove any null entries from providers that aren't configured
 };
 
 /** @type {MCPServerConfig} */
@@ -403,6 +455,7 @@ const config = {
   ___skipAPIOrgId: process.env.ASK_SKIP_ORGANIZATION_ID,
   apiKey: process.env.MJ_API_KEY,
   baseUrl: process.env.GRAPHQL_BASE_URL ?? 'http://localhost',
+  publicUrl: process.env.MJAPI_PUBLIC_URL, // Public URL for callbacks (e.g., ngrok URL when developing)
 
   // Used only for MJCLI
   migrationsLocation: process.env.MIGRATIONS_LOCATION ?? 'filesystem:./migrations',

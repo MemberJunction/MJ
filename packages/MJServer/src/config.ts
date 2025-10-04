@@ -68,6 +68,7 @@ const zodBooleanWithTransforms = () => {
 }
 
 const askSkipInfoSchema = z.object({
+  url: z.string().optional(), // Base URL for Skip API
   apiKey: z.string().optional(),
   orgID: z.string().optional(),
   organizationInfo: z.string().optional(),
@@ -78,8 +79,8 @@ const askSkipInfoSchema = z.object({
     })
     .optional(),
   chatURL: z.string().optional(),
-  learningCycleRunUponStartup: zodBooleanWithTransforms(),  
-  learningCycleEnabled: zodBooleanWithTransforms(),  
+  learningCycleRunUponStartup: zodBooleanWithTransforms(),
+  learningCycleEnabled: zodBooleanWithTransforms(),
   learningCycleURL: z.string().optional(),
   learningCycleIntervalInMinutes: z.coerce.number().optional(),
 });

@@ -131,36 +131,116 @@ export interface ComponentDependencyTree {
      * Component ID
      */
     componentId: string;
-    
+
     /**
      * Component name
      */
     name?: string;
-    
+
     /**
      * Component namespace
      */
     namespace?: string;
-    
+
     /**
      * Component version
      */
     version?: string;
-    
+
     /**
      * Direct dependencies
      */
     dependencies?: ComponentDependencyTree[];
-    
+
     /**
      * Whether this is a circular dependency
      */
     circular?: boolean;
-    
+
     /**
      * Total count of all dependencies
      */
     totalCount?: number;
+}
+
+/**
+ * Input parameters for sending component feedback
+ */
+export interface ComponentFeedbackParams {
+    /**
+     * Component name
+     */
+    componentName: string;
+
+    /**
+     * Component namespace
+     */
+    componentNamespace: string;
+
+    /**
+     * Component version (optional)
+     */
+    componentVersion?: string;
+
+    /**
+     * Registry name (optional - for registry-specific feedback)
+     */
+    registryName?: string;
+
+    /**
+     * Rating (typically 0-5 scale)
+     */
+    rating: number;
+
+    /**
+     * Type of feedback (optional)
+     */
+    feedbackType?: string;
+
+    /**
+     * User comments (optional)
+     */
+    comments?: string;
+
+    /**
+     * Associated conversation ID (optional)
+     */
+    conversationID?: string;
+
+    /**
+     * Associated conversation detail ID (optional)
+     */
+    conversationDetailID?: string;
+
+    /**
+     * Associated report ID (optional)
+     */
+    reportID?: string;
+
+    /**
+     * Associated dashboard ID (optional)
+     */
+    dashboardID?: string;
+}
+
+/**
+ * Response from sending component feedback
+ */
+export interface ComponentFeedbackResponse {
+    /**
+     * Whether the feedback was successfully submitted
+     */
+    success: boolean;
+
+    /**
+     * ID of the created feedback record (if available)
+     */
+    feedbackID?: string;
+
+    /**
+     * Error message if submission failed
+     */
+    error?: string;
 }
 
 /**
@@ -616,6 +696,73 @@ export class GraphQLComponentRegistryClient {
         } catch (e) {
             LogError(e);
             return null;
+        }
+    }
+
+    /**
+     * Send feedback for a component.
+     *
+     * This is a registry-agnostic method that allows submitting feedback
+     * for any component from any registry. The feedback can include ratings,
+     * comments, and associations with conversations, reports, or dashboards.
+     *
+     * @param params The feedback parameters
+     * @returns A Promise that resolves to a ComponentFeedbackResponse
+     *
+     * @example
+     * ```typescript
+     * const response = await registryClient.SendComponentFeedback({
+     *   componentName: 'DataGrid',
+     *   componentNamespace: 'core/ui',
+     *   componentVersion: '1.0.0',
+     *   registryName: 'MJ',
+     *   rating: 5,
+     *   feedbackType: 'feature-request',
+     *   comments: 'Would love to see export to Excel functionality',
+     *   conversationID: 'conv-123'
+     * });
+     *
+     * if (response.success) {
+     *   console.log('Feedback submitted successfully!');
+     *   if (response.feedbackID) {
+     *     console.log(`Feedback ID: ${response.feedbackID}`);
+     *   }
+     * } else {
+     *   console.error('Feedback submission failed:', response.error);
+     * }
+     * ```
+     */
+    public async SendComponentFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
+        try {
+            // Build the mutation
+            const mutation = gql`
+                mutation SendComponentFeedback($feedback: ComponentFeedbackInput!) {
+                    SendComponentFeedback(feedback: $feedback) {
+                        success
+                        feedbackID
+                        error
+                    }
+                }
+            `;
+
+            // Execute the mutation
+            const result = await this._dataProvider.ExecuteGQL(mutation, { feedback: params });
+
+            // Return the response
+            if (result && result.SendComponentFeedback) {
+                return result.SendComponentFeedback as ComponentFeedbackResponse;
+            }
+
+            return {
+                success: false,
+                error: 'No response from server'
+            };
+        } catch (e) {
+            LogError(e);
+            return {
+                success: false,
+                error: e instanceof Error ? e.message : 'Unknown error'
+            };
         }
     }
 }

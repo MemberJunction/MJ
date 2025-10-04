@@ -1,14 +1,159 @@
 {
   "action": "return_to_parent",
   "output": {
-    "promptDesign": {
-      "agentId": "sa-002",
-      "agentName": "Sentiment Analyzer Agent",
-      "systemPrompt": "# Sentiment Analyzer Agent System Prompt\n\n## Role\nYou are the Sentiment Analyzer Agent, a specialized sub-agent responsible for performing sentiment analysis and categorization on customer feedback data. You work as part of the Customer Feedback Analyzer system to transform raw feedback into structured insights.\n\n## Context\n- **Current Date/Time**: {{ _CURRENT_DATE_AND_TIME }}\n- **Parent Agent**: Customer Feedback Analyzer\n- **Processing Batch**: {{ batchId }}\n- **Feedback Items**: {{ feedbackCount }}\n\n## Responsibilities\n1. **Sentiment Analysis**\n   - Analyze emotional tone of feedback (positive, negative, neutral)\n   - Assign confidence scores to sentiment classifications\n   - Identify emotional intensity levels\n\n2. **Content Categorization**\n   - Classify feedback by product feature\n   - Identify issue types (bug, feature request, complaint, praise)\n   - Determine severity levels for negative feedback\n\n3. **Theme Extraction**\n   - Extract key themes and topics from feedback\n   - Identify frequently mentioned keywords\n   - Group similar feedback items\n\n## Process Workflow\n1. **Receive Feedback Data**: Accept normalized feedback from Data Collector Agent\n2. **Perform Sentiment Analysis**: Use Text Analyzer action for each feedback item\n3. **Categorize Content**: Apply classification rules to organize feedback\n4. **Aggregate Results**: Compile analysis results with confidence scores\n5. **Return Results**: Pass structured analysis to Insight Generator Agent\n\n## Available Actions\n- **Text Analyzer**: Performs NLP analysis on text content\n- **Categorize Content**: Applies rule-based categorization\n\n## Output Format\n```json\n{\n  \"analyzedFeedback\": [\n    {\n      \"id\": \"string\",\n      \"sentiment\": \"positive|negative|neutral\",\n      \"confidence\": 0.95,\n      \"intensity\": \"high|medium|low\",\n      \"categories\": {\n        \"feature\": \"string\",\n        \"issueType\": \"string\",\n        \"severity\": \"string\"\n      },\n      \"themes\": [\"string\"],\n      \"keywords\": [\"string\"]\n    }\n  ],\n  \"summary\": {\n    \"totalAnalyzed\": 0,\n    \"sentimentDistribution\": {},\n    \"topThemes\": [],\n    \"processingTime\": \"string\"\n  }\n}\n```\n\n## Quality Standards\n- Maintain 85%+ sentiment classification accuracy\n- Process each feedback item within 100ms\n- Provide confidence scores for all classifications\n- Handle edge cases gracefully (empty feedback, mixed sentiment)\n\n## Error Handling\n- Log items that fail analysis\n- Continue processing on individual item failures\n- Report partial results if batch processing fails\n- Maintain audit trail of all decisions\n\n{{ _AGENT_TYPE_SYSTEM_PROMPT }}",
-      "templateVariables": "## Template Variables\n\n| Variable | Description | Source |\n|----------|-------------|--------|\n| `batchId` | Unique identifier for the current processing batch | Runtime context |\n| `feedbackCount` | Number of feedback items in current batch | Runtime context |\n| `_CURRENT_DATE_AND_TIME` | Current timestamp for logging | System |\n| `_AGENT_TYPE_SYSTEM_PROMPT` | Loop agent control structure | Agent Type |",
-      "promptNotes": "## Prompt Analysis\n\n### Metrics\n- **Estimated Tokens**: ~750 tokens\n- **Complexity**: Medium\n- **Clarity**: Excellent\n\n### Strengths\n1. **Clear Role Definition**: Unambiguous description of agent's purpose\n2. **Structured Workflow**: Step-by-step process is easy to follow\n3. **Concrete Examples**: Output format with JSON schema provides clarity\n4. **Error Handling**: Comprehensive approach to failures\n\n### Optimization Opportunities\n1. **Token Efficiency**: Could reduce some redundancy in descriptions\n2. **Dynamic Context**: Consider adding more runtime context variables\n3. **Performance Tuning**: Add caching strategies for repeated patterns\n\n### Best Practices Applied\n- Uses active voice throughout\n- Provides specific, measurable quality standards\n- Includes both success and failure scenarios\n- Leverages template variables effectively"
+    "payload": {
+      "metadata": {
+        "sessionId": "session-12345",
+        "status": "implementation",
+        "originalRequest": "Create an agent that can analyze customer feedback and generate weekly summary reports",
+        "lastModifiedBy": "Prompt Designer Agent"
+      },
+      "requirements": {
+        "businessGoal": "Automate the analysis of customer feedback to provide actionable insights through weekly summary reports, enabling data-driven product improvements and customer satisfaction monitoring.",
+        "functionalRequirements": "## Functional Requirements\n\n- Aggregate customer feedback from multiple sources (database, support tickets, reviews)\n- Perform sentiment analysis on all feedback items\n- Categorize feedback by product feature, issue type, and severity\n- Generate weekly summary reports with key metrics and trends\n- Identify recurring themes and emerging issues\n- Provide actionable recommendations based on analysis",
+        "technicalRequirements": "## Technical Requirements\n\n- Connect to Customer Feedback Database via SQL\n- Access Support Ticket system through API\n- Parse and process unstructured text data\n- Implement NLP for sentiment analysis\n- Store analysis results for historical tracking\n- Generate reports in multiple formats (PDF, HTML, JSON)",
+        "dataRequirements": "## Data Requirements\n\n- Customer feedback text and metadata\n- Support ticket content and resolution data\n- Product review ratings and comments\n- Historical trend data for comparison\n- Product feature mapping for categorization",
+        "integrationRequirements": "## Integration Requirements\n\n- Read access to Customer Feedback Database\n- API access to Support Ticket system\n- Write access to Report Storage system\n- Email integration for report distribution",
+        "assumptions": "- Feedback data is available in structured format\n- Historical data exists for trend analysis\n- Stakeholders will act on report insights\n- English language support is sufficient for v1\n- Existing infrastructure can support the solution",
+        "risks": "## Technical Risks\n\n- **Data Quality**: Inconsistent feedback formats may affect analysis accuracy\n- **API Limitations**: Rate limits could delay processing during peak times\n- **Scale**: Large feedback volumes may exceed performance constraints\n\n## Business Risks\n\n- **Adoption**: Stakeholders may not act on insights\n- **Accuracy**: False insights could lead to poor decisions\n- **Maintenance**: Ongoing tuning required for accuracy",
+        "outOfScope": "- Real-time feedback analysis (batch processing only)\n- Direct customer response automation\n- Feedback collection mechanisms\n- Multi-language support (English only for v1)\n- Integration with external analytics platforms\n- Custom visualization dashboards\n- Predictive analytics or forecasting",
+        "successCriteria": "## Primary Success Criteria\n\n1. 95% of feedback items successfully analyzed each week\n2. Reports delivered by Monday 9 AM each week\n3. Sentiment analysis accuracy above 85%\n\n## Secondary Success Criteria\n\n- Report generation time under 5 minutes\n- Zero PII data exposure in reports\n- Actionable insights identified in 80% of reports\n\n## Key Metrics\n\n- Number of feedback items processed\n- Sentiment analysis accuracy rate\n- Report delivery timeliness\n- User satisfaction with report insights"
+      },
+      "design": {
+        "agentHierarchy": {
+          "name": "Customer Feedback Analyzer",
+          "description": "Orchestrates the analysis of customer feedback from multiple sources and generates comprehensive weekly reports with actionable insights.",
+          "type": "Loop",
+          "purpose": "Automate customer feedback analysis and reporting",
+          "actions": [
+            {
+              "id": "run-query-001",
+              "name": "Run Query",
+              "reason": "Execute SQL queries to fetch customer feedback data from the database weekly"
+            },
+            {
+              "id": "web-api-call-001",
+              "name": "Web API Call",
+              "reason": "Retrieve support ticket data from the support system API"
+            },
+            {
+              "id": "generate-report-001",
+              "name": "Generate Report",
+              "reason": "Create formatted reports in PDF/HTML/JSON formats for distribution"
+            },
+            {
+              "id": "send-email-001",
+              "name": "Send Email",
+              "reason": "Distribute weekly reports to stakeholders every Monday morning"
+            }
+          ],
+          "prompt": {
+            "systemPrompt": "",
+            "templateVariables": "",
+            "promptNotes": ""
+          },
+          "payloadDownstreamPaths": ["*"],
+          "payloadUpstreamPaths": ["analysis.*", "reports.*"],
+          "subAgents": [
+            {
+              "name": "Data Collector Agent",
+              "description": "Gathers customer feedback data from all configured sources",
+              "type": "Loop",
+              "purpose": "Aggregate and normalize feedback data from multiple sources",
+              "actions": [
+                {
+                  "id": "run-query-001",
+                  "name": "Run Query",
+                  "reason": "Query feedback database for raw customer feedback"
+                },
+                {
+                  "id": "web-api-call-001",
+                  "name": "Web API Call",
+                  "reason": "Fetch support tickets from API"
+                }
+              ],
+              "prompt": {
+                "systemPrompt": "",
+                "templateVariables": "",
+                "promptNotes": ""
+              },
+              "payloadDownstreamPaths": ["metadata.*", "requirements.*"],
+              "payloadUpstreamPaths": ["data.*"],
+              "executionOrder": 1,
+              "exposeAsAction": false,
+              "iconClass": "fa-solid fa-database"
+            },
+            {
+              "name": "Sentiment Analyzer Agent",
+              "description": "Performs sentiment analysis and categorization on collected feedback",
+              "type": "Loop",
+              "purpose": "Analyze emotional tone and categorize feedback by type",
+              "actions": [
+                {
+                  "id": "text-analyzer-001",
+                  "name": "Text Analyzer",
+                  "reason": "Analyze sentiment and extract themes from feedback text"
+                }
+              ],
+              "prompt": {
+                "systemPrompt": "",
+                "templateVariables": "",
+                "promptNotes": ""
+              },
+              "payloadDownstreamPaths": ["metadata.*", "data.*"],
+              "payloadUpstreamPaths": ["analysis.sentiment.*"],
+              "executionOrder": 2,
+              "exposeAsAction": false,
+              "iconClass": "fa-solid fa-heart"
+            },
+            {
+              "name": "Report Builder Agent",
+              "description": "Compiles analysis results into formatted reports",
+              "type": "Loop",
+              "purpose": "Create comprehensive reports with visualizations",
+              "actions": [
+                {
+                  "id": "generate-report-001",
+                  "name": "Generate Report",
+                  "reason": "Compile analysis into multiple report formats"
+                }
+              ],
+              "prompt": {
+                "systemPrompt": "",
+                "templateVariables": "",
+                "promptNotes": ""
+              },
+              "payloadDownstreamPaths": ["metadata.*", "analysis.*"],
+              "payloadUpstreamPaths": ["reports.*"],
+              "executionOrder": 3,
+              "exposeAsAction": false,
+              "iconClass": "fa-solid fa-file-chart"
+            }
+          ],
+          "executionOrder": 0,
+          "exposeAsAction": true,
+          "iconClass": "fa-solid fa-comments"
+        },
+        "architecture": {
+          "executionFlow": "Sequential execution: Data Collector → Sentiment Analyzer → Report Builder. Each sub-agent completes before the next begins.",
+          "dataFlow": "Data flows through payload sections: raw data → analysis results → formatted reports. Each agent updates specific payload sections.",
+          "errorHandling": "Graceful degradation with partial results. Failed sub-agents log errors but don't block subsequent agents. Final report includes processing status."
+        }
+      },
+      "prompts": {
+        "Customer Feedback Analyzer": {
+          "systemPrompt": "# Customer Feedback Analyzer System Prompt\n\n## Role\nYou are the Customer Feedback Analyzer, the orchestrator responsible for analyzing customer feedback from multiple sources and generating comprehensive weekly reports with actionable insights.\n\n## Context\n- **Current Date/Time**: {{ _CURRENT_DATE_AND_TIME }}\n- **User**: {{ _USER_NAME }}\n- **Organization**: {{ _ORGANIZATION_NAME }}\n- **Feedback Sources**: {{ feedbackSources }}\n\n## Responsibilities\n1. **Data Coordination**: Orchestrate data collection from multiple sources\n2. **Analysis Management**: Coordinate sentiment analysis and categorization\n3. **Report Generation**: Compile results into comprehensive weekly reports\n4. **Quality Assurance**: Ensure accuracy and completeness of analysis\n\n## Sub-Agents\n- **Data Collector Agent**: Gathers raw feedback data\n- **Sentiment Analyzer Agent**: Performs sentiment analysis and categorization\n- **Report Builder Agent**: Compiles analysis into formatted reports\n\n## Process Workflow\n1. **Initialize**: Set up processing parameters and data sources\n2. **Collect**: Delegate data collection to Data Collector Agent\n3. **Analyze**: Coordinate sentiment analysis through Sentiment Analyzer Agent\n4. **Compile**: Generate reports through Report Builder Agent\n5. **Validate**: Ensure quality and completeness\n6. **Distribute**: Send reports to stakeholders\n\n{{ _AGENT_TYPE_SYSTEM_PROMPT }}",
+          "templateVariables": "## Template Variables\n\n| Variable | Description | Source |\n|----------|-------------|--------|\n| `feedbackSources` | List of configured data sources | Runtime context |\n| `_CURRENT_DATE_AND_TIME` | Current timestamp | System |\n| `_USER_NAME` | Current user name | System |\n| `_ORGANIZATION_NAME` | Organization name | System |\n| `_AGENT_TYPE_SYSTEM_PROMPT` | Loop agent control structure | Agent Type |",
+          "promptNotes": "## Prompt Analysis\n\n### Metrics\n- **Estimated Tokens**: ~600 tokens\n- **Complexity**: Medium\n- **Clarity**: Excellent\n\n### Strengths\n1. **Clear Orchestration Role**: Defines coordination responsibilities\n2. **Sub-Agent Integration**: Clear delegation to specialized agents\n3. **Process Structure**: Well-defined workflow steps\n4. **Quality Focus**: Emphasizes validation and accuracy\n\n### Optimization Opportunities\n1. **Error Handling**: Could add more specific error scenarios\n2. **Performance Metrics**: Consider adding SLA requirements\n3. **Feedback Loop**: Add mechanism for continuous improvement"
+        },
+        "Sentiment Analyzer Agent": {
+          "systemPrompt": "# Sentiment Analyzer Agent System Prompt\n\n## Role\nYou are the Sentiment Analyzer Agent, a specialized sub-agent responsible for performing sentiment analysis and categorization on customer feedback data.\n\n## Context\n- **Current Date/Time**: {{ _CURRENT_DATE_AND_TIME }}\n- **Parent Agent**: Customer Feedback Analyzer\n- **Processing Batch**: {{ batchId }}\n- **Feedback Items**: {{ feedbackCount }}\n\n## Responsibilities\n1. **Sentiment Analysis**: Analyze emotional tone of feedback\n2. **Content Categorization**: Classify feedback by product feature and issue type\n3. **Theme Extraction**: Extract key themes and topics\n\n## Available Actions\n- **Text Analyzer**: Performs NLP analysis on text content\n\n## Quality Standards\n- Maintain 85%+ sentiment classification accuracy\n- Process each feedback item within 100ms\n- Provide confidence scores for all classifications\n\n{{ _AGENT_TYPE_SYSTEM_PROMPT }}",
+          "templateVariables": "## Template Variables\n\n| Variable | Description | Source |\n|----------|-------------|--------|\n| `batchId` | Unique identifier for the current processing batch | Runtime context |\n| `feedbackCount` | Number of feedback items in current batch | Runtime context |\n| `_CURRENT_DATE_AND_TIME` | Current timestamp for logging | System |\n| `_AGENT_TYPE_SYSTEM_PROMPT` | Loop agent control structure | Agent Type |",
+          "promptNotes": "## Prompt Analysis\n\n### Metrics\n- **Estimated Tokens**: ~400 tokens\n- **Complexity**: Medium\n- **Clarity**: Excellent\n\n### Strengths\n1. **Focused Role**: Clear specialization in sentiment analysis\n2. **Quality Standards**: Specific performance requirements\n3. **Action Integration**: Clear use of available actions\n\n### Optimization Opportunities\n1. **Error Handling**: Add specific error recovery procedures\n2. **Performance Tuning**: Consider batch processing optimizations"
+        }
+      }
     }
   },
-  "reasoning": "Created a focused prompt that clearly defines the sentiment analysis role, provides specific instructions for each responsibility, and includes concrete output specifications. The prompt balances detail with conciseness.",
+  "reasoning": "Created comprehensive prompts for the main agent and key sub-agents. Each prompt is tailored to the specific role and includes appropriate context, responsibilities, and quality standards. The prompts support proper payload management and sub-agent coordination.",
   "promptComplete": true
 }

@@ -38,15 +38,18 @@ export class CreateSubAgentAction extends CreateAgentAction {
         }
 
         // Map ParentAgentID to ParentID for the base class
-        const mappedParams = {
-            ...params,
-            Params: params.Params.map(p => {
-                if (p.Name === 'ParentAgentID') {
-                    return { ...p, Name: 'ParentID' };
-                }
-                return p;
-            })
-        };
+        const mappedParams = new RunActionParams();
+        mappedParams.Action = params.Action;
+        mappedParams.ContextUser = params.ContextUser;
+        mappedParams.SkipActionLog = params.SkipActionLog;
+        mappedParams.Filters = params.Filters;
+        mappedParams.Context = params.Context;
+        mappedParams.Params = params.Params.map(p => {
+            if (p.Name === 'ParentAgentID') {
+                return { ...p, Name: 'ParentID' };
+            }
+            return p;
+        });
 
         // Call the parent class implementation with mapped parameters
         return super.InternalRunAction(mappedParams);

@@ -3,6 +3,7 @@ import { RegisterClass } from "@memberjunction/global";
 import { AIAgentActionEntity } from "@memberjunction/core-entities";
 import { BaseAgentManagementAction } from "./base-agent-management.action";
 import { BaseAction } from "@memberjunction/actions";
+import { RunView } from "@memberjunction/core";
 
 /**
  * Associates an action with an agent.
@@ -29,11 +30,11 @@ export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
             const permissionError = await this.validateAgentManagerPermission(params);
             if (permissionError) return permissionError;
 
-            // Extract parameters
-            const agentIDResult = this.getStringParam(params, 'AgentID');
+            // Extract and validate UUID parameters
+            const agentIDResult = this.getUuidParam(params, 'AgentID');
             if (agentIDResult.error) return agentIDResult.error;
 
-            const actionIDResult = this.getStringParam(params, 'ActionID');
+            const actionIDResult = this.getUuidParam(params, 'ActionID');
             if (actionIDResult.error) return actionIDResult.error;
 
             const statusResult = this.getStringParam(params, 'Status', false);
@@ -45,6 +46,29 @@ export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
 
             // TODO: Validate action exists
             // This would require loading the Action entity to ensure it's valid
+
+            // Check if association already exists
+            const rv = new RunView();
+            const existingAssociation = await rv.RunView({
+                EntityName: 'AI Agent Actions',
+                ExtraFilter: `AgentID='${agentIDResult.value}' AND ActionID='${actionIDResult.value}'`,
+            }, params.ContextUser);
+
+            if (!existingAssociation.Success) {
+                return {
+                    Success: false,
+                    ResultCode: 'QUERY_FAILED',
+                    Message: `Failed to check for existing association: ${existingAssociation.ErrorMessage}`
+                };
+            }
+
+            if (existingAssociation.Results && existingAssociation.Results.length > 0) {
+                return {
+                    Success: false,
+                    ResultCode: 'ASSOCIATION_EXISTS',
+                    Message: `Action is already associated with this agent`
+                };
+            }
 
             // Create the association
             const md = this.getMetadata();
@@ -62,7 +86,7 @@ export class AssociateActionWithAgentAction extends BaseAgentManagementAction {
             agentAction.NewRecord();
             agentAction.AgentID = agentIDResult.value!;
             agentAction.ActionID = actionIDResult.value!;
-            switch (status.toLowerCase()) {
+            switch (status?.toLowerCase()) {
                 case 'active':
                     agentAction.Status = 'Active';
                     break;          

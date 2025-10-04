@@ -591,6 +591,101 @@ The runtime uses SHA-256 hashing to ensure cached components are up-to-date:
 - **Local Registry** (`registry` field undefined): Components stored in local database
 - **External Registry** (`registry` field defined): Components fetched from remote registries via MJServer
 
+## Debug Configuration
+
+The React runtime includes comprehensive debug logging that can be controlled via environment configuration. This is useful for troubleshooting component loading, compilation, and runtime issues.
+
+### Enabling Debug Mode
+
+Debug mode controls verbose console logging throughout the React runtime. When enabled, you'll see detailed information about:
+
+- Component compilation and registration
+- Library loading and initialization
+- Component lifecycle events
+- Method registration and invocation
+- Cache hits and misses
+- Performance metrics
+
+### Configuration Methods
+
+#### Option 1: Angular Environment (Recommended for MJExplorer)
+
+Set the `DEBUG` flag in your Angular environment files:
+
+```typescript
+// In environment.development.ts
+export const environment = {
+  // ... other settings
+  DEBUG: true  // Enable detailed debug logging
+};
+
+// In main.ts (before Angular bootstraps)
+import { environment } from './environments/environment';
+import { ReactDebugConfig } from '@memberjunction/ng-react';
+
+ReactDebugConfig.setDebugMode(environment.DEBUG || false);
+```
+
+#### Option 2: Window Global (For Quick Testing)
+
+Useful for temporarily enabling debug mode without changing code:
+
+```typescript
+// In browser console or before React components load
+(window as any).__MJ_REACT_DEBUG_MODE__ = true;
+```
+
+#### Option 3: Direct API Call
+
+Call the API directly in your initialization code:
+
+```typescript
+import { ReactDebugConfig } from '@memberjunction/ng-react';
+
+// Enable debug mode
+ReactDebugConfig.setDebugMode(true);
+
+// Check current debug mode
+const isDebug = ReactDebugConfig.getDebugMode();
+```
+
+### Debug Mode Priority
+
+The debug mode follows this priority order (highest to lowest):
+
+1. **Window global override** (`__MJ_REACT_DEBUG_MODE__`) - Highest priority
+2. **Static property** (set via `setDebugMode()` or environment) - Default
+3. **Default** - `false` (debug disabled)
+
+### When to Enable Debug Mode
+
+✅ **Enable in these scenarios:**
+- During local development
+- When troubleshooting component loading failures
+- When debugging component compilation errors
+- When investigating library dependency issues
+- When analyzing runtime performance
+
+❌ **Disable in these scenarios:**
+- Production environments (cleaner console output)
+- Staging environments (unless actively debugging)
+- Performance profiling (reduces console overhead)
+- Automated testing (reduces noise in logs)
+
+### Example Debug Output
+
+When debug mode is enabled, you'll see output like:
+
+```
+[ReactRuntime] Compiling component: Dashboard
+[ReactRuntime] Component registered: Dashboard (namespace: analytics, version: 1.0.0)
+[ReactRuntime] Loading library: lodash (version: 4.17.21)
+[ReactRuntime] Library loaded successfully: lodash
+[ReactRuntime] Cache hit for component: Chart@analytics:1.0.0
+[ReactRuntime] Method registered: getCurrentDataState
+[ReactRuntime] Component hierarchy loaded: 5 components in 234ms
+```
+
 ## Configuration
 
 ### Compiler Configuration
