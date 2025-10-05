@@ -49,33 +49,59 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
         </div>
       </div>
 
-      <!-- Scrollable Messages Area -->
-      <div class="chat-messages-container">
-        <mj-conversation-message-list
-          [messages]="messages"
-          [conversation]="conversationState.activeConversation"
-          [currentUser]="currentUser"
-          [isProcessing]="isProcessing"
-          [artifactMap]="artifactsByDetailId"
-          (replyInThread)="onReplyInThread($event)"
-          (viewThread)="onViewThread($event)"
-          (retryMessage)="onRetryMessage($event)"
-          (artifactClicked)="onArtifactClicked($event)"
-          (messageEdited)="onMessageEdited($event)">
-        </mj-conversation-message-list>
-      </div>
+      <!-- Messages and Artifact Splitter -->
+      <div class="chat-content-area">
+        <kendo-splitter orientation="horizontal">
+          <!-- Messages Pane -->
+          <kendo-splitter-pane
+            [size]="showArtifactPanel ? '60%' : '100%'"
+            [min]="'300px'"
+            [resizable]="showArtifactPanel"
+            [collapsible]="false">
+            <div class="chat-messages-wrapper">
+              <div class="chat-messages-container">
+                <mj-conversation-message-list
+                  [messages]="messages"
+                  [conversation]="conversationState.activeConversation"
+                  [currentUser]="currentUser"
+                  [isProcessing]="isProcessing"
+                  [artifactMap]="artifactsByDetailId"
+                  (replyInThread)="onReplyInThread($event)"
+                  (viewThread)="onViewThread($event)"
+                  (retryMessage)="onRetryMessage($event)"
+                  (artifactClicked)="onArtifactClicked($event)"
+                  (messageEdited)="onMessageEdited($event)">
+                </mj-conversation-message-list>
+              </div>
 
-      <!-- Fixed Input Area -->
-      <div class="chat-input-container">
-        <mj-message-input
-          *ngIf="conversationState.activeConversation"
-          [conversationId]="conversationState.activeConversation.ID"
-          [currentUser]="currentUser"
-          [conversationHistory]="messages"
-          [disabled]="isProcessing"
-          (messageSent)="onMessageSent($event)"
-          (agentResponse)="onAgentResponse($event)">
-        </mj-message-input>
+              <!-- Fixed Input Area -->
+              <div class="chat-input-container">
+                <mj-message-input
+                  *ngIf="conversationState.activeConversation"
+                  [conversationId]="conversationState.activeConversation.ID"
+                  [currentUser]="currentUser"
+                  [conversationHistory]="messages"
+                  [disabled]="isProcessing"
+                  (messageSent)="onMessageSent($event)"
+                  (agentResponse)="onAgentResponse($event)">
+                </mj-message-input>
+              </div>
+            </div>
+          </kendo-splitter-pane>
+        </kendo-splitter>
+
+          <!-- Artifact Viewer Pane -->
+          @if (showArtifactPanel && selectedArtifactId) {
+            <kendo-splitter-pane
+              [min]="'300px'"
+              [resizable]="true"
+              [collapsible]="false">
+              <mj-artifact-viewer-panel
+                [artifactId]="selectedArtifactId"
+                [currentUser]="currentUser">
+              </mj-artifact-viewer-panel>
+            </kendo-splitter-pane>
+          }
       </div>
     </div>
 
@@ -132,15 +158,6 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 
     <!-- Active Tasks Panel -->
     <mj-active-tasks-panel></mj-active-tasks-panel>
-
-    <!-- Artifact Viewer Panel -->
-    @if (showArtifactPanel && selectedArtifactId) {
-      <mj-artifact-viewer-panel
-        [artifactId]="selectedArtifactId"
-        [currentUser]="currentUser"
-        (closed)="onCloseArtifactPanel()">
-      </mj-artifact-viewer-panel>
-    }
   `,
   styles: [`
     .chat-area {
@@ -290,6 +307,19 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
       background: #DBEAFE;
       color: #1e3a8a;
     }
+    .chat-content-area {
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .chat-splitter {
+      height: 100%;
+    }
+    .chat-messages-wrapper {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
     .chat-messages-container {
       flex: 1;
       overflow-y: auto;
@@ -301,6 +331,48 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
       flex-shrink: 0;
       background: #FFF;
       z-index: 10;
+    }
+    .artifact-panel-wrapper {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #FAFAFA;
+    }
+    .artifact-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-bottom: 1px solid #E5E7EB;
+      background: white;
+    }
+    .artifact-panel-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    .artifact-panel-title i {
+      color: #6B7280;
+    }
+    .artifact-panel-close {
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: #6B7280;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+    .artifact-panel-close:hover {
+      background: #F3F4F6;
+      color: #111827;
+    }
+    .artifact-panel-content {
+      flex: 1;
+      overflow: hidden;
     }
     .modal-overlay {
       position: fixed;

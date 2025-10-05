@@ -10,7 +10,6 @@ import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-enti
 export class ArtifactViewerPanelComponent implements OnInit {
   @Input() artifactId!: string;
   @Input() currentUser!: UserInfo;
-  @Output() closed = new EventEmitter<void>();
 
   public artifact: ArtifactEntity | null = null;
   public artifactVersion: ArtifactVersionEntity | null = null;
@@ -44,7 +43,6 @@ export class ArtifactViewerPanelComponent implements OnInit {
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID='${this.artifactId}'`,
         OrderBy: 'VersionNumber DESC',
-        MaxRows: 1,
         ResultType: 'entity_object'
       }, this.currentUser);
 
@@ -60,10 +58,6 @@ export class ArtifactViewerPanelComponent implements OnInit {
     } finally {
       this.isLoading = false;
     }
-  }
-
-  onClose(): void {
-    this.closed.emit();
   }
 
   onCopyToClipboard(): void {
