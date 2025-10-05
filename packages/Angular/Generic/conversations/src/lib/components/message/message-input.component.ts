@@ -25,6 +25,7 @@ export class MessageInputComponent implements OnInit {
 
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
+  @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string, conversationDetailId: string}>();
 
   @ViewChild('messageTextarea') messageTextarea!: ElementRef;
 
@@ -479,6 +480,8 @@ export class MessageInputComponent implements OnInit {
       if (!junctionSaved) {
         console.error('Failed to create artifact-message association');
       }
+
+      this.artifactCreated.emit({ artifactId: artifact.ID, versionId: version.ID, conversationDetailId: message.ID });
     } catch (error) {
       console.error('Error creating artifact from payload:', error);
     }
