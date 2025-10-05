@@ -1,0 +1,180 @@
+<div class="chat-area">
+    <!-- Fixed Header -->
+    <div class="chat-header" *ngIf="conversationState.activeConversation as conversation">
+    <div class="chat-info">
+        <div class="chat-title">{{ conversation.Name }}</div>
+        <button class="project-tag" (click)="openProjectSelector()" title="Assign to project" *ngIf="conversation.ProjectID">
+        <i class="fas fa-folder"></i>
+        <span>{{ conversation.Project || 'Project' }}</span>
+        </button>
+        <button class="chat-members" (click)="toggleMembersModal()" title="View members">
+        <i class="fas fa-users"></i>
+        <span>{{ memberCount }} member{{ memberCount !== 1 ? 's' : '' }}</span>
+        </button>
+        <button class="artifact-indicator" (click)="viewArtifacts()" title="View artifacts" *ngIf="artifactCount > 0">
+        <i class="fas fa-cube"></i>
+        <span>{{ artifactCount }} artifact{{ artifactCount !== 1 ? 's' : '' }}</span>
+        </button>
+        <mj-tasks-dropdown [currentUser]="currentUser"></mj-tasks-dropdown>
+        <mj-active-agent-indicator
+        [conversationId]="conversationState.activeConversation.ID"
+        [currentUser]="currentUser"
+        (togglePanel)="onToggleAgentPanel()"
+        (agentSelected)="onAgentSelected($event)">
+        </mj-active-agent-indicator>
+    </div>
+    <div class="chat-actions">
+        <button class="action-btn" (click)="exportConversation()" title="Export conversation">
+        <i class="fas fa-download"></i>
+        Export
+        </button>
+        <button class="action-btn share-btn"
+                [class.shared]="isShared"
+                (click)="shareConversation()"
+                [title]="isShared ? 'Manage sharing' : 'Share conversation'">
+        <i class="fas fa-share-nodes"></i>
+        Share
+        </button>
+    </div>
+    </div>
+
+    <!-- Messages and Artifact Split Layout -->
+    <div class="chat-content-area">
+    <!-- Messages Pane -->
+    <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
+        <div class="chat-messages-wrapper">
+        <div class="chat-messages-container">
+            <mj-conversation-message-list
+            [messages]="messages"
+            [conversation]="conversationState.activeConversation"
+            [currentUser]="currentUser"
+            [isProcessing]="isProcessing"
+            [artifactMap]="artifactsByDetailId"
+            (replyInThread)="onReplyInThread($event)"
+            (viewThread)="onViewThread($event)"
+            (retryMessage)="onRetryMessage($event)"
+            (artifactClicked)="onArtifactClicked($event)"
+            (messageEdited)="onMessageEdited($event)">
+            </mj-conversation-message-list>
+        </div>
+
+        <!-- Fixed Input Area -->
+        <div class="chat-input-container">
+            <mj-message-input
+            *ngIf="conversationState.activeConversation"
+            [conversationId]="conversationState.activeConversation.ID"
+            [currentUser]="currentUser"
+            [conversationHistory]="messages"
+            [disabled]="isProcessing"
+            (messageSent)="onMessageSent($event)"
+            (agentResponse)="onAgentResponse($event)"
+            (artifactCreated)="onArtifactCreated($event)"
+            (conversationRenamed)="onConversationRenamed($event)">
+            </mj-message-input>
+        </div>
+        </div>
+    </div>
+
+    <!-- Artifact Viewer Pane -->
+    @if (showArtifactPanel && selectedArtifactId) {
+        <div class="resize-handle" (mousedown)="onResizeStart($event)"></div>
+        <div class="chat-artifact-pane" [style.width.%]="artifactPaneWidth">
+        <mj-artifact-viewer-panel
+            [artifactId]="selectedArtifactId"
+            [currentUser]="currentUser"
+            (closed)="onCloseArtifactPanel()">
+        </mj-artifact-viewer-panel>
+        </div>
+    }
+    </div>
+</div>
+
+<!-- Thread Panel -->
+@if (conversationState.activeThreadId) {
+    <mj-thread-panel
+    [parentMessageId]="conversationState.activeThreadId"
+    [conversationId]="conversationState.activeConversation?.ID || ''"
+    [currentUser]="currentUser"
+    (closed)="onThreadClosed()"
+    (replyAdded)="onThreadReplyAdded($event)">
+    </mj-thread-panel>
+}
+
+<!-- Export Modal -->
+<mj-export-modal
+    [isVisible]="showExportModal"
+    [conversation]="conversationState.activeConversation || undefined"
+    [currentUser]="currentUser"
+    (cancelled)="onExportModalCancelled()"
+    (exported)="onExportModalComplete()">
+</mj-export-modal>
+
+<!-- Members Modal -->
+<mj-members-modal
+    [isVisible]="showMembersModal"
+    [conversation]="conversationState.activeConversation || undefined"
+    [currentUser]="currentUser"
+    (cancelled)="showMembersModal = false"
+    (membersChanged)="showMembersModal = false">
+</mj-members-modal>
+
+<!-- Project Selector Modal -->
+@if (showProjectSelector && conversationState.activeConversation) {
+    <div class="modal-overlay" (click)="showProjectSelector = false">
+    <div class="modal-content project-selector-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+        <h3>Assign Project</h3>
+        <button class="modal-close-btn" (click)="showProjectSelector = false">
+            <i class="fas fa-times"></i>
+        </button>
+        </div>
+        <div class="modal-body">
+        <mj-project-selector
+            [environmentId]="environmentId"
+            [currentUser]="currentUser"
+            [selectedProjectId]="conversationState.activeConversation.ProjectID"
+            (projectSelected)="onProjectSelected($event)">
+        </mj-project-selector>
+        </div>
+    </div>
+    </div>
+}
+
+<!-- Active Tasks Panel -->
+<mj-active-tasks-panel></mj-active-tasks-panel>
+
+<!-- Artifacts Modal -->
+@if (showArtifactsModal) {
+    <div class="modal-overlay" (click)="showArtifactsModal = false">
+    <div class="modal-content artifacts-modal" (click)="$event.stopPropagation()">
+        <div class="modal-header">
+        <h3>Conversation Artifacts</h3>
+        <button class="modal-close-btn" (click)="showArtifactsModal = false">
+            <i class="fas fa-times"></i>
+        </button>
+        </div>
+        <div class="modal-body artifacts-grid">
+        @if (artifactsByDetailId.size === 0) {
+            <div class="empty-state">
+            <i class="fas fa-cube" style="font-size: 48px; color: #D1D5DB; margin-bottom: 16px;"></i>
+            <p style="color: #6B7280; font-size: 14px;">No artifacts in this conversation yet</p>
+            </div>
+        }
+        @for (artifact of getArtifactsArray(); track artifact.artifactId) {
+            <div class="artifact-modal-card" (click)="openArtifactFromModal(artifact.artifactId)">
+            <div class="artifact-modal-icon">
+                <i class="fas fa-file-code"></i>
+            </div>
+            <div class="artifact-modal-info">
+                <div class="artifact-modal-title">Artifact {{artifact.artifactId.substring(0, 8)}}</div>
+                <div class="artifact-modal-meta">Version {{artifact.versionId.substring(0, 8)}}</div>
+            </div>
+            <div class="artifact-modal-action">
+                <i class="fas fa-external-link-alt"></i>
+            </div>
+            </div>
+        }
+        </div>
+    </div>
+    </div>
+}

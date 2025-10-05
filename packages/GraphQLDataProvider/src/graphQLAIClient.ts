@@ -1,6 +1,8 @@
 import { LogError } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
+import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
+import { SafeJSONParse } from "@memberjunction/global";
 
 /**
  * Client for executing AI operations through GraphQL.
@@ -291,7 +293,7 @@ export class GraphQLAIClient {
      * }
      * ```
      */
-    public async RunAIAgent(params: RunAIAgentParams): Promise<RunAIAgentResult> {
+    public async RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
         try {
             // Build the mutation
             const mutation = gql`
@@ -318,7 +320,7 @@ export class GraphQLAIClient {
                         success
                         errorMessage
                         executionTimeMs
-                        payload
+                        result
                     }
                 }
             `;
@@ -330,7 +332,7 @@ export class GraphQLAIClient {
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
 
             // Process and return the result
-            return this.processAgentResult(result);
+            return this.processAgentResult(result.RunAIAgent?.result);
         } catch (e) {
             return this.handleAgentError(e);
         }
@@ -342,20 +344,17 @@ export class GraphQLAIClient {
      * @returns The prepared variables for GraphQL
      * @private
      */
-    private prepareAgentVariables(params: RunAIAgentParams): Record<string, any> {
+    private prepareAgentVariables(params: ExecuteAgentParams): Record<string, any> {
         const variables: Record<string, any> = {
-            agentId: params.agentId,
-            messages: JSON.stringify(params.messages),
-            sessionId: params.sessionId
+            agentId: params.agent.ID,
+            messages: JSON.stringify(params.conversationMessages),
+            sessionId: this._dataProvider.sessionId
         };
 
         // Serialize optional complex objects to JSON strings
         if (params.data !== undefined) {
             variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
-        }
-        if (params.templateData !== undefined) {
-            variables.templateData = typeof params.templateData === 'object' ? JSON.stringify(params.templateData) : params.templateData;
-        }
+        } 
 
         // Add optional scalar parameters
         if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
@@ -371,30 +370,8 @@ export class GraphQLAIClient {
      * @returns The processed RunAIAgentResult
      * @private
      */
-    private processAgentResult(result: any): RunAIAgentResult {
-        if (!result?.RunAIAgent) {
-            throw new Error("Invalid response from server");
-        }
-
-        const agentResult = result.RunAIAgent;
-
-        // Parse the payload if it's a JSON string
-        let payload: any;
-        try {
-            if (agentResult.payload) {
-                payload = JSON.parse(agentResult.payload);
-            }
-        } catch (e) {
-            // Keep as string if parsing fails
-            payload = agentResult.payload;
-        }
-
-        return {
-            success: agentResult.success,
-            errorMessage: agentResult.errorMessage,
-            executionTimeMs: agentResult.executionTimeMs,
-            payload
-        };
+    private processAgentResult(result: string): ExecuteAgentResult {
+        return SafeJSONParse(result) as ExecuteAgentResult;        
     }
 
     /**
@@ -403,12 +380,12 @@ export class GraphQLAIClient {
      * @returns An error result
      * @private
      */
-    private handleAgentError(e: unknown): RunAIAgentResult {
+    private handleAgentError(e: unknown): ExecuteAgentResult {
         const error = e as Error;
         LogError(`Error running AI agent: ${error}`);
         return {
             success: false,
-            errorMessage: error.message || 'Unknown error occurred'
+            agentRun: undefined
         };
     }
 
@@ -876,73 +853,4 @@ export interface RunAIPromptResult {
      */
     chatResult?: any;
 }
-
-/**
- * Parameters for running an AI agent
- */
-export interface RunAIAgentParams {
-    /**
-     * The ID of the AI agent to run
-     */
-    agentId: string;
-    
-    /**
-     * Conversation messages
-     */
-    messages: Array<{ role: string; content: string }>;
-    
-    /**
-     * Session ID for maintaining conversation context
-     */
-    sessionId: string;
-    
-    /**
-     * Data context to pass to the agent (will be JSON serialized)
-     */
-    data?: Record<string, any>;
-    
-    /**
-     * Template data for agent templating (will be JSON serialized)
-     */
-    templateData?: Record<string, any>;
-    
-    /**
-     * ID of the last agent run for context continuity
-     */
-    lastRunId?: string;
-    
-    /**
-     * Auto-populate the last run payload
-     */
-    autoPopulateLastRunPayload?: boolean;
-    
-    /**
-     * Configuration ID to use
-     */
-    configurationId?: string;
-}
-
-/**
- * Result from running an AI agent
- */
-export interface RunAIAgentResult {
-    /**
-     * Whether the agent execution was successful
-     */
-    success: boolean;
-    
-    /**
-     * Error message if the execution failed
-     */
-    errorMessage?: string;
-    
-    /**
-     * Execution time in milliseconds
-     */
-    executionTimeMs?: number;
-    
-    /**
-     * The agent's response payload (parsed from JSON)
-     */
-    payload?: any;
-}
+ 

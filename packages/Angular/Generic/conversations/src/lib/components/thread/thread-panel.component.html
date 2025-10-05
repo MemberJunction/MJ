@@ -1,0 +1,90 @@
+<div class="thread-panel-overlay" (click)="onClose()"></div>
+
+<div class="thread-panel">
+  <div class="thread-header">
+    <div class="thread-title">
+      <i class="fa-solid fa-comments"></i>
+      <span>Thread</span>
+    </div>
+    <button class="close-btn" (click)="onClose()" title="Close thread">
+      <i class="fa-solid fa-times"></i>
+    </button>
+  </div>
+
+  @if (isLoading) {
+    <div class="thread-loading">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      <span>Loading thread...</span>
+    </div>
+  }
+
+  @if (errorMessage && !isLoading) {
+    <div class="thread-error">
+      <i class="fa-solid fa-exclamation-circle"></i>
+      <span>{{ errorMessage }}</span>
+    </div>
+  }
+
+  @if (!isLoading && !errorMessage && parentMessage) {
+    <div class="thread-content">
+      <!-- Parent Message -->
+      <div class="parent-message">
+        <div class="message-header">
+          <span class="message-sender">{{ getSenderName(parentMessage) }}</span>
+          <span class="message-time">{{ getMessageTime(parentMessage) }}</span>
+        </div>
+        <div class="message-body">
+          {{ getMessageText(parentMessage) }}
+        </div>
+        <div class="reply-count">
+          <i class="fa-solid fa-reply"></i>
+          <span>{{ replyCountText }}</span>
+        </div>
+      </div>
+
+      <!-- Replies List -->
+      <div class="replies-container">
+        @if (replies.length === 0) {
+          <div class="no-replies">
+            <i class="fa-solid fa-message"></i>
+            <span>No replies yet. Be the first to reply!</span>
+          </div>
+        }
+
+        @for (reply of replies; track reply.ID) {
+          <div class="reply-item" [class.ai-reply]="reply.Role === 'AI'">
+            <div class="reply-header">
+              <span class="reply-sender">{{ getSenderName(reply) }}</span>
+              <span class="reply-time">{{ getMessageTime(reply) }}</span>
+            </div>
+            <div class="reply-body">
+              {{ getMessageText(reply) }}
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Reply Input -->
+    <div class="reply-input-container">
+      <textarea
+        class="reply-input"
+        [(ngModel)]="replyText"
+        [disabled]="isSending"
+        placeholder="Reply to thread..."
+        rows="3"
+        (keydown.control.enter)="onSendReply()"
+        (keydown.meta.enter)="onSendReply()">
+      </textarea>
+      <div class="reply-actions">
+        <button
+          class="btn-send-reply"
+          [disabled]="!canSendReply"
+          (click)="onSendReply()">
+          <i class="fa-solid fa-paper-plane"></i>
+          <span>{{ isSending ? 'Sending...' : 'Reply' }}</span>
+        </button>
+      </div>
+    </div>
+  }
+</div>

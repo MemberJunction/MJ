@@ -22,7 +22,7 @@ export class AIAgentRunResult {
     executionTimeMs?: number;
 
     @Field()
-    payload: string; // JSON serialized ExecuteAgentResult with scalars only
+    result: string; // JSON serialized ExecuteAgentResult with scalars only
 }
 
 @ObjectType()
@@ -376,7 +376,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Create sanitized payload for JSON serialization
             const sanitizedResult = this.sanitizeAgentResult(result);
-            const payload = JSON.stringify(sanitizedResult);
+            const returnResult = JSON.stringify(sanitizedResult);
 
             // Log completion
             if (result.success) {
@@ -389,7 +389,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 success: result.success,
                 errorMessage: result.agentRun?.ErrorMessage || undefined,
                 executionTimeMs: executionTime,
-                payload
+                result: returnResult
             };
 
         } catch (error) {
@@ -407,7 +407,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 success: false,
                 errorMessage: errorResult.errorMessage,
                 executionTimeMs: executionTime,
-                payload: JSON.stringify(errorResult)
+                result: JSON.stringify(errorResult)
             };
         }
     }

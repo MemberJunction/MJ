@@ -1360,15 +1360,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
         try {
             // Get GraphQL data provider
             const dataProvider = Metadata.Provider as GraphQLDataProvider;
-
-            // Build conversation history for context
-            const messages = this.conversationMessages
-                .filter(m => !m.isStreaming)
-                .map(m => ({
-                    role: m.role as string,
-                    content: m.content as string
-                }));
-
+ 
             // Build data context - include conversation state if available
             const dataContext = this.buildDataContext();
             const templateData = this.buildTemplateData();
@@ -1383,20 +1375,15 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             if (this.subAgentHistory.length > 0) {
                 dataContext._subAgentHistory = this.subAgentHistory;
             }
-
-            // Generate a session ID for this execution
-            const sessionId = dataProvider.sessionId;
             
             // Execute the agent using the new AI client
             // Start typing animation while we wait for the first real stream
             this.startTypingAnimation(assistantMessage);
 
             const executionResult = await dataProvider.AI.RunAIAgent({
-                agentId: (this.entity as AIAgentEntityExtended).ID,
-                messages: messages,
-                sessionId: sessionId,
-                data: Object.keys(dataContext).length > 0 ? dataContext : undefined,
-                templateData: Object.keys(templateData).length > 0 ? templateData : undefined,
+                agent: this.entity as AIAgentEntityExtended,
+                conversationMessages: this.conversationMessages, 
+                data: Object.keys(dataContext).length > 0 ? dataContext : undefined, 
                 lastRunId: this.lastAgentRunId || undefined,
                 autoPopulateLastRunPayload: this.lastAgentRunId ? true : false,
                 configurationId: this.agentConfigurationId || undefined
@@ -1468,7 +1455,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 
                 assistantMessage.content = displayContent;
                 assistantMessage.payload = payloadData; // Store the payload if present
-                assistantMessage.executionTime = executionResult.executionTimeMs;
+                const startedAt = executionResult.agentRun?.StartedAt ? new Date(executionResult.agentRun.StartedAt).getTime() : 0;
+                const completedAt = executionResult.agentRun?.CompletedAt ? new Date(executionResult.agentRun.CompletedAt).getTime() : 0;
+                const executionTime = (startedAt && completedAt) ? (completedAt - startedAt) : 0;
+                assistantMessage.executionTime = executionTime;
                 assistantMessage.agentRunId = fullResult.agentRun?.ID || assistantMessage.agentRunId;
                 
                 // Update the tracking ID when we set new execution data
@@ -1487,12 +1477,12 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             } else {
                 console.error('❌ AI Test Harness: Execution failed', {
                     success: executionResult?.success,
-                    errorMessage: executionResult?.errorMessage,
+                    errorMessage: executionResult?.agentRun?.ErrorMessage,
                     hasPayload: !!executionResult?.payload
                 });
                 assistantMessage.content = 'I encountered an error processing your request.';
-                assistantMessage.error = executionResult?.errorMessage || 'Unknown error occurred';
-                
+                assistantMessage.error = executionResult?.agentRun?.ErrorMessage || 'Unknown error occurred';
+
                 // On failure, clear live steps and switch to historical mode
                 if (this.currentAgentRun) {
                     this.executionMonitorMode = 'historical';
