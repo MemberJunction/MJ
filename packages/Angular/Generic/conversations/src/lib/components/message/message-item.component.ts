@@ -31,6 +31,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactId?: string;
   @Input() public artifactVersionId?: string;
+  @Input() public generationTimeSeconds?: number;
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -172,6 +173,23 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get hasArtifact(): boolean {
     return !!this.artifactVersionId;
+  }
+
+  public get formattedGenerationTime(): string | null {
+    if (!this.generationTimeSeconds || this.isUserMessage) {
+      return null;
+    }
+
+    const seconds = this.generationTimeSeconds;
+    if (seconds < 1) {
+      return `${(seconds * 1000).toFixed(0)}ms`;
+    } else if (seconds < 60) {
+      return `${seconds.toFixed(1)}s`;
+    } else {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}m ${secs}s`;
+    }
   }
 
   public get messageClasses(): string {

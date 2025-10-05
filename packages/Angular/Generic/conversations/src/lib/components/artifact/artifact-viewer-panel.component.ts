@@ -10,6 +10,7 @@ import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-enti
 export class ArtifactViewerPanelComponent implements OnInit {
   @Input() artifactId!: string;
   @Input() currentUser!: UserInfo;
+  @Output() closed = new EventEmitter<void>();
 
   public artifact: ArtifactEntity | null = null;
   public artifactVersion: ArtifactVersionEntity | null = null;
@@ -64,5 +65,9 @@ export class ArtifactViewerPanelComponent implements OnInit {
     if (this.jsonContent) {
       navigator.clipboard.writeText(this.jsonContent);
     }
+  }
+
+  onClose(): void {
+    this.closed.emit();
   }
 }

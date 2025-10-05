@@ -12,13 +12,16 @@
 
   <div class="workspace-content">
     <!-- Left Sidebar (hidden when Collections view is active) -->
-    <div class="workspace-sidebar" *ngIf="isSidebarVisible && activeTab !== 'collections'">
+    <div class="workspace-sidebar" *ngIf="isSidebarVisible && activeTab !== 'collections'" [style.width.px]="sidebarWidth">
       <mj-conversation-sidebar
         [activeTab]="activeTab"
         [environmentId]="environmentId"
         [currentUser]="currentUser">
       </mj-conversation-sidebar>
     </div>
+
+    <!-- Resize handle for sidebar -->
+    <div class="sidebar-resize-handle" *ngIf="isSidebarVisible && activeTab !== 'collections'" (mousedown)="onSidebarResizeStart($event)"></div>
 
     <!-- Collections Full-Panel View -->
     <div class="workspace-main" *ngIf="activeTab === 'collections'">

@@ -7,9 +7,16 @@
 
   <div class="message-content">
     <div class="message-header">
-      <span class="message-sender">{{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : currentUser.Name }}</span>
-      <span class="agent-badge" *ngIf="isAIMessage">{{ aiAgentInfo?.role || 'AI Assistant' }}</span>
+      <span class="message-sender" [title]="isAIMessage ? (aiAgentInfo?.role || 'AI Assistant') : ''">
+        {{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : currentUser.Name }}
+      </span>
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
+
+      <!-- Generation time for completed AI messages -->
+      <span *ngIf="!isUserMessage && formattedGenerationTime && !isTemporaryMessage" class="generation-time">
+        <i class="fas fa-clock"></i>
+        {{ formattedGenerationTime }}
+      </span>
 
       <!-- Status indicator for user messages -->
       <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">

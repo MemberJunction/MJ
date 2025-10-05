@@ -59,6 +59,7 @@ import { SearchPanelComponent } from './components/search/search-panel.component
 import { NotificationBadgeComponent } from './components/notification/notification-badge.component';
 import { ActivityIndicatorComponent } from './components/notification/activity-indicator.component';
 import { ToastComponent } from './components/toast/toast.component';
+import { InputDialogComponent } from './components/dialogs/input-dialog.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -101,7 +102,8 @@ const COMPONENTS = [
   SearchPanelComponent,
   NotificationBadgeComponent,
   ActivityIndicatorComponent,
-  ToastComponent
+  ToastComponent,
+  InputDialogComponent
 ];
 
 @NgModule({

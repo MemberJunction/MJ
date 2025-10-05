@@ -95,10 +95,26 @@
 }
 
 .message-time {
-  margin-left: auto;
   color: #9CA3AF;
   font-size: 12px;
   font-weight: 400;
+}
+
+.generation-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #E0F2FE;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #0369A1;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.generation-time i {
+  font-size: 10px;
 }
 
 .message-elapsed {

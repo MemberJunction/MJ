@@ -49,59 +49,52 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
         </div>
       </div>
 
-      <!-- Messages and Artifact Splitter -->
+      <!-- Messages and Artifact Split Layout -->
       <div class="chat-content-area">
-        <kendo-splitter orientation="horizontal">
-          <!-- Messages Pane -->
-          <kendo-splitter-pane
-            [size]="showArtifactPanel ? '60%' : '100%'"
-            [min]="'300px'"
-            [resizable]="showArtifactPanel"
-            [collapsible]="false">
-            <div class="chat-messages-wrapper">
-              <div class="chat-messages-container">
-                <mj-conversation-message-list
-                  [messages]="messages"
-                  [conversation]="conversationState.activeConversation"
-                  [currentUser]="currentUser"
-                  [isProcessing]="isProcessing"
-                  [artifactMap]="artifactsByDetailId"
-                  (replyInThread)="onReplyInThread($event)"
-                  (viewThread)="onViewThread($event)"
-                  (retryMessage)="onRetryMessage($event)"
-                  (artifactClicked)="onArtifactClicked($event)"
-                  (messageEdited)="onMessageEdited($event)">
-                </mj-conversation-message-list>
-              </div>
-
-              <!-- Fixed Input Area -->
-              <div class="chat-input-container">
-                <mj-message-input
-                  *ngIf="conversationState.activeConversation"
-                  [conversationId]="conversationState.activeConversation.ID"
-                  [currentUser]="currentUser"
-                  [conversationHistory]="messages"
-                  [disabled]="isProcessing"
-                  (messageSent)="onMessageSent($event)"
-                  (agentResponse)="onAgentResponse($event)">
-                </mj-message-input>
-              </div>
+        <!-- Messages Pane -->
+        <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
+          <div class="chat-messages-wrapper">
+            <div class="chat-messages-container">
+              <mj-conversation-message-list
+                [messages]="messages"
+                [conversation]="conversationState.activeConversation"
+                [currentUser]="currentUser"
+                [isProcessing]="isProcessing"
+                [artifactMap]="artifactsByDetailId"
+                (replyInThread)="onReplyInThread($event)"
+                (viewThread)="onViewThread($event)"
+                (retryMessage)="onRetryMessage($event)"
+                (artifactClicked)="onArtifactClicked($event)"
+                (messageEdited)="onMessageEdited($event)">
+              </mj-conversation-message-list>
             </div>
-          </kendo-splitter-pane>
-        </kendo-splitter>
 
-          <!-- Artifact Viewer Pane -->
-          @if (showArtifactPanel && selectedArtifactId) {
-            <kendo-splitter-pane
-              [min]="'300px'"
-              [resizable]="true"
-              [collapsible]="false">
-              <mj-artifact-viewer-panel
-                [artifactId]="selectedArtifactId"
-                [currentUser]="currentUser">
-              </mj-artifact-viewer-panel>
-            </kendo-splitter-pane>
-          }
+            <!-- Fixed Input Area -->
+            <div class="chat-input-container">
+              <mj-message-input
+                *ngIf="conversationState.activeConversation"
+                [conversationId]="conversationState.activeConversation.ID"
+                [currentUser]="currentUser"
+                [conversationHistory]="messages"
+                [disabled]="isProcessing"
+                (messageSent)="onMessageSent($event)"
+                (agentResponse)="onAgentResponse($event)">
+              </mj-message-input>
+            </div>
+          </div>
+        </div>
+
+        <!-- Artifact Viewer Pane -->
+        @if (showArtifactPanel && selectedArtifactId) {
+          <div class="resize-handle" (mousedown)="onResizeStart($event)"></div>
+          <div class="chat-artifact-pane" [style.width.%]="artifactPaneWidth">
+            <mj-artifact-viewer-panel
+              [artifactId]="selectedArtifactId"
+              [currentUser]="currentUser"
+              (closed)="onCloseArtifactPanel()">
+            </mj-artifact-viewer-panel>
+          </div>
+        }
       </div>
     </div>
 
@@ -160,9 +153,15 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
     <mj-active-tasks-panel></mj-active-tasks-panel>
   `,
   styles: [`
+    :host {
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
     .chat-area {
       display: flex;
       flex-direction: column;
+      width: 100%;
       height: 100%;
       overflow: hidden;
     }
@@ -311,14 +310,63 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
       flex: 1;
       min-height: 0;
       overflow: hidden;
+      display: flex;
+      flex-direction: row;
+      position: relative;
     }
-    .chat-splitter {
-      height: 100%;
-    }
-    .chat-messages-wrapper {
+    .chat-messages-pane {
       height: 100%;
       display: flex;
       flex-direction: column;
+      min-width: 300px;
+      overflow: hidden;
+      transition: width 0.3s ease;
+    }
+    .chat-messages-pane.full-width {
+      width: 100%;
+    }
+    .chat-messages-pane:not(.full-width) {
+      flex: 1;
+    }
+    .resize-handle {
+      width: 4px;
+      background: transparent;
+      cursor: col-resize;
+      flex-shrink: 0;
+      position: relative;
+      transition: background-color 0.2s;
+    }
+    .resize-handle:hover {
+      background: #3B82F6;
+    }
+    .resize-handle::before {
+      content: '';
+      position: absolute;
+      left: -4px;
+      right: -4px;
+      top: 0;
+      bottom: 0;
+    }
+    .chat-artifact-pane {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      background: #FAFAFA;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .chat-artifact-pane > mj-artifact-viewer-panel {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .chat-messages-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
     }
     .chat-messages-container {
       flex: 1;
@@ -330,49 +378,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
     .chat-input-container {
       flex-shrink: 0;
       background: #FFF;
-      z-index: 10;
-    }
-    .artifact-panel-wrapper {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      background: #FAFAFA;
-    }
-    .artifact-panel-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 16px;
-      border-bottom: 1px solid #E5E7EB;
-      background: white;
-    }
-    .artifact-panel-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #333;
-    }
-    .artifact-panel-title i {
-      color: #6B7280;
-    }
-    .artifact-panel-close {
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      color: #6B7280;
-      padding: 4px 8px;
-      border-radius: 4px;
-      transition: all 0.2s;
-    }
-    .artifact-panel-close:hover {
-      background: #F3F4F6;
-      color: #111827;
-    }
-    .artifact-panel-content {
-      flex: 1;
-      overflow: hidden;
+      border-top: 1px solid #E5E7EB;
     }
     .modal-overlay {
       position: fixed;
@@ -447,9 +453,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showProjectSelector: boolean = false;
   public showArtifactPanel: boolean = false;
   public selectedArtifactId: string | null = null;
+  public artifactPaneWidth: number = 40; // Default 40% width
 
   // Artifact mapping: ConversationDetailID -> {artifactId, versionId}
   public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string}>();
+
+  // Resize state
+  private isResizing: boolean = false;
+  private startX: number = 0;
+  private startWidth: number = 0;
+
+  // LocalStorage key
+  private readonly ARTIFACT_PANE_WIDTH_KEY = 'mj-conversations-artifact-pane-width';
 
   constructor(
     public conversationState: ConversationStateService,
@@ -459,10 +474,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   ) {}
 
   ngOnInit() {
+    // Load saved artifact pane width
+    this.loadArtifactPaneWidth();
+
     // Initial load if there's already an active conversation
     if (this.conversationState.activeConversationId) {
       this.onConversationChanged(this.conversationState.activeConversationId);
     }
+
+    // Setup resize listeners
+    window.addEventListener('mousemove', this.onResizeMove.bind(this));
+    window.addEventListener('mouseup', this.onResizeEnd.bind(this));
   }
 
   ngDoCheck() {
@@ -477,10 +499,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   ngOnDestroy() {
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
+
+    // Remove resize listeners
+    window.removeEventListener('mousemove', this.onResizeMove.bind(this));
+    window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
     this.activeTasks.clear();
+
+    // Hide artifact panel when conversation changes
+    this.showArtifactPanel = false;
+    this.selectedArtifactId = null;
 
     if (conversationId) {
       await this.loadMessages(conversationId);
@@ -529,7 +559,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       if (messagesResult.Success) {
         const loadedMessages = messagesResult.Results || [];
 
-        // Map AgentID from agent runs to messages
+        // Map AgentID and generation time from agent runs to messages
         if (agentRunsResult.Success && agentRunsResult.Results) {
           const agentRunsByDetailId = new Map<string, AIAgentRunEntity>();
           for (const run of agentRunsResult.Results) {
@@ -538,11 +568,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
             }
           }
 
-          // Populate AgentID on messages
+          // Populate AgentID and generation time on messages
           for (const message of loadedMessages) {
             const agentRun = agentRunsByDetailId.get(message.ID);
             if (agentRun && agentRun.AgentID) {
               (message as any).AgentID = agentRun.AgentID;
+
+              // Calculate generation time in seconds
+              if (agentRun.StartedAt && agentRun.CompletedAt) {
+                const durationMs = new Date(agentRun.CompletedAt).getTime() - new Date(agentRun.StartedAt).getTime();
+                (message as any).GenerationTimeSeconds = durationMs / 1000;
+              }
             }
           }
         }
@@ -778,5 +814,66 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    */
   public getArtifactInfo(conversationDetailId: string): {artifactId: string; versionId: string} | undefined {
     return this.artifactsByDetailId.get(conversationDetailId);
+  }
+
+  /**
+   * Resize handle methods for artifact pane
+   */
+  onResizeStart(event: MouseEvent): void {
+    this.isResizing = true;
+    this.startX = event.clientX;
+    this.startWidth = this.artifactPaneWidth;
+    event.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  private onResizeMove(event: MouseEvent): void {
+    if (!this.isResizing) return;
+
+    const containerWidth = (event.currentTarget as Window).innerWidth;
+    const deltaX = this.startX - event.clientX; // Reversed: drag left = wider artifact pane
+    const deltaPercent = (deltaX / containerWidth) * 100;
+    let newWidth = this.startWidth + deltaPercent;
+
+    // Constrain between 20% and 70%
+    newWidth = Math.max(20, Math.min(70, newWidth));
+    this.artifactPaneWidth = newWidth;
+  }
+
+  private onResizeEnd(event: MouseEvent): void {
+    if (this.isResizing) {
+      this.isResizing = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+
+      // Save to localStorage
+      this.saveArtifactPaneWidth();
+    }
+  }
+
+  /**
+   * LocalStorage persistence methods for artifact pane
+   */
+  private loadArtifactPaneWidth(): void {
+    try {
+      const saved = localStorage.getItem(this.ARTIFACT_PANE_WIDTH_KEY);
+      if (saved) {
+        const width = parseFloat(saved);
+        if (!isNaN(width) && width >= 20 && width <= 70) {
+          this.artifactPaneWidth = width;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load artifact pane width from localStorage:', error);
+    }
+  }
+
+  private saveArtifactPaneWidth(): void {
+    try {
+      localStorage.setItem(this.ARTIFACT_PANE_WIDTH_KEY, this.artifactPaneWidth.toString());
+    } catch (error) {
+      console.warn('Failed to save artifact pane width to localStorage:', error);
+    }
   }
 }

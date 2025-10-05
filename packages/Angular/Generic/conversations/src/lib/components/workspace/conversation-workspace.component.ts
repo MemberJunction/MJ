@@ -43,8 +43,17 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isArtifactPanelOpen: boolean = false;
   public isSearchPanelOpen: boolean = false;
 
+  // Resize state
+  public sidebarWidth: number = 260; // Default width
+  private isSidebarResizing: boolean = false;
+  private sidebarResizeStartX: number = 0;
+  private sidebarResizeStartWidth: number = 0;
+
   private previousConversationId: string | null = null;
   private destroy$ = new Subject<void>();
+
+  // LocalStorage keys
+  private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
 
   constructor(
     public conversationState: ConversationStateService,
@@ -54,6 +63,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async ngOnInit() {
+    // Load saved sidebar width from localStorage
+    this.loadSidebarWidth();
+
+    // Setup resize listeners
+    window.addEventListener('mousemove', this.onSidebarResizeMove.bind(this));
+    window.addEventListener('mouseup', this.onSidebarResizeEnd.bind(this));
+
     // Initialize AI Engine to load agent metadata cache
     // This ensures agent names and icons are available for display
     try {
@@ -97,6 +113,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
+
+    // Remove resize listeners
+    window.removeEventListener('mousemove', this.onSidebarResizeMove.bind(this));
+    window.removeEventListener('mouseup', this.onSidebarResizeEnd.bind(this));
   }
 
   onTabChanged(tab: NavigationTab): void {
@@ -134,5 +154,64 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // For now, just open the conversation
 
     this.closeSearch();
+  }
+
+  /**
+   * Sidebar resize methods
+   */
+  onSidebarResizeStart(event: MouseEvent): void {
+    this.isSidebarResizing = true;
+    this.sidebarResizeStartX = event.clientX;
+    this.sidebarResizeStartWidth = this.sidebarWidth;
+    event.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  private onSidebarResizeMove(event: MouseEvent): void {
+    if (!this.isSidebarResizing) return;
+
+    const deltaX = event.clientX - this.sidebarResizeStartX;
+    let newWidth = this.sidebarResizeStartWidth + deltaX;
+
+    // Constrain between 200px and 500px
+    newWidth = Math.max(200, Math.min(500, newWidth));
+    this.sidebarWidth = newWidth;
+  }
+
+  private onSidebarResizeEnd(event: MouseEvent): void {
+    if (this.isSidebarResizing) {
+      this.isSidebarResizing = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+
+      // Save to localStorage
+      this.saveSidebarWidth();
+    }
+  }
+
+  /**
+   * LocalStorage persistence methods
+   */
+  private loadSidebarWidth(): void {
+    try {
+      const saved = localStorage.getItem(this.SIDEBAR_WIDTH_KEY);
+      if (saved) {
+        const width = parseInt(saved, 10);
+        if (!isNaN(width) && width >= 200 && width <= 500) {
+          this.sidebarWidth = width;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load sidebar width from localStorage:', error);
+    }
+  }
+
+  private saveSidebarWidth(): void {
+    try {
+      localStorage.setItem(this.SIDEBAR_WIDTH_KEY, this.sidebarWidth.toString());
+    } catch (error) {
+      console.warn('Failed to save sidebar width to localStorage:', error);
+    }
   }
 }
