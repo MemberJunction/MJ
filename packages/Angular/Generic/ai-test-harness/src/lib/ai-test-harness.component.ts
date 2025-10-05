@@ -1640,7 +1640,13 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             if (executionResult?.success) {
                 // Use parsedResult if available, otherwise fall back to output
-                assistantMessage.content = executionResult.parsedResult || executionResult.output || 'No response generated';
+                // Handle case where parsedResult is already an object (from GraphQL client)
+                const contentToDisplay = executionResult.parsedResult
+                    ? (typeof executionResult.parsedResult === 'object'
+                        ? JSON.stringify(executionResult.parsedResult, null, 2)
+                        : executionResult.parsedResult)
+                    : (executionResult.output || 'No response generated');
+                assistantMessage.content = contentToDisplay;
                 assistantMessage.executionTime = executionResult.executionTimeMs;
                 
                 // Store the complete execution result for JSON display

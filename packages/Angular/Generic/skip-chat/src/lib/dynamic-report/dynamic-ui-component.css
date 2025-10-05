@@ -54,16 +54,30 @@
 
 /* Both buttons use the same white/secondary style */
 .tab-action-button.create-button,
-.tab-action-button.print-button {
+.tab-action-button.print-button,
+.tab-action-button.feedback-button {
   background-color: white;
   color: #333;
   border-color: #e0e0e0;
 }
 
 .tab-action-button.create-button:hover:not(:disabled),
-.tab-action-button.print-button:hover:not(:disabled) {
+.tab-action-button.print-button:hover:not(:disabled),
+.tab-action-button.feedback-button:hover:not(:disabled) {
   background-color: #f5f5f5;
   border-color: #d0d0d0;
+}
+
+/* Feedback button active state */
+.tab-action-button.feedback-button.active {
+  background-color: #3B82F6;
+  color: white;
+  border-color: #3B82F6;
+}
+
+.tab-action-button.feedback-button.active:hover:not(:disabled) {
+  background-color: #2563EB;
+  border-color: #2563EB;
 }
 
 /* Toggle buttons styling */

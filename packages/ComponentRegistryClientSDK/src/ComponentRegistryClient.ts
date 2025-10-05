@@ -11,7 +11,9 @@ import {
   DependencyTree,
   RegistryError,
   RegistryErrorCode,
-  RetryPolicy
+  RetryPolicy,
+  ComponentFeedbackParams,
+  ComponentFeedbackResponse
 } from './types';
 
 /**
@@ -236,12 +238,37 @@ export class ComponentRegistryClient {
    */
   async ping(): Promise<boolean> {
     const path = '/api/v1/health';
-    
+
     try {
       await this.makeRequest('GET', path);
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Submit feedback for a component
+   */
+  async submitFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
+    const path = '/api/v1/feedback';
+
+    try {
+      const response = await this.makeRequest('POST', path, params);
+      return response as ComponentFeedbackResponse;
+    } catch (error) {
+      if (error instanceof RegistryError) {
+        // Return structured error response
+        return {
+          success: false,
+          error: error.message
+        };
+      }
+      // Return generic error response
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to submit feedback'
+      };
     }
   }
 

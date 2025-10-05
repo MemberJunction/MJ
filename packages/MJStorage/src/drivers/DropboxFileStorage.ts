@@ -2,12 +2,13 @@ import { Dropbox } from 'dropbox';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * FileStorageBase implementation for Dropbox cloud storage
@@ -75,13 +76,16 @@ export class DropboxFileStorage extends FileStorageBase {
    */
   constructor() {
     super();
-    
+
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('dropbox');
+
     // Dropbox auth can be via access token or refresh token
-    const accessToken = env.get('STORAGE_DROPBOX_ACCESS_TOKEN').asString();
-    const refreshToken = env.get('STORAGE_DROPBOX_REFRESH_TOKEN').asString();
-    const appKey = env.get('STORAGE_DROPBOX_APP_KEY').asString();
-    const appSecret = env.get('STORAGE_DROPBOX_APP_SECRET').asString();
-    
+    const accessToken = config?.accessToken || env.get('STORAGE_DROPBOX_ACCESS_TOKEN').asString();
+    const refreshToken = config?.refreshToken || env.get('STORAGE_DROPBOX_REFRESH_TOKEN').asString();
+    const appKey = config?.clientID || env.get('STORAGE_DROPBOX_APP_KEY').asString();
+    const appSecret = config?.clientSecret || env.get('STORAGE_DROPBOX_APP_SECRET').asString();
+
     if (accessToken) {
       // Use access token directly
       this._client = new Dropbox({ accessToken });
@@ -95,10 +99,10 @@ export class DropboxFileStorage extends FileStorageBase {
     } else {
       throw new Error('Dropbox storage requires either STORAGE_DROPBOX_ACCESS_TOKEN or STORAGE_DROPBOX_REFRESH_TOKEN with APP_KEY and APP_SECRET');
     }
-    
+
     // Root path, optional (defaults to empty which is root)
-    this._rootPath = env.get('STORAGE_DROPBOX_ROOT_PATH').default('').asString();
-    
+    this._rootPath = config?.rootPath || env.get('STORAGE_DROPBOX_ROOT_PATH').default('').asString();
+
     // Ensure root path starts with / if not empty
     if (this._rootPath && !this._rootPath.startsWith('/')) {
       this._rootPath = '/' + this._rootPath;

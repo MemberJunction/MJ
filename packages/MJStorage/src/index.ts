@@ -7,3 +7,4 @@ export * from './drivers/DropboxFileStorage';
 export * from './drivers/BoxFileStorage';
 export * from './generic/FileStorageBase';
 export * from './util';
+export * from './config';
