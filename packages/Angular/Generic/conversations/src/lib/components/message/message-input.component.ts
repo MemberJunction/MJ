@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -15,7 +15,7 @@ import { ExecuteAgentResult } from '@memberjunction/ai-core-plus';
   templateUrl: './message-input.component.html',
   styleUrl: './message-input.component.scss'
 })
-export class MessageInputComponent {
+export class MessageInputComponent implements OnInit {
   @Input() conversationId!: string;
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
@@ -31,6 +31,7 @@ export class MessageInputComponent {
   public messageText: string = '';
   public isSending: boolean = false;
   public isProcessing: boolean = false; // True when waiting for agent/naming response
+  public converationManagerAgent: AIAgentEntityExtended | null = null;
 
   constructor(
     private dialogService: DialogService,
@@ -39,6 +40,10 @@ export class MessageInputComponent {
     private conversationState: ConversationStateService,
     private activeTasks: ActiveTasksService
   ) {}
+
+  async ngOnInit() {
+    this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
+  }
 
   get canSend(): boolean {
     return !this.disabled && !this.isSending && this.messageText.trim().length > 0;
@@ -206,7 +211,7 @@ export class MessageInputComponent {
     const agentName = payload.invokeAgent;
     const reasoning = payload.reasoning || 'Delegating to specialist agent';
 
-    console.log(`🎯 Sub-agent invocation requested: ${agentName}`, { reasoning });
+    console.log(`👉 Sub-agent invocation requested: ${agentName}`, { reasoning });
 
     // Create a status message showing agent invocation
     const md = new Metadata();
@@ -215,12 +220,14 @@ export class MessageInputComponent {
       this.currentUser
     );
 
+
     statusMessage.ConversationID = this.conversationId;
     statusMessage.Role = 'AI';
-    statusMessage.Message = `🎯 Delegating to **${agentName}**\n\n${reasoning}`;
+    statusMessage.Message = `👉 **${agentName}** will handle this request...`;
     statusMessage.ParentID = userMessage.ID; // Thread under user message
     statusMessage.Status = 'Complete'; // Mark as complete immediately
     statusMessage.HiddenToUser = false;
+    statusMessage.AgentID = this.converationManagerAgent?.ID || null; // Mark as from Conversation Manager
 
     await statusMessage.Save();
     this.messageSent.emit(statusMessage);
@@ -263,7 +270,7 @@ export class MessageInputComponent {
 
         // Store the agent ID for display
         if (subResult.agentRun.AgentID) {
-          (agentResponseMessage as any).AgentID = subResult.agentRun.AgentID;
+          agentResponseMessage.AgentID = subResult.agentRun.AgentID;
         }
 
         await agentResponseMessage.Save();
@@ -315,7 +322,7 @@ export class MessageInputComponent {
           agentResponseMessage.HiddenToUser = false;
 
           if (retryResult.agentRun.AgentID) {
-            (agentResponseMessage as any).AgentID = retryResult.agentRun.AgentID;
+            agentResponseMessage.AgentID = retryResult.agentRun.AgentID;
           }
 
           await agentResponseMessage.Save();
@@ -379,10 +386,14 @@ export class MessageInputComponent {
     agentMessage.Message = result.agentRun.Message;
     agentMessage.Role = 'AI';
     agentMessage.Status = 'Complete';
+    agentMessage.AgentID = this.converationManagerAgent?.ID || null; // Default to Conversation Manager
 
     // Populate denormalized AgentID for fast lookup
     if (result.agentRun.AgentID) {
       agentMessage.AgentID = result.agentRun.AgentID;
+      console.log(`✅ Set AgentID=${result.agentRun.AgentID} for message from agent`);
+    } else {
+      console.warn('⚠️ AgentID not found in agentRun result');
     }
 
     const saved = await agentMessage.Save();

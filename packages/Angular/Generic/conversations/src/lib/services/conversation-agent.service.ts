@@ -50,7 +50,7 @@ export class ConversationAgentService {
   /**
    * Get or load the Conversation Manager Agent
    */
-  private async getConversationManagerAgent(): Promise<AIAgentEntityExtended | null> {
+  public async getConversationManagerAgent(): Promise<AIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
       return this._conversationManagerAgent;
     }

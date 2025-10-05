@@ -144,6 +144,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.message.Role?.trim().toLowerCase() === 'user';
   }
 
+  public get isConversationManager(): boolean {
+    return this.aiAgentInfo?.name === 'Conversation Manager Agent' || this.aiAgentInfo?.name === 'Conversation Manager';
+  }
+
+  public get displayMessage(): string {
+    // For Conversation Manager, only show the delegation line (starts with emoji)
+    if (this.isConversationManager && this.message.Message) {
+      const delegationMatch = this.message.Message.match(/🤖.*Delegating to.*Agent.*/);
+      if (delegationMatch) {
+        return delegationMatch[0];
+      }
+    }
+    return this.message.Message || '';
+  }
+
   public get isTemporaryMessage(): boolean {
     return this.isAIMessage && (!this.message.ID || this.message.ID.length === 0);
   }

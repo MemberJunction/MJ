@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, DoCheck } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, DoCheck, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -151,6 +151,42 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 
     <!-- Active Tasks Panel -->
     <mj-active-tasks-panel></mj-active-tasks-panel>
+
+    <!-- Artifacts Modal -->
+    @if (showArtifactsModal) {
+      <div class="modal-overlay" (click)="showArtifactsModal = false">
+        <div class="modal-content artifacts-modal" (click)="$event.stopPropagation()">
+          <div class="modal-header">
+            <h3>Conversation Artifacts</h3>
+            <button class="modal-close-btn" (click)="showArtifactsModal = false">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body artifacts-grid">
+            @if (artifactsByDetailId.size === 0) {
+              <div class="empty-state">
+                <i class="fas fa-cube" style="font-size: 48px; color: #D1D5DB; margin-bottom: 16px;"></i>
+                <p style="color: #6B7280; font-size: 14px;">No artifacts in this conversation yet</p>
+              </div>
+            }
+            @for (artifact of getArtifactsArray(); track artifact.artifactId) {
+              <div class="artifact-modal-card" (click)="openArtifactFromModal(artifact.artifactId)">
+                <div class="artifact-modal-icon">
+                  <i class="fas fa-file-code"></i>
+                </div>
+                <div class="artifact-modal-info">
+                  <div class="artifact-modal-title">Artifact {{artifact.artifactId.substring(0, 8)}}</div>
+                  <div class="artifact-modal-meta">Version {{artifact.versionId.substring(0, 8)}}</div>
+                </div>
+                <div class="artifact-modal-action">
+                  <i class="fas fa-external-link-alt"></i>
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    }
   `,
   styles: [`
     :host {
@@ -435,6 +471,74 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
       overflow: auto;
       padding: 20px;
     }
+    .artifacts-modal {
+      width: 700px;
+      max-height: 600px;
+    }
+    .artifacts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 16px;
+    }
+    .empty-state {
+      grid-column: 1 / -1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 60px 20px;
+    }
+    .artifact-modal-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      background: white;
+      border: 1.5px solid #E5E7EB;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .artifact-modal-card:hover {
+      border-color: #3B82F6;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
+      transform: translateY(-2px);
+    }
+    .artifact-modal-icon {
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%);
+      border-radius: 10px;
+      color: #3B82F6;
+      flex-shrink: 0;
+    }
+    .artifact-modal-icon i {
+      font-size: 18px;
+    }
+    .artifact-modal-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .artifact-modal-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1F2937;
+      margin-bottom: 4px;
+    }
+    .artifact-modal-meta {
+      font-size: 12px;
+      color: #6B7280;
+    }
+    .artifact-modal-action {
+      color: #9CA3AF;
+      transition: color 0.2s;
+    }
+    .artifact-modal-card:hover .artifact-modal-action {
+      color: #3B82F6;
+    }
   `]
 })
 export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck {
@@ -452,6 +556,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showMembersModal: boolean = false;
   public showProjectSelector: boolean = false;
   public showArtifactPanel: boolean = false;
+  public showArtifactsModal: boolean = false;
   public selectedArtifactId: string | null = null;
   public artifactPaneWidth: number = 40; // Default 40% width
 
@@ -470,7 +575,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     public conversationState: ConversationStateService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
-    private activeTasks: ActiveTasksService
+    private activeTasks: ActiveTasksService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   ngOnInit() {
@@ -621,6 +727,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         // Update artifact count for header display
         this.artifactCount = this.artifactsByDetailId.size;
 
+        // Debug: Log all artifacts to console
+        console.log(`📊 Artifact Count: ${this.artifactCount}`);
+        console.log(`📦 Artifacts by Detail ID:`, Array.from(this.artifactsByDetailId.entries()).map(([detailId, info]) => ({
+          conversationDetailId: detailId,
+          artifactId: info.artifactId,
+          versionId: info.versionId
+        })));
+
         // NOW set messages to trigger rendering (after artifacts are loaded)
         this.messages = loadedMessages;
       }
@@ -672,10 +786,80 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.messages = [...this.messages, message];
   }
 
-  onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): void {
+  async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
     console.log('Agent responded:', event.agentResult);
+
+    // Reload artifact mapping for this message to pick up newly created artifacts
+    await this.reloadArtifactsForMessage(event.message.ID);
+
+    // Auto-open artifact panel if this message has an artifact and no artifact is currently shown
+    if (this.artifactsByDetailId.has(event.message.ID) && !this.showArtifactPanel) {
+      const artifactInfo = this.artifactsByDetailId.get(event.message.ID);
+      if (artifactInfo) {
+        this.selectedArtifactId = artifactInfo.artifactId;
+        this.showArtifactPanel = true;
+      }
+    }
+
+    // Force change detection to update the UI
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Reload artifacts for a specific message ID
+   * Called after an artifact is created to update the UI immediately
+   */
+  private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
+    try {
+      const rv = new RunView();
+      const artifactsResult = await rv.RunView<ConversationDetailArtifactEntity>(
+        {
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: `ConversationDetailID='${conversationDetailId}' AND Direction='Output'`,
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (artifactsResult.Success && artifactsResult.Results && artifactsResult.Results.length > 0) {
+        // Load artifact versions to get ArtifactID
+        const versionIds = artifactsResult.Results.map(a => `'${a.ArtifactVersionID}'`).join(',');
+        const versionsResult = await rv.RunView<ArtifactVersionEntity>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${versionIds})`,
+            ResultType: 'entity_object'
+          },
+          this.currentUser
+        );
+
+        if (versionsResult.Success && versionsResult.Results) {
+          const versionToArtifact = new Map<string, string>();
+          for (const version of versionsResult.Results) {
+            versionToArtifact.set(version.ID, version.ArtifactID);
+          }
+
+          // Update artifact map
+          for (const artifact of artifactsResult.Results) {
+            const artifactId = versionToArtifact.get(artifact.ArtifactVersionID);
+            if (artifactId) {
+              this.artifactsByDetailId.set(conversationDetailId, {
+                artifactId: artifactId,
+                versionId: artifact.ArtifactVersionID
+              });
+              console.log(`✅ Loaded artifact ${artifactId} for message ${conversationDetailId}`);
+            }
+          }
+
+          // Update artifact count
+          this.artifactCount = this.artifactsByDetailId.size;
+        }
+      }
+    } catch (error) {
+      console.error('Failed to reload artifacts for message:', error);
+    }
   }
 
   openProjectSelector(): void {
@@ -687,8 +871,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   viewArtifacts(): void {
-    // TODO: Open artifacts view/modal
-    console.log('View artifacts');
+    this.showArtifactsModal = true;
+  }
+
+  getArtifactsArray(): Array<{artifactId: string; versionId: string}> {
+    return Array.from(this.artifactsByDetailId.values());
+  }
+
+  openArtifactFromModal(artifactId: string): void {
+    this.selectedArtifactId = artifactId;
+    this.showArtifactPanel = true;
+    this.showArtifactsModal = false;
   }
 
   exportConversation(): void {

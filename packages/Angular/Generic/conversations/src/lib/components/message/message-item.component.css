@@ -1,7 +1,7 @@
 .message-item {
   display: flex;
   gap: 12px;
-  padding: 12px 24px;
+  padding: 8px 24px;
   transition: background-color 150ms ease;
   animation: fadeIn 0.3s ease;
   position: relative;
@@ -159,42 +159,85 @@
 
 /* Artifact Card - Claude.ai Style */
 .artifact-card {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-  padding: 8px 12px;
-  border: 1px solid #D1D5DB;
-  border-radius: 6px;
-  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #F8F7FF 0%, #F3F2FF 100%);
   cursor: pointer;
-  transition: all 0.15s ease;
-  max-width: fit-content;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 500px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.artifact-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #8B5CF6 0%, #6366F1 100%);
+  opacity: 1;
 }
 
 .artifact-card:hover {
-  background: #F9FAFB;
-  border-color: #9CA3AF;
+  background: linear-gradient(135deg, #F3F2FF 0%, #EBE9FF 100%);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.12);
+  transform: translateY(-1px);
+}
+
+.artifact-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .artifact-card-icon {
-  width: 20px;
-  height: 20px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #6B7280;
+  color: #8B5CF6;
   flex-shrink: 0;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.artifact-card:hover .artifact-card-icon {
+  background: rgba(139, 92, 246, 0.15);
+  transform: scale(1.05);
 }
 
 .artifact-card-icon i {
-  font-size: 14px;
+  font-size: 18px;
+}
+
+.artifact-card-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .artifact-card-label {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: #374151;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.artifact-card-description {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1.5;
 }
 
 .message-actions {

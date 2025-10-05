@@ -31,7 +31,7 @@
     <div class="message-body">
       @if (!isEditing) {
         <div class="message-text">
-          <markdown [data]="message.Message"></markdown>
+          <markdown [data]="displayMessage"></markdown>
           @if (isMessageEdited) {
             <span class="edited-badge">(edited)</span>
           }
@@ -40,10 +40,15 @@
         <!-- Artifact Card (Claude.ai Style) -->
         @if (hasArtifact) {
           <div class="artifact-card" (click)="onArtifactClick()">
-            <div class="artifact-card-icon">
-              <i class="fas fa-file-code"></i>
+            <div class="artifact-card-header">
+              <div class="artifact-card-icon">
+                <i class="fas fa-file-code"></i>
+              </div>
+              <div class="artifact-card-content">
+                <div class="artifact-card-label">Generated Artifact</div>
+                <div class="artifact-card-description">Click to view the generated content</div>
+              </div>
             </div>
-            <span class="artifact-card-label">View Artifact</span>
           </div>
         }
       }
