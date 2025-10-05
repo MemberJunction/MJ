@@ -42,6 +42,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isSidebarVisible: boolean = true;
   public isArtifactPanelOpen: boolean = false;
   public isSearchPanelOpen: boolean = false;
+  public renamedConversationId: string | null = null;
 
   // Resize state
   public sidebarWidth: number = 260; // Default width
@@ -213,5 +214,16 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     } catch (error) {
       console.warn('Failed to save sidebar width to localStorage:', error);
     }
+  }
+
+  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+    console.log('✨ Workspace received rename event:', event);
+    // Trigger animation in sidebar by setting the ID
+    this.renamedConversationId = event.conversationId;
+
+    // Clear after animation completes (1500ms)
+    setTimeout(() => {
+      this.renamedConversationId = null;
+    }, 1500);
   }
 }

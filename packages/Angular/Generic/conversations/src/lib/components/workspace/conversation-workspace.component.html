@@ -16,7 +16,8 @@
       <mj-conversation-sidebar
         [activeTab]="activeTab"
         [environmentId]="environmentId"
-        [currentUser]="currentUser">
+        [currentUser]="currentUser"
+        [renamedConversationId]="renamedConversationId">
       </mj-conversation-sidebar>
     </div>
 
@@ -35,7 +36,8 @@
     <div class="workspace-main" *ngIf="activeTab !== 'collections'">
       <mj-conversation-chat-area
         [environmentId]="environmentId"
-        [currentUser]="currentUser">
+        [currentUser]="currentUser"
+        (conversationRenamed)="onConversationRenamed($event)">
       </mj-conversation-chat-area>
     </div>
 

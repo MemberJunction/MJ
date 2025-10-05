@@ -11,7 +11,8 @@ import { ConversationStateService } from '../../services/conversation-state.serv
       <div *ngIf="activeTab === 'conversations'" class="sidebar-content">
         <mj-conversation-list
           [environmentId]="environmentId"
-          [currentUser]="currentUser">
+          [currentUser]="currentUser"
+          [renamedConversationId]="renamedConversationId">
         </mj-conversation-list>
       </div>
       <div *ngIf="activeTab === 'collections'" class="sidebar-content">
@@ -52,6 +53,7 @@ export class ConversationSidebarComponent implements OnInit {
   @Input() activeTab: NavigationTab = 'conversations';
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() renamedConversationId: string | null = null;
 
   public activeConversationId: string | null = null;
 

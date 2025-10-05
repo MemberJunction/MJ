@@ -34,6 +34,7 @@ import { ToastService } from '../../services/toast.service';
             @for (conversation of conversationState.filteredConversations; track conversation.ID) {
               <div class="conversation-item"
                    [class.active]="conversation.ID === conversationState.activeConversationId"
+                   [class.renamed]="conversation.ID === renamedConversationId"
                    (click)="selectConversation(conversation)">
                 <div class="conversation-icon-wrapper">
                   <div class="conversation-icon">
@@ -218,11 +219,43 @@ import { ToastService } from '../../services/toast.service';
     .action-btn.pinned { color: #AAE7FD; }
     .action-btn.danger:hover { background: rgba(239,68,68,0.3); color: #ff6b6b; }
     .action-btn i { font-size: 11px; }
+
+    /* Rename Animation */
+    .conversation-item.renamed {
+      animation: renameHighlight 1500ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    @keyframes renameHighlight {
+      0% {
+        background: linear-gradient(90deg, rgba(59, 130, 246, 0.4), rgba(147, 51, 234, 0.4));
+        transform: scale(1.03);
+        box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+      }
+      25% {
+        background: linear-gradient(90deg, rgba(59, 130, 246, 0.35), rgba(147, 51, 234, 0.35));
+        box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+      }
+      50% {
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.3), rgba(59, 130, 246, 0.3));
+        transform: scale(1.02);
+        box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+      }
+      75% {
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.2), rgba(59, 130, 246, 0.2));
+        box-shadow: 0 0 5px rgba(16, 185, 129, 0.2);
+      }
+      100% {
+        background: transparent;
+        transform: scale(1);
+        box-shadow: none;
+      }
+    }
   `]
 })
 export class ConversationListComponent implements OnInit {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() renamedConversationId: string | null = null;
 
   public directMessagesExpanded: boolean = true;
 

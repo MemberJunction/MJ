@@ -158,7 +158,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           const artifactInfo = this.artifactMap.get(message.ID);
           instance.artifactId = artifactInfo?.artifactId;
           instance.artifactVersionId = artifactInfo?.versionId;
-          instance.generationTimeSeconds = (message as any).GenerationTimeSeconds;
         } else {
           // Create new component
           const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
@@ -173,7 +172,6 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           const artifactInfo = this.artifactMap.get(message.ID);
           instance.artifactId = artifactInfo?.artifactId;
           instance.artifactVersionId = artifactInfo?.versionId;
-          instance.generationTimeSeconds = (message as any).GenerationTimeSeconds;
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));

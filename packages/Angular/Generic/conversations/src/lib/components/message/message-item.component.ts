@@ -31,7 +31,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactId?: string;
   @Input() public artifactVersionId?: string;
-  @Input() public generationTimeSeconds?: number;
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -191,13 +190,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get formattedGenerationTime(): string | null {
-    if (!this.generationTimeSeconds || this.isUserMessage) {
+    // Only show generation time for AI messages
+    if (this.isUserMessage || !this.message.__mj_CreatedAt || !this.message.__mj_UpdatedAt) {
       return null;
     }
 
-    const seconds = this.generationTimeSeconds;
+    // Calculate generation time from created -> updated timestamps
+    const createdAt = new Date(this.message.__mj_CreatedAt);
+    const updatedAt = new Date(this.message.__mj_UpdatedAt);
+    const diffMs = updatedAt.getTime() - createdAt.getTime();
+
+    // If no time difference, don't show (e.g., not yet completed)
+    if (diffMs <= 0) {
+      return null;
+    }
+
+    const seconds = diffMs / 1000;
+
     if (seconds < 1) {
-      return `${(seconds * 1000).toFixed(0)}ms`;
+      return `${Math.round(diffMs)}ms`;
     } else if (seconds < 60) {
       return `${seconds.toFixed(1)}s`;
     } else {

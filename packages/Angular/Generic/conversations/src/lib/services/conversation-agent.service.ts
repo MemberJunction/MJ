@@ -220,6 +220,7 @@ export class ConversationAgentService {
    * @param message The user message that triggered this
    * @param conversationHistory Recent conversation history for context
    * @param reasoning Why this agent is being invoked
+   * @param payload Optional payload to pass to the agent (e.g., previous OUTPUT artifact for continuity)
    * @returns The agent's execution result, or null if agent not found
    */
   async invokeSubAgent(
@@ -227,7 +228,8 @@ export class ConversationAgentService {
     conversationId: string,
     message: ConversationDetailEntity,
     conversationHistory: ConversationDetailEntity[],
-    reasoning: string
+    reasoning: string,
+    payload?: any
   ): Promise<ExecuteAgentResult | null> {
     if (!this._aiClient) {
       const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
@@ -250,12 +252,12 @@ export class ConversationAgentService {
         return null;
       }
 
-      console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning });
+      console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload });
 
       // Build conversation messages for the sub-agent
       const conversationMessages = this.buildAgentMessages(conversationHistory, message);
 
-      // Prepare parameters
+      // Prepare parameters with optional payload
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
@@ -263,7 +265,8 @@ export class ConversationAgentService {
           conversationId: conversationId,
           latestMessageId: message.ID,
           invocationReason: reasoning
-        }
+        },
+        ...(payload ? { payload } : {})
       };
 
       // Run the sub-agent

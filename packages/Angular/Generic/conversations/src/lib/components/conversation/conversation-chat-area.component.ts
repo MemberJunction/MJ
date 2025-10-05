@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, DoCheck, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -14,6 +14,8 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+
+  @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
 
   public messages: ConversationDetailEntity[] = [];
   private previousConversationId: string | null = null;
@@ -553,5 +555,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     } catch (error) {
       console.warn('Failed to save artifact pane width to localStorage:', error);
     }
+  }
+
+  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
+    console.log('🎉 Conversation renamed:', event);
+    // Pass the event up to workspace component for animation
+    this.conversationRenamed.emit(event);
   }
 }
