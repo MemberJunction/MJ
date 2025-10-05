@@ -68,6 +68,7 @@
 .message-content {
   flex: 1;
   min-width: 0;
+  position: relative;
 }
 
 .message-header {
@@ -129,8 +130,7 @@
 
 .message-text {
   color: #333;
-  line-height: 1.6;
-  white-space: pre-wrap;
+  line-height: 1.5;
   word-wrap: break-word;
 }
 
@@ -241,52 +241,66 @@
 }
 
 .message-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
   display: flex;
-  gap: 4px;
+  gap: 2px;
   opacity: 0;
-  transition: opacity 150ms ease;
+  transform: translateY(4px);
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
 }
 
 .message-item:hover .message-actions {
   opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .message-action-btn {
-  padding: 4px 8px;
+  padding: 6px 8px;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 4px;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
-  color: #AAA;
-  font-size: 12px;
+  color: #6B7280;
+  font-size: 13px;
   transition: all 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
 }
 
 .message-action-btn:hover {
-  background-color: #F4F4F4;
-  border-color: #D9D9D9;
-  color: #333;
+  background-color: #F3F4F6;
+  color: #111827;
 }
 
 .message-action-btn.danger:hover {
-  background-color: #DC2626;
-  border-color: #DC2626;
-  color: white;
+  background-color: #FEE2E2;
+  color: #DC2626;
 }
 
 .message-action-btn.retry-btn {
   color: #3B82F6;
-  border-color: #3B82F6;
-  background: white;
+  background: #EFF6FF;
   font-weight: 600;
   gap: 6px;
-  display: inline-flex;
-  align-items: center;
+  padding: 6px 12px;
+  min-width: auto;
 }
 
 .message-action-btn.retry-btn:hover {
-  background-color: #3B82F6;
-  color: white;
+  background-color: #DBEAFE;
+  color: #2563EB;
 }
 
 /* Thread indicator badge */

@@ -464,6 +464,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       artifactId: data.artifactId,
       versionId: data.versionId
     });
+
+    // if we don't already have another artifact showing, let's show the newly created one
+    if (!this.showArtifactPanel) {
+      this.selectedArtifactId = data.artifactId;
+      this.showArtifactPanel = true;
+    }
+
+    this.artifactCount++; // increment artifact count
   }
 
   onCloseArtifactPanel(): void {
