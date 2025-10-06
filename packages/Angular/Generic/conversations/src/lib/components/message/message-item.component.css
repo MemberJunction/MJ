@@ -39,6 +39,33 @@
   background-color: rgba(0, 0, 0, 0.02);
 }
 
+/* Mention Pills */
+:host ::ng-deep .mention-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 2px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+:host ::ng-deep .mention-badge.agent {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+:host ::ng-deep .mention-badge.user {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+:host ::ng-deep .mention-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
 .message-avatar {
   flex-shrink: 0;
 }

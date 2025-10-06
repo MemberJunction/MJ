@@ -8,10 +8,12 @@ import {
   AfterViewInit,
   OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { MentionParserService } from '../../services/mention-parser.service';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 
 /**
  * Component for displaying a single message in a conversation
@@ -47,7 +49,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public editedText: string = '';
   private originalText: string = '';
 
-  constructor(private cdRef: ChangeDetectorRef) {
+  constructor(
+    private cdRef: ChangeDetectorRef,
+    private mentionParser: MentionParserService,
+    private mentionAutocomplete: MentionAutocompleteService
+  ) {
     super();
   }
 
@@ -148,14 +154,49 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get displayMessage(): string {
+    let text = this.message.Message || '';
+
     // For Conversation Manager, only show the delegation line (starts with emoji)
-    if (this.isConversationManager && this.message.Message) {
-      const delegationMatch = this.message.Message.match(/🤖.*Delegating to.*Agent.*/);
+    if (this.isConversationManager && text) {
+      const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
       if (delegationMatch) {
-        return delegationMatch[0];
+        text = delegationMatch[0];
       }
     }
-    return this.message.Message || '';
+
+    // Transform @mentions to HTML pills
+    return this.transformMentionsToHTML(text);
+  }
+
+  /**
+   * Transform @mentions in text to HTML badge elements
+   */
+  private transformMentionsToHTML(text: string): string {
+    if (!text) return '';
+
+    const agents = this.mentionAutocomplete.getAvailableAgents();
+    const users = this.mentionAutocomplete.getAvailableUsers();
+
+    // Parse mentions from the text
+    const parseResult = this.mentionParser.parseMentions(text, agents, users);
+
+    // Replace each mention with an HTML badge
+    let transformedText = text;
+    for (const mention of parseResult.mentions) {
+      const mentionPattern = new RegExp(`@${this.escapeRegex(mention.name)}\\b`, 'gi');
+      const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
+      const badgeHTML = `<span class="${badgeClass}">@${mention.name}</span>`;
+      transformedText = transformedText.replace(mentionPattern, badgeHTML);
+    }
+
+    return transformedText;
+  }
+
+  /**
+   * Escape special regex characters
+   */
+  private escapeRegex(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   public get isTemporaryMessage(): boolean {

@@ -43,7 +43,7 @@
     <!-- Messages Pane -->
     <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
         <div class="chat-messages-wrapper">
-        <div class="chat-messages-container">
+        <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
             <mj-conversation-message-list
             [messages]="messages"
             [conversation]="conversationState.activeConversation"
@@ -57,6 +57,14 @@
             (messageEdited)="onMessageEdited($event)">
             </mj-conversation-message-list>
         </div>
+
+        <!-- Scroll to Bottom Icon -->
+        <span class="scroll-to-bottom-icon"
+              *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
+              [style.left.px]="getScrollToBottomIconPosition()"
+              (click)="scrollToBottomAnimate()">
+            <i class="fas fa-arrow-down"></i>
+        </span>
 
         <!-- Fixed Input Area -->
         <div class="chat-input-container">
@@ -166,7 +174,7 @@
                 <i class="fas fa-file-code"></i>
             </div>
             <div class="artifact-modal-info">
-                <div class="artifact-modal-title">Artifact {{artifact.artifactId.substring(0, 8)}}</div>
+                <div class="artifact-modal-title">{{artifact.name}}</div>
                 <div class="artifact-modal-meta">Version {{artifact.versionId.substring(0, 8)}}</div>
             </div>
             <div class="artifact-modal-action">
