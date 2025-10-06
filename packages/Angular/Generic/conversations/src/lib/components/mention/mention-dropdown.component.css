@@ -102,3 +102,22 @@
 .mention-dropdown::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
 }
+
+/* Empty State */
+.mention-empty-state {
+  padding: 24px;
+  text-align: center;
+  color: #9CA3AF;
+}
+
+.mention-empty-state i {
+  font-size: 32px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.mention-empty-state p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}

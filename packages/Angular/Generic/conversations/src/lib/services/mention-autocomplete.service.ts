@@ -42,6 +42,9 @@ export class MentionAutocompleteService {
         a => !a.ParentID && a.Status === 'Active'
       );
 
+      console.log('[MentionAutocomplete] Initialized with agents:', this.agentsCache.map(a => a.Name));
+      console.log('[MentionAutocomplete] Total active agents:', this.agentsCache.length);
+
       // Load users from the system (optional - can be expanded later)
       // For now, we'll just use the current user
       this.usersCache = [currentUser];

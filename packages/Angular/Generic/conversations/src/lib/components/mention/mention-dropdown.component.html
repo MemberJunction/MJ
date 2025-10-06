@@ -1,10 +1,11 @@
 <div
-  *ngIf="visible && suggestions.length > 0"
+  *ngIf="visible"
   class="mention-dropdown"
   [style.top.px]="position.top"
   [style.left.px]="position.left"
 >
-  <div class="mention-suggestions">
+  <!-- Suggestions List -->
+  <div class="mention-suggestions" *ngIf="suggestions.length > 0">
     <div
       *ngFor="let suggestion of suggestions; let i = index; trackBy: trackBySuggestion"
       class="mention-suggestion"
@@ -33,5 +34,11 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <!-- Empty State -->
+  <div class="mention-empty-state" *ngIf="suggestions.length === 0">
+    <i class="fa-solid fa-robot"></i>
+    <p>No agents or users available</p>
   </div>
 </div>

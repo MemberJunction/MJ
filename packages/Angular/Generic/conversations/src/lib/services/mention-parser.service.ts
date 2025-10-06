@@ -75,15 +75,29 @@ export class MentionParserService {
    * Uses exact match or starts-with match (no contains match to avoid ambiguity)
    */
   private findAgent(name: string, agents: AIAgentEntityExtended[]): AIAgentEntityExtended | null {
-    const lowerName = name.toLowerCase().trim();
+    // Remove trailing punctuation and trim
+    const cleanName = name.replace(/[.,;!?]+$/, '').trim();
+    const lowerName = cleanName.toLowerCase();
+
+    console.log('[MentionParser] Finding agent for:', name, '-> cleaned:', cleanName);
+    console.log('[MentionParser] Available agents:', agents.map(a => a.Name));
 
     // Try exact match first
     let agent = agents.find(a => (a.Name?.toLowerCase() || '') === lowerName);
-    if (agent) return agent;
+    if (agent) {
+      console.log('[MentionParser] Found exact match:', agent.Name);
+      return agent;
+    }
 
     // Try starts with match
     agent = agents.find(a => (a.Name?.toLowerCase() || '').startsWith(lowerName));
-    return agent || null;
+    if (agent) {
+      console.log('[MentionParser] Found starts-with match:', agent.Name);
+      return agent;
+    }
+
+    console.log('[MentionParser] No agent found for:', cleanName);
+    return null;
 
     // Note: Removed "contains" match to avoid ambiguous matches
     // e.g., "@Agent" would match multiple agents like "Marketing Agent", "Data Agent"

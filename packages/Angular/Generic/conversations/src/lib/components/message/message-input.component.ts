@@ -83,14 +83,19 @@ export class MessageInputComponent implements OnInit {
       this.mentionStartIndex = cursorPos - mentionMatch[0].length;
       this.mentionQuery = mentionMatch[1] || '';
 
+      console.log('[MentionInput] Detected @mention:', this.mentionQuery);
+
       // Get suggestions
       this.mentionSuggestions = this.mentionAutocomplete.getSuggestions(this.mentionQuery);
+
+      console.log('[MentionInput] Got suggestions:', this.mentionSuggestions.length, this.mentionSuggestions);
 
       // Calculate dropdown position
       this.calculateDropdownPosition(textarea);
 
-      // Show dropdown if we have suggestions
-      this.showMentionDropdown = this.mentionSuggestions.length > 0;
+      // Show dropdown if we have suggestions OR to show empty state
+      this.showMentionDropdown = true;
+      console.log('[MentionInput] Showing dropdown:', this.showMentionDropdown);
     } else {
       // No @ mention, close dropdown
       this.closeMentionDropdown();
@@ -190,17 +195,16 @@ export class MessageInputComponent implements OnInit {
       detail.Message = this.messageText.trim();
       detail.Role = 'User';
 
-      // Parse mentions from message
+      // Parse mentions from message (not stored, used for routing only)
       const mentionResult = this.mentionParser.parseMentions(
         detail.Message,
         this.mentionAutocomplete.getAvailableAgents(),
         this.mentionAutocomplete.getAvailableUsers()
       );
 
-      // Store mentions as JSON if any found
-      if (mentionResult.mentions.length > 0) {
-        (detail as any).Mentions = JSON.stringify(mentionResult.mentions);
-      }
+      console.log('[MentionInput] Parsing message for routing:', detail.Message);
+      console.log('[MentionInput] Found mentions:', mentionResult);
+      console.log('[MentionInput] Agent mention:', mentionResult.agentMention);
 
       // Set ParentID if this is a thread reply
       if (this.parentMessageId) {

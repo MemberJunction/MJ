@@ -8,11 +8,12 @@ import {
   AfterViewInit,
   OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { Mention } from '../../models/conversation-state.model';
+import { MentionParserService } from '../../services/mention-parser.service';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 
 /**
  * Component for displaying a single message in a conversation
@@ -48,7 +49,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public editedText: string = '';
   private originalText: string = '';
 
-  constructor(private cdRef: ChangeDetectorRef) {
+  constructor(
+    private cdRef: ChangeDetectorRef,
+    private mentionParser: MentionParserService,
+    private mentionAutocomplete: MentionAutocompleteService
+  ) {
     super();
   }
 
@@ -148,38 +153,50 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.aiAgentInfo?.name === 'Conversation Manager Agent' || this.aiAgentInfo?.name === 'Conversation Manager';
   }
 
-  public get mentions(): Mention[] {
-    if (!(this.message as any).Mentions) return [];
-    try {
-      return JSON.parse((this.message as any).Mentions as string);
-    } catch {
-      return [];
+  public get displayMessage(): string {
+    let text = this.message.Message || '';
+
+    // For Conversation Manager, only show the delegation line (starts with emoji)
+    if (this.isConversationManager && text) {
+      const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
+      if (delegationMatch) {
+        text = delegationMatch[0];
+      }
     }
+
+    // Transform @mentions to HTML pills
+    return this.transformMentionsToHTML(text);
   }
 
-  public get displayMessage(): string {
-    // For Conversation Manager, only show the delegation line (starts with emoji)
-    if (this.isConversationManager && this.message.Message) {
-      const delegationMatch = this.message.Message.match(/🤖.*Delegating to.*Agent.*/);
-      if (delegationMatch) {
-        return delegationMatch[0];
-      }
+  /**
+   * Transform @mentions in text to HTML badge elements
+   */
+  private transformMentionsToHTML(text: string): string {
+    if (!text) return '';
+
+    const agents = this.mentionAutocomplete.getAvailableAgents();
+    const users = this.mentionAutocomplete.getAvailableUsers();
+
+    // Parse mentions from the text
+    const parseResult = this.mentionParser.parseMentions(text, agents, users);
+
+    // Replace each mention with an HTML badge
+    let transformedText = text;
+    for (const mention of parseResult.mentions) {
+      const mentionPattern = new RegExp(`@${this.escapeRegex(mention.name)}\\b`, 'gi');
+      const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
+      const badgeHTML = `<span class="${badgeClass}">@${mention.name}</span>`;
+      transformedText = transformedText.replace(mentionPattern, badgeHTML);
     }
 
-    // Replace mentions with formatted pills/badges in markdown
-    let message = this.message.Message || '';
+    return transformedText;
+  }
 
-    if (this.mentions.length > 0) {
-      for (const mention of this.mentions) {
-        const mentionPattern = new RegExp(`@"${mention.name}"|@${mention.name.replace(/\s+/g, '\\s*')}`, 'gi');
-        const mentionBadge = mention.type === 'agent'
-          ? `<span class="mention-badge agent">@${mention.name}</span>`
-          : `<span class="mention-badge user">@${mention.name}</span>`;
-        message = message.replace(mentionPattern, mentionBadge);
-      }
-    }
-
-    return message;
+  /**
+   * Escape special regex characters
+   */
+  private escapeRegex(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   public get isTemporaryMessage(): boolean {
