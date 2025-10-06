@@ -12,7 +12,11 @@
     >
       <ng-template kendoDrawerItemTemplate let-item>
         <div class="drawer-item-icon">
-          <span [class]="item.icon"></span>
+          @if (item.text === 'Ask Skip') {
+            <span class="skip-icon"></span>
+          } @else {
+            <span [class]="item.icon"></span>
+          }
         </div>
         <div class="item-descr-wrap">
           <div>{{ item.text }}</div>

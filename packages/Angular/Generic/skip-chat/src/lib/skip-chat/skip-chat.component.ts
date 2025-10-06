@@ -62,7 +62,7 @@ export class SkipChatComponent extends BaseManagedComponent implements OnInit, A
   @Input() public ShowDataContextButton: boolean = true;
   @Input() public IncludeLinkedConversationsInList: boolean = false;
   @Input() public SkipLogoURL: string = "assets/Skip Full Logo - Transparent.png";
-  @Input() public SkipMarkOnlyLogoURL: string = "assets/Skip - Mark Only - Small.png";
+  @Input() public SkipMarkOnlyLogoURL: string = "assets/skip-icon.svg";
   /**
    * Set this property in order to set the user image. This can either be a URL or a Blob
    */

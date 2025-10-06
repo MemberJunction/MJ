@@ -1,0 +1,68 @@
+.custom-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+}
+
+.custom-icon-wrapper ::ng-deep .custom-svg-icon {
+  width: 100%;
+  height: 100%;
+  display: block;
+  transition: transform 0.2s ease;
+}
+
+/* Ensure the SVG inherits the parent color for theming */
+.custom-icon-wrapper ::ng-deep svg {
+  fill: currentColor;
+}
+
+/* Match Font Awesome hover behavior in drawer */
+:host-context(.k-drawer-item:hover) .custom-icon-wrapper ::ng-deep .custom-svg-icon {
+  transform: scale(1.1);
+}
+
+/* Match Font Awesome active/selected behavior */
+:host-context(.k-drawer-item.k-selected) .custom-icon-wrapper ::ng-deep .custom-svg-icon,
+:host-context(.k-drawer-item.k-state-selected) .custom-icon-wrapper ::ng-deep .custom-svg-icon {
+  font-weight: bold;
+}
+
+/* Ensure proper spacing in drawer context */
+:host-context(.drawer-item-icon) .custom-icon-wrapper {
+  margin-right: 0;
+}
+
+/* Large icon variant for cards */
+:host-context(.mj-card-icon-large-wrapper) .custom-icon-wrapper {
+  width: 4rem;
+  height: 4rem;
+  color: var(--mj-blue);
+  margin-bottom: 20px;
+  transition: all 0.3s ease;
+}
+
+:host-context(.mj-card-icon-large-wrapper) .custom-icon-wrapper ::ng-deep .custom-svg-icon {
+  width: 100%;
+  height: 100%;
+}
+
+/* Hover effect for large icon in cards */
+:host-context(.mj-kendo-icon-card:hover) :host-context(.mj-card-icon-large-wrapper) .custom-icon-wrapper {
+  transform: scale(1.1) rotate(5deg);
+  filter: drop-shadow(0 4px 8px rgba(0, 118, 182, 0.3));
+}
+
+/* Avatar icon variant for chat messages */
+:host-context(.avatar-icon) .custom-icon-wrapper {
+  width: 24px;
+  height: 24px;
+  color: var(--mj-blue);
+  display: block;
+}
+
+:host-context(.avatar-icon) .custom-icon-wrapper ::ng-deep .custom-svg-icon {
+  width: 100%;
+  height: 100%;
+}

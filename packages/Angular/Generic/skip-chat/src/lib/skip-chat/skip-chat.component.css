@@ -322,6 +322,11 @@
     justify-content: space-between; /* Aligns children (img and button) to each end */
     align-items: center; /* Centers children vertically */
 }
+
+.message-image {
+    min-width: 24px;
+}
+
 .avatar {
     max-height: 24px;
     margin-right: 10px;

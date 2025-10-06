@@ -1087,7 +1087,7 @@ export class NavigationComponent implements OnInit, OnDestroy, AfterViewInit {
       selected: false,
       text: 'Ask Skip',
       path: '/askskip',
-      icon: "fa-solid fa-robot"
+      icon: 'fa-solid fa-robot'  // Keep the fallback icon property
     }
     this.drawerItems.push(drawerItem);
   }
