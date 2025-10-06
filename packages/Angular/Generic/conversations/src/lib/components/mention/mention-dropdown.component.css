@@ -9,6 +9,12 @@
   max-width: 400px;
   max-height: 300px;
   overflow-y: auto;
+  transform-origin: top left; /* Default: grows downward from top-left */
+}
+
+.mention-dropdown.show-above {
+  transform: translateY(-100%); /* Shift entire dropdown up by its own height */
+  transform-origin: bottom left; /* Grows upward from bottom-left */
 }
 
 .mention-suggestions {

@@ -3,7 +3,7 @@ import { BehaviorSubject, Observable } from 'rxjs';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIAgentEntityExtended, ConversationDetailEntity } from '@memberjunction/core-entities';
@@ -98,12 +98,14 @@ export class ConversationAgentService {
    * @param conversationId The conversation ID
    * @param message The message that was just sent
    * @param conversationHistory Recent messages in the conversation for context
+   * @param onProgress Optional callback for receiving progress updates during execution
    * @returns The agent's response, or null if the agent chooses not to respond
    */
   async processMessage(
     conversationId: string,
     message: ConversationDetailEntity,
-    conversationHistory: ConversationDetailEntity[]
+    conversationHistory: ConversationDetailEntity[],
+    onProgress?: AgentExecutionProgressCallback
   ): Promise<ExecuteAgentResult | null> {
     // Don't process if user is tagging someone else (future enhancement)
     // For now, we'll always send to the ambient agent
@@ -145,7 +147,8 @@ export class ConversationAgentService {
           }),
           conversationId: conversationId,
           latestMessageId: message.ID
-        }
+        },
+        onProgress: onProgress
       };
 
       // Run the agent
@@ -221,6 +224,7 @@ export class ConversationAgentService {
    * @param conversationHistory Recent conversation history for context
    * @param reasoning Why this agent is being invoked
    * @param payload Optional payload to pass to the agent (e.g., previous OUTPUT artifact for continuity)
+   * @param onProgress Optional callback for receiving progress updates during execution
    * @returns The agent's execution result, or null if agent not found
    */
   async invokeSubAgent(
@@ -229,7 +233,8 @@ export class ConversationAgentService {
     message: ConversationDetailEntity,
     conversationHistory: ConversationDetailEntity[],
     reasoning: string,
-    payload?: any
+    payload?: any,
+    onProgress?: AgentExecutionProgressCallback
   ): Promise<ExecuteAgentResult | null> {
     if (!this._aiClient) {
       const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
@@ -257,7 +262,7 @@ export class ConversationAgentService {
       // Build conversation messages for the sub-agent
       const conversationMessages = this.buildAgentMessages(conversationHistory, message);
 
-      // Prepare parameters with optional payload
+      // Prepare parameters with optional payload and progress callback
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
@@ -266,7 +271,8 @@ export class ConversationAgentService {
           latestMessageId: message.ID,
           invocationReason: reasoning
         },
-        ...(payload ? { payload } : {})
+        ...(payload ? { payload } : {}),
+        onProgress: onProgress
       };
 
       // Run the sub-agent

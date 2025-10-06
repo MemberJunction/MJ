@@ -47,8 +47,13 @@ export class MJNotificationService {
             MJNotificationService.RefreshUserNotifications();
 
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
-          this.PushStatusUpdates().subscribe( (status: any) => {
-            const statusObj = JSON.parse(status.message);
+          this.PushStatusUpdates().subscribe( (message: string) => {
+            // Handle undefined/null messages gracefully
+            if (!message) {
+              return;
+            }
+
+            const statusObj = JSON.parse(message);
 
             // pass along as an event so anyone else who wants to know about the push status update can do stuff
             MJGlobal.Instance.RaiseEvent({

@@ -267,13 +267,16 @@ export class GraphQLAIClient {
 
     /**
      * Run an AI agent with the specified parameters.
-     * 
+     *
      * This method invokes an AI agent on the server through GraphQL and returns the result.
      * The agent can maintain conversation context across multiple interactions.
-     * 
+     *
+     * If a progress callback is provided in params.onProgress, this method will subscribe
+     * to real-time progress updates from the GraphQL server and forward them to the callback.
+     *
      * @param params The parameters for running the AI agent
      * @returns A Promise that resolves to a RunAIAgentResult object
-     * 
+     *
      * @example
      * ```typescript
      * const result = await aiClient.RunAIAgent({
@@ -282,9 +285,12 @@ export class GraphQLAIClient {
      *     { role: "user", content: "What's the weather like?" }
      *   ],
      *   sessionId: "session-123",
-     *   data: { location: "New York" }
+     *   data: { location: "New York" },
+     *   onProgress: (progress) => {
+     *     console.log(`Progress: ${progress.message} (${progress.percentage}%)`);
+     *   }
      * });
-     * 
+     *
      * if (result.success) {
      *   console.log('Response:', result.payload);
      *   console.log('Execution time:', result.executionTimeMs, 'ms');
@@ -294,7 +300,49 @@ export class GraphQLAIClient {
      * ```
      */
     public async RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+        let subscription: any;
+
         try {
+            // Subscribe to progress updates if callback provided
+            if (params.onProgress) {
+                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
+                    .subscribe((message: string) => {
+                        try {
+                            console.log('[GraphQLAIClient] Received statusUpdate message:', message);
+                            const parsed = JSON.parse(message);
+                            console.log('[GraphQLAIClient] Parsed message:', parsed);
+
+                            // Filter for ExecutionProgress messages from RunAIAgentResolver
+                            if (parsed.resolver === 'RunAIAgentResolver' &&
+                                parsed.type === 'ExecutionProgress' &&
+                                parsed.status === 'ok' &&
+                                parsed.data?.progress) {
+
+                                console.log('[GraphQLAIClient] Forwarding progress to callback:', parsed.data.progress);
+                                // Forward progress to callback with agentRunId in metadata
+                                const progressWithRunId = {
+                                    ...parsed.data.progress,
+                                    metadata: {
+                                        ...(parsed.data.progress.metadata || {}),
+                                        agentRunId: parsed.data.agentRunId
+                                    }
+                                };
+                                params.onProgress!(progressWithRunId);
+                            } else {
+                                console.log('[GraphQLAIClient] Message does not match filter criteria:', {
+                                    resolver: parsed.resolver,
+                                    type: parsed.type,
+                                    status: parsed.status,
+                                    hasProgress: !!parsed.data?.progress
+                                });
+                            }
+                        } catch (e) {
+                            // Log parsing errors for debugging
+                            console.error('[GraphQLAIClient] Failed to parse progress message:', e, 'Raw message:', message);
+                        }
+                    });
+            }
+
             // Build the mutation
             const mutation = gql`
                 mutation RunAIAgent(
@@ -335,6 +383,11 @@ export class GraphQLAIClient {
             return this.processAgentResult(result.RunAIAgent?.result);
         } catch (e) {
             return this.handleAgentError(e);
+        } finally {
+            // Always clean up subscription
+            if (subscription) {
+                subscription.unsubscribe();
+            }
         }
     }
 

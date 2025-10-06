@@ -80,6 +80,31 @@ export class ActiveTasksService {
   }
 
   /**
+   * Get an active task by its conversation detail ID
+   * @param conversationDetailId The conversation detail ID
+   * @returns The task if found, undefined otherwise
+   */
+  getByConversationDetailId(conversationDetailId: string): ActiveTask | undefined {
+    const tasks = Array.from(this._tasks$.value.values());
+    return tasks.find(task => task.conversationDetailId === conversationDetailId);
+  }
+
+  /**
+   * Update the status of a task by its conversation detail ID
+   * @param conversationDetailId The conversation detail ID
+   * @param status The new status text
+   * @returns true if task was found and updated, false otherwise
+   */
+  updateStatusByConversationDetailId(conversationDetailId: string, status: string): boolean {
+    const task = this.getByConversationDetailId(conversationDetailId);
+    if (task) {
+      this.updateStatus(task.id, status);
+      return true;
+    }
+    return false;
+  }
+
+  /**
    * Clear all active tasks
    */
   clear(): void {
