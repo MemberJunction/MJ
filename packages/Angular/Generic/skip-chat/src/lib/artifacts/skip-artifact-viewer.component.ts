@@ -1,6 +1,6 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector, Output, EventEmitter, ChangeDetectorRef, OnDestroy } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector, Output, EventEmitter, ChangeDetectorRef, OnDestroy, ElementRef } from '@angular/core';
 import { ConversationArtifactEntity, ArtifactTypeEntity, ConversationArtifactVersionEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
-import { RunView, LogError } from '@memberjunction/core';
+import { RunView, LogError, LogStatus } from '@memberjunction/core';
 import { DataContext } from '@memberjunction/data-context';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -8,6 +8,8 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { SkipDynamicReportWrapperComponent } from '../dynamic-report/skip-dynamic-report-wrapper';
 import { SkipAPIResponse, SkipAPIAnalysisCompleteResponse, SkipResponsePhase } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '../drill-down-info';
+import { ComponentNode, ComponentFeedback } from './skip-component-feedback-panel.component';
+import { GraphQLComponentRegistryClient } from '@memberjunction/graphql-dataprovider';
 
 @Component({
   selector: 'skip-artifact-viewer',
@@ -20,7 +22,8 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   @Input() public DataContext: DataContext | null = null;
   
   @ViewChild('reportContainer', { read: ViewContainerRef, static: false }) reportContainer!: ViewContainerRef;
-  
+  @ViewChild('reportContainer', { read: ElementRef, static: false }) reportContainerElement!: ElementRef;
+
   /**
    * Event emitted when the user clicks on a matching report and the application needs to handle the navigation
    */
@@ -59,7 +62,12 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   public selectedVersionId: string = '';
   public showVersionDropdown: boolean = false;
   private reportComponentRef: ComponentRef<any> | null = null;
-  private conversationDetailRecord: ConversationDetailEntity | null = null;
+  public conversationDetailRecord: ConversationDetailEntity | null = null;
+
+  // Component feedback properties
+  public showFeedbackPanel = false;
+  public componentHierarchy: ComponentNode | null = null;
+  public selectedFeedbackComponent: ComponentNode | null = null;
 
   constructor(
     private notificationService: MJNotificationService,
@@ -344,6 +352,10 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
           instance.ConversationDetailID = this.conversationDetailRecord.ID;
           instance.ConversationName = this.conversationDetailRecord.Conversation;
         }
+
+        // Pass feedback state and handler to wrapper
+        instance.showFeedbackPanel = this.showFeedbackPanel;
+        instance.toggleFeedbackPanel = () => this.toggleFeedbackPanel();
       }
     } catch (err) {
       LogError('Error creating report component', err instanceof Error ? err.message : String(err));
@@ -463,6 +475,152 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
   public get isPlainText(): boolean {
     return this.contentType.includes('text/plain');
+  }
+
+  /**
+   * Toggle the component feedback panel
+   */
+  public toggleFeedbackPanel(): void {
+    this.showFeedbackPanel = !this.showFeedbackPanel;
+
+    if (this.showFeedbackPanel) {
+      // Load component hierarchy from artifact configuration
+      this.loadComponentHierarchy();
+    } else {
+      this.selectedFeedbackComponent = null;
+    }
+  }
+
+  /**
+   * Load component hierarchy from the React component's resolved spec
+   * The React Runtime has the full component hierarchy with all dependencies resolved
+   */
+  private loadComponentHierarchy(): void {
+    try {
+      if (!this.reportComponentRef) {
+        LogError('No report component reference available for loading hierarchy', '');
+        return;
+      }
+
+      const wrapperInstance = this.reportComponentRef.instance as SkipDynamicReportWrapperComponent;
+
+      // Wait for the component to be fully initialized
+      // React components need time to resolve their specs
+      setTimeout(() => {
+        const resolvedSpec = wrapperInstance.getResolvedComponentSpec();
+
+        if (resolvedSpec) {
+          // Build hierarchy from the resolved spec
+          this.componentHierarchy = this.buildComponentNode(resolvedSpec);
+          this.cdRef.detectChanges();
+          LogStatus('Successfully loaded component hierarchy from React component', this.componentHierarchy.name);
+        } else {
+          // Try again after a longer delay if spec isn't ready yet
+          setTimeout(() => {
+            const retrySpec = wrapperInstance.getResolvedComponentSpec();
+            if (retrySpec) {
+              this.componentHierarchy = this.buildComponentNode(retrySpec);
+              this.cdRef.detectChanges();
+              LogStatus('Successfully loaded component hierarchy from React component (retry)', this.componentHierarchy.name);
+            } else {
+              LogError('React component does not have resolved spec yet after retry', '');
+            }
+          }, 1000);
+        }
+      }, 500);
+    } catch (error) {
+      LogError('Error loading component hierarchy for feedback', error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  /**
+   * Build a ComponentNode from component spec
+   */
+  private buildComponentNode(spec: any): ComponentNode {
+    const node: ComponentNode = {
+      name: spec.name,
+      title: spec.title || spec.name,
+      description: spec.description,
+      location: spec.location || 'embedded',
+      namespace: spec.namespace,
+      registry: spec.registry
+    };
+
+    // Recursively build dependency nodes
+    if (spec.dependencies && Array.isArray(spec.dependencies)) {
+      node.dependencies = spec.dependencies.map((dep: any) => this.buildComponentNode(dep));
+    }
+
+    return node;
+  }
+
+  /**
+   * Handle component selection for feedback
+   */
+  public onComponentSelected(component: ComponentNode): void {
+    this.selectedFeedbackComponent = component;
+  }
+
+  /**
+   * Handle feedback submission
+   */
+  public async onFeedbackSubmitted(feedback: ComponentFeedback): Promise<void> {
+    try {
+      LogStatus('Submitting component feedback', JSON.stringify(feedback));
+
+      // Use the GraphQLComponentRegistryClient for registry-agnostic feedback submission
+      const provider = this.ProviderToUse as GraphQLDataProvider;
+      const registryClient = new GraphQLComponentRegistryClient(provider);
+
+      const result = await registryClient.SendComponentFeedback({
+        componentName: feedback.componentName,
+        componentNamespace: feedback.componentNamespace,
+        componentVersion: feedback.componentVersion,
+        registryName: this.selectedFeedbackComponent?.registry || 'Skip',
+        rating: feedback.rating, // Already converted to 0-100 scale in the panel component
+        feedbackType: 'Stars',
+        comments: feedback.comments,
+        conversationID: feedback.conversationID,
+        conversationDetailID: feedback.conversationDetailID,
+        reportID: feedback.reportID,
+        dashboardID: feedback.dashboardID
+      });
+
+      if (result?.success) {
+        this.notificationService.CreateSimpleNotification(
+          'Feedback submitted successfully!',
+          'success',
+          3000
+        );
+        LogStatus('Component feedback submitted successfully', result.feedbackID);
+
+        // Close the feedback panel after successful submission
+        this.closeFeedbackPanel();
+      } else {
+        const errorMsg = result?.error || 'Failed to submit feedback';
+        this.notificationService.CreateSimpleNotification(
+          `Error: ${errorMsg}`,
+          'error',
+          5000
+        );
+        LogError('Failed to submit component feedback', errorMsg);
+      }
+    } catch (error) {
+      LogError('Error submitting component feedback', error instanceof Error ? error.message : String(error));
+      this.notificationService.CreateSimpleNotification(
+        'An unexpected error occurred while submitting feedback',
+        'error',
+        5000
+      );
+    }
+  }
+
+  /**
+   * Close the feedback panel
+   */
+  public closeFeedbackPanel(): void {
+    this.showFeedbackPanel = false;
+    this.selectedFeedbackComponent = null;
   }
 
   ngOnDestroy(): void {

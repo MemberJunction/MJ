@@ -59,6 +59,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   @Input() InEditMode: boolean = false;
   @Input() EditMode: "None" | "Save" | "Queue" = "None"
   @Input() AutoNavigate: boolean = true;
+  /**
+   * If set to false, the component will not automatically refresh when Params are provided.
+   * This is useful when the parent component wants to control when Refresh is called.
+   */
+  @Input() AutoRefreshOnInit: boolean = true;
 
 
   /**
@@ -623,7 +628,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   async ngAfterViewInit() {
     await ResourcePermissionEngine.Instance.Config();
     //this.setGridHeight();
-    if (this.Params)
+    if (this.Params && this.AutoRefreshOnInit)
       this.Refresh(this.Params);
 
     // setup event listener for MJGlobal because we might have a parent component that sends us messages

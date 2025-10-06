@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduled-actions",
-  "version": "2.102.0" ,
+  "version": "2.103.0",
   "description": "Scheduled Actions allow a system administrator to take any action defined in MemberJunction and schedule it for recurring or one-time future execution.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,11 +21,11 @@
   "dependencies": {
     "@memberjunction/global": "2.100.3",
     "@memberjunction/core": "2.100.3",
-    "@memberjunction/core-entities": "2.102.0",
-    "@memberjunction/core-entities-server": "2.102.0",
-    "@memberjunction/actions": "2.102.0",
-    "@memberjunction/sqlserver-dataprovider": "2.102.0",
-    "@memberjunction/core-actions": "2.102.0",
+    "@memberjunction/core-entities": "2.103.0",
+    "@memberjunction/core-entities-server": "2.103.0",
+    "@memberjunction/actions": "2.103.0",
+    "@memberjunction/sqlserver-dataprovider": "2.103.0",
+    "@memberjunction/core-actions": "2.103.0",
     "cron-parser": "^4.9.0"
   }
 }

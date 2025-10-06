@@ -247,7 +247,7 @@ async function loadAgentTools(contextUser: UserInfo) {
                 }),
                 async execute(props: any) {
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', contextUser);
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
                     const loaded = await agentRun.Load(props.runId);
                     
                     if (!loaded) {
@@ -280,7 +280,7 @@ async function loadAgentTools(contextUser: UserInfo) {
                     // Note: Actual cancellation would require the agent to check the cancellation token
                     // For now, we can update the status to indicate cancellation was requested
                     const md = new Metadata();
-                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('AI Agent Runs', contextUser);
+                    const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', contextUser);
                     const loaded = await agentRun.Load(props.runId);
                     
                     if (!loaded || agentRun.Status !== 'Running') {

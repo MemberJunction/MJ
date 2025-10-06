@@ -12,7 +12,7 @@ import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjuncti
 import sql from 'mssql';
 import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
 import createMSSQLConfig from './orm.js';
-import { DataSourceInfo, ComponentRegistryServerOptions } from './types.js';
+import { DataSourceInfo, ComponentRegistryServerOptions, ComponentFeedbackParams, ComponentFeedbackResponse, FeedbackHandler } from './types.js';
 
 /**
  * Base class for the Component Registry API Server.
@@ -326,6 +326,7 @@ export class ComponentRegistryAPIServer {
       target.get('/components', this.listComponents.bind(this));
       target.get('/components/search', this.searchComponents.bind(this));
       target.get('/components/:namespace/:name', this.getComponent.bind(this));
+      target.post('/feedback', this.submitFeedback.bind(this));
     } else {
       // Standalone mode: use full paths with basePath
       const basePath = this.options.basePath;
@@ -334,6 +335,7 @@ export class ComponentRegistryAPIServer {
       target.get(`${basePath}/components`, this.listComponents.bind(this));
       target.get(`${basePath}/components/search`, this.searchComponents.bind(this));
       target.get(`${basePath}/components/:namespace/:name`, this.getComponent.bind(this));
+      target.post(`${basePath}/feedback`, this.submitFeedback.bind(this));
     }
   }
   
@@ -615,6 +617,91 @@ export class ComponentRegistryAPIServer {
     }
     
     return Array.from(latestComponents.values());
+  }
+
+  /**
+   * Default feedback handler implementation.
+   * Simply logs feedback and returns success.
+   * Override by calling setFeedbackHandler() with a custom implementation.
+   *
+   * @protected
+   */
+  protected feedbackHandler: FeedbackHandler = {
+    async submitFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
+      LogStatus('Component feedback received (default handler):', undefined, {
+        component: `${params.componentNamespace}/${params.componentName}`,
+        version: params.componentVersion,
+        rating: params.rating,
+        feedbackType: params.feedbackType
+      });
+
+      return {
+        success: true,
+        feedbackID: undefined
+      };
+    }
+  };
+
+  /**
+   * Set a custom feedback handler.
+   * This allows external code (e.g., Skip) to override feedback handling logic.
+   *
+   * @param handler - Custom feedback handler implementation
+   *
+   * @example
+   * ```typescript
+   * const server = new ComponentRegistryAPIServer();
+   * server.setFeedbackHandler({
+   *   async submitFeedback(params, context) {
+   *     // Custom logic here
+   *     return { success: true, feedbackID: '...' };
+   *   }
+   * });
+   * ```
+   */
+  public setFeedbackHandler(handler: FeedbackHandler): void {
+    this.feedbackHandler = handler;
+  }
+
+  /**
+   * Handler for POST /api/v1/feedback
+   * Submit feedback for a component.
+   *
+   * @protected
+   * @virtual
+   */
+  protected async submitFeedback(req: Request, res: Response): Promise<void> {
+    try {
+      const params: ComponentFeedbackParams = req.body;
+
+      // Basic validation
+      if (!params.componentName || !params.componentNamespace) {
+        res.status(400).json({
+          success: false,
+          error: 'componentName and componentNamespace are required'
+        });
+        return;
+      }
+
+      if (params.rating === undefined || params.rating < 0 || params.rating > 5) {
+        res.status(400).json({
+          success: false,
+          error: 'rating must be between 0 and 5'
+        });
+        return;
+      }
+
+      // Call the feedback handler (default or custom)
+      const result = await this.feedbackHandler.submitFeedback(params, req.body.context);
+
+      res.json(result);
+    } catch (error) {
+      LogError(`Failed to submit feedback: ${error instanceof Error ? error.message : String(error)}`);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to submit feedback'
+      });
+    }
   }
 }
 

@@ -2400,10 +2400,10 @@ export class SQLServerDataProvider
     const spName = bNewRecord
       ? entity.EntityInfo.spCreate?.length > 0
         ? entity.EntityInfo.spCreate
-        : 'spCreate' + entity.EntityInfo.ClassName
+        : 'spCreate' + entity.EntityInfo.BaseTableCodeName
       : entity.EntityInfo.spUpdate?.length > 0
         ? entity.EntityInfo.spUpdate
-        : 'spUpdate' + entity.EntityInfo.ClassName;
+        : 'spUpdate' + entity.EntityInfo.BaseTableCodeName;
     return spName;
   }
 
@@ -2979,7 +2979,7 @@ export class SQLServerDataProvider
    */
   private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
-    const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.ClassName}`;
+    const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
       const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase());
       const quotes = f.NeedsQuotes ? "'" : '';

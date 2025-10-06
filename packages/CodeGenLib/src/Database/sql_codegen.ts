@@ -719,11 +719,11 @@ export class SQLCodeGenBase {
     public getSPName(entity: EntityInfo, type: SPType): string {
         switch (type) {
             case SPType.Create:
-                return entity.spCreate && entity.spCreate.length > 0 ? entity.spCreate : 'spCreate' + entity.ClassName;
+                return entity.spCreate && entity.spCreate.length > 0 ? entity.spCreate : 'spCreate' + entity.BaseTableCodeName;
             case SPType.Update:
-                return entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.ClassName;
+                return entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.BaseTableCodeName;
             case SPType.Delete:
-                return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.ClassName;
+                return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.BaseTableCodeName;
         }
     }
 
@@ -1123,7 +1123,7 @@ ${whereClause}GO${permissions}
 
 
     protected generateSPCreate(entity: EntityInfo): string {
-        const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.ClassName}`;
+        const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.BaseTableCodeName}`;
         const firstKey = entity.FirstPrimaryKey;
 
         //double exclamations used on the firstKey.DefaultValue property otherwise the type of this variable is 'number | ""';
@@ -1270,7 +1270,7 @@ GO`;
     }
 
     protected generateSPUpdate(entity: EntityInfo): string {
-        const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.ClassName}`;
+        const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.BaseTableCodeName}`;
         const efParamString: string = this.createEntityFieldsParamString(entity.Fields, true);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
         const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
@@ -1430,7 +1430,7 @@ ${updatedAtTrigger}
 
 
     protected generateSPDelete(entity: EntityInfo): string {
-        const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.ClassName}`;
+        const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.BaseTableCodeName}`;
         const sCascadeDeletes: string = this.generateCascadeDeletes(entity);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Delete);
         let sVariables: string = '';
@@ -1531,7 +1531,7 @@ GO${permissions}
         else if (fkField.AllowsNull && !relatedEntity.AllowUpdateAPI) {
             // Nullable FK but no update API - this is a configuration error
             const sqlComment = `WARNING: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
-            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.BaseTableCodeName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
             logWarning(consoleMsg);
             return `
     -- ${sqlComment}
@@ -1540,7 +1540,7 @@ GO${permissions}
         else if (!relatedEntity.AllowDeleteAPI) {
             // Entity doesn't allow delete API, so we can't cascade delete
             const sqlComment = `WARNING: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
-            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.BaseTableCodeName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
             logWarning(consoleMsg);
             return `
     -- ${sqlComment}

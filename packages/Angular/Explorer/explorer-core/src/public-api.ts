@@ -42,6 +42,7 @@ export * from './lib/guards/auth-guard.service';
 export * from './lib/guards/entities.guard';
 export * from './lib/list-view/list-view.component';
 export * from './lib/resource-browser/resource-browser.component';
+export * from './lib/chat-wrapper/chat-wrapper.component';
 
 export * from './lib/query-browser-component/query-browser.component'
 export * from './lib/single-query/single-query.component'

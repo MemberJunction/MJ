@@ -119,23 +119,31 @@ Standard variables available:
 - `{{ _AGENT_TYPE_SYSTEM_PROMPT }}`
 - Custom context variables as needed
 
-## Output Structure
-You are responsible for filling the prompt section of the AgentDefinition:
+## Payload Format
+Your payload will be of this type. You will receive some of this information when you start your work. Your job is to return this information in the overall response, and to fill in the `prompts` section based on your analysis.
 
 ```typescript
 {@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
 ```
 
-Focus on populating:
-- prompt.systemPrompt
-- prompt.templateVariables (as markdown table)
-- prompt.promptNotes (analysis and optimization notes)
+## Output Structure
+You are responsible for filling the `prompts` section of the AgentManagerPayload:
+
+Focus on populating prompts for each agent in the hierarchy:
+- prompts[agentName].systemPrompt: Complete system prompt
+- prompts[agentName].templateVariables: Documentation as markdown table
+- prompts[agentName].promptNotes: Analysis and optimization notes
 
 Format your documentation with:
 - Tables for template variables
 - Code blocks for examples
 - Sections for different analyses
 - Clear headings and structure
+
+Here is an example of how this JSON might look, but always **refer to the TypeScript shown above as the reference for what to return**.
+```json
+{{ _OUTPUT_EXAMPLE | safe }}
+```
 
 ## Quality Checklist
 - [ ] Role clearly defined

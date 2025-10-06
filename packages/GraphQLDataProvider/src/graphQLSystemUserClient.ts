@@ -5,13 +5,12 @@ import { ActionItemInput, RolesAndUsersInput, SyncDataResult, SyncRolesAndUsersR
 import { 
     RunAIPromptParams, 
     RunAIPromptResult, 
-    RunAIAgentParams, 
-    RunAIAgentResult,
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
     EmbedTextResult
 } from './graphQLAIClient';
+import { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
 /**
  * Specialized client that is designed to be used exclusively on the server side
@@ -33,6 +32,7 @@ import {
  */
 export class GraphQLSystemUserClient {
     private _client: GraphQLClient;
+    private _sessionId: string;
     /**
      * Returns the underlying GraphQL client which is an instance of the GraphQLClient object
      * from the graphql-request package. This is useful if you want to perform any operation
@@ -53,6 +53,7 @@ export class GraphQLSystemUserClient {
         const headers: Record<string, string> = { 
             'x-session-id': sessionId,
         };
+        this._sessionId = sessionId;
         if (token)
             headers.authorization = 'Bearer ' + token;
         if (mjAPIKey)
@@ -899,7 +900,7 @@ export class GraphQLSystemUserClient {
      * });
      * ```
      */
-    public async RunAIAgent(params: RunAIAgentParams): Promise<RunAIAgentResult> {
+    public async RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
         try {
             // Build the query for system user
             const query = gql`
@@ -926,7 +927,7 @@ export class GraphQLSystemUserClient {
                         success
                         errorMessage
                         executionTimeMs
-                        payload
+                        result
                     }
                 }
             `;
@@ -939,18 +940,18 @@ export class GraphQLSystemUserClient {
 
             // Process and return the result
             if (result && result.RunAIAgentSystemUser) {
-                return this.processAgentResult(result.RunAIAgentSystemUser);
+                return this.processAgentResult(result.RunAIAgentSystemUser.result);
             } else {
                 return {
-                    success: false,
-                    errorMessage: 'Failed to execute AI agent as system user'
+                    success: false, 
+                    agentRun: undefined
                 };
             }
         } catch (e) {
             LogError(`GraphQLSystemUserClient::RunAIAgent - Error running AI agent - ${e}`);
             return {
-                success: false,
-                errorMessage: e.toString()
+                success: false, 
+                agentRun: undefined
             };
         }
     }
@@ -1001,19 +1002,16 @@ export class GraphQLSystemUserClient {
      * Helper method to prepare agent variables for GraphQL
      * @private
      */
-    private prepareAgentVariables(params: RunAIAgentParams): Record<string, any> {
+    private prepareAgentVariables(params: ExecuteAgentParams): Record<string, any> {
         const variables: Record<string, any> = {
-            agentId: params.agentId,
-            messages: JSON.stringify(params.messages),
-            sessionId: params.sessionId
+            agentId: params.agent.ID,
+            messages: JSON.stringify(params.conversationMessages),
+            sessionId: this._sessionId
         };
 
         // Serialize optional complex objects to JSON strings
         if (params.data !== undefined) {
             variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
-        }
-        if (params.templateData !== undefined) {
-            variables.templateData = typeof params.templateData === 'object' ? JSON.stringify(params.templateData) : params.templateData;
         }
 
         // Add optional scalar parameters
@@ -1076,23 +1074,8 @@ export class GraphQLSystemUserClient {
      * Helper method to process agent results
      * @private
      */
-    private processAgentResult(agentResult: any): RunAIAgentResult {
-        // Parse the payload if it's a JSON string
-        let payload: any;
-        try {
-            if (agentResult.payload) {
-                payload = JSON.parse(agentResult.payload);
-            }
-        } catch (e) {
-            payload = agentResult.payload;
-        }
-
-        return {
-            success: agentResult.success,
-            errorMessage: agentResult.errorMessage,
-            executionTimeMs: agentResult.executionTimeMs,
-            payload
-        };
+    private processAgentResult(agentResult: any): ExecuteAgentResult {
+        return SafeJSONParse(agentResult) as ExecuteAgentResult;
     }
 
     /**

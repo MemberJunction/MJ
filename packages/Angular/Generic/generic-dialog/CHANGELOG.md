@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+
 ## 2.100.3
 
 ## 2.100.2

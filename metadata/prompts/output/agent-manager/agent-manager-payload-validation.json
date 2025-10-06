@@ -1,0 +1,51 @@
+{
+  "metadata": {
+    "sessionId": "string:!empty",
+    "status": "string:requirements|design|prompting|implementation|validation|complete",
+    "originalRequest": "string:!empty",
+    "lastModifiedBy": "string:!empty"
+  },
+  "requirements": {
+    "businessGoal": "string:!empty",
+    "functionalRequirements": "string:!empty",
+    "technicalRequirements": "string:!empty",
+    "dataRequirements": "string:!empty",
+    "integrationRequirements": "string:!empty",
+    "assumptions": "string:!empty",
+    "risks": "string:!empty",
+    "outOfScope": "string:!empty",
+    "successCriteria": "string:!empty"
+  },
+  "design": {
+    "agentHierarchy": {
+      "name": "string:!empty",
+      "description": "string:!empty",
+      "type": "string:Loop",
+      "purpose": "string:!empty",
+      "actions": "array:[1+]",
+      "prompt": "object",
+      "payloadDownstreamPaths": "array?",
+      "payloadUpstreamPaths": "array?",
+      "subAgents": "array?",
+      "executionOrder": "number?",
+      "exposeAsAction": "boolean?",
+      "iconClass": "string?"
+    },
+    "architecture": {
+      "executionFlow": "string:!empty",
+      "dataFlow": "string:!empty",
+      "errorHandling": "string:!empty"
+    }
+  },
+  "prompts": {
+    "*": {
+      "systemPrompt": "string:!empty",
+      "templateVariables": "string:!empty",
+      "promptNotes": "string:!empty"
+    }
+  },
+  "implementation": {
+    "createdAgents": "array:[1+]",
+    "validationResults": "array:[1+]"
+  }
+}

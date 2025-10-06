@@ -83,23 +83,23 @@ export class GetAgentDetailsAction extends BaseAgentManagementAction {
                 EntityName: 'AI Agent Actions',
                 ExtraFilter: `AgentID = '${agent.ID}' AND Status = 'Active'`,
                 OrderBy: 'CreatedAt',
-                ResultType: 'entity_object' as const
+                ResultType: 'simple' as const
             },
             {
                 EntityName: 'AI Agents',
                 ExtraFilter: `ParentID = '${agent.ID}'`,
                 OrderBy: 'ExecutionOrder, Name',
-                ResultType: 'entity_object' as const
+                ResultType: 'simple' as const
             }
         ];
 
         // Add prompts view if requested
         if (includePrompts) {
             viewsToRun.push({
-                EntityName: 'AI Agent Prompts',
+                EntityName: 'MJ: AI Agent Prompts',
                 ExtraFilter: `AgentID = '${agent.ID}' AND Status = 'Active'`,
                 OrderBy: 'ExecutionOrder',
-                ResultType: 'entity_object' as const
+                ResultType: 'simple' as const
             });
         }
 

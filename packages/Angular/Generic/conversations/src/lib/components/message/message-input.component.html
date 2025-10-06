@@ -1,0 +1,30 @@
+<div class="message-input-container">
+  <textarea
+    #messageTextarea
+    class="message-input"
+    [(ngModel)]="messageText"
+    [placeholder]="placeholder"
+    [disabled]="disabled || isSending"
+    (keydown)="onKeyDown($event)"
+    rows="3">
+  </textarea>
+  <div class="input-actions">
+    <div class="processing-indicator" *ngIf="isProcessing">
+      <i class="fas fa-circle-notch fa-spin"></i>
+      <span>AI is responding...</span>
+    </div>
+    <button
+      class="btn-attach"
+      [disabled]="disabled"
+      title="Attach file (coming soon)">
+      <i class="fas fa-paperclip"></i>
+    </button>
+    <button
+      class="btn-send"
+      [disabled]="!canSend"
+      (click)="onSend()"
+      [title]="isSending ? 'Sending...' : 'Send message'">
+      <i class="fas fa-paper-plane"></i>
+    </button>
+  </div>
+</div>

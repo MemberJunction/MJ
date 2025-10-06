@@ -172,26 +172,33 @@ export class AIPromptRunner {
     prompt?: AIPromptEntityExtended;
     model?: AIModelEntityExtended;
     severity?: 'warning' | 'error' | 'critical';
+    maxErrorLength?: number;
   }): void {
-    const errorMessage = error instanceof Error ? error.message : error;
+    let errorMessage = error instanceof Error ? error.message : error;
     const errorObj = error instanceof Error ? error : undefined;
-    
+
+    // Truncate extremely long error messages (like Groq's failed_generation JSON dumps)
+    // Only truncate if maxErrorLength is explicitly set
+    if (options?.maxErrorLength !== undefined && errorMessage.length > options.maxErrorLength) {
+      errorMessage = errorMessage.substring(0, options.maxErrorLength) + '... [truncated]';
+    }
+
     const metadata: Record<string, any> = {
       ...options?.metadata
     };
-    
+
     // Add prompt information if available
     if (options?.prompt) {
       metadata.promptId = options.prompt.ID;
       metadata.promptName = options.prompt.Name;
     }
-    
-    // Add model information if available  
+
+    // Add model information if available
     if (options?.model) {
       metadata.modelId = options.model.ID;
       metadata.modelName = options.model.Name;
     }
-    
+
     LogErrorEx({
       message: errorMessage,
       error: errorObj,
@@ -394,7 +401,8 @@ export class AIPromptRunner {
         metadata: {
           executionPhase: 'main-execution',
           hasChildPrompts: !!params.childPrompts?.length
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
 
       const endTime = new Date();
@@ -423,7 +431,8 @@ export class AIPromptRunner {
             metadata: {
               promptRunId: promptRun.ID,
               errorMessage: promptRun.LatestResult?.Message
-            }
+            },
+            maxErrorLength: params.maxErrorLength
           });
         }
       }
@@ -744,7 +753,8 @@ export class AIPromptRunner {
           promptRunId: consolidatedPromptRun.ID,
           executionTasks: executionTasks.length,
           successfulResults: successfulResults.length
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
     }
 
@@ -951,7 +961,8 @@ export class AIPromptRunner {
           category: 'ChildTemplateRendering',
           metadata: {
             placeholder: childParam.parentPlaceholder
-          }
+          },
+          maxErrorLength: params.maxErrorLength
         });
         
         // Return error result but allow other children to continue
@@ -976,7 +987,8 @@ export class AIPromptRunner {
           failedCount: failedChildren.length,
           totalCount: childResults.length,
           failedPlaceholders: failedChildren.map(fc => fc.placeholder)
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
 
       // any child render failure means we must throw an error
@@ -1065,7 +1077,8 @@ export class AIPromptRunner {
         metadata: {
           childPromptCount: params.childPrompts?.length || 0,
           templateId: prompt.TemplateID
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
       throw error;
     }
@@ -1135,7 +1148,8 @@ export class AIPromptRunner {
         this.logError(`No suitable model candidates found for prompt ${prompt.Name}`, {
           category: 'ModelSelection',
           prompt: prompt,
-          severity: 'critical'
+          severity: 'critical',
+          maxErrorLength: params?.maxErrorLength
         });
         return {
           model: null,
@@ -1224,7 +1238,8 @@ export class AIPromptRunner {
     } catch (error) {
       this.logError(error, {
         category: 'ModelSelection',
-        prompt: prompt
+        prompt: prompt,
+        maxErrorLength: params?.maxErrorLength
       });
       return {
         model: null,
@@ -1628,7 +1643,8 @@ export class AIPromptRunner {
       metadata: {
         candidatesChecked: candidates.length,
         modelsChecked: consideredModels.length
-      }
+      },
+      maxErrorLength: params?.maxErrorLength
     });
     
     return { selected: null, consideredModels };
@@ -1848,7 +1864,8 @@ export class AIPromptRunner {
             promptId: prompt.ID,
             modelId: model.ID,
             vendorId
-          }
+          },
+          maxErrorLength: params.maxErrorLength
         });
         throw new Error(error);
       }
@@ -1871,7 +1888,8 @@ export class AIPromptRunner {
         metadata: {
           promptRunId: promptRun.ID,
           saveError: promptRun.LatestResult?.Message
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
       throw new Error(msg);
     }
@@ -1912,7 +1930,8 @@ export class AIPromptRunner {
           templateId: template.ID,
           templateName: template.Name,
           hasChildPrompts: !!params.childPrompts?.length
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
       throw error;
     }
@@ -2412,7 +2431,8 @@ export class AIPromptRunner {
         model: model,
         metadata: {
           vendorId
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
       throw error;
     }
@@ -2591,7 +2611,8 @@ export class AIPromptRunner {
             attempt: attempt + 1,
             maxRetries: maxRetries + 1,
             modelName: selectedModel.Name
-          }
+          },
+          maxErrorLength: params.maxErrorLength
         });
 
         // Record failed attempt
@@ -2896,7 +2917,8 @@ export class AIPromptRunner {
           rawOutput: rawOutput?.substring(0, 200),
           outputType: prompt.OutputType,
           parseAttempt: true
-        }
+        },
+        maxErrorLength: params?.maxErrorLength
       });
 
       // Handle validation behavior
@@ -2917,7 +2939,8 @@ export class AIPromptRunner {
             metadata: {
               validationPath: error.dataPath,
               validationMessage: error.message
-            }
+            },
+            maxErrorLength: params?.maxErrorLength
           });
           return { result: modelResult.data?.choices?.[0]?.message?.content, validationResult, validationErrors: validationResult.Errors };
         case 'None':
@@ -3086,9 +3109,10 @@ export class AIPromptRunner {
       this.logError(new Error('Raw output does not contain any JSON-like characters'), {
         category: 'JSONRepairSkipped',
         metadata: {
-          originalError: originalError.message,     
+          originalError: originalError.message,
           rawOutput: rawOutput.substring(0, 500)
-        }
+        },
+        maxErrorLength: params.maxErrorLength
       });
       throw new Error(`JSON repair skipped: raw output does not contain JSON-like characters. Original error: ${originalError.message}`);
     }
@@ -3107,7 +3131,8 @@ export class AIPromptRunner {
           metadata: {
             originalError: originalError.message,
             rawOutput: rawOutput.substring(0, 500)
-          }
+          },
+          maxErrorLength: params.maxErrorLength
         });
       }
       const json5Result = JSON5.parse(jsonToParse);
@@ -3159,7 +3184,8 @@ export class AIPromptRunner {
             json5Error: json5Error.message,
             aiError: aiRepairError.message,
             rawOutput: rawOutput.substring(0, 500)
-          }
+          },
+          maxErrorLength: params.maxErrorLength
         });
         
         throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
@@ -3474,11 +3500,23 @@ export class AIPromptRunner {
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        this.logError(`Failed to update AIPromptRun with results: ${promptRun.LatestResult?.Message || 'Unknown error'}`, {
+        // Safely extract error message - LatestResult.Message might be an Error object or string
+        let errorMsg = 'Unknown error';
+        try {
+          if (promptRun.LatestResult?.Message) {
+            errorMsg = typeof promptRun.LatestResult.Message === 'string'
+              ? promptRun.LatestResult.Message
+              : String(promptRun.LatestResult.Message);
+          }
+        } catch (msgError) {
+          errorMsg = 'Error accessing error message';
+        }
+
+        this.logError(`Failed to update AIPromptRun with results: ${errorMsg}`, {
           category: 'PromptRunUpdate',
           metadata: {
             promptRunId: promptRun.ID,
-            updateError: promptRun.LatestResult?.Message
+            updateError: errorMsg
           }
         });
       }

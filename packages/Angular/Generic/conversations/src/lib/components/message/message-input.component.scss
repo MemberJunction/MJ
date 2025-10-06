@@ -1,0 +1,100 @@
+.message-input-container {
+  padding: 16px 24px;
+  border-top: 1px solid #D9D9D9;
+  background: #FFF;
+}
+
+.message-input-wrapper {
+  border: 2px solid #D9D9D9;
+  border-radius: 8px;
+  padding: 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: #FFF;
+}
+
+.message-input-wrapper:focus-within {
+  border-color: #0076B6;
+  box-shadow: 0 0 0 3px rgba(0, 118, 182, 0.1);
+}
+
+.message-input {
+  width: 100%;
+  padding: 0;
+  border: none;
+  resize: none;
+  font-family: inherit;
+  font-size: 14px;
+  min-height: 40px;
+  max-height: 200px;
+  line-height: 1.5;
+}
+
+.message-input:focus {
+  outline: none;
+}
+
+.message-input:disabled {
+  background: #F4F4F4;
+  cursor: not-allowed;
+}
+.input-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+.btn-attach {
+  padding: 8px 16px;
+  background: transparent;
+  border: 1px solid #D9D9D9;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-attach:hover:not(:disabled) {
+  background: #F4F4F4;
+  border-color: #AAA;
+}
+.btn-attach:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-send {
+  width: 40px;
+  height: 40px;
+  background: #3B82F6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.btn-send:hover:not(:disabled) {
+  background: #2563EB;
+}
+.btn-send:disabled {
+  background: #D9D9D9;
+  color: #AAA;
+  cursor: not-allowed;
+}
+.btn-send i {
+  font-size: 16px;
+}
+.processing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #6B7280;
+  margin-right: auto;
+}
+.processing-indicator i {
+  color: #0076B6;
+}
