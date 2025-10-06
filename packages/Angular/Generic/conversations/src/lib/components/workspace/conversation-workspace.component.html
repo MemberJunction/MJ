@@ -1,0 +1,64 @@
+<div class="conversation-workspace" [attr.data-layout]="layout" mjSearchShortcut (searchTriggered)="openSearch()" kendoDialogContainer>
+  <!-- Top Navigation Bar -->
+  <div class="workspace-navigation">
+    <mj-conversation-navigation
+      [activeTab]="activeTab"
+      [environmentId]="environmentId"
+      (tabChanged)="onTabChanged($event)"
+      (sidebarToggled)="toggleSidebar()"
+      (searchTriggered)="openSearch()">
+    </mj-conversation-navigation>
+  </div>
+
+  <div class="workspace-content">
+    <!-- Left Sidebar (hidden when Collections view is active) -->
+    <div class="workspace-sidebar" *ngIf="isSidebarVisible && activeTab !== 'collections'" [style.width.px]="sidebarWidth">
+      <mj-conversation-sidebar
+        [activeTab]="activeTab"
+        [environmentId]="environmentId"
+        [currentUser]="currentUser"
+        [renamedConversationId]="renamedConversationId">
+      </mj-conversation-sidebar>
+    </div>
+
+    <!-- Resize handle for sidebar -->
+    <div class="sidebar-resize-handle" *ngIf="isSidebarVisible && activeTab !== 'collections'" (mousedown)="onSidebarResizeStart($event)"></div>
+
+    <!-- Collections Full-Panel View -->
+    <div class="workspace-main" *ngIf="activeTab === 'collections'">
+      <mj-collections-full-view
+        [environmentId]="environmentId"
+        [currentUser]="currentUser">
+      </mj-collections-full-view>
+    </div>
+
+    <!-- Main Chat Area (only shown when not in Collections view) -->
+    <div class="workspace-main" *ngIf="activeTab !== 'collections'">
+      <mj-conversation-chat-area
+        [environmentId]="environmentId"
+        [currentUser]="currentUser"
+        (conversationRenamed)="onConversationRenamed($event)">
+      </mj-conversation-chat-area>
+    </div>
+
+    <!-- Right Artifact Panel -->
+    <div class="workspace-artifact-panel" *ngIf="isArtifactPanelOpen">
+      <mj-artifact-panel
+        [currentUser]="currentUser"
+        (close)="closeArtifactPanel()">
+      </mj-artifact-panel>
+    </div>
+  </div>
+
+  <!-- Global Search Panel -->
+  <mj-search-panel
+    [isOpen]="isSearchPanelOpen"
+    [environmentId]="environmentId"
+    [currentUser]="currentUser"
+    (close)="closeSearch()"
+    (resultSelected)="handleSearchResult($event)">
+  </mj-search-panel>
+
+  <!-- Toast Notifications -->
+  <mj-toast></mj-toast>
+</div>

@@ -42,6 +42,7 @@
     "@memberjunction/ng-shared": "2.103.0",
     "@memberjunction/ng-tabstrip": "2.103.0",
     "@memberjunction/ng-skip-chat": "2.103.0",
+    "@memberjunction/ng-conversations": "2.103.0",
     "@memberjunction/ng-ask-skip": "2.103.0",
     "@memberjunction/ng-auth-services": "2.103.0",
     "@memberjunction/ng-explorer-settings": "2.103.0",

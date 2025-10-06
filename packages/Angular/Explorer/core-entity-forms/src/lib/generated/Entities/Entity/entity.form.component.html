@@ -538,19 +538,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Record Links" [Visible]="record.IsSaved"> 
-                        MJ: Record Links
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Links','SourceEntityID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Record Links')"
-                            [AllowLoad]="IsCurrentTab('MJ: Record Links')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: Access Control Rules" [Visible]="record.IsSaved"> 
                         MJ: Access Control Rules
                     </mj-tab>
@@ -559,6 +546,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Access Control Rules','EntityID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Access Control Rules')"
                             [AllowLoad]="IsCurrentTab('MJ: Access Control Rules')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Record Links" [Visible]="record.IsSaved"> 
+                        MJ: Record Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Links','SourceEntityID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Record Links')"
+                            [AllowLoad]="IsCurrentTab('MJ: Record Links')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

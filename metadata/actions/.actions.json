@@ -1999,7 +1999,7 @@
   {
     "fields": {
       "Name": "Web Page Content",
-      "Description": "Retrieves and processes web page content with various output formats including text extraction, HTML parsing, and document conversion",
+      "Description": "Retrieves and processes web content in various formats including JSON APIs, PDF documents, DOCX files, XML, CSV, HTML and more - with intelligent content type detection and format conversion",
       "DriverClass": "__WebPageContent",
       "Type": "Custom",
       "Status": "Active",
@@ -2033,16 +2033,16 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Output format - 'text', 'html', 'markdown', 'json' (default: 'text')",
+            "Description": "Output format - 'auto' (intelligent detection), 'text', 'html', 'markdown', 'json'. Auto-detects and processes JSON, PDF, DOCX, XML, CSV, HTML, images and more (default: 'auto')",
             "IsRequired": false,
-            "DefaultValue": "text"
+            "DefaultValue": "auto"
           },
           "primaryKey": {
             "ID": "E013D3BF-E9B1-4B65-BB46-B2F293651FB0"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:29.970Z",
-            "checksum": "f6ee5a5d8c4a5bce32f19e8e383f1fec1eb2c29bb033c37e18e4ba477438aefe"
+            "lastModified": "2025-10-04T06:26:05.463Z",
+            "checksum": "f1d9d14e39966acbbc28820b0b798f67bad89907b5c88a56ada3da631f8f924d"
           }
         },
         {
@@ -2090,16 +2090,16 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Maximum content length to return (default: 50000 chars)",
+            "Description": "Maximum content length to return (default: 100000 chars)",
             "IsRequired": false,
-            "DefaultValue": "50000"
+            "DefaultValue": "100000"
           },
           "primaryKey": {
             "ID": "2749E985-DC09-4DD3-902B-BDB7C7E6B036"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:29.988Z",
-            "checksum": "9bce098579c3f5770778f64240b69d01763fdcb79573f4b52e0c5a74234ba96d"
+            "lastModified": "2025-10-04T06:26:05.473Z",
+            "checksum": "c56b6c5849aba0b9cc38d4363396e6bdf67230d4bfc4b2233afc40285c32244f"
           }
         }
       ],
@@ -2154,14 +2154,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_CONTENT_TYPE",
             "IsSuccess": false,
-            "Description": "ContentType must be one of: text, html, markdown, json"
+            "Description": "ContentType must be one of: auto, text, html, markdown, json"
           },
           "primaryKey": {
             "ID": "8FE1314F-9649-4AD5-922B-30D110E1F6E4"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:30.015Z",
-            "checksum": "dd0fa19ac5525475e4d63fb64bca49f7288073a3e085cd061f43438ee2279bce"
+            "lastModified": "2025-10-04T06:26:05.558Z",
+            "checksum": "8583057265f071eabc9c6f811d6acfa1138102e5a40718a605c9088ea21758bf"
           }
         },
         {
@@ -2199,14 +2199,14 @@
             "ActionID": "@parent:ID",
             "ResultCode": "UNSUPPORTED_CONTENT_TYPE",
             "IsSuccess": false,
-            "Description": "URL does not return supported content type"
+            "Description": "Rare edge case: content type could not be processed (supports JSON, PDF, DOCX, XML, CSV, HTML, images, text)"
           },
           "primaryKey": {
             "ID": "93FEBC8D-3375-4A7E-B0BA-92A03B4152AD"
           },
           "sync": {
-            "lastModified": "2025-08-12T19:54:30.033Z",
-            "checksum": "dc8c3b0a6d05a536ef0c19a8820dbd306381735ba8a9d54ae33d24e6f7d06712"
+            "lastModified": "2025-10-04T06:26:05.566Z",
+            "checksum": "d17ed3ad5c010da343e9455449eebd9519ce3ce44f9ccd62c2109f7323915034"
           }
         },
         {
@@ -2230,8 +2230,8 @@
       "ID": "81F96534-03F5-49E9-81B0-D8902A7645A3"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:29.137Z",
-      "checksum": "b27fe6504d78b21a6c8b13ce90ce6815c56fdfa0d888bdb711871feb7467c525"
+      "lastModified": "2025-10-04T06:26:04.652Z",
+      "checksum": "31fe00e9f66ec3dc603d75da7fbd48757499c63bf78215fcea64ff47a8cd0b88"
     }
   },
   {

@@ -1,0 +1,117 @@
+.message-list-container {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #FFF;
+  position: relative;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #AAA;
+  padding: 40px;
+  text-align: center;
+}
+
+.empty-state i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-state p {
+  font-size: 16px;
+  margin: 0;
+}
+
+/* Sticky Date Header */
+.sticky-date-header {
+  position: sticky;
+  top: 12px;
+  z-index: 100;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+  margin: 0;
+  pointer-events: none;
+}
+
+.sticky-date-wrapper {
+  pointer-events: auto;
+  position: relative;
+}
+
+.sticky-date-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid #D9D9D9;
+  border-radius: 16px;
+  background: white;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.sticky-date-button:hover {
+  background: #F4F4F4;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.sticky-date-button i {
+  font-size: 10px;
+  color: #6B7280;
+}
+
+/* Date Navigation Dropdown */
+.date-nav-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background: white;
+  border: 1px solid #D9D9D9;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  display: none;
+  z-index: 101;
+}
+
+.date-nav-dropdown.show {
+  display: block;
+}
+
+.date-nav-option {
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 14px;
+  color: #333;
+}
+
+.date-nav-option:hover {
+  background: #F3F4F6;
+}
+
+.date-nav-option.jump-to {
+  font-weight: 600;
+  color: #6B7280;
+  font-size: 12px;
+  cursor: default;
+  padding: 8px 16px 4px 16px;
+}
+
+.date-nav-option.jump-to:hover {
+  background: none;
+}
