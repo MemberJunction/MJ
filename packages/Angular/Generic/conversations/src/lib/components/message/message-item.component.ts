@@ -131,11 +131,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           role: agent.Description || 'AI Assistant'
         };
       } else {
-        console.log('⚠️ Agent not found in cache for ID:', agentID);
+        // Only log if the message is complete (should have AgentID by then)
+        if (this.message.Status === 'Complete') {
+          console.warn('⚠️ Agent not found in cache for ID:', agentID);
+        }
       }
-    } else {
-      console.log('⚠️ No AgentID on message or no Agents cache:', { agentID, hasCache: !!AIEngineBase.Instance?.Agents });
     }
+    // Note: In-progress messages won't have AgentID yet, so we don't log warnings for them
 
     // Default fallback for AI messages without agent info
     return {
@@ -170,6 +172,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Transform @mentions in text to HTML badge elements
+   * Uses inline HTML that markdown will preserve
    */
   private transformMentionsToHTML(text: string): string {
     if (!text) return '';
@@ -181,12 +184,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const parseResult = this.mentionParser.parseMentions(text, agents, users);
 
     // Replace each mention with an HTML badge
+    // Note: Handle both @"Agent Name" (quoted) and @AgentName formats
     let transformedText = text;
     for (const mention of parseResult.mentions) {
-      const mentionPattern = new RegExp(`@${this.escapeRegex(mention.name)}\\b`, 'gi');
       const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
+
+      // Match both quoted and unquoted versions
+      const quotedPattern = new RegExp(`@"${this.escapeRegex(mention.name)}"`, 'gi');
+      const unquotedPattern = new RegExp(`@${this.escapeRegex(mention.name)}(?![\\w"])`, 'gi');
+
       const badgeHTML = `<span class="${badgeClass}">@${mention.name}</span>`;
-      transformedText = transformedText.replace(mentionPattern, badgeHTML);
+
+      // Replace quoted version first, then unquoted
+      transformedText = transformedText.replace(quotedPattern, badgeHTML);
+      transformedText = transformedText.replace(unquotedPattern, badgeHTML);
     }
 
     return transformedText;
