@@ -319,8 +319,15 @@ export class GraphQLAIClient {
                                 parsed.data?.progress) {
 
                                 console.log('[GraphQLAIClient] Forwarding progress to callback:', parsed.data.progress);
-                                // Forward progress to callback
-                                params.onProgress!(parsed.data.progress);
+                                // Forward progress to callback with agentRunId in metadata
+                                const progressWithRunId = {
+                                    ...parsed.data.progress,
+                                    metadata: {
+                                        ...(parsed.data.progress.metadata || {}),
+                                        agentRunId: parsed.data.agentRunId
+                                    }
+                                };
+                                params.onProgress!(progressWithRunId);
                             } else {
                                 console.log('[GraphQLAIClient] Message does not match filter criteria:', {
                                     resolver: parsed.resolver,

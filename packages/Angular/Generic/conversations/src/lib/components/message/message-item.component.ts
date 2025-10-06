@@ -274,7 +274,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const classes: string[] = ['message-item'];
     if (this.isAIMessage) {
       classes.push('ai-message');
-      if (this.isTemporaryMessage) {
+      // Show in-progress styling for AI messages that are still processing
+      if (this.isTemporaryMessage || this.messageStatus === 'In-Progress') {
         classes.push('in-progress');
       }
     } else if (this.isUserMessage) {
