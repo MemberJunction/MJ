@@ -25,6 +25,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { MessageItemComponent } from './components/message/message-item.component';
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
+import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
@@ -69,6 +70,7 @@ const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
   MessageInputComponent,
+  MentionDropdownComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
   ConversationSidebarComponent,

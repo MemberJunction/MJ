@@ -58,3 +58,26 @@ export type ArtifactSortBy = 'name' | 'date' | 'type' | 'modified';
  * Grouping options for conversations
  */
 export type ConversationGroupBy = 'project' | 'date' | 'none';
+
+/**
+ * Type of entity being mentioned
+ */
+export type MentionType = 'agent' | 'user';
+
+/**
+ * Represents a mention in a message (@Agent or @User)
+ */
+export interface Mention {
+  type: MentionType;
+  id: string;
+  name: string;
+}
+
+/**
+ * Result of parsing mentions from a message
+ */
+export interface MentionParseResult {
+  mentions: Mention[];
+  agentMention: Mention | null; // Single agent mention (first one found)
+  userMentions: Mention[]; // All user mentions
+}

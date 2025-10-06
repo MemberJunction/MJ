@@ -12,6 +12,7 @@ import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/co
 import { UserInfo, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { Mention } from '../../models/conversation-state.model';
 
 /**
  * Component for displaying a single message in a conversation
@@ -147,6 +148,15 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.aiAgentInfo?.name === 'Conversation Manager Agent' || this.aiAgentInfo?.name === 'Conversation Manager';
   }
 
+  public get mentions(): Mention[] {
+    if (!(this.message as any).Mentions) return [];
+    try {
+      return JSON.parse((this.message as any).Mentions as string);
+    } catch {
+      return [];
+    }
+  }
+
   public get displayMessage(): string {
     // For Conversation Manager, only show the delegation line (starts with emoji)
     if (this.isConversationManager && this.message.Message) {
@@ -155,7 +165,21 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         return delegationMatch[0];
       }
     }
-    return this.message.Message || '';
+
+    // Replace mentions with formatted pills/badges in markdown
+    let message = this.message.Message || '';
+
+    if (this.mentions.length > 0) {
+      for (const mention of this.mentions) {
+        const mentionPattern = new RegExp(`@"${mention.name}"|@${mention.name.replace(/\s+/g, '\\s*')}`, 'gi');
+        const mentionBadge = mention.type === 'agent'
+          ? `<span class="mention-badge agent">@${mention.name}</span>`
+          : `<span class="mention-badge user">@${mention.name}</span>`;
+        message = message.replace(mentionPattern, mentionBadge);
+      }
+    }
+
+    return message;
   }
 
   public get isTemporaryMessage(): boolean {

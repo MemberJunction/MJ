@@ -1,0 +1,37 @@
+<div
+  *ngIf="visible && suggestions.length > 0"
+  class="mention-dropdown"
+  [style.top.px]="position.top"
+  [style.left.px]="position.left"
+>
+  <div class="mention-suggestions">
+    <div
+      *ngFor="let suggestion of suggestions; let i = index; trackBy: trackBySuggestion"
+      class="mention-suggestion"
+      [class.selected]="i === selectedIndex"
+      (click)="selectSuggestion(suggestion)"
+      (mouseenter)="selectedIndex = i"
+    >
+      <div class="suggestion-icon">
+        <i
+          *ngIf="suggestion.type === 'agent' && suggestion.icon"
+          class="fa-solid {{ suggestion.icon }}"
+        ></i>
+        <i
+          *ngIf="suggestion.type === 'user'"
+          class="fa-solid fa-user"
+        ></i>
+      </div>
+      <div class="suggestion-content">
+        <div class="suggestion-name">
+          <span class="suggestion-type-badge" *ngIf="suggestion.type === 'agent'">Agent</span>
+          <span class="suggestion-type-badge user" *ngIf="suggestion.type === 'user'">User</span>
+          {{ suggestion.displayName }}
+        </div>
+        <div class="suggestion-description" *ngIf="suggestion.description">
+          {{ suggestion.description }}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
