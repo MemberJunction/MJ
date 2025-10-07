@@ -53,6 +53,7 @@ import { LoadLMStudioLLM } from '@memberjunction/ai-lmstudio';
 import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
 import { LoadOllamaLLM } from '@memberjunction/ai-ollama';
 import { LoadLocalEmbedding } from '@memberjunction/ai-local-embeddings';
+import { LoadxAILLM } from '@memberjunction/ai-xai';
 // Load AI LLMs and Base AI Engine
 // These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
 // system. They are not tree-shaken because they are dynamically loaded at runtime.
@@ -65,6 +66,7 @@ LoadMistralLLM();
 LoadLMStudioLLM();
 LoadOpenRouterLLM();
 LoadOllamaLLM();
+LoadxAILLM();
 LoadLocalEmbedding();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
