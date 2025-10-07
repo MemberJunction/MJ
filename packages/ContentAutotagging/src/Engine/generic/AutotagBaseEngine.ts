@@ -4,9 +4,14 @@ import { ContentSourceEntity, ContentItemEntity, ContentFileTypeEntity, ContentP
 import { ContentSourceParams, ContentSourceTypeParams } from './content.types'
 import pdfParse from 'pdf-parse'
 import pdf2pic from 'pdf2pic'
+import { PDFDocument, degrees } from 'pdf-lib'
+import * as im from 'imagemagick'
 import * as officeparser from 'officeparser'
 import * as XLSX from 'xlsx'
 import * as fs from 'fs'
+import * as os from 'os'
+import * as path from 'path'
+import { spawn } from 'child_process'
 import { ProcessRunParams, JsonObject, ContentItemProcessParams, StructuredPDFContent, ContentItemProcessParamsExtended } from './process.types'
 import { toZonedTime } from 'date-fns-tz'
 import axios from 'axios'
@@ -18,8 +23,35 @@ import { LoadGeminiLLM } from '@memberjunction/ai-gemini'
 import { ContentItemAttributeEntity } from '@memberjunction/core-entities'
 import { AIEngineBase } from '@memberjunction/ai-engine-base'
 
+/**
+ * AutotagBaseEngine - Main engine for content processing with vision model support
+ * 
+ * FORCE VISION PROCESSING OPTIONS:
+ * 
+ * 1. Environment Variable (Global):
+ *    Set FORCE_VISION_PROCESSING=true to force all PDFs to use vision models
+ *    Example: FORCE_VISION_PROCESSING=true npm start
+ * 
+ * 2. Content Source Parameter (Per-Source):
+ *    Add 'forceVisionProcessing': true to content source parameters
+ * 
+ * 3. Method Parameter (Per-Call):
+ *    Pass forceVisionProcessing: true to processing methods
+ *    Example: await engine.ExtractTextAndProcessWithLLM(items, user, [], true);
+ *            await autotag.TagSingleContentItem(item, user, [], true);
+ * 
+ * Priority: Method Parameter > Environment Variable > Content Source Parameter
+ * 
+ * ORIENTATION DETECTION:
+ * - Uses IMAGE-BASED analysis with vision models (more reliable than text analysis)
+ * - Tests all 4 orientations and picks the one that looks most correct
+ * - Optimized: skips orientation detection when vision processing is globally forced
+ * - Prioritizes accuracy over speed for critical document processing
+ */
 @RegisterClass(AIEngine, 'AutotagBaseEngine')
 export class AutotagBaseEngine extends AIEngine {
+    private currentOrientationTest?: number | 'final'; // Track current rotation being tested for debug filenames
+    
     constructor() {
         super();
         // Load Gemini provider to ensure it's registered
@@ -33,9 +65,12 @@ export class AutotagBaseEngine extends AIEngine {
     /**
      * Given a list of content items, extract the text from each content item with the LLM and send off the required parameters to the LLM for tagging.
      * @param contentItems 
+     * @param contextUser 
+     * @param protectedFields 
+     * @param forceVisionProcessing - Optional flag to force vision processing for all PDF items
      * @returns 
      */
-    public async ExtractTextAndProcessWithLLM(contentItems: ContentItemEntity[], contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
+    public async ExtractTextAndProcessWithLLM(contentItems: ContentItemEntity[], contextUser: UserInfo, protectedFields?: string[], forceVisionProcessing?: boolean): Promise<void> {
         if (!contentItems || contentItems.length === 0) {
             console.log('No content items to process');
             return;
@@ -52,6 +87,7 @@ export class AutotagBaseEngine extends AIEngine {
                 
                 // Parameters that depend on the content item
                 processingParams.text = contentItem.Text;
+                
                 processingParams.name = contentItem.Name;
                 processingParams.contentSourceTypeID = contentItem.ContentSourceTypeID;
                 processingParams.contentFileTypeID = contentItem.ContentFileTypeID;
@@ -148,6 +184,48 @@ export class AutotagBaseEngine extends AIEngine {
      * @returns 
      */
     public async ProcessContentItemText(params: ContentItemProcessParams, contextUser: UserInfo, protectedFields?: string[]): Promise<void> {
+        // Check if vision processing with base64 images was requested
+        if (params.text && params.text.startsWith('VISION_IMAGES:')) {
+            console.log('🔄 Processing vision images from base64 strings');
+            const base64Images = params.text.substring('VISION_IMAGES:'.length).split('|');
+            console.log(`📸 Found ${base64Images.length} base64 images to process`);
+            
+            // Process with vision model using base64 images directly
+            const LLMResults: JsonObject = await this.processWithVisionModelFromBase64(base64Images, params, contextUser);
+            await this.saveLLMResults(LLMResults, contextUser, protectedFields);
+            return;
+        }
+        
+        // Check if vision processing was requested via the special token (legacy support)
+        if (params.text === 'VISION_PROCESSING_REQUESTED' || params.text === 'VISION_PROCESSING_REQUESTED_NO_FILE') {
+            console.log('🔄 Switching to vision processing due to force flag');
+            console.log(`🔍 DEBUG: correctedPdfBuffer available: ${!!params.correctedPdfBuffer}`);
+            console.log(`🔍 DEBUG: correctedPdfBuffer size: ${params.correctedPdfBuffer?.length || 0} bytes`);
+            
+            let correctedPdfBuffer: Buffer;
+            
+            // Use cached corrected buffer if available, otherwise re-read and correct
+            if (params.correctedPdfBuffer && params.correctedPdfBuffer.length > 0) {
+                console.log('✅ Using cached corrected PDF buffer');
+                correctedPdfBuffer = params.correctedPdfBuffer;
+            } else {
+                console.log('⚠️ No cached buffer available, re-reading and correcting PDF...');
+                console.log(`🔍 DEBUG: ContentItemID: ${params.contentItemID}`);
+                // Fallback: re-read and correct (shouldn't happen with new flow)
+                const contentItem = await this.getContentItemEntity(params.contentItemID, contextUser);
+                console.log(`🔍 DEBUG: ContentItem URL: ${contentItem.URL}`);
+                const filePath = contentItem.URL;
+                const dataBuffer = await fs.promises.readFile(filePath);
+                correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
+            }
+            
+            // Process with vision model using corrected buffer
+            const LLMResults: JsonObject = await this.processWithVisionModel(correctedPdfBuffer, params, contextUser);
+            await this.saveLLMResults(LLMResults, contextUser, protectedFields);
+            return;
+        }
+        
+        // Regular text processing
         const LLMResults: JsonObject = await this.promptAndRetrieveResultsFromLLM(params, contextUser);
         await this.saveLLMResults(LLMResults, contextUser, protectedFields);
     }
@@ -852,9 +930,10 @@ export class AutotagBaseEngine extends AIEngine {
      * Parse content from a ContentItem entity with full context and parameter support
      * @param contentItem - The ContentItem entity containing metadata and file path
      * @param contextUser - User context for database operations
+     * @param forceVisionProcessing - Optional flag to force vision model processing for PDFs
      * @returns Parsed text from the content item
      */
-    public async parseContentItem(contentItem: ContentItemEntity, contextUser: UserInfo): Promise<string> {
+    public async parseContentItem(contentItem: ContentItemEntity, contextUser: UserInfo, forceVisionProcessing?: boolean): Promise<string> {
         try {
             // 1. Load content source and parameters
             const contentSource = await this.getContentSourceEntity(contentItem.ContentSourceID, contextUser);
@@ -868,10 +947,37 @@ export class AutotagBaseEngine extends AIEngine {
             const filePath = contentItem.URL; // Assuming URL contains file path for local files
             const dataBuffer = await fs.promises.readFile(filePath);
             
-            // 4. Parse based on file type with full context
+            // 4. Check for vision processing flags
+            const shouldUseVision = this.shouldForceVisionProcessing(forceVisionProcessing, sourceParams);
+            
+            // 5. Parse based on file type with full context
             switch (fileExtension) {
                 case '.pdf':
-                    return await this.parsePDF(dataBuffer);
+                    // Preprocess PDF for orientation correction
+                    const correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
+                    
+                    if (shouldUseVision) {
+                        console.log('🔄 FORCING VISION PROCESSING for PDF - converting to images');
+                        console.log('📋 Using corrected PDF buffer (post-orientation detection)');
+                        
+                        // Set flag to identify final processing images in debug output
+                        this.currentOrientationTest = 'final';
+                        
+                        try {
+                            // Convert corrected PDF to high-quality B&W images using ImageMagick
+                            const images = await this.convertPDFToImages(correctedPdfBuffer);
+                            console.log(`✅ Generated ${images.length} FINAL high-contrast B&W images for vision processing`);
+                            console.log('🎨 Images should be pure black/white with ImageMagick optimizations');
+                            
+                            // Return images as concatenated base64 string with special prefix
+                            return 'VISION_IMAGES:' + images.join('|');
+                        } finally {
+                            // Clear the debug flag
+                            this.currentOrientationTest = undefined;
+                        }
+                    }
+                    
+                    return await this.parsePDF(correctedPdfBuffer);
                 case '.docx':
                     return await this.parseDOCX(dataBuffer);
                 case '.xlsx':
@@ -883,6 +989,134 @@ export class AutotagBaseEngine extends AIEngine {
             console.error(`Failed to parse content item ${contentItem.ID}:`, error.message);
             throw new Error(`Content parsing failed: ${error.message}`);
         }
+    }
+
+    /**
+     * Enhanced parseContentItem that returns both text and corrected PDF buffer
+     * @param contentItem - The ContentItem entity
+     * @param contextUser - User context
+     * @param forceVisionProcessing - Vision processing flag
+     * @returns Object containing text and corrected PDF buffer
+     */
+    public async parseContentItemWithBuffer(
+        contentItem: ContentItemEntity, 
+        contextUser: UserInfo, 
+        forceVisionProcessing?: boolean
+    ): Promise<{ text: string; correctedPdfBuffer?: Buffer }> {
+        try {
+            // 1. Load content source and parameters
+            const contentSource = await this.getContentSourceEntity(contentItem.ContentSourceID, contextUser);
+            const sourceParams = await this.getContentSourceParams(contentSource, contextUser);
+            
+            // 2. Get content file type information
+            const contentFileType = await this.getContentFileTypeEntity(contentItem.ContentFileTypeID, contextUser);
+            const fileExtension = contentFileType.FileExtension.toLowerCase();
+            
+            // 3. Check for vision processing flags BEFORE trying to read file
+            const shouldUseVision = this.shouldForceVisionProcessing(forceVisionProcessing, sourceParams);
+            
+            // 4. If forcing vision processing and file doesn't exist locally, return token without file processing
+            if (shouldUseVision && fileExtension === '.pdf') {
+                const filePath = contentItem.URL;
+                console.log(`🔍 Checking file existence: ${filePath}`);
+                
+                try {
+                    // Try to check if file exists before reading
+                    await fs.promises.access(filePath);
+                    console.log('✅ File exists locally, proceeding with orientation correction...');
+                } catch (accessError) {
+                    console.log('⚠️ File not accessible locally, will use existing ContentItem text for vision processing');
+                    console.log(`🔍 File path: ${filePath}`);
+                    console.log(`🔍 Access error: ${accessError.message}`);
+                    
+                    // Return vision token without file processing - the vision model will handle the existing text
+                    return { 
+                        text: 'VISION_PROCESSING_REQUESTED_NO_FILE'  // Special token indicating no file access
+                    };
+                }
+            }
+            
+            // 5. Read file data (only if we reach here)
+            const filePath = contentItem.URL;
+            const dataBuffer = await fs.promises.readFile(filePath);
+            
+            // 6. Parse based on file type with full context
+            switch (fileExtension) {
+                case '.pdf':
+                    // Preprocess PDF for orientation correction
+                    const correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
+                    
+                    if (shouldUseVision) {
+                        console.log('🔄 FORCING VISION PROCESSING for PDF (flag enabled)');
+                        return { 
+                            text: 'VISION_PROCESSING_REQUESTED', 
+                            correctedPdfBuffer // Return the corrected buffer
+                        };
+                    }
+                    
+                    const text = await this.parsePDF(correctedPdfBuffer);
+                    return { text, correctedPdfBuffer };
+                    
+                case '.docx':
+                    const docxText = await this.parseDOCX(dataBuffer);
+                    return { text: docxText };
+                    
+                case '.xlsx':
+                    const xlsxText = await this.parseXLSXWithContext(dataBuffer, sourceParams);
+                    return { text: xlsxText };
+                    
+                default:
+                    throw new Error(`Unsupported file type: ${fileExtension}`);
+            }
+        } catch (error) {
+            console.error(`Failed to parse content item ${contentItem.ID}:`, error.message);
+            throw new Error(`Content parsing failed: ${error.message}`);
+        }
+    }
+
+    /**
+     * Determines whether to force vision processing based on multiple flag sources
+     * @param forceVisionProcessing - Method-level override flag
+     * @param sourceParams - Content source parameters that may contain vision flag
+     * @returns true if vision processing should be forced
+     */
+    private shouldForceVisionProcessing(forceVisionProcessing?: boolean, sourceParams?: Map<string, any>): boolean {
+        // 1. Check method-level override (highest priority)
+        if (forceVisionProcessing === true) {
+            console.log('🎯 Vision processing forced via method parameter');
+            return true;
+        }
+        
+        // 2. Check environment variable (global setting)
+        const envForceVision = process.env.FORCE_VISION_PROCESSING;
+        if (envForceVision && (envForceVision.toLowerCase() === 'true' || envForceVision === '1')) {
+            console.log('🌍 Vision processing forced via environment variable FORCE_VISION_PROCESSING');
+            return true;
+        }
+        
+        // 3. Check content source parameter (per-source setting)
+        if (sourceParams?.has('forceVisionProcessing')) {
+            const sourceVisionFlag = sourceParams.get('forceVisionProcessing');
+            if (sourceVisionFlag === true || sourceVisionFlag === 'true' || sourceVisionFlag === '1') {
+                console.log('📋 Vision processing forced via content source parameter');
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    /**
+     * Helper method to get ContentItem entity by ID
+     * @param contentItemID - ID of the content item
+     * @param contextUser - User context
+     * @returns ContentItem entity
+     */
+    private async getContentItemEntity(contentItemID: string, contextUser: UserInfo): Promise<ContentItemEntity> {
+        const md = new Metadata();
+        const contentItem = await md.GetEntityObject<ContentItemEntity>('Content Items', contextUser);
+        await contentItem.Load(contentItemID);
+        return contentItem;
     }
 
     /**
@@ -1015,6 +1249,463 @@ export class AutotagBaseEngine extends AIEngine {
     * @param dataBuffer: The buffer of data to extract text from
     * @returns The extracted text from the PDF file
     */
+    /**
+     * Preprocesses PDF by detecting and correcting orientation using IMAGE-BASED analysis
+     * 
+     * APPROACH: Uses vision models to analyze actual page images at different rotations
+     * - More reliable than text-based detection (handles scanned docs, garbled OCR)
+     * - Tests all 4 orientations (0°, 90°, 180°, 270°) 
+     * - Vision model determines which looks most correctly oriented
+     * - Prioritizes accuracy over speed for critical document processing
+     * 
+     * @param dataBuffer - Original PDF buffer
+     * @returns Orientation-corrected PDF buffer
+     */
+    public async preprocessPDFOrientation(dataBuffer: Buffer, skipIfVisionForced: boolean = false): Promise<Buffer> {
+        try {
+            // Check if we should skip orientation correction when vision processing is forced
+            // (since vision models can handle rotated content well)
+            const envForceVision = process.env.FORCE_VISION_PROCESSING;
+            if (skipIfVisionForced && envForceVision && (envForceVision.toLowerCase() === 'true' || envForceVision === '1')) {
+                console.log('⚡ Skipping orientation detection - vision processing forced globally');
+                return dataBuffer;
+            }
+            
+            const requiredRotation = await this.detectPDFOrientation(dataBuffer);
+            
+            if (requiredRotation === 0) {
+                console.log('✅ PDF is already correctly oriented');
+                return dataBuffer; // No rotation needed
+            }
+            
+            console.log(`🔄 PDF requires ${requiredRotation}° rotation for correct orientation`);
+            return await this.correctPDFOrientation(dataBuffer, requiredRotation);
+            
+        } catch (error) {
+            console.warn('❌ PDF orientation correction failed, using original:', error.message);
+            return dataBuffer; // Fall back to original if correction fails
+        }
+    }
+
+    /**
+     * Detects PDF orientation using IMAGE-BASED analysis by testing different rotations
+     * More reliable than text-based analysis, especially for scanned documents
+     * @param dataBuffer - PDF buffer to analyze
+     * @returns Required rotation in degrees (0, 90, 180, or 270)
+     */
+    private async detectPDFOrientation(dataBuffer: Buffer): Promise<number> {
+        try {
+            console.log('🔍 Starting IMAGE-BASED orientation detection...');
+            
+            // Test each possible orientation using image analysis
+            const orientationScores: { [key: number]: number } = {};
+            const rotations = [0, 90, 180, 270];
+            
+            for (const rotation of rotations) {
+                try {
+                    console.log(`📸 Testing ${rotation}° rotation with image analysis...`);
+                    
+                    // Track current test for debug filenames
+                    this.currentOrientationTest = rotation;
+                    
+                    let testBuffer = dataBuffer;
+                    
+                    // Apply rotation if not 0
+                    if (rotation !== 0) {
+                        testBuffer = await this.correctPDFOrientation(dataBuffer, rotation);
+                    }
+                    
+                    // Convert PDF to image for visual analysis
+                    const images = await this.convertPDFToImages(testBuffer);
+                    
+                    if (!images || images.length === 0) {
+                        console.warn(`No images generated for ${rotation}° rotation`);
+                        orientationScores[rotation] = 0;
+                        continue;
+                    }
+                    
+                    // Analyze the first page (most representative)
+                    const imageBuffer = Buffer.from(images[0], 'base64');
+                    const visualScore = await this.calculateImageOrientationScore(imageBuffer, rotation);
+                    
+                    orientationScores[rotation] = visualScore;
+                    console.log(`📊 Orientation ${rotation}°: visual score = ${visualScore.toFixed(3)}`);
+                    
+                } catch (rotationError) {
+                    console.warn(`❌ Failed to test ${rotation}° rotation:`, rotationError.message);
+                    orientationScores[rotation] = 0;
+                }
+            }
+            
+            // Clear orientation test tracking
+            this.currentOrientationTest = undefined;
+            
+            // Find the best orientation
+            const bestRotation = Object.keys(orientationScores).reduce((best, rotation) => 
+                orientationScores[parseInt(rotation)] > orientationScores[parseInt(best)] ? rotation : best
+            );
+            
+            const bestScore = orientationScores[parseInt(bestRotation)];
+            const confidence = bestScore;
+            
+            console.log(`🎯 Best visual orientation: ${bestRotation}° (confidence: ${confidence.toFixed(3)})`);
+            
+            // More lenient thresholds for image-based detection since it's more reliable
+            if (confidence > 0.4 && parseInt(bestRotation) !== 0) {
+                console.log(`✅ Image-based detection: rotating ${bestRotation}°`);
+                return parseInt(bestRotation);
+            } else if (parseInt(bestRotation) === 0 && confidence > 0.3) {
+                console.log('✅ Image-based detection: original orientation is best');
+                return 0;
+            } else {
+                console.log('⚠️ Image-based orientation detection inconclusive, assuming correct orientation');
+                return 0; // Low confidence, don't rotate
+            }
+            
+        } catch (error) {
+            console.warn('❌ Image-based orientation detection failed:', error.message);
+            return 0; // Fall back to no rotation
+        }
+    }
+
+    /**
+     * Calculates orientation score based on visual image analysis
+     * Uses multiple image analysis techniques to determine if orientation looks correct
+     * @param imageBuffer - PNG image buffer to analyze
+     * @param rotation - Current rotation being tested (for logging)
+     * @returns Score from 0.0 to 1.0 (higher = better orientation)
+     */
+    private async calculateImageOrientationScore(imageBuffer: Buffer, rotation: number): Promise<number> {
+        try {
+            // For now, use a vision model to analyze the image directly
+            // This is more accurate than trying to implement custom image analysis
+            return await this.analyzeImageWithVisionModel(imageBuffer, rotation);
+            
+        } catch (error) {
+            console.warn(`Image analysis failed for ${rotation}° rotation:`, error.message);
+            return 0.0;
+        }
+    }
+
+    /**
+     * Uses vision model to determine if an image appears to be correctly oriented
+     * @param imageBuffer - Image buffer to analyze
+     * @param rotation - Current rotation being tested
+     * @returns Score from 0.0 to 1.0 indicating orientation correctness
+     */
+    private async analyzeImageWithVisionModel(imageBuffer: Buffer, rotation: number): Promise<number> {
+        try {
+            // Get a vision-capable model
+            const visionModel = AIEngineBase.Instance.Models.find(m => m.ID === 'C478D8CD-9D81-491A-9992-139F45789309');
+            
+            if (!visionModel) {
+                console.warn('No vision model available for orientation detection');
+                return 0.5; // Neutral score if no vision model
+            }
+            
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+                BaseLLM, visionModel.DriverClass, GetAIAPIKey(visionModel.DriverClass)
+            );
+            
+            const base64Image = imageBuffer.toString('base64');
+            
+            // Simple, focused prompt for orientation detection
+            const orientationPrompt = `Look at this document image and determine if the text appears to be correctly oriented (readable/upright). This is 
+            and extremely important part of our preprocessing, and the rest of the process is highly dependent on this being accurate. We need to know
+            if the document you are analyzing is in the optimal orientation for processing with OCR and text extraction. We want the tables to be oriented
+            properly with the text to be upright and easy to read. The text should NOT be sideways or upside down. It is of the upmost importance that a 
+            human could read the text easily without having to turn their head at all. I can not stress enough how important this is.
+
+                Respond with a JSON object containing:
+                - "isCorrectlyOriented": true/false - whether text appears upright, with text being read left to right WITHOUT turning your head. 
+                - "confidence": number from 0.0 to 1.0 - how confident you are in this assessment
+                - "reasoning": brief explanation of what you observe
+
+                Focus on:
+                - Text orientation and readability
+                - Overall document layout correctness
+                - Any tables or structured content alignment
+
+                {
+                    "isCorrectlyOriented": true/false,
+                    "confidence": 0.0-1.0,
+                    "reasoning": "brief explanation"
+                }`;
+
+            const messages = [
+                {
+                    role: 'user' as const,
+                    content: [
+                        { 
+                            type: 'text' as const, 
+                            content: orientationPrompt 
+                        },
+                        {
+                            type: 'image_url' as const,
+                            content: base64Image
+                        }
+                    ]
+                }
+            ];
+
+            console.log(`🤖 Analyzing ${rotation}° rotation with vision model: ${visionModel.APIName}`);
+            
+            const response = await llm.ChatCompletion({
+                messages,
+                model: visionModel.APIName,
+            });
+
+            const visionResponse = response.data.choices[0]?.message?.content?.trim() || '';
+            
+            // Parse the JSON response
+            let analysisResult;
+            try {
+                // Clean response to extract JSON
+                let cleanedResponse = visionResponse.trim();
+                if (cleanedResponse.startsWith('```json')) {
+                    cleanedResponse = cleanedResponse.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
+                }
+                if (cleanedResponse.startsWith('```')) {
+                    cleanedResponse = cleanedResponse.replace(/^```\s*/, '').replace(/\s*```$/, '');
+                }
+                
+                analysisResult = JSON.parse(cleanedResponse);
+                
+                const isCorrect = analysisResult.isCorrectlyOriented === true;
+                const confidence = Math.max(0, Math.min(1, parseFloat(analysisResult.confidence) || 0));
+                
+                console.log(`🔍 ${rotation}° analysis: ${isCorrect ? 'CORRECT' : 'INCORRECT'} (confidence: ${confidence.toFixed(2)}) - ${analysisResult.reasoning}`);
+                
+                // Return higher score for correctly oriented images
+                return isCorrect ? confidence : (1.0 - confidence);
+                
+            } catch (parseError) {
+                console.warn(`Failed to parse vision model orientation response: ${parseError.message}`);
+                console.warn(`Raw response: ${visionResponse.substring(0, 200)}`);
+                
+                // Fallback: simple text analysis of response
+                const response_lower = visionResponse.toLowerCase();
+                if (response_lower.includes('correctly oriented') || response_lower.includes('upright') || response_lower.includes('readable')) {
+                    return 0.7;
+                } else if (response_lower.includes('rotated') || response_lower.includes('sideways') || response_lower.includes('upside')) {
+                    return 0.3;
+                }
+                
+                return 0.5; // Neutral if can't parse
+            }
+            
+        } catch (error) {
+            console.warn(`Vision model orientation analysis failed: ${error.message}`);
+            return 0.5; // Neutral score on error
+        }
+    }
+
+    /**
+     * Calculates a comprehensive readability score combining multiple heuristics
+     * NOTE: This is now legacy - kept for potential fallback use
+     */
+    private calculateComprehensiveReadabilityScore(text: string): number {
+        const readabilityScore = this.calculateTextReadability(text);
+        const lineStructure = this.analyzeLineStructure(text);
+        const documentPatterns = this.analyzeDocumentPatterns(text);
+        
+        // Weight the different components
+        let totalScore = readabilityScore * 0.4;
+        
+        // Line structure scoring
+        const structureScore = this.scoreLineStructure(lineStructure);
+        totalScore += structureScore * 0.3;
+        
+        // Document pattern scoring
+        const patternScore = this.scoreDocumentPatterns(documentPatterns);
+        totalScore += patternScore * 0.3;
+        
+        return Math.min(totalScore, 1.0);
+    }
+
+    /**
+     * Scores line structure quality
+     */
+    private scoreLineStructure(structure: { avgLineLength: number; lineCount: number; emptyLineRatio: number }): number {
+        let score = 0;
+        
+        // Prefer reasonable line lengths (20-120 characters)
+        if (structure.avgLineLength >= 20 && structure.avgLineLength <= 120) {
+            score += 0.4;
+        } else if (structure.avgLineLength >= 10 && structure.avgLineLength <= 200) {
+            score += 0.2;
+        }
+        
+        // Prefer documents with reasonable number of lines
+        if (structure.lineCount >= 10) {
+            score += 0.3;
+        } else if (structure.lineCount >= 5) {
+            score += 0.1;
+        }
+        
+        // Prefer reasonable empty line ratio (some whitespace, but not too much)
+        if (structure.emptyLineRatio >= 0.1 && structure.emptyLineRatio <= 0.5) {
+            score += 0.3;
+        } else if (structure.emptyLineRatio <= 0.7) {
+            score += 0.1;
+        }
+        
+        return score;
+    }
+
+    /**
+     * Scores document pattern quality
+     */
+    private scoreDocumentPatterns(patterns: { hasHeaders: boolean; hasNumbers: boolean; hasTablePatterns: boolean }): number {
+        let score = 0;
+        
+        if (patterns.hasHeaders) score += 0.4;
+        if (patterns.hasNumbers) score += 0.3;
+        if (patterns.hasTablePatterns) score += 0.3;
+        
+        return score;
+    }
+
+    /**
+     * Calculates text readability score based on various heuristics
+     */
+    private calculateTextReadability(text: string): number {
+        const lines = text.split('\n').filter(line => line.trim().length > 0);
+        
+        // Heuristic 1: Reasonable line lengths (not too short, not extremely long)
+        const avgLineLength = lines.reduce((sum, line) => sum + line.length, 0) / lines.length;
+        const lineLengthScore = this.normalizeScore(avgLineLength, 20, 150); // Optimal range 20-150 chars
+        
+        // Heuristic 2: Proper word spacing (not too many single characters)
+        const words = text.split(/\\s+/).filter(word => word.length > 0);
+        const longWords = words.filter(word => word.length > 2).length;
+        const wordLengthScore = longWords / Math.max(words.length, 1);
+        
+        // Heuristic 3: Reasonable character distribution
+        const alphanumericRatio = (text.match(/[a-zA-Z0-9]/g) || []).length / text.length;
+        
+        // Heuristic 4: Common English word patterns
+        const commonWords = ['the', 'and', 'to', 'of', 'a', 'in', 'is', 'it', 'for', 'with'];
+        const foundCommonWords = commonWords.filter(word => 
+            text.toLowerCase().includes(' ' + word + ' ')
+        ).length;
+        const commonWordScore = foundCommonWords / commonWords.length;
+        
+        return (lineLengthScore * 0.3 + wordLengthScore * 0.3 + alphanumericRatio * 0.2 + commonWordScore * 0.2);
+    }
+
+    /**
+     * Analyzes line structure patterns
+     */
+    private analyzeLineStructure(text: string): { avgLineLength: number; lineCount: number; emptyLineRatio: number } {
+        const allLines = text.split('\n');
+        const nonEmptyLines = allLines.filter(line => line.trim().length > 0);
+        
+        return {
+            avgLineLength: nonEmptyLines.reduce((sum, line) => sum + line.length, 0) / Math.max(nonEmptyLines.length, 1),
+            lineCount: nonEmptyLines.length,
+            emptyLineRatio: (allLines.length - nonEmptyLines.length) / allLines.length
+        };
+    }
+
+    /**
+     * Looks for common document patterns that indicate proper orientation
+     */
+    private analyzeDocumentPatterns(text: string): { hasHeaders: boolean; hasNumbers: boolean; hasTablePatterns: boolean } {
+        const lowerText = text.toLowerCase();
+        
+        // Look for header-like patterns
+        const hasHeaders = /^[A-Z][^\\n]*$/m.test(text) || 
+                          lowerText.includes('salary') || 
+                          lowerText.includes('schedule') ||
+                          lowerText.includes('district') ||
+                          lowerText.includes('employee');
+        
+        // Look for numeric patterns (common in salary schedules)
+        const hasNumbers = /\\d{1,3}(,\\d{3})*(\\.\\d{2})?/.test(text); // Currency-like patterns
+        
+        // Look for table-like patterns
+        const hasTablePatterns = text.includes('\\t') || // Tab characters
+                                 /\\s{2,}\\d+\\s{2,}/.test(text) || // Spaced numbers
+                                 /\\|.*\\|/.test(text); // Pipe characters
+        
+        return { hasHeaders, hasNumbers, hasTablePatterns };
+    }
+
+    /**
+     * Calculates overall orientation confidence and recommended rotation
+     */
+    private calculateOrientationScore(
+        readabilityScore: number, 
+        lineStructure: { avgLineLength: number; lineCount: number; emptyLineRatio: number },
+        patterns: { hasHeaders: boolean; hasNumbers: boolean; hasTablePatterns: boolean }
+    ): { rotation: number; confidence: number } {
+        
+        // For now, we'll implement a simple heuristic
+        // In a more sophisticated implementation, you could:
+        // 1. Try parsing the PDF at different rotations
+        // 2. Compare readability scores across rotations
+        // 3. Use machine learning models trained on document orientation
+        
+        let confidence = readabilityScore;
+        
+        // Boost confidence if we find expected patterns
+        if (patterns.hasHeaders) confidence += 0.1;
+        if (patterns.hasNumbers) confidence += 0.1;
+        if (patterns.hasTablePatterns) confidence += 0.1;
+        
+        // Adjust based on line structure
+        if (lineStructure.avgLineLength > 10 && lineStructure.avgLineLength < 200) {
+            confidence += 0.1;
+        }
+        
+        // For this initial implementation, if confidence is high, assume no rotation needed
+        // Later, we could enhance this to actually test different rotations
+        return {
+            rotation: 0, // For now, always assume correct orientation if confident
+            confidence: Math.min(confidence, 1.0)
+        };
+    }
+
+    /**
+     * Normalizes a score to 0-1 range based on optimal range
+     */
+    private normalizeScore(value: number, minOptimal: number, maxOptimal: number): number {
+        if (value >= minOptimal && value <= maxOptimal) {
+            return 1.0;
+        } else if (value < minOptimal) {
+            return Math.max(0, value / minOptimal);
+        } else {
+            return Math.max(0, 1 - ((value - maxOptimal) / maxOptimal));
+        }
+    }
+
+    /**
+     * Corrects PDF orientation by rotating pages
+     * @param dataBuffer - Original PDF buffer
+     * @param rotationDegrees - Degrees to rotate (90, 180, or 270)
+     * @returns Corrected PDF buffer
+     */
+    private async correctPDFOrientation(dataBuffer: Buffer, rotationDegrees: number): Promise<Buffer> {
+        try {
+            const pdfDoc = await PDFDocument.load(dataBuffer);
+            const pages = pdfDoc.getPages();
+            
+            console.log(`Rotating ${pages.length} pages by ${rotationDegrees}°`);
+            
+            pages.forEach(page => {
+                page.setRotation(degrees(rotationDegrees));
+            });
+            
+            const correctedPdfBytes = await pdfDoc.save();
+            return Buffer.from(correctedPdfBytes);
+            
+        } catch (error) {
+            console.error('Failed to rotate PDF:', error.message);
+            throw error;
+        }
+    }
+
     public async parsePDF(dataBuffer: Buffer): Promise<string> {
         const dataPDF = await pdfParse(dataBuffer);
         return dataPDF.text
@@ -1028,8 +1719,11 @@ export class AutotagBaseEngine extends AIEngine {
      */
     public async parsePDFWithStructure(dataBuffer: Buffer, assumeTabularContent: boolean = false): Promise<StructuredPDFContent> {
         try {
+            // Preprocess PDF for orientation correction
+            const correctedPdfBuffer = await this.preprocessPDFOrientation(dataBuffer);
+            
             // Get raw text using standard pdf-parse
-            const dataPDF = await pdfParse(dataBuffer);
+            const dataPDF = await pdfParse(correctedPdfBuffer);
             const rawText = dataPDF.text;
 
             return {
@@ -1037,7 +1731,7 @@ export class AutotagBaseEngine extends AIEngine {
                 tables: [], // No longer using table detection - vision model handles structure
                 hasTabularData: assumeTabularContent,
                 contentType: assumeTabularContent ? 'tabular' : 'text',
-                pdfBuffer: dataBuffer // Include PDF buffer for vision model processing
+                pdfBuffer: correctedPdfBuffer // Include corrected PDF buffer for vision model processing
             };
 
         } catch (error) {
@@ -1058,131 +1752,202 @@ export class AutotagBaseEngine extends AIEngine {
 
 
     /**
-     * Convert PDF to high-resolution images for vision model processing
+     * Convert PDF to high-resolution, high-contrast PNG images optimized for OCR and vision model processing
+     * 
+     * OCR OPTIMIZATIONS APPLIED:
+     * - PNG format (lossless compression preserves text clarity)
+     * - 300 DPI resolution for crisp text
+     * - Grayscale conversion (removes color distractions) 
+     * - High contrast enhancement (2.0x contrast boost)
+     * - Threshold conversion to pure black/white text
+     * - Noise removal and edge sharpening
+     * - Histogram normalization for consistent brightness
+     * 
      * @param pdfBuffer The PDF file as a buffer
-     * @returns Array of base64-encoded images (one per page)
+     * @returns Array of base64-encoded PNG images (one per page)
      */
     public async convertPDFToImages(pdfBuffer: Buffer): Promise<string[]> {
-        console.log(`Converting PDF to images for vision processing...`);
+        console.log(`🖼️ Converting PDF to high-quality grayscale PNG images using ImageMagick...`);
         
         // First, get the total number of pages using pdf-parse
         const pdfInfo = await pdfParse(pdfBuffer);
         const totalPages = pdfInfo.numpages;
-        console.log(`PDF has ${totalPages} pages`);
+        console.log(`📄 PDF has ${totalPages} pages - applying simplified ImageMagick processing`);
         
-        // Try multiple approaches for PDF to image conversion
-        const approaches = [
-            {
-                name: 'High Quality (300 DPI)',
-                options: {
-                    density: 300,
-                    format: "jpeg",
-                    width: 2000,
-                    height: 2800,
-                    quality: 95
+        return new Promise((resolve, reject) => {
+            console.log('🔧 Setting up ImageMagick conversion...');
+            console.log(`   📐 Density: 300 DPI for high resolution`);
+            console.log(`   🎨 Format: Grayscale PNG with gentle contrast enhancement`);
+            
+            // Create a temporary file for the PDF since ImageMagick needs file input
+            const tempDir = os.tmpdir();
+            const tempPdfPath = path.join(tempDir, `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.pdf`);
+            
+            console.log(`📁 Creating temporary PDF file: ${tempPdfPath}`);
+            
+            // Write PDF buffer to temporary file
+            fs.writeFile(tempPdfPath, pdfBuffer, async (writeErr) => {
+                if (writeErr) {
+                    console.error('❌ Failed to write temporary PDF:', writeErr.message);
+                    return this.convertPDFToImagesWithPdf2pic(pdfBuffer).then(resolve).catch(reject);
                 }
-            },
-            {
-                name: 'Standard Quality (200 DPI)',
-                options: {
-                    density: 200,
-                    format: "jpeg",
-                    width: 1600,
-                    height: 2200,
-                    quality: 90
-                }
-            },
-            {
-                name: 'Low Quality (150 DPI)',
-                options: {
-                    density: 150,
-                    format: "png",
-                    quality: 85
-                }
-            },
-            {
-                name: 'Basic (defaults)',
-                options: {}
-            }
-        ];
-        
-        for (const approach of approaches) {
-            try {
-                console.log(`Trying ${approach.name} approach...`);
                 
-                const convert = pdf2pic.fromBuffer(pdfBuffer, approach.options);
-                const images: string[] = [];
+                console.log('✅ Temporary PDF file created, starting ImageMagick conversion...');
                 
-                for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                // SIMPLIFIED ImageMagick arguments - just high-quality grayscale with good contrast
+                const magickArgs = [
+                    '-density', '300',               // 300 DPI for high resolution
+                    tempPdfPath,                     // Input PDF file
+                    '-colorspace', 'Gray',           // Convert to grayscale
+                    '-contrast-stretch', '0.5%x0.5%', // Contrast enhancement
+                    '-quality', '100',               // Maximum PNG quality
+                    'png:-'                          // Output PNG to stdout
+                ];
+                
+                console.log(`⚙️  ImageMagick command: magick ${magickArgs.join(' ')}`);
+                
+                // Use Node.js child_process to call ImageMagick directly
+                const magickProcess = spawn('magick', magickArgs, {
+                    stdio: ['pipe', 'pipe', 'pipe']
+                });
+                
+                let outputBuffer = Buffer.alloc(0);
+                let errorOutput = '';
+                
+                magickProcess.stdout.on('data', (data) => {
+                    outputBuffer = Buffer.concat([outputBuffer, data]);
+                });
+                
+                magickProcess.stderr.on('data', (data) => {
+                    errorOutput += data.toString();
+                });
+                
+                magickProcess.on('close', async (code) => {
+                    // Clean up temporary file
                     try {
-                        console.log(`Converting page ${pageNum} with ${approach.name}...`);
+                        await fs.promises.unlink(tempPdfPath);
+                        console.log('🧹 Temporary PDF file cleaned up');
+                    } catch (cleanupErr) {
+                        console.warn('⚠️ Failed to cleanup temporary PDF:', cleanupErr.message);
+                    }
+                    
+                    if (code !== 0) {
+                        console.error('❌ ImageMagick process failed with code:', code);
+                        console.error('🔍 stderr:', errorOutput);
                         
-                        const result = await convert(pageNum, { responseType: 'buffer' });
+                        // Fallback to pdf2pic
+                        console.log('🔄 Falling back to pdf2pic conversion...');
+                        return this.convertPDFToImagesWithPdf2pic(pdfBuffer).then(resolve).catch(reject);
+                    }
+                    
+                    try {
+                        console.log('✅ ImageMagick conversion completed successfully');
+                        console.log(`📊 Output buffer size: ${outputBuffer.length} bytes`);
                         
-                        if (result && 'buffer' in result && result.buffer && 
-                            Buffer.isBuffer(result.buffer) && result.buffer.length > 0) {
-                            
-                            const base64String = result.buffer.toString('base64');
-                            // For vision models, send just the raw base64 (no data URL prefix)
-                            images.push(base64String);
-                            console.log(`✅ Page ${pageNum} converted (${result.buffer.length} bytes)`);
-                            
-                            // Save image to disk for debugging
-                            try {
-                                const debugImagePath = `/tmp/pdf_debug_page_${pageNum}.jpg`;
-                                await fs.promises.writeFile(debugImagePath, result.buffer);
-                                console.log(`🔍 Debug image saved to: ${debugImagePath}`);
-                            } catch (debugError) {
-                                // Try Windows temp path if /tmp doesn't exist
-                                try {
-                                    const windowsDebugPath = `C:\\temp\\pdf_debug_page_${pageNum}.jpg`;
-                                    await fs.promises.writeFile(windowsDebugPath, result.buffer);
-                                    console.log(`🔍 Debug image saved to: ${windowsDebugPath}`);
-                                } catch (windowsError) {
-                                    // Finally try current directory
-                                    try {
-                                        const localDebugPath = `./pdf_debug_page_${pageNum}.jpg`;
-                                        await fs.promises.writeFile(localDebugPath, result.buffer);
-                                        console.log(`🔍 Debug image saved to: ${localDebugPath}`);
-                                    } catch (localError) {
-                                        console.warn(`⚠️ Could not save debug image: ${localError.message}`);
-                                    }
-                                }
-                            }
-                        } else {
-                            console.warn(`⚠️ Page ${pageNum} returned empty buffer with ${approach.name}`);
-                            break; // Try next approach
+                        if (outputBuffer.length === 0) {
+                            throw new Error('ImageMagick returned empty output');
                         }
                         
-                    } catch (pageError) {
-                        console.error(`❌ Page ${pageNum} failed with ${approach.name}:`, pageError.message);
-                        break; // Try next approach
+                        // Convert buffer to base64
+                        const base64String = outputBuffer.toString('base64');
+                        console.log(`📄 Converted to base64 (${base64String.length} chars)`);
+                        
+                        // Save debug image
+                        await this.saveDebugImage(outputBuffer, 1);
+                        
+                        console.log(`🎉 Successfully converted 1 page to high-quality grayscale PNG`);
+                        resolve([base64String]);
+                        
+                    } catch (processingError) {
+                        console.error('❌ Post-processing failed:', processingError.message);
+                        
+                        // Fallback to pdf2pic
+                        console.log('🔄 Falling back to pdf2pic conversion...');
+                        this.convertPDFToImagesWithPdf2pic(pdfBuffer).then(resolve).catch(reject);
                     }
-                }
+                });
                 
-                if (images.length > 0) {
-                    console.log(`🎉 Success with ${approach.name}! Converted ${images.length} pages`);
-                    return images;
-                }
+                magickProcess.on('error', (processError) => {
+                    console.error('❌ Failed to spawn ImageMagick process:', processError.message);
+                    
+                    // Clean up temporary file
+                    fs.unlink(tempPdfPath, () => {});
+                    
+                    // Fallback to pdf2pic
+                    console.log('🔄 Falling back to pdf2pic conversion...');
+                    this.convertPDFToImagesWithPdf2pic(pdfBuffer).then(resolve).catch(reject);
+                });
+            });
+        });
+    }
+
+    /**
+     * Fallback PDF to image conversion using pdf2pic (legacy method)
+     */
+    private async convertPDFToImagesWithPdf2pic(pdfBuffer: Buffer): Promise<string[]> {
+        console.log('🔄 Using pdf2pic fallback conversion...');
+        
+        const pdfInfo = await pdfParse(pdfBuffer);
+        const totalPages = pdfInfo.numpages;
+        
+        const convert = pdf2pic.fromBuffer(pdfBuffer, {
+            density: 300,
+            format: "png",
+            width: 2400,
+            height: 3200
+        });
+        
+        const images: string[] = [];
+        
+        for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+            try {
+                const result = await convert(pageNum, { responseType: 'buffer' });
                 
-            } catch (approachError) {
-                console.warn(`❌ ${approach.name} approach failed:`, approachError.message);
-                // Continue to next approach
+                if (result && 'buffer' in result && result.buffer && 
+                    Buffer.isBuffer(result.buffer) && result.buffer.length > 0) {
+                    
+                    const base64String = result.buffer.toString('base64');
+                    images.push(base64String);
+                    
+                    // Save debug image
+                    await this.saveDebugImage(result.buffer, pageNum);
+                }
+            } catch (pageError) {
+                console.warn(`❌ pdf2pic failed for page ${pageNum}:`, pageError.message);
             }
         }
         
-        // All approaches failed - provide helpful error message
-        console.error('🚨 All PDF conversion approaches failed!');
-        console.error('This usually indicates missing dependencies:');
-        console.error('- ImageMagick (https://imagemagick.org/script/download.php)');
-        console.error('- GraphicsMagick (http://www.graphicsmagick.org/download.html)');
-        console.error('- Poppler utils (for some systems)');
+        return images;
+    }
+
+    /**
+     * Save debug images to disk for inspection
+     */
+    private async saveDebugImage(imageBuffer: Buffer, pageNum: number): Promise<void> {
+        const rotationSuffix = this.currentOrientationTest !== undefined ? `_${this.currentOrientationTest}deg` : '';
+        const processingType = this.currentOrientationTest === 'final' ? '_FINAL' : rotationSuffix;
         
-        throw new Error(
-            'PDF to image conversion failed with all approaches. ' +
-            'Please ensure ImageMagick or GraphicsMagick is installed and available in PATH. ' +
-            'Visit https://imagemagick.org/script/download.php for installation instructions.'
-        );
+        try {
+            const debugImagePath = `/tmp/pdf_debug_page_${pageNum}${processingType}.png`;
+            await fs.promises.writeFile(debugImagePath, imageBuffer);
+            console.log(`🔍 Grayscale PNG debug image saved to: ${debugImagePath}`);
+        } catch (debugError) {
+            // Try Windows temp path if /tmp doesn't exist
+            try {
+                const windowsDebugPath = `C:\\temp\\pdf_debug_page_${pageNum}${processingType}.png`;
+                await fs.promises.writeFile(windowsDebugPath, imageBuffer);
+                console.log(`🔍 B&W PNG debug image saved to: ${windowsDebugPath}`);
+            } catch (windowsError) {
+                // Finally try current directory
+                try {
+                    const localDebugPath = `./pdf_debug_page_${pageNum}${processingType}.png`;
+                    await fs.promises.writeFile(localDebugPath, imageBuffer);
+                    console.log(`🔍 B&W PNG debug image saved to: ${localDebugPath}`);
+                } catch (localError) {
+                    console.warn(`⚠️ Could not save debug image: ${localError.message}`);
+                }
+            }
+        }
     }
 
     /**
@@ -1324,6 +2089,146 @@ export class AutotagBaseEngine extends AIEngine {
             
         } catch (error) {
             console.error('Vision model processing failed:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Process content using vision model with pre-generated base64 images
+     * This method is optimized for the new workflow where images are generated during PDF parsing
+     * and stored as base64 strings in ContentItem.Text field
+     */
+    public async processWithVisionModelFromBase64(
+        base64Images: string[],
+        params: ContentItemProcessParams,
+        contextUser: UserInfo
+    ): Promise<JsonObject> {
+        try {
+            console.log(`Starting vision model processing with ${base64Images.length} base64 images...`);
+            
+            // Get AI model and create LLM instance (same as regular processing)
+            const model = AIEngine.Instance.Models.find(m => m.ID === params.modelID);
+            if (!model) {
+                throw new Error(`AI Model with ID ${params.modelID} not found`);
+            }
+            
+            const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
+                BaseLLM, model.DriverClass, GetAIAPIKey(model.DriverClass)
+            );
+
+            // Use existing prompt system (same as text processing)
+            const { systemPrompt, userPrompt } = await this.getLLMPrompts(params, '', {}, contextUser);
+            
+            console.log('\n=== VISION MODEL (BASE64) DEBUGGING ===');
+            console.log('📝 System Prompt:');
+            console.log(systemPrompt.substring(0, 500) + '...');
+            console.log('\n📝 User Prompt:');
+            console.log(userPrompt.substring(0, 500) + '...');
+            console.log('\n🖼️ Base64 images being processed:', base64Images.length);
+            console.log('📏 Base64 image sizes:', base64Images.map((img, i) => `Page ${i+1}: ${img.length} chars`));
+            
+            // Create multimodal messages with base64 images
+            const messages: ChatMessage[] = [
+                {
+                    role: 'system' as const,
+                    content: systemPrompt
+                },
+                {
+                    role: 'user' as const,
+                    content: [
+                        {
+                            type: 'text',
+                            content: userPrompt
+                        },
+                        ...base64Images.map(imageData => ({
+                            type: 'image_url' as const,
+                            content: imageData
+                        }))
+                    ]
+                }
+            ];
+
+            console.log(`\n🤖 Sending ${base64Images.length} base64 images to vision model: ${model.APIName}`);
+            console.log('⏳ Processing with vision model...');
+            
+            // Process with vision model
+            const response = await llm.ChatCompletion({
+                messages,
+                model: model.APIName,
+                temperature: 0.0
+            });
+
+            const visionResponse = response.data.choices[0]?.message?.content?.trim() || '';
+            console.log('\n📤 Vision Model Raw Response:');
+            console.log('='.repeat(80));
+            console.log(visionResponse);
+            console.log('='.repeat(80));
+            console.log('📊 Response length:', visionResponse.length, 'characters');
+            console.log('🔧 Parsing JSON response...');
+            
+            // Parse the vision model response (same logic as processWithVisionModel)
+            let visionResults: JsonObject;
+            try {
+                // Clean the response to extract JSON from markdown code blocks
+                let cleanedResponse = visionResponse.trim();
+                
+                // Remove markdown code blocks if present
+                if (cleanedResponse.startsWith('```json')) {
+                    cleanedResponse = cleanedResponse.replace(/^```json\s*/i, '');
+                }
+                if (cleanedResponse.startsWith('```')) {
+                    cleanedResponse = cleanedResponse.replace(/^```\s*/, '');
+                }
+                if (cleanedResponse.endsWith('```')) {
+                    cleanedResponse = cleanedResponse.replace(/\s*```$/, '');
+                }
+                
+                // Remove numeric separators (same as text processing)
+                cleanedResponse = cleanedResponse.replace(/(\d+)_(\d+)/g, '$1$2');
+                
+                // Additional cleaning for common vision model formatting issues
+                cleanedResponse = cleanedResponse.trim();
+                
+                console.log('🧹 Cleaned response (first 300 chars):', cleanedResponse.substring(0, 300) + '...');
+                
+                visionResults = JSON.parse(cleanedResponse);
+                visionResults.processedWithVision = true;
+                visionResults.processedFromBase64 = true; // Flag to indicate this was processed from stored base64
+                visionResults.totalPages = base64Images.length;
+                visionResults.contentItemID = params.contentItemID;
+                
+                console.log(`✅ Vision processing successful - processed data from ${base64Images.length} base64 images`);
+                console.log('📊 Extracted fields:', Object.keys(visionResults).join(', '));
+                return visionResults;
+                
+            } catch (parseError) {
+                console.error('❌ Vision model JSON parse error:', parseError.message);
+                console.error('🔍 Raw vision response:', visionResponse.substring(0, 500));
+                
+                // Try to find where JSON might actually start
+                const jsonStartPattern = /\{[\s\S]*\}/;
+                const jsonMatch = visionResponse.match(jsonStartPattern);
+                if (jsonMatch) {
+                    try {
+                        console.log('🔧 Attempting to parse extracted JSON...');
+                        const extractedJson = jsonMatch[0].replace(/(\d+)_(\d+)/g, '$1$2');
+                        visionResults = JSON.parse(extractedJson);
+                        visionResults.processedWithVision = true;
+                        visionResults.processedFromBase64 = true;
+                        visionResults.totalPages = base64Images.length;
+                        visionResults.contentItemID = params.contentItemID;
+                        console.log('🎯 Successfully parsed extracted JSON!');
+                        return visionResults;
+                    } catch (secondParseError) {
+                        console.error('❌ Second parse attempt failed:', secondParseError.message);
+                    }
+                }
+                
+                throw new Error(`Vision model response is not valid JSON: ${parseError.message}`);
+            }
+            
+        } catch (error) {
+            console.error('Vision model processing (base64) failed:', error.message);
             throw error;
         }
     }

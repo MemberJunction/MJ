@@ -194,7 +194,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
             
             try {
                 // Parse using centralized method
-                const parsedText = await this.engine.parseContentItem(contentItem, contextUser);
+                const parsedText = await this.engine.parseContentItem(contentItem, contextUser, true);
                 contentItem.Text = parsedText;
                 contentItem.Checksum = await this.engine.getChecksumFromText(parsedText);
                 contentItem.URL = originalURL; // Restore original blob path

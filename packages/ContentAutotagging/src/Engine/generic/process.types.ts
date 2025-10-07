@@ -15,6 +15,7 @@ export class ContentItemProcessParams {
     contentTypeID: string;
     contentFileTypeID: string;
     contentSourceTypeID: string;
+    correctedPdfBuffer?: Buffer; // Add buffer to pass corrected PDF through processing chain
 }
 
 export class ContentItemProcessResults {
