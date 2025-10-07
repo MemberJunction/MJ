@@ -2185,6 +2185,9 @@ export class BaseAgent {
         // Create AIAgentRunEntity
         this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
+        if (params.conversationDetailId) {
+            this._agentRun.ConversationDetailID = params.conversationDetailId;
+        }
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
         this._agentRun.UserID = params.contextUser?.ID || null;
