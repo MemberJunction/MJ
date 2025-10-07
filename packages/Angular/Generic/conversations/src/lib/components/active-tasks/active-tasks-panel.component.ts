@@ -23,7 +23,7 @@ import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.serv
             <span class="task-agent">{{ task.agentName }}</span>
             <span class="task-elapsed">{{ getElapsedTime(task) }}</span>
           </div>
-          <div class="task-status">{{ task.status }}</div>
+          <div class="task-status">{{ getTrimmedStatus(task.status) }}</div>
         </div>
       </div>
     </div>
@@ -144,5 +144,13 @@ export class ActiveTasksPanelComponent {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  getTrimmedStatus(status: string): string {
+    const maxLength = 50;
+    if (status.length <= maxLength) {
+      return status;
+    }
+    return status.substring(0, maxLength) + '...';
   }
 }

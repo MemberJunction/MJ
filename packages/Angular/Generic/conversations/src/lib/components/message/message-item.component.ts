@@ -8,8 +8,8 @@ import {
   AfterViewInit,
   OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
@@ -48,6 +48,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public isEditing: boolean = false;
   public editedText: string = '';
   private originalText: string = '';
+
+  // Agent run details
+  public isAgentDetailsExpanded: boolean = false;
+  public agentRun: AIAgentRunEntityExtended | null = null;
+  public isLoadingAgentRun: boolean = false;
 
   constructor(
     private cdRef: ChangeDetectorRef,
@@ -417,6 +422,130 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     event.stopPropagation();
     // TODO: Implement artifact export
     console.log('Export artifact for message:', this.message.ID);
+  }
+
+  /**
+   * Whether this message has an associated agent run
+   * Only true if AgentID is populated (which means an agent was invoked)
+   */
+  public get hasAgentRun(): boolean {
+    return !!(this.message as any).AgentID;
+  }
+
+  /**
+   * Get the AgentRunID from the message
+   */
+  public get agentRunId(): string | null {
+    return (this.message as any).AgentRunID || null;
+  }
+
+  /**
+   * Toggle the agent details panel expansion
+   */
+  public async toggleAgentDetails(): Promise<void> {
+    this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
+
+    // Load agent run data when expanding (if not already loaded)
+    if (this.isAgentDetailsExpanded && !this.agentRun && this.agentRunId) {
+      await this.loadAgentRun();
+    }
+
+    this.cdRef.detectChanges();
+  }
+
+  /**
+   * Load the agent run entity for this message
+   */
+  private async loadAgentRun(): Promise<void> {
+    if (!this.agentRunId) {
+      return;
+    }
+
+    this.isLoadingAgentRun = true;
+    this.cdRef.detectChanges();
+
+    try {
+      const md = new Metadata();
+      const agentRunEntity = await md.GetEntityObject<AIAgentRunEntityExtended>(
+        'MJ: AI Agent Runs',
+        this.currentUser
+      );
+
+      const loaded = await agentRunEntity.Load(this.agentRunId);
+      if (loaded) {
+        this.agentRun = agentRunEntity;
+      }
+    } catch (error) {
+      console.error('Error loading agent run:', error);
+    } finally {
+      this.isLoadingAgentRun = false;
+      this.cdRef.detectChanges();
+    }
+  }
+
+  /**
+   * Get formatted duration for the agent run
+   * Calculate from created to updated timestamp
+   */
+  public get agentRunDuration(): string | null {
+    if (!this.agentRun || !this.agentRun.__mj_CreatedAt || !this.agentRun.__mj_UpdatedAt) {
+      return null;
+    }
+
+    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+    const updatedAt = new Date(this.agentRun.__mj_UpdatedAt);
+    const diffMs = updatedAt.getTime() - createdAt.getTime();
+
+    if (diffMs <= 0) {
+      return null;
+    }
+
+    const seconds = diffMs / 1000;
+
+    if (seconds < 1) {
+      return `${Math.round(diffMs)}ms`;
+    } else if (seconds < 60) {
+      return `${seconds.toFixed(1)}s`;
+    } else {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}m ${secs}s`;
+    }
+  }
+
+  /**
+   * Get total tokens used in the agent run
+   */
+  public get agentRunTotalTokens(): number {
+    if (!this.agentRun) {
+      return 0;
+    }
+    return (this.agentRun.TotalPromptTokensUsed || 0) + (this.agentRun.TotalCompletionTokensUsed || 0);
+  }
+
+  /**
+   * Get total cost of the agent run
+   */
+  public get agentRunTotalCost(): number {
+    return this.agentRun?.TotalCost || 0;
+  }
+
+  /**
+   * Get number of steps in the agent run
+   */
+  public get agentRunStepCount(): number {
+    // Count from the Steps array if available
+    if (this.agentRun && (this.agentRun as any).Steps) {
+      return (this.agentRun as any).Steps.length;
+    }
+    return 0;
+  }
+
+  /**
+   * Format number with commas
+   */
+  public formatNumber(num: number): string {
+    return num.toLocaleString();
   }
 
 }

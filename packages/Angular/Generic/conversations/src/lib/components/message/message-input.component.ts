@@ -387,31 +387,50 @@ export class MessageInputComponent implements OnInit {
     mentionResult: MentionParseResult
   ): Promise<void> {
     let taskId: string | null = null;
+    let conversationManagerMessage: ConversationDetailEntity | null = null;
 
     // CRITICAL: Capture conversationId from user message at start
     // This prevents race condition when user switches conversations during async processing
     const conversationId = userMessage.ConversationID;
 
     try {
+      // Create AI message for Conversation Manager BEFORE invoking
+      const md = new Metadata();
+      conversationManagerMessage = await md.GetEntityObject<ConversationDetailEntity>(
+        'Conversation Details',
+        this.currentUser
+      );
+
+      // Look up Conversation Manager agent to get its ID
+      const conversationManagerAgent = AIEngineBase.Instance.Agents.find(a => a.Name === 'Conversation Manager');
+
+      conversationManagerMessage.ConversationID = conversationId;
+      conversationManagerMessage.Role = 'AI';
+      conversationManagerMessage.Message = '⏳ Starting...';
+      conversationManagerMessage.ParentID = userMessage.ID;
+      conversationManagerMessage.Status = 'In-Progress';
+      conversationManagerMessage.HiddenToUser = false;
+      if (conversationManagerAgent?.ID) {
+        conversationManagerMessage.AgentID = conversationManagerAgent.ID;
+      }
+
+      await conversationManagerMessage.Save();
+      this.messageSent.emit(conversationManagerMessage);
+
       // Use Conversation Manager to evaluate and route
       // Stage 1: Conversation Manager evaluates the message
       taskId = this.activeTasks.add({
         agentName: 'Conversation Manager',
         status: 'Evaluating message...',
         relatedMessageId: userMessage.ID,
-        conversationDetailId: userMessage.ID
+        conversationDetailId: conversationManagerMessage.ID
       });
-
-      // Update user message status to In-Progress
-      userMessage.Status = 'In-Progress';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage); // Trigger UI update
 
       const result = await this.agentService.processMessage(
         conversationId,
         userMessage,
         this.conversationHistory,
-        this.createProgressCallback(userMessage.ID, 'Conversation Manager')
+        this.createProgressCallback(conversationManagerMessage.ID, 'Conversation Manager')
       );
 
       // Remove Conversation Manager from active tasks
@@ -422,8 +441,13 @@ export class MessageInputComponent implements OnInit {
 
       if (!result || !result.success) {
         // Evaluation failed
-        userMessage.Status = 'Error';
-        userMessage.Error = result?.agentRun?.ErrorMessage || 'Agent evaluation failed';
+        conversationManagerMessage.Status = 'Error';
+        conversationManagerMessage.Message = `❌ Evaluation failed`;
+        conversationManagerMessage.Error = result?.agentRun?.ErrorMessage || 'Agent evaluation failed';
+        await conversationManagerMessage.Save();
+        this.messageSent.emit(conversationManagerMessage);
+
+        userMessage.Status = 'Complete';
         await userMessage.Save();
         this.messageSent.emit(userMessage);
         console.warn('⚠️ Conversation Manager failed:', result?.agentRun?.ErrorMessage);
@@ -438,24 +462,62 @@ export class MessageInputComponent implements OnInit {
 
       // Stage 2: Check for sub-agent invocation
       if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
+        // Hide the Conversation Manager message since delegation message will be shown
+        conversationManagerMessage.HiddenToUser = true;
+        conversationManagerMessage.Status = 'Complete';
+        await conversationManagerMessage.Save();
+        this.messageSent.emit(conversationManagerMessage);
+
         await this.handleSubAgentInvocation(userMessage, result, this.conversationId);
       }
       // Stage 3: Direct chat response from Conversation Manager
       else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
-        await this.handleAgentResponse(userMessage, result, this.conversationId);
+        // Update the existing message with the response
+        conversationManagerMessage.Message = result.agentRun.Message;
+        conversationManagerMessage.Status = 'Complete';
+        if (result.agentRun.ID) {
+          (conversationManagerMessage as any).AgentRunID = result.agentRun.ID;
+        }
+        await conversationManagerMessage.Save();
+        this.messageSent.emit(conversationManagerMessage);
+
+        // Handle artifacts if any
+        if (result.payload && Object.keys(result.payload).length > 0) {
+          await this.createArtifactFromPayload(result.payload, conversationManagerMessage, result.agentRun.AgentID);
+          console.log('🎨 Artifact created and linked to Conversation Manager message');
+          this.messageSent.emit(conversationManagerMessage);
+        }
+
+        userMessage.Status = 'Complete';
+        await userMessage.Save();
+        this.messageSent.emit(userMessage);
       }
       // Stage 4: Silent observation - check for agent continuity
       else {
         console.log('🔇 Conversation Manager chose to observe silently');
+        // Hide the Conversation Manager message
+        conversationManagerMessage.HiddenToUser = true;
+        conversationManagerMessage.Status = 'Complete';
+        await conversationManagerMessage.Save();
+        this.messageSent.emit(conversationManagerMessage);
+
         await this.handleSilentObservation(userMessage, this.conversationId);
       }
 
     } catch (error) {
       console.error('❌ Error processing message through agents:', error);
 
-      // Update message status to Error
-      userMessage.Status = 'Error';
-      userMessage.Error = String(error);
+      // Update conversationManagerMessage status to Error
+      if (conversationManagerMessage && conversationManagerMessage.ID) {
+        conversationManagerMessage.Status = 'Error';
+        conversationManagerMessage.Message = `❌ Error: ${String(error)}`;
+        conversationManagerMessage.Error = String(error);
+        await conversationManagerMessage.Save();
+        this.messageSent.emit(conversationManagerMessage);
+      }
+
+      // Mark user message as complete
+      userMessage.Status = 'Complete';
       await userMessage.Save();
       this.messageSent.emit(userMessage);
 

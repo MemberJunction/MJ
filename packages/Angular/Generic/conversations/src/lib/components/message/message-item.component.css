@@ -55,14 +55,17 @@
 .message-item.in-progress .message-text {
   color: #1F2937;
   font-weight: 500;
+  max-height: 150px;
+  overflow-y: auto;
+  display: block;
 }
 
-/* Progress icon - positioned to the right of message */
+/* Progress icon - positioned to the right of message, pushed down to avoid overlap */
 .message-item.in-progress .message-content::after {
   content: '';
   position: absolute;
   right: 12px;
-  top: 12px;
+  top: 22px;
   width: 16px;
   height: 16px;
   border: 2px solid #3B82F6;
@@ -534,4 +537,214 @@
 @keyframes statusPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+/* ============================================
+   Agent Run Badge & Details Panel
+   ============================================ */
+
+/* Agent run badge in header */
+.agent-run-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 100%);
+  color: white;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.agent-run-badge:hover {
+  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(147, 51, 234, 0.3);
+}
+
+.agent-run-badge i.fa-robot {
+  font-size: 12px;
+}
+
+.agent-run-badge .badge-text {
+  font-weight: 600;
+}
+
+.agent-run-badge .expand-icon {
+  font-size: 10px;
+  transition: transform 0.2s ease;
+}
+
+.agent-run-badge.expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+/* Agent details panel */
+.agent-details-panel {
+  margin-top: 12px;
+  padding: 16px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading state */
+.agent-details-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6B7280;
+  font-size: 13px;
+}
+
+.agent-details-loading i {
+  color: #9333EA;
+}
+
+/* Error state */
+.agent-details-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #DC2626;
+  font-size: 13px;
+}
+
+.agent-details-error i {
+  color: #DC2626;
+}
+
+/* Content header */
+.agent-details-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #E5E7EB;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+}
+
+.agent-details-header i {
+  color: #9333EA;
+}
+
+/* Details grid */
+.agent-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #E5E7EB;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.detail-value {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 600;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* Status badge in details */
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-pending {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.status-badge.status-running {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.status-badge.status-complete {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.status-badge.status-failed,
+.status-badge.status-error {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.status-badge.status-cancelled {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
+/* Footer with action button */
+.agent-details-footer {
+  padding-top: 12px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.btn-view-full-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: white;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-view-full-run:not(:disabled):hover {
+  background: #F9FAFB;
+  border-color: #9333EA;
+  color: #9333EA;
+}
+
+.btn-view-full-run:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-view-full-run i {
+  font-size: 12px;
 }
