@@ -5,10 +5,10 @@
 "@memberjunction/react-runtime": patch
 "@memberjunction/ai-prompts": patch
 "@memberjunction/server": patch
-"@memberjunction/component-registry": patch
+"@memberjunction/component-registry-server": patch
 "@memberjunction/component-registry-client-sdk": patch
 "@memberjunction/graphql-dataprovider": patch
-"@memberjunction/ai-coreplus": patch
+"@memberjunction/ai-core-plus": patch
 ---
 
 **Component Feedback System (Registry-Agnostic)**
