@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ng-compare-records
 
+## 2.104.0
+
+### Patch Changes
+
+- Updated dependencies [9ad6353]
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/core@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

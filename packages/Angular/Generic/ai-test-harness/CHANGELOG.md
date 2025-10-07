@@ -1,5 +1,34 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.104.0
+
+### Patch Changes
+
+- 8f2a4fa: Enhance Web Page Content action with comprehensive format support (resolves #1414)
+
+  **New Format Support**:
+
+  - JSON APIs, PDF, DOCX, XML, CSV, HTML, and images
+  - Intelligent content type detection from headers and file extensions
+  - New 'auto' mode for automatic format selection (default)
+
+  **Improvements**:
+
+  - Enhanced HTML to Markdown conversion (Turndown library)
+  - Robust HTML parsing with JSDOM
+  - Increased default MaxContentLength to 100,000 characters
+  - Fix '[object Object]' display in Prompt Runner UI
+
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+  - @memberjunction/graphql-dataprovider@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/ng-code-editor@2.104.0
+  - @memberjunction/ng-container-directives@2.104.0
+  - @memberjunction/ng-notifications@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/ng-shared@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

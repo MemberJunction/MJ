@@ -1,5 +1,75 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 2.104.0
+
+### Patch Changes
+
+- 49171c3: - Implement missing AI Agent Manager action drivers including
+  deactivate-agent, export-agent-bundle, set-agent-prompt, and
+  validate-agent-configuration
+
+  - Add comprehensive UUID validation with regex patterns to prevent SQL
+    conversion errors
+  - Enhance parameter validation and error handling across all actions
+  - Implement DRY principle by consolidating validation logic in base class
+  - Add transaction management infrastructure for future multi-record
+    operations
+  - Fix type safety issues with optional chaining for parameter handling
+  - Improve agent definition interfaces for better type safety
+  - Standardize error handling patterns across all action implementations
+
+  This completes the Agent Manager action system and resolves critical
+  validation errors that were preventing proper agent management
+  functionality.
+
+- 7980171: entity name corrections
+
+  ### Features
+
+  - **Resizable & Draggable Dialogs**: Converted all AI Agent dialog
+    types from DialogService to WindowService
+    - Added corner resizing and drag-and-drop movement capabilities for
+      all 7 dialog types
+    - Fixed z-index layering issues to render above MJExplorer banner
+    - Improved dialog styling with enhanced CSS and layout fixes
+  - **Enhanced AI Agent Form**: Major improvements to
+    ai-agent-form.component with expanded HTML layout and comprehensive
+    styling
+
+  ### Bug Fixes
+
+  - **Critical Entity Name Corrections**: Fixed entity references to use
+    proper "MJ: " prefix for newer core entities
+    - Fixed 'AI Agent Prompts' → 'MJ: AI Agent Prompts' (3 occurrences)
+    - Fixed 'AI Agent Runs' → 'MJ: AI Agent Runs' (4 occurrences)
+    - Ensures all entity references work correctly with the
+      MemberJunction framework and prevents runtime errors
+
+  ### Documentation
+
+  - Updated CLAUDE.md with comprehensive entity naming guidelines
+  - Added complete list of all 23 core entities requiring "MJ: " prefix
+  - Added warning section with code examples to prevent future entity
+    naming issues
+
+  ### Impact
+
+  - **Enhanced User Experience**: All AI Agent dialogs now provide
+    modern, resizable, and draggable interfaces
+  - **Database Compatibility**: Ensures proper entity schema compliance
+    across all AI services
+  - **Developer Guidance**: Comprehensive documentation prevents future
+    entity naming conflicts
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [9ad6353]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/actions-base@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/ai-agent-manager@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

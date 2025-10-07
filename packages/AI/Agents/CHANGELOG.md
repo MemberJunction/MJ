@@ -1,5 +1,27 @@
 # @memberjunction/ai-agents
 
+## 2.104.0
+
+### Patch Changes
+
+- e6df147: Add array indexing support to ActionInputMapping in Flow agents. Flow
+  agent ActionInputMapping now supports JavaScript-style array indexing
+  syntax (e.g., `payload.array[0]`, `payload.nested.records[5].field`) for
+  accessing specific array elements in payload references.
+- Updated dependencies [aafa827]
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+  - @memberjunction/ai-prompts@2.104.0
+  - @memberjunction/global@2.104.0
+  - @memberjunction/ai-core-plus@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/aiengine@2.104.0
+  - @memberjunction/actions-base@2.104.0
+  - @memberjunction/core@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

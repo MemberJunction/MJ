@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/component-registry-client-sdk",
-  "version": "2.103.0",
+  "version": "2.104.0",
   "description": "MemberJunction: Component Registry Client SDK",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.100.3",
-    "@memberjunction/core": "2.100.3",
-    "@memberjunction/interactive-component-types": "2.103.0"
+    "@memberjunction/global": "2.104.0",
+    "@memberjunction/core": "2.104.0",
+    "@memberjunction/interactive-component-types": "2.104.0"
   }
 }

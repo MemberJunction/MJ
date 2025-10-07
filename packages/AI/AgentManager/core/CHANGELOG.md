@@ -1,5 +1,7 @@
 # @memberjunction/ai-agent-manager
 
+## 2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

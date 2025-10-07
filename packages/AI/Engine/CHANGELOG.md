@@ -1,5 +1,20 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.104.0
+
+### Patch Changes
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/ai-core-plus@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/ai-engine-base@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/actions-base@2.104.0
+  - @memberjunction/core@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

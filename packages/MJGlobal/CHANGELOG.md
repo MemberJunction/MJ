@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.104.0
+
+### Minor Changes
+
+- 2ff5428: MJ & Skip Logo Updates
+
 ## 2.103.0
 
 ### Patch Changes

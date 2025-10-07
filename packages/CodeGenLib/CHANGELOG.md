@@ -1,5 +1,42 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.104.0
+
+### Patch Changes
+
+- 883933e: CodeGen SQL Dependency Ordering and Cascade Delete Fixes Fix critical CodeGen bugs causing SQL dependency errors and preventing cascade delete regeneration for modified entities.
+  - Add TempBatchFile utility class for dependency-ordered SQL execution
+  - Temp batch files maintain CodeGen log order (correct dependency order) for execution
+  - Combined \_all_entities.sql files remain alphabetical for clean git diffs
+  - Add SQL Server severity handling with -V 17 flag (only fail on severity ≥17 system errors)
+  - Fix EntityField sequence collisions with dynamic offset based on max existing sequence per entity
+  - Skip self-referential FKs in cascade delete dependency analysis
+    Enhance topological sort to handle circular dependencies gracefully
+  - Add proper cleanup of temp files on success and error paths
+- 6e7f14a: Fix stored procedure name construction for entities with special characters in
+  names. Changed fallback logic to use `BaseTableCodeName` instead of `ClassName`
+  when `spCreate`, `spUpdate`, or `spDelete` fields are null. This prevents
+  incorrect SP names like `spUpdateMJ_ComponentLibraries` (from ClassName) and
+  ensures correct names like `spUpdateComponentLibrary` (from BaseTableCodeName)
+  that match actual database stored procedures.
+- Updated dependencies [aafa827]
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+- Updated dependencies [6e7f14a]
+  - @memberjunction/ai-anthropic@2.104.0
+  - @memberjunction/ai-openai@2.104.0
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities-server@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/sqlserver-dataprovider@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/aiengine@2.104.0
+  - @memberjunction/ai-groq@2.104.0
+  - @memberjunction/ai-mistral@2.104.0
+  - @memberjunction/core@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

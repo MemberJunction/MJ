@@ -1,5 +1,29 @@
 # Change Log - @memberjunction/cli
 
+## 2.104.0
+
+### Patch Changes
+
+- 3f71ef4: Add new storage actions and external API integrations
+
+  - Add 13 individual file storage actions
+  - Add Gamma API integration for AI-powered presentation generation
+  - Add Perplexity Search action for AI-powered web search with
+    citations
+  - Add centralized configuration system for MJStorage drivers and
+    Core Actions
+  - Complete Box SDK v10 migration for BoxFileStorage driver
+  - Fix Box storage driver API endpoint errors (405 Method Not
+    Allowed)
+  - Fix CLI action parameter passing bug
+
+- Updated dependencies [883933e]
+- Updated dependencies [6e7f14a]
+  - @memberjunction/codegen-lib@2.104.0
+  - @memberjunction/sqlserver-dataprovider@2.104.0
+  - @memberjunction/ai-cli@2.104.0
+  - @memberjunction/metadata-sync@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

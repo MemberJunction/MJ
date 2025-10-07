@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 2.104.0
+
+### Patch Changes
+
+- 7980171: entity name corrections
+
+  ### Features
+
+  - **Resizable & Draggable Dialogs**: Converted all AI Agent dialog
+    types from DialogService to WindowService
+    - Added corner resizing and drag-and-drop movement capabilities for
+      all 7 dialog types
+    - Fixed z-index layering issues to render above MJExplorer banner
+    - Improved dialog styling with enhanced CSS and layout fixes
+  - **Enhanced AI Agent Form**: Major improvements to
+    ai-agent-form.component with expanded HTML layout and comprehensive
+    styling
+
+  ### Bug Fixes
+
+  - **Critical Entity Name Corrections**: Fixed entity references to use
+    proper "MJ: " prefix for newer core entities
+    - Fixed 'AI Agent Prompts' → 'MJ: AI Agent Prompts' (3 occurrences)
+    - Fixed 'AI Agent Runs' → 'MJ: AI Agent Runs' (4 occurrences)
+    - Ensures all entity references work correctly with the
+      MemberJunction framework and prevents runtime errors
+
+  ### Documentation
+
+  - Updated CLAUDE.md with comprehensive entity naming guidelines
+  - Added complete list of all 23 core entities requiring "MJ: " prefix
+  - Added warning section with code examples to prevent future entity
+    naming issues
+
+  ### Impact
+
+  - **Enhanced User Experience**: All AI Agent dialogs now provide
+    modern, resizable, and draggable interfaces
+  - **Database Compatibility**: Ensures proper entity schema compliance
+    across all AI services
+  - **Developer Guidance**: Comprehensive documentation prevents future
+    entity naming conflicts
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+- Updated dependencies [8f2a4fa]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/ai-core-plus@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/ng-ai-test-harness@2.104.0
+  - @memberjunction/ai-engine-base@2.104.0
+  - @memberjunction/actions-base@2.104.0
+  - @memberjunction/ng-base-forms@2.104.0
+  - @memberjunction/ng-form-toolbar@2.104.0
+  - @memberjunction/ng-code-editor@2.104.0
+  - @memberjunction/ng-container-directives@2.104.0
+  - @memberjunction/ng-deep-diff@2.104.0
+  - @memberjunction/ng-join-grid@2.104.0
+  - @memberjunction/ng-timeline@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/ng-action-gallery@2.104.0
+  - @memberjunction/ng-tabstrip@2.104.0
+
 ## 2.103.0
 
 ### Minor Changes

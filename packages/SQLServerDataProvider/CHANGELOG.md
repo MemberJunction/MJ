@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.104.0
+
+### Patch Changes
+
+- 6e7f14a: Fix stored procedure name construction for entities with special characters in
+  names. Changed fallback logic to use `BaseTableCodeName` instead of `ClassName`
+  when `spCreate`, `spUpdate`, or `spDelete` fields are null. This prevents
+  incorrect SP names like `spUpdateMJ_ComponentLibraries` (from ClassName) and
+  ensures correct names like `spUpdateComponentLibrary` (from BaseTableCodeName)
+  that match actual database stored procedures.
+- Updated dependencies [2ff5428]
+- Updated dependencies [9ad6353]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/aiengine@2.104.0
+  - @memberjunction/ai-vector-dupe@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/queue@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes

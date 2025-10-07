@@ -1,5 +1,53 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.104.0
+
+### Patch Changes
+
+- 8f2a4fa: Enhance Web Page Content action with comprehensive format support (resolves #1414)
+
+  **New Format Support**:
+
+  - JSON APIs, PDF, DOCX, XML, CSV, HTML, and images
+  - Intelligent content type detection from headers and file extensions
+  - New 'auto' mode for automatic format selection (default)
+
+  **Improvements**:
+
+  - Enhanced HTML to Markdown conversion (Turndown library)
+  - Robust HTML parsing with JSDOM
+  - Increased default MaxContentLength to 100,000 characters
+  - Fix '[object Object]' display in Prompt Runner UI
+
+- 3f71ef4: Add new storage actions and external API integrations
+
+  - Add 13 individual file storage actions
+  - Add Gamma API integration for AI-powered presentation generation
+  - Add Perplexity Search action for AI-powered web search with
+    citations
+  - Add centralized configuration system for MJStorage drivers and
+    Core Actions
+  - Complete Box SDK v10 migration for BoxFileStorage driver
+  - Fix Box storage driver API endpoint errors (405 Method Not
+    Allowed)
+  - Fix CLI action parameter passing bug
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+- Updated dependencies [3f71ef4]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities-server@2.104.0
+  - @memberjunction/ai-core-plus@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/storage@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai-vector-sync@2.104.0
+  - @memberjunction/communication-engine@2.104.0
+  - @memberjunction/content-autotagging@2.104.0
+  - @memberjunction/external-change-detection@2.104.0
+  - @memberjunction/core@2.104.0
+
 ## 2.103.0
 
 ### Patch Changes
