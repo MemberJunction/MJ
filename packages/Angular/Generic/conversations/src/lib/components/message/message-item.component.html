@@ -1,0 +1,178 @@
+<div [class]="messageClasses">
+  <div class="message-avatar">
+    <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
+      <i class="fas" [ngClass]="isAIMessage ? (aiAgentInfo?.iconClass || 'fa-robot') : 'fa-user'"></i>
+    </div>
+  </div>
+
+  <div class="message-content">
+    <div class="message-header">
+      <span class="message-sender" [title]="isAIMessage ? (aiAgentInfo?.role || 'AI Assistant') : ''">
+        {{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : currentUser.Name }}
+      </span>
+      <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
+
+      <!-- Generation time for completed AI messages -->
+      <span *ngIf="!isUserMessage && formattedGenerationTime && !isTemporaryMessage" class="generation-time">
+        <i class="fas fa-clock"></i>
+        {{ formattedGenerationTime }}
+      </span>
+
+      <!-- Agent run icon (clickable to expand details) -->
+      <span *ngIf="hasAgentRun"
+            class="agent-run-icon"
+            (click)="toggleAgentDetails()"
+            [class.expanded]="isAgentDetailsExpanded"
+            title="Click to view agent execution details">
+        <i class="fas fa-cog"></i>
+      </span>
+
+      <!-- Status indicator for user messages -->
+      <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">
+        <i class="fas" [ngClass]="messageStatus === 'Error' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'"></i>
+        <span class="status-text">{{ getStatusText() }}</span>
+      </span>
+
+      <!-- Elapsed time for AI messages still processing -->
+      <span *ngIf="isTemporaryMessage" class="message-elapsed">{{ _elapsedTimeFormatted }}</span>
+    </div>
+
+    <div class="message-body">
+      @if (!isEditing) {
+        <div class="message-text">
+          <markdown [data]="displayMessage"></markdown>
+          @if (isMessageEdited) {
+            <span class="edited-badge">(edited)</span>
+          }
+        </div>
+
+        <!-- Artifact Card (Claude.ai Style) -->
+        @if (hasArtifact) {
+          <div class="artifact-card" (click)="onArtifactClick()">
+            <div class="artifact-card-header">
+              <div class="artifact-card-icon">
+                <i class="fas fa-file-code"></i>
+              </div>
+              <div class="artifact-card-content">
+                <div class="artifact-card-label">Generated Artifact</div>
+                <div class="artifact-card-description">Click to view the generated content</div>
+              </div>
+            </div>
+          </div>
+        }
+      }
+
+      @if (isEditing) {
+        <div class="message-edit-container">
+          <textarea
+            class="message-edit-textarea"
+            [(ngModel)]="editedText"
+            (keydown)="onEditKeydown($event)"
+            rows="4"
+            placeholder="Edit your message..."></textarea>
+          <div class="edit-actions">
+            <button class="edit-action-btn save" (click)="saveEdit()">
+              <i class="fas fa-check"></i>
+              Save
+            </button>
+            <button class="edit-action-btn cancel" (click)="cancelEditing()">
+              <i class="fas fa-times"></i>
+              Cancel
+            </button>
+          </div>
+          <div class="edit-hint">
+            Press Enter to save, Shift+Enter for new line, Escape to cancel
+          </div>
+        </div>
+      }
+
+      <!-- Agent Run Details Panel (expandable) -->
+      @if (isAgentDetailsExpanded && hasAgentRun) {
+        <div class="agent-details-panel">
+          @if (agentRun) {
+            <div class="agent-details-content">
+              <div class="agent-details-header">
+                <i class="fas fa-chart-line"></i>
+                <span>
+                  <a class="agent-name-link" (click)="openAgentRecord()" title="Open agent details">
+                    {{ aiAgentInfo?.name || 'Agent' }}
+                  </a>
+                  Run Details
+                </span>
+              </div>
+
+              <div class="agent-details-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Run ID:</span>
+                  <span class="detail-value">
+                    <a class="run-id-link" (click)="openAgentRunRecord()" title="Open agent run details">
+                      {{ agentRun.ID }}
+                      <i class="fas fa-external-link-alt"></i>
+                    </a>
+                  </span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunDuration">
+                  <span class="detail-label">Duration:</span>
+                  <span class="detail-value">{{ agentRunDuration }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunStepCount > 0">
+                  <span class="detail-label">Steps:</span>
+                  <span class="detail-value">{{ agentRunStepCount }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunTotalTokens > 0">
+                  <span class="detail-label">Tokens:</span>
+                  <span class="detail-value">{{ formatNumber(agentRunTotalTokens) }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunTotalCost > 0">
+                  <span class="detail-label">Cost:</span>
+                  <span class="detail-value">\${{ agentRunTotalCost.toFixed(4) }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRun.Status">
+                  <span class="detail-label">Status:</span>
+                  <span class="detail-value status-badge" [class]="'status-' + agentRun.Status.toLowerCase()">
+                    {{ agentRun.Status }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="message-actions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+      <!-- Retry button for failed AI messages -->
+      <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry" *ngIf="messageStatus === 'Error' && isAIMessage">
+        <i class="fas fa-redo"></i>
+        Retry
+      </button>
+
+      <button class="message-action-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin' : 'Pin'">
+        <i class="fas" [ngClass]="message.IsPinned ? 'fa-thumbtack' : 'fa-thumbtack'"></i>
+      </button>
+      <button class="message-action-btn" (click)="onEditClick()" title="Edit" *ngIf="isUserMessage">
+        <i class="fas fa-edit"></i>
+      </button>
+      <button class="message-action-btn danger" (click)="onDeleteClick()" title="Delete">
+        <i class="fas fa-trash"></i>
+      </button>
+    </div>
+
+    <!-- Reaction Buttons -->
+    <div class="message-reactions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+      <button class="reaction-btn" (click)="toggleReaction('like')">
+        <i class="far fa-thumbs-up"></i>
+        <span class="reaction-count">0</span>
+      </button>
+      <button class="reaction-btn" (click)="toggleReaction('comment')">
+        <i class="far fa-comment"></i>
+        <span class="reaction-count">0</span>
+      </button>
+    </div>
+  </div>
+</div>

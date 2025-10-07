@@ -2,12 +2,13 @@ import { google, drive_v3 } from 'googleapis';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * Google Drive implementation of the FileStorageBase interface.
@@ -62,34 +63,47 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    */
   constructor() {
     super();
-    
-    // Get credentials from environment
-    const keyFile = env.get('STORAGE_GDRIVE_KEY_FILE').asString();
-    const credentials = env.get('STORAGE_GDRIVE_CREDENTIALS_JSON').asJsonObject();
-    
-    // Initialize the Google Drive client
+
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('googleDrive');
+
+    // Get credentials from config or environment
+    const keyFile = config?.keyFile || env.get('STORAGE_GDRIVE_KEY_FILE').asString();
+    const credentials = config?.credentialsJSON || env.get('STORAGE_GDRIVE_CREDENTIALS_JSON').asJsonObject();
+    const clientID = config?.clientID || env.get('STORAGE_GDRIVE_CLIENT_ID').asString();
+    const clientSecret = config?.clientSecret || env.get('STORAGE_GDRIVE_CLIENT_SECRET').asString();
+    const refreshToken = config?.refreshToken || env.get('STORAGE_GDRIVE_REFRESH_TOKEN').asString();
+    const redirectURI = config?.redirectURI || env.get('STORAGE_GDRIVE_REDIRECT_URI').asString();
+
+    // Initialize the Google Drive client - support THREE auth methods
     if (keyFile) {
-      // Using key file
+      // Method 1: Using key file (service account)
       const auth = new google.auth.GoogleAuth({
         keyFile,
         scopes: ['https://www.googleapis.com/auth/drive']
       });
       this._drive = google.drive({ version: 'v3', auth });
     } else if (credentials) {
-      // Using credentials directly
+      // Method 2: Using credentials directly (service account)
+      const creds = typeof credentials === 'string' ? JSON.parse(credentials) : credentials;
       const auth = new google.auth.JWT(
-        (credentials as any).client_email,
+        (creds as any).client_email,
         undefined,
-        (credentials as any).private_key,
+        (creds as any).private_key,
         ['https://www.googleapis.com/auth/drive']
       );
       this._drive = google.drive({ version: 'v3', auth });
+    } else if (clientID && clientSecret && refreshToken) {
+      // Method 3: Using OAuth2 with refresh token
+      const auth = new google.auth.OAuth2(clientID, clientSecret, redirectURI);
+      auth.setCredentials({ refresh_token: refreshToken });
+      this._drive = google.drive({ version: 'v3', auth });
     } else {
-      throw new Error('Google Drive storage requires either STORAGE_GDRIVE_KEY_FILE or STORAGE_GDRIVE_CREDENTIALS_JSON to be set');
+      throw new Error('Google Drive storage requires either STORAGE_GDRIVE_KEY_FILE, STORAGE_GDRIVE_CREDENTIALS_JSON, or OAuth2 credentials (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN) to be set');
     }
-    
+
     // Optionally set a root folder ID to restrict operations
-    this._rootFolderId = env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString();
+    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString();
   }
 
   /**

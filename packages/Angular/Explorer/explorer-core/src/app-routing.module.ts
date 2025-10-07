@@ -13,6 +13,7 @@ import {
   FilesComponent,
   QueryBrowserComponent,
   ListViewComponent,
+  ChatWrapperComponent,
 } from './public-api';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
@@ -230,6 +231,8 @@ export class ResourceResolver implements Resolve<void> {
 const routes: Routes = [
   { path: '', component: HomeWrapperComponent, canActivate: [AuthGuard] },
   { path: 'home', component: HomeWrapperComponent, canActivate: [AuthGuard] },
+  { path: 'chat', component: ChatWrapperComponent, canActivate: [AuthGuard] },
+  { path: 'chat/:conversationId', component: ChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'askskip', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'askskip/:conversationId', component: SkipChatWrapperComponent, canActivate: [AuthGuard] },
   { path: 'dashboards', component: DashboardBrowserComponent, canActivate: [AuthGuard] },

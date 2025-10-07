@@ -1,0 +1,100 @@
+/**
+ * MemberJunction Conversations - CSS Custom Properties
+ * Based on slack-style-agent-chat-v22.html prototype
+ * These variables ensure consistent styling across all components
+ */
+
+:root {
+    /* ========== Base Colors ========== */
+    --navy: #092340;
+    --light-blue: #AAE7FD;
+    --gray-600: #F4F4F4;
+    --gray-700: #D9D9D9;
+    --gray-800: #AAA;
+    --gray-900: #333;
+    --mj-blue: #0076B6;
+    --white-color: #FFF;
+    --shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+
+    /* ========== Semantic Mappings ========== */
+    --primary-color: var(--mj-blue);
+    --background: var(--gray-600);
+    --surface: var(--white-color);
+    --surface-hover: var(--gray-700);
+    --text-primary: var(--gray-900);
+    --text-secondary: var(--gray-800);
+    --border-color: var(--gray-700);
+    --success: #059669;
+    --warning: #D97706;
+    --error: #DC2626;
+    --accent: var(--light-blue);
+
+    /* ========== Agent Colors ========== */
+    --agent-claude: #9b59b6;
+    --agent-designer: #e74c3c;
+    --agent-coder: #3498db;
+    --agent-code: #3498db;
+    --agent-analyst: #f39c12;
+    --agent-analysis: #f39c12;
+    --agent-research: #2ecc71;
+    --agent-skip: #00BFA5;
+
+    /* ========== Message Type Backgrounds ========== */
+    --ai-message-bg: rgba(0, 118, 182, 0.05);
+    --human-message-bg: transparent;
+
+    /* ========== User Colors ========== */
+    --user-1: #6c5ce7;
+    --user-2: #00b894;
+    --user-3: #fdcb6e;
+    --user-4: #e17055;
+    --user-5: #74b9ff;
+    --user-6: #a29bfe;
+
+    /* ========== Transitions ========== */
+    --transition-fast: 150ms ease;
+    --transition-base: 250ms ease;
+
+    /* ========== Spacing System ========== */
+    --space-xs: 4px;
+    --space-sm: 6px;
+    --space-md: 8px;
+    --space-lg: 10px;
+    --space-xl: 12px;
+    --space-2xl: 16px;
+    --space-3xl: 20px;
+    --space-4xl: 24px;
+
+    /* ========== Typography ========== */
+    --font-size-xs: 10px;
+    --font-size-sm: 11px;
+    --font-size-base: 12px;
+    --font-size-md: 13px;
+    --font-size-lg: 14px;
+    --font-size-xl: 16px;
+    --font-size-2xl: 18px;
+
+    /* ========== Heights ========== */
+    --nav-height: 48px;
+    --sidebar-header-height: 50px;
+    --button-sm: 28px;
+    --button-md: 32px;
+    --button-lg: 36px;
+
+    /* ========== Border Radius ========== */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+    --radius-xl: 12px;
+    --radius-pill: 20px;
+    --radius-circle: 50%;
+}
+
+/* ========== Dark Background Specific ========== */
+.dark-bg {
+    --border-color-subtle: rgba(255, 255, 255, 0.1);
+    --hover-overlay: rgba(255, 255, 255, 0.08);
+    --active-overlay: rgba(255, 255, 255, 0.1);
+    --text-on-dark: rgba(255, 255, 255, 0.7);
+    --text-on-dark-strong: rgba(255, 255, 255, 1);
+}

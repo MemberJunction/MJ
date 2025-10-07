@@ -427,9 +427,9 @@ export class ManageMetadataBase {
                   // next up we need to remove the spCreate, spDelete, spUpdate, BaseView, and FullTextSearchFunction, if provided.
                   // We only remoe these artifcacts when they are generated which is info we have in the BaseViewGenerated, spCreateGenerated, etc. fields
                   await this.checkDropSQLObject(pool, e.BaseViewGenerated, 'view', e.SchemaName, e.BaseView);
-                  await this.checkDropSQLObject(pool, e.spCreateGenerated, 'procedure', e.SchemaName, e.spCreate ? e.spCreate : `spCreate${e.ClassName}`);
-                  await this.checkDropSQLObject(pool, e.spDeleteGenerated, 'procedure', e.SchemaName, e.spDelete ? e.spDelete : `spDelete${e.ClassName}`);
-                  await this.checkDropSQLObject(pool, e.spUpdateGenerated, 'procedure', e.SchemaName, e.spUpdate ? e.spUpdate : `spUpdate${e.ClassName}`);
+                  await this.checkDropSQLObject(pool, e.spCreateGenerated, 'procedure', e.SchemaName, e.spCreate ? e.spCreate : `spCreate${e.BaseTableCodeName}`);
+                  await this.checkDropSQLObject(pool, e.spDeleteGenerated, 'procedure', e.SchemaName, e.spDelete ? e.spDelete : `spDelete${e.BaseTableCodeName}`);
+                  await this.checkDropSQLObject(pool, e.spUpdateGenerated, 'procedure', e.SchemaName, e.spUpdate ? e.spUpdate : `spUpdate${e.BaseTableCodeName}`);
                   await this.checkDropSQLObject(pool, e.FullTextSearchFunctionGenerated, 'function', e.SchemaName, e.FullTextSearchFunction);
                }
                catch (ex) {
@@ -901,18 +901,31 @@ export class ManageMetadataBase {
    /**
     * Creates a SQL statement to retrieve all of the pending entity fields that need to be created in the metadata. This method looks for fields that exist in the underlying
     * database but are NOT in the metadata.
-    * 
-    * IMPORTANT: The sequence shown below has a 100,000 added to it to ensure that there is no collision with existing sequences. The spUpdateExistingEntityFieldsFromSchema
-    * stored procedure runs AFTER this method and will correct the sequences to ensure they are in the correct order. In a migration, the spUpdateExistingEntityFieldsFromSchema
-    * runs afterwards as well so this behavior ensures CodeGen works consistently.
-    * 
+    *
+    * IMPORTANT: The sequence calculation uses a dynamic offset based on the maximum existing sequence for each entity, plus 100,000, plus the column sequence.
+    * This ensures no collision with existing sequences while maintaining deterministic ordering. The spUpdateExistingEntityFieldsFromSchema stored procedure runs
+    * AFTER this method and will correct the sequences to ensure they are in the correct sequential order starting from 1. In a migration, the
+    * spUpdateExistingEntityFieldsFromSchema runs afterwards as well so this behavior ensures CodeGen works consistently.
+    *
     * @returns {string} - The SQL statement to retrieve pending entity fields.
     */
    protected getPendingEntityFieldsSELECTSQL(): string {
-      const sSQL = `WITH NumberedRows AS (
+      const sSQL = `WITH MaxSequences AS (
+   -- Calculate the maximum existing sequence for each entity to avoid collisions
+   SELECT
+      EntityID,
+      ISNULL(MAX(Sequence), 0) AS MaxSequence
+   FROM
+      [${mj_core_schema()}].EntityField
+   GROUP BY
+      EntityID
+),
+NumberedRows AS (
    SELECT
       sf.EntityID,
-      sf.Sequence + 100000 Sequence, -- add a large number to the sequence to ensure no collision with existing sequences - spUpdateExistingEntityFieldsFromSchema runs AFTER this and will correct them.
+      -- Use dynamic offset based on max existing sequence for this entity to prevent collisions
+      -- Add 100000 to ensure we're well above any existing sequences, then add the column sequence
+      ISNULL(ms.MaxSequence, 0) + 100000 + sf.Sequence AS Sequence,
       sf.FieldName,
       sf.Description,
       sf.Type,
@@ -947,6 +960,10 @@ export class ManageMetadataBase {
       ROW_NUMBER() OVER (PARTITION BY sf.EntityID, sf.FieldName ORDER BY (SELECT NULL)) AS rn
    FROM
       [${mj_core_schema()}].vwSQLColumnsAndEntityFields sf
+   LEFT OUTER JOIN
+      MaxSequences ms
+   ON
+      sf.EntityID = ms.EntityID
    LEFT OUTER JOIN
       [${mj_core_schema()}].Entity e
    ON

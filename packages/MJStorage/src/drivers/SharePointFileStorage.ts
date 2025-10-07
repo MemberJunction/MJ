@@ -3,13 +3,14 @@ import { AuthenticationProvider } from '@microsoft/microsoft-graph-client';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata, 
-  UnsupportedOperationError 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  StorageListResult,
+  StorageObjectMetadata,
+  UnsupportedOperationError
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 // Define types for Microsoft OAuth token response
 interface MicrosoftTokenResponse {
@@ -204,16 +205,20 @@ export class SharePointFileStorage extends FileStorageBase {
    */
   constructor() {
     super();
-    
-    const clientId = env.get('STORAGE_SHAREPOINT_CLIENT_ID').required().asString();
-    const clientSecret = env.get('STORAGE_SHAREPOINT_CLIENT_SECRET').required().asString();
-    const tenantId = env.get('STORAGE_SHAREPOINT_TENANT_ID').required().asString();
-    this._siteId = env.get('STORAGE_SHAREPOINT_SITE_ID').required().asString();
-    this._driveId = env.get('STORAGE_SHAREPOINT_DRIVE_ID').required().asString();
-    
+
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('sharePoint');
+
+    // Extract values from config, fall back to env vars
+    const clientId = config?.clientID || env.get('STORAGE_SHAREPOINT_CLIENT_ID').required().asString();
+    const clientSecret = config?.clientSecret || env.get('STORAGE_SHAREPOINT_CLIENT_SECRET').required().asString();
+    const tenantId = config?.tenantID || env.get('STORAGE_SHAREPOINT_TENANT_ID').required().asString();
+    this._siteId = config?.siteID || env.get('STORAGE_SHAREPOINT_SITE_ID').required().asString();
+    this._driveId = config?.driveID || env.get('STORAGE_SHAREPOINT_DRIVE_ID').required().asString();
+
     // Optionally set a root folder within the SharePoint drive
-    this._rootFolderId = env.get('STORAGE_SHAREPOINT_ROOT_FOLDER_ID').asString();
-    
+    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_SHAREPOINT_ROOT_FOLDER_ID').asString();
+
     // Initialize Graph client with auth provider
     const authProvider = new ClientCredentialsAuthProvider(clientId, clientSecret, tenantId);
     this._client = Client.initWithMiddleware({

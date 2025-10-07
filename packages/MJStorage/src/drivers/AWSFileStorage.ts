@@ -1,23 +1,24 @@
-import { 
-  CopyObjectCommand, 
-  DeleteObjectCommand, 
-  DeleteObjectsCommand, 
-  GetObjectCommand, 
-  HeadObjectCommand, 
-  ListObjectsV2Command, 
-  PutObjectCommand, 
-  S3Client 
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * AWS S3 implementation of the FileStorageBase interface.
@@ -71,15 +72,19 @@ export class AWSFileStorage extends FileStorageBase {
   constructor() {
     super();
 
-    const region = env.get('STORAGE_AWS_REGION').required().asString();
-    this._bucket = env.get('STORAGE_AWS_BUCKET_NAME').required().asString();
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('aws');
 
-    const keyPrefix = env.get('STORAGE_AWS_KEY_PREFIX').default('/').asString();
+    // Extract values from config, fall back to env vars
+    const region = config?.region || env.get('STORAGE_AWS_REGION').required().asString();
+    this._bucket = config?.defaultBucket || env.get('STORAGE_AWS_BUCKET_NAME').required().asString();
+
+    const keyPrefix = config?.keyPrefix || env.get('STORAGE_AWS_KEY_PREFIX').default('/').asString();
     this._keyPrefix = keyPrefix.endsWith('/') ? keyPrefix : `${keyPrefix}/`;
 
     const credentials = {
-      accessKeyId: env.get('STORAGE_AWS_ACCESS_KEY_ID').required().asString(),
-      secretAccessKey: env.get('STORAGE_AWS_SECRET_ACCESS_KEY').required().asString(),
+      accessKeyId: config?.accessKeyID || env.get('STORAGE_AWS_ACCESS_KEY_ID').required().asString(),
+      secretAccessKey: config?.secretAccessKey || env.get('STORAGE_AWS_SECRET_ACCESS_KEY').required().asString(),
     };
 
     this._client = new S3Client({ region, credentials });

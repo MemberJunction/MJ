@@ -1,0 +1,254 @@
+[
+  {
+    "fields": {
+      "Name": "Agent Manager - Main Prompt",
+      "Description": "System prompt for the Agent Manager agent that orchestrates creation and management of other agents.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/agent-manager.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/agent-manager.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management?create&Description=Prompts for Agent Management System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "7AB18736-0371-41F8-8408-46903C1B3ECC"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.753Z",
+            "checksum": "81f4195f88d79c657b2fb5156d03e358c1f61d8c7ba8d4bc8d5191134f5833e5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "3BF5F393-10C4-4470-8783-2131F18E4196"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.767Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "96BCAE1C-B1F0-4FC4-9988-54B067BC962A"
+    },
+    "sync": {
+      "lastModified": "2025-10-03T15:37:00.053Z",
+      "checksum": "3dfcb81b1adb2184bbc90a0e42df75ea0e1a4e5a879f581caf664b8aeece40b1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Requirements Analyst Agent - Main Prompt",
+      "Description": "System prompt for the Requirements Analyst sub-agent that gathers and clarifies agent requirements.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/requirements-analyst-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/requirements-analyst-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 11
+          },
+          "primaryKey": {
+            "ID": "9BDC20EE-B8BC-44E6-99B8-2D3C60DBB16B"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.800Z",
+            "checksum": "81f4195f88d79c657b2fb5156d03e358c1f61d8c7ba8d4bc8d5191134f5833e5"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "219CC484-E76A-4982-9DF7-82A543B560BB"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.814Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
+    },
+    "sync": {
+      "lastModified": "2025-10-03T15:37:00.008Z",
+      "checksum": "72d67ed4467320bbbe560cd29161efaca6c9a458cbf7bafe4cfd43d1969ce220"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Planning Designer Agent - Main Prompt",
+      "Description": "System prompt for the Planning Designer sub-agent that designs agent hierarchies and selects actions.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/planning-designer-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/planning-designer-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "C62C4C5F-3A99-45ED-B4AF-CB2F160EF68E"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.845Z",
+            "checksum": "071e025446183a58e2bd40af7285599a556d58c9efdb7435fa14312f6be14523"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "831C9661-5268-4606-B9DF-3656EBA960CC"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.860Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2B405BA2-A446-4F1E-9402-D88C51CC8F9F"
+    },
+    "sync": {
+      "lastModified": "2025-10-03T15:37:00.032Z",
+      "checksum": "3f8aa0a15d362e030d24918560cde6c2b7404e472c00f8a413b2744ff9d429b8"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Prompt Designer Agent - Main Prompt",
+      "Description": "System prompt for the Prompt Designer sub-agent that crafts effective prompts for agents.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/agent-manager/prompt-designer-agent.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "OutputType": "object",
+      "OutputExample": "@file:output/agent-manager/prompt-designer-agent.example.json",
+      "ValidationBehavior": "Strict",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "F9E3E68F-ADAB-4DD9-AAD4-EC4D06F10E5C"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.894Z",
+            "checksum": "071e025446183a58e2bd40af7285599a556d58c9efdb7435fa14312f6be14523"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "67100A77-DB8B-4163-AF29-525153DEE29B"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:08.908Z",
+            "checksum": "33282cc46a9cda534cbff8811e8248647c1571078a37bed5d8fd142752c3ae7e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "04EB71C7-718A-4B6E-A8BB-35D9AF8AB94D"
+    },
+    "sync": {
+      "lastModified": "2025-10-03T15:37:00.072Z",
+      "checksum": "9fd6a3a7f8b5a333d0acbb507bb7663029dd977149acd1fe97336c497aaecfd6"
+    }
+  }
+]

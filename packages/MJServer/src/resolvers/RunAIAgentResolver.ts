@@ -22,7 +22,7 @@ export class AIAgentRunResult {
     executionTimeMs?: number;
 
     @Field()
-    payload: string; // JSON serialized ExecuteAgentResult with scalars only
+    result: string; // JSON serialized ExecuteAgentResult with scalars only
 }
 
 @ObjectType()
@@ -315,7 +315,8 @@ export class RunAIAgentResolver extends ResolverBase {
         templateData?: string,
         lastRunId?: string,
         autoPopulateLastRunPayload?: boolean,
-        configurationId?: string
+        configurationId?: string,
+        conversationDetailId?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -361,7 +362,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 lastRunId: lastRunId,
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
-                data: parsedData
+                data: parsedData,
+                conversationDetailId: conversationDetailId,
             });
 
             // Update agent run ref once available
@@ -376,7 +378,7 @@ export class RunAIAgentResolver extends ResolverBase {
 
             // Create sanitized payload for JSON serialization
             const sanitizedResult = this.sanitizeAgentResult(result);
-            const payload = JSON.stringify(sanitizedResult);
+            const returnResult = JSON.stringify(sanitizedResult);
 
             // Log completion
             if (result.success) {
@@ -389,7 +391,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 success: result.success,
                 errorMessage: result.agentRun?.ErrorMessage || undefined,
                 executionTimeMs: executionTime,
-                payload
+                result: returnResult
             };
 
         } catch (error) {
@@ -407,7 +409,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 success: false,
                 errorMessage: errorResult.errorMessage,
                 executionTimeMs: executionTime,
-                payload: JSON.stringify(errorResult)
+                result: JSON.stringify(errorResult)
             };
         }
     }
@@ -465,7 +467,8 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('templateData', { nullable: true }) templateData?: string,
         @Arg('lastRunId', { nullable: true }) lastRunId?: string,
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
-        @Arg('configurationId', { nullable: true }) configurationId?: string
+        @Arg('configurationId', { nullable: true }) configurationId?: string,
+        @Arg('conversationDetailId', { nullable: true }) conversationDetailId?: string
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -479,7 +482,8 @@ export class RunAIAgentResolver extends ResolverBase {
             templateData,
             lastRunId,
             autoPopulateLastRunPayload,
-            configurationId
+            configurationId,
+            conversationDetailId
         );
     }
 
@@ -499,7 +503,8 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('templateData', { nullable: true }) templateData?: string,
         @Arg('lastRunId', { nullable: true }) lastRunId?: string,
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
-        @Arg('configurationId', { nullable: true }) configurationId?: string
+        @Arg('configurationId', { nullable: true }) configurationId?: string,
+        @Arg('conversationDetailId', { nullable: true }) conversationDetailId?: string
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -513,7 +518,8 @@ export class RunAIAgentResolver extends ResolverBase {
             templateData,
             lastRunId,
             autoPopulateLastRunPayload,
-            configurationId
+            configurationId,
+            conversationDetailId
         );
     }
  

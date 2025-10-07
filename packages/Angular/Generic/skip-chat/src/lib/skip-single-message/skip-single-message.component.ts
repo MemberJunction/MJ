@@ -32,7 +32,7 @@ export class SkipSingleMessageComponent  extends BaseAngularComponent implements
     /**
      * Set this property in order to set the Skip logo. This can either be a URL or a Blob
      */
-    @Input() public SkipMarkOnlyLogoURL: string = "assets/Skip - Mark Only - Small.png";
+    @Input() public SkipMarkOnlyLogoURL: string = "assets/skip-icon.svg";
     /**
      * Set this property in order to set the user image. This can either be a URL or a Blob
      */

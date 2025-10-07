@@ -13,6 +13,7 @@ import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
+import { TempBatchFile } from '../Misc/temp_batch_file';
 
 
 export const SPType = {
@@ -99,9 +100,16 @@ export class SQLCodeGenBase {
             succeedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
 
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
-            const baselineEntities = entities.filter(e => e.IncludeInAPI);
+            // Sort entities by name for deterministic processing order (workaround until MJCore fix in issue #1436)
+            const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
+            const baselineEntities = sortedEntities.filter(e => e.IncludeInAPI);
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
+
+            // Initialize temp batch files for each schema
+            // These will be populated as SQL is generated and will be used for actual execution
+            const schemas = Array.from(new Set(baselineEntities.map(e => e.SchemaName)));
+            TempBatchFile.initialize(directory, schemas);
 
             // STEP 1.5 - Check for cascade delete dependencies that require regeneration
             startSpinner('Analyzing cascade delete dependencies...');
@@ -181,12 +189,30 @@ export class SQLCodeGenBase {
             startSpinner('Creating combined SQL files...');
             const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
             succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} schemas`);
-            
-            // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
-            startSpinner('Executing combined entity SQL files...');
+
+            // STEP 2(e) ---- FINALLY, we execute SQL in proper dependency order
+            // Use temp batch files (which maintain CodeGen log order) if available, otherwise fall back to combined files
+            startSpinner('Executing entity SQL files...');
             const step2eStartTime: Date = new Date();
-            if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false)) {
-                failSpinner('Failed to execute combined entity SQL files');
+
+            let executionSuccess = false;
+            if (TempBatchFile.hasContent()) {
+                // Execute temp batch files in dependency order (matches CodeGen run log)
+                const tempFiles = TempBatchFile.getTempFilePaths();
+                logIf(configInfo?.verboseOutput ?? false, `Executing ${tempFiles.length} temp batch file(s) in dependency order`);
+                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(tempFiles, configInfo?.verboseOutput ?? false);
+
+                // Clean up temp files after execution
+                TempBatchFile.cleanup();
+            } else {
+                // Fall back to combined files (for backward compatibility or if temp files weren't created)
+                logIf(configInfo?.verboseOutput ?? false, `Executing ${allEntityFiles.length} combined file(s)`);
+                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
+            }
+
+            if (!executionSuccess) {
+                failSpinner('Failed to execute entity SQL files');
+                TempBatchFile.cleanup(); // Cleanup on error
                 return false;
             }
             const step2eEndTime: Date = new Date();
@@ -231,6 +257,8 @@ export class SQLCodeGenBase {
         }
         catch (err) {
             logError(err as string);
+            // Clean up temp batch files on error
+            TempBatchFile.cleanup();
             return false;
         }
     }
@@ -490,8 +518,10 @@ export class SQLCodeGenBase {
         
         if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
+            // Also write to temp batch file for actual execution (matches CodeGen log order)
+            TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
         }
-        
+
         logIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
     }
 
@@ -719,11 +749,11 @@ export class SQLCodeGenBase {
     public getSPName(entity: EntityInfo, type: SPType): string {
         switch (type) {
             case SPType.Create:
-                return entity.spCreate && entity.spCreate.length > 0 ? entity.spCreate : 'spCreate' + entity.ClassName;
+                return entity.spCreate && entity.spCreate.length > 0 ? entity.spCreate : 'spCreate' + entity.BaseTableCodeName;
             case SPType.Update:
-                return entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.ClassName;
+                return entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.BaseTableCodeName;
             case SPType.Delete:
-                return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.ClassName;
+                return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.BaseTableCodeName;
         }
     }
 
@@ -1123,7 +1153,7 @@ ${whereClause}GO${permissions}
 
 
     protected generateSPCreate(entity: EntityInfo): string {
-        const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.ClassName}`;
+        const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.BaseTableCodeName}`;
         const firstKey = entity.FirstPrimaryKey;
 
         //double exclamations used on the firstKey.DefaultValue property otherwise the type of this variable is 'number | ""';
@@ -1270,7 +1300,7 @@ GO`;
     }
 
     protected generateSPUpdate(entity: EntityInfo): string {
-        const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.ClassName}`;
+        const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.BaseTableCodeName}`;
         const efParamString: string = this.createEntityFieldsParamString(entity.Fields, true);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
         const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
@@ -1430,7 +1460,7 @@ ${updatedAtTrigger}
 
 
     protected generateSPDelete(entity: EntityInfo): string {
-        const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.ClassName}`;
+        const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.BaseTableCodeName}`;
         const sCascadeDeletes: string = this.generateCascadeDeletes(entity);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Delete);
         let sVariables: string = '';
@@ -1531,7 +1561,7 @@ GO${permissions}
         else if (fkField.AllowsNull && !relatedEntity.AllowUpdateAPI) {
             // Nullable FK but no update API - this is a configuration error
             const sqlComment = `WARNING: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
-            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.BaseTableCodeName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
             logWarning(consoleMsg);
             return `
     -- ${sqlComment}
@@ -1540,7 +1570,7 @@ GO${permissions}
         else if (!relatedEntity.AllowDeleteAPI) {
             // Entity doesn't allow delete API, so we can't cascade delete
             const sqlComment = `WARNING: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
-            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.BaseTableCodeName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
             logWarning(consoleMsg);
             return `
     -- ${sqlComment}
@@ -1717,11 +1747,17 @@ GO${permissions}
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                        // Skip self-referential foreign keys (e.g., ParentID pointing to same entity)
+                        // These don't create inter-entity dependencies for ordering purposes
+                        if (e.ID === entity.ID) {
+                            continue;
+                        }
+
                         // Check if this would generate a cascade operation
-                        const wouldGenerateOperation = 
+                        const wouldGenerateOperation =
                             (ef.AllowsNull === false && e.AllowDeleteAPI) || // Non-nullable FK: cascade delete
                             (ef.AllowsNull && e.AllowUpdateAPI); // Nullable FK: cascade update
-                        
+
                         if (wouldGenerateOperation) {
                             // Track the dependency: entity's delete SP depends on e's update/delete SP
                             if (ef.AllowsNull && e.AllowUpdateAPI) {
@@ -1787,20 +1823,20 @@ GO${permissions}
      */
     protected async getModifiedEntitiesWithUpdateAPI(entities: EntityInfo[]): Promise<Map<string, string>> {
         const modifiedEntitiesMap = new Map<string, string>();
-        
+
         // Get the list of modified entity names from the metadata management phase
         const modifiedEntityNames = ManageMetadataBase.modifiedEntityList;
-        
+
         logStatus(`Modified entities from metadata phase: ${modifiedEntityNames.join(', ')}`);
-        
+
         // Convert entity names to IDs and filter for those with update API
         for (const entityName of modifiedEntityNames) {
-            const entity = entities.find(e => 
-                e.Name === entityName && 
-                e.AllowUpdateAPI && 
+            const entity = entities.find(e =>
+                e.Name === entityName &&
+                e.AllowUpdateAPI &&
                 e.spUpdateGenerated
             );
-            
+
             if (entity) {
                 modifiedEntitiesMap.set(entity.Name, entity.ID);
                 logStatus(`  - ${entity.Name} (${entity.ID}) has update API and will be tracked`);
@@ -1813,7 +1849,7 @@ GO${permissions}
                 }
             }
         }
-        
+
         return modifiedEntitiesMap;
     }
 
@@ -1822,7 +1858,7 @@ GO${permissions}
      * due to cascade dependencies on entities that had schema changes.
      */
     protected async getEntitiesRequiringCascadeDeleteRegeneration(
-        pool: sql.ConnectionPool, 
+        pool: sql.ConnectionPool,
         changedEntityIds: Set<string>
     ): Promise<Set<string>> {
         const entitiesNeedingRegeneration = new Set<string>();
@@ -1877,13 +1913,13 @@ GO${permissions}
                             logStatus(`  - Skipping ${entity.Name} - has cascade dependency but spDeleteGenerated=false (custom SP)`);
                         }
                     }
-                    
+
                     // Order entities by dependencies for proper regeneration
                     this.orderedEntitiesForDeleteSPRegeneration = this.orderEntitiesByDependencies(
                         entities,
                         this.entitiesNeedingDeleteSPRegeneration
                     );
-                    
+
                     if (this.orderedEntitiesForDeleteSPRegeneration.length > 0) {
                         logStatus(`Ordered entities for delete SP regeneration:`);
                         this.orderedEntitiesForDeleteSPRegeneration.forEach((entityId, index) => {
@@ -1912,15 +1948,15 @@ GO${permissions}
         const ordered: string[] = [];
         const visited = new Set<string>();
         const visiting = new Set<string>();
-        
+
         // Build reverse dependency map for entities we're ordering
         // If A depends on B, then reverseMap[A] contains B
         const reverseMap = new Map<string, Set<string>>();
-        
+
         for (const entityId of entityIdsToOrder) {
             reverseMap.set(entityId, new Set<string>());
         }
-        
+
         // For each entity in our set, find what it depends on
         for (const [dependedOnId, dependentIds] of this.cascadeDeleteDependencies) {
             for (const dependentId of dependentIds) {
@@ -1930,42 +1966,58 @@ GO${permissions}
                 }
             }
         }
-        
-        // Topological sort using DFS
+
+        // Topological sort using DFS with circular dependency handling
+        const circularDeps = new Set<string>();
+
         const visit = (entityId: string): boolean => {
             if (visited.has(entityId)) {
                 return true;
             }
-            
+
             if (visiting.has(entityId)) {
-                // Circular dependency detected
+                // Circular dependency detected - mark it but don't fail
                 const entity = entities.find(e => e.ID === entityId);
                 logStatus(`Warning: Circular cascade delete dependency detected involving ${entity?.Name || entityId}`);
-                return false;
+                circularDeps.add(entityId);
+                return false; // Signal circular dependency but continue processing
             }
-            
+
             visiting.add(entityId);
-            
+
             // Visit dependencies first
             const dependencies = reverseMap.get(entityId) || new Set();
             for (const depId of dependencies) {
                 if (!visit(depId)) {
-                    return false;
+                    // If dependency visit failed (circular), skip this dependency edge
+                    // but continue processing other dependencies
+                    continue;
                 }
             }
-            
+
             visiting.delete(entityId);
             visited.add(entityId);
             ordered.push(entityId);
-            
+
             return true;
         };
-        
+
         // Visit all entities that need ordering
         for (const entityId of entityIdsToOrder) {
             if (!visited.has(entityId)) {
-                visit(entityId);
+                const success = visit(entityId);
+                if (!success && circularDeps.has(entityId)) {
+                    // Entity is part of circular dependency - add it anyway in arbitrary order
+                    // The SQL will still be generated, just not in perfect dependency order
+                    logStatus(`  - Adding ${entities.find(e => e.ID === entityId)?.Name || entityId} despite circular dependency`);
+                    visited.add(entityId);
+                    ordered.push(entityId);
+                }
             }
+        }
+
+        if (circularDeps.size > 0) {
+            logStatus(`Note: ${circularDeps.size} entities have circular cascade delete dependencies and will be regenerated in arbitrary order.`);
         }
         
         return ordered;

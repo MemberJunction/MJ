@@ -139,6 +139,31 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ParentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="AgentID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Status"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Conversation"
             Type="textbox"
             [EditMode]="EditMode"
@@ -154,6 +179,13 @@ import { ConversationDetailEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Artifact"
+            Type="textbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="Agent"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

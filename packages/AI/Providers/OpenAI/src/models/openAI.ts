@@ -38,49 +38,73 @@ export class OpenAILLM extends BaseLLM {
     }
 
     /**
+     * Check if the model supports reasoning via system prompt keywords
+     * GPT-OSS models use "Reasoning: low/medium/high" in system prompt
+     */
+    private supportsReasoningViaSystemPrompt(modelName: string): boolean {
+        const lowerModel = modelName.toLowerCase();
+        return lowerModel.includes('gpt-oss') || lowerModel.includes('gptoss');
+    }
+
+    /**
+     * Convert effort level to reasoning level string for system prompt
+     */
+    private getReasoningLevel(effortLevel: string): 'low' | 'medium' | 'high' {
+        const numValue = Number.parseInt(effortLevel);
+        if (isNaN(numValue)) {
+            const level = effortLevel.trim().toLowerCase();
+            if (level === 'low' || level === 'medium' || level === 'high') {
+                return level as 'low' | 'medium' | 'high';
+            }
+            throw new Error(`Invalid effortLevel: ${effortLevel}`);
+        }
+        // Map numeric values to levels
+        if (numValue <= 33) return 'low';
+        if (numValue <= 66) return 'medium';
+        return 'high';
+    }
+
+    /**
      * Implementation of non-streaming chat completion for OpenAI
      */
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
-        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
+        let messages = params.messages;
+
+        // Handle reasoning for GPT-OSS models via system prompt
+        const supportsReasoningInSystemPrompt = this.supportsReasoningViaSystemPrompt(params.model);
+
+        if (params.effortLevel && supportsReasoningInSystemPrompt) {
+            const reasoningLevel = this.getReasoningLevel(params.effortLevel);
+            // Add or append to system message
+            const systemMsg = messages.find(m => m.role === 'system');
+            if (systemMsg) {
+                // Append to existing system message
+                systemMsg.content = `${systemMsg.content}\n\nReasoning: ${reasoningLevel}`;
+            } else {
+                // Prepend new system message
+                messages = [
+                    { role: 'system', content: `Reasoning: ${reasoningLevel}` },
+                    ...messages
+                ];
+            }
+        }
+
+        const formattedMessages = this.ConvertMJToOpenAIChatMessages(messages);
 
         const startTime = new Date();
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsNonStreaming = {
             model: params.model,
-            messages: messages,
+            messages: formattedMessages,
             temperature: params.temperature,
             max_completion_tokens: params.maxOutputTokens,
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
-        
-        if (params.effortLevel) {
-            // check to see if params.effortLevel is a number
-            const numValue = Number.parseInt(params.effortLevel);
-            if (isNaN(numValue)) {
-                // not a number so check to see if strings match to low/medium/high
-                switch (params.effortLevel.trim().toLowerCase()) {
-                    case 'low':
-                        openAIParams.reasoning_effort = 'low';
-                        break;
-                    case 'medium':
-                        openAIParams.reasoning_effort = 'medium';
-                        break;
-                    case 'high':
-                        openAIParams.reasoning_effort = 'high';
-                        break;
-                    default:
-                        throw new Error(`Invalid effortLevel: ${params.effortLevel}`);
-                }
-            }
-            else {
-                // we map the number ranges as follows:
-                if (numValue <= 33)
-                    openAIParams.reasoning_effort = 'low';
-                else if (numValue <= 66)
-                    openAIParams.reasoning_effort = 'medium';
-                else
-                    openAIParams.reasoning_effort = 'high';
-            }
+
+        //Reasoning effort level has been provided and it wasn't handled via system prompt
+        if (params.effortLevel && !supportsReasoningInSystemPrompt) {
+            const reasoningLevel = this.getReasoningLevel(params.effortLevel);
+            openAIParams.reasoning_effort = reasoningLevel;
         }
 
         // Add sampling and generation parameters
@@ -214,20 +238,41 @@ export class OpenAILLM extends BaseLLM {
     protected async createStreamingRequest(params: ChatParams): Promise<any> {
         // Reset streaming state for new request
         this.resetStreamingState();
-        const messages = this.ConvertMJToOpenAIChatMessages(params.messages);
-        
+
+        let messages = params.messages;
+
+        // Handle reasoning for GPT-OSS models via system prompt
+        if (params.effortLevel && this.supportsReasoningViaSystemPrompt(params.model)) {
+            const reasoningLevel = this.getReasoningLevel(params.effortLevel);
+            // Add or append to system message
+            const systemMsg = messages.find(m => m.role === 'system');
+            if (systemMsg) {
+                // Append to existing system message
+                systemMsg.content = `${systemMsg.content}\n\nReasoning: ${reasoningLevel}`;
+            } else {
+                // Prepend new system message
+                messages = [
+                    { role: 'system', content: `Reasoning: ${reasoningLevel}` },
+                    ...messages
+                ];
+            }
+        }
+
+        const formattedMessages = this.ConvertMJToOpenAIChatMessages(messages);
+
         const openAIParams: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming = {
             model: params.model,
-            messages: messages,
+            messages: formattedMessages,
             temperature: params.temperature,
             max_tokens: params.maxOutputTokens,
             stream: true,
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
-        
+
         if (params.effortLevel) {
-            openAIParams.reasoning_effort = params.effortLevel as OpenAI.Chat.Completions.ChatCompletionReasoningEffort;
+            const reasoningLevel = this.getReasoningLevel(params.effortLevel);
+            openAIParams.reasoning_effort = reasoningLevel;
         }
 
         // Add sampling and generation parameters

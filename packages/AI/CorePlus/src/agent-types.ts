@@ -336,6 +336,15 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * Different from parentRun which is for sub-agent hierarchy.
      */
     lastRunId?: string;
+
+    /**
+     * Optional conversation detail ID to associate with this agent execution.
+     * When provided, this value is stored in the ConversationDetailID column within
+     * the to be created AIAgentRun record. This allows for linking the agent run 
+     * to a specific conversation detail for tracking and reporting purposes.
+     */
+    conversationDetailId?: string;
+
     /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:

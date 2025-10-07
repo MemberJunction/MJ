@@ -1,0 +1,76 @@
+<div class="artifact-viewer-panel">
+  <div class="panel-header">
+    <div class="panel-header-left">
+      <h3>
+        <i class="fas fa-cube"></i>
+        {{ artifact?.Name || 'Artifact' }}
+      </h3>
+    </div>
+    <div class="panel-header-right">
+      <div class="version-selector">
+        <i class="fas fa-history"></i>
+        <span class="version-label">v{{ artifactVersion?.VersionNumber || 1 }}</span>
+      </div>
+      <button class="close-btn" (click)="onClose()" title="Close">
+        <i class="fas fa-times"></i>
+      </button>
+    </div>
+  </div>
+
+  <div class="panel-content">
+    @if (isLoading) {
+      <div class="loading-state">
+        <i class="fas fa-spinner fa-spin"></i>
+        <span>Loading artifact...</span>
+      </div>
+    }
+
+    @if (error) {
+      <div class="error-state">
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>{{ error }}</span>
+      </div>
+    }
+
+    @if (!isLoading && !error && artifact) {
+      <div class="artifact-content-wrapper">
+        <div class="artifact-meta">
+          <div class="meta-item">
+            <label>Type</label>
+            <span>{{ artifact.Type }}</span>
+          </div>
+          <div class="meta-item">
+            <label>Version</label>
+            <span>{{ artifactVersion?.VersionNumber || 1 }}</span>
+          </div>
+          <div class="meta-item">
+            <label>Created</label>
+            <span>{{ artifact.__mj_CreatedAt | date:'short' }}</span>
+          </div>
+        </div>
+
+        @if (artifact.Description) {
+          <div class="artifact-description">
+            {{ artifact.Description }}
+          </div>
+        }
+
+        <div class="json-viewer">
+          <div class="json-toolbar">
+            <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
+              <i class="fas fa-copy"></i> Copy
+            </button>
+          </div>
+          <div class="json-editor-container">
+            <mj-code-editor
+              [(ngModel)]="jsonContent"
+              [language]="'json'"
+              [readonly]="true"
+              style="width: 100%; height: 100%;">
+            </mj-code-editor>
+          </div>
+        </div>
+      </div>
+    }
+  </div>
+</div>
