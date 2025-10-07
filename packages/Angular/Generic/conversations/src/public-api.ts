@@ -19,6 +19,8 @@ export * from './lib/services/dialog.service';
 export * from './lib/services/export.service';
 export * from './lib/services/notification.service';
 export * from './lib/services/toast.service';
+export * from './lib/services/mention-parser.service';
+export * from './lib/services/mention-autocomplete.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -33,6 +35,7 @@ export * from './lib/components/artifact/inline-artifact.component';
 export * from './lib/components/message/message-item.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';
+export * from './lib/components/mention/mention-dropdown.component';
 export * from './lib/components/collection/collection-tree.component';
 export * from './lib/components/collection/collection-view.component';
 export * from './lib/components/collection/collection-artifact-card.component';

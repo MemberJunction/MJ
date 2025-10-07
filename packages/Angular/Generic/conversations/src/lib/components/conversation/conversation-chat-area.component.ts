@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -11,13 +11,17 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
   templateUrl: `./conversation-chat-area.component.html`,
   styleUrls: ['./conversation-chat-area.component.scss']
 })
-export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck {
+export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck, AfterViewChecked {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
 
+  @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
+
   public messages: ConversationDetailEntity[] = [];
+  public showScrollToBottomIcon = false;
+  private scrollToBottom = false;
   private previousConversationId: string | null = null;
   public isProcessing: boolean = false;
   public memberCount: number = 1;
@@ -32,8 +36,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public selectedArtifactId: string | null = null;
   public artifactPaneWidth: number = 40; // Default 40% width
 
-  // Artifact mapping: ConversationDetailID -> {artifactId, versionId}
-  public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string}>();
+  // Artifact mapping: ConversationDetailID -> {artifactId, versionId, name}
+  public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string; name: string}>();
 
   // Resize state
   private isResizing: boolean = false;
@@ -71,6 +75,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     if (currentId !== this.previousConversationId) {
       this.previousConversationId = currentId;
       this.onConversationChanged(currentId);
+    }
+  }
+
+  ngAfterViewChecked() {
+    if (this.scrollToBottom) {
+      this.scrollToBottom = false;
+      setTimeout(() => {
+        this.scrollToBottomNow();
+      }, 100);
     }
   }
 
@@ -176,19 +189,43 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           );
 
           if (versionsResult.Success && versionsResult.Results) {
-            // Create map of versionId -> artifactId
-            const versionToArtifact = new Map<string, string>();
-            for (const version of versionsResult.Results) {
-              versionToArtifact.set(version.ID, version.ArtifactID);
+            // Create map of versionId -> {artifactId, artifactName}
+            const versionToArtifact = new Map<string, {artifactId: string; artifactName: string}>();
+
+            // Get all unique artifact IDs
+            const artifactIds = [...new Set(versionsResult.Results.map(v => v.ArtifactID))];
+
+            // Load artifact entities to get names
+            const artifactsResult = await rv.RunView({
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
+              ResultType: 'entity_object'
+            }, this.currentUser);
+
+            // Create map of artifactId -> name
+            const artifactNames = new Map<string, string>();
+            if (artifactsResult.Success && artifactsResult.Results) {
+              for (const artifact of artifactsResult.Results) {
+                artifactNames.set(artifact.ID, artifact.Name || 'Unnamed Artifact');
+              }
             }
 
-            // Build final artifact map with both IDs
+            // Build versionId to artifact info map
+            for (const version of versionsResult.Results) {
+              versionToArtifact.set(version.ID, {
+                artifactId: version.ArtifactID,
+                artifactName: artifactNames.get(version.ArtifactID) || 'Unnamed Artifact'
+              });
+            }
+
+            // Build final artifact map with IDs and names
             for (const artifact of conversationDetailArtifacts.Results) {
-              const artifactId = versionToArtifact.get(artifact.ArtifactVersionID);
-              if (artifact.ConversationDetailID && artifactId) {
+              const artifactInfo = versionToArtifact.get(artifact.ArtifactVersionID);
+              if (artifact.ConversationDetailID && artifactInfo) {
                 this.artifactsByDetailId.set(artifact.ConversationDetailID, {
-                  artifactId: artifactId,
-                  versionId: artifact.ArtifactVersionID
+                  artifactId: artifactInfo.artifactId,
+                  versionId: artifact.ArtifactVersionID,
+                  name: artifactInfo.artifactName
                 });
               }
             }
@@ -256,11 +293,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   onMessageSent(message: ConversationDetailEntity): void {
     // Add the new message to the list
     this.messages = [...this.messages, message];
+
+    // Scroll to bottom when new message is sent
+    this.scrollToBottom = true;
   }
 
   async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
+
+    // Scroll to bottom when agent responds
+    this.scrollToBottom = true;
     console.log('Agent responded:', event.agentResult);
 
     // Reload artifact mapping for this message to pick up newly created artifacts
@@ -319,7 +362,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
             if (artifactId) {
               this.artifactsByDetailId.set(conversationDetailId, {
                 artifactId: artifactId,
-                versionId: artifact.ArtifactVersionID
+                versionId: artifact.ArtifactVersionID,
+                name: 'Artifact' // Note: This method is deprecated, name should come from event
               });
               console.log(`✅ Loaded artifact ${artifactId} for message ${conversationDetailId}`);
             }
@@ -346,7 +390,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.showArtifactsModal = true;
   }
 
-  getArtifactsArray(): Array<{artifactId: string; versionId: string}> {
+  getArtifactsArray(): Array<{artifactId: string; versionId: string; name: string}> {
     return Array.from(this.artifactsByDetailId.values());
   }
 
@@ -461,10 +505,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.showArtifactPanel = true;
   }
 
-  onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string}): void {
+  onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; name: string}): void {
     this.artifactsByDetailId.set(data.conversationDetailId, {
       artifactId: data.artifactId,
-      versionId: data.versionId
+      versionId: data.versionId,
+      name: data.name
     });
 
     // if we don't already have another artifact showing, let's show the newly created one
@@ -561,5 +606,53 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     console.log('🎉 Conversation renamed:', event);
     // Pass the event up to workspace component for animation
     this.conversationRenamed.emit(event);
+  }
+
+  // Scroll functionality (pattern from skip-chat)
+  checkScroll(): void {
+    if (!this.scrollContainer) return;
+
+    const element = this.scrollContainer.nativeElement;
+    const buffer = 15; // Tolerance in pixels
+    const scrollDifference = element.scrollHeight - (element.scrollTop + element.clientHeight);
+    const hasScrollableContent = element.scrollHeight > element.clientHeight + 50;
+    const atBottom = scrollDifference <= buffer;
+
+    this.showScrollToBottomIcon = !atBottom && hasScrollableContent;
+  }
+
+  scrollToBottomNow(retryCount: number = 0): void {
+    try {
+      if (!this.scrollContainer) {
+        if (retryCount < 10) {
+          setTimeout(() => this.scrollToBottomNow(retryCount + 1), 50);
+        }
+        return;
+      }
+
+      const element = this.scrollContainer.nativeElement;
+      if (element.scrollHeight === 0 && retryCount < 10) {
+        setTimeout(() => this.scrollToBottomNow(retryCount + 1), 50);
+      } else if (element.scrollHeight > 0) {
+        element.scrollTop = element.scrollHeight;
+      }
+    } catch (err) {
+      console.error('Error scrolling to bottom:', err);
+    }
+  }
+
+  scrollToBottomAnimate(): void {
+    if (this.scrollContainer) {
+      const element = this.scrollContainer.nativeElement;
+      element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
+    }
+  }
+
+  getScrollToBottomIconPosition(): number {
+    if (!this.scrollContainer) {
+      return window.innerWidth / 2;
+    }
+    const rect = this.scrollContainer.nativeElement.getBoundingClientRect();
+    return rect.left + (rect.width / 2);
   }
 }

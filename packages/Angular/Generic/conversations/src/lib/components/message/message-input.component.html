@@ -6,8 +6,20 @@
     [placeholder]="placeholder"
     [disabled]="disabled || isSending"
     (keydown)="onKeyDown($event)"
+    (input)="onInput($event)"
     rows="3">
   </textarea>
+
+  <!-- Mention Autocomplete Dropdown -->
+  <mj-mention-dropdown
+    [suggestions]="mentionSuggestions"
+    [position]="mentionDropdownPosition"
+    [visible]="showMentionDropdown"
+    [showAbove]="mentionDropdownShowAbove"
+    (suggestionSelected)="onMentionSelected($event)"
+    (closed)="closeMentionDropdown()">
+  </mj-mention-dropdown>
+
   <div class="input-actions">
     <div class="processing-indicator" *ngIf="isProcessing">
       <i class="fas fa-circle-notch fa-spin"></i>

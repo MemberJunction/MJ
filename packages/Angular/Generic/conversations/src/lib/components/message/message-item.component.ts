@@ -8,10 +8,12 @@ import {
   AfterViewInit,
   OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { MentionParserService } from '../../services/mention-parser.service';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 
 /**
  * Component for displaying a single message in a conversation
@@ -47,7 +49,11 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public editedText: string = '';
   private originalText: string = '';
 
-  constructor(private cdRef: ChangeDetectorRef) {
+  constructor(
+    private cdRef: ChangeDetectorRef,
+    private mentionParser: MentionParserService,
+    private mentionAutocomplete: MentionAutocompleteService
+  ) {
     super();
   }
 
@@ -125,11 +131,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           role: agent.Description || 'AI Assistant'
         };
       } else {
-        console.log('⚠️ Agent not found in cache for ID:', agentID);
+        // Only log if the message is complete (should have AgentID by then)
+        if (this.message.Status === 'Complete') {
+          console.warn('⚠️ Agent not found in cache for ID:', agentID);
+        }
       }
-    } else {
-      console.log('⚠️ No AgentID on message or no Agents cache:', { agentID, hasCache: !!AIEngineBase.Instance?.Agents });
     }
+    // Note: In-progress messages won't have AgentID yet, so we don't log warnings for them
 
     // Default fallback for AI messages without agent info
     return {
@@ -148,14 +156,58 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get displayMessage(): string {
+    let text = this.message.Message || '';
+
     // For Conversation Manager, only show the delegation line (starts with emoji)
-    if (this.isConversationManager && this.message.Message) {
-      const delegationMatch = this.message.Message.match(/🤖.*Delegating to.*Agent.*/);
+    if (this.isConversationManager && text) {
+      const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
       if (delegationMatch) {
-        return delegationMatch[0];
+        text = delegationMatch[0];
       }
     }
-    return this.message.Message || '';
+
+    // Transform @mentions to HTML pills
+    return this.transformMentionsToHTML(text);
+  }
+
+  /**
+   * Transform @mentions in text to HTML badge elements
+   * Uses inline HTML that markdown will preserve
+   */
+  private transformMentionsToHTML(text: string): string {
+    if (!text) return '';
+
+    const agents = this.mentionAutocomplete.getAvailableAgents();
+    const users = this.mentionAutocomplete.getAvailableUsers();
+
+    // Parse mentions from the text
+    const parseResult = this.mentionParser.parseMentions(text, agents, users);
+
+    // Replace each mention with an HTML badge
+    // Note: Handle both @"Agent Name" (quoted) and @AgentName formats
+    let transformedText = text;
+    for (const mention of parseResult.mentions) {
+      const badgeClass = mention.type === 'agent' ? 'mention-badge agent' : 'mention-badge user';
+
+      // Match both quoted and unquoted versions
+      const quotedPattern = new RegExp(`@"${this.escapeRegex(mention.name)}"`, 'gi');
+      const unquotedPattern = new RegExp(`@${this.escapeRegex(mention.name)}(?![\\w"])`, 'gi');
+
+      const badgeHTML = `<span class="${badgeClass}">@${mention.name}</span>`;
+
+      // Replace quoted version first, then unquoted
+      transformedText = transformedText.replace(quotedPattern, badgeHTML);
+      transformedText = transformedText.replace(unquotedPattern, badgeHTML);
+    }
+
+    return transformedText;
+  }
+
+  /**
+   * Escape special regex characters
+   */
+  private escapeRegex(text: string): string {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   public get isTemporaryMessage(): boolean {
@@ -222,7 +274,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     const classes: string[] = ['message-item'];
     if (this.isAIMessage) {
       classes.push('ai-message');
-      if (this.isTemporaryMessage) {
+      // Show in-progress styling for AI messages that are still processing
+      if (this.isTemporaryMessage || this.messageStatus === 'In-Progress') {
         classes.push('in-progress');
       }
     } else if (this.isUserMessage) {

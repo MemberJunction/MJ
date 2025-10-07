@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 
@@ -7,7 +7,7 @@ import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-enti
   templateUrl: './artifact-viewer-panel.component.html',
   styleUrls: ['./artifact-viewer-panel.component.css']
 })
-export class ArtifactViewerPanelComponent implements OnInit {
+export class ArtifactViewerPanelComponent implements OnInit, OnChanges {
   @Input() artifactId!: string;
   @Input() currentUser!: UserInfo;
   @Output() closed = new EventEmitter<void>();
@@ -20,6 +20,13 @@ export class ArtifactViewerPanelComponent implements OnInit {
 
   async ngOnInit() {
     await this.loadArtifact();
+  }
+
+  async ngOnChanges(changes: SimpleChanges) {
+    // Reload artifact when artifactId changes
+    if (changes['artifactId'] && !changes['artifactId'].firstChange) {
+      await this.loadArtifact();
+    }
   }
 
   private async loadArtifact(): Promise<void> {

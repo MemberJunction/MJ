@@ -1790,8 +1790,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const unsubscribe = this._wsClient.subscribe(
               { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
               {
-                next: (data) => {
-                    return observer.next(<string>data.data.statusUpdates)
+                next: (data: any) => {
+                    // Extract the message field from the statusUpdates object
+                    // data.data.statusUpdates = { message: string, date: Date, sessionId: string }
+                    return observer.next(data.data.statusUpdates.message)
                 },
                 error: (error) => {
                     return observer.error(error)
