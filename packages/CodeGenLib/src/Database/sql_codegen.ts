@@ -13,6 +13,7 @@ import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
+import { TempBatchFile } from '../Misc/temp_batch_file';
 
 
 export const SPType = {
@@ -105,6 +106,11 @@ export class SQLCodeGenBase {
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
 
+            // Initialize temp batch files for each schema
+            // These will be populated as SQL is generated and will be used for actual execution
+            const schemas = Array.from(new Set(baselineEntities.map(e => e.SchemaName)));
+            TempBatchFile.initialize(directory, schemas);
+
             // STEP 1.5 - Check for cascade delete dependencies that require regeneration
             startSpinner('Analyzing cascade delete dependencies...');
             await this.markEntitiesForCascadeDeleteRegeneration(pool, includedEntities);
@@ -183,12 +189,30 @@ export class SQLCodeGenBase {
             startSpinner('Creating combined SQL files...');
             const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
             succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} schemas`);
-            
-            // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
-            startSpinner('Executing combined entity SQL files...');
+
+            // STEP 2(e) ---- FINALLY, we execute SQL in proper dependency order
+            // Use temp batch files (which maintain CodeGen log order) if available, otherwise fall back to combined files
+            startSpinner('Executing entity SQL files...');
             const step2eStartTime: Date = new Date();
-            if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false)) {
-                failSpinner('Failed to execute combined entity SQL files');
+
+            let executionSuccess = false;
+            if (TempBatchFile.hasContent()) {
+                // Execute temp batch files in dependency order (matches CodeGen run log)
+                const tempFiles = TempBatchFile.getTempFilePaths();
+                logIf(configInfo?.verboseOutput ?? false, `Executing ${tempFiles.length} temp batch file(s) in dependency order`);
+                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(tempFiles, configInfo?.verboseOutput ?? false);
+
+                // Clean up temp files after execution
+                TempBatchFile.cleanup();
+            } else {
+                // Fall back to combined files (for backward compatibility or if temp files weren't created)
+                logIf(configInfo?.verboseOutput ?? false, `Executing ${allEntityFiles.length} combined file(s)`);
+                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
+            }
+
+            if (!executionSuccess) {
+                failSpinner('Failed to execute entity SQL files');
+                TempBatchFile.cleanup(); // Cleanup on error
                 return false;
             }
             const step2eEndTime: Date = new Date();
@@ -233,6 +257,8 @@ export class SQLCodeGenBase {
         }
         catch (err) {
             logError(err as string);
+            // Clean up temp batch files on error
+            TempBatchFile.cleanup();
             return false;
         }
     }
@@ -492,8 +518,10 @@ export class SQLCodeGenBase {
         
         if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
+            // Also write to temp batch file for actual execution (matches CodeGen log order)
+            TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
         }
-        
+
         logIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
     }
 
