@@ -1,4 +1,4 @@
-import { logError, logMessage } from "../Misc/status_logging";
+import { logError, logMessage, logWarning } from "../Misc/status_logging";
 import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
@@ -320,20 +320,29 @@ public async recompileAllBaseViews(ds: sql.ConnectionPool, excludeSchemas: strin
     const cwd = path.resolve(process.cwd());
     const absoluteFilePath = path.resolve(cwd, filePath);
     // Add -I flag to enable QUOTED_IDENTIFIER (required for indexed views, computed columns, etc.)
-    command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -I -i "${absoluteFilePath}"`;
+    // Add -V 17 to only fail on severity >= 17 (system errors), allowing informational messages and warnings
+    command += ` -U ${escapedUser} -P ${escapedPassword} -d ${escapedDatabase} -I -V 17 -i "${absoluteFilePath}"`;
 
     // Execute the command
     logIf(configInfo.verboseOutput, `Executing SQL file: ${filePath} as ${sqlConfig.user}@${sqlConfig.server}:${sqlConfig.port}/${sqlConfig.database}`);
-    const { stdout, stderr } = await execAsync(command);
 
-    if (stderr && stderr.trim().length > 0) {
-      throw new Error(stderr);
+    try {
+      const { stdout, stderr } = await execAsync(command);
+
+      // Log any output as warnings (they're non-fatal since we didn't throw)
+      if (stdout && stdout.trim().length > 0) {
+        logWarning(`SQL Server message: ${stdout.trim()}`);
+      }
+      if (stderr && stderr.trim().length > 0) {
+        logWarning(`SQL Server stderr: ${stderr.trim()}`);
+      }
+
+      return true;
+    } catch (execError: any) {
+      // Only errors with severity >= 17 will cause sqlcmd to exit with non-zero code
+      // Re-throw to be handled by outer catch block
+      throw execError;
     }
-    else if (stdout && stdout.trim().length > 0) {
-      // we shouldn't have any output from this command if there are no errors, so consider this an error
-      throw new Error(stdout);
-    }
-    return true;
   }
   catch (e) {
     const message = (e as any).message || e;
