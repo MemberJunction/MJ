@@ -305,6 +305,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.scrollToBottom = true;
   }
 
+  /**
+   * Handle agent run detected event from progress updates
+   * This is called when the first progress update arrives with an agent run ID
+   */
+  async onAgentRunDetected(event: {conversationDetailId: string; agentRunId: string}): Promise<void> {
+    console.log('🎯 Agent run detected from progress update:', event);
+    await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId);
+  }
+
   async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
@@ -313,9 +322,22 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.scrollToBottom = true;
     console.log('Agent responded:', event.agentResult);
 
-    // Add agent run to the map if present
-    if (event.agentResult?.ID) {
-      await this.addAgentRunToMap(event.message.ID, event.agentResult.ID);
+    // Add agent run to the map if present (fallback if not already loaded from progress)
+    // agentResult is ExecuteAgentResult which contains agentRun property
+    if (event.agentResult?.agentRun?.ID) {
+      // Only load if not already in map (progress update may have already loaded it)
+      if (!this.agentRunsByDetailId.has(event.message.ID)) {
+        console.log('🔄 Loading agent run after execution:', {
+          agentRunId: event.agentResult.agentRun.ID,
+          conversationDetailId: event.message.ID,
+          agentName: event.agentResult.agentRun.Agent
+        });
+        await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID);
+      } else {
+        console.log('✅ Agent run already in map from progress update');
+      }
+    } else {
+      console.warn('⚠️ No agent run ID in agent response:', event.agentResult);
     }
 
     // Reload artifact mapping for this message to pick up newly created artifacts

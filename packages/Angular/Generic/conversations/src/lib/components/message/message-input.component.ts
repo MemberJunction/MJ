@@ -28,6 +28,7 @@ export class MessageInputComponent implements OnInit {
 
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
+  @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
   @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
 
@@ -355,6 +356,12 @@ export class MessageInputComponent implements OnInit {
           if (!storedAgentRunId && progressAgentRunId) {
             (conversationDetail as any).AgentRunID = progressAgentRunId;
             console.log(`[${agentName}] Setting AgentRunID from progress update:`, progressAgentRunId);
+
+            // Emit event to parent so it can load the agent run into the map immediately
+            this.agentRunDetected.emit({
+              conversationDetailId,
+              agentRunId: progressAgentRunId
+            });
           }
           // If we have both IDs, verify they match before updating
           else if (progressAgentRunId && storedAgentRunId) {

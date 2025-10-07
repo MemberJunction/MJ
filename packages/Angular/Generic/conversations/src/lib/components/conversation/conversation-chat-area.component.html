@@ -78,6 +78,7 @@
             [disabled]="isProcessing"
             (messageSent)="onMessageSent($event)"
             (agentResponse)="onAgentResponse($event)"
+            (agentRunDetected)="onAgentRunDetected($event)"
             (artifactCreated)="onArtifactCreated($event)"
             (conversationRenamed)="onConversationRenamed($event)">
             </mj-message-input>
