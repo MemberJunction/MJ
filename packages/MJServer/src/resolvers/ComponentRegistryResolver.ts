@@ -210,7 +210,8 @@ export class ComponentRegistryExtendedResolver {
                 namespace,
                 name,
                 version: version || 'latest',
-                hash: hash
+                hash: hash,
+                userEmail: user.Email
             });
             
             // If not modified (304), return response with notModified flag

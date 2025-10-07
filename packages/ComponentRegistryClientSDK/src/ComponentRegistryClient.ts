@@ -63,8 +63,8 @@ export class ComponentRegistryClient {
    * Returns ComponentResponse which includes hash and notModified flag
    */
   async getComponentWithHash(params: GetComponentParams): Promise<ComponentResponse> {
-    const { namespace, name, version = 'latest', hash } = params;
-    
+    const { namespace, name, version = 'latest', hash, userEmail } = params;
+
     // Build query parameters
     const queryParams = new URLSearchParams();
     if (version !== 'latest') {
@@ -73,13 +73,16 @@ export class ComponentRegistryClient {
     if (hash) {
       queryParams.append('hash', hash);
     }
-    
+    if (userEmail) {
+      queryParams.append('userEmail', userEmail);
+    }
+
     const queryString = queryParams.toString();
     const path = `/api/v1/components/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${queryString ? `?${queryString}` : ''}`;
-    
+
     try {
       const response = await this.makeRequest('GET', path);
-      
+
       // Handle 304 Not Modified response
       if (response && typeof response === 'object' && 'message' in response && response.message === 'Not modified') {
         return {
@@ -87,7 +90,7 @@ export class ComponentRegistryClient {
           notModified: true
         } as ComponentResponse;
       }
-      
+
       return response as ComponentResponse;
     } catch (error) {
       if (error instanceof RegistryError) {

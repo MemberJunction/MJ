@@ -63,26 +63,31 @@ export interface GetComponentParams {
    * Registry identifier
    */
   registry: string;
-  
+
   /**
    * Component namespace
    */
   namespace: string;
-  
+
   /**
    * Component name
    */
   name: string;
-  
+
   /**
    * Component version (defaults to 'latest')
    */
   version?: string;
-  
+
   /**
    * Optional hash for caching - if provided and matches current spec, returns 304
    */
   hash?: string;
+
+  /**
+   * User email for tracking and analytics (optional)
+   */
+  userEmail?: string;
 }
 
 /**
