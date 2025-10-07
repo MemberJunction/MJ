@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UserInfo, RunView, Metadata, CompositeKey } from '@memberjunction/core';
+import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, AIAgentRunEntityExtended, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -16,6 +16,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   @Input() currentUser!: UserInfo;
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
 
@@ -38,6 +39,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   // Artifact mapping: ConversationDetailID -> {artifactId, versionId, name}
   public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string; name: string}>();
+
+  // Agent run mapping: ConversationDetailID -> AIAgentRunEntityExtended
+  // Loaded once per conversation and kept in sync as new runs are created
+  public agentRunsByDetailId = new Map<string, AIAgentRunEntityExtended>();
 
   // Resize state
   private isResizing: boolean = false;
@@ -129,10 +134,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           },
           this.currentUser
         ),
-        rv.RunView<AIAgentRunEntity>(
+        rv.RunView<AIAgentRunEntityExtended>(
           {
             EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationID='${conversationId}'`, 
+            ExtraFilter: `ConversationDetailID IN (SELECT ID FROM [${convoDetailEntity.SchemaName}].[${convoDetailEntity.BaseView}] WHERE ConversationID='${conversationId}')`,
             ResultType: 'entity_object'
           },
           this.currentUser
@@ -150,28 +155,30 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       if (messagesResult.Success) {
         const loadedMessages = messagesResult.Results || [];
 
-        // Map AgentID and generation time from agent runs to messages
+        // Build agent runs map - single query loads all runs for this conversation
+        this.agentRunsByDetailId.clear();
+        console.log(`🔍 Agent Runs Query Result:`, {
+          success: agentRunsResult.Success,
+          resultCount: agentRunsResult.Results?.length || 0,
+          errorMessage: agentRunsResult.ErrorMessage
+        });
+
         if (agentRunsResult.Success && agentRunsResult.Results) {
-          const agentRunsByDetailId = new Map<string, AIAgentRunEntity>();
           for (const run of agentRunsResult.Results) {
+            console.log(`  📌 Agent Run:`, {
+              id: run.ID,
+              agentName: run.Agent,
+              conversationDetailID: run.ConversationDetailID,
+              status: run.Status
+            });
             if (run.ConversationDetailID) {
-              agentRunsByDetailId.set(run.ConversationDetailID, run);
+              this.agentRunsByDetailId.set(run.ConversationDetailID, run);
             }
           }
-
-          // Populate AgentID and generation time on messages
-          for (const message of loadedMessages) {
-            const agentRun = agentRunsByDetailId.get(message.ID);
-            if (agentRun && agentRun.AgentID) {
-              (message as any).AgentID = agentRun.AgentID;
-
-              // Calculate generation time in seconds
-              if (agentRun.StartedAt && agentRun.CompletedAt) {
-                const durationMs = new Date(agentRun.CompletedAt).getTime() - new Date(agentRun.StartedAt).getTime();
-                (message as any).GenerationTimeSeconds = durationMs / 1000;
-              }
-            }
-          }
+          console.log(`📊 Loaded ${this.agentRunsByDetailId.size} agent runs for conversation ${conversationId}`);
+          console.log(`📊 Map keys:`, Array.from(this.agentRunsByDetailId.keys()));
+        } else {
+          console.error(`❌ Failed to load agent runs:`, agentRunsResult.ErrorMessage);
         }
 
         // Build artifact map from preloaded artifacts
@@ -298,6 +305,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.scrollToBottom = true;
   }
 
+  /**
+   * Handle agent run detected event from progress updates
+   * This is called when the first progress update arrives with an agent run ID
+   */
+  async onAgentRunDetected(event: {conversationDetailId: string; agentRunId: string}): Promise<void> {
+    console.log('🎯 Agent run detected from progress update:', event);
+    await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId);
+  }
+
   async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
@@ -305,6 +321,24 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Scroll to bottom when agent responds
     this.scrollToBottom = true;
     console.log('Agent responded:', event.agentResult);
+
+    // Add agent run to the map if present (fallback if not already loaded from progress)
+    // agentResult is ExecuteAgentResult which contains agentRun property
+    if (event.agentResult?.agentRun?.ID) {
+      // Only load if not already in map (progress update may have already loaded it)
+      if (!this.agentRunsByDetailId.has(event.message.ID)) {
+        console.log('🔄 Loading agent run after execution:', {
+          agentRunId: event.agentResult.agentRun.ID,
+          conversationDetailId: event.message.ID,
+          agentName: event.agentResult.agentRun.Agent
+        });
+        await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID);
+      } else {
+        console.log('✅ Agent run already in map from progress update');
+      }
+    } else {
+      console.warn('⚠️ No agent run ID in agent response:', event.agentResult);
+    }
 
     // Reload artifact mapping for this message to pick up newly created artifacts
     await this.reloadArtifactsForMessage(event.message.ID);
@@ -320,6 +354,32 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
     // Force change detection to update the UI
     this.cdr.detectChanges();
+  }
+
+  /**
+   * Add or update an agent run in the map
+   * Called when a new agent run completes to keep the map in sync
+   */
+  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string): Promise<void> {
+    try {
+      console.log(`🔄 Adding agent run to map:`, { conversationDetailId, agentRunId });
+      const md = new Metadata();
+      const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
+      if (await agentRun.Load(agentRunId)) {
+        this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+        console.log(`✅ Added agent run to map:`, {
+          agentRunId,
+          conversationDetailId,
+          agentName: agentRun.Agent,
+          status: agentRun.Status,
+          mapSize: this.agentRunsByDetailId.size
+        });
+      } else {
+        console.warn(`⚠️ Failed to load agent run ${agentRunId}`);
+      }
+    } catch (error) {
+      console.error('❌ Failed to load agent run for map:', error);
+    }
   }
 
   /**
@@ -606,6 +666,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     console.log('🎉 Conversation renamed:', event);
     // Pass the event up to workspace component for animation
     this.conversationRenamed.emit(event);
+  }
+
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    // Pass the event up to the parent component (workspace or explorer wrapper)
+    this.openEntityRecord.emit(event);
   }
 
   // Scroll functionality (pattern from skip-chat)

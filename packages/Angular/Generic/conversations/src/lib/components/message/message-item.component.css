@@ -55,14 +55,17 @@
 .message-item.in-progress .message-text {
   color: #1F2937;
   font-weight: 500;
+  max-height: 150px;
+  overflow-y: auto;
+  display: block;
 }
 
-/* Progress icon - positioned to the right of message */
+/* Progress icon - positioned to the right of message, pushed down to avoid overlap */
 .message-item.in-progress .message-content::after {
   content: '';
   position: absolute;
   right: 12px;
-  top: 12px;
+  top: 22px;
   width: 16px;
   height: 16px;
   border: 2px solid #3B82F6;
@@ -534,4 +537,212 @@
 @keyframes statusPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.7; }
+}
+
+/* ============================================
+   Agent Run Icon & Details Panel
+   ============================================ */
+
+/* Agent run gear icon in header - muted style for power users */
+.agent-run-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  margin-left: 8px;
+}
+
+.agent-run-icon i.fa-cog {
+  font-size: 13px;
+}
+
+.agent-run-icon:hover {
+  color: #6B7280;
+}
+
+.agent-run-icon.expanded {
+  color: #4B5563;
+}
+
+.agent-run-icon.expanded i.fa-cog {
+  animation: rotate 1s linear infinite;
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Agent details panel */
+.agent-details-panel {
+  margin-top: 12px;
+  padding: 16px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading state */
+.agent-details-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6B7280;
+  font-size: 13px;
+}
+
+.agent-details-loading i {
+  color: #9333EA;
+}
+
+/* Error state */
+.agent-details-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #DC2626;
+  font-size: 13px;
+}
+
+.agent-details-error i {
+  color: #DC2626;
+}
+
+/* Content header */
+.agent-details-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #E5E7EB;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+}
+
+.agent-details-header i {
+  color: #9333EA;
+}
+
+.agent-name-link {
+  color: #9333EA;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.agent-name-link:hover {
+  color: #7C3AED;
+  text-decoration: underline;
+}
+
+/* Details grid */
+.agent-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #E5E7EB;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.detail-value {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 600;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* Status badge in details */
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-pending {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.status-badge.status-running {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.status-badge.status-complete {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.status-badge.status-failed,
+.status-badge.status-error {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.status-badge.status-cancelled {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
+/* Run ID link styling */
+.run-id-link {
+  color: #3B82F6;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.run-id-link:hover {
+  color: #2563EB;
+  text-decoration: underline;
+}
+
+.run-id-link i.fa-external-link-alt {
+  font-size: 10px;
+  opacity: 0.7;
 }

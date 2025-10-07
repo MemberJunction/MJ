@@ -1,8 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { SharedService } from '@memberjunction/ng-shared';
 
 /**
  * Wrapper component for the conversations interface within MJ Explorer
@@ -19,7 +20,8 @@ import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
         [currentUser]="currentUser"
         [layout]="'full'"
         [activeContext]="activeContext"
-        [contextItemId]="contextItemId">
+        [contextItemId]="contextItemId"
+        (openEntityRecord)="onOpenEntityRecord($event)">
       </mj-conversation-workspace>
     </div>
   `,
@@ -69,5 +71,13 @@ export class ChatWrapperComponent implements OnInit {
         this.contextItemId = undefined;
       }
     });
+  }
+
+  /**
+   * Handle openEntityRecord event from conversation components
+   * Opens the specified entity record in a new tab using SharedService
+   */
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    SharedService.Instance.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 }

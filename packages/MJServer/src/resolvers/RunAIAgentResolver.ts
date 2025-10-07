@@ -315,7 +315,8 @@ export class RunAIAgentResolver extends ResolverBase {
         templateData?: string,
         lastRunId?: string,
         autoPopulateLastRunPayload?: boolean,
-        configurationId?: string
+        configurationId?: string,
+        conversationDetailId?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -361,7 +362,8 @@ export class RunAIAgentResolver extends ResolverBase {
                 lastRunId: lastRunId,
                 autoPopulateLastRunPayload: autoPopulateLastRunPayload,
                 configurationId: configurationId,
-                data: parsedData
+                data: parsedData,
+                conversationDetailId: conversationDetailId,
             });
 
             // Update agent run ref once available
@@ -465,7 +467,8 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('templateData', { nullable: true }) templateData?: string,
         @Arg('lastRunId', { nullable: true }) lastRunId?: string,
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
-        @Arg('configurationId', { nullable: true }) configurationId?: string
+        @Arg('configurationId', { nullable: true }) configurationId?: string,
+        @Arg('conversationDetailId', { nullable: true }) conversationDetailId?: string
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -479,7 +482,8 @@ export class RunAIAgentResolver extends ResolverBase {
             templateData,
             lastRunId,
             autoPopulateLastRunPayload,
-            configurationId
+            configurationId,
+            conversationDetailId
         );
     }
 
@@ -499,7 +503,8 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('templateData', { nullable: true }) templateData?: string,
         @Arg('lastRunId', { nullable: true }) lastRunId?: string,
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
-        @Arg('configurationId', { nullable: true }) configurationId?: string
+        @Arg('configurationId', { nullable: true }) configurationId?: string,
+        @Arg('conversationDetailId', { nullable: true }) conversationDetailId?: string
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -513,7 +518,8 @@ export class RunAIAgentResolver extends ResolverBase {
             templateData,
             lastRunId,
             autoPopulateLastRunPayload,
-            configurationId
+            configurationId,
+            conversationDetailId
         );
     }
  

@@ -8,8 +8,8 @@ import {
   AfterViewInit,
   OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
@@ -33,6 +33,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactId?: string;
   @Input() public artifactVersionId?: string;
+  @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -41,6 +42,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
+  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -48,6 +50,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public isEditing: boolean = false;
   public editedText: string = '';
   private originalText: string = '';
+
+  // Agent run details
+  public isAgentDetailsExpanded: boolean = false;
 
   constructor(
     private cdRef: ChangeDetectorRef,
@@ -417,6 +422,119 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     event.stopPropagation();
     // TODO: Implement artifact export
     console.log('Export artifact for message:', this.message.ID);
+  }
+
+  /**
+   * Whether this message has an associated agent run
+   * Based on whether the message has an AgentID (not whether agentRun object is loaded)
+   */
+  public get hasAgentRun(): boolean {
+    return !!this.message?.AgentID;
+  }
+
+  /**
+   * Toggle the agent details panel expansion
+   */
+  public toggleAgentDetails(): void {
+    this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
+    this.cdRef.detectChanges();
+  }
+
+  /**
+   * Get formatted duration for the agent run
+   * Calculate from created to updated timestamp
+   */
+  public get agentRunDuration(): string | null {
+    if (!this.agentRun || !this.agentRun.__mj_CreatedAt || !this.agentRun.__mj_UpdatedAt) {
+      return null;
+    }
+
+    const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+    const updatedAt = new Date(this.agentRun.__mj_UpdatedAt);
+    const diffMs = updatedAt.getTime() - createdAt.getTime();
+
+    if (diffMs <= 0) {
+      return null;
+    }
+
+    const seconds = diffMs / 1000;
+
+    if (seconds < 1) {
+      return `${Math.round(diffMs)}ms`;
+    } else if (seconds < 60) {
+      return `${seconds.toFixed(1)}s`;
+    } else {
+      const mins = Math.floor(seconds / 60);
+      const secs = Math.floor(seconds % 60);
+      return `${mins}m ${secs}s`;
+    }
+  }
+
+  /**
+   * Get total tokens used in the agent run
+   */
+  public get agentRunTotalTokens(): number {
+    if (!this.agentRun) {
+      return 0;
+    }
+    return (this.agentRun.TotalPromptTokensUsed || 0) + (this.agentRun.TotalCompletionTokensUsed || 0);
+  }
+
+  /**
+   * Get total cost of the agent run
+   */
+  public get agentRunTotalCost(): number {
+    return this.agentRun?.TotalCost || 0;
+  }
+
+  /**
+   * Get number of steps in the agent run
+   */
+  public get agentRunStepCount(): number {
+    // Count from the Steps array if available
+    if (this.agentRun && (this.agentRun as any).Steps) {
+      return (this.agentRun as any).Steps.length;
+    }
+    return 0;
+  }
+
+  /**
+   * Format number with commas
+   */
+  public formatNumber(num: number): string {
+    return num.toLocaleString();
+  }
+
+  /**
+   * Open the agent run entity record in a new tab
+   */
+  public openAgentRunRecord(): void {
+    if (!this.agentRun?.ID) return;
+
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', this.agentRun.ID)
+    ]);
+
+    this.openEntityRecord.emit({
+      entityName: 'MJ: AI Agent Runs',
+      compositeKey
+    });
+  }
+
+  /**
+   * Open the agent entity record in a new tab
+   */
+  public openAgentRecord(): void {
+    if (!this.agentRun?.AgentID) return;
+
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', this.agentRun.AgentID)
+    ]);
+
+    this.openEntityRecord.emit({
+      entityName: 'AI Agents',
+      compositeKey
+    });
   }
 
 }

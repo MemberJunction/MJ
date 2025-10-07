@@ -18,6 +18,15 @@
         {{ formattedGenerationTime }}
       </span>
 
+      <!-- Agent run icon (clickable to expand details) -->
+      <span *ngIf="hasAgentRun"
+            class="agent-run-icon"
+            (click)="toggleAgentDetails()"
+            [class.expanded]="isAgentDetailsExpanded"
+            title="Click to view agent execution details">
+        <i class="fas fa-cog"></i>
+      </span>
+
       <!-- Status indicator for user messages -->
       <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">
         <i class="fas" [ngClass]="messageStatus === 'Error' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'"></i>
@@ -74,6 +83,64 @@
           <div class="edit-hint">
             Press Enter to save, Shift+Enter for new line, Escape to cancel
           </div>
+        </div>
+      }
+
+      <!-- Agent Run Details Panel (expandable) -->
+      @if (isAgentDetailsExpanded && hasAgentRun) {
+        <div class="agent-details-panel">
+          @if (agentRun) {
+            <div class="agent-details-content">
+              <div class="agent-details-header">
+                <i class="fas fa-chart-line"></i>
+                <span>
+                  <a class="agent-name-link" (click)="openAgentRecord()" title="Open agent details">
+                    {{ aiAgentInfo?.name || 'Agent' }}
+                  </a>
+                  Run Details
+                </span>
+              </div>
+
+              <div class="agent-details-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Run ID:</span>
+                  <span class="detail-value">
+                    <a class="run-id-link" (click)="openAgentRunRecord()" title="Open agent run details">
+                      {{ agentRun.ID }}
+                      <i class="fas fa-external-link-alt"></i>
+                    </a>
+                  </span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunDuration">
+                  <span class="detail-label">Duration:</span>
+                  <span class="detail-value">{{ agentRunDuration }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunStepCount > 0">
+                  <span class="detail-label">Steps:</span>
+                  <span class="detail-value">{{ agentRunStepCount }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunTotalTokens > 0">
+                  <span class="detail-label">Tokens:</span>
+                  <span class="detail-value">{{ formatNumber(agentRunTotalTokens) }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunTotalCost > 0">
+                  <span class="detail-label">Cost:</span>
+                  <span class="detail-value">\${{ agentRunTotalCost.toFixed(4) }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRun.Status">
+                  <span class="detail-label">Status:</span>
+                  <span class="detail-value status-badge" [class]="'status-' + agentRun.Status.toLowerCase()">
+                    {{ agentRun.Status }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          }
         </div>
       }
     </div>

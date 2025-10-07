@@ -8,7 +8,7 @@ import {
   DoCheck
 } from '@angular/core';
 import { ConversationEntity, ArtifactEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -37,6 +37,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   @Output() conversationChanged = new EventEmitter<ConversationEntity>();
   @Output() artifactOpened = new EventEmitter<ArtifactEntity>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -225,5 +226,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     setTimeout(() => {
       this.renamedConversationId = null;
     }, 1500);
+  }
+
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+    // Pass the event up to the parent component (chat-wrapper in explorer-core)
+    this.openEntityRecord.emit(event);
   }
 }
