@@ -188,9 +188,6 @@ export default class FileReset extends Command {
     } finally {
       // Reset singletons
       resetSyncEngine();
-      
-      // Exit process
-      process.exit(0);
     }
   }
 }

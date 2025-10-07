@@ -101,10 +101,10 @@ export default class Validate extends Command {
       } else {
         this.log(chalk.red(`\n❌ Validation failed with ${validationResult.errors.length} error(s) and ${validationResult.warnings.length} warning(s)`));
       }
-      
+
       // Exit with error code if validation failed
       if (!validationResult.isValid) {
-        process.exit(1);
+        this.error('Validation failed');
       }
       
     } catch (error) {
@@ -124,9 +124,6 @@ export default class Validate extends Command {
     } finally {
       // Reset singletons
       resetSyncEngine();
-      
-      // Exit process
-      process.exit(0);
     }
   }
 }
