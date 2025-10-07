@@ -13,8 +13,8 @@ import {
   ElementRef,
   AfterViewChecked
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/core';
+import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
 
@@ -34,6 +34,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
   @Input() public artifactMap: Map<string, {artifactId: string; versionId: string}> = new Map();
+  @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
@@ -43,6 +44,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public replyInThread = new EventEmitter<ConversationDetailEntity>();
   @Output() public viewThread = new EventEmitter<ConversationDetailEntity>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
+  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -158,6 +160,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           const artifactInfo = this.artifactMap.get(message.ID);
           instance.artifactId = artifactInfo?.artifactId;
           instance.artifactVersionId = artifactInfo?.versionId;
+          // Update agent run from map
+          instance.agentRun = this.agentRunMap.get(message.ID) || null;
         } else {
           // Create new component
           const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);
@@ -172,6 +176,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           const artifactInfo = this.artifactMap.get(message.ID);
           instance.artifactId = artifactInfo?.artifactId;
           instance.artifactVersionId = artifactInfo?.versionId;
+          // Pass agent run from map (loaded once per conversation)
+          instance.agentRun = this.agentRunMap.get(message.ID) || null;
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));
@@ -180,6 +186,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.retryClicked.subscribe((msg: ConversationDetailEntity) => this.retryMessage.emit(msg));
           instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
           instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
+          instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
 
           // Handle artifact actions if the output exists
           if (instance.artifactActionPerformed) {

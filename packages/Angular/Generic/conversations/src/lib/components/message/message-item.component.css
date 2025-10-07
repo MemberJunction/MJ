@@ -540,46 +540,46 @@
 }
 
 /* ============================================
-   Agent Run Badge & Details Panel
+   Agent Run Icon & Details Panel
    ============================================ */
 
-/* Agent run badge in header */
-.agent-run-badge {
+/* Agent run gear icon in header - muted style for power users */
+.agent-run-icon {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: linear-gradient(135deg, #9333EA 0%, #7C3AED 100%);
-  color: white;
-  border-radius: 12px;
-  font-size: 11px;
-  font-weight: 600;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #9CA3AF;
   cursor: pointer;
   transition: all 0.2s ease;
   user-select: none;
+  margin-left: 8px;
 }
 
-.agent-run-badge:hover {
-  background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(147, 51, 234, 0.3);
+.agent-run-icon i.fa-cog {
+  font-size: 13px;
 }
 
-.agent-run-badge i.fa-robot {
-  font-size: 12px;
+.agent-run-icon:hover {
+  color: #6B7280;
 }
 
-.agent-run-badge .badge-text {
-  font-weight: 600;
+.agent-run-icon.expanded {
+  color: #4B5563;
 }
 
-.agent-run-badge .expand-icon {
-  font-size: 10px;
-  transition: transform 0.2s ease;
+.agent-run-icon.expanded i.fa-cog {
+  animation: rotate 1s linear infinite;
 }
 
-.agent-run-badge.expanded .expand-icon {
-  transform: rotate(180deg);
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Agent details panel */
@@ -644,6 +644,19 @@
 
 .agent-details-header i {
   color: #9333EA;
+}
+
+.agent-name-link {
+  color: #9333EA;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.agent-name-link:hover {
+  color: #7C3AED;
+  text-decoration: underline;
 }
 
 /* Details grid */
@@ -713,38 +726,23 @@
   color: #4B5563;
 }
 
-/* Footer with action button */
-.agent-details-footer {
-  padding-top: 12px;
-  border-top: 1px solid #E5E7EB;
-}
-
-.btn-view-full-run {
+/* Run ID link styling */
+.run-id-link {
+  color: #3B82F6;
+  cursor: pointer;
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: white;
-  border: 1px solid #D1D5DB;
-  border-radius: 6px;
-  color: #374151;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
+  gap: 4px;
   transition: all 0.2s ease;
 }
 
-.btn-view-full-run:not(:disabled):hover {
-  background: #F9FAFB;
-  border-color: #9333EA;
-  color: #9333EA;
+.run-id-link:hover {
+  color: #2563EB;
+  text-decoration: underline;
 }
 
-.btn-view-full-run:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-view-full-run i {
-  font-size: 12px;
+.run-id-link i.fa-external-link-alt {
+  font-size: 10px;
+  opacity: 0.7;
 }

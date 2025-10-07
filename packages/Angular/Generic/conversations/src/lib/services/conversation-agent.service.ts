@@ -98,6 +98,7 @@ export class ConversationAgentService {
    * @param conversationId The conversation ID
    * @param message The message that was just sent
    * @param conversationHistory Recent messages in the conversation for context
+   * @param conversationDetailId The ID of the conversation detail record to link to the agent run
    * @param onProgress Optional callback for receiving progress updates during execution
    * @returns The agent's response, or null if the agent chooses not to respond
    */
@@ -105,6 +106,7 @@ export class ConversationAgentService {
     conversationId: string,
     message: ConversationDetailEntity,
     conversationHistory: ConversationDetailEntity[],
+    conversationDetailId: string,
     onProgress?: AgentExecutionProgressCallback
   ): Promise<ExecuteAgentResult | null> {
     // Don't process if user is tagging someone else (future enhancement)
@@ -137,6 +139,7 @@ export class ConversationAgentService {
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
+        conversationDetailId: conversationDetailId,
         data: {
           ALL_AVAILABLE_AGENTS: availAgents.map(a => {
             return {
@@ -223,6 +226,7 @@ export class ConversationAgentService {
    * @param message The user message that triggered this
    * @param conversationHistory Recent conversation history for context
    * @param reasoning Why this agent is being invoked
+   * @param conversationDetailId The ID of the conversation detail record to link to the agent run
    * @param payload Optional payload to pass to the agent (e.g., previous OUTPUT artifact for continuity)
    * @param onProgress Optional callback for receiving progress updates during execution
    * @returns The agent's execution result, or null if agent not found
@@ -233,6 +237,7 @@ export class ConversationAgentService {
     message: ConversationDetailEntity,
     conversationHistory: ConversationDetailEntity[],
     reasoning: string,
+    conversationDetailId: string,
     payload?: any,
     onProgress?: AgentExecutionProgressCallback
   ): Promise<ExecuteAgentResult | null> {
@@ -266,6 +271,7 @@ export class ConversationAgentService {
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
+        conversationDetailId: conversationDetailId,
         data: {
           conversationId: conversationId,
           latestMessageId: message.ID,

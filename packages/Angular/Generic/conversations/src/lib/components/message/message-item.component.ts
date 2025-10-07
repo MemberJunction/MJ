@@ -9,7 +9,7 @@ import {
   OnInit
 } from '@angular/core';
 import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
@@ -33,6 +33,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactId?: string;
   @Input() public artifactVersionId?: string;
+  @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -41,6 +42,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
+  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -51,8 +53,6 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
-  public agentRun: AIAgentRunEntityExtended | null = null;
-  public isLoadingAgentRun: boolean = false;
 
   constructor(
     private cdRef: ChangeDetectorRef,
@@ -426,61 +426,18 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Whether this message has an associated agent run
-   * Only true if AgentID is populated (which means an agent was invoked)
+   * Based on whether the message has an AgentID (not whether agentRun object is loaded)
    */
   public get hasAgentRun(): boolean {
-    return !!(this.message as any).AgentID;
-  }
-
-  /**
-   * Get the AgentRunID from the message
-   */
-  public get agentRunId(): string | null {
-    return (this.message as any).AgentRunID || null;
+    return !!this.message?.AgentID;
   }
 
   /**
    * Toggle the agent details panel expansion
    */
-  public async toggleAgentDetails(): Promise<void> {
+  public toggleAgentDetails(): void {
     this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
-
-    // Load agent run data when expanding (if not already loaded)
-    if (this.isAgentDetailsExpanded && !this.agentRun && this.agentRunId) {
-      await this.loadAgentRun();
-    }
-
     this.cdRef.detectChanges();
-  }
-
-  /**
-   * Load the agent run entity for this message
-   */
-  private async loadAgentRun(): Promise<void> {
-    if (!this.agentRunId) {
-      return;
-    }
-
-    this.isLoadingAgentRun = true;
-    this.cdRef.detectChanges();
-
-    try {
-      const md = new Metadata();
-      const agentRunEntity = await md.GetEntityObject<AIAgentRunEntityExtended>(
-        'MJ: AI Agent Runs',
-        this.currentUser
-      );
-
-      const loaded = await agentRunEntity.Load(this.agentRunId);
-      if (loaded) {
-        this.agentRun = agentRunEntity;
-      }
-    } catch (error) {
-      console.error('Error loading agent run:', error);
-    } finally {
-      this.isLoadingAgentRun = false;
-      this.cdRef.detectChanges();
-    }
   }
 
   /**
@@ -546,6 +503,38 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public formatNumber(num: number): string {
     return num.toLocaleString();
+  }
+
+  /**
+   * Open the agent run entity record in a new tab
+   */
+  public openAgentRunRecord(): void {
+    if (!this.agentRun?.ID) return;
+
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', this.agentRun.ID)
+    ]);
+
+    this.openEntityRecord.emit({
+      entityName: 'MJ: AI Agent Runs',
+      compositeKey
+    });
+  }
+
+  /**
+   * Open the agent entity record in a new tab
+   */
+  public openAgentRecord(): void {
+    if (!this.agentRun?.AgentID) return;
+
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', this.agentRun.AgentID)
+    ]);
+
+    this.openEntityRecord.emit({
+      entityName: 'AI Agents',
+      compositeKey
+    });
   }
 
 }

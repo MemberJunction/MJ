@@ -50,11 +50,13 @@
             [currentUser]="currentUser"
             [isProcessing]="isProcessing"
             [artifactMap]="artifactsByDetailId"
+            [agentRunMap]="agentRunsByDetailId"
             (replyInThread)="onReplyInThread($event)"
             (viewThread)="onViewThread($event)"
             (retryMessage)="onRetryMessage($event)"
             (artifactClicked)="onArtifactClicked($event)"
-            (messageEdited)="onMessageEdited($event)">
+            (messageEdited)="onMessageEdited($event)"
+            (openEntityRecord)="onOpenEntityRecord($event)">
             </mj-conversation-message-list>
         </div>
 
