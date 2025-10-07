@@ -3137,7 +3137,7 @@ export const CompanyIntegrationSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
     LastRunID: z.string().nullable().describe(`
         * * Field Name: LastRunID
-        * * Display Name: Last Run ID
+        * * Display Name: LastRun
         * * SQL Data Type: uniqueidentifier`),
     LastRunStartedAt: z.date().nullable().describe(`
         * * Field Name: LastRunStartedAt
@@ -6306,7 +6306,7 @@ export const EntityPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(50)`),
     RoleSQLName: z.string().nullable().describe(`
         * * Field Name: RoleSQLName
-        * * Display Name: Role SQL Name
+        * * Display Name: Role SQLName
         * * SQL Data Type: nvarchar(250)`),
     CreateRLSFilter: z.string().nullable().describe(`
         * * Field Name: CreateRLSFilter
@@ -7199,7 +7199,7 @@ export const IntegrationURLFormatSchema = z.object({
         * * SQL Data Type: nvarchar(500)`),
     FullURLFormat: z.string().nullable().describe(`
         * * Field Name: FullURLFormat
-        * * Display Name: Full URL Format
+        * * Display Name: Full URLFormat
         * * SQL Data Type: nvarchar(1000)`),
 });
 
@@ -14216,11 +14216,11 @@ export const UserViewRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     UserViewID: z.string().describe(`
         * * Field Name: UserViewID
-        * * Display Name: User View ID
+        * * Display Name: User View
         * * SQL Data Type: uniqueidentifier`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -23253,7 +23253,7 @@ export class CompanyIntegrationEntity extends BaseEntity<CompanyIntegrationEntit
 
     /**
     * * Field Name: LastRunID
-    * * Display Name: Last Run ID
+    * * Display Name: LastRun
     * * SQL Data Type: uniqueidentifier
     */
     get LastRunID(): string | null {
@@ -31357,7 +31357,7 @@ export class EntityPermissionEntity extends BaseEntity<EntityPermissionEntityTyp
 
     /**
     * * Field Name: RoleSQLName
-    * * Display Name: Role SQL Name
+    * * Display Name: Role SQLName
     * * SQL Data Type: nvarchar(250)
     */
     get RoleSQLName(): string | null {
@@ -33681,7 +33681,7 @@ export class IntegrationURLFormatEntity extends BaseEntity<IntegrationURLFormatE
 
     /**
     * * Field Name: FullURLFormat
-    * * Display Name: Full URL Format
+    * * Display Name: Full URLFormat
     * * SQL Data Type: nvarchar(1000)
     */
     get FullURLFormat(): string | null {
@@ -52343,7 +52343,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
 
     /**
     * * Field Name: UserViewID
-    * * Display Name: User View ID
+    * * Display Name: User View
     * * SQL Data Type: uniqueidentifier
     */
     get UserViewID(): string {
@@ -52352,7 +52352,7 @@ export class UserViewRunDetailEntity extends BaseEntity<UserViewRunDetailEntityT
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     */
     get EntityID(): string {

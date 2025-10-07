@@ -5,7 +5,7 @@ GO
 -- Account table - stores information about customer organizations/companies
 CREATE TABLE CRM.Account (
     ID INT IDENTITY(1,1) PRIMARY KEY,
-    AccountName NVARCHAR(100) NOT NULL,
+    Name NVARCHAR(100) NOT NULL,
     Industry NVARCHAR(50),
     AnnualRevenue DECIMAL(18,2),
     Website NVARCHAR(255),
@@ -83,38 +83,38 @@ CREATE TABLE CRM.Activity (
 -- Industry lookup
 CREATE TABLE CRM.Industry (
     ID INT IDENTITY(1,1) PRIMARY KEY,
-    IndustryName NVARCHAR(50) NOT NULL
+    Name NVARCHAR(50) NOT NULL
 );
 
 -- Account Type lookup
 CREATE TABLE CRM.AccountType (
     ID INT IDENTITY(1,1) PRIMARY KEY,
-    TypeName NVARCHAR(50) NOT NULL,
-    CONSTRAINT CHK_AccountType_Name CHECK (TypeName IN ('Prospect', 'Customer', 'Vendor', 'Partner', 'Competitor', 'Other'))
+    Name NVARCHAR(50) NOT NULL,
+    CONSTRAINT CHK_AccountType_Name CHECK (Name IN ('Prospect', 'Customer', 'Vendor', 'Partner', 'Competitor', 'Other'))
 );
 
 -- Account Status lookup
 CREATE TABLE CRM.AccountStatus (
     ID INT IDENTITY(1,1) PRIMARY KEY,
-    StatusName NVARCHAR(20) NOT NULL,
-    CONSTRAINT CHK_AccountStatus_Name CHECK (StatusName IN ('Active', 'Inactive', 'On Hold', 'Closed'))
+    Name NVARCHAR(20) NOT NULL,
+    CONSTRAINT CHK_AccountStatus_Name CHECK (Name IN ('Active', 'Inactive', 'On Hold', 'Closed'))
 );
 
 -- Activity Type lookup
 CREATE TABLE CRM.ActivityType (
     ID INT IDENTITY(1,1) PRIMARY KEY,
-    TypeName NVARCHAR(50) NOT NULL,
-    CONSTRAINT CHK_ActivityType_Name CHECK (TypeName IN ('Call', 'Email', 'Meeting', 'Task', 'Note', 'Demo', 'Site Visit', 'Other'))
+    Name NVARCHAR(50) NOT NULL,
+    CONSTRAINT CHK_ActivityType_Name CHECK (Name IN ('Call', 'Email', 'Meeting', 'Task', 'Note', 'Demo', 'Site Visit', 'Other'))
 );
 
 
 -- RelationshipType table - defines relationship types and their inverse relationships
 CREATE TABLE CRM.RelationshipType (
     ID INT IDENTITY(1,1) PRIMARY KEY,
-    TypeName NVARCHAR(50) NOT NULL,
+    Name NVARCHAR(50) NOT NULL,
     IsBidirectional BIT NOT NULL DEFAULT 0,
     InverseRelationshipID INT NULL,
-    CONSTRAINT UQ_RelationshipType_Name UNIQUE (TypeName),
+    CONSTRAINT UQ_RelationshipType_Name UNIQUE (Name),
     CONSTRAINT FK_RelationshipType_InverseRelationship FOREIGN KEY (InverseRelationshipID) 
         REFERENCES CRM.RelationshipType(ID)
 );
@@ -155,7 +155,7 @@ EXEC sp_addextendedproperty
     @value = N'Name of the relationship type (e.g., Parent, Child, Spouse)',
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'RelationshipType',
-    @level2type = N'COLUMN', @level2name = N'TypeName';
+    @level2type = N'COLUMN', @level2name = N'Name';
 GO
 
 EXEC sp_addextendedproperty
@@ -263,7 +263,7 @@ EXEC sp_addextendedproperty
     @value = N'Official name of the organization or company',
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'Account',
-    @level2type = N'COLUMN', @level2name = N'AccountName';
+    @level2type = N'COLUMN', @level2name = N'Name';
 GO
 
 EXEC sp_addextendedproperty
@@ -657,7 +657,7 @@ EXEC sp_addextendedproperty
     @value = N'Name of the industry',
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'Industry',
-    @level2type = N'COLUMN', @level2name = N'IndustryName';
+    @level2type = N'COLUMN', @level2name = N'Name';
 GO
 
 -- Table: AccountType
@@ -673,7 +673,7 @@ EXEC sp_addextendedproperty
     @value = N'Name of the account type',
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'AccountType',
-    @level2type = N'COLUMN', @level2name = N'TypeName';
+    @level2type = N'COLUMN', @level2name = N'Name';
 GO
 
 -- Table: AccountStatus
@@ -689,7 +689,7 @@ EXEC sp_addextendedproperty
     @value = N'Name of the account status',
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'AccountStatus',
-    @level2type = N'COLUMN', @level2name = N'StatusName';
+    @level2type = N'COLUMN', @level2name = N'Name';
 GO
 
 -- Table: ActivityType
@@ -705,14 +705,14 @@ EXEC sp_addextendedproperty
     @value = N'Name of the activity type',
     @level0type = N'SCHEMA', @level0name = N'CRM',
     @level1type = N'TABLE',  @level1name = N'ActivityType',
-    @level2type = N'COLUMN', @level2name = N'TypeName';
+    @level2type = N'COLUMN', @level2name = N'Name';
 GO
 
 
 
 
 -- Sample data for Industry lookup table
-INSERT INTO CRM.Industry (IndustryName) VALUES 
+INSERT INTO CRM.Industry (Name) VALUES 
 ('Technology'),
 ('Healthcare'),
 ('Financial Services'),
@@ -736,7 +736,7 @@ INSERT INTO CRM.Industry (IndustryName) VALUES
 ('Aerospace & Defense');
 
 -- Sample data for AccountType lookup table
-INSERT INTO CRM.AccountType (TypeName) VALUES 
+INSERT INTO CRM.AccountType (Name) VALUES 
 ('Prospect'),
 ('Customer'),
 ('Vendor'),
@@ -745,14 +745,14 @@ INSERT INTO CRM.AccountType (TypeName) VALUES
 ('Other');
 
 -- Sample data for AccountStatus lookup table
-INSERT INTO CRM.AccountStatus (StatusName) VALUES 
+INSERT INTO CRM.AccountStatus (Name) VALUES 
 ('Active'),
 ('Inactive'),
 ('On Hold'),
 ('Closed');
 
 -- Sample data for ActivityType lookup table
-INSERT INTO CRM.ActivityType (TypeName) VALUES 
+INSERT INTO CRM.ActivityType (Name) VALUES 
 ('Call'),
 ('Email'),
 ('Meeting'),
@@ -769,41 +769,41 @@ INSERT INTO CRM.ActivityType (TypeName) VALUES
 SET IDENTITY_INSERT CRM.RelationshipType ON;
 
 -- Insert relationship types with their inverse relationships
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (1, 'Parent', 0, NULL);
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (2, 'Child', 0, 1);
 
 -- Update Parent to point to Child as its inverse
 UPDATE CRM.RelationshipType SET InverseRelationshipID = 2 WHERE ID = 1;
 
 -- Continue with other relationship types
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (3, 'Spouse', 1, NULL);
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (4, 'Supervisor', 0, NULL);
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (5, 'Subordinate', 0, 4);
 
 -- Update Supervisor to point to Subordinate as its inverse
 UPDATE CRM.RelationshipType SET InverseRelationshipID = 5 WHERE ID = 4;
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (6, 'Friend', 1, NULL);
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (7, 'Sibling', 1, NULL);
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (8, 'Colleague', 1, NULL);
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (9, 'Mentor', 0, NULL);
 
-INSERT INTO CRM.RelationshipType (ID, TypeName, IsBidirectional, InverseRelationshipID) 
+INSERT INTO CRM.RelationshipType (ID, Name, IsBidirectional, InverseRelationshipID) 
 VALUES (10, 'Mentee', 0, 9);
 
 -- Update Mentor to point to Mentee as its inverse
@@ -816,7 +816,7 @@ SET IDENTITY_INSERT CRM.RelationshipType OFF;
 -- Enable IDENTITY_INSERT for Account table
 SET IDENTITY_INSERT CRM.Account ON;
 
-INSERT INTO CRM.Account (ID, AccountName, Industry, AnnualRevenue, Website, Phone, Fax, 
+INSERT INTO CRM.Account (ID, Name, Industry, AnnualRevenue, Website, Phone, Fax, 
                         BillingStreet, BillingCity, BillingState, BillingPostalCode, BillingCountry,
                         ShippingStreet, ShippingCity, ShippingState, ShippingPostalCode, ShippingCountry,
                         AccountType, AccountStatus, IsActive)
