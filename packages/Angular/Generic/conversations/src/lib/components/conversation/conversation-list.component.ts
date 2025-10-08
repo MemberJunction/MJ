@@ -1,4 +1,4 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, HostListener } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -53,16 +53,27 @@ import { ToastService } from '../../services/toast.service';
                     <i class="fas fa-thumbtack pinned-icon"></i>
                   }
                 </div>
-                <div class="conversation-actions" (click)="$event.stopPropagation()">
-                  <button class="action-btn" (click)="togglePin(conversation)" [title]="conversation.IsPinned ? 'Unpin' : 'Pin'" [class.pinned]="conversation.IsPinned">
-                    <i class="fas fa-thumbtack"></i>
+                <div class="conversation-actions">
+                  <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
+                    <i class="fas fa-ellipsis"></i>
                   </button>
-                  <button class="action-btn" (click)="renameConversation(conversation)" title="Rename">
-                    <i class="fas fa-edit"></i>
-                  </button>
-                  <button class="action-btn danger" (click)="deleteConversation(conversation)" title="Delete">
-                    <i class="fas fa-trash"></i>
-                  </button>
+                  @if (openMenuConversationId === conversation.ID) {
+                    <div class="context-menu" (click)="$event.stopPropagation()">
+                      <button class="menu-item" (click)="togglePin(conversation, $event)">
+                        <i class="fas fa-thumbtack"></i>
+                        <span>{{ conversation.IsPinned ? 'Unpin' : 'Pin' }}</span>
+                      </button>
+                      <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
+                        <i class="fas fa-edit"></i>
+                        <span>Rename</span>
+                      </button>
+                      <div class="menu-divider"></div>
+                      <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
+                        <i class="fas fa-trash"></i>
+                        <span>Delete</span>
+                      </button>
+                    </div>
+                  }
                 </div>
               </div>
             }
@@ -140,7 +151,7 @@ import { ToastService } from '../../services/toast.service';
     .chat-list.expanded { display: block; }
 
     .conversation-item {
-      padding: 6px 40px 6px 28px;
+      padding: 6px 8px 6px 16px;
       cursor: pointer;
       display: flex;
       gap: 8px;
@@ -156,11 +167,11 @@ import { ToastService } from '../../services/toast.service';
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
-    .conversation-info { flex: 1; min-width: 0; padding-right: 8px; }
+    .conversation-info { flex: 1; min-width: 0; margin-right: 4px; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
-    .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-right: 4px; }
 
     /* Project Badge */
     .project-badge {
@@ -187,38 +198,102 @@ import { ToastService } from '../../services/toast.service';
     }
 
     .conversation-actions {
+      position: relative;
       display: flex;
       align-items: center;
-      gap: 4px;
-      margin-left: auto;
       opacity: 0;
       transition: opacity 0.2s;
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      z-index: 10;
+      flex-shrink: 0;
     }
+    .conversation-item:hover .conversation-actions { opacity: 1; }
     .conversation-item.active .conversation-actions { opacity: 1; }
-    .conversation-item:has(.pinned-icon) .conversation-actions { opacity: 1; }
     .pinned-icon { color: #AAE7FD; font-size: 12px; }
-    .action-btn {
-      width: 20px;
-      height: 20px;
+
+    .menu-btn {
+      width: 28px;
+      height: 28px;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: 3px;
+      border-radius: 6px;
       color: rgba(255,255,255,0.6);
       background: transparent;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
     }
-    .action-btn:hover { background: rgba(255,255,255,0.2); color: white; }
-    .action-btn.pinned { color: #AAE7FD; }
-    .action-btn.danger:hover { background: rgba(239,68,68,0.3); color: #ff6b6b; }
-    .action-btn i { font-size: 11px; }
+    .menu-btn:hover {
+      background: rgba(255,255,255,0.15);
+      color: white;
+    }
+    .menu-btn i { font-size: 14px; }
+
+    .context-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 160px;
+      background: #0A2742;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      z-index: 1000;
+      overflow: hidden;
+    }
+
+    .menu-item {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      background: transparent;
+      border: none;
+      color: rgba(255,255,255,0.85);
+      font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .menu-item:hover {
+      background: rgba(255,255,255,0.1);
+      color: white;
+    }
+
+    .menu-item i {
+      width: 16px;
+      font-size: 13px;
+      color: rgba(255,255,255,0.6);
+    }
+
+    .menu-item:hover i {
+      color: white;
+    }
+
+    .menu-item.danger {
+      color: rgba(239, 68, 68, 0.9);
+    }
+
+    .menu-item.danger:hover {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ff6b6b;
+    }
+
+    .menu-item.danger i {
+      color: rgba(239, 68, 68, 0.8);
+    }
+
+    .menu-item.danger:hover i {
+      color: #ff6b6b;
+    }
+
+    .menu-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.1);
+      margin: 4px 0;
+    }
 
     /* Rename Animation */
     .conversation-item.renamed {
@@ -258,6 +333,7 @@ export class ConversationListComponent implements OnInit {
   @Input() renamedConversationId: string | null = null;
 
   public directMessagesExpanded: boolean = true;
+  public openMenuConversationId: string | null = null;
 
   constructor(
     public conversationState: ConversationStateService,
@@ -269,6 +345,14 @@ export class ConversationListComponent implements OnInit {
   ngOnInit() {
     // Load conversations on init
     this.conversationState.loadConversations(this.environmentId, this.currentUser);
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: Event): void {
+    // Close menu when clicking outside
+    if (this.openMenuConversationId) {
+      this.closeMenu();
+    }
   }
 
   public toggleDirectMessages(): void {
@@ -341,9 +425,20 @@ export class ConversationListComponent implements OnInit {
     }
   }
 
-  async togglePin(conversation: ConversationEntity): Promise<void> {
+  toggleMenu(conversationId: string, event: Event): void {
+    event.stopPropagation();
+    this.openMenuConversationId = this.openMenuConversationId === conversationId ? null : conversationId;
+  }
+
+  closeMenu(): void {
+    this.openMenuConversationId = null;
+  }
+
+  async togglePin(conversation: ConversationEntity, event?: Event): Promise<void> {
+    if (event) event.stopPropagation();
     try {
       await this.conversationState.togglePin(conversation.ID, this.currentUser);
+      this.closeMenu();
     } catch (error) {
       console.error('Error toggling pin:', error);
       await this.dialogService.alert('Error', 'Failed to pin/unpin conversation. Please try again.');
