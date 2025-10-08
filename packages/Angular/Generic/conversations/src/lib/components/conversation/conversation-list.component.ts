@@ -22,16 +22,72 @@ import { ToastService } from '../../services/toast.service';
         <span>New Conversation</span>
       </button>
       <div class="list-content">
-        <!-- Direct Messages Section -->
+        <!-- Pinned Section (only show if there are pinned conversations) -->
+        @if (pinnedConversations.length > 0) {
+          <div class="sidebar-section pinned-section">
+            <div class="section-header" [class.expanded]="pinnedExpanded" (click)="togglePinned()">
+              <div class="section-title">
+                <i class="fas fa-chevron-right"></i>
+                <i class="fas fa-thumbtack section-icon"></i>
+                <span>Pinned</span>
+              </div>
+            </div>
+            <div class="chat-list" [class.expanded]="pinnedExpanded">
+              @for (conversation of pinnedConversations; track conversation.ID) {
+                <div class="conversation-item"
+                     [class.active]="conversation.ID === conversationState.activeConversationId"
+                     [class.renamed]="conversation.ID === renamedConversationId"
+                     (click)="selectConversation(conversation)">
+                  <div class="conversation-icon-wrapper">
+                    <div class="conversation-icon">
+                      <i class="fas fa-comments"></i>
+                    </div>
+                    <div class="badge-overlay">
+                      <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
+                    </div>
+                  </div>
+                  <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
+                    <div class="conversation-name">{{ conversation.Name }}</div>
+                    <div class="conversation-preview">{{ conversation.Description || 'No description' }}</div>
+                  </div>
+                  <div class="conversation-actions">
+                    <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
+                      <i class="fas fa-ellipsis"></i>
+                    </button>
+                    @if (openMenuConversationId === conversation.ID) {
+                      <div class="context-menu" (click)="$event.stopPropagation()">
+                        <button class="menu-item" (click)="togglePin(conversation, $event)">
+                          <i class="fas fa-thumbtack"></i>
+                          <span>Unpin</span>
+                        </button>
+                        <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
+                          <i class="fas fa-edit"></i>
+                          <span>Rename</span>
+                        </button>
+                        <div class="menu-divider"></div>
+                        <button class="menu-item danger" (click)="deleteConversation(conversation); closeMenu()">
+                          <i class="fas fa-trash"></i>
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Messages Section -->
         <div class="sidebar-section">
           <div class="section-header" [class.expanded]="directMessagesExpanded" (click)="toggleDirectMessages()">
             <div class="section-title">
               <i class="fas fa-chevron-right"></i>
-              <span>Direct Messages</span>
+              <span>Messages</span>
             </div>
           </div>
           <div class="chat-list" [class.expanded]="directMessagesExpanded">
-            @for (conversation of conversationState.filteredConversations; track conversation.ID) {
+            @for (conversation of unpinnedConversations; track conversation.ID) {
               <div class="conversation-item"
                    [class.active]="conversation.ID === conversationState.activeConversationId"
                    [class.renamed]="conversation.ID === renamedConversationId"
@@ -48,11 +104,6 @@ import { ToastService } from '../../services/toast.service';
                   <div class="conversation-name">{{ conversation.Name }}</div>
                   <div class="conversation-preview">{{ conversation.Description || 'No description' }}</div>
                 </div>
-                <div class="conversation-meta">
-                  @if (conversation.IsPinned) {
-                    <i class="fas fa-thumbtack pinned-icon"></i>
-                  }
-                </div>
                 <div class="conversation-actions">
                   <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
                     <i class="fas fa-ellipsis"></i>
@@ -61,7 +112,7 @@ import { ToastService } from '../../services/toast.service';
                     <div class="context-menu" (click)="$event.stopPropagation()">
                       <button class="menu-item" (click)="togglePin(conversation, $event)">
                         <i class="fas fa-thumbtack"></i>
-                        <span>{{ conversation.IsPinned ? 'Unpin' : 'Pin' }}</span>
+                        <span>Pin</span>
                       </button>
                       <button class="menu-item" (click)="renameConversation(conversation); closeMenu()">
                         <i class="fas fa-edit"></i>
@@ -121,6 +172,16 @@ import { ToastService } from '../../services/toast.service';
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }
+    .pinned-section .section-header {
+      background: rgba(255, 193, 7, 0.08);
+      border-radius: 4px;
+      margin: 0 4px;
+    }
+    .pinned-section .section-title .section-icon {
+      color: #FFC107;
+      font-size: 11px;
+      margin-left: 2px;
+    }
     .section-header {
       padding: 4px 16px;
       display: flex;
@@ -343,6 +404,7 @@ export class ConversationListComponent implements OnInit {
   @Input() renamedConversationId: string | null = null;
 
   public directMessagesExpanded: boolean = true;
+  public pinnedExpanded: boolean = true;
   public openMenuConversationId: string | null = null;
 
   constructor(
@@ -351,6 +413,14 @@ export class ConversationListComponent implements OnInit {
     private notificationService: NotificationService,
     private toastService: ToastService
   ) {}
+
+  get pinnedConversations() {
+    return this.conversationState.filteredConversations.filter(c => c.IsPinned);
+  }
+
+  get unpinnedConversations() {
+    return this.conversationState.filteredConversations.filter(c => !c.IsPinned);
+  }
 
   ngOnInit() {
     // Load conversations on init
@@ -367,6 +437,10 @@ export class ConversationListComponent implements OnInit {
 
   public toggleDirectMessages(): void {
     this.directMessagesExpanded = !this.directMessagesExpanded;
+  }
+
+  public togglePinned(): void {
+    this.pinnedExpanded = !this.pinnedExpanded;
   }
 
   selectConversation(conversation: ConversationEntity): void {
