@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
-import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
+import { ArtifactEntity, ArtifactVersionEntity, CollectionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -12,6 +12,7 @@ import { takeUntil } from 'rxjs/operators';
 export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestroy {
   @Input() artifactId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() environmentId!: string;
   @Input() versionNumber?: number; // Version to display
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Output() closed = new EventEmitter<void>();
@@ -26,6 +27,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public error: string | null = null;
   public jsonContent = '';
   public showVersionDropdown = false;
+  public showLibraryDialog = false;
+  public collections: CollectionEntity[] = [];
+  public selectedCollectionId: string | null = null;
+  public newCollectionName = '';
+  public isCreatingCollection = false;
+  public isSavingToLibrary = false;
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
@@ -155,6 +162,126 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     this.jsonContent = version.Content || '{}';
     this.showVersionDropdown = false;
     console.log(`📦 Switched to version ${this.selectedVersionNumber}`);
+  }
+
+  async onSaveToLibrary(): Promise<void> {
+    try {
+      // Load user's collections
+      const rv = new RunView();
+      const result = await rv.RunView<CollectionEntity>({
+        EntityName: 'MJ: Collections',
+        ExtraFilter: `EnvironmentID='${this.environmentId}'`,
+        OrderBy: 'Name',
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (result.Success) {
+        this.collections = result.Results || [];
+        this.showLibraryDialog = true;
+      } else {
+        console.error('Failed to load collections:', result.ErrorMessage);
+        alert('Failed to load collections. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error loading collections:', err);
+      alert('Error loading collections. Please try again.');
+    }
+  }
+
+  async createNewCollection(): Promise<void> {
+    if (!this.newCollectionName.trim()) {
+      alert('Please enter a collection name');
+      return;
+    }
+
+    try {
+      this.isCreatingCollection = true;
+      const md = new Metadata();
+      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+
+      collection.EnvironmentID = this.environmentId;
+      collection.Name = this.newCollectionName.trim();
+      collection.Description = 'Created from conversation';
+
+      const saved = await collection.Save();
+
+      if (saved) {
+        this.collections.push(collection);
+        this.selectedCollectionId = collection.ID;
+        this.newCollectionName = '';
+        console.log('✅ Created new collection:', collection.Name);
+      } else {
+        alert('Failed to create collection. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error creating collection:', err);
+      LogError(err);
+      alert('Error creating collection. Please try again.');
+    } finally {
+      this.isCreatingCollection = false;
+    }
+  }
+
+  async saveToSelectedCollection(): Promise<void> {
+    if (!this.selectedCollectionId) {
+      alert('Please select a collection');
+      return;
+    }
+
+    if (!this.artifactId) {
+      alert('No artifact to save');
+      return;
+    }
+
+    try {
+      this.isSavingToLibrary = true;
+
+      // Check if artifact already exists in this collection
+      const rv = new RunView();
+      const existingResult = await rv.RunView<CollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${this.selectedCollectionId}' AND ArtifactID='${this.artifactId}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
+        alert('This artifact is already in the selected collection');
+        this.showLibraryDialog = false;
+        return;
+      }
+
+      // Create junction record
+      const md = new Metadata();
+      const collectionArtifact = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+
+      collectionArtifact.CollectionID = this.selectedCollectionId;
+      collectionArtifact.ArtifactID = this.artifactId;
+      collectionArtifact.Sequence = 0; // Could calculate max sequence + 1 if needed
+
+      const saved = await collectionArtifact.Save();
+
+      if (saved) {
+        const collectionName = this.collections.find(c => c.ID === this.selectedCollectionId)?.Name || 'collection';
+        console.log(`✅ Saved artifact to ${collectionName}`);
+        alert(`Artifact saved to ${collectionName} successfully!`);
+        this.showLibraryDialog = false;
+        this.selectedCollectionId = null;
+      } else {
+        alert('Failed to save artifact to collection. Please try again.');
+      }
+    } catch (err) {
+      console.error('Error saving to collection:', err);
+      LogError(err);
+      alert('Error saving artifact to collection. Please try again.');
+    } finally {
+      this.isSavingToLibrary = false;
+    }
+  }
+
+  cancelLibraryDialog(): void {
+    this.showLibraryDialog = false;
+    this.selectedCollectionId = null;
+    this.newCollectionName = '';
   }
 
   onClose(): void {

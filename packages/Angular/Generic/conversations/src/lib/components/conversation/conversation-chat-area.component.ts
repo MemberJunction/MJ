@@ -38,6 +38,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
+  public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
 
   // Artifact mapping: ConversationDetailID -> {artifactId, versionId, name}
   public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string; versionNumber: number; name: string}>();
@@ -472,42 +473,60 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   /**
    * Get unique artifacts grouped by artifact ID (not by conversation detail)
-   * Returns the latest version info for each unique artifact
+   * Returns the latest version info for each unique artifact with all versions
    */
-  getArtifactsArray(): Array<{artifactId: string; versionId: string; name: string; versionCount: number}> {
-    const artifactMap = new Map<string, {artifactId: string; versionId: string; name: string; versionIds: string[]}>();
+  getArtifactsArray(): Array<{
+    artifactId: string;
+    versionId: string;
+    name: string;
+    versionCount: number;
+    versions: Array<{versionId: string; versionNumber: number}>
+  }> {
+    const artifactMap = new Map<string, {
+      artifactId: string;
+      versionId: string;
+      name: string;
+      versions: Array<{versionId: string; versionNumber: number}>
+    }>();
 
-    // Group by artifactId, collecting all version IDs
+    // Group by artifactId, collecting all version details
     for (const info of this.artifactsByDetailId.values()) {
       if (!artifactMap.has(info.artifactId)) {
         artifactMap.set(info.artifactId, {
           artifactId: info.artifactId,
           versionId: info.versionId, // Latest version ID
           name: info.name,
-          versionIds: [info.versionId]
+          versions: [{versionId: info.versionId, versionNumber: info.versionNumber}]
         });
       } else {
-        // Add version ID if not already present
+        // Add version if not already present
         const existing = artifactMap.get(info.artifactId)!;
-        if (!existing.versionIds.includes(info.versionId)) {
-          existing.versionIds.push(info.versionId);
+        if (!existing.versions.some(v => v.versionId === info.versionId)) {
+          existing.versions.push({versionId: info.versionId, versionNumber: info.versionNumber});
           // Update to latest version ID (assuming versions are added chronologically)
           existing.versionId = info.versionId;
         }
       }
     }
 
-    // Convert to array with version count
+    // Convert to array with version count, sorted by version number descending
     return Array.from(artifactMap.values()).map(item => ({
       artifactId: item.artifactId,
       versionId: item.versionId,
       name: item.name,
-      versionCount: item.versionIds.length
+      versionCount: item.versions.length,
+      versions: item.versions.sort((a, b) => b.versionNumber - a.versionNumber)
     }));
   }
 
-  openArtifactFromModal(artifactId: string): void {
+  toggleArtifactExpansion(artifactId: string, event: Event): void {
+    event.stopPropagation(); // Prevent opening artifact when clicking expand button
+    this.expandedArtifactId = this.expandedArtifactId === artifactId ? null : artifactId;
+  }
+
+  openArtifactFromModal(artifactId: string, versionNumber?: number): void {
     this.selectedArtifactId = artifactId;
+    this.selectedVersionNumber = versionNumber;
     this.showArtifactPanel = true;
     this.showArtifactsModal = false;
   }

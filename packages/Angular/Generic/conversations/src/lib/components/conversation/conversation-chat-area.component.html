@@ -104,6 +104,7 @@
         <mj-artifact-viewer-panel
             [artifactId]="selectedArtifactId"
             [currentUser]="currentUser"
+            [environmentId]="environmentId"
             [versionNumber]="selectedVersionNumber"
             [refreshTrigger]="artifactViewerRefresh$"
             (closed)="onCloseArtifactPanel()">
@@ -185,23 +186,45 @@
             </div>
         }
         @for (artifact of getArtifactsArray(); track artifact.artifactId) {
-            <div class="artifact-modal-card" (click)="openArtifactFromModal(artifact.artifactId)">
-            <div class="artifact-modal-icon">
-                <i class="fas fa-file-code"></i>
-            </div>
-            <div class="artifact-modal-info">
-                <div class="artifact-modal-title">{{artifact.name}}</div>
-                <div class="artifact-modal-meta">
-                  @if (artifact.versionCount > 1) {
-                    {{artifact.versionCount}} versions
-                  } @else {
-                    1 version
+            <div class="artifact-modal-card" [class.expanded]="expandedArtifactId === artifact.artifactId">
+              <!-- Main card header - click to open latest version -->
+              <div class="artifact-card-header" (click)="openArtifactFromModal(artifact.artifactId)">
+                <div class="artifact-modal-icon">
+                    <i class="fas fa-file-code"></i>
+                </div>
+                <div class="artifact-modal-info">
+                    <div class="artifact-modal-title">{{artifact.name}}</div>
+                    <div class="artifact-modal-meta">
+                      @if (artifact.versionCount > 1) {
+                        {{artifact.versionCount}} versions
+                      } @else {
+                        1 version
+                      }
+                    </div>
+                </div>
+                @if (artifact.versionCount > 1) {
+                  <button class="expand-btn" (click)="toggleArtifactExpansion(artifact.artifactId, $event)">
+                    <i class="fas" [class.fa-chevron-down]="expandedArtifactId !== artifact.artifactId"
+                       [class.fa-chevron-up]="expandedArtifactId === artifact.artifactId"></i>
+                  </button>
+                }
+                <div class="artifact-modal-action">
+                    <i class="fas fa-external-link-alt"></i>
+                </div>
+              </div>
+
+              <!-- Expanded version list -->
+              @if (expandedArtifactId === artifact.artifactId && artifact.versionCount > 1) {
+                <div class="artifact-versions-list">
+                  @for (version of artifact.versions; track version.versionId) {
+                    <div class="artifact-version-item" (click)="openArtifactFromModal(artifact.artifactId, version.versionNumber); $event.stopPropagation()">
+                      <span class="version-badge">v{{version.versionNumber}}</span>
+                      <span class="version-open-text">Open this version</span>
+                      <i class="fas fa-arrow-right"></i>
+                    </div>
                   }
                 </div>
-            </div>
-            <div class="artifact-modal-action">
-                <i class="fas fa-external-link-alt"></i>
-            </div>
+              }
             </div>
         }
         </div>
