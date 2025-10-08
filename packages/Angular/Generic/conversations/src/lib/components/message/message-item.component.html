@@ -54,7 +54,12 @@
                 <i class="fas fa-file-code"></i>
               </div>
               <div class="artifact-card-content">
-                <div class="artifact-card-label">Generated Artifact</div>
+                <div class="artifact-card-label">
+                  Generated Artifact
+                  @if (artifactVersionNumber) {
+                    <span class="artifact-version-badge">v{{artifactVersionNumber}}</span>
+                  }
+                </div>
                 <div class="artifact-card-description">Click to view the generated content</div>
               </div>
             </div>

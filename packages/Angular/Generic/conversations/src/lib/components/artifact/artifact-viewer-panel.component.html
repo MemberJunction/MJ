@@ -7,9 +7,27 @@
       </h3>
     </div>
     <div class="panel-header-right">
-      <div class="version-selector">
+      <div class="version-selector" [class.clickable]="allVersions.length > 1" (click)="toggleVersionDropdown()">
         <i class="fas fa-history"></i>
-        <span class="version-label">v{{ artifactVersion?.VersionNumber || 1 }}</span>
+        <span class="version-label">v{{ selectedVersionNumber }}</span>
+        @if (allVersions.length > 1) {
+          <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
+        }
+        @if (showVersionDropdown) {
+          <div class="version-dropdown" (click)="$event.stopPropagation()">
+            @for (version of allVersions; track version.ID) {
+              <div class="version-option"
+                   [class.selected]="version.VersionNumber === selectedVersionNumber"
+                   (click)="selectVersion(version); $event.stopPropagation()">
+                <span class="version-number">v{{ version.VersionNumber }}</span>
+                <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
+                @if (version.VersionNumber === selectedVersionNumber) {
+                  <i class="fas fa-check"></i>
+                }
+              </div>
+            }
+          </div>
+        }
       </div>
       <button class="close-btn" (click)="onClose()" title="Close">
         <i class="fas fa-times"></i>

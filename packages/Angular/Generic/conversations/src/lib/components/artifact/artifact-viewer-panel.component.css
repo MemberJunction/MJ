@@ -47,6 +47,7 @@
 }
 
 .version-selector {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -56,14 +57,81 @@
   font-size: 12px;
   color: #6B7280;
   font-weight: 500;
+  transition: all 0.2s;
+}
+
+.version-selector.clickable {
+  cursor: pointer;
+}
+
+.version-selector.clickable:hover {
+  background: #E5E7EB;
 }
 
 .version-selector i {
   font-size: 11px;
 }
 
+.version-selector .dropdown-icon {
+  margin-left: 2px;
+  transition: transform 0.2s;
+}
+
+.version-selector .dropdown-icon.open {
+  transform: rotate(180deg);
+}
+
 .version-label {
   font-family: monospace;
+}
+
+.version-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 200px;
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.version-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 13px;
+}
+
+.version-option:hover {
+  background: #F9FAFB;
+}
+
+.version-option.selected {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.version-option .version-number {
+  font-family: monospace;
+  font-weight: 600;
+  min-width: 35px;
+}
+
+.version-option .version-date {
+  flex: 1;
+  color: #6B7280;
+  font-size: 12px;
+}
+
+.version-option i.fa-check {
+  color: #10B981;
+  margin-left: auto;
 }
 
 .close-btn {

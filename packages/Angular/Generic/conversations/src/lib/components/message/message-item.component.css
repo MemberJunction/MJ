@@ -743,3 +743,17 @@
   font-size: 10px;
   opacity: 0.7;
 }
+
+/* Artifact version badge */
+.artifact-version-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: #EEF2FF;
+  color: #4F46E5;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: monospace;
+  border-radius: 4px;
+  vertical-align: middle;
+}

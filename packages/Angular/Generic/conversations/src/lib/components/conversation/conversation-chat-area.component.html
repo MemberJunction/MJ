@@ -104,6 +104,8 @@
         <mj-artifact-viewer-panel
             [artifactId]="selectedArtifactId"
             [currentUser]="currentUser"
+            [initialVersionNumber]="selectedVersionNumber"
+            [refreshTrigger]="artifactViewerRefresh$"
             (closed)="onCloseArtifactPanel()">
         </mj-artifact-viewer-panel>
         </div>
@@ -189,7 +191,13 @@
             </div>
             <div class="artifact-modal-info">
                 <div class="artifact-modal-title">{{artifact.name}}</div>
-                <div class="artifact-modal-meta">Version {{artifact.versionId.substring(0, 8)}}</div>
+                <div class="artifact-modal-meta">
+                  @if (artifact.versionCount > 1) {
+                    {{artifact.versionCount}} versions
+                  } @else {
+                    1 version
+                  }
+                </div>
             </div>
             <div class="artifact-modal-action">
                 <i class="fas fa-external-link-alt"></i>

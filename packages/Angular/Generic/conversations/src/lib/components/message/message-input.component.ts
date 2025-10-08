@@ -29,7 +29,7 @@ export class MessageInputComponent implements OnInit {
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
-  @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; conversationDetailId: string; name: string}>();
+  @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
 
   @ViewChild('messageTextarea') messageTextarea!: ElementRef;
@@ -776,6 +776,8 @@ export class MessageInputComponent implements OnInit {
     }, this.currentUser);
 
     let previousPayload: any = null;
+    let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
+
     if (artifactResult.Success && artifactResult.Results && artifactResult.Results.length > 0) {
       // Load the artifact version content
       const junctionRecord = artifactResult.Results[0];
@@ -790,7 +792,12 @@ export class MessageInputComponent implements OnInit {
         if (version.Content) {
           try {
             previousPayload = JSON.parse(version.Content);
-            console.log('📦 Loaded previous OUTPUT artifact as payload for continuity');
+            previousArtifactInfo = {
+              artifactId: version.ArtifactID,
+              versionId: version.ID,
+              versionNumber: version.VersionNumber || 1
+            };
+            console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
           } catch (error) {
             console.warn('⚠️ Could not parse previous artifact content:', error);
           }
@@ -857,9 +864,14 @@ export class MessageInputComponent implements OnInit {
         await agentResponseMessage.Save();
         this.messageSent.emit(agentResponseMessage);
 
-        // Handle artifacts from agent if any
+        // Handle artifacts from agent if any - create new version if continuing same agent
         if (continuityResult.payload && Object.keys(continuityResult.payload).length > 0) {
-          await this.createArtifactFromPayload(continuityResult.payload, agentResponseMessage, lastAIMessage.AgentID);
+          await this.createArtifactFromPayload(
+            continuityResult.payload,
+            agentResponseMessage,
+            lastAIMessage.AgentID,
+            previousArtifactInfo // Pass artifact info to create new version
+          );
           console.log('🎨 Artifact created from agent continuity');
           this.messageSent.emit(agentResponseMessage);
         }
@@ -1118,6 +1130,51 @@ export class MessageInputComponent implements OnInit {
     const agent = agentResult.Results[0];
     const agentName = agent.Name || 'Agent';
 
+    // Find the last AI message from this same agent to get the previous OUTPUT artifact
+    const lastAIMessage = this.conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+
+    let previousPayload: any = null;
+    let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
+
+    if (lastAIMessage) {
+      // Load the OUTPUT artifact from the last agent message
+      const artifactResult = await rv.RunView<ConversationDetailArtifactEntity>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ConversationDetailID='${lastAIMessage.ID}' AND Direction='Output'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (artifactResult.Success && artifactResult.Results && artifactResult.Results.length > 0) {
+        // Load the artifact version content
+        const junctionRecord = artifactResult.Results[0];
+        const versionResult = await rv.RunView<ArtifactVersionEntity>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID='${junctionRecord.ArtifactVersionID}'`,
+          ResultType: 'entity_object'
+        }, this.currentUser);
+
+        if (versionResult.Success && versionResult.Results && versionResult.Results.length > 0) {
+          const version = versionResult.Results[0];
+          if (version.Content) {
+            try {
+              previousPayload = JSON.parse(version.Content);
+              previousArtifactInfo = {
+                artifactId: version.ArtifactID,
+                versionId: version.ID,
+                versionNumber: version.VersionNumber || 1
+              };
+              console.log('📦 Loaded previous OUTPUT artifact as payload for continuation', previousArtifactInfo);
+            } catch (error) {
+              console.warn('⚠️ Could not parse previous artifact content:', error);
+            }
+          }
+        }
+      }
+    }
+
     // Add agent to active tasks
     const taskId = this.activeTasks.add({
       agentName: agentName,
@@ -1150,7 +1207,7 @@ export class MessageInputComponent implements OnInit {
       await agentResponseMessage.Save();
       this.messageSent.emit(agentResponseMessage);
 
-      // Invoke the agent directly (continuation)
+      // Invoke the agent directly (continuation) with previous payload if available
       const result = await this.agentService.invokeSubAgent(
         agentName,
         conversationId,
@@ -1158,7 +1215,7 @@ export class MessageInputComponent implements OnInit {
         this.conversationHistory,
         'Continuing previous conversation with user',
         agentResponseMessage.ID,
-        undefined, // no payload for continuation
+        previousPayload, // Pass previous OUTPUT artifact payload for continuity
         this.createProgressCallback(agentResponseMessage.ID, agentName)
       );
 
@@ -1178,9 +1235,14 @@ export class MessageInputComponent implements OnInit {
         await agentResponseMessage.Save();
         this.messageSent.emit(agentResponseMessage);
 
-        // Handle artifacts
+        // Handle artifacts - create new version if continuing with same agent and artifact
         if (result.payload && Object.keys(result.payload).length > 0) {
-          await this.createArtifactFromPayload(result.payload, agentResponseMessage, agentId);
+          await this.createArtifactFromPayload(
+            result.payload,
+            agentResponseMessage,
+            agentId,
+            previousArtifactInfo // Pass artifact info to create new version instead of new artifact
+          );
           this.messageSent.emit(agentResponseMessage);
         }
 
@@ -1239,43 +1301,60 @@ export class MessageInputComponent implements OnInit {
 
   /**
    * Creates an artifact from an agent's payload and links it to the conversation detail
+   * If previousArtifactInfo is provided, creates a new version of the existing artifact
+   * Otherwise, creates a new artifact with version 1
    * @param payload The agent's payload object
    * @param message The conversation detail message to link to
    * @param agentId The ID of the agent that produced the payload
+   * @param previousArtifactInfo Optional info about previous artifact to create new version
    */
   private async createArtifactFromPayload(
     payload: any,
     message: ConversationDetailEntity,
-    agentId?: string
+    agentId?: string,
+    previousArtifactInfo?: {artifactId: string; versionId: string; versionNumber: number} | null
   ): Promise<void> {
     try {
       const md = new Metadata();
+      let artifactId: string;
+      let newVersionNumber: number;
 
-      // Create Artifact header
-      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+      // If we have previous artifact info, we're creating a new version of existing artifact
+      if (previousArtifactInfo) {
+        artifactId = previousArtifactInfo.artifactId;
+        newVersionNumber = previousArtifactInfo.versionNumber + 1;
+        console.log(`📦 Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
+      } else {
+        // Create new Artifact header
+        const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
 
-      // Generate artifact name based on agent name and timestamp
-      const agentName = agentId
-        ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)?.Name || 'Agent'
-        : 'Agent';
-      artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
-      artifact.Description = `Payload returned by ${agentName}`;
+        // Generate artifact name based on agent name and timestamp
+        const agentName = agentId
+          ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)?.Name || 'Agent'
+          : 'Agent';
+        artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
+        artifact.Description = `Payload returned by ${agentName}`;
 
-      // Use JSON artifact type (hardcoded ID from migration)
-      artifact.TypeID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4'; // JSON type
-      artifact.UserID = this.currentUser.ID;
-      artifact.EnvironmentID = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+        // Use JSON artifact type (hardcoded ID from migration)
+        artifact.TypeID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4'; // JSON type
+        artifact.UserID = this.currentUser.ID;
+        artifact.EnvironmentID = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
-      const artifactSaved = await artifact.Save();
-      if (!artifactSaved) {
-        console.error('Failed to save artifact');
-        return;
+        const artifactSaved = await artifact.Save();
+        if (!artifactSaved) {
+          console.error('Failed to save artifact');
+          return;
+        }
+
+        artifactId = artifact.ID;
+        newVersionNumber = 1;
+        console.log(`📦 Creating new artifact ${artifactId} with version 1`);
       }
 
       // Create Artifact Version with content
       const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
-      version.ArtifactID = artifact.ID;
-      version.VersionNumber = 1;
+      version.ArtifactID = artifactId;
+      version.VersionNumber = newVersionNumber;
       version.Content = JSON.stringify(payload, null, 2);
       version.UserID = this.currentUser.ID;
 
@@ -1299,7 +1378,29 @@ export class MessageInputComponent implements OnInit {
         console.error('Failed to create artifact-message association');
       }
 
-      this.artifactCreated.emit({ artifactId: artifact.ID, versionId: version.ID, conversationDetailId: message.ID, name: artifact.Name });
+      // Emit with artifact name (load from DB if versioning existing artifact)
+      let artifactName: string;
+      if (previousArtifactInfo) {
+        const artifactEntity = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+        if (await artifactEntity.Load(artifactId)) {
+          artifactName = artifactEntity.Name || 'Artifact';
+        } else {
+          artifactName = 'Artifact';
+        }
+      } else {
+        const agentName = agentId
+          ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)?.Name || 'Agent'
+          : 'Agent';
+        artifactName = `${agentName} Payload - ${new Date().toLocaleString()}`;
+      }
+
+      this.artifactCreated.emit({
+        artifactId,
+        versionId: version.ID,
+        versionNumber: newVersionNumber,
+        conversationDetailId: message.ID,
+        name: artifactName
+      });
     } catch (error) {
       console.error('Error creating artifact from payload:', error);
     }

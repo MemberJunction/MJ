@@ -33,6 +33,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactId?: string;
   @Input() public artifactVersionId?: string;
+  @Input() public artifactVersionNumber?: number;
   @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();

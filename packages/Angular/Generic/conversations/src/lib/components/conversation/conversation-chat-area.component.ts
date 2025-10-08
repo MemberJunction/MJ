@@ -5,6 +5,7 @@ import { ConversationStateService } from '../../services/conversation-state.serv
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
+import { Subject } from 'rxjs';
 
 @Component({
   selector: 'mj-conversation-chat-area',
@@ -35,10 +36,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showArtifactPanel: boolean = false;
   public showArtifactsModal: boolean = false;
   public selectedArtifactId: string | null = null;
+  public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
 
   // Artifact mapping: ConversationDetailID -> {artifactId, versionId, name}
-  public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string; name: string}>();
+  public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string; versionNumber: number; name: string}>();
 
   // Agent run mapping: ConversationDetailID -> AIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
@@ -46,6 +48,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   // Loading state for peripheral data
   public isLoadingPeripheralData: boolean = false;
+
+  // Subject to trigger artifact viewer refresh when new version is created
+  public artifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
 
   // Resize state
   private isResizing: boolean = false;
@@ -214,8 +219,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         );
 
         if (versionsResult.Success && versionsResult.Results) {
-          // Create map of versionId -> {artifactId, artifactName}
-          const versionToArtifact = new Map<string, {artifactId: string; artifactName: string}>();
+          // Create map of versionId -> {artifactId, artifactName, versionNumber}
+          const versionToArtifact = new Map<string, {artifactId: string; artifactName: string; versionNumber: number}>();
 
           // Get all unique artifact IDs
           const artifactIds = [...new Set(versionsResult.Results.map(v => v.ArtifactID))];
@@ -239,17 +244,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           for (const version of versionsResult.Results) {
             versionToArtifact.set(version.ID, {
               artifactId: version.ArtifactID,
-              artifactName: artifactNames.get(version.ArtifactID) || 'Unnamed Artifact'
+              artifactName: artifactNames.get(version.ArtifactID) || 'Unnamed Artifact',
+              versionNumber: version.VersionNumber || 1
             });
           }
 
-          // Build final artifact map with IDs and names
+          // Build final artifact map with IDs, names, and version numbers
           for (const artifact of conversationDetailArtifacts.Results) {
             const artifactInfo = versionToArtifact.get(artifact.ArtifactVersionID);
             if (artifact.ConversationDetailID && artifactInfo) {
               this.artifactsByDetailId.set(artifact.ConversationDetailID, {
                 artifactId: artifactInfo.artifactId,
                 versionId: artifact.ArtifactVersionID,
+                versionNumber: artifactInfo.versionNumber,
                 name: artifactInfo.artifactName
               });
             }
@@ -258,8 +265,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         }
       }
 
-      // Update artifact count for header display
-      this.artifactCount = conversationDetailArtifacts.Results?.length || 0;
+      // Update artifact count for header display (unique artifacts, not versions)
+      this.artifactCount = this.calculateUniqueArtifactCount();
 
       // Debug: Log all artifacts to console
       console.log(`📊 Artifact Count: ${this.artifactCount}`);
@@ -409,26 +416,30 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         );
 
         if (versionsResult.Success && versionsResult.Results) {
-          const versionToArtifact = new Map<string, string>();
+          const versionToArtifact = new Map<string, {artifactId: string; versionNumber: number}>();
           for (const version of versionsResult.Results) {
-            versionToArtifact.set(version.ID, version.ArtifactID);
+            versionToArtifact.set(version.ID, {
+              artifactId: version.ArtifactID,
+              versionNumber: version.VersionNumber || 1
+            });
           }
 
           // Update artifact map
           for (const artifact of artifactsResult.Results) {
-            const artifactId = versionToArtifact.get(artifact.ArtifactVersionID);
-            if (artifactId) {
+            const artifactInfo = versionToArtifact.get(artifact.ArtifactVersionID);
+            if (artifactInfo) {
               this.artifactsByDetailId.set(conversationDetailId, {
-                artifactId: artifactId,
+                artifactId: artifactInfo.artifactId,
                 versionId: artifact.ArtifactVersionID,
+                versionNumber: artifactInfo.versionNumber,
                 name: 'Artifact' // Note: This method is deprecated, name should come from event
               });
-              console.log(`✅ Loaded artifact ${artifactId} for message ${conversationDetailId}`);
+              console.log(`✅ Loaded artifact ${artifactInfo.artifactId} v${artifactInfo.versionNumber} for message ${conversationDetailId}`);
             }
           }
 
           // Update artifact count
-          this.artifactCount = this.artifactsByDetailId.size;
+          this.artifactCount = this.calculateUniqueArtifactCount();
         }
       }
     } catch (error) {
@@ -448,8 +459,51 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.showArtifactsModal = true;
   }
 
-  getArtifactsArray(): Array<{artifactId: string; versionId: string; name: string}> {
-    return Array.from(this.artifactsByDetailId.values());
+  /**
+   * Calculate count of unique artifacts (not versions)
+   */
+  private calculateUniqueArtifactCount(): number {
+    const uniqueArtifactIds = new Set<string>();
+    for (const info of this.artifactsByDetailId.values()) {
+      uniqueArtifactIds.add(info.artifactId);
+    }
+    return uniqueArtifactIds.size;
+  }
+
+  /**
+   * Get unique artifacts grouped by artifact ID (not by conversation detail)
+   * Returns the latest version info for each unique artifact
+   */
+  getArtifactsArray(): Array<{artifactId: string; versionId: string; name: string; versionCount: number}> {
+    const artifactMap = new Map<string, {artifactId: string; versionId: string; name: string; versionIds: string[]}>();
+
+    // Group by artifactId, collecting all version IDs
+    for (const info of this.artifactsByDetailId.values()) {
+      if (!artifactMap.has(info.artifactId)) {
+        artifactMap.set(info.artifactId, {
+          artifactId: info.artifactId,
+          versionId: info.versionId, // Latest version ID
+          name: info.name,
+          versionIds: [info.versionId]
+        });
+      } else {
+        // Add version ID if not already present
+        const existing = artifactMap.get(info.artifactId)!;
+        if (!existing.versionIds.includes(info.versionId)) {
+          existing.versionIds.push(info.versionId);
+          // Update to latest version ID (assuming versions are added chronologically)
+          existing.versionId = info.versionId;
+        }
+      }
+    }
+
+    // Convert to array with version count
+    return Array.from(artifactMap.values()).map(item => ({
+      artifactId: item.artifactId,
+      versionId: item.versionId,
+      name: item.name,
+      versionCount: item.versionIds.length
+    }));
   }
 
   openArtifactFromModal(artifactId: string): void {
@@ -560,13 +614,29 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   onArtifactClicked(data: {artifactId: string; versionId?: string}): void {
     this.selectedArtifactId = data.artifactId;
+
+    // If versionId is provided, find the version number
+    if (data.versionId) {
+      for (const [detailId, artifactInfo] of this.artifactsByDetailId.entries()) {
+        if (artifactInfo.versionId === data.versionId) {
+          this.selectedVersionNumber = artifactInfo.versionNumber;
+          console.log(`📦 Opening artifact viewer for v${this.selectedVersionNumber}`);
+          break;
+        }
+      }
+    } else {
+      // No specific version, let viewer default to latest
+      this.selectedVersionNumber = undefined;
+    }
+
     this.showArtifactPanel = true;
   }
 
-  onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; name: string}): void {
+  onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): void {
     this.artifactsByDetailId.set(data.conversationDetailId, {
       artifactId: data.artifactId,
       versionId: data.versionId,
+      versionNumber: data.versionNumber,
       name: data.name
     });
 
@@ -576,7 +646,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       this.showArtifactPanel = true;
     }
 
-    this.artifactCount++; // increment artifact count
+    this.artifactCount = this.calculateUniqueArtifactCount(); // update unique artifact count
+
+    // If artifact viewer is already open for this artifact, trigger refresh to show new version
+    if (this.showArtifactPanel && this.selectedArtifactId === data.artifactId) {
+      // Emit event to refresh artifact viewer with new version
+      this.artifactViewerRefresh$.next({artifactId: data.artifactId, versionNumber: data.versionNumber});
+    }
   }
 
   onCloseArtifactPanel(): void {

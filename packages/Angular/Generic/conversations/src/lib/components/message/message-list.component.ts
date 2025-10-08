@@ -33,7 +33,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
-  @Input() public artifactMap: Map<string, {artifactId: string; versionId: string}> = new Map();
+  @Input() public artifactMap: Map<string, {artifactId: string; versionId: string; versionNumber: number}> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
@@ -160,6 +160,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           const artifactInfo = this.artifactMap.get(message.ID);
           instance.artifactId = artifactInfo?.artifactId;
           instance.artifactVersionId = artifactInfo?.versionId;
+          instance.artifactVersionNumber = artifactInfo?.versionNumber;
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
         } else {
@@ -176,6 +177,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           const artifactInfo = this.artifactMap.get(message.ID);
           instance.artifactId = artifactInfo?.artifactId;
           instance.artifactVersionId = artifactInfo?.versionId;
+          instance.artifactVersionNumber = artifactInfo?.versionNumber;
           // Pass agent run from map (loaded once per conversation)
           const agentRun = this.agentRunMap.get(message.ID) || null;
           console.log(`✨ Creating new message ${message.ID} component with agentRun:`, {
