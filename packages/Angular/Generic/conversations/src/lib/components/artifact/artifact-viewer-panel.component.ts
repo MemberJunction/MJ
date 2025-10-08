@@ -12,7 +12,7 @@ import { takeUntil } from 'rxjs/operators';
 export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestroy {
   @Input() artifactId!: string;
   @Input() currentUser!: UserInfo;
-  @Input() initialVersionNumber?: number; // Version to load on init
+  @Input() versionNumber?: number; // Version to display
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Output() closed = new EventEmitter<void>();
 
@@ -39,14 +39,34 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       });
     }
 
-    // Load artifact with initial version number if provided
-    await this.loadArtifact(this.initialVersionNumber);
+    // Load artifact with specified version if provided
+    await this.loadArtifact(this.versionNumber);
   }
 
   async ngOnChanges(changes: SimpleChanges) {
     // Reload artifact when artifactId changes
     if (changes['artifactId'] && !changes['artifactId'].firstChange) {
-      await this.loadArtifact();
+      await this.loadArtifact(this.versionNumber);
+    }
+
+    // Switch to new version when versionNumber changes (but artifactId stays the same)
+    if (changes['versionNumber'] && !changes['versionNumber'].firstChange) {
+      const newVersionNumber = changes['versionNumber'].currentValue;
+      if (newVersionNumber != null) {
+        console.log(`📦 Version number changed to ${newVersionNumber}, switching version`);
+        // Check if we already have this version loaded (avoid reload if possible)
+        const targetVersion = this.allVersions.find(v => v.VersionNumber === newVersionNumber);
+        if (targetVersion) {
+          // Just switch to the version we already have
+          this.artifactVersion = targetVersion;
+          this.selectedVersionNumber = targetVersion.VersionNumber || 1;
+          this.jsonContent = targetVersion.Content || '{}';
+          console.log(`📦 Switched to cached version ${this.selectedVersionNumber}`);
+        } else {
+          // Need to reload to get this version (shouldn't normally happen)
+          await this.loadArtifact(newVersionNumber);
+        }
+      }
     }
   }
 
