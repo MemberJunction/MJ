@@ -177,7 +177,15 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.artifactId = artifactInfo?.artifactId;
           instance.artifactVersionId = artifactInfo?.versionId;
           // Pass agent run from map (loaded once per conversation)
-          instance.agentRun = this.agentRunMap.get(message.ID) || null;
+          const agentRun = this.agentRunMap.get(message.ID) || null;
+          console.log(`✨ Creating new message ${message.ID} component with agentRun:`, {
+            messageId: message.ID,
+            agentRunExists: !!agentRun,
+            agentRunId: agentRun?.ID,
+            mapSize: this.agentRunMap.size,
+            mapHasKey: this.agentRunMap.has(message.ID)
+          });
+          instance.agentRun = agentRun;
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));

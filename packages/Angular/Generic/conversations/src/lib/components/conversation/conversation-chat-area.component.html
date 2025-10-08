@@ -70,18 +70,29 @@
 
         <!-- Fixed Input Area -->
         <div class="chat-input-container">
-            <mj-message-input
-            *ngIf="conversationState.activeConversation"
-            [conversationId]="conversationState.activeConversation.ID"
-            [currentUser]="currentUser"
-            [conversationHistory]="messages"
-            [disabled]="isProcessing"
-            (messageSent)="onMessageSent($event)"
-            (agentResponse)="onAgentResponse($event)"
-            (agentRunDetected)="onAgentRunDetected($event)"
-            (artifactCreated)="onArtifactCreated($event)"
-            (conversationRenamed)="onConversationRenamed($event)">
-            </mj-message-input>
+            @if (isLoadingPeripheralData) {
+              <!-- Loading State -->
+              <div class="loading-peripheral-placeholder">
+                <div class="loading-peripheral-content">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span>Loading conversation data...</span>
+                </div>
+              </div>
+            } @else {
+              <!-- Input Component -->
+              <mj-message-input
+              *ngIf="conversationState.activeConversation"
+              [conversationId]="conversationState.activeConversation.ID"
+              [currentUser]="currentUser"
+              [conversationHistory]="messages"
+              [disabled]="isProcessing"
+              (messageSent)="onMessageSent($event)"
+              (agentResponse)="onAgentResponse($event)"
+              (agentRunDetected)="onAgentRunDetected($event)"
+              (artifactCreated)="onArtifactCreated($event)"
+              (conversationRenamed)="onConversationRenamed($event)">
+              </mj-message-input>
+            }
         </div>
         </div>
     </div>

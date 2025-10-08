@@ -44,6 +44,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   // Loaded once per conversation and kept in sync as new runs are created
   public agentRunsByDetailId = new Map<string, AIAgentRunEntityExtended>();
 
+  // Loading state for peripheral data
+  public isLoadingPeripheralData: boolean = false;
+
   // Resize state
   private isResizing: boolean = false;
   private startX: number = 0;
@@ -121,24 +124,58 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     try {
       const rv = new RunView();
 
-      // Load messages and agent runs in parallel
+      // PHASE 1: Load messages first (fast, shows content immediately)
+      const messagesResult = await rv.RunView<ConversationDetailEntity>(
+        {
+          EntityName: 'Conversation Details',
+          ExtraFilter: `ConversationID='${conversationId}'`,
+          OrderBy: '__mj_CreatedAt ASC',
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (messagesResult.Success) {
+        const loadedMessages = messagesResult.Results || [];
+        this.messages = loadedMessages;
+        this.scrollToBottom = true;
+        this.cdr.detectChanges(); // Show messages immediately
+
+        // PHASE 2: Load peripheral data in background (agent runs & artifacts)
+        this.isLoadingPeripheralData = true;
+        this.loadPeripheralData(conversationId).finally(() => {
+          this.isLoadingPeripheralData = false;
+          this.cdr.detectChanges();
+        });
+      } else {
+        console.error('Failed to load messages:', messagesResult.ErrorMessage);
+        this.messages = [];
+      }
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      this.messages = [];
+    }
+  }
+
+  /**
+   * Load peripheral data (agent runs and artifacts) in background
+   * This allows messages to display immediately while slower queries complete
+   */
+  private async loadPeripheralData(conversationId: string): Promise<void> {
+    try {
+      const rv = new RunView();
       const md = new Metadata();
       const convoDetailEntity = md.EntityByName("Conversation Details");
-      const [messagesResult, agentRunsResult, conversationDetailArtifacts] = await Promise.all([
-        rv.RunView<ConversationDetailEntity>(
-          {
-            EntityName: 'Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}'`,
-            OrderBy: '__mj_CreatedAt ASC', 
-            ResultType: 'entity_object'
-          },
-          this.currentUser
-        ),
+
+      // Load agent runs and artifacts in parallel
+      const [agentRunsResult, conversationDetailArtifacts] = await Promise.all([
         rv.RunView<AIAgentRunEntityExtended>(
           {
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ConversationDetailID IN (SELECT ID FROM [${convoDetailEntity.SchemaName}].[${convoDetailEntity.BaseView}] WHERE ConversationID='${conversationId}')`,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
+            // Only fetch fields we actually display to reduce payload size
+            Fields: ['ID', 'AgentID', 'Agent', 'Status', '__mj_CreatedAt', '__mj_UpdatedAt', 'TotalPromptTokensUsed', 'TotalCompletionTokensUsed', 'TotalCost', 'ConversationDetailID']
           },
           this.currentUser
         ),
@@ -152,110 +189,92 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         )
       ]);
 
-      if (messagesResult.Success) {
-        const loadedMessages = messagesResult.Results || [];
+      // Build agent runs map - single query loads all runs for this conversation
+      this.agentRunsByDetailId.clear();
+      if (agentRunsResult.Success && agentRunsResult.Results) {
+        for (const run of agentRunsResult.Results) {
+          if (run.ConversationDetailID) {
+            this.agentRunsByDetailId.set(run.ConversationDetailID, run);
+          }
+        }
+      }
 
-        // Build agent runs map - single query loads all runs for this conversation
-        this.agentRunsByDetailId.clear();
-        console.log(`🔍 Agent Runs Query Result:`, {
-          success: agentRunsResult.Success,
-          resultCount: agentRunsResult.Results?.length || 0,
-          errorMessage: agentRunsResult.ErrorMessage
-        });
+      // Build artifact map from preloaded artifacts
+      this.artifactsByDetailId.clear();
+      if (conversationDetailArtifacts.Success && conversationDetailArtifacts.Results && conversationDetailArtifacts.Results.length > 0) {
+        // Load artifact versions to get ArtifactID
+        const versionIds = conversationDetailArtifacts.Results.map(a => `'${a.ArtifactVersionID}'`).join(',');
+        const versionsResult = await rv.RunView<ArtifactVersionEntity>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${versionIds})`,
+            ResultType: 'entity_object'
+          },
+          this.currentUser
+        );
 
-        if (agentRunsResult.Success && agentRunsResult.Results) {
-          for (const run of agentRunsResult.Results) {
-            console.log(`  📌 Agent Run:`, {
-              id: run.ID,
-              agentName: run.Agent,
-              conversationDetailID: run.ConversationDetailID,
-              status: run.Status
-            });
-            if (run.ConversationDetailID) {
-              this.agentRunsByDetailId.set(run.ConversationDetailID, run);
+        if (versionsResult.Success && versionsResult.Results) {
+          // Create map of versionId -> {artifactId, artifactName}
+          const versionToArtifact = new Map<string, {artifactId: string; artifactName: string}>();
+
+          // Get all unique artifact IDs
+          const artifactIds = [...new Set(versionsResult.Results.map(v => v.ArtifactID))];
+
+          // Load artifact entities to get names
+          const artifactsResult = await rv.RunView({
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          // Create map of artifactId -> name
+          const artifactNames = new Map<string, string>();
+          if (artifactsResult.Success && artifactsResult.Results) {
+            for (const artifact of artifactsResult.Results) {
+              artifactNames.set(artifact.ID, artifact.Name || 'Unnamed Artifact');
             }
           }
-          console.log(`📊 Loaded ${this.agentRunsByDetailId.size} agent runs for conversation ${conversationId}`);
-          console.log(`📊 Map keys:`, Array.from(this.agentRunsByDetailId.keys()));
-        } else {
-          console.error(`❌ Failed to load agent runs:`, agentRunsResult.ErrorMessage);
-        }
 
-        // Build artifact map from preloaded artifacts
-        this.artifactsByDetailId.clear();
-        if (conversationDetailArtifacts.Success && conversationDetailArtifacts.Results && conversationDetailArtifacts.Results.length > 0) {
-          // Load artifact versions to get ArtifactID
-          const versionIds = conversationDetailArtifacts.Results.map(a => `'${a.ArtifactVersionID}'`).join(',');
-          const versionsResult = await rv.RunView<ArtifactVersionEntity>(
-            {
-              EntityName: 'MJ: Artifact Versions',
-              ExtraFilter: `ID IN (${versionIds})`,
-              ResultType: 'entity_object'
-            },
-            this.currentUser
-          );
+          // Build versionId to artifact info map
+          for (const version of versionsResult.Results) {
+            versionToArtifact.set(version.ID, {
+              artifactId: version.ArtifactID,
+              artifactName: artifactNames.get(version.ArtifactID) || 'Unnamed Artifact'
+            });
+          }
 
-          if (versionsResult.Success && versionsResult.Results) {
-            // Create map of versionId -> {artifactId, artifactName}
-            const versionToArtifact = new Map<string, {artifactId: string; artifactName: string}>();
-
-            // Get all unique artifact IDs
-            const artifactIds = [...new Set(versionsResult.Results.map(v => v.ArtifactID))];
-
-            // Load artifact entities to get names
-            const artifactsResult = await rv.RunView({
-              EntityName: 'MJ: Artifacts',
-              ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
-              ResultType: 'entity_object'
-            }, this.currentUser);
-
-            // Create map of artifactId -> name
-            const artifactNames = new Map<string, string>();
-            if (artifactsResult.Success && artifactsResult.Results) {
-              for (const artifact of artifactsResult.Results) {
-                artifactNames.set(artifact.ID, artifact.Name || 'Unnamed Artifact');
-              }
-            }
-
-            // Build versionId to artifact info map
-            for (const version of versionsResult.Results) {
-              versionToArtifact.set(version.ID, {
-                artifactId: version.ArtifactID,
-                artifactName: artifactNames.get(version.ArtifactID) || 'Unnamed Artifact'
+          // Build final artifact map with IDs and names
+          for (const artifact of conversationDetailArtifacts.Results) {
+            const artifactInfo = versionToArtifact.get(artifact.ArtifactVersionID);
+            if (artifact.ConversationDetailID && artifactInfo) {
+              this.artifactsByDetailId.set(artifact.ConversationDetailID, {
+                artifactId: artifactInfo.artifactId,
+                versionId: artifact.ArtifactVersionID,
+                name: artifactInfo.artifactName
               });
             }
-
-            // Build final artifact map with IDs and names
-            for (const artifact of conversationDetailArtifacts.Results) {
-              const artifactInfo = versionToArtifact.get(artifact.ArtifactVersionID);
-              if (artifact.ConversationDetailID && artifactInfo) {
-                this.artifactsByDetailId.set(artifact.ConversationDetailID, {
-                  artifactId: artifactInfo.artifactId,
-                  versionId: artifact.ArtifactVersionID,
-                  name: artifactInfo.artifactName
-                });
-              }
-            }
-            console.log(`📦 Preloaded ${this.artifactsByDetailId.size} artifacts for conversation ${conversationId}`);
           }
+          console.log(`📦 Preloaded ${this.artifactsByDetailId.size} artifacts for conversation ${conversationId}`);
         }
-
-        // Update artifact count for header display
-        this.artifactCount = conversationDetailArtifacts.Results?.length || 0;
-
-        // Debug: Log all artifacts to console
-        console.log(`📊 Artifact Count: ${this.artifactCount}`);
-        console.log(`📦 Artifacts by Detail ID:`, Array.from(this.artifactsByDetailId.entries()).map(([detailId, info]) => ({
-          conversationDetailId: detailId,
-          artifactId: info.artifactId,
-          versionId: info.versionId
-        })));
-
-        // NOW set messages to trigger rendering (after artifacts are loaded)
-        this.messages = loadedMessages;
       }
+
+      // Update artifact count for header display
+      this.artifactCount = conversationDetailArtifacts.Results?.length || 0;
+
+      // Debug: Log all artifacts to console
+      console.log(`📊 Artifact Count: ${this.artifactCount}`);
+      console.log(`📦 Artifacts by Detail ID:`, Array.from(this.artifactsByDetailId.entries()).map(([detailId, info]) => ({
+        conversationDetailId: detailId,
+        artifactId: info.artifactId,
+        versionId: info.versionId
+      })));
+
+      // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
+      // This updates all message components with the newly loaded agent run data
+      this.messages = [...this.messages]; // Create new array reference to trigger change detection
+      this.cdr.detectChanges();
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      console.error('Failed to load peripheral data:', error);
     }
   }
 
@@ -310,7 +329,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * This is called when the first progress update arrives with an agent run ID
    */
   async onAgentRunDetected(event: {conversationDetailId: string; agentRunId: string}): Promise<void> {
-    console.log('🎯 Agent run detected from progress update:', event);
     await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId);
   }
 
@@ -320,24 +338,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
     // Scroll to bottom when agent responds
     this.scrollToBottom = true;
-    console.log('Agent responded:', event.agentResult);
 
     // Add agent run to the map if present (fallback if not already loaded from progress)
     // agentResult is ExecuteAgentResult which contains agentRun property
     if (event.agentResult?.agentRun?.ID) {
       // Only load if not already in map (progress update may have already loaded it)
       if (!this.agentRunsByDetailId.has(event.message.ID)) {
-        console.log('🔄 Loading agent run after execution:', {
-          agentRunId: event.agentResult.agentRun.ID,
-          conversationDetailId: event.message.ID,
-          agentName: event.agentResult.agentRun.Agent
-        });
         await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID);
-      } else {
-        console.log('✅ Agent run already in map from progress update');
       }
-    } else {
-      console.warn('⚠️ No agent run ID in agent response:', event.agentResult);
     }
 
     // Reload artifact mapping for this message to pick up newly created artifacts
@@ -362,23 +370,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    */
   private async addAgentRunToMap(conversationDetailId: string, agentRunId: string): Promise<void> {
     try {
-      console.log(`🔄 Adding agent run to map:`, { conversationDetailId, agentRunId });
       const md = new Metadata();
       const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
       if (await agentRun.Load(agentRunId)) {
         this.agentRunsByDetailId.set(conversationDetailId, agentRun);
-        console.log(`✅ Added agent run to map:`, {
-          agentRunId,
-          conversationDetailId,
-          agentName: agentRun.Agent,
-          status: agentRun.Status,
-          mapSize: this.agentRunsByDetailId.size
-        });
-      } else {
-        console.warn(`⚠️ Failed to load agent run ${agentRunId}`);
       }
     } catch (error) {
-      console.error('❌ Failed to load agent run for map:', error);
+      console.error('Failed to load agent run for map:', error);
     }
   }
 

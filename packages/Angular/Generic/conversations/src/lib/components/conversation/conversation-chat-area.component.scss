@@ -257,6 +257,20 @@
     background: #FFF;
     border-top: 1px solid #E5E7EB;
 }
+
+// Loading placeholder - replaces input while loading
+.loading-peripheral-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 140px; // Match typical input area height
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+    margin: 12px;
+    animation: fadeIn 0.2s ease-in-out;
+}
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -379,4 +393,33 @@
 }
 .artifact-modal-card:hover .artifact-modal-action {
     color: #3B82F6;
+}
+
+// Loading content styling
+.loading-peripheral-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: white;
+    border: 2px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    color: #4B5563;
+    font-size: 14px;
+    font-weight: 500;
+
+    i {
+        font-size: 20px;
+        color: #9333EA;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }

@@ -566,11 +566,8 @@
 }
 
 .agent-run-icon.expanded {
-  color: #4B5563;
-}
-
-.agent-run-icon.expanded i.fa-cog {
-  animation: rotate 1s linear infinite;
+  color: #9333EA;
+  transform: scale(1.1);
 }
 
 @keyframes rotate {

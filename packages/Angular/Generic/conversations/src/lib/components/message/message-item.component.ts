@@ -437,6 +437,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public toggleAgentDetails(): void {
     this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
+    console.log(`🔧 Toggle agent details for message ${this.message.ID}:`, {
+      expanded: this.isAgentDetailsExpanded,
+      hasAgentRun: this.hasAgentRun,
+      agentRunExists: !!this.agentRun,
+      agentRunId: this.agentRun?.ID,
+      messageAgentId: this.message?.AgentID
+    });
     this.cdRef.detectChanges();
   }
 
