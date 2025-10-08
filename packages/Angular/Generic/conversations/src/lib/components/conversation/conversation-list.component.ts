@@ -198,15 +198,20 @@ import { ToastService } from '../../services/toast.service';
     }
 
     .conversation-actions {
-      position: relative;
+      position: absolute;
+      right: 5px;
+      top: 50%;
+      transform: translateY(-50%);
       display: flex;
       align-items: center;
       opacity: 0;
+      pointer-events: none;
       transition: opacity 0.2s;
-      flex-shrink: 0;
+      z-index: 10;
     }
-    .conversation-item:hover .conversation-actions { opacity: 1; }
-    .conversation-item.active .conversation-actions { opacity: 1; }
+    .conversation-item:hover .conversation-actions { opacity: 1; pointer-events: auto; }
+    .conversation-item.active .conversation-actions { opacity: 1; pointer-events: auto; }
+    .conversation-actions > * { pointer-events: auto; }
     .pinned-icon { color: #AAE7FD; font-size: 12px; }
 
     .menu-btn {
@@ -216,14 +221,18 @@ import { ToastService } from '../../services/toast.service';
       align-items: center;
       justify-content: center;
       border-radius: 6px;
-      color: rgba(255,255,255,0.6);
-      background: transparent;
+      color: rgba(255,255,255,0.7);
+      background: #092340 !important;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
     }
     .menu-btn:hover {
-      background: rgba(255,255,255,0.15);
+      background: rgba(255,255,255,0.15) !important;
+      color: white;
+    }
+    .conversation-item.active .menu-btn {
+      background: #005A8C !important;
       color: white;
     }
     .menu-btn i { font-size: 14px; }
@@ -238,8 +247,9 @@ import { ToastService } from '../../services/toast.service';
       border: 1px solid rgba(255,255,255,0.15);
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-      z-index: 1000;
+      z-index: 1001;
       overflow: hidden;
+      pointer-events: auto;
     }
 
     .menu-item {
@@ -347,8 +357,8 @@ export class ConversationListComponent implements OnInit {
     this.conversationState.loadConversations(this.environmentId, this.currentUser);
   }
 
-  @HostListener('document:click', ['$event'])
-  onDocumentClick(event: Event): void {
+  @HostListener('document:click')
+  onDocumentClick(): void {
     // Close menu when clicking outside
     if (this.openMenuConversationId) {
       this.closeMenu();
