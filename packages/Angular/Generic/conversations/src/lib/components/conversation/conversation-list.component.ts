@@ -151,7 +151,7 @@ import { ToastService } from '../../services/toast.service';
     .chat-list.expanded { display: block; }
 
     .conversation-item {
-      padding: 6px 8px 6px 16px;
+      padding: 6px 5px 6px 16px;
       cursor: pointer;
       display: flex;
       gap: 8px;
@@ -167,11 +167,11 @@ import { ToastService } from '../../services/toast.service';
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
-    .conversation-info { flex: 1; min-width: 0; margin-right: 4px; }
+    .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
-    .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-right: 4px; }
+    .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
     /* Project Badge */
     .project-badge {
