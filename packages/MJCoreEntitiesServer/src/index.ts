@@ -1,3 +1,4 @@
+import { LoadAIEngine } from '@memberjunction/aiengine';
 import { LoadActionEntityServer } from './custom/ActionEntity.server';
 import { LoadAIPromptEntityExtendedServerSubClass } from './custom/AIPromptEntityExtended.server';
 import { LoadAIPromptRunEntityServerSubClass } from './custom/AIPromptRunEntity.server';
@@ -6,6 +7,8 @@ import { LoadQueryEntityServerSubClass } from './custom/QueryEntity.server';
 import { LoadReportEntityServerSubClass } from './custom/reportEntity.server';
 import { LoadTemplateContentEntityServerSubClass } from './custom/TemplateContentEntity.server';
 import { LoadUserViewEntityServerSubClass } from './custom/userViewEntity.server';
+
+LoadAIEngine(); // Ensure all AI providers are loaded
 
 export * from './custom/AIPromptEntityExtended.server';
 export * from './custom/AIPromptRunEntity.server';

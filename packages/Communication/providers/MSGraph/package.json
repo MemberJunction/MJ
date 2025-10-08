@@ -23,7 +23,6 @@
     "@azure/identity": "^4.4.1",
     "@memberjunction/communication-types": "2.104.0",
     "@memberjunction/ai": "2.104.0",
-    "@memberjunction/ai-openai": "2.104.0",
     "@memberjunction/aiengine": "2.104.0",
     "@memberjunction/core": "2.100.3",
     "@memberjunction/core-entities": "2.104.0",

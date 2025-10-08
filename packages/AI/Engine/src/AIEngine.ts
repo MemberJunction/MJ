@@ -1,5 +1,5 @@
-import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRole, 
-         ParallelChatCompletionsCallbacks, GetAIAPIKey, 
+import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRole,
+         ParallelChatCompletionsCallbacks, GetAIAPIKey,
          EmbedTextResult,
          EmbedTextParams,
          BaseEmbeddings} from "@memberjunction/ai";
@@ -10,6 +10,18 @@ import { BaseEntity, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIModelEntityExtended } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
+
+// Import all AI provider loaders to prevent tree shaking when consumed by external packages
+import { LoadOpenAILLM } from '@memberjunction/ai-openai';
+import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
+import { LoadGroqLLM } from '@memberjunction/ai-groq';
+import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
+import { LoadMistralLLM } from '@memberjunction/ai-mistral';
+import { LoadLMStudioLLM } from '@memberjunction/ai-lmstudio';
+import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
+import { LoadOllamaLLM } from '@memberjunction/ai-ollama';
+import { LoadxAILLM } from '@memberjunction/ai-xai';
+import { LoadLocalEmbedding } from '@memberjunction/ai-local-embeddings';
 
 
 /**
@@ -504,6 +516,17 @@ export class AIEngine extends AIEngineBase {
 }
 
 export function LoadAIEngine() {
-    // This function exists to prevent tree shaking from removing the AIEngine class
+    // Load the base AI engine and all provider drivers to prevent tree shaking
+    // This ensures all AI providers are available when consuming packages import @memberjunction/aiengine
     LoadBaseAIEngine();
+    LoadOpenAILLM();
+    LoadAnthropicLLM();
+    LoadGroqLLM();
+    LoadCerebrasLLM();
+    LoadMistralLLM();
+    LoadLMStudioLLM();
+    LoadOpenRouterLLM();
+    LoadOllamaLLM();
+    LoadxAILLM();
+    LoadLocalEmbedding();
 }
