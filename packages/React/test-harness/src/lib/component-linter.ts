@@ -2530,7 +2530,6 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                   message: `RunQuery requires a RunQueryParams object as the first parameter.
 Use: RunQuery({ 
   QueryName: 'YourQuery',             // Or use QueryID: 'uuid'
-  CategoryPath: 'Category/Subcategory', // Optional. Used when QueryName is provided to provide a better filter
   Parameters: {                       // Optional query parameters
     param1: 'value1'
   },
@@ -2552,7 +2551,6 @@ Use: RunQuery({
                   message: `RunQuery expects a RunQueryParams object, not a ${argType}.
 Use: RunQuery({ 
   QueryName: 'YourQuery',             // Or use QueryID: 'uuid'
-  CategoryPath: 'Category/Subcategory', // Optional. Used when QueryName is provided to provide a better filter
   Parameters: {                       // Optional query parameters
     startDate: '2024-01-01',
     endDate: '2024-12-31'
@@ -2569,17 +2567,13 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 // Check for required properties (must have QueryID or QueryName)
                 let hasQueryID = false;
                 let hasQueryName = false;
-                let hasCategoryPath = false;
-                const foundProps: string[] = [];
-
+                
                 for (const prop of config.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
-                    foundProps.push(propName);
-
+                    
                     if (propName === 'QueryID') hasQueryID = true;
                     if (propName === 'QueryName') hasQueryName = true;
-                    if (propName === 'CategoryPath') hasCategoryPath = true;
                     
                     if (!validRunQueryProps.has(propName)) {
                       let message = `Invalid property '${propName}' on RunQuery. Valid properties: ${Array.from(validRunQueryProps).join(', ')}`;
@@ -2716,59 +2710,20 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 
                 // Check that at least one required property is present
                 if (!hasQueryID && !hasQueryName) {
-                  // Build helpful context about what properties were found
-                  const propsContext = foundProps.length > 0
-                    ? ` Found properties: ${foundProps.join(', ')}.`
-                    : '';
-
-                  // Special message if CategoryPath was provided without QueryName
-                  const message = hasCategoryPath
-                    ? `RunQuery requires QueryName (or QueryID). CategoryPath alone is insufficient - it's only used to help filter when QueryName is ambiguous.${propsContext}`
-                    : `RunQuery requires either QueryID or QueryName property to identify which query to run.${propsContext}`;
-
-                  // Suggest QueryName from spec if available
-                  const exampleQueryName = componentSpec?.dataRequirements?.queries?.[0]?.name || 'YourQueryName';
-
                   violations.push({
                     rule: 'runview-runquery-valid-properties',
                     severity: 'critical',
                     line: config.loc?.start.line || 0,
                     column: config.loc?.start.column || 0,
-                    message,
-                    code: `RunQuery({ QueryName: '${exampleQueryName}', ... })`,
-                    suggestion: {
-                      text: 'Add QueryName property to identify the query',
-                      example: `await utilities.rq.RunQuery({\n  QueryName: '${exampleQueryName}',${hasCategoryPath ? '\n  CategoryPath: \'...\',  // Optional, helps disambiguate' : ''}\n  Parameters: { ... }  // Optional query parameters\n})`
-                    }
-                  });
-                }
-
-                // Special check for CategoryPath-only calls (common Skip generation issue)
-                // This provides a more targeted error for this specific anti-pattern
-                if (!hasQueryID && !hasQueryName && hasCategoryPath) {
-                  const exampleQueryName = componentSpec?.dataRequirements?.queries?.[0]?.name || 'YourQueryName';
-                  const categoryPathProp = config.properties.find(
-                    p => t.isObjectProperty(p) && t.isIdentifier(p.key) && p.key.name === 'CategoryPath'
-                  ) as t.ObjectProperty | undefined;
-
-                  violations.push({
-                    rule: 'runquery-categorypath-without-queryname',
-                    severity: 'critical',
-                    line: categoryPathProp?.loc?.start.line || config.loc?.start.line || 0,
-                    column: categoryPathProp?.loc?.start.column || config.loc?.start.column || 0,
-                    message: `CategoryPath cannot be used alone - it requires QueryName. CategoryPath is only used to disambiguate when multiple queries share the same name. You must specify which query to run using QueryName.`,
-                    code: `CategoryPath: '...'  // Missing: QueryName`,
-                    suggestion: {
-                      text: 'Add QueryName property alongside CategoryPath. The query name should come from your dataRequirements.queries[].name',
-                      example: `// Query name from your spec: "${exampleQueryName}"\nawait utilities.rq.RunQuery({\n  QueryName: '${exampleQueryName}',  // Required: identifies which query to run\n  CategoryPath: '...',  // Optional: helps disambiguate if multiple queries have same name\n  Parameters: {\n    // Your query parameters here\n  }\n})`
-                    }
+                    message: `RunQuery requires either QueryID or QueryName property. Add one of these to identify the query to run.`,
+                    code: `RunQuery({ ... })`
                   });
                 }
               }
             }
           }
         });
-
+        
         return violations;
       }
     },
@@ -9182,7 +9137,7 @@ await utilities.rq.RunQuery({
 
 // Valid RunQuery properties:
 // - QueryName (required)
-// - CategoryPath, CategoryID, Parameters (optional)`
+// - CategoryName, CategoryID, Parameters (optional)`
           };
           break;
           

@@ -8,7 +8,7 @@
         "runtimeArgs": ["--preserve-symlinks"],
         "request": "launch",
         "preLaunchTask": "npm: start",
-        "url": "http://localhost:4300/"
+        "url": "http://localhost:4200/"
       },
       {
         "name": "ng test",
