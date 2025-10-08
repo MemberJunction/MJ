@@ -1,18 +1,18 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'MJ: Artifact Versions.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: Artifact Version Attributes.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-artifactversion-form-details',
+    selector: 'gen-artifactversionattribute-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ArtifactID"
+            FieldName="ArtifactVersionID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -21,39 +21,30 @@ import { ArtifactVersionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="VersionNumber"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Content"
+            FieldName="Name"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Configuration"
+            FieldName="Type"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Comments"
+            FieldName="Value"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="UserID"
-            Type="textbox"
+            FieldName="StandardProperty"
+            Type="dropdownlist"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -72,35 +63,7 @@ import { ArtifactVersionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ContentHash"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Artifact"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="User"
+            FieldName="ArtifactVersion"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -109,12 +72,12 @@ import { ArtifactVersionEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ArtifactVersionDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ArtifactVersionEntity;
+export class ArtifactVersionAttributeDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: ArtifactVersionAttributeEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadArtifactVersionDetailsComponent() {
+export function LoadArtifactVersionAttributeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

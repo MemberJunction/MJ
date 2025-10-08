@@ -1,40 +1,37 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { ArtifactTypeEntity } from '@memberjunction/core-entities';
+import { AgentArtifactTypeEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'MJ: Artifact Types.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: Agent Artifact Types.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-artifacttype-form-details',
+    selector: 'gen-agentartifacttype-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
+            FieldName="AgentID"
             Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="ContentType"
+            FieldName="ArtifactTypeID"
             Type="textbox"
             [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="IsEnabled"
-            Type="checkbox"
+            FieldName="Sequence"
+            Type="numerictextbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -54,23 +51,14 @@ import { ArtifactTypeEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
+            FieldName="Agent"
             Type="textbox"
             [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ExtractRules"
-            Type="textarea"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Parent"
+            FieldName="ArtifactType"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -79,12 +67,12 @@ import { ArtifactTypeEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class ArtifactTypeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: ArtifactTypeEntity;
+export class AgentArtifactTypeDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: AgentArtifactTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadArtifactTypeDetailsComponent() {
+export function LoadAgentArtifactTypeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

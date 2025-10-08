@@ -141,11 +141,11 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
 
 /**
  * Result returned from executing an AI Agent with comprehensive execution history.
- * 
+ *
  * This result structure provides complete visibility into the agent's execution flow,
  * including all prompts executed, actions taken, sub-agents invoked, and decisions made.
  * The agentRun property contains the full execution history with all steps.
- * 
+ *
  * @template P - Generic type parameter for payload value, allowing flexibility in the type of data returned by the agent
  */
 export type ExecuteAgentResult<P = any> = {
@@ -153,7 +153,7 @@ export type ExecuteAgentResult<P = any> = {
     success: boolean;
     /** Optional payload returned by the agent */
     payload?: P;
-    /** 
+    /**
      * The agent run entity with full execution history.
      * - Use agentRun.ErrorMessage for error details
      * - Use agentRun.Status === 'Cancelled' to check if cancelled
@@ -161,6 +161,13 @@ export type ExecuteAgentResult<P = any> = {
      * - Use agentRun.Steps for the execution step history
      */
     agentRun: AIAgentRunEntityExtended;
+    /**
+     * The artifact type ID for the returned payload.
+     * This identifies what type of artifact the payload represents (e.g., JSON, Markdown, HTML).
+     * Used by UI to determine how to render the payload and which extract rules to apply.
+     * If not specified, falls back to the agent's default artifact type configuration.
+     */
+    payloadArtifactTypeID?: string;
 }
 
 /**

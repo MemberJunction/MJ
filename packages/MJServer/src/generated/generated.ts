@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, EnvironmentEntity, AIAgentActionEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, ConversationArtifactEntity, AIAgentPromptEntity, ComponentLibraryEntity, DashboardUserPreferenceEntity, QueryParameterEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, EnvironmentEntity, AIAgentActionEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, PublicLinkEntity, AgentArtifactTypeEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, ArtifactVersionAttributeEntity, ConversationArtifactEntity, AIAgentPromptEntity, ComponentLibraryEntity, DashboardUserPreferenceEntity, QueryParameterEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -1741,11 +1741,11 @@ each time the agent processes a prompt step.`})
     @MaxLength(100)
     OverrideVendor?: string;
         
-    @Field(() => [AIAgentRun_])
-    MJ_AIAgentRuns_ParentRunIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
-    
     @Field(() => [AIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
+    
+    @Field(() => [AIAgentRun_])
+    MJ_AIAgentRuns_ParentRunIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
     
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_AgentRunIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -2048,17 +2048,6 @@ export class AIAgentRunResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [AIAgentRun_])
-    async MJ_AIAgentRuns_ParentRunIDArray(@Root() aiagentrun_: AIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ParentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIAgentRunStep_])
     async MJ_AIAgentRunSteps_AgentRunIDArray(@Root() aiagentrun_: AIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
@@ -2067,6 +2056,17 @@ export class AIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [AgentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentRun_])
+    async MJ_AIAgentRuns_ParentRunIDArray(@Root() aiagentrun_: AIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ParentRunID]='${aiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
         
@@ -2140,11 +2140,11 @@ export class AIVendor_ {
     @Field(() => [AIResultCache_])
     AIResultCache_VendorIDArray: AIResultCache_[]; // Link to AIResultCache
     
-    @Field(() => [AIPromptRun_])
-    MJ_AIPromptRuns_VendorIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
-    
     @Field(() => [AIModelVendor_])
     MJ_AIModelVendors_VendorIDArray: AIModelVendor_[]; // Link to MJ_AIModelVendors
+    
+    @Field(() => [AIPromptRun_])
+    MJ_AIPromptRuns_VendorIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
     
     @Field(() => [AIVendorType_])
     MJ_AIVendorTypes_VendorIDArray: AIVendorType_[]; // Link to MJ_AIVendorTypes
@@ -2271,17 +2271,6 @@ export class AIVendorResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIPromptRun_])
-    async MJ_AIPromptRuns_VendorIDArray(@Root() aivendor_: AIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIModelVendor_])
     async MJ_AIModelVendors_VendorIDArray(@Root() aivendor_: AIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
@@ -2290,6 +2279,17 @@ export class AIVendorResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIPromptRun_])
+    async MJ_AIPromptRuns_VendorIDArray(@Root() aivendor_: AIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [VendorID]='${aivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
         
@@ -2569,14 +2569,14 @@ export class AIConfiguration_ {
     @Field(() => [AIAgentPrompt_])
     MJ_AIAgentPrompts_ConfigurationIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
-    @Field(() => [AIPromptRun_])
-    MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
+    @Field(() => [AIPromptModel_])
+    MJ_AIPromptModels_ConfigurationIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
     
     @Field(() => [AIResultCache_])
     AIResultCache_ConfigurationIDArray: AIResultCache_[]; // Link to AIResultCache
     
-    @Field(() => [AIPromptModel_])
-    MJ_AIPromptModels_ConfigurationIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
+    @Field(() => [AIPromptRun_])
+    MJ_AIPromptRuns_ConfigurationIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
     
     @Field(() => [AIAgentRun_])
     MJ_AIAgentRuns_ConfigurationIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -2721,14 +2721,14 @@ export class AIConfigurationResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIPromptRun_])
-    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+    @FieldResolver(() => [AIPromptModel_])
+    async MJ_AIPromptModels_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
         
@@ -2743,14 +2743,14 @@ export class AIConfigurationResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIPromptModel_])
-    async MJ_AIPromptModels_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
+    @FieldResolver(() => [AIPromptRun_])
+    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() aiconfiguration_: AIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${aiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
         
@@ -2962,6 +2962,9 @@ if this limit is exceeded.`})
     
     @Field(() => [AIAgentRelationship_])
     MJ_AIAgentRelationships_AgentIDArray: AIAgentRelationship_[]; // Link to MJ_AIAgentRelationships
+    
+    @Field(() => [AgentArtifactType_])
+    MJ_AgentArtifactTypes_AgentIDArray: AgentArtifactType_[]; // Link to MJ_AgentArtifactTypes
     
     @Field(() => [AIAgentNote_])
     AIAgentNotes_AgentIDArray: AIAgentNote_[]; // Link to AIAgentNotes
@@ -3342,6 +3345,17 @@ export class AIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRelationships] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Relationships', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Relationships', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AgentArtifactType_])
+    async MJ_AgentArtifactTypes_AgentIDArray(@Root() aiagent_: AIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Agent Artifact Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAgentArtifactTypes] WHERE [AgentID]='${aiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Agent Artifact Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Agent Artifact Types', rows);
         return result;
     }
         
@@ -4789,20 +4803,20 @@ export class Environment_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => [Collection_])
-    MJ_Collections_EnvironmentIDArray: Collection_[]; // Link to MJ_Collections
-    
     @Field(() => [Project_])
     MJ_Projects_EnvironmentIDArray: Project_[]; // Link to MJ_Projects
+    
+    @Field(() => [Collection_])
+    MJ_Collections_EnvironmentIDArray: Collection_[]; // Link to MJ_Collections
     
     @Field(() => [Artifact_])
     MJ_Artifacts_EnvironmentIDArray: Artifact_[]; // Link to MJ_Artifacts
     
-    @Field(() => [Dashboard_])
-    Dashboards_EnvironmentIDArray: Dashboard_[]; // Link to Dashboards
-    
     @Field(() => [Task_])
     MJ_Tasks_EnvironmentIDArray: Task_[]; // Link to MJ_Tasks
+    
+    @Field(() => [Dashboard_])
+    Dashboards_EnvironmentIDArray: Dashboard_[]; // Link to Dashboards
     
     @Field(() => [Report_])
     Reports_EnvironmentIDArray: Report_[]; // Link to Reports
@@ -4916,17 +4930,6 @@ export class EnvironmentResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [Collection_])
-    async MJ_Collections_EnvironmentIDArray(@Root() environment_: Environment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Collections', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCollections] WHERE [EnvironmentID]='${environment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [Project_])
     async MJ_Projects_EnvironmentIDArray(@Root() environment_: Environment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Projects', userPayload);
@@ -4935,6 +4938,17 @@ export class EnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwProjects] WHERE [EnvironmentID]='${environment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Projects', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Projects', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [Collection_])
+    async MJ_Collections_EnvironmentIDArray(@Root() environment_: Environment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Collections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCollections] WHERE [EnvironmentID]='${environment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows);
         return result;
     }
         
@@ -4949,17 +4963,6 @@ export class EnvironmentResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [Dashboard_])
-    async Dashboards_EnvironmentIDArray(@Root() environment_: Environment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Dashboards', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [EnvironmentID]='${environment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [Task_])
     async MJ_Tasks_EnvironmentIDArray(@Root() environment_: Environment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
@@ -4968,6 +4971,17 @@ export class EnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTasks] WHERE [EnvironmentID]='${environment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [Dashboard_])
+    async Dashboards_EnvironmentIDArray(@Root() environment_: Environment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Dashboards', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [EnvironmentID]='${environment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
         return result;
     }
         
@@ -6352,11 +6366,11 @@ export class AIPrompt_ {
     @Field(() => [AIPrompt_])
     AIPrompts_ResultSelectorPromptIDArray: AIPrompt_[]; // Link to AIPrompts
     
-    @Field(() => [AIAgentPrompt_])
-    MJ_AIAgentPrompts_PromptIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
-    
     @Field(() => [AIPromptModel_])
     MJ_AIPromptModels_PromptIDArray: AIPromptModel_[]; // Link to MJ_AIPromptModels
+    
+    @Field(() => [AIAgentPrompt_])
+    MJ_AIAgentPrompts_PromptIDArray: AIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
     @Field(() => [AIAgentStep_])
     MJ_AIAgentSteps_PromptIDArray: AIAgentStep_[]; // Link to MJ_AIAgentSteps
@@ -6792,17 +6806,6 @@ export class AIPromptResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [AIAgentPrompt_])
-    async MJ_AIAgentPrompts_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [AIPromptModel_])
     async MJ_AIPromptModels_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
@@ -6811,6 +6814,17 @@ export class AIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [AIAgentPrompt_])
+    async MJ_AIAgentPrompts_PromptIDArray(@Root() aiprompt_: AIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${aiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
         return result;
     }
         
@@ -11850,11 +11864,11 @@ export class User_ {
     @Field(() => [DashboardUserState_])
     MJ_DashboardUserStates_UserIDArray: DashboardUserState_[]; // Link to MJ_DashboardUserStates
     
-    @Field(() => [PublicLink_])
-    MJ_PublicLinks_UserIDArray: PublicLink_[]; // Link to MJ_PublicLinks
-    
     @Field(() => [ArtifactVersion_])
     MJ_ArtifactVersions_UserIDArray: ArtifactVersion_[]; // Link to MJ_ArtifactVersions
+    
+    @Field(() => [PublicLink_])
+    MJ_PublicLinks_UserIDArray: PublicLink_[]; // Link to MJ_PublicLinks
     
     @Field(() => [ResourcePermission_])
     ResourcePermissions_UserIDArray: ResourcePermission_[]; // Link to ResourcePermissions
@@ -12454,17 +12468,6 @@ export class UserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [PublicLink_])
-    async MJ_PublicLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Public Links', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwPublicLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Public Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Public Links', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ArtifactVersion_])
     async MJ_ArtifactVersions_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifact Versions', userPayload);
@@ -12473,6 +12476,17 @@ export class UserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactVersions] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [PublicLink_])
+    async MJ_PublicLinks_UserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Public Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwPublicLinks] WHERE [UserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Public Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Public Links', rows);
         return result;
     }
         
@@ -40250,6 +40264,171 @@ export class PublicLinkResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Agent Artifact Types
+//****************************************************************************
+@ObjectType({ description: `Junction table linking AI Agents to the artifact types they can produce. An agent can produce zero to many artifact types.` })
+export class AgentArtifactType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `AI Agent that can produce this artifact type`}) 
+    @MaxLength(16)
+    AgentID: string;
+        
+    @Field({description: `Artifact type that this agent can produce`}) 
+    @MaxLength(16)
+    ArtifactTypeID: string;
+        
+    @Field(() => Int, {nullable: true, description: `Optional sequence for ordering multiple artifact types for an agent`}) 
+    Sequence?: number;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    Agent?: string;
+        
+    @Field() 
+    @MaxLength(200)
+    ArtifactType: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Agent Artifact Types
+//****************************************************************************
+@InputType()
+export class CreateAgentArtifactTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    ArtifactTypeID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence: number | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Agent Artifact Types
+//****************************************************************************
+@InputType()
+export class UpdateAgentArtifactTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    ArtifactTypeID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Agent Artifact Types
+//****************************************************************************
+@ObjectType()
+export class RunAgentArtifactTypeViewResult {
+    @Field(() => [AgentArtifactType_])
+    Results: AgentArtifactType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(AgentArtifactType_)
+export class AgentArtifactTypeResolver extends ResolverBase {
+    @Query(() => RunAgentArtifactTypeViewResult)
+    async RunAgentArtifactTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunAgentArtifactTypeViewResult)
+    async RunAgentArtifactTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunAgentArtifactTypeViewResult)
+    async RunAgentArtifactTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Agent Artifact Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => AgentArtifactType_, { nullable: true })
+    async AgentArtifactType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<AgentArtifactType_ | null> {
+        this.CheckUserReadPermissions('MJ: Agent Artifact Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAgentArtifactTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Agent Artifact Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Agent Artifact Types', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => AgentArtifactType_)
+    async CreateAgentArtifactType(
+        @Arg('input', () => CreateAgentArtifactTypeInput) input: CreateAgentArtifactTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Agent Artifact Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => AgentArtifactType_)
+    async UpdateAgentArtifactType(
+        @Arg('input', () => UpdateAgentArtifactTypeInput) input: UpdateAgentArtifactTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Agent Artifact Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => AgentArtifactType_)
+    async DeleteAgentArtifactType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Agent Artifact Types', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Artifact Types
 //****************************************************************************
 @ObjectType({ description: `Defines the types of artifacts that can be created within conversations` })
@@ -40280,11 +40459,28 @@ export class ArtifactType_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.`}) 
+    @MaxLength(16)
+    ParentID?: string;
+        
+    @Field({nullable: true, description: `JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`}) 
+    ExtractRules?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    Parent?: string;
+        
     @Field(() => [ConversationArtifact_])
     MJ_ConversationArtifacts_ArtifactTypeIDArray: ConversationArtifact_[]; // Link to MJ_ConversationArtifacts
     
+    @Field(() => [AgentArtifactType_])
+    MJ_AgentArtifactTypes_ArtifactTypeIDArray: AgentArtifactType_[]; // Link to MJ_AgentArtifactTypes
+    
     @Field(() => [Artifact_])
     MJ_Artifacts_TypeIDArray: Artifact_[]; // Link to MJ_Artifacts
+    
+    @Field(() => [ArtifactType_])
+    MJ_ArtifactTypes_ParentIDArray: ArtifactType_[]; // Link to MJ_ArtifactTypes
     
 }
 
@@ -40307,6 +40503,12 @@ export class CreateArtifactTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ParentID: string | null;
+
+    @Field({ nullable: true })
+    ExtractRules: string | null;
 }
     
 
@@ -40329,6 +40531,12 @@ export class UpdateArtifactTypeInput {
 
     @Field(() => Boolean, { nullable: true })
     IsEnabled?: boolean;
+
+    @Field({ nullable: true })
+    ParentID?: string | null;
+
+    @Field({ nullable: true })
+    ExtractRules?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -40403,6 +40611,17 @@ export class ArtifactTypeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [AgentArtifactType_])
+    async MJ_AgentArtifactTypes_ArtifactTypeIDArray(@Root() artifacttype_: ArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Agent Artifact Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAgentArtifactTypes] WHERE [ArtifactTypeID]='${artifacttype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Agent Artifact Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Agent Artifact Types', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [Artifact_])
     async MJ_Artifacts_TypeIDArray(@Root() artifacttype_: ArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Artifacts', userPayload);
@@ -40411,6 +40630,17 @@ export class ArtifactTypeResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifacts] WHERE [TypeID]='${artifacttype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifacts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Artifacts', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ArtifactType_])
+    async MJ_ArtifactTypes_ParentIDArray(@Root() artifacttype_: ArtifactType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Artifact Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactTypes] WHERE [ParentID]='${artifacttype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Types', rows);
         return result;
     }
         
@@ -40845,6 +41075,187 @@ export class ArtifactResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: Artifact Version Attributes
+//****************************************************************************
+@ObjectType({ description: `Stores extracted attribute values from artifact content based on ArtifactType ExtractRules. Prevents re-running extraction logic on every access.` })
+export class ArtifactVersionAttribute_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `The artifact version this attribute belongs to`}) 
+    @MaxLength(16)
+    ArtifactVersionID: string;
+        
+    @Field({description: `Name of the extracted attribute (matches ExtractRule.name)`}) 
+    @MaxLength(510)
+    Name: string;
+        
+    @Field({description: `TypeScript type definition of the value (e.g., 'string', 'number', 'Date', 'Array<{x: number, y: string}>')`}) 
+    @MaxLength(1000)
+    Type: string;
+        
+    @Field({nullable: true, description: `JSON-serialized extracted value`}) 
+    Value?: string;
+        
+    @Field({nullable: true, description: `Maps this attribute to a standard property for UI rendering: 'name', 'description', 'displayMarkdown', 'displayHtml', or NULL for custom attributes`}) 
+    @MaxLength(100)
+    StandardProperty?: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ArtifactVersion?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Artifact Version Attributes
+//****************************************************************************
+@InputType()
+export class CreateArtifactVersionAttributeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ArtifactVersionID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    Value: string | null;
+
+    @Field({ nullable: true })
+    StandardProperty: string | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Artifact Version Attributes
+//****************************************************************************
+@InputType()
+export class UpdateArtifactVersionAttributeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ArtifactVersionID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Type?: string;
+
+    @Field({ nullable: true })
+    Value?: string | null;
+
+    @Field({ nullable: true })
+    StandardProperty?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Artifact Version Attributes
+//****************************************************************************
+@ObjectType()
+export class RunArtifactVersionAttributeViewResult {
+    @Field(() => [ArtifactVersionAttribute_])
+    Results: ArtifactVersionAttribute_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(ArtifactVersionAttribute_)
+export class ArtifactVersionAttributeResolver extends ResolverBase {
+    @Query(() => RunArtifactVersionAttributeViewResult)
+    async RunArtifactVersionAttributeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunArtifactVersionAttributeViewResult)
+    async RunArtifactVersionAttributeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunArtifactVersionAttributeViewResult)
+    async RunArtifactVersionAttributeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Artifact Version Attributes';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => ArtifactVersionAttribute_, { nullable: true })
+    async ArtifactVersionAttribute(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ArtifactVersionAttribute_ | null> {
+        this.CheckUserReadPermissions('MJ: Artifact Version Attributes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactVersionAttributes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Version Attributes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Artifact Version Attributes', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @Mutation(() => ArtifactVersionAttribute_)
+    async CreateArtifactVersionAttribute(
+        @Arg('input', () => CreateArtifactVersionAttributeInput) input: CreateArtifactVersionAttributeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Artifact Version Attributes', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => ArtifactVersionAttribute_)
+    async UpdateArtifactVersionAttribute(
+        @Arg('input', () => UpdateArtifactVersionAttributeInput) input: UpdateArtifactVersionAttributeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Artifact Version Attributes', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => ArtifactVersionAttribute_)
+    async DeleteArtifactVersionAttribute(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Artifact Version Attributes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: Conversation Artifacts
 //****************************************************************************
 @ObjectType({ description: `Stores metadata for artifacts created within conversations` })
@@ -40891,11 +41302,11 @@ export class ConversationArtifact_ {
     @MaxLength(200)
     ArtifactType: string;
         
-    @Field(() => [ConversationArtifactVersion_])
-    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
-    
     @Field(() => [ConversationArtifactPermission_])
     MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: ConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
+    
+    @Field(() => [ConversationArtifactVersion_])
+    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: ConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
     
     @Field(() => [ConversationDetail_])
     ConversationDetails_ArtifactIDArray: ConversationDetail_[]; // Link to ConversationDetails
@@ -41018,17 +41429,6 @@ export class ConversationArtifactResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [ConversationArtifactVersion_])
-    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [ConversationArtifactPermission_])
     async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
@@ -41037,6 +41437,17 @@ export class ConversationArtifactResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [ConversationArtifactVersion_])
+    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() conversationartifact_: ConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${conversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
         return result;
     }
         
@@ -46967,6 +47378,13 @@ export class ArtifactVersion_ {
     @MaxLength(1000)
     ContentHash?: string;
         
+    @Field({nullable: true, description: `Name of this artifact version. Can differ from Artifact.Name as it may evolve with versions.`}) 
+    @MaxLength(510)
+    Name?: string;
+        
+    @Field({nullable: true, description: `Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`}) 
+    Description?: string;
+        
     @Field() 
     @MaxLength(510)
     Artifact: string;
@@ -46975,6 +47393,9 @@ export class ArtifactVersion_ {
     @MaxLength(200)
     User: string;
         
+    @Field(() => [ArtifactVersionAttribute_])
+    MJ_ArtifactVersionAttributes_ArtifactVersionIDArray: ArtifactVersionAttribute_[]; // Link to MJ_ArtifactVersionAttributes
+    
     @Field(() => [ConversationDetailArtifact_])
     MJ_ConversationDetailArtifacts_ArtifactVersionIDArray: ConversationDetailArtifact_[]; // Link to MJ_ConversationDetailArtifacts
     
@@ -47008,6 +47429,12 @@ export class CreateArtifactVersionInput {
 
     @Field({ nullable: true })
     ContentHash: string | null;
+
+    @Field({ nullable: true })
+    Name: string | null;
+
+    @Field({ nullable: true })
+    Description: string | null;
 }
     
 
@@ -47039,6 +47466,12 @@ export class UpdateArtifactVersionInput {
 
     @Field({ nullable: true })
     ContentHash?: string | null;
+
+    @Field({ nullable: true })
+    Name?: string | null;
+
+    @Field({ nullable: true })
+    Description?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -47102,6 +47535,17 @@ export class ArtifactVersionResolver extends ResolverBase {
         return result;
     }
     
+    @FieldResolver(() => [ArtifactVersionAttribute_])
+    async MJ_ArtifactVersionAttributes_ArtifactVersionIDArray(@Root() artifactversion_: ArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Artifact Version Attributes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwArtifactVersionAttributes] WHERE [ArtifactVersionID]='${artifactversion_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Artifact Version Attributes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Version Attributes', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [ConversationDetailArtifact_])
     async MJ_ConversationDetailArtifacts_ArtifactVersionIDArray(@Root() artifactversion_: ArtifactVersion_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Detail Artifacts', userPayload);

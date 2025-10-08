@@ -94,6 +94,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Agent Artifact Types" [Visible]="record.IsSaved"> 
+                        MJ: Agent Artifact Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Agent Artifact Types','AgentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Agent Artifact Types')"
+                            [AllowLoad]="IsCurrentTab('MJ: Agent Artifact Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="AIAgent Notes" [Visible]="record.IsSaved"> 
                         AIAgent Notes
                     </mj-tab>
