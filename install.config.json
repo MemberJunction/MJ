@@ -8,7 +8,7 @@
     "codeGenPwD": "",
     "mjAPILogin": "",
     "mjAPIPwD": "",
-    "graphQLPort": 4000,
+    "graphQLPort": 4100,
     "authType": "MSAL",
     "msalWebClientId": "",
     "msalTenantId": "",
