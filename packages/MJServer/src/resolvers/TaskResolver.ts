@@ -116,10 +116,18 @@ export class TaskOrchestrationResolver extends ResolverBase {
 
             LogStatus(`=== TASK GRAPH EXECUTION COMPLETE ===`);
 
-            return {
+            const result = {
                 success: true,
                 results: graphqlResults
             };
+
+            LogStatus(`Returning ExecuteTaskGraph result: ${JSON.stringify({
+                success: result.success,
+                resultsCount: result.results.length,
+                firstResult: result.results[0]
+            })}`);
+
+            return result;
 
         } catch (error) {
             LogError(`Task graph execution failed:`, undefined, error);

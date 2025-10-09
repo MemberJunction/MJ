@@ -1,5 +1,5 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { TaskEntity, TaskDependencyEntity, TaskTypeEntity, AIAgentEntityExtended, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { TaskEntity, TaskDependencyEntity, TaskTypeEntity, AIAgentEntityExtended, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { PubSubEngine } from 'type-graphql';
@@ -41,6 +41,9 @@ export interface TaskExecutionResult {
  * TaskOrchestrator handles multi-step task execution with dependencies
  */
 export class TaskOrchestrator {
+    // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
+    private readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+
     private taskTypeId: string | null = null;
 
     constructor(
@@ -118,8 +121,21 @@ export class TaskOrchestrator {
 
         LogStatus(`Created parent workflow task: ${parentTask.Name} (${parentTask.ID})`);
 
+        // Deduplicate tasks by tempId (LLM sometimes returns duplicates)
+        const seenTempIds = new Set<string>();
+        const uniqueTasks = taskGraph.tasks.filter(task => {
+            if (seenTempIds.has(task.tempId)) {
+                LogError(`Duplicate tempId detected and ignored: ${task.tempId} (${task.name})`);
+                return false;
+            }
+            seenTempIds.add(task.tempId);
+            return true;
+        });
+
+        LogStatus(`Creating ${uniqueTasks.length} unique child tasks (${taskGraph.tasks.length - uniqueTasks.length} duplicates filtered)`);
+
         // Create all child tasks
-        for (const taskDef of taskGraph.tasks) {
+        for (const taskDef of uniqueTasks) {
             const task = await md.GetEntityObject<TaskEntity>('MJ: Tasks', this.contextUser);
 
             // Find agent by name
@@ -157,7 +173,7 @@ export class TaskOrchestrator {
         }
 
         // Create dependencies between child tasks
-        for (const taskDef of taskGraph.tasks) {
+        for (const taskDef of uniqueTasks) {
             const taskId = tempIdToRealId.get(taskDef.tempId);
             if (!taskId) continue;
 
@@ -188,9 +204,12 @@ export class TaskOrchestrator {
      * Publish task progress update via PubSub
      */
     private publishTaskProgress(taskName: string, message: string, percentComplete: number): void {
-        if (!this.pubSub || !this.sessionId || !this.userPayload) return;
+        if (!this.pubSub || !this.sessionId || !this.userPayload) {
+            LogStatus(`⚠️ PubSub not available for progress updates (pubSub: ${!!this.pubSub}, sessionId: ${!!this.sessionId}, userPayload: ${!!this.userPayload})`);
+            return;
+        }
 
-        this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        const payload = {
             message: JSON.stringify({
                 resolver: 'TaskOrchestrator',
                 type: 'TaskProgress',
@@ -203,7 +222,10 @@ export class TaskOrchestrator {
                 }
             }),
             sessionId: this.userPayload.sessionId
-        });
+        };
+
+        LogStatus(`📡 Publishing task progress: ${taskName} - ${message} (${percentComplete}%) to session ${this.userPayload.sessionId}`);
+        this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
 
         LogStatus(`[Task: ${taskName}] ${message} (${percentComplete}%)`);
     }
@@ -212,9 +234,12 @@ export class TaskOrchestrator {
      * Publish agent progress update (nested within task)
      */
     private publishAgentProgress(taskName: string, agentStep: string, agentMessage: string): void {
-        if (!this.pubSub || !this.sessionId || !this.userPayload) return;
+        if (!this.pubSub || !this.sessionId || !this.userPayload) {
+            LogStatus(`⚠️ PubSub not available for agent progress (pubSub: ${!!this.pubSub}, sessionId: ${!!this.sessionId}, userPayload: ${!!this.userPayload})`);
+            return;
+        }
 
-        this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        const payload = {
             message: JSON.stringify({
                 resolver: 'TaskOrchestrator',
                 type: 'AgentProgress',
@@ -227,7 +252,10 @@ export class TaskOrchestrator {
                 }
             }),
             sessionId: this.userPayload.sessionId
-        });
+        };
+
+        LogStatus(`📡 Publishing agent progress: ${taskName} → ${agentStep} to session ${this.userPayload.sessionId}`);
+        this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, payload);
 
         LogStatus(`[Task: ${taskName}] → ${agentStep}: ${agentMessage}`);
     }
@@ -424,6 +452,75 @@ export class TaskOrchestrator {
     }
 
     /**
+     * Create an artifact from agent payload and link to conversation detail
+     * Uses agent's DefaultArtifactTypeID if available, otherwise falls back to JSON
+     */
+    private async createArtifactFromPayload(
+        payload: any,
+        conversationDetailId: string,
+        agent: AIAgentEntityExtended,
+        taskName: string
+    ): Promise<void> {
+        try {
+            const md = new Metadata();
+
+            // Create Artifact header
+            const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.contextUser);
+            artifact.Name = `${agent.Name} - ${taskName} - ${new Date().toLocaleString()}`;
+            artifact.Description = `Artifact generated by ${agent.Name} for task: ${taskName}`;
+
+            // Use agent's DefaultArtifactTypeID if available, otherwise fall back to JSON
+            const defaultArtifactTypeId = (agent as any).DefaultArtifactTypeID;
+            artifact.TypeID = defaultArtifactTypeId || this.JSON_ARTIFACT_TYPE_ID;
+
+            artifact.UserID = this.contextUser.ID;
+            artifact.EnvironmentID = (this.contextUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+
+            const artifactSaved = await artifact.Save();
+            if (!artifactSaved) {
+                LogError('Failed to save artifact');
+                return;
+            }
+
+            LogStatus(`Created artifact: ${artifact.Name} (${artifact.ID})`);
+
+            // Create Artifact Version with content
+            const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.contextUser);
+            version.ArtifactID = artifact.ID;
+            version.VersionNumber = 1;
+            version.Content = JSON.stringify(payload, null, 2);
+            version.UserID = this.contextUser.ID;
+
+            const versionSaved = await version.Save();
+            if (!versionSaved) {
+                LogError('Failed to save artifact version');
+                return;
+            }
+
+            LogStatus(`Created artifact version: ${version.ID}`);
+
+            // Create M2M relationship linking artifact to conversation detail
+            const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
+                'MJ: Conversation Detail Artifacts',
+                this.contextUser
+            );
+            junction.ConversationDetailID = conversationDetailId;
+            junction.ArtifactVersionID = version.ID;
+            junction.Direction = 'Output'; // Artifact produced as output from task
+
+            const junctionSaved = await junction.Save();
+            if (!junctionSaved) {
+                LogError('Failed to create artifact-conversation association');
+                return;
+            }
+
+            LogStatus(`Linked artifact ${artifact.ID} to conversation detail ${conversationDetailId}`);
+        } catch (error) {
+            LogError(`Error creating artifact from payload: ${error}`);
+        }
+    }
+
+    /**
      * Execute a single task
      */
     private async executeTask(task: TaskEntity): Promise<TaskExecutionResult> {
@@ -495,6 +592,27 @@ export class TaskOrchestrator {
                 await task.Save();
 
                 LogStatus(`Task completed: ${task.Name}`);
+
+                // Create artifact from payload if it exists
+                if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
+                    // Get conversation detail ID (from parent task if child doesn't have it)
+                    let conversationDetailId = task.ConversationDetailID;
+                    if (!conversationDetailId && task.ParentID) {
+                        const parentTask = await this.loadTask(task.ParentID);
+                        conversationDetailId = parentTask?.ConversationDetailID || null;
+                    }
+
+                    if (conversationDetailId) {
+                        await this.createArtifactFromPayload(
+                            agentResult.payload,
+                            conversationDetailId,
+                            agentEntity,
+                            task.Name
+                        );
+                    } else {
+                        LogError(`Cannot create artifact: No conversation detail ID found for task ${task.ID}`);
+                    }
+                }
 
                 return {
                     taskId: task.ID,
