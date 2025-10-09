@@ -94,6 +94,11 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     if (changes['messages'] && this.messages && this.messageContainerRef) {
       this.updateMessages(this.messages);
     }
+
+    // React to artifact map changes (when artifacts are added/updated)
+    if (changes['artifactMap'] && this.messages && this.messageContainerRef) {
+      this.updateMessages(this.messages);
+    }
   }
 
   ngAfterViewChecked() {

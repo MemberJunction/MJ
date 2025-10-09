@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactVersionEntity, CollectionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, CollectionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -33,6 +33,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public newCollectionName = '';
   public isCreatingCollection = false;
   public isSavingToLibrary = false;
+
+  // Tabbed interface
+  public activeTab: 'display' | 'json' | 'details' = 'display';
+  public displayMarkdown: string | null = null;
+  public displayHtml: string | null = null;
+  public versionAttributes: ArtifactVersionAttributeEntity[] = [];
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
@@ -132,6 +138,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           this.jsonContent = this.artifactVersion.Content || '{}';
         }
 
+        // Load version attributes
+        await this.loadVersionAttributes();
+
         console.log(`📦 Loaded ${this.allVersions.length} versions for artifact ${this.artifactId}, showing v${this.selectedVersionNumber}`);
       } else {
         this.error = 'No artifact version found';
@@ -142,6 +151,90 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     } finally {
       this.isLoading = false;
     }
+  }
+
+  private async loadVersionAttributes(): Promise<void> {
+    if (!this.artifactVersion) return;
+
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<ArtifactVersionAttributeEntity>({
+        EntityName: 'MJ: Artifact Version Attributes',
+        ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (result.Success && result.Results) {
+        this.versionAttributes = result.Results;
+
+        // Check for displayMarkdown or displayHtml attributes
+        const displayMarkdownAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displaymarkdown');
+        const displayHtmlAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displayhtml');
+
+        // Parse values - they might be JSON-encoded strings
+        this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
+        this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
+
+        // Set default tab based on available display attributes
+        if (this.displayMarkdown || this.displayHtml) {
+          this.activeTab = 'display';
+        } else if (this.artifact?.Type?.toLowerCase() === 'json' || this.jsonContent) {
+          this.activeTab = 'json';
+        } else {
+          this.activeTab = 'details';
+        }
+
+        console.log(`📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, activeTab=${this.activeTab}`);
+      }
+    } catch (err) {
+      console.error('Error loading version attributes:', err);
+    }
+  }
+
+  get displayName(): string {
+    if (this.artifactVersion?.Name) {
+      return this.artifactVersion.Name;
+    }
+    return this.artifact?.Name || 'Artifact';
+  }
+
+  get displayDescription(): string | null {
+    if (this.artifactVersion?.Description) {
+      return this.artifactVersion.Description;
+    }
+    return this.artifact?.Description || null;
+  }
+
+  get hasDisplayTab(): boolean {
+    return !!(this.displayMarkdown || this.displayHtml);
+  }
+
+  get filteredAttributes(): ArtifactVersionAttributeEntity[] {
+    // Filter out displayMarkdown and displayHtml as they're shown in the Display tab
+    return this.versionAttributes.filter(attr => {
+      const name = attr.Name?.toLowerCase();
+      return name !== 'displaymarkdown' && name !== 'displayhtml';
+    });
+  }
+
+  setActiveTab(tab: 'display' | 'json' | 'details'): void {
+    this.activeTab = tab;
+  }
+
+  private parseAttributeValue(value: string | null | undefined): string | null {
+    if (!value) return null;
+
+    // Check if it's a JSON-encoded string (starts and ends with quotes)
+    if (value.startsWith('"') && value.endsWith('"')) {
+      try {
+        return JSON.parse(value);
+      } catch (e) {
+        console.warn('Failed to parse attribute value as JSON:', e);
+        return value;
+      }
+    }
+
+    return value;
   }
 
   onCopyToClipboard(): void {
@@ -156,11 +249,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
   }
 
-  selectVersion(version: ArtifactVersionEntity): void {
+  async selectVersion(version: ArtifactVersionEntity): Promise<void> {
     this.artifactVersion = version;
     this.selectedVersionNumber = version.VersionNumber || 1;
     this.jsonContent = version.Content || '{}';
     this.showVersionDropdown = false;
+
+    // Load attributes for the selected version
+    await this.loadVersionAttributes();
+
     console.log(`📦 Switched to version ${this.selectedVersionNumber}`);
   }
 

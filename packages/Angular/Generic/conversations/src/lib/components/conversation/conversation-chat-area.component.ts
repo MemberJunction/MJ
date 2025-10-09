@@ -247,6 +247,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
               });
             }
           }
+
+          // Create new Map reference to trigger Angular change detection
+          this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+
           console.log(`📦 Preloaded ${this.artifactsByDetailId.size} artifacts for conversation ${conversationId}`);
         }
       }
@@ -380,6 +384,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * Called after an artifact is created to update the UI immediately
    */
   private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
+    console.log(`🔄 Reloading artifacts for message ${conversationDetailId}`);
     try {
       const rv = new RunView();
       const artifactsResult = await rv.RunView<ConversationDetailArtifactEntity>(
@@ -390,6 +395,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         },
         this.currentUser
       );
+
+      console.log(`📊 Junction query result:`, {
+        success: artifactsResult.Success,
+        count: artifactsResult.Results?.length || 0,
+        error: artifactsResult.ErrorMessage
+      });
 
       if (artifactsResult.Success && artifactsResult.Results && artifactsResult.Results.length > 0) {
         // Load full artifact versions and artifacts
@@ -408,7 +419,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           const artifactIds = versionsResult.Results.map(v => `'${v.ArtifactID}'`).join(',');
           const fullArtifactsResult = await rv.RunView<ArtifactEntity>(
             {
-              EntityName: 'MJ: Conversation Artifacts',
+              EntityName: 'MJ: Artifacts',
               ExtraFilter: `ID IN (${artifactIds})`,
               ResultType: 'entity_object'
             },
@@ -441,6 +452,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
                 console.log(`✅ Loaded artifact ${artifact.ID} v${version.VersionNumber} for message ${conversationDetailId}`);
               }
             }
+
+            // Create new Map reference to trigger Angular change detection
+            this.artifactsByDetailId = new Map(this.artifactsByDetailId);
 
             // Update artifact count
             this.artifactCount = this.calculateUniqueArtifactCount();
@@ -675,6 +689,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       // Emit event to refresh artifact viewer with new version
       this.artifactViewerRefresh$.next({artifactId: data.artifactId, versionNumber: data.versionNumber});
     }
+
+    // Force change detection to update the UI immediately
+    this.cdr.detectChanges();
   }
 
   onCloseArtifactPanel(): void {
