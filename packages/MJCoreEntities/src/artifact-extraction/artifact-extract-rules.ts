@@ -5,7 +5,7 @@
  * to declaratively specify how to extract attributes from artifact content.
  * Extract rules support hierarchical inheritance through parent artifact types.
  *
- * @module @memberjunction/ai-core-plus
+ * @module @memberjunction/core-entities
  * @since 2.105.0
  */
 

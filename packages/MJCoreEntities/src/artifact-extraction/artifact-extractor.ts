@@ -5,7 +5,7 @@
  * based on extract rules defined in artifact types. Supports hierarchical inheritance
  * where child artifact types can override parent rules.
  *
- * @module @memberjunction/ai-core-plus
+ * @module @memberjunction/core-entities
  * @since 2.105.0
  */
 

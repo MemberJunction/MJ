@@ -419,13 +419,17 @@ Resolved Rules for "Marketing Email JSON":
 ## Files Modified
 
 ### Database
-- `/migrations/v2/V202510081612__v2.105.x__Artifact_Extract_Rules_and_Agent_Artifact_Types.sql`
+- `migrations/v2/V202510081612__v2.105.x__Artifact_Extract_Rules_and_Agent_Artifact_Types.sql`
 
-### TypeScript
-- `packages/AI/CorePlus/src/agent-types.ts` - Added payloadArtifactTypeID
-- `packages/AI/CorePlus/src/artifact-extract-rules.ts` - Type definitions (NEW)
-- `packages/AI/CorePlus/src/artifact-extractor.ts` - Utility class (NEW)
-- `packages/AI/CorePlus/src/index.ts` - Export new modules
+### TypeScript - Core Entities Package
+- `packages/MJCoreEntities/src/artifact-extraction/artifact-extract-rules.ts` - Type definitions (NEW)
+- `packages/MJCoreEntities/src/artifact-extraction/artifact-extractor.ts` - Utility class (NEW)
+- `packages/MJCoreEntities/src/custom/ArtifactVersionExtended.ts` - Extended entity class (NEW)
+- `packages/MJCoreEntities/src/index.ts` - Export new modules
+
+### TypeScript - AI CorePlus Package
+- `packages/AI/CorePlus/src/agent-types.ts` - Added payloadArtifactTypeID (MODIFIED)
+- `packages/AI/CorePlus/src/index.ts` - Re-export artifact extraction from core-entities (MODIFIED)
 
 ### Documentation
 - This implementation summary
@@ -453,3 +457,17 @@ Resolved Rules for "Marketing Email JSON":
 - Existing agents work without modification
 - Existing artifact types work without extract rules
 - New functionality is opt-in via configuration
+
+## Architecture Notes
+
+### Package Organization
+- **Artifact extraction utilities** are in `@memberjunction/core-entities` (not AI-specific)
+- **AI CorePlus** re-exports these utilities for convenience
+- **No circular dependencies** - core-entities doesn't depend on AI packages
+- **Proper separation of concerns** - artifacts are general-purpose, not AI-only
+
+### Why This Organization?
+- Artifacts can be used anywhere in the system (forms, dashboards, reports, etc.)
+- Extract rules are a general metadata-driven pattern
+- Keeps AI packages focused on AI-specific functionality
+- Prevents circular dependency issues
