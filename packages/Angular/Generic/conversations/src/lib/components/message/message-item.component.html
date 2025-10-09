@@ -46,24 +46,15 @@
           }
         </div>
 
-        <!-- Artifact Card (Claude.ai Style) -->
-        @if (hasArtifact) {
-          <div class="artifact-card" (click)="onArtifactClick()">
-            <div class="artifact-card-header">
-              <div class="artifact-card-icon">
-                <i class="fas fa-file-code"></i>
-              </div>
-              <div class="artifact-card-content">
-                <div class="artifact-card-label">
-                  Generated Artifact
-                  @if (artifactVersionNumber) {
-                    <span class="artifact-version-badge">v{{artifactVersionNumber}}</span>
-                  }
-                </div>
-                <div class="artifact-card-description">Click to view the generated content</div>
-              </div>
-            </div>
-          </div>
+        <!-- Inline Artifact Component -->
+        @if (hasArtifact && artifact && artifactVersion) {
+          <mj-inline-artifact
+            [artifactId]="artifact.ID"
+            [artifact]="artifact"
+            [artifactVersion]="artifactVersion"
+            [currentUser]="currentUser"
+            (actionPerformed)="onArtifactActionPerformed($event)">
+          </mj-inline-artifact>
         }
       }
 

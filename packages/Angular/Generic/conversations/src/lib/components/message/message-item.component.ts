@@ -8,7 +8,7 @@ import {
   AfterViewInit,
   OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -31,9 +31,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public currentUser!: UserInfo;
   @Input() public allMessages!: ConversationDetailEntity[];
   @Input() public isProcessing: boolean = false;
-  @Input() public artifactId?: string;
-  @Input() public artifactVersionId?: string;
-  @Input() public artifactVersionNumber?: number;
+  @Input() public artifact?: ArtifactEntity;
+  @Input() public artifactVersion?: ArtifactVersionEntity;
   @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
@@ -244,7 +243,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get hasArtifact(): boolean {
-    return !!this.artifactVersionId;
+    return !!this.artifactVersion;
   }
 
   public get formattedGenerationTime(): string | null {
@@ -394,11 +393,24 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public onArtifactClick(): void {
-    if (this.hasArtifact && this.artifactId) {
+    if (this.hasArtifact && this.artifact) {
       this.artifactClicked.emit({
-        artifactId: this.artifactId,
-        versionId: this.artifactVersionId
+        artifactId: this.artifact.ID,
+        versionId: this.artifactVersion?.ID
       });
+    }
+  }
+
+  public onArtifactActionPerformed(event: {action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}): void {
+    // Handle artifact actions from inline-artifact component
+    if (event.action === 'open') {
+      this.artifactClicked.emit({
+        artifactId: event.artifact.ID,
+        versionId: event.version?.ID
+      });
+    } else {
+      // Emit other actions to parent
+      this.artifactActionPerformed.emit({ action: event.action, artifactId: event.artifact.ID });
     }
   }
 

@@ -13,7 +13,7 @@ import {
   ElementRef,
   AfterViewChecked
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
@@ -33,7 +33,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
-  @Input() public artifactMap: Map<string, {artifactId: string; versionId: string; versionNumber: number}> = new Map();
+  @Input() public artifactMap: Map<string, {artifact: ArtifactEntity; version: ArtifactVersionEntity}> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
@@ -158,9 +158,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
           const artifactInfo = this.artifactMap.get(message.ID);
-          instance.artifactId = artifactInfo?.artifactId;
-          instance.artifactVersionId = artifactInfo?.versionId;
-          instance.artifactVersionNumber = artifactInfo?.versionNumber;
+          instance.artifact = artifactInfo?.artifact;
+          instance.artifactVersion = artifactInfo?.version;
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
         } else {
@@ -175,9 +174,8 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
           const artifactInfo = this.artifactMap.get(message.ID);
-          instance.artifactId = artifactInfo?.artifactId;
-          instance.artifactVersionId = artifactInfo?.versionId;
-          instance.artifactVersionNumber = artifactInfo?.versionNumber;
+          instance.artifact = artifactInfo?.artifact;
+          instance.artifactVersion = artifactInfo?.version;
           // Pass agent run from map (loaded once per conversation)
           const agentRun = this.agentRunMap.get(message.ID) || null;
           console.log(`✨ Creating new message ${message.ID} component with agentRun:`, {

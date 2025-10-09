@@ -378,10 +378,12 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
   @Input() artifactId!: string;
   @Input() versionNumber?: number;
   @Input() currentUser!: UserInfo;
-  @Output() actionPerformed = new EventEmitter<{action: string; artifact: ArtifactEntity}>();
+  @Input() artifact?: ArtifactEntity; // Optional - if provided, skips loading
+  @Input() artifactVersion?: ArtifactVersionEntity; // Optional - if provided, skips loading
+  @Output() actionPerformed = new EventEmitter<{action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}>();
 
-  public artifact: ArtifactEntity | null = null;
-  public currentVersion: ArtifactVersionEntity | null = null;
+  public _artifact: ArtifactEntity | null = null;
+  public _currentVersion: ArtifactVersionEntity | null = null;
   public loading = true;
   public error = false;
   public previewLines: string[] = [];
@@ -394,7 +396,25 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
   constructor(private artifactState: ArtifactStateService) {}
 
   async ngOnInit(): Promise<void> {
-    await this.loadArtifact();
+    // If entities are provided, use them directly
+    if (this.artifact && this.artifactVersion) {
+      this._artifact = this.artifact;
+      this._currentVersion = this.artifactVersion;
+      this.generatePreview();
+      this.loading = false;
+    } else {
+      // Otherwise load from database
+      await this.loadArtifact();
+    }
+  }
+
+  // Getters to access the internal properties
+  public get artifactEntity(): ArtifactEntity | null {
+    return this._artifact;
+  }
+
+  public get currentVersion(): ArtifactVersionEntity | null {
+    return this._currentVersion;
   }
 
   ngOnDestroy(): void {
@@ -414,9 +434,9 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
       this.error = false;
 
       // Load artifact
-      this.artifact = await this.artifactState.loadArtifact(this.artifactId, this.currentUser);
+      this._artifact = await this.artifactState.loadArtifact(this.artifactId, this.currentUser);
 
-      if (!this.artifact) {
+      if (!this._artifact) {
         this.error = true;
         return;
       }
@@ -433,13 +453,13 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
   }
 
   private async loadVersionContent(): Promise<void> {
-    if (!this.artifact) return;
+    if (!this._artifact) return;
 
     try {
       const rv = new RunView();
       const filter = this.versionNumber
-        ? `ArtifactID='${this.artifact.ID}' AND VersionNumber=${this.versionNumber}`
-        : `ArtifactID='${this.artifact.ID}'`;
+        ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.versionNumber}`
+        : `ArtifactID='${this._artifact.ID}'`;
 
       const result = await rv.RunView<ArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
@@ -450,7 +470,7 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
       }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        this.currentVersion = result.Results[0];
+        this._currentVersion = result.Results[0];
         this.generatePreview();
       }
     } catch (err) {
@@ -459,12 +479,12 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
   }
 
   private generatePreview(): void {
-    if (!this.currentVersion?.Content) {
+    if (!this._currentVersion?.Content) {
       this.previewLines = [];
       return;
     }
 
-    const lines = this.currentVersion.Content.split('\n');
+    const lines = this._currentVersion.Content.split('\n');
     this.previewLines = lines.slice(0, this.PREVIEW_LINES);
     this.hasMoreContent = lines.length > this.PREVIEW_LINES;
     this.remainingLines = Math.max(0, lines.length - this.PREVIEW_LINES);
@@ -474,42 +494,42 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
    * Get the display name - prefer version-specific name if available, otherwise use artifact name
    */
   public get displayName(): string {
-    if (this.currentVersion?.Name) {
-      return this.currentVersion.Name;
+    if (this._currentVersion?.Name) {
+      return this._currentVersion.Name;
     }
-    return this.artifact?.Name || 'Untitled';
+    return this._artifact?.Name || 'Untitled';
   }
 
   /**
    * Get the display description - prefer version-specific description if available, otherwise use artifact description
    */
   public get displayDescription(): string | null {
-    if (this.currentVersion?.Description) {
-      return this.currentVersion.Description;
+    if (this._currentVersion?.Description) {
+      return this._currentVersion.Description;
     }
-    return this.artifact?.Description || null;
+    return this._artifact?.Description || null;
   }
 
   public get isNew(): boolean {
-    if (!this.artifact) return false;
-    const createdAt = new Date(this.artifact.__mj_CreatedAt);
+    if (!this._artifact) return false;
+    const createdAt = new Date(this._artifact.__mj_CreatedAt);
     const now = new Date();
     const hoursDiff = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
     return hoursDiff < 24;
   }
 
   public get isCodeArtifact(): boolean {
-    if (!this.artifact) return false;
-    const name = this.artifact.Name?.toLowerCase() || '';
+    if (!this._artifact) return false;
+    const name = this._artifact.Name?.toLowerCase() || '';
     const codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.cpp', '.c', '.go', '.rs', '.sql', '.html', '.css', '.scss'];
     return codeExtensions.some(ext => name.endsWith(ext));
   }
 
   public getArtifactIcon(): string {
-    if (!this.artifact) return 'fa-file';
+    if (!this._artifact) return 'fa-file';
 
-    const name = this.artifact.Name?.toLowerCase() || '';
-    const type = this.artifact.Type?.toLowerCase() || '';
+    const name = this._artifact.Name?.toLowerCase() || '';
+    const type = this._artifact.Type?.toLowerCase() || '';
 
     if (type.includes('code') || this.isCodeArtifact) return 'fa-file-code';
     if (type.includes('report')) return 'fa-chart-line';
@@ -522,9 +542,9 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
   }
 
   public getTypeBadgeColor(): string {
-    if (!this.artifact) return '#6B7280';
+    if (!this._artifact) return '#6B7280';
 
-    const type = this.artifact.Type?.toLowerCase() || '';
+    const type = this._artifact.Type?.toLowerCase() || '';
 
     if (type.includes('code')) return '#8B5CF6'; // Purple
     if (type.includes('report')) return '#3B82F6'; // Blue
@@ -539,40 +559,40 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
       event.stopPropagation();
     }
 
-    if (this.artifact) {
-      this.artifactState.openArtifact(this.artifact.ID, this.versionNumber);
-      this.actionPerformed.emit({ action: 'open', artifact: this.artifact });
+    if (this._artifact) {
+      this.artifactState.openArtifact(this._artifact.ID, this.versionNumber);
+      this.actionPerformed.emit({ action: 'open', artifact: this._artifact, version: this._currentVersion || undefined });
     }
   }
 
   public saveToLibrary(event: Event): void {
     event.stopPropagation();
-    if (this.artifact) {
-      this.actionPerformed.emit({ action: 'save', artifact: this.artifact });
+    if (this._artifact) {
+      this.actionPerformed.emit({ action: 'save', artifact: this._artifact, version: this._currentVersion || undefined });
     }
   }
 
   public forkArtifact(event: Event): void {
     event.stopPropagation();
-    if (this.artifact) {
-      this.actionPerformed.emit({ action: 'fork', artifact: this.artifact });
+    if (this._artifact) {
+      this.actionPerformed.emit({ action: 'fork', artifact: this._artifact, version: this._currentVersion || undefined });
     }
   }
 
   public viewHistory(event: Event): void {
     event.stopPropagation();
-    if (this.artifact) {
-      this.artifactState.openArtifact(this.artifact.ID);
+    if (this._artifact) {
+      this.artifactState.openArtifact(this._artifact.ID);
       this.artifactState.setPanelMode('view');
       // Note: Parent component should switch to history tab
-      this.actionPerformed.emit({ action: 'history', artifact: this.artifact });
+      this.actionPerformed.emit({ action: 'history', artifact: this._artifact, version: this._currentVersion || undefined });
     }
   }
 
   public shareArtifact(event: Event): void {
     event.stopPropagation();
-    if (this.artifact) {
-      this.actionPerformed.emit({ action: 'share', artifact: this.artifact });
+    if (this._artifact) {
+      this.actionPerformed.emit({ action: 'share', artifact: this._artifact, version: this._currentVersion || undefined });
     }
   }
 }

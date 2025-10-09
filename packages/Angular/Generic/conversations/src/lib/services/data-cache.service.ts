@@ -131,6 +131,9 @@ export class DataCacheService {
     // Automatically add to cache - user code doesn't need to do anything
     // Note: Detail has no ID yet (not saved), so we can't deduplicate
     // After Save(), the ID will be populated and future getConversationDetail() calls will find it
+
+    detail.UserRating = 1 // TO-DO - temp fix for a BUG - remove this after 2.105.0 makes this field optional again, right now it requires a value even though column is nullable
+
     this.conversationDetails.push(detail);
 
     return detail;
