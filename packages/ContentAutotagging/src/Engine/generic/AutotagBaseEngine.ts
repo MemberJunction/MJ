@@ -1396,7 +1396,7 @@ export class AutotagBaseEngine extends AIEngine {
     private async analyzeImageWithVisionModel(imageBuffer: Buffer, rotation: number): Promise<number> {
         try {
             // Get a vision-capable model
-            const visionModel = AIEngineBase.Instance.Models.find(m => m.ID === 'C478D8CD-9D81-491A-9992-139F45789309');
+            const visionModel = AIEngineBase.Instance.Models.find(m => m.ID === '9604B1A4-3A21-F011-8B3D-7C1E5249773E'); // Let's try with OpenAI
             
             if (!visionModel) {
                 console.warn('No vision model available for orientation detection');
@@ -1442,7 +1442,7 @@ export class AutotagBaseEngine extends AIEngine {
                         },
                         {
                             type: 'image_url' as const,
-                            content: base64Image
+                            content: `data:image/png;base64,${base64Image}`
                         }
                     ]
                 }
@@ -1799,7 +1799,7 @@ export class AutotagBaseEngine extends AIEngine {
                     '-density', '300',               // 300 DPI for high resolution
                     tempPdfPath,                     // Input PDF file
                     '-colorspace', 'Gray',           // Convert to grayscale
-                    '-contrast-stretch', '0.5%x0.5%', // Contrast enhancement
+                    '-contrast-stretch', '0.2%x0.2%', // Contrast enhancement
                     '-quality', '100',               // Maximum PNG quality
                     'png:-'                          // Output PNG to stdout
                 ];

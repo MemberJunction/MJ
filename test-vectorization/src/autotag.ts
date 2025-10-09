@@ -52,15 +52,15 @@ async function main(): Promise<void> {
         // Initialize autotagger
         console.log('🏷️ Initializing autotagger...');
         const connectionString = 'BlobEndpoint=https://mstaautotagstorage.blob.core.windows.net/;QueueEndpoint=https://mstaautotagstorage.queue.core.windows.net/;FileEndpoint=https://mstaautotagstorage.file.core.windows.net/;TableEndpoint=https://mstaautotagstorage.table.core.windows.net/;SharedAccessSignature=sv=2024-11-04&ss=bfqt&srt=sco&sp=rwdlacupiytfx&se=2025-12-31T06:04:13Z&st=2025-09-12T20:49:13Z&spr=https&sig=gwS%2Bjr0i%2FBt0KlTN%2BU1GQAOnEKBLixwatfbtmD6bges%3D';
-        const containerName = 'small-autotag';
+        const containerName = 'autotag-test';
         const autotagger = new AutotagAzureBlob(connectionString, containerName);
 
         // Option 1: Full discovery and processing pipeline
-        // await fullPipelineExample(autotagger, systemUser);
+        await fullPipelineExample(autotagger, systemUser);
         
-        // Option 2: Direct re-tagging of specific items
-        const filter = `ID='363EA74E-234B-495F-9623-DB3DAEC282BE'`
-        await retagItemsByFilter(autotagger, systemUser, filter, true);
+        // // Option 2: Direct re-tagging of specific items
+        // const filter = `ID='363EA74E-234B-495F-9623-DB3DAEC282BE'`
+        // await retagItemsByFilter(autotagger, systemUser, filter, true);
 
         console.log('✅ All processing completed successfully!');
         
