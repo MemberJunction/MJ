@@ -2,18 +2,32 @@ import { LogError, Metadata, RunViewParams } from "@memberjunction/core";
 import { EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
 import { Message } from "@memberjunction/communication-types";
 import { GraphQLDataProvider } from "@memberjunction/graphql-dataprovider";
-import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
-import { CommunicationProviderMessageTypeEntity } from "@memberjunction/core-entities";
- 
+import { CommunicationProviderMessageTypeEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
 
 export class EntityCommunicationsEngineClient extends EntityCommunicationsEngineBase {
     /**
+     * Get the singleton instance of EntityCommunicationsEngineClient
+     */
+    public static override get Instance(): EntityCommunicationsEngineClient {
+        return super.getInstance<EntityCommunicationsEngineClient>();
+    }
+
+    /**
+     * Configure the entity communications engine client.
+     * This method is inherited from EntityCommunicationsEngineBase but needs to be explicitly
+     * exposed to prevent tree-shaking in production builds from removing access to it.
+     */
+    public override async Config(forceRefresh?: boolean, contextUser?: import("@memberjunction/core").UserInfo, provider?: import("@memberjunction/core").IMetadataProvider): Promise<void> {
+        return super.Config(forceRefresh, contextUser, provider);
+    }
+
+    /**
      * Executes a given message request against a view of records for a given entity
-     * @param entityID 
-     * @param runViewParams 
-     * @param providerName 
-     * @param providerMessageTypeName 
-     * @param message 
+     * @param entityID
+     * @param runViewParams
+     * @param providerName
+     * @param providerMessageTypeName
+     * @param message
      */
     public async RunEntityCommunication(params: EntityCommunicationParams): Promise<EntityCommunicationResult> {
         try {
@@ -113,6 +127,17 @@ export class EntityCommunicationsEngineClient extends EntityCommunicationsEngine
           User: template.User,
         };
     }
+}
+
+/**
+ * Stub function to prevent tree-shaking of EntityCommunicationsEngineClient in production builds.
+ * Call this function early in your application initialization (before using the client)
+ * to ensure the class and its inherited Config() method are not removed by the bundler.
+ */
+export function LoadEntityCommunicationsEngineClient(): void {
+    // Reference the class and its Instance/Config to prevent tree-shaking
+    const _instance = EntityCommunicationsEngineClient.Instance;
+    const _config = _instance.Config;
 }
 
 type Scalar = string | number | boolean | null | undefined;

@@ -1,8 +1,7 @@
 import { LogError, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
 import { NunjucksCallback, TemplateExtensionBase } from "./TemplateExtensionBase";
-import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
-import { TemplateContentEntity } from "@memberjunction/core-entities";
+import { TemplateContentEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
 import { TemplateEngineServer } from '../TemplateEngine';
 
 // TODO: Add type defs based on nunjucks classes used for extensions

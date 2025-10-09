@@ -1,8 +1,7 @@
 import { BaseEmbeddings, EmbedTextsResult } from "@memberjunction/ai";
 import { VectorDBBase } from "@memberjunction/ai-vectordb";
 import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { TemplateContentEntity, EntityDocumentEntity } from "@memberjunction/core-entities";
-import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
+import { EntityDocumentEntity, TemplateContentEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
 
 export type VectorizeEntityParams = {
     entityID: string;

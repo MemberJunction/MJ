@@ -1,9 +1,8 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, Metadata, RunView } from '@memberjunction/core';
-import { TemplateContentEntity } from '@memberjunction/core-entities';
+import { TemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { GetReadWriteProvider } from '../util.js';
 

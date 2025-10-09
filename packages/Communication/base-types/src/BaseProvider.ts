@@ -1,7 +1,6 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity } from "@memberjunction/core-entities";
-import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
+import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
 
 /**
  * Information about a single recipient

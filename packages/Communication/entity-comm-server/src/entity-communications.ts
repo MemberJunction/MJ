@@ -1,9 +1,8 @@
 import { CommunicationEngine } from "@memberjunction/communication-engine";
 import { CommunicationProviderEntityExtended, Message, MessageRecipient } from "@memberjunction/communication-types";
 import { EntityInfo, LogStatus, Metadata, RunView, RunViewParams, RunViewResult, UserInfo } from "@memberjunction/core";
-import { ListDetailEntityType, ListEntityType, TemplateParamEntity } from "@memberjunction/core-entities";
+import { ListDetailEntityType, ListEntityType, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
 import { EntityCommunicationMessageTypeExtended, EntityCommunicationParams, EntityCommunicationResult, EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
-import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
 
  
 /**
