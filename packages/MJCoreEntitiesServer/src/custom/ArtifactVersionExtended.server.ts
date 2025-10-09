@@ -116,7 +116,7 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
 
     /**
      * Saves extracted attributes as ArtifactVersionAttribute records
-     * Deletes existing attributes for this version first
+     * Updates existing attributes, creates new ones, and deletes removed ones
      * @param attributes - Extracted attributes to save
      * @protected
      */
@@ -126,39 +126,69 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
         }
 
         const md = new Metadata();
+        const operations: Promise<boolean>[] = [];
 
-        // Delete existing attributes for this version
+        // Load existing attributes for this version
         const rv = new RunView();
-        const existingAttrs = await rv.RunView<ArtifactVersionAttributeEntity>({
+        const existingAttrsResult = await rv.RunView<ArtifactVersionAttributeEntity>({
             EntityName: 'MJ: Artifact Version Attributes',
             ExtraFilter: `ArtifactVersionID='${this.ID}'`,
             ResultType: 'entity_object'
         }, this.ContextCurrentUser);
 
-        if (existingAttrs?.Success && existingAttrs.Results?.length > 0) {
-            for (const attr of existingAttrs.Results) {
-                await attr.Delete();
+        const existingAttrs = existingAttrsResult?.Success ? (existingAttrsResult.Results || []) : [];
+        const existingAttrMap = new Map(existingAttrs.map(attr => [attr.Name, attr]));
+
+        // Serialize attributes for storage
+        const serialized = ArtifactExtractor.SerializeForStorage(attributes);
+
+        // Track which attributes we've processed
+        const processedNames = new Set<string>();
+
+        // Update existing or create new attributes
+        for (const attrData of serialized) {
+            processedNames.add(attrData.name);
+            const existingAttr = existingAttrMap.get(attrData.name);
+
+            // Null value means delete the attribute if it exists
+            if (attrData.value === null || attrData.value === undefined) {
+                if (existingAttr) {
+                    operations.push(existingAttr.Delete());
+                }
+                continue;
+            }
+
+            // Update existing attribute
+            if (existingAttr) {
+                existingAttr.Type = attrData.type;
+                existingAttr.Value = attrData.value;
+                existingAttr.StandardProperty = (attrData.standardProperty as 'name' | 'description' | 'displayMarkdown' | 'displayHtml' | null) || null;
+                operations.push(existingAttr.Save());
+            } else {
+                // Create new attribute
+                const newAttr = await md.GetEntityObject<ArtifactVersionAttributeEntity>(
+                    'MJ: Artifact Version Attributes',
+                    this.ContextCurrentUser
+                );
+                newAttr.NewRecord();
+                newAttr.ArtifactVersionID = this.ID;
+                newAttr.Name = attrData.name;
+                newAttr.Type = attrData.type;
+                newAttr.Value = attrData.value;
+                newAttr.StandardProperty = (attrData.standardProperty as 'name' | 'description' | 'displayMarkdown' | 'displayHtml' | null) || null;
+                operations.push(newAttr.Save());
             }
         }
 
-        // Create new attribute records
-        const serialized = ArtifactExtractor.SerializeForStorage(attributes);
-
-        for (const attrData of serialized) {
-            const attr = await md.GetEntityObject<ArtifactVersionAttributeEntity>(
-                'MJ: Artifact Version Attributes',
-                this.ContextCurrentUser
-            );
-
-            attr.NewRecord();
-            attr.ArtifactVersionID = this.ID;
-            attr.Name = attrData.name;
-            attr.Type = attrData.type;
-            attr.Value = attrData.value;
-            attr.StandardProperty = (attrData.standardProperty as 'name' | 'description' | 'displayMarkdown' | 'displayHtml' | null) || null;
-
-            await attr.Save();
+        // Delete attributes that are no longer in the serialized data
+        for (const [name, attr] of existingAttrMap) {
+            if (!processedNames.has(name)) {
+                operations.push(attr.Delete());
+            }
         }
+
+        // Execute all operations in parallel
+        await Promise.all(operations);
     }
 
     /**

@@ -192,7 +192,12 @@ export class ArtifactExtractor {
                 const extractorFn = new Function('content', extractorCode);
 
                 // Execute the extractor
-                const result = extractorFn(content);
+                let result = extractorFn(content);
+
+                // Handle the case where extractor returns string "null" instead of null
+                if (typeof result === "string" && result.trim().toLowerCase() === "null") {
+                    result = null;
+                }
 
                 clearTimeout(timeoutId);
                 resolve(result);
