@@ -1273,6 +1273,12 @@ if this limit is exceeded.`),
     *   * Failed
     *   * Retry
         * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
+    DefaultArtifactTypeID: z.string().nullable().describe(`
+        * * Field Name: DefaultArtifactTypeID
+        * * Display Name: Default Artifact Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+        * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1284,6 +1290,10 @@ if this limit is exceeded.`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
+    DefaultArtifactType: z.string().nullable().describe(`
+        * * Field Name: DefaultArtifactType
+        * * Display Name: Default Artifact Type
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7637,9 +7647,9 @@ export const AccessControlRuleSchema = z.object({
 export type AccessControlRuleEntityType = z.infer<typeof AccessControlRuleSchema>;
 
 /**
- * zod schema definition for the entity MJ: Agent Artifact Types
+ * zod schema definition for the entity MJ: AI Agent Artifact Types
  */
-export const AgentArtifactTypeSchema = z.object({
+export const AIAgentArtifactTypeSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
         * * Display Name: ID
@@ -7682,7 +7692,7 @@ export const AgentArtifactTypeSchema = z.object({
         * * SQL Data Type: nvarchar(100)`),
 });
 
-export type AgentArtifactTypeEntityType = z.infer<typeof AgentArtifactTypeSchema>;
+export type AIAgentArtifactTypeEntityType = z.infer<typeof AIAgentArtifactTypeSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Agent Prompts
@@ -18423,6 +18433,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DefaultArtifactTypeID
+    * * Display Name: Default Artifact Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+    * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
+    */
+    get DefaultArtifactTypeID(): string | null {
+        return this.Get('DefaultArtifactTypeID');
+    }
+    set DefaultArtifactTypeID(value: string | null) {
+        this.Set('DefaultArtifactTypeID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -18447,6 +18471,15 @@ if this limit is exceeded.
     */
     get Type(): string | null {
         return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: DefaultArtifactType
+    * * Display Name: Default Artifact Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DefaultArtifactType(): string | null {
+        return this.Get('DefaultArtifactType');
     }
 }
 
@@ -34934,26 +34967,26 @@ export class AccessControlRuleEntity extends BaseEntity<AccessControlRuleEntityT
 
 
 /**
- * MJ: Agent Artifact Types - strongly typed entity sub-class
+ * MJ: AI Agent Artifact Types - strongly typed entity sub-class
  * * Schema: __mj
- * * Base Table: AgentArtifactType
- * * Base View: vwAgentArtifactTypes
+ * * Base Table: AIAgentArtifactType
+ * * Base View: vwAIAgentArtifactTypes
  * * @description Junction table linking AI Agents to the artifact types they can produce. An agent can produce zero to many artifact types.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
  * @public
  */
-@RegisterClass(BaseEntity, 'MJ: Agent Artifact Types')
-export class AgentArtifactTypeEntity extends BaseEntity<AgentArtifactTypeEntityType> {
+@RegisterClass(BaseEntity, 'MJ: AI Agent Artifact Types')
+export class AIAgentArtifactTypeEntity extends BaseEntity<AIAgentArtifactTypeEntityType> {
     /**
-    * Loads the MJ: Agent Artifact Types record from the database
-    * @param ID: string - primary key value to load the MJ: Agent Artifact Types record.
+    * Loads the MJ: AI Agent Artifact Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Artifact Types record.
     * @param EntityRelationshipsToLoad - (optional) the relationships to load
     * @returns {Promise<boolean>} - true if successful, false otherwise
     * @public
     * @async
-    * @memberof AgentArtifactTypeEntity
+    * @memberof AIAgentArtifactTypeEntity
     * @method
     * @override
     */

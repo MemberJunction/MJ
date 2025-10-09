@@ -131,7 +131,7 @@ import { ListCategoryFormComponent, LoadListCategoryFormComponent } from "./Enti
 import { ListDetailFormComponent, LoadListDetailFormComponent } from "./Entities/ListDetail/listdetail.form.component";
 import { ListFormComponent, LoadListFormComponent } from "./Entities/List/list.form.component";
 import { AccessControlRuleFormComponent, LoadAccessControlRuleFormComponent } from "./Entities/AccessControlRule/accesscontrolrule.form.component";
-import { AgentArtifactTypeFormComponent, LoadAgentArtifactTypeFormComponent } from "./Entities/AgentArtifactType/agentartifacttype.form.component";
+import { AIAgentArtifactTypeFormComponent, LoadAIAgentArtifactTypeFormComponent } from "./Entities/AIAgentArtifactType/aiagentartifacttype.form.component";
 import { AIAgentPromptFormComponent, LoadAIAgentPromptFormComponent } from "./Entities/AIAgentPrompt/aiagentprompt.form.component";
 import { AIAgentRelationshipFormComponent, LoadAIAgentRelationshipFormComponent } from "./Entities/AIAgentRelationship/aiagentrelationship.form.component";
 import { AIAgentRunStepFormComponent, LoadAIAgentRunStepFormComponent } from "./Entities/AIAgentRunStep/aiagentrunstep.form.component";
@@ -346,7 +346,7 @@ import { ListCategoryDetailsComponent, LoadListCategoryDetailsComponent } from "
 import { ListDetailDetailsComponent, LoadListDetailDetailsComponent } from "./Entities/ListDetail/sections/details.component"
 import { ListDetailsComponent, LoadListDetailsComponent } from "./Entities/List/sections/details.component"
 import { AccessControlRuleDetailsComponent, LoadAccessControlRuleDetailsComponent } from "./Entities/AccessControlRule/sections/details.component"
-import { AgentArtifactTypeDetailsComponent, LoadAgentArtifactTypeDetailsComponent } from "./Entities/AgentArtifactType/sections/details.component"
+import { AIAgentArtifactTypeDetailsComponent, LoadAIAgentArtifactTypeDetailsComponent } from "./Entities/AIAgentArtifactType/sections/details.component"
 import { AIAgentPromptDetailsComponent, LoadAIAgentPromptDetailsComponent } from "./Entities/AIAgentPrompt/sections/details.component"
 import { AIAgentRelationshipDetailsComponent, LoadAIAgentRelationshipDetailsComponent } from "./Entities/AIAgentRelationship/sections/details.component"
 import { AIAgentRunStepDetailsComponent, LoadAIAgentRunStepDetailsComponent } from "./Entities/AIAgentRunStep/sections/details.component"
@@ -689,7 +689,7 @@ declarations: [
     ListDetailFormComponent,
     ListFormComponent,
     AccessControlRuleFormComponent,
-    AgentArtifactTypeFormComponent,
+    AIAgentArtifactTypeFormComponent,
     AIAgentPromptFormComponent,
     AIAgentRelationshipFormComponent,
     AIAgentRunStepFormComponent,
@@ -1185,7 +1185,7 @@ export class GeneratedForms_SubModule_15 { }
 
 @NgModule({
 declarations: [
-    AgentArtifactTypeDetailsComponent,
+    AIAgentArtifactTypeDetailsComponent,
     AIAgentPromptDetailsComponent,
     AIAgentRelationshipDetailsComponent,
     AIAgentRunStepDetailsComponent,
@@ -1577,7 +1577,7 @@ export function LoadCoreGeneratedForms() {
     LoadListDetailFormComponent();
     LoadListFormComponent();
     LoadAccessControlRuleFormComponent();
-    LoadAgentArtifactTypeFormComponent();
+    LoadAIAgentArtifactTypeFormComponent();
     LoadAIAgentPromptFormComponent();
     LoadAIAgentRelationshipFormComponent();
     LoadAIAgentRunStepFormComponent();
@@ -1792,7 +1792,7 @@ export function LoadCoreGeneratedForms() {
     LoadListDetailDetailsComponent();
     LoadListDetailsComponent();
     LoadAccessControlRuleDetailsComponent();
-    LoadAgentArtifactTypeDetailsComponent();
+    LoadAIAgentArtifactTypeDetailsComponent();
     LoadAIAgentPromptDetailsComponent();
     LoadAIAgentRelationshipDetailsComponent();
     LoadAIAgentRunStepDetailsComponent();

@@ -1,11 +1,11 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { AgentArtifactTypeEntity } from '@memberjunction/core-entities';
+import { AIAgentArtifactTypeEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'MJ: Agent Artifact Types.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: AI Agent Artifact Types.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-agentartifacttype-form-details',
+    selector: 'gen-aiagentartifacttype-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
@@ -67,12 +67,12 @@ import { AgentArtifactTypeEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class AgentArtifactTypeDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: AgentArtifactTypeEntity;
+export class AIAgentArtifactTypeDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: AIAgentArtifactTypeEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadAgentArtifactTypeDetailsComponent() {
+export function LoadAIAgentArtifactTypeDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       

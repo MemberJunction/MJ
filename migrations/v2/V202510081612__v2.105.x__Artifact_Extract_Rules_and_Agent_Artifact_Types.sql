@@ -30,17 +30,26 @@ ADD ExtractRules NVARCHAR(MAX) NULL;
 -- PART 2: Create AgentArtifactType junction table
 -- =====================================================================================
 
-CREATE TABLE ${flyway:defaultSchema}.AgentArtifactType (
-    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_AgentArtifactType_ID DEFAULT (newsequentialid()),
+ALTER TABLE ${flyway:defaultSchema}.AIAgent
+ADD DefaultArtifactTypeID UNIQUEIDENTIFIER NULL;
+
+-- Add foreign key constraint for DefaultArtifactTypeID
+ALTER TABLE ${flyway:defaultSchema}.AIAgent
+ADD CONSTRAINT FK_AIAgent_DefaultArtifactType FOREIGN KEY (DefaultArtifactTypeID)
+    REFERENCES ${flyway:defaultSchema}.ArtifactType(ID);
+
+
+CREATE TABLE ${flyway:defaultSchema}.AIAgentArtifactType (
+    ID UNIQUEIDENTIFIER NOT NULL CONSTRAINT DF_AIAgentArtifactType_ID DEFAULT (newsequentialid()),
     AgentID UNIQUEIDENTIFIER NOT NULL,
     ArtifactTypeID UNIQUEIDENTIFIER NOT NULL,
     Sequence INT NULL, -- For ordering multiple artifact types per agent
-    CONSTRAINT PK_AgentArtifactType PRIMARY KEY (ID),
-    CONSTRAINT FK_AgentArtifactType_Agent FOREIGN KEY (AgentID)
+    CONSTRAINT PK_AIAgentArtifactType PRIMARY KEY (ID),
+    CONSTRAINT FK_AIAgentArtifactType_Agent FOREIGN KEY (AgentID)
         REFERENCES ${flyway:defaultSchema}.AIAgent(ID),
-    CONSTRAINT FK_AgentArtifactType_ArtifactType FOREIGN KEY (ArtifactTypeID)
+    CONSTRAINT FK_AIAgentArtifactType_ArtifactType FOREIGN KEY (ArtifactTypeID)
         REFERENCES ${flyway:defaultSchema}.ArtifactType(ID),
-    CONSTRAINT UQ_AgentArtifactType_Agent_ArtifactType UNIQUE (AgentID, ArtifactTypeID)
+    CONSTRAINT UQ_AIAgentArtifactType_Agent_ArtifactType UNIQUE (AgentID, ArtifactTypeID)
 );
 
 -- =====================================================================================
@@ -74,6 +83,15 @@ CREATE TABLE ${flyway:defaultSchema}.ArtifactVersionAttribute (
 -- Extended Property Descriptions
 -- =====================================================================================
 
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.',
+    @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
+    @level1type = N'TABLE', @level1name = 'AIAgent',
+    @level2type = N'COLUMN', @level2name = 'DefaultArtifactTypeID';
+
+
+
 -- ArtifactType.ParentID
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -95,27 +113,27 @@ EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Junction table linking AI Agents to the artifact types they can produce. An agent can produce zero to many artifact types.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'AgentArtifactType';
+    @level1type = N'TABLE', @level1name = 'AIAgentArtifactType';
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'AI Agent that can produce this artifact type',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'AgentArtifactType',
+    @level1type = N'TABLE', @level1name = 'AIAgentArtifactType',
     @level2type = N'COLUMN', @level2name = 'AgentID';
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Artifact type that this agent can produce',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'AgentArtifactType',
+    @level1type = N'TABLE', @level1name = 'AIAgentArtifactType',
     @level2type = N'COLUMN', @level2name = 'ArtifactTypeID';
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
     @value = N'Optional sequence for ordering multiple artifact types for an agent',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = 'AgentArtifactType',
+    @level1type = N'TABLE', @level1name = 'AIAgentArtifactType',
     @level2type = N'COLUMN', @level2name = 'Sequence';
 
 -- ArtifactVersion.Name
@@ -216,8 +234,8 @@ EXEC sp_addextendedproperty
 
 
 
--- CODE GEN RUN
-/* SQL generated to create new entity MJ: Agent Artifact Types */
+-- CODE GEN RUN 
+/* SQL generated to create new entity MJ: AI Agent Artifact Types */
 
       INSERT INTO [${flyway:defaultSchema}].Entity (
          ID,
@@ -240,13 +258,13 @@ EXEC sp_addextendedproperty
          , UserViewMaxRows
       )
       VALUES (
-         'ae65a416-5173-486b-8c26-80ec3320d2ee',
-         'MJ: Agent Artifact Types',
-         'Agent Artifact Types',
+         '9e05b993-96a3-4e96-be9b-60c644d575cf',
+         'MJ: AI Agent Artifact Types',
+         'AI Agent Artifact Types',
          NULL,
          NULL,
-         'AgentArtifactType',
-         'vwAgentArtifactTypes',
+         'AIAgentArtifactType',
+         'vwAIAgentArtifactTypes',
          '${flyway:defaultSchema}',
          1,
          0
@@ -261,25 +279,25 @@ EXEC sp_addextendedproperty
       )
    
 
-/* SQL generated to add new entity MJ: Agent Artifact Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+/* SQL generated to add new entity MJ: AI Agent Artifact Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'ae65a416-5173-486b-8c26-80ec3320d2ee', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9e05b993-96a3-4e96-be9b-60c644d575cf', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 
-/* SQL generated to add new permission for entity MJ: Agent Artifact Types for role UI */
+/* SQL generated to add new permission for entity MJ: AI Agent Artifact Types for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('ae65a416-5173-486b-8c26-80ec3320d2ee', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+                                                   ('9e05b993-96a3-4e96-be9b-60c644d575cf', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 
-/* SQL generated to add new permission for entity MJ: Agent Artifact Types for role Developer */
+/* SQL generated to add new permission for entity MJ: AI Agent Artifact Types for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('ae65a416-5173-486b-8c26-80ec3320d2ee', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('9e05b993-96a3-4e96-be9b-60c644d575cf', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 
-/* SQL generated to add new permission for entity MJ: Agent Artifact Types for role Integration */
+/* SQL generated to add new permission for entity MJ: AI Agent Artifact Types for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('ae65a416-5173-486b-8c26-80ec3320d2ee', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('9e05b993-96a3-4e96-be9b-60c644d575cf', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL generated to create new entity MJ: Artifact Version Attributes */
 
@@ -304,7 +322,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
          , UserViewMaxRows
       )
       VALUES (
-         'fe6f3995-2ebd-4ae0-a4dd-939a21c4baca',
+         '5d4bc8d7-ab3f-444e-b85a-fc89297887b2',
          'MJ: Artifact Version Attributes',
          'Artifact Version Attributes',
          NULL,
@@ -328,28 +346,28 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
 /* SQL generated to add new entity MJ: Artifact Version Attributes to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'fe6f3995-2ebd-4ae0-a4dd-939a21c4baca', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '5d4bc8d7-ab3f-444e-b85a-fc89297887b2', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 
 /* SQL generated to add new permission for entity MJ: Artifact Version Attributes for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('fe6f3995-2ebd-4ae0-a4dd-939a21c4baca', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+                                                   ('5d4bc8d7-ab3f-444e-b85a-fc89297887b2', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 
 /* SQL generated to add new permission for entity MJ: Artifact Version Attributes for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('fe6f3995-2ebd-4ae0-a4dd-939a21c4baca', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('5d4bc8d7-ab3f-444e-b85a-fc89297887b2', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 
 /* SQL generated to add new permission for entity MJ: Artifact Version Attributes for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('fe6f3995-2ebd-4ae0-a4dd-939a21c4baca', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('5d4bc8d7-ab3f-444e-b85a-fc89297887b2', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
-/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AgentArtifactType */
-ALTER TABLE [${flyway:defaultSchema}].[AgentArtifactType] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+/* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.AIAgentArtifactType */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentArtifactType] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
 
-/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AgentArtifactType */
-ALTER TABLE [${flyway:defaultSchema}].[AgentArtifactType] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
+/* SQL text to add special date field __mj_UpdatedAt to entity ${flyway:defaultSchema}.AIAgentArtifactType */
+ALTER TABLE [${flyway:defaultSchema}].[AIAgentArtifactType] ADD __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ArtifactVersionAttribute */
 ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
@@ -361,8 +379,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '17abd11a-56f8-4bf5-bc3d-aacd729bc187'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = 'ID')
+         WHERE ID = 'f58ea638-ce95-4d2a-9095-9909149b83c7'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'DefaultArtifactTypeID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -395,8 +413,73 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            '17abd11a-56f8-4bf5-bc3d-aacd729bc187',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            'f58ea638-ce95-4d2a-9095-9909149b83c7',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
+            100078,
+            'DefaultArtifactTypeID',
+            'Default Artifact Type ID',
+            'Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            '91797885-7128-4B71-8C4B-81C5FEE24F38',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'f2737af4-09b8-4d72-84a0-39ae1600bef7'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = 'ID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'f2737af4-09b8-4d72-84a0-39ae1600bef7',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100001,
             'ID',
             'ID',
@@ -426,8 +509,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '676718ba-263b-4bc7-9ad3-162c8514fdd3'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = 'AgentID')
+         WHERE ID = '16db9e63-3a14-4c12-85ef-8ffc777ca031'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = 'AgentID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -460,8 +543,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            '676718ba-263b-4bc7-9ad3-162c8514fdd3',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            '16db9e63-3a14-4c12-85ef-8ffc777ca031',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100002,
             'AgentID',
             'Agent ID',
@@ -491,8 +574,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'd0d4df2e-1447-41e2-8d62-976022957209'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = 'ArtifactTypeID')
+         WHERE ID = '6e49dcd8-d78e-43ef-921f-0b7135edadf7'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = 'ArtifactTypeID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -525,8 +608,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            'd0d4df2e-1447-41e2-8d62-976022957209',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            '6e49dcd8-d78e-43ef-921f-0b7135edadf7',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100003,
             'ArtifactTypeID',
             'Artifact Type ID',
@@ -556,8 +639,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '9469d0b2-9401-4c3b-af0f-c2700e12906d'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = 'Sequence')
+         WHERE ID = 'c5176c15-e4c1-4b22-a644-e141adacfe38'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = 'Sequence')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -590,8 +673,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            '9469d0b2-9401-4c3b-af0f-c2700e12906d',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            'c5176c15-e4c1-4b22-a644-e141adacfe38',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100004,
             'Sequence',
             'Sequence',
@@ -621,8 +704,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '2dd47030-e982-49f0-abc4-d5c78ebcbd84'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = '__mj_CreatedAt')
+         WHERE ID = 'e787dcef-baa7-4c4d-83e4-340cb3c8a132'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = '__mj_CreatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -655,8 +738,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            '2dd47030-e982-49f0-abc4-d5c78ebcbd84',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            'e787dcef-baa7-4c4d-83e4-340cb3c8a132',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100005,
             '__mj_CreatedAt',
             'Created At',
@@ -686,8 +769,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '71c1724d-846d-4990-ba6d-7e2d7c029532'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = '__mj_UpdatedAt')
+         WHERE ID = 'd7ef7f8c-db02-4e75-aba8-77f418684230'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = '__mj_UpdatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -720,8 +803,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            '71c1724d-846d-4990-ba6d-7e2d7c029532',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            'd7ef7f8c-db02-4e75-aba8-77f418684230',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100006,
             '__mj_UpdatedAt',
             'Updated At',
@@ -751,7 +834,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '867c810b-837c-4cd1-b93e-39783033859b'  OR 
+         WHERE ID = '02b6383f-bae6-465c-bbb4-652e6f75a74c'  OR 
                (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'ParentID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -785,7 +868,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            '867c810b-837c-4cd1-b93e-39783033859b',
+            '02b6383f-bae6-465c-bbb4-652e6f75a74c',
             '91797885-7128-4B71-8C4B-81C5FEE24F38', -- Entity: MJ: Artifact Types
             100015,
             'ParentID',
@@ -816,7 +899,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'c4252e88-4f09-445b-aefc-4eca96d94c10'  OR 
+         WHERE ID = '6cace3bf-bdf2-4443-9d2c-e28e4fe4e489'  OR 
                (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'ExtractRules')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -850,7 +933,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            'c4252e88-4f09-445b-aefc-4eca96d94c10',
+            '6cace3bf-bdf2-4443-9d2c-e28e4fe4e489',
             '91797885-7128-4B71-8C4B-81C5FEE24F38', -- Entity: MJ: Artifact Types
             100016,
             'ExtractRules',
@@ -881,527 +964,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '3196ba7d-1ef9-4e8f-95b7-d6b489c377b6'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = 'ID')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '3196ba7d-1ef9-4e8f-95b7-d6b489c377b6',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100001,
-            'ID',
-            'ID',
-            NULL,
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'newsequentialid()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            1,
-            0,
-            1,
-            1,
-            1,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '50c82d4b-8e08-4f37-a29a-eab3ad78d0bf'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = 'ArtifactVersionID')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '50c82d4b-8e08-4f37-a29a-eab3ad78d0bf',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100002,
-            'ArtifactVersionID',
-            'Artifact Version ID',
-            'The artifact version this attribute belongs to',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            1,
-            0,
-            'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            1,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '475d0956-93a3-4cbc-b840-7bd3f9fa0986'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = 'Name')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '475d0956-93a3-4cbc-b840-7bd3f9fa0986',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100003,
-            'Name',
-            'Name',
-            'Name of the extracted attribute (matches ExtractRule.name)',
-            'nvarchar',
-            510,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            1,
-            1,
-            0,
-            1,
-            0,
-            1,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '7c46f986-5725-4894-b389-a639239c3e2f'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = 'Type')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '7c46f986-5725-4894-b389-a639239c3e2f',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100004,
-            'Type',
-            'Type',
-            'TypeScript type definition of the value (e.g., ''string'', ''number'', ''Date'', ''Array<{x: number, y: string}>'')',
-            'nvarchar',
-            1000,
-            0,
-            0,
-            0,
-            'null',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'c4fff1b4-a7c1-4a5a-95d7-2604dc446f70'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = 'Value')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'c4fff1b4-a7c1-4a5a-95d7-2604dc446f70',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100005,
-            'Value',
-            'Value',
-            'JSON-serialized extracted value',
-            'nvarchar',
-            -1,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '32df7112-97ce-4ccc-9620-2faab6bca3d4'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = 'StandardProperty')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '32df7112-97ce-4ccc-9620-2faab6bca3d4',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100006,
-            'StandardProperty',
-            'Standard Property',
-            'Maps this attribute to a standard property for UI rendering: ''name'', ''description'', ''displayMarkdown'', ''displayHtml'', or NULL for custom attributes',
-            'nvarchar',
-            100,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            1,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '624ad08a-959b-4ad6-85ac-06ab539cc8fc'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = '__mj_CreatedAt')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '624ad08a-959b-4ad6-85ac-06ab539cc8fc',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100007,
-            '__mj_CreatedAt',
-            'Created At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '79bb39b7-ac46-4238-96bc-eb44af801d9b'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = '__mj_UpdatedAt')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            '79bb39b7-ac46-4238-96bc-eb44af801d9b',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
-            100008,
-            '__mj_UpdatedAt',
-            'Updated At',
-            NULL,
-            'datetimeoffset',
-            10,
-            34,
-            7,
-            0,
-            'getutcdate()',
-            0,
-            0,
-            0,
-            NULL,
-            NULL,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '48176db2-9c31-4c10-8397-8ae3265efe58'  OR 
+         WHERE ID = 'c8da4933-f812-48b2-a445-e49413076b6b'  OR 
                (EntityID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01' AND Name = 'Name')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1435,7 +998,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            '48176db2-9c31-4c10-8397-8ae3265efe58',
+            'c8da4933-f812-48b2-a445-e49413076b6b',
             'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', -- Entity: MJ: Artifact Versions
             100023,
             'Name',
@@ -1466,7 +1029,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'e5374856-2add-4af0-b63c-dbd15390e368'  OR 
+         WHERE ID = '96e57b30-5efd-4612-a28e-16ab359864ea'  OR 
                (EntityID = 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01' AND Name = 'Description')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -1500,7 +1063,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
          VALUES
          (
-            'e5374856-2add-4af0-b63c-dbd15390e368',
+            '96e57b30-5efd-4612-a28e-16ab359864ea',
             'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', -- Entity: MJ: Artifact Versions
             100024,
             'Description',
@@ -1527,52 +1090,572 @@ ALTER TABLE [${flyway:defaultSchema}].[ArtifactVersionAttribute] ADD __mj_Update
          )
       END
 
-/* SQL text to delete entity field value ID 625A433E-F36B-1410-8DC9-00021F8B792E */
-DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='625A433E-F36B-1410-8DC9-00021F8B792E'
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '846ecc90-cc37-4bd8-9005-48c5c0422f82'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = 'ID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '846ecc90-cc37-4bd8-9005-48c5c0422f82',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100001,
+            'ID',
+            'ID',
+            NULL,
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'newsequentialid()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            1,
+            0,
+            1,
+            1,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = 'aa6a1211-4fb0-4942-9952-6cf444aa2c9c'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = 'ArtifactVersionID')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            'aa6a1211-4fb0-4942-9952-6cf444aa2c9c',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100002,
+            'ArtifactVersionID',
+            'Artifact Version ID',
+            'The artifact version this attribute belongs to',
+            'uniqueidentifier',
+            16,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01',
+            'ID',
+            0,
+            0,
+            1,
+            0,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '6c4ba62e-2e1f-4c23-933f-2c565d9f0db6'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = 'Name')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '6c4ba62e-2e1f-4c23-933f-2c565d9f0db6',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100003,
+            'Name',
+            'Name',
+            'Name of the extracted attribute (matches ExtractRule.name)',
+            'nvarchar',
+            510,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            1,
+            1,
+            0,
+            1,
+            0,
+            1,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '8d71c3ae-ecc3-4b90-9664-ca1c0abdf926'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = 'Type')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '8d71c3ae-ecc3-4b90-9664-ca1c0abdf926',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100004,
+            'Type',
+            'Type',
+            'TypeScript type definition of the value (e.g., ''string'', ''number'', ''Date'', ''Array<{x: number, y: string}>'')',
+            'nvarchar',
+            1000,
+            0,
+            0,
+            0,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '9604e1ae-6581-41c7-ac6a-5732465fda79'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = 'Value')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '9604e1ae-6581-41c7-ac6a-5732465fda79',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100005,
+            'Value',
+            'Value',
+            'JSON-serialized extracted value',
+            'nvarchar',
+            -1,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '9a18cb1c-86a9-4d80-b388-c49b2c50edae'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = 'StandardProperty')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '9a18cb1c-86a9-4d80-b388-c49b2c50edae',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100006,
+            'StandardProperty',
+            'Standard Property',
+            'Maps this attribute to a standard property for UI rendering: ''name'', ''description'', ''displayMarkdown'', ''displayHtml'', or NULL for custom attributes',
+            'nvarchar',
+            100,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            1,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '36117514-fe7f-4302-86f0-05b76bdc3d3d'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = '__mj_CreatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '36117514-fe7f-4302-86f0-05b76bdc3d3d',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100007,
+            '__mj_CreatedAt',
+            'Created At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '88437ba7-3546-43de-b18d-493d5833b3a3'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = '__mj_UpdatedAt')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '88437ba7-3546-43de-b18d-493d5833b3a3',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
+            100008,
+            '__mj_UpdatedAt',
+            'Updated At',
+            NULL,
+            'datetimeoffset',
+            10,
+            34,
+            7,
+            0,
+            'getutcdate()',
+            0,
+            0,
+            0,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('9A18CB1C-86A9-4D80-B388-C49B2C50EDAE', 1, 'name', 'name')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('9A18CB1C-86A9-4D80-B388-C49B2C50EDAE', 2, 'description', 'description')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('9A18CB1C-86A9-4D80-B388-C49B2C50EDAE', 3, 'displayMarkdown', 'displayMarkdown')
+
+/* SQL text to insert entity field values */
+INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
+                                       (EntityFieldID, Sequence, Value, Code)
+                                    VALUES
+                                       ('9A18CB1C-86A9-4D80-B388-C49B2C50EDAE', 4, 'displayHtml', 'displayHtml')
+
+/* SQL text to update ValueListType for entity field ID 9A18CB1C-86A9-4D80-B388-C49B2C50EDAE */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='9A18CB1C-86A9-4D80-B388-C49B2C50EDAE'
+
+/* SQL text to delete entity field value ID C1C2433E-F36B-1410-8DCA-00021F8B792E */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='C1C2433E-F36B-1410-8DCA-00021F8B792E'
 
 /* SQL text to update entity field value sequence */
-UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='AC5B433E-F36B-1410-8DC9-00021F8B792E'
+UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='49C3433E-F36B-1410-8DCA-00021F8B792E'
 
-/* SQL text to insert entity field values */
-INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
-                                    VALUES
-                                       ('32DF7112-97CE-4CCC-9620-2FAAB6BCA3D4', 1, 'name', 'name')
-
-/* SQL text to insert entity field values */
-INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
-                                    VALUES
-                                       ('32DF7112-97CE-4CCC-9620-2FAAB6BCA3D4', 2, 'description', 'description')
-
-/* SQL text to insert entity field values */
-INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
-                                    VALUES
-                                       ('32DF7112-97CE-4CCC-9620-2FAAB6BCA3D4', 3, 'displayMarkdown', 'displayMarkdown')
-
-/* SQL text to insert entity field values */
-INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
-                                    VALUES
-                                       ('32DF7112-97CE-4CCC-9620-2FAAB6BCA3D4', 4, 'displayHtml', 'displayHtml')
-
-/* SQL text to update ValueListType for entity field ID 32DF7112-97CE-4CCC-9620-2FAAB6BCA3D4 */
-UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='32DF7112-97CE-4CCC-9620-2FAAB6BCA3D4'
-
-/* SQL text to delete entity field value ID 6C5A433E-F36B-1410-8DC9-00021F8B792E */
-DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='6C5A433E-F36B-1410-8DC9-00021F8B792E'
+/* SQL text to delete entity field value ID C6C2433E-F36B-1410-8DCA-00021F8B792E */
+DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='C6C2433E-F36B-1410-8DCA-00021F8B792E'
 
 /* SQL text to create Entitiy Relationships */
 
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = 'fd869825-d8d2-4fa4-ba78-15c27548976d'
+      WHERE ID = '28228341-0f5d-48b5-bbcc-de88adf0028d'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('fd869825-d8d2-4fa4-ba78-15c27548976d', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', 'AE65A416-5173-486B-8C26-80EC3320D2EE', 'AgentID', 'One To Many', 1, 1, 'MJ: Agent Artifact Types', 1);
+                              VALUES ('28228341-0f5d-48b5-bbcc-de88adf0028d', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '9E05B993-96A3-4E96-BE9B-60C644D575CF', 'AgentID', 'One To Many', 1, 1, 'MJ: AI Agent Artifact Types', 1);
    END
                               
 
@@ -1581,21 +1664,21 @@ DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='6C5A433E-F36B-1
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '55a3d700-a2cf-4efb-93a2-c49c9d316cb3'
+      WHERE ID = '15066f60-7896-42e3-aac4-8c8cafef9bf9'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('55a3d700-a2cf-4efb-93a2-c49c9d316cb3', '91797885-7128-4B71-8C4B-81C5FEE24F38', '91797885-7128-4B71-8C4B-81C5FEE24F38', 'ParentID', 'One To Many', 1, 1, 'MJ: Artifact Types', 3);
+                              VALUES ('15066f60-7896-42e3-aac4-8c8cafef9bf9', '91797885-7128-4B71-8C4B-81C5FEE24F38', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', 'DefaultArtifactTypeID', 'One To Many', 1, 1, 'AI Agents', 17);
    END
                               
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '752dfd9a-fca3-4795-bd32-e85e56099d42'
+      WHERE ID = '754016fe-cb38-41e4-8fa4-674125a2dfc2'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('752dfd9a-fca3-4795-bd32-e85e56099d42', '91797885-7128-4B71-8C4B-81C5FEE24F38', 'AE65A416-5173-486B-8C26-80EC3320D2EE', 'ArtifactTypeID', 'One To Many', 1, 1, 'MJ: Agent Artifact Types', 2);
+                              VALUES ('754016fe-cb38-41e4-8fa4-674125a2dfc2', '91797885-7128-4B71-8C4B-81C5FEE24F38', '9E05B993-96A3-4E96-BE9B-60C644D575CF', 'ArtifactTypeID', 'One To Many', 1, 1, 'MJ: AI Agent Artifact Types', 2);
    END
                               
 
@@ -1604,72 +1687,621 @@ DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='6C5A433E-F36B-1
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '1b6db205-d8ab-4efd-b41f-7c9e9b7ce58d'
+      WHERE ID = 'c37e1d16-9fc0-4f2d-bb19-f3b47ff1a286'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('1b6db205-d8ab-4efd-b41f-7c9e9b7ce58d', 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', 'ArtifactVersionID', 'One To Many', 1, 1, 'MJ: Artifact Version Attributes', 1);
+                              VALUES ('c37e1d16-9fc0-4f2d-bb19-f3b47ff1a286', '91797885-7128-4B71-8C4B-81C5FEE24F38', '91797885-7128-4B71-8C4B-81C5FEE24F38', 'ParentID', 'One To Many', 1, 1, 'MJ: Artifact Types', 3);
    END
                               
 
-/* SQL text to update entity field related entity name field map for entity field ID CC54433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = '6d2b20f9-a1ca-445a-9ad1-2277730a05e1'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('6d2b20f9-a1ca-445a-9ad1-2277730a05e1', 'AEB408D2-162A-49AE-9DC2-DBE9A21A3C01', '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', 'ArtifactVersionID', 'One To Many', 1, 1, 'MJ: Artifact Version Attributes', 1);
+   END
+                              
+
+/* Index for Foreign Keys for AIAgent */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key ParentID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ParentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ParentID ON [${flyway:defaultSchema}].[AIAgent] ([ParentID]);
+
+-- Index for foreign key ContextCompressionPromptID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_ContextCompressionPromptID ON [${flyway:defaultSchema}].[AIAgent] ([ContextCompressionPromptID]);
+
+-- Index for foreign key TypeID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_TypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_TypeID ON [${flyway:defaultSchema}].[AIAgent] ([TypeID]);
+
+-- Index for foreign key DefaultArtifactTypeID in table AIAgent
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgent_DefaultArtifactTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgent]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgent_DefaultArtifactTypeID ON [${flyway:defaultSchema}].[AIAgent] ([DefaultArtifactTypeID]);
+
+/* SQL text to update entity field related entity name field map for entity field ID F58EA638-CE95-4D2A-9095-9909149B83C7 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='CC54433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='F58EA638-CE95-4D2A-9095-9909149B83C7',
+         @RelatedEntityNameFieldMap='DefaultArtifactType'
+
+/* Base View SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- BASE VIEW FOR ENTITY:      AI Agents
+-----               SCHEMA:      ${flyway:defaultSchema}
+-----               BASE TABLE:  AIAgent
+-----               PRIMARY KEY: ID
+------------------------------------------------------------
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAIAgents]
+GO
+
+CREATE VIEW [${flyway:defaultSchema}].[vwAIAgents]
+AS
+SELECT
+    a.*,
+    AIAgent_ParentID.[Name] AS [Parent],
+    AIPrompt_ContextCompressionPromptID.[Name] AS [ContextCompressionPrompt],
+    AIAgentType_TypeID.[Name] AS [Type],
+    ArtifactType_DefaultArtifactTypeID.[Name] AS [DefaultArtifactType]
+FROM
+    [${flyway:defaultSchema}].[AIAgent] AS a
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgent] AS AIAgent_ParentID
+  ON
+    [a].[ParentID] = AIAgent_ParentID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIPrompt] AS AIPrompt_ContextCompressionPromptID
+  ON
+    [a].[ContextCompressionPromptID] = AIPrompt_ContextCompressionPromptID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[AIAgentType] AS AIAgentType_TypeID
+  ON
+    [a].[TypeID] = AIAgentType_TypeID.[ID]
+LEFT OUTER JOIN
+    [${flyway:defaultSchema}].[ArtifactType] AS ArtifactType_DefaultArtifactTypeID
+  ON
+    [a].[DefaultArtifactTypeID] = ArtifactType_DefaultArtifactTypeID.[ID]
+GO
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+    
+
+/* Base View Permissions SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: Permissions for vwAIAgents
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgents] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+
+/* spCreate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spCreateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgent]
+    @ID uniqueidentifier = NULL,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX),
+    @PayloadScope nvarchar(MAX),
+    @FinalPayloadValidation nvarchar(MAX),
+    @FinalPayloadValidationMode nvarchar(25),
+    @FinalPayloadValidationMaxRetries int,
+    @MaxCostPerRun decimal(10, 4),
+    @MaxTokensPerRun int,
+    @MaxIterationsPerRun int,
+    @MaxTimePerRun int,
+    @MinExecutionsPerRun int,
+    @MaxExecutionsPerRun int,
+    @StartingPayloadValidation nvarchar(MAX),
+    @StartingPayloadValidationMode nvarchar(25),
+    @DefaultPromptEffortLevel int,
+    @ChatHandlingOption nvarchar(30),
+    @DefaultArtifactTypeID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [ID],
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope],
+                [FinalPayloadValidation],
+                [FinalPayloadValidationMode],
+                [FinalPayloadValidationMaxRetries],
+                [MaxCostPerRun],
+                [MaxTokensPerRun],
+                [MaxIterationsPerRun],
+                [MaxTimePerRun],
+                [MinExecutionsPerRun],
+                [MaxExecutionsPerRun],
+                [StartingPayloadValidation],
+                [StartingPayloadValidationMode],
+                [DefaultPromptEffortLevel],
+                [ChatHandlingOption],
+                [DefaultArtifactTypeID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths,
+                @PayloadScope,
+                @FinalPayloadValidation,
+                @FinalPayloadValidationMode,
+                @FinalPayloadValidationMaxRetries,
+                @MaxCostPerRun,
+                @MaxTokensPerRun,
+                @MaxIterationsPerRun,
+                @MaxTimePerRun,
+                @MinExecutionsPerRun,
+                @MaxExecutionsPerRun,
+                @StartingPayloadValidation,
+                @StartingPayloadValidationMode,
+                @DefaultPromptEffortLevel,
+                @ChatHandlingOption,
+                @DefaultArtifactTypeID
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[AIAgent]
+            (
+                [Name],
+                [Description],
+                [LogoURL],
+                [ParentID],
+                [ExposeAsAction],
+                [ExecutionOrder],
+                [ExecutionMode],
+                [EnableContextCompression],
+                [ContextCompressionMessageThreshold],
+                [ContextCompressionPromptID],
+                [ContextCompressionMessageRetentionCount],
+                [TypeID],
+                [Status],
+                [DriverClass],
+                [IconClass],
+                [ModelSelectionMode],
+                [PayloadDownstreamPaths],
+                [PayloadUpstreamPaths],
+                [PayloadSelfReadPaths],
+                [PayloadSelfWritePaths],
+                [PayloadScope],
+                [FinalPayloadValidation],
+                [FinalPayloadValidationMode],
+                [FinalPayloadValidationMaxRetries],
+                [MaxCostPerRun],
+                [MaxTokensPerRun],
+                [MaxIterationsPerRun],
+                [MaxTimePerRun],
+                [MinExecutionsPerRun],
+                [MaxExecutionsPerRun],
+                [StartingPayloadValidation],
+                [StartingPayloadValidationMode],
+                [DefaultPromptEffortLevel],
+                [ChatHandlingOption],
+                [DefaultArtifactTypeID]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @Name,
+                @Description,
+                @LogoURL,
+                @ParentID,
+                @ExposeAsAction,
+                @ExecutionOrder,
+                @ExecutionMode,
+                @EnableContextCompression,
+                @ContextCompressionMessageThreshold,
+                @ContextCompressionPromptID,
+                @ContextCompressionMessageRetentionCount,
+                @TypeID,
+                @Status,
+                @DriverClass,
+                @IconClass,
+                @ModelSelectionMode,
+                @PayloadDownstreamPaths,
+                @PayloadUpstreamPaths,
+                @PayloadSelfReadPaths,
+                @PayloadSelfWritePaths,
+                @PayloadScope,
+                @FinalPayloadValidation,
+                @FinalPayloadValidationMode,
+                @FinalPayloadValidationMaxRetries,
+                @MaxCostPerRun,
+                @MaxTokensPerRun,
+                @MaxIterationsPerRun,
+                @MaxTimePerRun,
+                @MinExecutionsPerRun,
+                @MaxExecutionsPerRun,
+                @StartingPayloadValidation,
+                @StartingPayloadValidationMode,
+                @DefaultPromptEffortLevel,
+                @ChatHandlingOption,
+                @DefaultArtifactTypeID
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+    
+
+/* spCreate Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spUpdate SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spUpdateAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgent]
+    @ID uniqueidentifier,
+    @Name nvarchar(255),
+    @Description nvarchar(MAX),
+    @LogoURL nvarchar(255),
+    @ParentID uniqueidentifier,
+    @ExposeAsAction bit,
+    @ExecutionOrder int,
+    @ExecutionMode nvarchar(20),
+    @EnableContextCompression bit,
+    @ContextCompressionMessageThreshold int,
+    @ContextCompressionPromptID uniqueidentifier,
+    @ContextCompressionMessageRetentionCount int,
+    @TypeID uniqueidentifier,
+    @Status nvarchar(20),
+    @DriverClass nvarchar(255),
+    @IconClass nvarchar(100),
+    @ModelSelectionMode nvarchar(50),
+    @PayloadDownstreamPaths nvarchar(MAX),
+    @PayloadUpstreamPaths nvarchar(MAX),
+    @PayloadSelfReadPaths nvarchar(MAX),
+    @PayloadSelfWritePaths nvarchar(MAX),
+    @PayloadScope nvarchar(MAX),
+    @FinalPayloadValidation nvarchar(MAX),
+    @FinalPayloadValidationMode nvarchar(25),
+    @FinalPayloadValidationMaxRetries int,
+    @MaxCostPerRun decimal(10, 4),
+    @MaxTokensPerRun int,
+    @MaxIterationsPerRun int,
+    @MaxTimePerRun int,
+    @MinExecutionsPerRun int,
+    @MaxExecutionsPerRun int,
+    @StartingPayloadValidation nvarchar(MAX),
+    @StartingPayloadValidationMode nvarchar(25),
+    @DefaultPromptEffortLevel int,
+    @ChatHandlingOption nvarchar(30),
+    @DefaultArtifactTypeID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        [Name] = @Name,
+        [Description] = @Description,
+        [LogoURL] = @LogoURL,
+        [ParentID] = @ParentID,
+        [ExposeAsAction] = @ExposeAsAction,
+        [ExecutionOrder] = @ExecutionOrder,
+        [ExecutionMode] = @ExecutionMode,
+        [EnableContextCompression] = @EnableContextCompression,
+        [ContextCompressionMessageThreshold] = @ContextCompressionMessageThreshold,
+        [ContextCompressionPromptID] = @ContextCompressionPromptID,
+        [ContextCompressionMessageRetentionCount] = @ContextCompressionMessageRetentionCount,
+        [TypeID] = @TypeID,
+        [Status] = @Status,
+        [DriverClass] = @DriverClass,
+        [IconClass] = @IconClass,
+        [ModelSelectionMode] = @ModelSelectionMode,
+        [PayloadDownstreamPaths] = @PayloadDownstreamPaths,
+        [PayloadUpstreamPaths] = @PayloadUpstreamPaths,
+        [PayloadSelfReadPaths] = @PayloadSelfReadPaths,
+        [PayloadSelfWritePaths] = @PayloadSelfWritePaths,
+        [PayloadScope] = @PayloadScope,
+        [FinalPayloadValidation] = @FinalPayloadValidation,
+        [FinalPayloadValidationMode] = @FinalPayloadValidationMode,
+        [FinalPayloadValidationMaxRetries] = @FinalPayloadValidationMaxRetries,
+        [MaxCostPerRun] = @MaxCostPerRun,
+        [MaxTokensPerRun] = @MaxTokensPerRun,
+        [MaxIterationsPerRun] = @MaxIterationsPerRun,
+        [MaxTimePerRun] = @MaxTimePerRun,
+        [MinExecutionsPerRun] = @MinExecutionsPerRun,
+        [MaxExecutionsPerRun] = @MaxExecutionsPerRun,
+        [StartingPayloadValidation] = @StartingPayloadValidation,
+        [StartingPayloadValidationMode] = @StartingPayloadValidationMode,
+        [DefaultPromptEffortLevel] = @DefaultPromptEffortLevel,
+        [ChatHandlingOption] = @ChatHandlingOption,
+        [DefaultArtifactTypeID] = @DefaultArtifactTypeID
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIAgents] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwAIAgents]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgent table
+------------------------------------------------------------
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgent
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIAgent
+ON [${flyway:defaultSchema}].[AIAgent]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[AIAgent]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[AIAgent] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgent] TO [cdp_Developer], [cdp_Integration]
+
+
+
+/* spDelete SQL for AI Agents */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: AI Agents
+-- Item: spDeleteAIAgent
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR AIAgent
+------------------------------------------------------------
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAIAgent]
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgent]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[AIAgent]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration]
+    
+
+/* spDelete Permissions for AI Agents */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration]
+
+
+
+/* SQL text to update entity field related entity name field map for entity field ID 3CBD433E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3CBD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentItem'
 
-/* SQL text to update entity field related entity name field map for entity field ID E454433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 4EBD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E454433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='4EBD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='Item'
 
-/* SQL text to update entity field related entity name field map for entity field ID 9C54433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 18BD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='9C54433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='18BD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentSource'
 
-/* SQL text to update entity field related entity name field map for entity field ID C053433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 73BC433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='C053433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='73BC433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='Source'
 
-/* SQL text to update entity field related entity name field map for entity field ID 0054433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID A3BC433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='0054433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='A3BC433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentSource'
 
-/* SQL text to update entity field related entity name field map for entity field ID A854433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 21BD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='A854433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='21BD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentType'
 
-/* SQL text to update entity field related entity name field map for entity field ID AC54433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 24BD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='AC54433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='24BD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentSourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID B054433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 27BD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='B054433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='27BD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentFileType'
 
-/* SQL text to update entity field related entity name field map for entity field ID E453433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 8EBC433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E453433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='8EBC433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 5454433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID E2BC433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='5454433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='E2BC433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='AIModel'
 
-/* SQL text to update entity field related entity name field map for entity field ID E853433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 91BC433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E853433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='91BC433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentSourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID EC53433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 94BC433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='EC53433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='94BC433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ContentFileType'
 
 /* Index for Foreign Keys for EntityRelationship */
@@ -2042,70 +2674,70 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityRelationship] TO [cdp_
 
 
 
-/* Index for Foreign Keys for AgentArtifactType */
+/* Index for Foreign Keys for AIAgentArtifactType */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Agent Artifact Types
+-- Entity: MJ: AI Agent Artifact Types
 -- Item: Index for Foreign Keys
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
--- Index for foreign key AgentID in table AgentArtifactType
+-- Index for foreign key AgentID in table AIAgentArtifactType
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AgentArtifactType_AgentID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AgentArtifactType]')
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentArtifactType_AgentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentArtifactType]')
 )
-CREATE INDEX IDX_AUTO_MJ_FKEY_AgentArtifactType_AgentID ON [${flyway:defaultSchema}].[AgentArtifactType] ([AgentID]);
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentArtifactType_AgentID ON [${flyway:defaultSchema}].[AIAgentArtifactType] ([AgentID]);
 
--- Index for foreign key ArtifactTypeID in table AgentArtifactType
+-- Index for foreign key ArtifactTypeID in table AIAgentArtifactType
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_AgentArtifactType_ArtifactTypeID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AgentArtifactType]')
+    WHERE name = 'IDX_AUTO_MJ_FKEY_AIAgentArtifactType_ArtifactTypeID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[AIAgentArtifactType]')
 )
-CREATE INDEX IDX_AUTO_MJ_FKEY_AgentArtifactType_ArtifactTypeID ON [${flyway:defaultSchema}].[AgentArtifactType] ([ArtifactTypeID]);
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentArtifactType_ArtifactTypeID ON [${flyway:defaultSchema}].[AIAgentArtifactType] ([ArtifactTypeID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 676718BA-263B-4BC7-9AD3-162C8514FDD3 */
+/* SQL text to update entity field related entity name field map for entity field ID 16DB9E63-3A14-4C12-85EF-8FFC777CA031 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='676718BA-263B-4BC7-9AD3-162C8514FDD3',
+         @EntityFieldID='16DB9E63-3A14-4C12-85EF-8FFC777CA031',
          @RelatedEntityNameFieldMap='Agent'
 
-/* SQL text to update entity field related entity name field map for entity field ID D0D4DF2E-1447-41E2-8D62-976022957209 */
+/* SQL text to update entity field related entity name field map for entity field ID 6E49DCD8-D78E-43EF-921F-0B7135EDADF7 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='D0D4DF2E-1447-41E2-8D62-976022957209',
+         @EntityFieldID='6E49DCD8-D78E-43EF-921F-0B7135EDADF7',
          @RelatedEntityNameFieldMap='ArtifactType'
 
-/* Base View SQL for MJ: Agent Artifact Types */
+/* Base View SQL for MJ: AI Agent Artifact Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Agent Artifact Types
--- Item: vwAgentArtifactTypes
+-- Entity: MJ: AI Agent Artifact Types
+-- Item: vwAIAgentArtifactTypes
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ BASE VIEW FOR ENTITY:      MJ: Agent Artifact Types
+----- BASE VIEW FOR ENTITY:      MJ: AI Agent Artifact Types
 -----               SCHEMA:      ${flyway:defaultSchema}
------               BASE TABLE:  AgentArtifactType
+-----               BASE TABLE:  AIAgentArtifactType
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAgentArtifactTypes]
+DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAIAgentArtifactTypes]
 GO
 
-CREATE VIEW [${flyway:defaultSchema}].[vwAgentArtifactTypes]
+CREATE VIEW [${flyway:defaultSchema}].[vwAIAgentArtifactTypes]
 AS
 SELECT
     a.*,
     AIAgent_AgentID.[Name] AS [Agent],
     ArtifactType_ArtifactTypeID.[Name] AS [ArtifactType]
 FROM
-    [${flyway:defaultSchema}].[AgentArtifactType] AS a
+    [${flyway:defaultSchema}].[AIAgentArtifactType] AS a
 INNER JOIN
     [${flyway:defaultSchema}].[AIAgent] AS AIAgent_AgentID
   ON
@@ -2115,38 +2747,38 @@ INNER JOIN
   ON
     [a].[ArtifactTypeID] = ArtifactType_ArtifactTypeID.[ID]
 GO
-GRANT SELECT ON [${flyway:defaultSchema}].[vwAgentArtifactTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentArtifactTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
     
 
-/* Base View Permissions SQL for MJ: Agent Artifact Types */
+/* Base View Permissions SQL for MJ: AI Agent Artifact Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Agent Artifact Types
--- Item: Permissions for vwAgentArtifactTypes
+-- Entity: MJ: AI Agent Artifact Types
+-- Item: Permissions for vwAIAgentArtifactTypes
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
-GRANT SELECT ON [${flyway:defaultSchema}].[vwAgentArtifactTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
+GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentArtifactTypes] TO [cdp_UI], [cdp_Developer], [cdp_Integration]
 
-/* spCreate SQL for MJ: Agent Artifact Types */
+/* spCreate SQL for MJ: AI Agent Artifact Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Agent Artifact Types
--- Item: spCreateAgentArtifactType
+-- Entity: MJ: AI Agent Artifact Types
+-- Item: spCreateAIAgentArtifactType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ CREATE PROCEDURE FOR AgentArtifactType
+----- CREATE PROCEDURE FOR AIAgentArtifactType
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAgentArtifactType]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIAgentArtifactType]
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAgentArtifactType]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentArtifactType]
     @ID uniqueidentifier = NULL,
     @AgentID uniqueidentifier,
     @ArtifactTypeID uniqueidentifier,
@@ -2159,7 +2791,7 @@ BEGIN
     IF @ID IS NOT NULL
     BEGIN
         -- User provided a value, use it
-        INSERT INTO [${flyway:defaultSchema}].[AgentArtifactType]
+        INSERT INTO [${flyway:defaultSchema}].[AIAgentArtifactType]
             (
                 [ID],
                 [AgentID],
@@ -2178,7 +2810,7 @@ BEGIN
     ELSE
     BEGIN
         -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
-        INSERT INTO [${flyway:defaultSchema}].[AgentArtifactType]
+        INSERT INTO [${flyway:defaultSchema}].[AIAgentArtifactType]
             (
                 [AgentID],
                 [ArtifactTypeID],
@@ -2193,35 +2825,35 @@ BEGIN
             )
     END
     -- return the new record from the base view, which might have some calculated fields
-    SELECT * FROM [${flyway:defaultSchema}].[vwAgentArtifactTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+    SELECT * FROM [${flyway:defaultSchema}].[vwAIAgentArtifactTypes] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
     
 
-/* spCreate Permissions for MJ: Agent Artifact Types */
+/* spCreate Permissions for MJ: AI Agent Artifact Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
 
 
 
-/* spUpdate SQL for MJ: Agent Artifact Types */
+/* spUpdate SQL for MJ: AI Agent Artifact Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Agent Artifact Types
--- Item: spUpdateAgentArtifactType
+-- Entity: MJ: AI Agent Artifact Types
+-- Item: spUpdateAIAgentArtifactType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ UPDATE PROCEDURE FOR AgentArtifactType
+----- UPDATE PROCEDURE FOR AIAgentArtifactType
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAgentArtifactType]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAIAgentArtifactType]
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAgentArtifactType]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgentArtifactType]
     @ID uniqueidentifier,
     @AgentID uniqueidentifier,
     @ArtifactTypeID uniqueidentifier,
@@ -2230,7 +2862,7 @@ AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[AgentArtifactType]
+        [${flyway:defaultSchema}].[AIAgentArtifactType]
     SET
         [AgentID] = @AgentID,
         [ArtifactTypeID] = @ArtifactTypeID,
@@ -2241,39 +2873,39 @@ BEGIN
     -- Check if the update was successful
     IF @@ROWCOUNT = 0
         -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
-        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAgentArtifactTypes] WHERE 1=0
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwAIAgentArtifactTypes] WHERE 1=0
     ELSE
         -- Return the updated record so the caller can see the updated values and any calculated fields
         SELECT
                                         *
                                     FROM
-                                        [${flyway:defaultSchema}].[vwAgentArtifactTypes]
+                                        [${flyway:defaultSchema}].[vwAIAgentArtifactTypes]
                                     WHERE
                                         [ID] = @ID
                                     
 END
 GO
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
 GO
 
 ------------------------------------------------------------
------ TRIGGER FOR __mj_UpdatedAt field for the AgentArtifactType table
+----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentArtifactType table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAgentArtifactType
+DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgentArtifactType
 GO
-CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAgentArtifactType
-ON [${flyway:defaultSchema}].[AgentArtifactType]
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIAgentArtifactType
+ON [${flyway:defaultSchema}].[AIAgentArtifactType]
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
     UPDATE
-        [${flyway:defaultSchema}].[AgentArtifactType]
+        [${flyway:defaultSchema}].[AIAgentArtifactType]
     SET
         __mj_UpdatedAt = GETUTCDATE()
     FROM
-        [${flyway:defaultSchema}].[AgentArtifactType] AS _organicTable
+        [${flyway:defaultSchema}].[AIAgentArtifactType] AS _organicTable
     INNER JOIN
         INSERTED AS I ON
         _organicTable.[ID] = I.[ID];
@@ -2281,36 +2913,36 @@ END;
 GO
         
 
-/* spUpdate Permissions for MJ: Agent Artifact Types */
+/* spUpdate Permissions for MJ: AI Agent Artifact Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentArtifactType] TO [cdp_Developer], [cdp_Integration]
 
 
 
-/* spDelete SQL for MJ: Agent Artifact Types */
+/* spDelete SQL for MJ: AI Agent Artifact Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
--- Entity: MJ: Agent Artifact Types
--- Item: spDeleteAgentArtifactType
+-- Entity: MJ: AI Agent Artifact Types
+-- Item: spDeleteAIAgentArtifactType
 --
 -- This was generated by the MemberJunction CodeGen tool.
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------
 
 ------------------------------------------------------------
------ DELETE PROCEDURE FOR AgentArtifactType
+----- DELETE PROCEDURE FOR AIAgentArtifactType
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAgentArtifactType]
+DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAIAgentArtifactType]
 GO
 
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAgentArtifactType]
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgentArtifactType]
     @ID uniqueidentifier
 AS
 BEGIN
     SET NOCOUNT ON;
 
     DELETE FROM
-        [${flyway:defaultSchema}].[AgentArtifactType]
+        [${flyway:defaultSchema}].[AIAgentArtifactType]
     WHERE
         [ID] = @ID
 
@@ -2322,12 +2954,12 @@ BEGIN
         SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
 END
 GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAgentArtifactType] TO [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentArtifactType] TO [cdp_Integration]
     
 
-/* spDelete Permissions for MJ: Agent Artifact Types */
+/* spDelete Permissions for MJ: AI Agent Artifact Types */
 
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAgentArtifactType] TO [cdp_Integration]
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgentArtifactType] TO [cdp_Integration]
 
 
 
@@ -2349,9 +2981,9 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ArtifactType_ParentID ON [${flyway:defaultSchema}].[ArtifactType] ([ParentID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 867C810B-837C-4CD1-B93E-39783033859B */
+/* SQL text to update entity field related entity name field map for entity field ID 02B6383F-BAE6-465C-BBB4-652E6F75A74C */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='867C810B-837C-4CD1-B93E-39783033859B',
+         @EntityFieldID='02B6383F-BAE6-465C-BBB4-652E6F75A74C',
          @RelatedEntityNameFieldMap='Parent'
 
 /* Base View SQL for MJ: Artifact Types */
@@ -2612,9 +3244,9 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ArtifactVersionAttribute_ArtifactVersionID ON [${flyway:defaultSchema}].[ArtifactVersionAttribute] ([ArtifactVersionID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 50C82D4B-8E08-4F37-A29A-EAB3AD78D0BF */
+/* SQL text to update entity field related entity name field map for entity field ID AA6A1211-4FB0-4942-9952-6CF444AA2C9C */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='50C82D4B-8E08-4F37-A29A-EAB3AD78D0BF',
+         @EntityFieldID='AA6A1211-4FB0-4942-9952-6CF444AA2C9C',
          @RelatedEntityNameFieldMap='ArtifactVersion'
 
 /* Index for Foreign Keys for ArtifactVersion */
@@ -3204,37 +3836,37 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
          @EntityFieldID='C45DA881-7CD4-424E-8855-C259F531E018',
          @RelatedEntityNameFieldMap='ArtifactVersion'
 
-/* SQL text to update entity field related entity name field map for entity field ID 6755433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 18BE433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='6755433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='18BE433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='User'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3255433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 91BD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3255433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='91BD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ResourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 6C55433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID 19BE433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='6C55433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='19BE433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='ResourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3655433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID ADBD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3655433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='ADBD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='Role'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3755433E-F36B-1410-8DC9-00021F8B792E */
+/* SQL text to update entity field related entity name field map for entity field ID B4BD433E-F36B-1410-8DCA-00021F8B792E */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3755433E-F36B-1410-8DC9-00021F8B792E',
+         @EntityFieldID='B4BD433E-F36B-1410-8DCA-00021F8B792E',
          @RelatedEntityNameFieldMap='User'
 
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f69bc0f6-2e64-4f49-bc41-66aca219e5fe'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = 'Agent')
+         WHERE ID = '6c1c76df-bbff-4903-9bb9-3325b5abb4b1'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'DefaultArtifactType')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3267,8 +3899,73 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
          )
          VALUES
          (
-            'f69bc0f6-2e64-4f49-bc41-66aca219e5fe',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            '6c1c76df-bbff-4903-9bb9-3325b5abb4b1',
+            'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
+            100083,
+            'DefaultArtifactType',
+            'Default Artifact Type',
+            NULL,
+            'nvarchar',
+            200,
+            0,
+            0,
+            1,
+            'null',
+            0,
+            0,
+            1,
+            NULL,
+            NULL,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            'Search'
+         )
+      END
+
+/* SQL text to insert new entity field */
+
+      IF NOT EXISTS (
+         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
+         WHERE ID = '07bf8f19-86a4-44a9-af0e-8ff9b09c8e6f'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = 'Agent')
+         -- check to make sure we're not inserting a duplicate entity field metadata record
+      )
+      BEGIN
+         INSERT INTO [${flyway:defaultSchema}].EntityField
+         (
+            ID,
+            EntityID,
+            Sequence,
+            Name,
+            DisplayName,
+            Description,
+            Type,
+            Length,
+            Precision,
+            Scale,
+            AllowsNull,
+            DefaultValue,
+            AutoIncrement,
+            AllowUpdateAPI,
+            IsVirtual,
+            RelatedEntityID,
+            RelatedEntityFieldName,
+            IsNameField,
+            IncludeInUserSearchAPI,
+            IncludeRelatedEntityNameFieldInBaseView,
+            DefaultInView,
+            IsPrimaryKey,
+            IsUnique,
+            RelatedEntityDisplayType
+         )
+         VALUES
+         (
+            '07bf8f19-86a4-44a9-af0e-8ff9b09c8e6f',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100013,
             'Agent',
             'Agent',
@@ -3298,8 +3995,8 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b70ac69d-2e29-469a-a0e2-92cf591a9339'  OR 
-               (EntityID = 'AE65A416-5173-486B-8C26-80EC3320D2EE' AND Name = 'ArtifactType')
+         WHERE ID = 'e1acc909-e34d-40a4-9110-65dd258058ec'  OR 
+               (EntityID = '9E05B993-96A3-4E96-BE9B-60C644D575CF' AND Name = 'ArtifactType')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3332,8 +4029,8 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
          )
          VALUES
          (
-            'b70ac69d-2e29-469a-a0e2-92cf591a9339',
-            'AE65A416-5173-486B-8C26-80EC3320D2EE', -- Entity: MJ: Agent Artifact Types
+            'e1acc909-e34d-40a4-9110-65dd258058ec',
+            '9E05B993-96A3-4E96-BE9B-60C644D575CF', -- Entity: MJ: AI Agent Artifact Types
             100014,
             'ArtifactType',
             'Artifact Type',
@@ -3363,7 +4060,7 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f1154837-845f-4684-b09c-341741c85461'  OR 
+         WHERE ID = '63d25bcf-550e-4013-ab1f-03657369b0e9'  OR 
                (EntityID = '91797885-7128-4B71-8C4B-81C5FEE24F38' AND Name = 'Parent')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -3397,7 +4094,7 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
          )
          VALUES
          (
-            'f1154837-845f-4684-b09c-341741c85461',
+            '63d25bcf-550e-4013-ab1f-03657369b0e9',
             '91797885-7128-4B71-8C4B-81C5FEE24F38', -- Entity: MJ: Artifact Types
             100019,
             'Parent',
@@ -3428,8 +4125,8 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b0747f9d-73da-41e0-8c6c-eaabab8b7d00'  OR 
-               (EntityID = 'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA' AND Name = 'ArtifactVersion')
+         WHERE ID = 'a4a4ff94-a7db-495e-8055-cad07ad96945'  OR 
+               (EntityID = '5D4BC8D7-AB3F-444E-B85A-FC89297887B2' AND Name = 'ArtifactVersion')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3462,8 +4159,8 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
          )
          VALUES
          (
-            'b0747f9d-73da-41e0-8c6c-eaabab8b7d00',
-            'FE6F3995-2EBD-4AE0-A4DD-939A21C4BACA', -- Entity: MJ: Artifact Version Attributes
+            'a4a4ff94-a7db-495e-8055-cad07ad96945',
+            '5D4BC8D7-AB3F-444E-B85A-FC89297887B2', -- Entity: MJ: Artifact Version Attributes
             100017,
             'ArtifactVersion',
             'Artifact Version',
