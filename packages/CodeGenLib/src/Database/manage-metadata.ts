@@ -1432,7 +1432,7 @@ NumberedRows AS (
                throw new Error(`   >>> Error generating validator function from check constraint. Unable to find AI Model with name ${ag.AIModel} and vendor ${ag.AIVendor}.`);
 
             const prompt = ag.getPrompt('CheckConstraintParser');
-            const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}`).join('\n');
+            const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}${item.AllowsNull ? ' (nullable)' : ' (not null)'}`).join('\n');
             const existingMethodNameBlock = generatedValidationFunctionName ? `Existing Method Name: ${generatedValidationFunctionName}\n Please reuse this SAME method name for the new generation` : '';
             const markedUpSysPrompt = ag.fillTemplate(prompt.systemPrompt, {
                ENTITY_FIELD_LIST: entityFieldListInfo,
