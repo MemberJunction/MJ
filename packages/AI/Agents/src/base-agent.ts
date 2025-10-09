@@ -3504,9 +3504,21 @@ export class BaseAgent {
      */
     private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
         if (this._agentRun) {
-            this._agentRun.Status = 'Completed';
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
+            if (!this._agentRun.Success && finalStep.message) {
+                // grab the message from the finalStep.message if it exists and append to any existing
+                // error messagge thjat might already be there
+                this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + finalStep.message;
+            }
+            if (!this._agentRun.Success) {
+                // set status to Failed
+                this._agentRun.Status = 'Failed';
+            }
+            else {
+                this._agentRun.Status = 'Completed';
+            }
+        
             this._agentRun.Result = payload ? JSON.stringify(payload) : null;
             this._agentRun.FinalStep = finalStep.step;
             this._agentRun.Message = finalStep.message;

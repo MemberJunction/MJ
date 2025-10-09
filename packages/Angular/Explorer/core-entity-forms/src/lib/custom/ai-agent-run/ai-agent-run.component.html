@@ -10,7 +10,11 @@
           <div class="header-info">
             <h2>AI Agent Run</h2>
             <div class="meta-info">
-              <span class="agent-name" *ngIf="agent">{{ agent.Name }}</span>
+              <span class="agent-name" *ngIf="agent">
+                <a href="javascript:void(0)" class="entity-link" (click)="openEntityRecord('AI Agents', record.AgentID)">
+                  {{ agent.Name }}
+                </a>
+              </span>
               <span class="run-id">{{ record.ID }}</span>
               <span class="parent-run" *ngIf="record.ParentRunID">
                 <i class="fas fa-level-up-alt"></i>
@@ -241,9 +245,19 @@
                 </div>
                 <div class="detail-item">
                   <label>Success</label>
-                  <span [class.success]="record.Success" [class.error]="record.Success === false">
-                    {{ record.Success === null ? 'In Progress' : (record.Success ? 'Yes' : 'No') }}
-                  </span>
+                  @if (record.Success === null) {
+                    <span>In Progress</span>
+                  }
+                  @else if (record.Success) {
+                    <span class="success">Yes</span>
+                  }
+                  @else {
+                    <span class="error-message">No</span>
+                  }
+                </div>
+                <div class="detail-item full-width" *ngIf="record.Message">
+                  <label>Message</label>
+                  <div class="message">{{ record.Message }}</div>
                 </div>
                 <div class="detail-item full-width" *ngIf="record.ErrorMessage">
                   <label>Error Message</label>

@@ -320,7 +320,7 @@
       "ExposeAsAction": true,
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Marketing Content",
       "IconClass": "fa-solid fa-bullhorn",
-      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMode": "Warn",
       "FinalPayloadValidation": "@file:../prompts/output/marketing/marketing-agent-output.example.json",
       "FinalPayloadValidationMaxRetries": 2
     },
@@ -887,8 +887,8 @@
       "ID": "4A7B4F1D-C536-409F-9206-F36FDEE64EDF"
     },
     "sync": {
-      "lastModified": "2025-10-09T02:07:23.300Z",
-      "checksum": "120df3826d7a86d96f88313c86d3de9c5b33cbb114d11c65e87a3d7e4f936f75"
+      "lastModified": "2025-10-09T13:00:37.521Z",
+      "checksum": "107d501e056c33d36627c4b775cc4574d2dcf0c0c005c8eab5605d609a85ae80"
     }
   }
 ]
