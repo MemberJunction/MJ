@@ -744,6 +744,40 @@
   opacity: 0.7;
 }
 
+/* Tasks section in agent details */
+.agent-details-tasks {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.tasks-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tasks-section-header i {
+  color: #3B82F6;
+  font-size: 11px;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tasks-list mj-task-widget {
+  display: block;
+}
+
 /* Artifact version badge */
 .artifact-version-badge {
   display: inline-block;

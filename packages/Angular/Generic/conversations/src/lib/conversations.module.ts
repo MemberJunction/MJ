@@ -50,7 +50,9 @@ import { TaskListComponent } from './components/task/task-list.component';
 import { TaskItemComponent } from './components/task/task-item.component';
 import { TaskFormModalComponent } from './components/task/task-form-modal.component';
 import { TaskTimelineComponent } from './components/task/task-timeline.component';
+import { TasksFullViewComponent } from './components/task/tasks-full-view.component';
 import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.component';
+import { TaskWidgetComponent } from './components/tasks/task-widget.component';
 import { AgentProcessPanelComponent } from './components/agent/agent-process-panel.component';
 import { ActiveAgentIndicatorComponent } from './components/agent/active-agent-indicator.component';
 import { ActiveTasksPanelComponent } from './components/active-tasks/active-tasks-panel.component';
@@ -96,7 +98,9 @@ const COMPONENTS = [
   TaskItemComponent,
   TaskFormModalComponent,
   TaskTimelineComponent,
+  TasksFullViewComponent,
   TasksDropdownComponent,
+  TaskWidgetComponent,
   AgentProcessPanelComponent,
   ActiveAgentIndicatorComponent,
   ActiveTasksPanelComponent,

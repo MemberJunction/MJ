@@ -11,8 +11,8 @@
   </div>
 
   <div class="workspace-content">
-    <!-- Left Sidebar (hidden when Collections view is active) -->
-    <div class="workspace-sidebar" *ngIf="isSidebarVisible && activeTab !== 'collections'" [style.width.px]="sidebarWidth">
+    <!-- Left Sidebar (hidden when Collections or Tasks view is active) -->
+    <div class="workspace-sidebar" *ngIf="isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks'" [style.width.px]="sidebarWidth">
       <mj-conversation-sidebar
         [activeTab]="activeTab"
         [environmentId]="environmentId"
@@ -22,7 +22,7 @@
     </div>
 
     <!-- Resize handle for sidebar -->
-    <div class="sidebar-resize-handle" *ngIf="isSidebarVisible && activeTab !== 'collections'" (mousedown)="onSidebarResizeStart($event)"></div>
+    <div class="sidebar-resize-handle" *ngIf="isSidebarVisible && activeTab !== 'collections' && activeTab !== 'tasks'" (mousedown)="onSidebarResizeStart($event)"></div>
 
     <!-- Collections Full-Panel View -->
     <div class="workspace-main" *ngIf="activeTab === 'collections'">
@@ -32,8 +32,16 @@
       </mj-collections-full-view>
     </div>
 
-    <!-- Main Chat Area (only shown when not in Collections view) -->
-    <div class="workspace-main" *ngIf="activeTab !== 'collections'">
+    <!-- Tasks Full-Panel View -->
+    <div class="workspace-main" *ngIf="activeTab === 'tasks'">
+      <mj-tasks-full-view
+        [environmentId]="environmentId"
+        [currentUser]="currentUser">
+      </mj-tasks-full-view>
+    </div>
+
+    <!-- Main Chat Area (only shown when not in Collections or Tasks view) -->
+    <div class="workspace-main" *ngIf="activeTab !== 'collections' && activeTab !== 'tasks'">
       <mj-conversation-chat-area
         [environmentId]="environmentId"
         [currentUser]="currentUser"

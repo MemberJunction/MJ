@@ -45,6 +45,7 @@ export * from './lib/components/project/project-selector.component';
 export * from './lib/components/project/project-form-modal.component';
 export * from './lib/components/task/task-list.component';
 export * from './lib/components/task/task-item.component';
+export * from './lib/components/tasks/task-widget.component';
 export * from './lib/components/agent/agent-process-panel.component';
 export * from './lib/components/agent/active-agent-indicator.component';
 export * from './lib/components/active-tasks/active-tasks-panel.component';

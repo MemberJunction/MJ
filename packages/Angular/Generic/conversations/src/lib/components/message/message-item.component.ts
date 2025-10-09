@@ -8,7 +8,7 @@ import {
   AfterViewInit,
   OnInit
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -53,6 +53,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
+  public detailTasks: TaskEntity[] = [];
+  private tasksLoaded: boolean = false;
 
   constructor(
     private cdRef: ChangeDetectorRef,
@@ -448,7 +450,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * Toggle the agent details panel expansion
    */
-  public toggleAgentDetails(): void {
+  public async toggleAgentDetails(): Promise<void> {
     this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
     console.log(`🔧 Toggle agent details for message ${this.message.ID}:`, {
       expanded: this.isAgentDetailsExpanded,
@@ -457,7 +459,43 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       agentRunId: this.agentRun?.ID,
       messageAgentId: this.message?.AgentID
     });
+
+    // Load tasks when expanding if not already loaded
+    if (this.isAgentDetailsExpanded && !this.tasksLoaded) {
+      await this.loadTasks();
+    }
+
     this.cdRef.detectChanges();
+  }
+
+  /**
+   * Load tasks associated with this conversation detail
+   */
+  private async loadTasks(): Promise<void> {
+    if (!this.message?.ID) {
+      return;
+    }
+
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<TaskEntity>(
+        {
+          EntityName: 'MJ: Tasks',
+          ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (result.Success) {
+        this.detailTasks = result.Results || [];
+        this.tasksLoaded = true;
+        console.log(`📋 Loaded ${this.detailTasks.length} tasks for conversation detail ${this.message.ID}`);
+      }
+    } catch (error) {
+      console.error('Failed to load tasks for conversation detail:', error);
+    }
   }
 
   /**

@@ -137,6 +137,26 @@
               </div>
             </div>
           }
+
+          <!-- Tasks Section -->
+          @if (detailTasks.length > 0) {
+            <div class="agent-details-tasks">
+              <div class="tasks-section-header">
+                <i class="fas fa-tasks"></i>
+                <span>Associated Tasks ({{ detailTasks.length }})</span>
+              </div>
+              <div class="tasks-list">
+                <mj-task-widget
+                  *ngFor="let task of detailTasks"
+                  [task]="task"
+                  [compact]="false"
+                  [clickable]="false"
+                  [showProgress]="true"
+                  [showDuration]="true">
+                </mj-task-widget>
+              </div>
+            </div>
+          }
         </div>
       }
     </div>

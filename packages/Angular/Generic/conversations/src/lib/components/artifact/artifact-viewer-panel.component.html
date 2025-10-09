@@ -32,6 +32,9 @@
           </div>
         }
       </div>
+      <button class="save-to-collection-btn" (click)="onSaveToLibrary()" title="Save to Collection">
+        <i class="fas fa-bookmark"></i>
+      </button>
       <button class="close-btn" (click)="onClose()" title="Close">
         <i class="fas fa-times"></i>
       </button>
@@ -96,9 +99,6 @@
               <div class="json-toolbar">
                 <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
                   <i class="fas fa-copy"></i> Copy
-                </button>
-                <button class="btn-icon btn-primary" title="Save to Collection" (click)="onSaveToLibrary()">
-                  <i class="fas fa-bookmark"></i> Save to Collection
                 </button>
               </div>
               <div class="json-editor-container">

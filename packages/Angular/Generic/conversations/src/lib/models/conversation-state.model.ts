@@ -75,7 +75,7 @@ export interface PublicLinkOptions {
 /**
  * Tab types for the main navigation
  */
-export type NavigationTab = 'conversations' | 'collections';
+export type NavigationTab = 'conversations' | 'collections' | 'tasks';
 
 /**
  * Layout modes for the workspace

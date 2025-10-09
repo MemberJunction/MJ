@@ -25,6 +25,13 @@ import { NavigationTab } from '../../models/conversation-state.model';
           <i class="fas fa-folder"></i>
           <span>Collections</span>
         </button>
+        <button
+          class="nav-tab"
+          [class.active]="activeTab === 'tasks'"
+          (click)="tabChanged.emit('tasks')">
+          <i class="fas fa-tasks"></i>
+          <span>Tasks</span>
+        </button>
       </div>
       <div class="nav-right">
         <button class="nav-btn search-btn" (click)="searchTriggered.emit()" title="Search (Ctrl+K)">

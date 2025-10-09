@@ -141,6 +141,30 @@
   margin-left: auto;
 }
 
+.save-to-collection-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #F59E0B;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.save-to-collection-btn:hover {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+.save-to-collection-btn i {
+  font-size: 14px;
+}
+
 .close-btn {
   background: none;
   border: none;
