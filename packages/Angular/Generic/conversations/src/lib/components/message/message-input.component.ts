@@ -1050,15 +1050,10 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         // Sub-agent failed - attempt auto-retry once
         console.log(`⚠️ ${agentName} failed, attempting auto-retry...`);
 
-        // Update delegation message to show retry
-        conversationManagerMessage.Message = `👉 **${agentName}** will handle this request...\n\n⚠️ First attempt failed, retrying...`;
-        await conversationManagerMessage.Save();
-        this.messageSent.emit(conversationManagerMessage);
+        await this.updateConversationDetail(conversationManagerMessage, `👉 **${agentName}** will handle this request...\n\n⚠️ First attempt failed, retrying...`, conversationManagerMessage.Status);
 
         // Update the existing agentResponseMessage to show retry status
-        agentResponseMessage.Message = 'Retrying...';
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage, "Retrying...", agentResponseMessage.Status);
 
         // Retry the sub-agent
         const retryResult = await this.agentService.invokeSubAgent(
@@ -1363,17 +1358,11 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       this.activeTasks.remove(taskId);
 
       if (result && result.success) {
-        // Update the response message with agent result
-        agentResponseMessage.Message = result.agentRun?.Message || `✅ **${agentName}** completed`;
-        agentResponseMessage.Status = 'Complete';
-
         if (result.agentRun.AgentID) {
           agentResponseMessage.AgentID = result.agentRun.AgentID;
         }
 
-        // Save updates - this sets __mj_UpdatedAt for duration calculation
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
 
         // Handle artifacts
         if (result.payload && Object.keys(result.payload).length > 0) {
@@ -1545,12 +1534,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
       if (result && result.success) {
         // Update the response message with agent result
-        agentResponseMessage.Message = result.agentRun?.Message || `✅ **${agentName}** completed`;
-        agentResponseMessage.Status = 'Complete';
-
-        // Save updates - this sets __mj_UpdatedAt for duration calculation
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
         // Handle artifacts - create new version if continuing with same agent and artifact
         if (result.payload && Object.keys(result.payload).length > 0) {

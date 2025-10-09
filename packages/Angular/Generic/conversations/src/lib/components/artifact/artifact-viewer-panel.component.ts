@@ -74,7 +74,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           this.artifactVersion = targetVersion;
           this.selectedVersionNumber = targetVersion.VersionNumber || 1;
           this.jsonContent = targetVersion.Content || '{}';
+
           console.log(`📦 Switched to cached version ${this.selectedVersionNumber}`);
+
+          // Load version attributes
+          await this.loadVersionAttributes();
         } else {
           // Need to reload to get this version (shouldn't normally happen)
           await this.loadArtifact(newVersionNumber);
@@ -240,6 +244,17 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   onCopyToClipboard(): void {
     if (this.jsonContent) {
       navigator.clipboard.writeText(this.jsonContent);
+    }
+  }
+
+  onCopyDisplayContent(): void {
+    const content = this.displayMarkdown || this.displayHtml;
+    if (content) {
+      navigator.clipboard.writeText(content).then(() => {
+        console.log('✅ Copied display content to clipboard');
+      }).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+      });
     }
   }
 

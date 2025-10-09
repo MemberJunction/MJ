@@ -53,6 +53,10 @@ export class AIAgentPermissionHelper {
      * - Edit implies Run and View
      * - Run implies View
      *
+     * Default behavior when no permission records exist:
+     * - Anyone can View and Run (open by default)
+     * - Only owner can Edit and Delete
+     *
      * Checks ownership first, then combines all matching user and role permissions.
      * @param agentId - The ID of the agent
      * @param user - The user to check permissions for
@@ -88,6 +92,18 @@ export class AIAgentPermissionHelper {
             const agentPermissions = AIEngineBase.Instance.AgentPermissions.filter(
                 p => p.AgentID === agentId
             );
+
+            // DEFAULT BEHAVIOR: If no permission records exist, grant View and Run to everyone
+            // This minimizes administrative overhead while protecting Edit/Delete through ownership
+            if (agentPermissions.length === 0) {
+                return {
+                    canView: true,
+                    canRun: true,
+                    canEdit: false,  // Only owner can edit
+                    canDelete: false, // Only owner can delete
+                    isOwner: false
+                };
+            }
 
             // Get user's role IDs
             const userRoleIds = user.UserRoles?.map(ur => ur.RoleID) || [];

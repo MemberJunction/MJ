@@ -75,6 +75,11 @@
           <!-- Display Tab (Markdown or HTML) -->
           @if (activeTab === 'display' && hasDisplayTab) {
             <div class="display-content">
+              <div class="display-toolbar">
+                <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
+                  <i class="fas fa-copy"></i> Copy
+                </button>
+              </div>
               @if (displayMarkdown) {
                 <div class="markdown-content">
                   <markdown [data]="displayMarkdown"></markdown>
@@ -149,7 +154,11 @@
                     @for (attr of filteredAttributes; track attr.ID) {
                       <div class="attribute-item">
                         <label>{{ attr.Name }}</label>
-                        <span>{{ attr.Value }}</span>
+                        @if (attr.Value) {
+                          <span>{{ attr.Value }}</span>
+                        } @else {
+                          <span class="attribute-empty-pill">Empty</span>
+                        }
                       </div>
                     }
                   </div>

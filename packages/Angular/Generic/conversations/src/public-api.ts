@@ -31,6 +31,7 @@ export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
 export * from './lib/components/artifact/artifact-panel.component';
 export * from './lib/components/artifact/artifact-viewer.component';
+export * from './lib/components/artifact/artifact-viewer-panel.component';
 export * from './lib/components/artifact/artifact-version-history.component';
 export * from './lib/components/artifact/inline-artifact.component';
 export * from './lib/components/message/message-item.component';

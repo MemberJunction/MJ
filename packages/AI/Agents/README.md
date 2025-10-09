@@ -528,12 +528,183 @@ return {
 };
 ```
 
+## Agent Permissions System
+
+The agent framework includes a comprehensive ACL-based permissions system that controls who can view, run, edit, and delete agents.
+
+### Permission Model
+
+The permissions system uses **hierarchical permissions** with the following levels:
+
+1. **View** - See agent configuration and details
+2. **Run** - Execute the agent (implies View)
+3. **Edit** - Modify agent configuration (implies Run and View)
+4. **Delete** - Remove the agent (implies Edit, Run, and View)
+
+### Default Permission Behavior
+
+The system uses an **"open by default"** approach to minimize administrative overhead:
+
+- **No permission records exist**: Anyone can **View** and **Run** the agent
+- **Owner**: Always has full permissions (View, Run, Edit, Delete)
+- **Explicit permissions**: When permission records exist, only users/roles with matching permissions can access
+
+**Why this approach?**
+- Minimizes setup overhead for most agents
+- Allows broad access for running agents (common use case)
+- Protects modification operations (Edit/Delete) through ownership
+- Explicit permissions provide fine-grained control when needed
+
+### Ownership
+
+Every agent has an `OwnerUserID` field:
+- Owners always have full permissions regardless of ACL records
+- Defaults to the user who created the agent
+- Can be transferred by editing the agent
+
+### Permission Records
+
+Permission records are stored in the `AIAgentPermission` table with these fields:
+
+- **AgentID** - The agent being controlled
+- **UserID** - Direct user permission (mutually exclusive with RoleID)
+- **RoleID** - Role-based permission (mutually exclusive with UserID)
+- **CanView** - Boolean flag for view permission
+- **CanRun** - Boolean flag for run permission
+- **CanEdit** - Boolean flag for edit permission
+- **CanDelete** - Boolean flag for delete permission
+- **Comments** - Optional description of why permission was granted
+
+**Important**: Each record must have either `UserID` OR `RoleID` set, but not both.
+
+### Permission Resolution
+
+When checking if a user can perform an operation:
+
+1. **Check ownership** - If user is the owner, grant all permissions
+2. **Check if no permissions exist** - Grant View and Run by default
+3. **Find matching permissions** - Get all records for the user OR their roles
+4. **Apply OR logic** - If ANY permission grants access, allow the operation
+5. **Apply hierarchy** - Higher permissions automatically grant lower ones:
+   - Delete → Edit → Run → View
+   - If you have Run permission, you automatically get View
+   - If you have Edit permission, you automatically get Run and View
+
+### Using Permissions in Code
+
+The framework provides helper methods for checking permissions:
+
+```typescript
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+
+// Check specific permission
+const canRun = await AIEngineBase.Instance.CanUserRunAgent(agentId, user);
+const canEdit = await AIEngineBase.Instance.CanUserEditAgent(agentId, user);
+
+// Get all effective permissions
+const permissions = await AIEngineBase.Instance.GetUserAgentPermissions(agentId, user);
+console.log(permissions);
+// {
+//   canView: true,
+//   canRun: true,
+//   canEdit: false,
+//   canDelete: false,
+//   isOwner: false
+// }
+
+// Get all agents user can access with specific permission
+const runnableAgents = await AIEngineBase.Instance.GetAccessibleAgents(user, 'run');
+
+// Using the helper directly
+const hasPermission = await AIAgentPermissionHelper.HasPermission(agentId, user, 'run');
+```
+
+### Runtime Permission Enforcement
+
+The BaseAgent class automatically enforces run permissions:
+
+```typescript
+// BaseAgent.Execute() checks permissions before running
+const result = await agent.Execute({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user
+});
+
+// If user lacks run permission, execution fails with:
+// Error: "User {email} does not have permission to run agent '{name}'"
+```
+
+### Managing Permissions in the UI
+
+The AI Agent form includes a "Permissions" button that opens a dialog for managing permissions:
+
+- View all existing permissions for the agent
+- Add new user or role-based permissions
+- Edit existing permissions with hierarchical checkboxes
+- Delete permissions to return to default behavior
+- See effective permissions after hierarchy is applied
+- Display owner information with visual indicator
+
+### Permission Caching
+
+Permissions are cached in the AIEngineBase metadata system for performance:
+
+```typescript
+// Clear cache after modifying permissions
+AIEngineBase.Instance.ClearAgentPermissionsCache();
+
+// Refresh cache for specific agent
+await AIEngineBase.Instance.RefreshAgentPermissionsCache(agentId, user);
+```
+
+### Best Practices for Permissions
+
+1. **Start Open**: Let anyone run new agents by default, add restrictions only when needed
+2. **Use Roles**: Grant permissions to roles instead of individual users when possible
+3. **Document Permissions**: Use the Comments field to explain why permissions were granted
+4. **Ownership Transfer**: Transfer ownership when primary maintainers change
+5. **Hierarchical Thinking**: Set the highest permission needed; lower ones are automatic
+6. **Test Access**: Verify permissions work as expected before deploying agents
+7. **Regular Audits**: Review permission records periodically to remove unnecessary entries
+
+### Example Permission Scenarios
+
+**Scenario 1: Public Agent**
+- No permission records
+- Anyone can view and run
+- Only owner can edit/delete
+
+**Scenario 2: Department Agent**
+- Permission record: Role="Sales Team", CanRun=true
+- Sales team members can view and run
+- Owner can edit/delete
+- Others cannot access
+
+**Scenario 3: Restricted Agent**
+- Permission record: Role="Admins", CanEdit=true
+- Admins can view, run, edit (and delete via hierarchy)
+- Permission record: Role="Developers", CanRun=true
+- Developers can view and run
+- Owner has full access
+- Others cannot access
+
+**Scenario 4: Shared Ownership**
+- Permission record: User="alice@example.com", CanEdit=true
+- Alice can view, run, and edit
+- Permission record: User="bob@example.com", CanEdit=true
+- Bob can view, run, and edit
+- Owner can delete
+- Creates "co-owner" scenario for collaborative development
+
 ## Database Schema
 
 Key entities used by the agent framework:
 
 - **AIAgentType**: Agent behavior patterns and system prompts
 - **AIAgent**: Configured agent instances
+  - `OwnerUserID`: User who owns the agent (defaults to creator, grants full permissions)
   - `PayloadDownstreamPaths`: JSON array of paths sub-agents can read
   - `PayloadUpstreamPaths`: JSON array of paths sub-agents can write
   - **NEW** `PayloadScope`: Path to narrow payload for sub-agents (e.g., "/functionalRequirements")
@@ -546,6 +717,15 @@ Key entities used by the agent framework:
   - **NEW** `MaxTokensPerRun`: Token limit per agent run
   - **NEW** `MaxIterationsPerRun`: Iteration limit per agent run
   - **NEW** `MaxTimePerRun`: Time limit in seconds per agent run
+- **AIAgentPermission**: Permission records for agent access control
+  - `AgentID`: The agent being controlled
+  - `UserID`: Direct user permission (exclusive with RoleID)
+  - `RoleID`: Role-based permission (exclusive with UserID)
+  - `CanView`: View agent configuration
+  - `CanRun`: Execute the agent
+  - `CanEdit`: Modify agent configuration
+  - `CanDelete`: Remove the agent
+  - `Comments`: Optional permission description
 - **AIPrompt**: Reusable prompt templates with placeholders
 - **AIAgentPrompt**: Links agents to prompts with execution order
 - **AIAgentRun**: Tracks complete agent executions
@@ -578,6 +758,9 @@ Key entities used by the agent framework:
 13. **Set Guardrails**: Configure cost/token/time limits to prevent runaway execution
 14. **Monitor Retries**: Track validation retry counts to avoid infinite loops
 15. **Fail Fast**: Use StartingPayloadValidation with 'Fail' mode for deterministic behavior
+16. **Permission Strategy**: Start with open access, add restrictions only when needed
+17. **Role-Based Permissions**: Use role-based permissions for easier management at scale
+18. **Document Access**: Use Comments field in permission records to explain grant rationale
 
 ## Examples
 
