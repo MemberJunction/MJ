@@ -42,6 +42,34 @@ export class GraphQLServerGeneratorBase {
     return this._graphQLTypeSuffix;
   }
 
+  /**
+   * Sanitizes a string to be a valid GraphQL name component.
+   * GraphQL names must match the pattern [_A-Za-z][_0-9A-Za-z]* and cannot start with double underscore
+   * @param input - The string to sanitize
+   * @returns A valid GraphQL name component
+   */
+  protected sanitizeGraphQLName(input: string): string {
+    if (!input || input.length === 0) {
+      return '';
+    }
+
+    // Replace any non-alphanumeric characters (except underscore) with underscore
+    let sanitized = input.replace(/[^A-Za-z0-9_]/g, '_');
+
+    // If the first character is a digit, prepend an underscore
+    if (/^[0-9]/.test(sanitized)) {
+      sanitized = '_' + sanitized;
+    }
+
+    // If the name starts with two underscores, replace with single underscore
+    // (double underscore is reserved for GraphQL introspection)
+    if (sanitized.startsWith('__')) {
+      sanitized = '_' + sanitized.substring(2);
+    }
+
+    return sanitized;
+  }
+
   public generateServerEntityString(
     entity: EntityInfo,
     includeFileHeader: boolean,
@@ -53,7 +81,9 @@ export class GraphQLServerGeneratorBase {
     try {
       const md = new Metadata();
       const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
-      const serverGraphQLTypeName: string = entity.ClassName + this.GraphQLTypeSuffix;
+      const sanitizedSchema = this.sanitizeGraphQLName(entity.SchemaName);
+      const sanitizedBaseTable = this.sanitizeGraphQLName(entity.BaseTable);
+      const serverGraphQLTypeName: string = `${sanitizedSchema}_${sanitizedBaseTable}${this.GraphQLTypeSuffix}`;
 
       if (includeFileHeader)
         sEntityOutput = this.generateEntitySpecificServerFileHeader(
