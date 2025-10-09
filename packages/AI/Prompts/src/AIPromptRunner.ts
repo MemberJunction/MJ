@@ -4,7 +4,7 @@ import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, 
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
 import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
+import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';

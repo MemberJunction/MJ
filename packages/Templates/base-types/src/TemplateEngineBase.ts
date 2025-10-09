@@ -1,6 +1,5 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
-import { TemplateEntityExtended } from "./TemplateEntityExtended";
-import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateParamEntity } from "@memberjunction/core-entities";
+import { TemplateCategoryEntity, TemplateContentEntity, TemplateContentTypeEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
 
 /**
  * TemplateEngine is used for accessing template metadata/caching it, and rendering templates

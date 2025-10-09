@@ -1,8 +1,8 @@
 import { parentPort, threadId, workerData } from 'node:worker_threads';
 import type { WorkerData } from '../BatchWorker';
-import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateContentEntity } from '@memberjunction/core-entities';
+import { TemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
+import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { LogError, ValidationResult } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseEmbeddings, EmbedTextsResult } from '@memberjunction/ai';
