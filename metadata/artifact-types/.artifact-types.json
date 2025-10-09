@@ -5,66 +5,14 @@
       "Description": "JSON schema for marketing content artifacts.",
       "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
       "ContentType": "application/json",
-      "ExtractRules": [
-        {
-          "name": "name",
-          "description": "Extracts the marketing content headline/title",
-          "type": "string",
-          "standardProperty": "name",
-          "extractor": "@file:extract-rules/marketing-content-name.js"
-        },
-        {
-          "name": "description",
-          "description": "Extracts the marketing content subheadline or brief",
-          "type": "string",
-          "standardProperty": "description",
-          "extractor": "@file:extract-rules/marketing-content-description.js"
-        },
-        {
-          "name": "displayMarkdown",
-          "description": "Extracts the full marketing content body in markdown format",
-          "type": "string",
-          "standardProperty": "displayMarkdown",
-          "extractor": "@file:extract-rules/marketing-content-body.js"
-        },
-        {
-          "name": "contentType",
-          "description": "The type of marketing content (blog_post, social_media, email, etc.)",
-          "type": "string",
-          "extractor": "@file:extract-rules/marketing-content-type.js"
-        },
-        {
-          "name": "targetAudience",
-          "description": "The intended audience for this content",
-          "type": "string",
-          "extractor": "@file:extract-rules/marketing-target-audience.js"
-        },
-        {
-          "name": "seoScore",
-          "description": "SEO optimization score (0-100)",
-          "type": "number",
-          "extractor": "@file:extract-rules/marketing-seo-score.js"
-        },
-        {
-          "name": "brandAlignment",
-          "description": "Brand alignment score (0-100)",
-          "type": "number",
-          "extractor": "@file:extract-rules/marketing-brand-alignment.js"
-        },
-        {
-          "name": "wordCount",
-          "description": "Total word count of the content",
-          "type": "number",
-          "extractor": "@file:extract-rules/marketing-word-count.js"
-        }
-      ]
+      "ExtractRules": "@file:extract-rules/marketing-content.json"
     },
     "primaryKey": {
       "ID": "931E8903-7937-4ED1-8C00-6A6568133C7A"
     },
     "sync": {
-      "lastModified": "2025-10-09T02:58:37.611Z",
-      "checksum": "8acb471e2230c805c5ef463d6de12dfa5201d6d1ca7d2ae017562262fa7aad72"
+      "lastModified": "2025-10-09T13:12:33.191Z",
+      "checksum": "de5849272ad9a2385e900143dc93eff427351228e5d61001fe851abb0caaff1a"
     }
   }
 ]
