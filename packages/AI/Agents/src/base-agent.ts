@@ -19,6 +19,7 @@ import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import {
     AIPromptParams,
     AIPromptRunResult,
@@ -352,7 +353,20 @@ export class BaseAgent {
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
-            
+
+            // Check permissions - user must have run permission or be the owner
+            const canRun = await AIAgentPermissionHelper.HasPermission(
+                params.agent.ID,
+                params.contextUser,
+                'run'
+            );
+
+            if (!canRun) {
+                const errorMessage = `User ${params.contextUser.Email} does not have permission to run agent '${params.agent.Name}' (ID: ${params.agent.ID})`;
+                this.logStatus(`🚫 ${errorMessage}`, false, params);
+                throw new Error(errorMessage);
+            }
+
             // Wrap the progress callback to capture all events
             const wrappedParams = {
                 ...params,

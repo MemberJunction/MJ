@@ -11,7 +11,7 @@
 
 -- Add OwnerUserID column to AIAgent (nullable initially for existing records)
 ALTER TABLE ${flyway:defaultSchema}.AIAgent
-ADD OwnerUserID UNIQUEIDENTIFIER NULL;
+ADD OwnerUserID UNIQUEIDENTIFIER NOT NULL DEFAULT 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E'; -- default to system user
 
 -- Add foreign key constraint
 ALTER TABLE ${flyway:defaultSchema}.AIAgent

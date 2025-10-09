@@ -59,6 +59,13 @@
                             <i class="fa-solid fa-play"></i>
                             Run
                         </button>
+                        <button kendoButton size="large" 
+                                (click)="openPermissionsDialog()" 
+                                title="Manage permissions"
+                                >
+                            <i class="fa-solid fa-lock"></i>
+                            Permissions
+                        </button>
                     }
                     <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
                         <i class="fa-solid fa-refresh"></i>
