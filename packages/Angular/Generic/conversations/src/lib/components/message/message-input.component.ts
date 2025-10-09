@@ -499,16 +499,29 @@ export class MessageInputComponent implements OnInit {
         await userMessage.Save();
         this.messageSent.emit(userMessage);
       }
-      // Stage 4: Silent observation - check for agent continuity
+      // Stage 4: Silent observation - but check for message content first
       else {
-        console.log('🔇 Conversation Manager chose to observe silently');
-        // Hide the Conversation Manager message
-        conversationManagerMessage.HiddenToUser = true;
-        conversationManagerMessage.Status = 'Complete';
-        await conversationManagerMessage.Save();
-        this.messageSent.emit(conversationManagerMessage);
+        // Check if there's a message to display even without payload/taskGraph
+        if (result.agentRun.Message) {
+          console.log('💬 Conversation Manager provided a message without payload');
+          conversationManagerMessage.Message = result.agentRun.Message;
+          conversationManagerMessage.Status = 'Complete';
+          conversationManagerMessage.HiddenToUser = false;
+          if (result.agentRun.ID) {
+            (conversationManagerMessage as any).AgentRunID = result.agentRun.ID;
+          }
+          await conversationManagerMessage.Save();
+          this.messageSent.emit(conversationManagerMessage);
+        } else {
+          console.log('🔇 Conversation Manager chose to observe silently');
+          // Hide the Conversation Manager message
+          conversationManagerMessage.HiddenToUser = true;
+          conversationManagerMessage.Status = 'Complete';
+          await conversationManagerMessage.Save();
+          this.messageSent.emit(conversationManagerMessage);
 
-        await this.handleSilentObservation(userMessage, this.conversationId);
+          await this.handleSilentObservation(userMessage, this.conversationId);
+        }
       }
 
     } catch (error) {

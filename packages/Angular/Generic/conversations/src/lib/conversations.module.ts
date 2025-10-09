@@ -49,6 +49,7 @@ import { ProjectFormModalComponent } from './components/project/project-form-mod
 import { TaskListComponent } from './components/task/task-list.component';
 import { TaskItemComponent } from './components/task/task-item.component';
 import { TaskFormModalComponent } from './components/task/task-form-modal.component';
+import { TaskTimelineComponent } from './components/task/task-timeline.component';
 import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.component';
 import { AgentProcessPanelComponent } from './components/agent/agent-process-panel.component';
 import { ActiveAgentIndicatorComponent } from './components/agent/active-agent-indicator.component';
@@ -94,6 +95,7 @@ const COMPONENTS = [
   TaskListComponent,
   TaskItemComponent,
   TaskFormModalComponent,
+  TaskTimelineComponent,
   TasksDropdownComponent,
   AgentProcessPanelComponent,
   ActiveAgentIndicatorComponent,

@@ -23,7 +23,7 @@ import { NavigationTab } from '../../models/conversation-state.model';
           [class.active]="activeTab === 'collections'"
           (click)="tabChanged.emit('collections')">
           <i class="fas fa-folder"></i>
-          <span>Libraries</span>
+          <span>Collections</span>
         </button>
       </div>
       <div class="nav-right">
