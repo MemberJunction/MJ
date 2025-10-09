@@ -17,6 +17,9 @@ import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { LoadEntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
+// Prevent tree-shaking of EntityCommunicationsEngineClient
+LoadEntityCommunicationsEngineClient();
 
 export interface Tab {
   id?: string;
