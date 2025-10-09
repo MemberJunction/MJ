@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, Cha
 import { UserInfo, RunView, Metadata, CompositeKey } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, AIAgentRunEntityExtended, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
+import { DataCacheService } from '../../services/data-cache.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
@@ -63,6 +64,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   constructor(
     public conversationState: ConversationStateService,
+    private dataCache: DataCacheService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
@@ -128,35 +130,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   private async loadMessages(conversationId: string): Promise<void> {
     try {
-      const rv = new RunView();
+      // PHASE 1: Load messages from cache (fast, shows content immediately)
+      // The cache will load from DB if not already cached
+      const loadedMessages = await this.dataCache.loadConversationDetails(conversationId, this.currentUser);
 
-      // PHASE 1: Load messages first (fast, shows content immediately)
-      const messagesResult = await rv.RunView<ConversationDetailEntity>(
-        {
-          EntityName: 'Conversation Details',
-          ExtraFilter: `ConversationID='${conversationId}'`,
-          OrderBy: '__mj_CreatedAt ASC',
-          ResultType: 'entity_object'
-        },
-        this.currentUser
-      );
+      this.messages = loadedMessages;
+      this.scrollToBottom = true;
+      this.cdr.detectChanges(); // Show messages immediately
 
-      if (messagesResult.Success) {
-        const loadedMessages = messagesResult.Results || [];
-        this.messages = loadedMessages;
-        this.scrollToBottom = true;
-        this.cdr.detectChanges(); // Show messages immediately
-
-        // PHASE 2: Load peripheral data in background (agent runs & artifacts)
-        this.isLoadingPeripheralData = true;
-        this.loadPeripheralData(conversationId).finally(() => {
-          this.isLoadingPeripheralData = false;
-          this.cdr.detectChanges();
-        });
-      } else {
-        console.error('Failed to load messages:', messagesResult.ErrorMessage);
-        this.messages = [];
-      }
+      // PHASE 2: Load peripheral data in background (agent runs & artifacts)
+      this.isLoadingPeripheralData = true;
+      this.loadPeripheralData(conversationId).finally(() => {
+        this.isLoadingPeripheralData = false;
+        this.cdr.detectChanges();
+      });
     } catch (error) {
       console.error('Error loading messages:', error);
       this.messages = [];

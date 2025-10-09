@@ -10,6 +10,7 @@ export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 
 // Services - State
+export * from './lib/services/data-cache.service';
 export * from './lib/services/conversation-state.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';

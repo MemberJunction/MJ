@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ConversationStateService } from '../../services/conversation-state.service';
+import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -53,16 +54,15 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   // PubSub subscription for task progress updates
   private pushStatusSubscription?: Subscription;
-  // Map of task execution message IDs to their entities (for real-time updates)
-  private activeTaskExecutionMessages = new Map<string, ConversationDetailEntity>();
-  // Track completed conversation detail IDs to prevent stale progress updates
-  private completedConversationDetails = new Set<string>();
+  // Track active task execution message IDs for real-time updates
+  private activeTaskExecutionMessageIds = new Set<string>();
 
   constructor(
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
     private conversationState: ConversationStateService,
+    private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
     private mentionAutocomplete: MentionAutocompleteService,
     private mentionParser: MentionParserService
@@ -136,9 +136,21 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     percentComplete?: number,
     isAgentDetail: boolean = false
   ) {
-    // Update all active task execution messages
-    for (const [messageId, message] of this.activeTaskExecutionMessages.entries()) {
+    // Update all active task execution messages using the cache
+    for (const messageId of this.activeTaskExecutionMessageIds) {
       try {
+        // Get message from cache (single source of truth)
+        const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+        if (!message) {
+          console.warn(`Task execution message ${messageId} not found in cache`);
+          continue;
+        }
+
+        // Skip if already complete
+        if (message.Status === 'Complete' || message.Status === 'Error') {
+          continue;
+        }
+
         // Build progress message
         let updatedMessage = message.Message || '';
 
@@ -314,8 +326,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
     this.isSending = true;
     try {
-      const md = new Metadata();
-      const detail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+      const detail = await this.dataCache.createConversationDetail(this.currentUser);
 
       detail.ConversationID = this.conversationId;
       detail.Message = this.messageText.trim();
@@ -417,7 +428,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
    * IMPORTANT: Filters by agentRunId to prevent cross-contamination when multiple agents run in parallel
    */
   private createProgressCallback(
-    conversationDetailId: string,
+    conversationDetail: ConversationDetailEntity,
     agentName: string
   ): AgentExecutionProgressCallback {
     return async (progress) => {
@@ -428,37 +439,24 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       const progressText = progress.message;
 
       // Update the active task with progress details (if it exists)
-      this.activeTasks.updateStatusByConversationDetailId(conversationDetailId, progressText);
+      this.activeTasks.updateStatusByConversationDetailId(conversationDetail.ID, progressText);
 
       // Update the ConversationDetail message in real-time
       try {
-        // Check local completed set first (prevents race condition with DB)
-        if (this.completedConversationDetails.has(conversationDetailId)) {
-          console.log(`[${agentName}] Skipping progress update - message marked complete locally`);
-          return;
-        }
-
-        const md = new Metadata();
-        const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
-
-        if (await conversationDetail.Load(conversationDetailId)) {
-          console.log(`[${agentName}] Loaded conversation detail for progress update - Status: ${conversationDetail.Status}, ID: ${conversationDetailId}`);
+        if (conversationDetail) {
+          console.log(`[${agentName}] Got conversation detail from cache - Status: ${conversationDetail.Status}, ID: ${conversationDetail.ID}`);
 
           // Skip progress updates if message is already complete
+          // Since we're using the cached instance, this check sees the ACTUAL current state
           if (conversationDetail.Status === 'Complete') {
-            console.log(`[${agentName}] ⛔ Skipping progress update - message already complete in DB`);
-            // Add to local set for faster future checks
-            this.completedConversationDetails.add(conversationDetailId);
+            console.log(`[${agentName}] ⛔ Skipping progress update - message already complete`);
             return;
           }
 
           // Emit agentRunId if we have it (for parent to track)
           if (progressAgentRunId) {
             this.agentRunDetected.emit({
-              conversationDetailId,
+              conversationDetailId: conversationDetail.ID,
               agentRunId: progressAgentRunId
             });
           }
@@ -474,7 +472,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
       console.log(`[${agentName}] Progress: ${progress.step} - ${progress.message} (${progress.percentage}%)`, {
         agentRunId: progressAgentRunId,
-        conversationDetailId
+        conversationDetailId: conversationDetail.ID
       });
     };
   }
@@ -496,11 +494,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
     try {
       // Create AI message for Conversation Manager BEFORE invoking
-      const md = new Metadata();
-      conversationManagerMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      conversationManagerMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       conversationManagerMessage.ConversationID = conversationId;
       conversationManagerMessage.Role = 'AI';
@@ -530,7 +524,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage.ID, 'Conversation Manager')
+        this.createProgressCallback(conversationManagerMessage, 'Conversation Manager')
       );
 
       // Remove Conversation Manager from active tasks
@@ -563,7 +557,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       });
 
       // Stage 2: Check for task graph (multi-step orchestration)
-      if (result.agentRun.FinalStep === 'Success' && result.payload?.taskGraph) {
+      if (result.payload?.taskGraph) {
         console.log('📋 Task graph detected, starting task orchestration');
         await this.handleTaskGraphExecution(userMessage, result, this.conversationId, conversationManagerMessage);
         // Remove CM from active tasks
@@ -582,40 +576,27 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       }
       // Stage 4: Direct chat response from Conversation Manager
       else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
-        // Check if this is actually a task graph wrapped in a Chat response
-        if (result.payload?.taskGraph) {
-          console.log('📋 Task graph detected in Chat response, starting task orchestration');
-          await this.handleTaskGraphExecution(userMessage, result, this.conversationId, conversationManagerMessage);
-          // Remove CM from active tasks
-          if (taskId) {
-            this.activeTasks.remove(taskId);
-          }
-        } else {
-          // Normal chat response
-          conversationManagerMessage.Message = result.agentRun.Message;
-          conversationManagerMessage.Status = 'Complete';
+        // Normal chat response
+        conversationManagerMessage.Message = result.agentRun.Message;
+        conversationManagerMessage.Status = 'Complete';
 
-          // Mark as complete locally BEFORE save to prevent race condition
-          this.completedConversationDetails.add(conversationManagerMessage.ID);
+        await conversationManagerMessage.Save();
+        this.messageSent.emit(conversationManagerMessage);
 
-          await conversationManagerMessage.Save();
+        // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
+        if (result.payload && Object.keys(result.payload).length > 0) {
+          await this.createArtifactFromPayload(result.payload, conversationManagerMessage, result.agentRun.AgentID);
+          console.log('🎨 Artifact created and linked to Conversation Manager message');
           this.messageSent.emit(conversationManagerMessage);
+        }
 
-          // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
-          if (result.payload && Object.keys(result.payload).length > 0) {
-            await this.createArtifactFromPayload(result.payload, conversationManagerMessage, result.agentRun.AgentID);
-            console.log('🎨 Artifact created and linked to Conversation Manager message');
-            this.messageSent.emit(conversationManagerMessage);
-          }
+        userMessage.Status = 'Complete';
+        await userMessage.Save();
+        this.messageSent.emit(userMessage);
 
-          userMessage.Status = 'Complete';
-          await userMessage.Save();
-          this.messageSent.emit(userMessage);
-
-          // Remove CM from active tasks
-          if (taskId) {
-            this.activeTasks.remove(taskId);
-          }
+        // Remove CM from active tasks
+        if (taskId) {
+          this.activeTasks.remove(taskId);
         }
       }
       // Stage 5: Silent observation - but check for message content first
@@ -626,9 +607,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
           conversationManagerMessage.Message = result.agentRun.Message;
           conversationManagerMessage.Status = 'Complete';
           conversationManagerMessage.HiddenToUser = false;
-
-          // Mark as complete locally BEFORE save to prevent race condition
-          this.completedConversationDetails.add(conversationManagerMessage.ID);
 
           await conversationManagerMessage.Save();
           this.messageSent.emit(conversationManagerMessage);
@@ -716,16 +694,10 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       const task = uniqueTasks[0];
       const agentName = task.agentName;
 
-      console.log(`📋 Single task detected, using direct agent execution for ${agentName}`);
-
       // Update CM message
       const delegationMessage = `👉 Delegating to **${agentName}**`;
-      console.log(`Updating CM message to: "${delegationMessage}"`);
       conversationManagerMessage.Message = delegationMessage;
       conversationManagerMessage.Status = 'Complete';
-
-      // Mark as complete locally BEFORE save to prevent race condition with progress callbacks
-      this.completedConversationDetails.add(conversationManagerMessage.ID);
 
       const saved = await conversationManagerMessage.Save();
       console.log(`CM message save result: ${saved}, ID: ${conversationManagerMessage.ID}, Message: ${conversationManagerMessage.Message}`);
@@ -753,18 +725,12 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     conversationManagerMessage.Message = `📋 Setting up multi-step workflow...\n\n**${workflowName}**\n${taskSummary}`;
     conversationManagerMessage.Status = 'Complete';
 
-    // Mark as complete locally BEFORE save to prevent race condition with progress callbacks
-    this.completedConversationDetails.add(conversationManagerMessage.ID);
-
     await conversationManagerMessage.Save();
 
     this.messageSent.emit(conversationManagerMessage);
 
     // Step 2: Create new ConversationDetail for task execution updates
-    const taskExecutionMessage = await md.GetEntityObject<ConversationDetailEntity>(
-      'Conversation Details',
-      this.currentUser
-    );
+    const taskExecutionMessage = await this.dataCache.createConversationDetail(this.currentUser);
     taskExecutionMessage.ConversationID = conversationId;
     taskExecutionMessage.Role = 'AI';
     taskExecutionMessage.Message = '⏳ Starting workflow execution...';
@@ -776,7 +742,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     this.messageSent.emit(taskExecutionMessage);
 
     // Register for real-time updates via PubSub
-    this.activeTaskExecutionMessages.set(taskExecutionMessage.ID, taskExecutionMessage);
+    this.activeTaskExecutionMessageIds.add(taskExecutionMessage.ID);
 
     try {
       // Get environment ID from user
@@ -846,7 +812,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       this.messageSent.emit(taskExecutionMessage);
 
       // Unregister from real-time updates (task complete)
-      this.activeTaskExecutionMessages.delete(taskExecutionMessage.ID);
+      this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
 
       // Mark user message as complete
       userMessage.Status = 'Complete';
@@ -862,7 +828,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       this.messageSent.emit(taskExecutionMessage);
 
       // Unregister from real-time updates (task failed)
-      this.activeTaskExecutionMessages.delete(taskExecutionMessage.ID);
+      this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
 
       userMessage.Status = 'Complete';
       await userMessage.Save();
@@ -889,11 +855,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       }
 
       // Create AI response message for the agent execution
-      const md = new Metadata();
-      const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -923,7 +885,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         task.description || task.name,
         agentResponseMessage.ID,
         task.inputPayload, // Pass the task's input payload
-        this.createProgressCallback(agentResponseMessage.ID, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName)
       );
 
       // Remove from active tasks
@@ -988,9 +950,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     conversationManagerMessage.Status = 'Complete';
     // Keep AgentID as Conversation Manager (already set)
 
-    // Mark as complete locally BEFORE save to prevent race condition
-    this.completedConversationDetails.add(conversationManagerMessage.ID);
-
     await conversationManagerMessage.Save();
     this.messageSent.emit(conversationManagerMessage);
 
@@ -1000,11 +959,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const md = new Metadata();
-      const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -1038,7 +993,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         reasoning,
         agentResponseMessage.ID,
         undefined, // no payload for initial invocation
-        this.createProgressCallback(agentResponseMessage.ID, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName)
       );
 
       // Remove from active tasks
@@ -1093,7 +1048,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
           reasoning,
           agentResponseMessage.ID,
           undefined, // no payload for retry
-          this.createProgressCallback(agentResponseMessage.ID, `${agentName} (retry)`)
+          this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`)
         );
 
         if (retryResult && retryResult.success) {
@@ -1174,7 +1129,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     }
 
     // Load the agent entity to get its name
-    const md = new Metadata();
     const rv = new RunView();
     const agentResult = await rv.RunView<AIAgentEntityExtended>({
       EntityName: 'AI Agents',
@@ -1233,10 +1187,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     }
 
     // Create status message showing agent continuity
-    const statusMessage = await md.GetEntityObject<ConversationDetailEntity>(
-      'Conversation Details',
-      this.currentUser
-    );
+    const statusMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
     statusMessage.ConversationID = conversationId;
     statusMessage.Role = 'AI';
@@ -1267,7 +1218,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         'Continuing previous work based on user feedback',
         statusMessage.ID,
         previousPayload,
-        this.createProgressCallback(statusMessage.ID, agentName)
+        this.createProgressCallback(statusMessage, agentName)
       );
 
       // Remove from active tasks
@@ -1275,10 +1226,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
       if (continuityResult && continuityResult.success) {
         // Create response message
-        const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
+        const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
         agentResponseMessage.ConversationID = conversationId;
         agentResponseMessage.Role = 'AI';
@@ -1346,11 +1294,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   ): Promise<void> {
     if (!result.agentRun.Message) return;
 
-    const md = new Metadata();
-    const agentMessage = await md.GetEntityObject<ConversationDetailEntity>(
-      'Conversation Details',
-      this.currentUser
-    );
+    const agentMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
     agentMessage.ConversationID = conversationId;
     agentMessage.Message = result.agentRun.Message;
@@ -1417,11 +1361,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const md = new Metadata();
-      const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -1447,7 +1387,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         `User mentioned agent directly with @${agentName}`,
         agentResponseMessage.ID,
         undefined, // no payload for direct mention
-        this.createProgressCallback(agentResponseMessage.ID, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName)
       );
 
       // Remove from active tasks
@@ -1478,11 +1418,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         this.messageSent.emit(userMessage);
       } else {
         // Agent failed - create error message
-        const md = new Metadata();
-        const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
+        const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
         errorMessage.ConversationID = conversationId;
         errorMessage.Role = 'AI';
@@ -1504,11 +1440,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
       this.activeTasks.remove(taskId);
 
-      const md = new Metadata();
-      const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       errorMessage.ConversationID = conversationId;
       errorMessage.Role = 'AI';
@@ -1537,7 +1469,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     conversationId: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const md = new Metadata();
     const rv = new RunView();
     const agentResult = await rv.RunView<AIAgentEntityExtended>({
       EntityName: 'AI Agents',
@@ -1614,10 +1545,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       this.messageSent.emit(userMessage);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -1640,7 +1568,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         'Continuing previous conversation with user',
         agentResponseMessage.ID,
         previousPayload, // Pass previous OUTPUT artifact payload for continuity
-        this.createProgressCallback(agentResponseMessage.ID, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName)
       );
 
       // Remove from active tasks
@@ -1672,10 +1600,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         this.messageSent.emit(userMessage);
       } else {
         // Agent failed - create error message
-        const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
+        const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
         errorMessage.ConversationID = conversationId;
         errorMessage.Role = 'AI';
@@ -1697,10 +1622,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
       this.activeTasks.remove(taskId);
 
-      const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       errorMessage.ConversationID = conversationId;
       errorMessage.Role = 'AI';

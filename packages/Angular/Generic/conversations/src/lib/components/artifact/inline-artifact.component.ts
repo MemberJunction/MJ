@@ -33,7 +33,7 @@ import { takeUntil } from 'rxjs/operators';
                 <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
               </div>
               <div class="artifact-title">
-                <span class="artifact-name">{{ artifact.Name }}</span>
+                <span class="artifact-name">{{ displayName }}</span>
                 @if (isNew) {
                   <span class="new-badge">NEW</span>
                 }
@@ -44,8 +44,8 @@ import { takeUntil } from 'rxjs/operators';
                 {{ artifact.Type }}
               </span>
               <span class="artifact-version">v{{ currentVersion?.VersionNumber || 1 }}</span>
-              @if (artifact.Description) {
-                <span class="artifact-description">{{ artifact.Description }}</span>
+              @if (displayDescription) {
+                <span class="artifact-description">{{ displayDescription }}</span>
               }
             </div>
           </div>
@@ -468,6 +468,26 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
     this.previewLines = lines.slice(0, this.PREVIEW_LINES);
     this.hasMoreContent = lines.length > this.PREVIEW_LINES;
     this.remainingLines = Math.max(0, lines.length - this.PREVIEW_LINES);
+  }
+
+  /**
+   * Get the display name - prefer version-specific name if available, otherwise use artifact name
+   */
+  public get displayName(): string {
+    if (this.currentVersion?.Name) {
+      return this.currentVersion.Name;
+    }
+    return this.artifact?.Name || 'Untitled';
+  }
+
+  /**
+   * Get the display description - prefer version-specific description if available, otherwise use artifact description
+   */
+  public get displayDescription(): string | null {
+    if (this.currentVersion?.Description) {
+      return this.currentVersion.Description;
+    }
+    return this.artifact?.Description || null;
   }
 
   public get isNew(): boolean {
