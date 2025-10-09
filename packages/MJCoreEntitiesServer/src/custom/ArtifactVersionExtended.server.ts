@@ -1,7 +1,6 @@
 import { BaseEntity, EntitySaveOptions, Metadata, RunView, LogError } from "@memberjunction/core";
-import { ArtifactVersionEntity, ArtifactEntity, ArtifactTypeEntity, ArtifactVersionAttributeEntity } from "../generated/entity_subclasses";
+import { ArtifactVersionEntity, ArtifactEntity, ArtifactTypeEntity, ArtifactVersionAttributeEntity, ArtifactExtractor } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
-import { ArtifactExtractor } from "../artifact-extraction/artifact-extractor";
 import { createHash } from 'crypto';
 
 @RegisterClass(BaseEntity, "MJ: Artifact Versions")
@@ -193,4 +192,11 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
 
         return hierarchy;
     }
+}
+
+/**
+ * Stub function to ensure this class is not tree shaken out
+ */
+export function LoadArtifactVersionExtendedServerSubClass() {
+    // This function is intentionally empty - it just needs to exist to prevent tree shaking
 }
