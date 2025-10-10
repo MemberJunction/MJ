@@ -1106,7 +1106,8 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map(pk => pk.Name).join(', ')}
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${entity.SchemaName}].[${viewName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${viewName}]', 'V') IS NOT NULL
+    DROP VIEW [${entity.SchemaName}].[${viewName}];
 GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
@@ -1330,7 +1331,8 @@ ${whereClause}GO${permissions}
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1365,7 +1367,8 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${entity.SchemaName}].trgUpdate${entity.ClassName}
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
 GO
 CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
@@ -1405,7 +1408,8 @@ GO`;
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1593,7 +1597,8 @@ ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't updat
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
