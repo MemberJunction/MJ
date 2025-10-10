@@ -119,10 +119,14 @@ export class AngularClientGeneratorBase {
                       const sectionPath = path.join(thisEntityPath, 'sections');
                       if (!fs.existsSync(sectionPath))
                           fs.mkdirSync(sectionPath, { recursive: true }); // create the directory if it doesn't exist
-      
+
                       for (let j:number = 0; j < additionalSections.length; ++j) {
-                          fs.writeFileSync(path.join(sectionPath, `${additionalSections[j].FileName}`), additionalSections[j].ComponentCode!);
-                          sections.push(additionalSections[j]); // add the entity's secitons one by one to the master/global list of sections
+                          const section = additionalSections[j];
+                          // Only write file if FileName and ComponentCode are populated
+                          if (section.FileName && section.ComponentCode) {
+                              fs.writeFileSync(path.join(sectionPath, section.FileName), section.ComponentCode);
+                          }
+                          sections.push(section); // add the entity's secitons one by one to the master/global list of sections
                       }
                   }
       
