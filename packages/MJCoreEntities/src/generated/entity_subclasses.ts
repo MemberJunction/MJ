@@ -17068,10 +17068,10 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     }
 
     /**
-    * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * MaxExecutionsPerRun: This rule ensures that if a value for the maximum number of executions per run is provided, it must be greater than zero. If no value is provided, that's acceptable.
-    * * MinExecutionsPerRun: This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
-    * * Table-Level: This rule ensures that the minimum number of executions per run cannot be greater than the maximum number of executions per run. If either value is not specified, the rule is considered satisfied.  
+    * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
+    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
+    * * Table-Level: This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
     * @public
     * @method
     * @override
@@ -17080,48 +17080,45 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
         const result = super.Validate();
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunIsNonNegative(result);
-        this.ValidateMinExecutionsPerRunLessThanOrEqualToMax(result);
+        this.ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that if a value for the maximum number of executions per run is provided, it must be greater than zero. If no value is provided, that's acceptable.
+    * This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
-    	if (this.MaxExecutionsPerRun !== null && this.MaxExecutionsPerRun <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If a maximum executions per run is specified, it must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "When provided, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if a value for 'Minimum Executions Per Run' is provided, it must be zero or greater. If the value is not provided (left blank), that's also allowed.
+    * This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the minimum number of executions per run cannot be greater than the maximum number of executions per run. If either value is not specified, the rule is considered satisfied.
+    * This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMinExecutionsPerRunLessThanOrEqualToMax(result: ValidationResult) {
-    	if (
-    		this.MinExecutionsPerRun !== null &&
-    		this.MaxExecutionsPerRun !== null &&
-    		this.MinExecutionsPerRun > this.MaxExecutionsPerRun
-    	) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum executions per run cannot be greater than the maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    public ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 
@@ -18038,108 +18035,112 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     }
 
     /**
-    * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * DefaultPromptEffortLevel: This rule ensures that the DefaultPromptEffortLevel must always be a value between 1 and 100, inclusive.
-    * * MaxExecutionsPerRun: This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.
-    * * MinExecutionsPerRun: This rule ensures that if the minimum executions per run value is provided, it must be zero or greater.
-    * * Table-Level: This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.
-    * * Table-Level: This rule ensures that if both 'Minimum Executions Per Run' and 'Maximum Executions Per Run' are specified, the minimum must not be greater than the maximum. If either field is not specified, this rule does not apply.
-    * * Table-Level: This rule makes sure that if the ParentID is set (not empty), then the ExposeAsAction option must be disabled. If ExposeAsAction is enabled, ParentID must be empty.  
+    * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
+    * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
+    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
+    * * Table-Level: This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
+    * * Table-Level: This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
+    * * Table-Level: This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateDefaultPromptEffortLevelWithinRange(result);
-        this.ValidateMaxExecutionsPerRunIsNullOrPositive(result);
-        this.ValidateMinExecutionsPerRunIsNonNegative(result);
-        this.ValidateEnableContextCompressionRequiresContextFields(result);
+        this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
+        this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMinExecutionsPerRunNonNegative(result);
+        this.ValidateContextCompressionFieldsWhenEnabled(result);
         this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
-        this.ValidateParentIDMustBeNullIfExposeAsActionTrue(result);
+        this.ValidateParentIDRequiresExposeAsActionFalse(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the DefaultPromptEffortLevel must always be a value between 1 and 100, inclusive.
+    * This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateDefaultPromptEffortLevelWithinRange(result: ValidationResult) {
-    	if (this.DefaultPromptEffortLevel < 1 || this.DefaultPromptEffortLevel > 100) {
-    		result.Errors.push(new ValidationErrorInfo("DefaultPromptEffortLevel", "DefaultPromptEffortLevel must be between 1 and 100.", this.DefaultPromptEffortLevel, ValidationErrorType.Failure));
+    public ValidateDefaultPromptEffortLevelInAllowedRange(result: ValidationResult) {
+    	if (this.DefaultPromptEffortLevel != null && (this.DefaultPromptEffortLevel < 1 || this.DefaultPromptEffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("DefaultPromptEffortLevel", "If specified, DefaultPromptEffortLevel must be between 1 and 100.", this.DefaultPromptEffortLevel, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the maximum number of executions per run can either be left blank (unspecified) or, if provided, it must be a positive number greater than zero.
+    * This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMaxExecutionsPerRunIsNullOrPositive(result: ValidationResult) {
-    	if (this.MaxExecutionsPerRun !== null && this.MaxExecutionsPerRun <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "MaxExecutionsPerRun must be left blank or must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If specified, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the minimum executions per run value is provided, it must be zero or greater.
+    * This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun !== null && this.MinExecutionsPerRun < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "If specified, the minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    public ValidateMinExecutionsPerRunNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be less than zero.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if context compression is enabled, all related settings (message threshold, prompt ID, and message retention count) must be specified. If context compression is not enabled, these settings may be left unspecified.
+    * This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateEnableContextCompressionRequiresContextFields(result: ValidationResult) {
+    public ValidateContextCompressionFieldsWhenEnabled(result: ValidationResult) {
     	if (this.EnableContextCompression) {
-    		if (this.ContextCompressionMessageThreshold === null) {
-    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageThreshold", "Context compression is enabled, so the context compression message threshold is required.", this.ContextCompressionMessageThreshold, ValidationErrorType.Failure));
+    		if (this.ContextCompressionMessageThreshold == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageThreshold", "Context compression message threshold must be provided when context compression is enabled.", this.ContextCompressionMessageThreshold, ValidationErrorType.Failure));
     		}
-    		if (this.ContextCompressionPromptID === null) {
-    			result.Errors.push(new ValidationErrorInfo("ContextCompressionPromptID", "Context compression is enabled, so the context compression prompt ID is required.", this.ContextCompressionPromptID, ValidationErrorType.Failure));
+    		if (this.ContextCompressionPromptID == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionPromptID", "Context compression prompt ID must be provided when context compression is enabled.", this.ContextCompressionPromptID, ValidationErrorType.Failure));
     		}
-    		if (this.ContextCompressionMessageRetentionCount === null) {
-    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageRetentionCount", "Context compression is enabled, so the context compression message retention count is required.", this.ContextCompressionMessageRetentionCount, ValidationErrorType.Failure));
+    		if (this.ContextCompressionMessageRetentionCount == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageRetentionCount", "Context compression message retention count must be provided when context compression is enabled.", this.ContextCompressionMessageRetentionCount, ValidationErrorType.Failure));
     		}
     	}
     }
 
     /**
-    * This rule ensures that if both 'Minimum Executions Per Run' and 'Maximum Executions Per Run' are specified, the minimum must not be greater than the maximum. If either field is not specified, this rule does not apply.
+    * This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
-    	if (this.MinExecutionsPerRun !== null && this.MaxExecutionsPerRun !== null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
-    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null) {
+    		if (this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
+    			result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum number of executions per run cannot be greater than the maximum.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    		}
     	}
     }
 
     /**
-    * This rule makes sure that if the ParentID is set (not empty), then the ExposeAsAction option must be disabled. If ExposeAsAction is enabled, ParentID must be empty.
+    * This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateParentIDMustBeNullIfExposeAsActionTrue(result: ValidationResult) {
-    	if (this.ParentID !== null && this.ExposeAsAction) {
-    		result.Errors.push(new ValidationErrorInfo("ParentID", "ParentID must be empty if this item is exposed as an action.", this.ParentID, ValidationErrorType.Failure));
+    public ValidateParentIDRequiresExposeAsActionFalse(result: ValidationResult) {
+    	if (this.ParentID != null && this.ExposeAsAction) {
+    		result.Errors.push(new ValidationErrorInfo("ExposeAsAction", "If ParentID is specified, ExposeAsAction must be false.", this.ExposeAsAction, ValidationErrorType.Failure));
     	}
     }
+    
 
     /**
     * * Field Name: ID
@@ -18986,56 +18987,57 @@ export class AIModelEntity extends BaseEntity<AIModelEntityType> {
     }
 
     /**
-    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * CostRank: This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
-    * * PowerRank: This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
-    * * SpeedRank: This rule ensures that the speed rank must be zero or a positive number.  
+    * Validate() method override for AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CostRank: This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
+    * * PowerRank: This rule ensures that if a value is provided for PowerRank, it must not be negative.
+    * * SpeedRank: This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCostRank(result);
-        this.ValidatePowerRank(result);
-        this.ValidateSpeedRank(result);
+        this.ValidateCostRankNonNegative(result);
+        this.ValidatePowerRankIsNonNegative(result);
+        this.ValidateSpeedRankNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the cost rank of an item must be zero or higher. This means that the cost rank cannot be negative.
+    * This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateCostRank(result: ValidationResult) {
-    	if (this.CostRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo('CostRank', 'The cost rank must be zero or higher.', this.CostRank, ValidationErrorType.Failure));
-    	} 
-    }
-
-    /**
-    * This rule ensures that the power rank must be greater than or equal to zero, meaning that it cannot be negative.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidatePowerRank(result: ValidationResult) {
-    	if (this.PowerRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo('PowerRank', 'The power rank must be greater than or equal to zero.', this.PowerRank, ValidationErrorType.Failure));
+    public ValidateCostRankNonNegative(result: ValidationResult) {
+    	if (this.CostRank != null && this.CostRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("CostRank", "CostRank must be greater than or equal to zero.", this.CostRank, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the speed rank must be zero or a positive number.
+    * This rule ensures that if a value is provided for PowerRank, it must not be negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateSpeedRank(result: ValidationResult) {
-    	if (this.SpeedRank < 0) {
-    		result.Errors.push(new ValidationErrorInfo('SpeedRank', 'Speed rank must be zero or a positive number.', this.SpeedRank, ValidationErrorType.Failure));
+    public ValidatePowerRankIsNonNegative(result: ValidationResult) {
+    	if (this.PowerRank != null && this.PowerRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("PowerRank", "PowerRank must be zero or positive.", this.PowerRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSpeedRankNonNegative(result: ValidationResult) {
+    	if (this.SpeedRank != null && this.SpeedRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("SpeedRank", "SpeedRank must be zero or a positive number.", this.SpeedRank, ValidationErrorType.Failure));
     	}
     }
 
@@ -19493,189 +19495,186 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     }
 
     /**
-    * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * CacheSimilarityThreshold: This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
-    * * CacheTTLSeconds: This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
-    * * EffortLevel: This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
-    * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
-    * * FailoverModelStrategy: This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
-    * * FailoverStrategy: This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
-    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
-    * * Table-Level: This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
-    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
-    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
-    * * Table-Level: This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.  
+    * Validate() method override for AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CacheSimilarityThreshold: This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
+    * * CacheTTLSeconds: This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
+    * * EffortLevel: This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
+    * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field, if set, can only be 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', or 'All'. It can also be left blank (no value). Any other value is not allowed.
+    * * FailoverModelStrategy: This rule ensures that the Failover Model Strategy can only be 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not specified). No other values are allowed.
+    * * FailoverStrategy: This rule ensures that the Failover Strategy field can only be set to one of the following values: 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.
+    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
+    * * Table-Level: This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
+    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
+    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
+    * * Table-Level: This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result);
-        this.ValidateCacheTTLSecondsGreaterThanZero(result);
-        this.ValidateEffortLevelIsWithinRange(result);
+        this.ValidateCacheSimilarityThresholdBetweenZeroAndOne(result);
+        this.ValidateCacheTTLSecondsIsPositive(result);
+        this.ValidateEffortLevelIsBetween1And100(result);
         this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
         this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
         this.ValidateFailoverStrategyAllowedValues(result);
-        this.ValidateCacheSimilarityThresholdRequiredForVectorCache(result);
-        this.ValidateOutputExampleWhenOutputTypeObject(result);
+        this.ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result);
+        this.ValidateOutputExampleRequiredWhenOutputTypeIsObject(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
-        this.ValidateParallelCountWhenParallelizationModeIsStaticCount(result);
+        this.ValidateParallelCountRequiredForStaticCount(result);
         this.ValidateResultSelectorPromptIDNotEqualID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that if a cache similarity threshold is provided, it must be a value between 0 and 1, inclusive. If no value is provided, that's also allowed.
+    * This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateCacheSimilarityThresholdIsBetweenZeroAndOne(result: ValidationResult) {
-    	if (this.CacheSimilarityThreshold !== null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
-    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "Cache similarity threshold must be between 0 and 1.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    public ValidateCacheSimilarityThresholdBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.CacheSimilarityThreshold != null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be between 0 and 1, inclusive.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the cache expiration time in seconds is provided, it must be greater than zero.
+    * This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateCacheTTLSecondsGreaterThanZero(result: ValidationResult) {
-    	if (this.CacheTTLSeconds !== null && this.CacheTTLSeconds <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "If cache expiration time (CacheTTLSeconds) is specified, it must be greater than zero.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    public ValidateCacheTTLSecondsIsPositive(result: ValidationResult) {
+    	if (this.CacheTTLSeconds != null && this.CacheTTLSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "Cache time-to-live (CacheTTLSeconds) must be greater than 0 if specified.", this.CacheTTLSeconds, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
+    * This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateEffortLevelIsWithinRange(result: ValidationResult) {
-    	if (this.EffortLevel < 1 || this.EffortLevel > 100) {
-    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "EffortLevel must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort Level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the FailoverErrorScope field can only be set to 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.
+    * This rule ensures that the FailoverErrorScope field, if set, can only be 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', or 'All'. It can also be left blank (no value). Any other value is not allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFailoverErrorScopeAgainstAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["ServiceErrorOnly", "RateLimitOnly", "NetworkOnly", "All", null];
-    	if (!allowedValues.includes(this.FailoverErrorScope)) {
-    		result.Errors.push(new ValidationErrorInfo("FailoverErrorScope", "The failover error scope must be one of: 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', 'All', or left empty.", this.FailoverErrorScope, ValidationErrorType.Failure));
+    	if (
+    		this.FailoverErrorScope != null &&
+    		this.FailoverErrorScope !== "ServiceErrorOnly" &&
+    		this.FailoverErrorScope !== "RateLimitOnly" &&
+    		this.FailoverErrorScope !== "NetworkOnly" &&
+    		this.FailoverErrorScope !== "All"
+    	) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"FailoverErrorScope",
+    			"FailoverErrorScope can only be 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', or 'All'.",
+    			this.FailoverErrorScope,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
     /**
-    * This rule ensures that the value for FailoverModelStrategy is either 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not set). Any other value is not allowed.
+    * This rule ensures that the Failover Model Strategy can only be 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not specified). No other values are allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFailoverModelStrategyAgainstAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["RequireSameModel", "PreferDifferentModel", "PreferSameModel", null];
-    	if (this.FailoverModelStrategy !== null &&
-    		!allowedValues.includes(this.FailoverModelStrategy)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FailoverModelStrategy",
-    			"FailoverModelStrategy must be null or one of: 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel'.",
-    			this.FailoverModelStrategy,
-    			ValidationErrorType.Failure
-    		));
+    	if (this.FailoverModelStrategy != null && this.FailoverModelStrategy !== "RequireSameModel" && this.FailoverModelStrategy !== "PreferDifferentModel" && this.FailoverModelStrategy !== "PreferSameModel") {
+    		result.Errors.push(new ValidationErrorInfo("FailoverModelStrategy", "Failover Model Strategy must be one of: 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank.", this.FailoverModelStrategy, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the FailoverStrategy field, if specified, must be either 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (unset).
+    * This rule ensures that the Failover Strategy field can only be set to one of the following values: 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFailoverStrategyAllowedValues(result: ValidationResult) {
-    	const allowed = [
-    		"None",
-    		"PowerRank",
-    		"NextBestModel",
-    		"SameModelDifferentVendor",
-    		null, // Allowing null/undefined as valid per the constraint
-    		undefined
-    	];
-    	if (!allowed.includes(this.FailoverStrategy)) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FailoverStrategy",
-    			"The failover strategy must be 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.",
-    			this.FailoverStrategy,
-    			ValidationErrorType.Failure
-    		));
+    	if (
+    		this.FailoverStrategy != null &&
+    		this.FailoverStrategy !== "None" &&
+    		this.FailoverStrategy !== "PowerRank" &&
+    		this.FailoverStrategy !== "NextBestModel" &&
+    		this.FailoverStrategy !== "SameModelDifferentVendor"
+    	) {
+    		result.Errors.push(new ValidationErrorInfo("FailoverStrategy", "FailoverStrategy must be 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (null).", this.FailoverStrategy, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the cache match type is set to 'Vector', the cache similarity threshold must be specified. If the match type is anything other than 'Vector', the similarity threshold can be left empty.
+    * This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateCacheSimilarityThresholdRequiredForVectorCache(result: ValidationResult) {
-    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold === null) {
-    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be specified when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    public ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result: ValidationResult) {
+    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold == null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "A cache similarity threshold must be set when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the OutputType is set to 'object', an OutputExample must be provided. If the OutputType is anything other than 'object', providing an OutputExample is not required.
+    * This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateOutputExampleWhenOutputTypeObject(result: ValidationResult) {
-    	if (this.OutputType === "object" && (this.OutputExample === null || this.OutputExample === undefined)) {
-    		result.Errors.push(new ValidationErrorInfo("OutputExample", "When OutputType is 'object', OutputExample must be provided.", this.OutputExample, ValidationErrorType.Failure));
+    public ValidateOutputExampleRequiredWhenOutputTypeIsObject(result: ValidationResult) {
+    	if (this.OutputType === "object" && this.OutputExample == null) {
+    		result.Errors.push(new ValidationErrorInfo("OutputExample", "An output example must be provided when OutputType is 'object'.", this.OutputExample, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then the Parallel Config Param field must be filled in. For any other mode, the Parallel Config Param can be left empty.
+    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
-    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam === null) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "Parallel Config Param must be entered when Parallelization Mode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam == null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the parallelization mode is set to 'StaticCount', then the number of parallel tasks (ParallelCount) must be provided.
+    * This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateParallelCountWhenParallelizationModeIsStaticCount(result: ValidationResult) {
-    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount === null) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "When ParallelizationMode is 'StaticCount', ParallelCount must be specified.", this.ParallelCount, ValidationErrorType.Failure));
+    public ValidateParallelCountRequiredForStaticCount(result: ValidationResult) {
+    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount == null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "A parallel count must be provided when parallelization mode is set to 'StaticCount'.", this.ParallelCount, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the ResultSelectorPromptID field must be different from the ID field. In other words, a result selector prompt cannot reference itself.
+    * This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
-    	if (this.ResultSelectorPromptID === this.ID) {
-    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "The ResultSelectorPromptID cannot be the same as the ID. A result selector prompt cannot reference itself.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
+    	if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "ResultSelectorPromptID cannot be the same as the ID of this record.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
     	}
     }
 
@@ -22311,28 +22310,29 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     }
 
     /**
-    * Validate() method override for Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.  
+    * Validate() method override for Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateSupportsScheduledSendingComparedToSupportsSending(result);
+        this.ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the ability to schedule sending messages cannot exceed the overall ability to send messages. In simpler terms, if a user can send messages, they can also send them on a schedule, but if they cannot send messages, they shouldn't be able to send them on a schedule either.
+    * This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateSupportsScheduledSendingComparedToSupportsSending(result: ValidationResult) {
+    public ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result: ValidationResult) {
     	if (this.SupportsScheduledSending && !this.SupportsSending) {
-    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "A user who cannot send messages cannot schedule sending of messages.", this.SupportsScheduledSending, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "Scheduled sending cannot be supported if sending is not supported.", this.SupportsScheduledSending, ValidationErrorType.Failure));
     	}
     }
 
@@ -25199,28 +25199,29 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
 
     /**
-    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * UserRating: This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.  
+    * Validate() method override for Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * UserRating: This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateUserRating(result);
+        this.ValidateUserRatingBetween1And10(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the user rating is between 1 and 10, inclusive. Ratings below 1 or above 10 are not allowed.
+    * This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateUserRating(result: ValidationResult) {
-    	if (this.UserRating < 1 || this.UserRating > 10) {
-    		result.Errors.push(new ValidationErrorInfo('UserRating', 'The user rating must be between 1 and 10, inclusive.', this.UserRating, ValidationErrorType.Failure));
+    public ValidateUserRatingBetween1And10(result: ValidationResult) {
+    	if (this.UserRating != null && (this.UserRating < 1 || this.UserRating > 10)) {
+    		result.Errors.push(new ValidationErrorInfo("UserRating", "User rating must be between 1 and 10.", this.UserRating, ValidationErrorType.Failure));
     	}
     }
 
@@ -28145,28 +28146,29 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     }
 
     /**
-    * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.  
+    * Validate() method override for Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateAllowRecordMergeConstraints(result);
+        this.ValidateAllowRecordMergeForSoftDeleteAPI(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that if record merging is allowed, it can only be permitted if record deletion is enabled and the deletion type is set to 'Soft'.
+    * This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateAllowRecordMergeConstraints(result: ValidationResult) {
-    	if (this.AllowRecordMerge && !(this.AllowDeleteAPI && this.DeleteType === 'Soft')) {
-    		result.Errors.push(new ValidationErrorInfo('AllowRecordMerge', 'Record merging is only allowed when record deletion is enabled and the deletion type is set to Soft.', this.AllowRecordMerge, ValidationErrorType.Failure));
+    public ValidateAllowRecordMergeForSoftDeleteAPI(result: ValidationResult) {
+    	if (this.AllowDeleteAPI && this.DeleteType === "Soft" && !this.AllowRecordMerge) {
+    		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "When API deletes are allowed and delete type is 'Soft', record merging must be allowed.", this.AllowRecordMerge, ValidationErrorType.Failure));
     	}
     }
 
@@ -30492,34 +30494,35 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     }
 
     /**
-    * Validate() method override for Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.  
+    * Validate() method override for Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result);
+        this.ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the potential match threshold is not greater than the absolute match threshold, and both thresholds must be between 0 and 1 inclusive.
+    * This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidatePotentialMatchThresholdAgainstAbsoluteMatchThreshold(result: ValidationResult) {
-    	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
-    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold cannot be greater than the absolute match threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
-    	}
+    public ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result: ValidationResult) {
     	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
-    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "The potential match threshold must be between 0 and 1 inclusive.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must be between 0 and 1.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
     	}
     	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
-    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "The absolute match threshold must be between 0 and 1 inclusive.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "Absolute Match Threshold must be between 0 and 1.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must not exceed the Absolute Match Threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
     	}
     }
 
@@ -32930,28 +32933,29 @@ export class ExplorerNavigationItemEntity extends BaseEntity<ExplorerNavigationI
     }
 
     /**
-    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Sequence: This rule ensures that the sequence must be greater than zero.  
+    * Validate() method override for Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Sequence: This rule ensures that the 'Sequence' value must always be greater than zero.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateSequence(result);
+        this.ValidateSequenceGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the sequence must be greater than zero.
+    * This rule ensures that the 'Sequence' value must always be greater than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateSequence(result: ValidationResult) {
+    public ValidateSequenceGreaterThanZero(result: ValidationResult) {
     	if (this.Sequence <= 0) {
-    		result.Errors.push(new ValidationErrorInfo('Sequence', 'The sequence must be greater than zero.', this.Sequence, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("Sequence", "The Sequence value must be greater than zero.", this.Sequence, ValidationErrorType.Failure));
     	}
     }
 
@@ -35690,28 +35694,29 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then the context message count must be provided. For all other context behaviors, the context message count can be left blank.  
+    * Validate() method override for MJ: AI Agent Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateContextMessageCountRequiredForCertainBehaviors(result);
+        this.ValidateContextMessageCountForSelectedBehaviors(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then the context message count must be provided. For all other context behaviors, the context message count can be left blank.
+    * This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateContextMessageCountRequiredForCertainBehaviors(result: ValidationResult) {
-    	if ((this.ContextBehavior === "InitialMessages" || this.ContextBehavior === "RecentMessages") && this.ContextMessageCount === null) {
-    		result.Errors.push(new ValidationErrorInfo("ContextMessageCount", "ContextMessageCount must be specified when ContextBehavior is 'InitialMessages' or 'RecentMessages'.", this.ContextMessageCount, ValidationErrorType.Failure));
+    public ValidateContextMessageCountForSelectedBehaviors(result: ValidationResult) {
+    	if ((this.ContextBehavior === "InitialMessages" || this.ContextBehavior === "RecentMessages") && this.ContextMessageCount == null) {
+    		result.Errors.push(new ValidationErrorInfo("ContextMessageCount", "When ContextBehavior is 'InitialMessages' or 'RecentMessages', ContextMessageCount must be provided.", this.ContextMessageCount, ValidationErrorType.Failure));
     	}
     }
 
@@ -36062,9 +36067,9 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * FinalPayloadValidationResult: This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.
-    * * StepNumber: This rule ensures that the step number must always be greater than zero.  
+    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * FinalPayloadValidationResult: This rule ensures that if the FinalPayloadValidationResult field has a value, it must be one of the following: 'Warn', 'Fail', 'Retry', or 'Pass'. The field can also be empty (null).
+    * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
     * @override
@@ -36073,22 +36078,28 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
         const result = super.Validate();
         this.ValidateFinalPayloadValidationResultAllowedValues(result);
         this.ValidateStepNumberGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the FinalPayloadValidationResult field is either left blank or is set to one of the following values: 'Warn', 'Fail', 'Retry', or 'Pass'. No other values are allowed.
+    * This rule ensures that if the FinalPayloadValidationResult field has a value, it must be one of the following: 'Warn', 'Fail', 'Retry', or 'Pass'. The field can also be empty (null).
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
-    	const allowedValues = ["Warn", "Fail", "Retry", "Pass"];
-    	if (this.FinalPayloadValidationResult !== null && !allowedValues.includes(this.FinalPayloadValidationResult)) {
+    	if (
+    		this.FinalPayloadValidationResult != null &&
+    		this.FinalPayloadValidationResult !== "Warn" &&
+    		this.FinalPayloadValidationResult !== "Fail" &&
+    		this.FinalPayloadValidationResult !== "Retry" &&
+    		this.FinalPayloadValidationResult !== "Pass"
+    	) {
     		result.Errors.push(new ValidationErrorInfo(
     			"FinalPayloadValidationResult",
-    			"If a final payload validation result is specified, it must be either 'Warn', 'Fail', 'Retry', or 'Pass'.",
+    			"FinalPayloadValidationResult must be 'Warn', 'Fail', 'Retry', or 'Pass' if it is provided.",
     			this.FinalPayloadValidationResult,
     			ValidationErrorType.Failure
     		));
@@ -36096,7 +36107,7 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     }
 
     /**
-    * This rule ensures that the step number must always be greater than zero.
+    * This rule ensures that the step number must be greater than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -36452,28 +36463,29 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * EffortLevel: This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.  
+    * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateEffortLevelWithinAllowedRange(result);
+        this.ValidateEffortLevelBetween1And100(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the EffortLevel must be a value between 1 and 100, inclusive.
+    * This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateEffortLevelWithinAllowedRange(result: ValidationResult) {
-    	if (this.EffortLevel < 1 || this.EffortLevel > 100) {
-    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "EffortLevel must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    public ValidateEffortLevelBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
     	}
     }
 
@@ -37121,28 +37133,29 @@ export class AIAgentStepPathEntity extends BaseEntity<AIAgentStepPathEntityType>
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Step Paths entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the origin step and destination step must be different. In other words, a step cannot connect to itself.  
+    * Validate() method override for MJ: AI Agent Step Paths entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateOriginStepIDIsNotEqualToDestinationStepID(result);
+        this.ValidateOriginStepIDAgainstDestinationStepIDDifferent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the origin step and destination step must be different. In other words, a step cannot connect to itself.
+    * This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateOriginStepIDIsNotEqualToDestinationStepID(result: ValidationResult) {
+    public ValidateOriginStepIDAgainstDestinationStepIDDifferent(result: ValidationResult) {
     	if (this.OriginStepID === this.DestinationStepID) {
-    		result.Errors.push(new ValidationErrorInfo("OriginStepID", "Origin step and destination step must be different. A step cannot connect to itself.", this.OriginStepID, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("OriginStepID", "The origin step cannot be the same as the destination step.", this.OriginStepID, ValidationErrorType.Failure));
     	}
     }
 
@@ -37307,42 +37320,43 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Agent Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * RetryCount: This rule ensures that the RetryCount value cannot be negative. It must be zero or higher.
-    * * TimeoutSeconds: This rule makes sure that the value for TimeoutSeconds must be greater than zero. Negative values or zero are not allowed.  
+    * Validate() method override for MJ: AI Agent Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RetryCount: This rule ensures that the number of retries allowed cannot be negative.
+    * * TimeoutSeconds: This rule ensures that, if provided, the timeout value must be greater than zero seconds.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateRetryCountIsNonNegative(result);
+        this.ValidateRetryCountNonNegative(result);
         this.ValidateTimeoutSecondsGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the RetryCount value cannot be negative. It must be zero or higher.
+    * This rule ensures that the number of retries allowed cannot be negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateRetryCountIsNonNegative(result: ValidationResult) {
+    public ValidateRetryCountNonNegative(result: ValidationResult) {
     	if (this.RetryCount < 0) {
     		result.Errors.push(new ValidationErrorInfo("RetryCount", "Retry count cannot be negative.", this.RetryCount, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule makes sure that the value for TimeoutSeconds must be greater than zero. Negative values or zero are not allowed.
+    * This rule ensures that, if provided, the timeout value must be greater than zero seconds.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateTimeoutSecondsGreaterThanZero(result: ValidationResult) {
-    	if (this.TimeoutSeconds <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("TimeoutSeconds", "TimeoutSeconds must be greater than zero.", this.TimeoutSeconds, ValidationErrorType.Failure));
+    	if (this.TimeoutSeconds != null && this.TimeoutSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("TimeoutSeconds", "TimeoutSeconds must be greater than zero if specified.", this.TimeoutSeconds, ValidationErrorType.Failure));
     	}
     }
 
@@ -38210,11 +38224,11 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Model Costs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Currency: This rule ensures that the currency code consists of exactly three uppercase letters. For example, 'USD', 'EUR', or 'JPY' are valid, but anything with lowercase letters or a different length is not allowed.
-    * * InputPricePerUnit: This rule ensures that the input price per unit cannot be negative. It must be zero or greater.
-    * * OutputPricePerUnit: This rule ensures that the output price per unit cannot be negative. It must be zero or greater.
-    * * Table-Level: This rule ensures that the end date must be after the start date if both are specified. If either the start date or end date is missing, any value is allowed.  
+    * Validate() method override for MJ: AI Model Costs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Currency: This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
+    * * InputPricePerUnit: This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
+    * * OutputPricePerUnit: This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
+    * * Table-Level: This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
     * @public
     * @method
     * @override
@@ -38222,60 +38236,61 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateCurrencyIsThreeUppercaseLetters(result);
-        this.ValidateInputPricePerUnitNonNegative(result);
+        this.ValidateInputPricePerUnitIsNonNegative(result);
         this.ValidateOutputPricePerUnitNonNegative(result);
         this.ValidateEndedAtAfterStartedAt(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the currency code consists of exactly three uppercase letters. For example, 'USD', 'EUR', or 'JPY' are valid, but anything with lowercase letters or a different length is not allowed.
+    * This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateCurrencyIsThreeUppercaseLetters(result: ValidationResult) {
-    	if (typeof this.Currency !== "string" || this.Currency.length !== 3 || this.Currency !== this.Currency.toUpperCase()) {
-    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be exactly three uppercase letters (e.g., 'USD').", this.Currency, ValidationErrorType.Failure));
+    	if (this.Currency.length !== 3) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be exactly 3 characters long.", this.Currency, ValidationErrorType.Failure));
+    	} else if (this.Currency !== this.Currency.toUpperCase()) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be in uppercase letters.", this.Currency, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the input price per unit cannot be negative. It must be zero or greater.
+    * This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateInputPricePerUnitNonNegative(result: ValidationResult) {
+    public ValidateInputPricePerUnitIsNonNegative(result: ValidationResult) {
     	if (this.InputPricePerUnit < 0) {
-    		result.Errors.push(new ValidationErrorInfo("InputPricePerUnit", "Input price per unit cannot be negative.", this.InputPricePerUnit, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("InputPricePerUnit", "The input price per unit cannot be negative.", this.InputPricePerUnit, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the output price per unit cannot be negative. It must be zero or greater.
+    * This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateOutputPricePerUnitNonNegative(result: ValidationResult) {
     	if (this.OutputPricePerUnit < 0) {
-    		result.Errors.push(new ValidationErrorInfo("OutputPricePerUnit", "Output price per unit must be zero or a positive value.", this.OutputPricePerUnit, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("OutputPricePerUnit", "The output price per unit cannot be negative.", this.OutputPricePerUnit, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the end date must be after the start date if both are specified. If either the start date or end date is missing, any value is allowed.
+    * This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
-    	if (this.EndedAt !== null && this.StartedAt !== null) {
-    		if (this.EndedAt <= this.StartedAt) {
-    			result.Errors.push(new ValidationErrorInfo("EndedAt", "The end date must be after the start date when both are specified.", this.EndedAt, ValidationErrorType.Failure));
-    		}
+    	if (this.EndedAt !== null && this.StartedAt !== null && this.EndedAt <= this.StartedAt) {
+    		result.Errors.push(new ValidationErrorInfo("EndedAt", "When both an end date and a start date are set, the end date must be later than the start date.", this.EndedAt, ValidationErrorType.Failure));
     	}
     }
 
@@ -38548,8 +38563,8 @@ export class AIModelPriceTypeEntity extends BaseEntity<AIModelPriceTypeEntityTyp
     }
 
     /**
-    * Validate() method override for MJ: AI Model Price Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Name: This rule ensures that the Name field cannot be empty or consist only of spaces; it must contain at least one non-space character.  
+    * Validate() method override for MJ: AI Model Price Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Name: This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
     * @public
     * @method
     * @override
@@ -38557,19 +38572,20 @@ export class AIModelPriceTypeEntity extends BaseEntity<AIModelPriceTypeEntityTyp
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateNameNotEmptyOrWhitespace(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the Name field cannot be empty or consist only of spaces; it must contain at least one non-space character.
+    * This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
-    	if (!this.Name || this.Name.trim().length === 0) {
-    		result.Errors.push(new ValidationErrorInfo("Name", "The Name field cannot be empty or just spaces.", this.Name, ValidationErrorType.Failure));
+    	if (this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "Name must not be empty or only spaces.", this.Name, ValidationErrorType.Failure));
     	}
     }
 
@@ -38665,42 +38681,43 @@ export class AIModelPriceUnitTypeEntity extends BaseEntity<AIModelPriceUnitTypeE
     }
 
     /**
-    * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * DriverClass: This rule ensures that the DriverClass field cannot be empty or consist only of spaces. The value must contain at least one character when leading and trailing spaces are ignored.
-    * * Name: This rule ensures that the Name field cannot be empty or contain only spaces; it must have at least one non-space character.  
+    * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DriverClass: This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
+    * * Name: This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateDriverClassNotEmpty(result);
-        this.ValidateNameNotEmptyOrWhitespace(result);
+        this.ValidateDriverClassNotBlank(result);
+        this.ValidateNameHasNonWhitespaceCharacters(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the DriverClass field cannot be empty or consist only of spaces. The value must contain at least one character when leading and trailing spaces are ignored.
+    * This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateDriverClassNotEmpty(result: ValidationResult) {
-    	if (this.DriverClass === null || this.DriverClass.trim().length === 0) {
-    		result.Errors.push(new ValidationErrorInfo("DriverClass", "DriverClass must not be empty or only spaces.", this.DriverClass, ValidationErrorType.Failure));
+    public ValidateDriverClassNotBlank(result: ValidationResult) {
+    	if (this.DriverClass != null && this.DriverClass.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("DriverClass", "DriverClass cannot be blank or consist only of whitespace.", this.DriverClass, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the Name field cannot be empty or contain only spaces; it must have at least one non-space character.
+    * This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
-    	if (!this.Name || this.Name.trim().length === 0) {
-    		result.Errors.push(new ValidationErrorInfo("Name", "The Name field must not be empty or contain only spaces.", this.Name, ValidationErrorType.Failure));
+    public ValidateNameHasNonWhitespaceCharacters(result: ValidationResult) {
+    	if (this.Name != null && this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "Name cannot be empty or consist only of spaces.", this.Name, ValidationErrorType.Failure));
     	}
     }
 
@@ -38809,56 +38826,57 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * MaxInputTokens: This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.
-    * * MaxOutputTokens: This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.
-    * * Priority: This rule ensures that the Priority value cannot be negative. It must be zero or greater.  
+    * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxInputTokens: This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
+    * * MaxOutputTokens: This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
+    * * Priority: This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateMaxInputTokensNonNegative(result);
-        this.ValidateMaxOutputTokensNotNegative(result);
+        this.ValidateMaxInputTokensIsNonNegative(result);
+        this.ValidateMaxOutputTokensNonNegative(result);
         this.ValidatePriorityIsNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that if the MaxInputTokens field is specified, it must be zero or a positive number. It cannot be negative.
+    * This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMaxInputTokensNonNegative(result: ValidationResult) {
-    	if (this.MaxInputTokens !== null && this.MaxInputTokens < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxInputTokens", "MaxInputTokens must be zero or a positive value if specified.", this.MaxInputTokens, ValidationErrorType.Failure));
+    public ValidateMaxInputTokensIsNonNegative(result: ValidationResult) {
+    	if (this.MaxInputTokens != null && this.MaxInputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxInputTokens", "MaxInputTokens, if specified, must be zero or a positive number.", this.MaxInputTokens, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the maximum output tokens value must be zero or higher. If no value is provided, that's also acceptable.
+    * This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMaxOutputTokensNotNegative(result: ValidationResult) {
+    public ValidateMaxOutputTokensNonNegative(result: ValidationResult) {
     	if (this.MaxOutputTokens !== null && this.MaxOutputTokens < 0) {
-    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "Max output tokens must be zero or greater.", this.MaxOutputTokens, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "If specified, the maximum output tokens must be greater than or equal to zero.", this.MaxOutputTokens, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the Priority value cannot be negative. It must be zero or greater.
+    * This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidatePriorityIsNonNegative(result: ValidationResult) {
     	if (this.Priority < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or greater.", this.Priority, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must not be negative.", this.Priority, ValidationErrorType.Failure));
     	}
     }
 
@@ -39136,88 +39154,77 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
-    * * ParallelCount: This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
-    * * Priority: This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
-    * * Table-Level: This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.  
+    * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
+    * * ParallelCount: This rule ensures that the ParallelCount value must always be at least 1.
+    * * Priority: This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
+    * * Table-Level: This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateExecutionGroupIsNonNegative(result);
+        this.ValidateExecutionGroupNonNegative(result);
         this.ValidateParallelCountAtLeastOne(result);
         this.ValidatePriorityIsNonNegative(result);
-        this.ValidateParallelConfigParamBasedOnParallelizationMode(result);
+        this.ValidateParallelizationModeAndConfigParam(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative numbers are not allowed.
+    * This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateExecutionGroupIsNonNegative(result: ValidationResult) {
+    public ValidateExecutionGroupNonNegative(result: ValidationResult) {
     	if (this.ExecutionGroup < 0) {
-    		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive number.", this.ExecutionGroup, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive integer.", this.ExecutionGroup, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the number of parallel tasks (ParallelCount) must be at least 1. It cannot be zero or negative.
+    * This rule ensures that the ParallelCount value must always be at least 1.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateParallelCountAtLeastOne(result: ValidationResult) {
     	if (this.ParallelCount < 1) {
-    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be at least 1.", this.ParallelCount, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be greater than or equal to 1.", this.ParallelCount, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that the Priority value must be greater than or equal to zero. Negative priorities are not allowed.
+    * This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidatePriorityIsNonNegative(result: ValidationResult) {
     	if (this.Priority < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be greater than or equal to zero.", this.Priority, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or a positive number.", this.Priority, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the parallelization mode is 'None' or 'StaticCount', then the parallel config parameter must be empty. If the parallelization mode is 'ConfigParam', then the parallel config parameter must be provided.
+    * This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateParallelConfigParamBasedOnParallelizationMode(result: ValidationResult) {
-    	if (
-    		(this.ParallelizationMode === "None" || this.ParallelizationMode === "StaticCount") &&
-    		this.ParallelConfigParam !== null
-    	) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ParallelConfigParam",
-    			"ParallelConfigParam must be empty when ParallelizationMode is 'None' or 'StaticCount'.",
-    			this.ParallelConfigParam,
-    			ValidationErrorType.Failure
-    		));
-    	} else if (
-    		this.ParallelizationMode === "ConfigParam" &&
-    		this.ParallelConfigParam === null
-    	) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"ParallelConfigParam",
-    			"ParallelConfigParam must be provided when ParallelizationMode is 'ConfigParam'.",
-    			this.ParallelConfigParam,
-    			ValidationErrorType.Failure
-    		));
+    public ValidateParallelizationModeAndConfigParam(result: ValidationResult) {
+    	if (this.ParallelizationMode === "ConfigParam") {
+    		if (this.ParallelConfigParam == null) {
+    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    		}
+    	} else if (this.ParallelizationMode === "None" || this.ParallelizationMode === "StaticCount") {
+    		if (this.ParallelConfigParam != null) {
+    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be null when ParallelizationMode is 'None' or 'StaticCount'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    		}
     	}
     }
 
@@ -39486,62 +39493,62 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * EffortLevel: This rule ensures that the effort level must be a number between 1 and 100, inclusive.
-    * * Table-Level: This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
-    * * Table-Level: This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.  
+    * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * * Table-Level: This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
+    * * Table-Level: This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateEffortLevelWithinRange(result);
-        this.ValidateCompletedAtIsNullOrAfterRunAt(result);
-        this.ValidateTokensUsedSumMatchesPromptAndCompletion(result);
+        this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateCompletedAtNotBeforeRunAt(result);
+        this.ValidateTokensUsedEqualsPromptPlusCompletion(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the effort level must be a number between 1 and 100, inclusive.
+    * This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateEffortLevelWithinRange(result: ValidationResult) {
-    	if (this.EffortLevel < 1 || this.EffortLevel > 100) {
-    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "EffortLevel must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100 if provided.", this.EffortLevel, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that if the 'CompletedAt' field has a value, it must be on or after the 'RunAt' field. Otherwise, if 'CompletedAt' is empty, there is no restriction.
+    * This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateCompletedAtIsNullOrAfterRunAt(result: ValidationResult) {
+    public ValidateCompletedAtNotBeforeRunAt(result: ValidationResult) {
     	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
-    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "Completed date and time, if present, must not be earlier than the run start date and time.", this.CompletedAt, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "If provided, CompletedAt must be the same as or later than RunAt.", this.CompletedAt, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that either both TokensPrompt and TokensCompletion are missing, or TokensUsed is missing, or, if all values are present, the value of TokensUsed equals the sum of TokensPrompt and TokensCompletion.
+    * This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateTokensUsedSumMatchesPromptAndCompletion(result: ValidationResult) {
-    	if (
-    		!((this.TokensPrompt === null && this.TokensCompletion === null) ||
-    			this.TokensUsed === null ||
-    			(this.TokensPrompt !== null && this.TokensCompletion !== null && this.TokensUsed === (this.TokensPrompt + this.TokensCompletion))
-    		)
-    	) {
-    		result.Errors.push(new ValidationErrorInfo("TokensUsed", "TokensUsed must be equal to the sum of TokensPrompt and TokensCompletion, unless one or more of these values are NULL (except if TokensPrompt and TokensCompletion are both NULL).", this.TokensUsed, ValidationErrorType.Failure));
+    public ValidateTokensUsedEqualsPromptPlusCompletion(result: ValidationResult) {
+    	// Allow missing values for any of the three fields
+    	if (this.TokensUsed != null && this.TokensPrompt != null && this.TokensCompletion != null) {
+    		if (this.TokensUsed !== this.TokensPrompt + this.TokensCompletion) {
+    			result.Errors.push(new ValidationErrorInfo("TokensUsed", "The total tokens used must equal the sum of the prompt tokens and completion tokens.", this.TokensUsed, ValidationErrorType.Failure));
+    		}
     	}
+    	// Otherwise, skip the check (it passes)
     }
 
     /**
@@ -40868,28 +40875,29 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Rank: This rule ensures that the Rank value cannot be negative; it must be zero or higher.  
+    * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rank: This rule ensures that the Rank value cannot be negative. It must be zero or higher.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateRankNonNegative(result);
+        this.ValidateRankIsNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the Rank value cannot be negative; it must be zero or higher.
+    * This rule ensures that the Rank value cannot be negative. It must be zero or higher.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateRankNonNegative(result: ValidationResult) {
+    public ValidateRankIsNonNegative(result: ValidationResult) {
     	if (this.Rank < 0) {
-    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank cannot be negative. It must be zero or higher.", this.Rank, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank must be zero or greater.", this.Rank, ValidationErrorType.Failure));
     	}
     }
 
@@ -43351,8 +43359,8 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
     }
 
     /**
-    * Validate() method override for MJ: Conversation Artifact Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Version: This rule ensures that the version number must be greater than zero.  
+    * Validate() method override for MJ: Conversation Artifact Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Version: This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
     * @public
     * @method
     * @override
@@ -43360,19 +43368,20 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateVersionGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the version number must be greater than zero.
+    * This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateVersionGreaterThanZero(result: ValidationResult) {
     	if (this.Version <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("Version", "The version number must be greater than zero.", this.Version, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("Version", "Version must be greater than zero.", this.Version, ValidationErrorType.Failure));
     	}
     }
 
@@ -43841,31 +43850,29 @@ export class DashboardUserPreferenceEntity extends BaseEntity<DashboardUserPrefe
     }
 
     /**
-    * Validate() method override for MJ: Dashboard User Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that when the scope is set to 'Global', the ApplicationID must be blank, and when the scope is set to 'App', an ApplicationID must be provided.  
+    * Validate() method override for MJ: Dashboard User Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateApplicationIDCorrectForScope(result);
+        this.ValidateScopeAndApplicationIDConsistency(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that when the scope is set to 'Global', the ApplicationID must be blank, and when the scope is set to 'App', an ApplicationID must be provided.
+    * This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateApplicationIDCorrectForScope(result: ValidationResult) {
-    	if (this.Scope === "Global" && this.ApplicationID !== null) {
-    		result.Errors.push(new ValidationErrorInfo("ApplicationID", "When scope is 'Global', ApplicationID must be blank.", this.ApplicationID, ValidationErrorType.Failure));
-    	}
-    	else if (this.Scope === "App" && this.ApplicationID === null) {
-    		result.Errors.push(new ValidationErrorInfo("ApplicationID", "When scope is 'App', ApplicationID must be provided.", this.ApplicationID, ValidationErrorType.Failure));
+    public ValidateScopeAndApplicationIDConsistency(result: ValidationResult) {
+    	if ((this.Scope === "Global" && this.ApplicationID !== null) || (this.Scope === "App" && this.ApplicationID === null)) {
+    		result.Errors.push(new ValidationErrorInfo("Scope", "When the scope is 'Global', ApplicationID must be null. When scope is 'App', ApplicationID must not be null.", this.Scope + ":" + this.ApplicationID, ValidationErrorType.Failure));
     	}
     }
 
@@ -45171,8 +45178,8 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * VersionNumber: This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.  
+    * Validate() method override for MJ: Report Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * VersionNumber: This rule ensures that the Version Number must be greater than zero.
     * @public
     * @method
     * @override
@@ -45180,19 +45187,20 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateVersionNumberGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the version number must be greater than zero, meaning there should be at least one version created.
+    * This rule ensures that the Version Number must be greater than zero.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateVersionNumberGreaterThanZero(result: ValidationResult) {
     	if (this.VersionNumber <= 0) {
-    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "The version number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo("VersionNumber", "Version Number must be greater than zero.", this.VersionNumber, ValidationErrorType.Failure));
     	}
     }
 
@@ -45350,28 +45358,34 @@ export class TaskDependencyEntity extends BaseEntity<TaskDependencyEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: Task Dependencies entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that a task cannot depend on itself. In other words, the dependent task and the task it depends on must be different.  
+    * Validate() method override for MJ: Task Dependencies entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateTaskIDIsNotEqualToDependsOnTaskID(result);
+        this.ValidateTaskIDNotEqualDependsOnTaskID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that a task cannot depend on itself. In other words, the dependent task and the task it depends on must be different.
+    * This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateTaskIDIsNotEqualToDependsOnTaskID(result: ValidationResult) {
+    public ValidateTaskIDNotEqualDependsOnTaskID(result: ValidationResult) {
     	if (this.TaskID === this.DependsOnTaskID) {
-    		result.Errors.push(new ValidationErrorInfo("TaskID", "A task cannot depend on itself. The TaskID and DependsOnTaskID must be different.", this.TaskID, ValidationErrorType.Failure));
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TaskID",
+    			"A task cannot be dependent on itself.",
+    			this.TaskID,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -45595,43 +45609,43 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * PercentComplete: This rule ensures that the percent complete value must always be between 0 and 100, inclusive.
-    * * Table-Level: This rule ensures that you can have a user, or an agent, or neither, but you cannot have both set at the same time.  
+    * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * * Table-Level: This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidatePercentCompleteWithinRange(result);
-        this.ValidateUserIDAndAgentIDNotBothSet(result);
+        this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
+        this.ValidateUserIDAndAgentIDMutualExclusivity(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the percent complete value must always be between 0 and 100, inclusive.
+    * This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidatePercentCompleteWithinRange(result: ValidationResult) {
-    	if (this.PercentComplete < 0 || this.PercentComplete > 100) {
-    		result.Errors.push(new ValidationErrorInfo("PercentComplete", "Percent complete must be between 0 and 100.", this.PercentComplete, ValidationErrorType.Failure));
+    public ValidatePercentCompleteWithinZeroAndOneHundred(result: ValidationResult) {
+    	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
     	}
     }
 
     /**
-    * This rule ensures that you can have a user, or an agent, or neither, but you cannot have both set at the same time.
+    * This rule ensures that for each record, either UserID or AgentID can be set, or both can be left empty, but not both can be filled in at the same time.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateUserIDAndAgentIDNotBothSet(result: ValidationResult) {
-    	if (this.UserID !== null && this.AgentID !== null) {
-    		result.Errors.push(new ValidationErrorInfo("UserID", "You cannot have both a User and an Agent specified at the same time.", this.UserID, ValidationErrorType.Failure));
-    		result.Errors.push(new ValidationErrorInfo("AgentID", "You cannot have both an Agent and a User specified at the same time.", this.AgentID, ValidationErrorType.Failure));
+    public ValidateUserIDAndAgentIDMutualExclusivity(result: ValidationResult) {
+    	if (this.UserID != null && this.AgentID != null) {
+    		result.Errors.push(new ValidationErrorInfo("UserID", "UserID and AgentID cannot both have values at the same time. Only one or neither may be set.", this.UserID, ValidationErrorType.Failure));
     	}
     }
 
@@ -47924,28 +47938,29 @@ export class RecommendationItemEntity extends BaseEntity<RecommendationItemEntit
     }
 
     /**
-    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * MatchProbability: This rule ensures that the match probability value is between 0 and 1, inclusive.  
+    * Validate() method override for Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MatchProbability: This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateMatchProbability(result);
+        this.ValidateMatchProbabilityIsBetweenZeroAndOne(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the match probability value is between 0 and 1, inclusive.
+    * This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateMatchProbability(result: ValidationResult) {
-    	if (this.MatchProbability < 0 || this.MatchProbability > 1) {
-    		result.Errors.push(new ValidationErrorInfo('MatchProbability', 'The match probability must be between 0 and 1, inclusive.', this.MatchProbability, ValidationErrorType.Failure));
+    public ValidateMatchProbabilityIsBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.MatchProbability != null && (this.MatchProbability < 0 || this.MatchProbability > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("MatchProbability", "MatchProbability, if provided, must be between 0 and 1 (inclusive).", this.MatchProbability, ValidationErrorType.Failure));
     	}
     }
 
@@ -50032,30 +50047,41 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     }
 
     /**
-    * Validate() method override for Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.  
+    * Validate() method override for Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateUserTypeConstraints(result);
+        this.ValidateTypeAndRoleOrUserIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that when the type is set to 'Role', a role ID must be provided and the user ID must not be provided. Conversely, if the type is set to 'User', a user ID must be provided and the role ID must not be provided.
+    * This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateUserTypeConstraints(result: ValidationResult) {
-    	if (this.Type === 'Role' && this.RoleID === null && this.UserID !== null) {
-    		result.Errors.push(new ValidationErrorInfo("RoleID", "When the type is 'Role', a RoleID must be provided and UserID must be null.", this.RoleID, ValidationErrorType.Failure));
-    	} else if (this.Type === 'User' && this.UserID === null && this.RoleID !== null) {
-    		result.Errors.push(new ValidationErrorInfo("UserID", "When the type is 'User', a UserID must be provided and RoleID must be null.", this.UserID, ValidationErrorType.Failure));
+    public ValidateTypeAndRoleOrUserIDExclusive(result: ValidationResult) {
+    	if (this.Type === "Role") {
+    		if (this.RoleID == null) {
+    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'Role', RoleID must be provided.", this.RoleID, ValidationErrorType.Failure));
+    		}
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'Role', UserID must not be provided.", this.UserID, ValidationErrorType.Failure));
+    		}
+    	} else if (this.Type === "User") {
+    		if (this.UserID == null) {
+    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'User', UserID must be provided.", this.UserID, ValidationErrorType.Failure));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'User', RoleID must not be provided.", this.RoleID, ValidationErrorType.Failure));
+    		}
     	}
     }
 
@@ -51075,9 +51101,9 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     }
 
     /**
-    * Validate() method override for Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Table-Level: This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
-    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.  
+    * Validate() method override for Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
+    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
     * @public
     * @method
     * @override
@@ -51085,13 +51111,14 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
-        this.ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result);
+        this.ValidateEntityIDMinEntityIDMaxGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that the maximum entity ID must be greater than the minimum entity ID, which helps to maintain valid and logical ranges for entity IDs.
+    * This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
@@ -51108,7 +51135,7 @@ export class SchemaInfoEntity extends BaseEntity<SchemaInfoEntityType> {
     * @public
     * @method
     */
-    public ValidateEntityIDMinAndEntityIDMaxGreaterThanZero(result: ValidationResult) {
+    public ValidateEntityIDMinEntityIDMaxGreaterThanZero(result: ValidationResult) {
     	if (this.EntityIDMin <= 0) {
     		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
     	}
