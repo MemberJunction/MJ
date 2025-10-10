@@ -536,11 +536,14 @@
 .tab-content {
   flex: 1;
   overflow: auto;
+  width: 100%;
 }
 
 .display-content {
   padding: 20px;
   position: relative;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .display-toolbar {
@@ -556,11 +559,14 @@
 .html-content {
   font-size: 14px;
   line-height: 1.6;
-  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .details-content {
   padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .details-content .artifact-meta {
