@@ -37,6 +37,7 @@
     "@memberjunction/ng-container-directives": "2.104.0",
     "@memberjunction/ng-notifications": "2.104.0",
     "@memberjunction/ng-code-editor": "2.104.0",
+    "@memberjunction/ng-tasks": "2.104.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-inputs": "16.2.0",

@@ -66,7 +66,7 @@ import { InputDialogComponent } from './components/dialogs/input-dialog.componen
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
 
-// Export all components
+// Export all components (excluding standalone components)
 const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
@@ -94,7 +94,7 @@ const COMPONENTS = [
   TaskItemComponent,
   TaskFormModalComponent,
   TaskTimelineComponent,
-  TasksFullViewComponent,
+  // TasksFullViewComponent - now standalone, imported below
   TasksDropdownComponent,
   TaskWidgetComponent,
   AgentProcessPanelComponent,
@@ -131,11 +131,15 @@ const COMPONENTS = [
     DateInputsModule,
     ContainerDirectivesModule,
     CodeEditorModule,
-    MarkdownModule.forRoot()
+    MarkdownModule.forRoot(),
+    // Standalone components
+    TasksFullViewComponent
   ],
   exports: [
     ...COMPONENTS,
-    SearchShortcutDirective
+    SearchShortcutDirective,
+    // Standalone components
+    TasksFullViewComponent
   ]
 })
 export class ConversationsModule { }
