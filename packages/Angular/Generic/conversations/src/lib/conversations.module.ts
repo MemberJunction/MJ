@@ -44,10 +44,6 @@ import { CollectionFormModalComponent } from './components/collection/collection
 import { CollectionsFullViewComponent } from './components/collection/collections-full-view.component';
 import { ProjectSelectorComponent } from './components/project/project-selector.component';
 import { ProjectFormModalComponent } from './components/project/project-form-modal.component';
-import { TaskListComponent } from './components/task/task-list.component';
-import { TaskItemComponent } from './components/task/task-item.component';
-import { TaskFormModalComponent } from './components/task/task-form-modal.component';
-import { TaskTimelineComponent } from './components/task/task-timeline.component';
 import { TasksFullViewComponent } from './components/task/tasks-full-view.component';
 import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.component';
 import { TaskWidgetComponent } from './components/tasks/task-widget.component';
@@ -90,10 +86,6 @@ const COMPONENTS = [
   CollectionsFullViewComponent,
   ProjectSelectorComponent,
   ProjectFormModalComponent,
-  TaskListComponent,
-  TaskItemComponent,
-  TaskFormModalComponent,
-  TaskTimelineComponent,
   // TasksFullViewComponent - now standalone, imported below
   TasksDropdownComponent,
   TaskWidgetComponent,

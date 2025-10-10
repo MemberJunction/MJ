@@ -36,7 +36,8 @@
     <div class="workspace-main" *ngIf="activeTab === 'tasks'">
       <mj-tasks-full-view
         [environmentId]="environmentId"
-        [currentUser]="currentUser">
+        [currentUser]="currentUser"
+        [baseFilter]="tasksFilter">
       </mj-tasks-full-view>
     </div>
 

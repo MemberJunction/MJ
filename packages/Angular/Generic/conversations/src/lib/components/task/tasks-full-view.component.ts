@@ -1,11 +1,11 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { TaskEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { TaskEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
 
 /**
  * Full-page tasks view with task list and Gantt chart
- * Shows all tasks across conversations the user has access to
+ * Generic component that displays tasks based on provided filter
  */
 @Component({
   selector: 'mj-tasks-full-view',
@@ -32,10 +32,10 @@ import { TaskComponent } from '@memberjunction/ng-tasks';
     }
   `]
 })
-export class TasksFullViewComponent implements OnInit {
+export class TasksFullViewComponent implements OnInit, OnChanges {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
-  @Input() baseFilter?: string; // Optional base filter to override default conversation filtering
+  @Input() baseFilter: string = '1=1'; // SQL filter for tasks (default: show all)
 
   public allTasks: TaskEntity[] = [];
   public filteredTasks: TaskEntity[] = [];
@@ -45,63 +45,26 @@ export class TasksFullViewComponent implements OnInit {
     this.loadTasks();
   }
 
+  ngOnChanges(changes: SimpleChanges) {
+    // Reload tasks if baseFilter changes
+    if (changes['baseFilter'] && !changes['baseFilter'].firstChange) {
+      this.loadTasks();
+    }
+  }
+
   public async loadTasks(): Promise<void> {
     this.isLoading = true;
 
     try {
       const rv = new RunView();
-      let taskFilter: string;
 
-      // If baseFilter is provided, use it directly
-      if (this.baseFilter) {
-        taskFilter = this.baseFilter;
-        console.log('📝 Using provided baseFilter:', taskFilter);
-      } else {
-        // Default: Filter by conversations user has access to
-        // First, get all conversations the user has access to
-        const conversationFilterSQL = `ID IN (
-            SELECT ConversationID FROM vwConversationDetails WHERE UserID='${this.currentUser.ID}'
-            UNION
-            SELECT ID FROM vwConversations WHERE UserID='${this.currentUser.ID}'
-          )`;
+      console.log('📝 Tasks filter SQL:', this.baseFilter);
 
-        console.log('📝 Conversations filter SQL:', conversationFilterSQL);
-
-        const conversationsResult = await rv.RunView<ConversationEntity>(
-          {
-            EntityName: 'Conversations',
-            ExtraFilter: conversationFilterSQL,
-            ResultType: 'entity_object'
-          },
-          this.currentUser
-        );
-
-        if (!conversationsResult.Success || !conversationsResult.Results || conversationsResult.Results.length === 0) {
-          console.log('❌ No conversations found for user or query failed:', conversationsResult.ErrorMessage);
-          this.allTasks = [];
-          this.filteredTasks = [];
-          return;
-        }
-
-        console.log(`✅ Found ${conversationsResult.Results.length} conversations user has access to`);
-        console.log('📋 Conversation IDs:', conversationsResult.Results.map(c => c.ID));
-
-        // Get conversation IDs
-        const conversationIds = conversationsResult.Results.map(c => `'${c.ID}'`).join(',');
-
-        // Build filter for tasks in these conversations
-        taskFilter = `ConversationDetailID IN (
-            SELECT ID FROM vwConversationDetails WHERE ConversationID IN (${conversationIds})
-          )`;
-      }
-
-      console.log('📝 Tasks filter SQL:', taskFilter);
-
-      // Load all tasks with the filter
+      // Load all tasks with the provided filter
       const tasksResult = await rv.RunView<TaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: taskFilter,
+          ExtraFilter: this.baseFilter,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1000,
           ResultType: 'entity_object'
@@ -120,10 +83,7 @@ export class TasksFullViewComponent implements OnInit {
         this.filteredTasks = this.allTasks;
         console.log(`📋 Loaded ${this.allTasks.length} tasks`);
         if (this.allTasks.length === 0) {
-          console.log('💡 No tasks found. Check:');
-          console.log('  - Tasks exist in database');
-          console.log('  - Tasks have ConversationDetailID set (unless using custom baseFilter)');
-          console.log('  - User has access to conversations containing those tasks');
+          console.log('💡 No tasks found with current filter');
         } else {
           console.log('✅ Sample task:', {
             id: this.allTasks[0].ID,
@@ -134,9 +94,13 @@ export class TasksFullViewComponent implements OnInit {
         }
       } else {
         console.error('❌ Failed to load tasks:', tasksResult.ErrorMessage);
+        this.allTasks = [];
+        this.filteredTasks = [];
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
+      this.allTasks = [];
+      this.filteredTasks = [];
     } finally {
       this.isLoading = false;
     }

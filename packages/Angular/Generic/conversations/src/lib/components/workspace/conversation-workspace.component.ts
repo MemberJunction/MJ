@@ -66,6 +66,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
   private readonly ARTIFACT_PANEL_WIDTH_KEY = 'mj-artifact-panel-width';
 
+  // Task filter for conversation-specific filtering
+  public tasksFilter: string = '1=1';
+
   constructor(
     public conversationState: ConversationStateService,
     public artifactState: ArtifactStateService
@@ -122,6 +125,25 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.activeTab = 'collections';
     }
     // Task context will be handled by chat header dropdown, not navigation tabs
+
+    // Build task filter for conversations domain
+    this.buildTasksFilter();
+  }
+
+  /**
+   * Builds the SQL filter for tasks in conversations the user has access to
+   */
+  private buildTasksFilter(): void {
+    // Filter tasks by conversations the user owns or is a participant in
+    this.tasksFilter = `ConversationDetailID IN (
+      SELECT ID FROM vwConversationDetails
+      WHERE ConversationID IN (
+        SELECT ConversationID FROM vwConversationDetails WHERE UserID='${this.currentUser.ID}'
+        UNION
+        SELECT ID FROM vwConversations WHERE UserID='${this.currentUser.ID}'
+      )
+    )`;
+    console.log('📝 Conversations domain tasks filter built:', this.tasksFilter);
   }
 
   ngDoCheck() {
