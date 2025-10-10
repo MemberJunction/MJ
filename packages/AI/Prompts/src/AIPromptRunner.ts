@@ -1525,8 +1525,9 @@ export class AIPromptRunner {
         }
       }
 
-      // CONFIGURATION FALLBACK: If configurationId was specified but we want to include NULL config as fallback
-      // Add NULL configuration prompt models with lower priority for failover scenarios
+      // CONFIGURATION FALLBACK: If configurationId was specified, we still want to include PromptModels
+      // as fallbacks that do NOT have a ConfigurationID specified (i.e. universal fallback options).
+      // These are added with lower priority so config-specific models are tried first.
       if (configurationId) {
         const nullConfigModels = AIEngine.Instance.PromptModels.filter(
           pm => pm.PromptID === prompt.ID &&
@@ -3626,15 +3627,50 @@ export class AIPromptRunner {
   // ==================== FAILOVER METHODS ====================
 
   /**
-   * Retrieves failover configuration from the prompt entity.
-   * 
-   * @param prompt - The AI prompt entity containing failover settings
-   * @returns FailoverConfiguration object with strategy and settings
-   * 
+   * Gets the failover configuration for a prompt, using prompt-specific settings or defaults.
+   *
+   * @param prompt - The prompt entity with potential failover configuration
+   * @returns The failover configuration with all required settings
+   *
+   * @example
+   * ```typescript
+   * // Input: Prompt with custom failover settings
+   * const prompt = {
+   *   Name: "Customer Support",
+   *   FailoverStrategy: "SameModelDifferentVendor",
+   *   FailoverMaxAttempts: 5,
+   *   FailoverDelaySeconds: 2,
+   *   FailoverModelStrategy: "PreferSameModel",
+   *   FailoverErrorScope: "NetworkOnly"
+   * };
+   *
+   * // Output:
+   * {
+   *   strategy: "SameModelDifferentVendor",
+   *   maxAttempts: 5,
+   *   delaySeconds: 2,
+   *   modelStrategy: "PreferSameModel",
+   *   errorScope: "NetworkOnly"
+   * }
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Prompt without failover settings (uses defaults)
+   * const prompt = { Name: "Simple Prompt" };
+   *
+   * // Output:
+   * {
+   *   strategy: "None",
+   *   maxAttempts: 3,
+   *   delaySeconds: 1,
+   *   modelStrategy: "PreferSameModel",
+   *   errorScope: "All"
+   * }
+   * ```
+   *
    * @remarks
-   * This method extracts failover configuration from the prompt entity and provides
-   * default values when configuration is not specified. Override this method to
-   * implement custom failover configuration logic.
+   * Override this method to implement environment-specific or dynamic failover configuration.
    */
   protected getFailoverConfiguration(prompt: AIPromptEntityExtended): FailoverConfiguration {
     // TODO: Remove type assertions after CodeGen updates entities with new fields
@@ -3657,12 +3693,50 @@ export class AIPromptRunner {
 
   /**
    * Determines whether a failover attempt should be made based on the error and configuration.
-   * 
+   *
    * @param error - The error that occurred during execution
    * @param config - The failover configuration
    * @param attemptNumber - The current attempt number (1-based)
    * @returns True if failover should be attempted, false otherwise
-   * 
+   *
+   * @example
+   * ```typescript
+   * // Input: Network error with NetworkOnly scope
+   * const error = new Error("ECONNREFUSED");
+   * const config = {
+   *   strategy: "NextBestModel",
+   *   maxAttempts: 3,
+   *   errorScope: "NetworkOnly"
+   * };
+   * const attemptNumber = 1;
+   *
+   * // Output: true (network error is eligible for NetworkOnly scope)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Rate limit error with NetworkOnly scope
+   * const error = new Error("Rate limit exceeded (429)");
+   * const config = {
+   *   strategy: "NextBestModel",
+   *   maxAttempts: 3,
+   *   errorScope: "NetworkOnly"
+   * };
+   * const attemptNumber = 1;
+   *
+   * // Output: false (rate limit error doesn't match NetworkOnly scope)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Exceeded max attempts
+   * const error = new Error("Service unavailable");
+   * const config = { strategy: "NextBestModel", maxAttempts: 3, errorScope: "All" };
+   * const attemptNumber = 4; // Already tried 3 times
+   *
+   * // Output: false (exceeded maxAttempts)
+   * ```
+   *
    * @remarks
    * This method uses the ErrorAnalyzer to classify errors and determine if they are
    * eligible for failover based on the configured error scope. Override this method
@@ -3703,16 +3777,47 @@ export class AIPromptRunner {
 
   /**
    * Calculates the delay before the next failover attempt.
-   * 
+   *
    * @param attemptNumber - The current attempt number (1-based)
    * @param baseDelaySeconds - The base delay in seconds from configuration
    * @param previousError - The error from the previous attempt
    * @returns Delay in milliseconds before the next attempt
-   * 
+   *
+   * @example
+   * ```typescript
+   * // Input: First attempt with 1 second base delay
+   * const attemptNumber = 1;
+   * const baseDelaySeconds = 1;
+   *
+   * // Output: ~1000-1250ms
+   * // Calculation: 1 * 2^0 = 1 second + 0-25% jitter = 1000-1250ms
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Third attempt with 2 second base delay
+   * const attemptNumber = 3;
+   * const baseDelaySeconds = 2;
+   *
+   * // Output: ~8000-10000ms
+   * // Calculation: 2 * 2^2 = 8 seconds + 0-25% jitter = 8000-10000ms
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Fifth attempt (hits cap)
+   * const attemptNumber = 5;
+   * const baseDelaySeconds = 2;
+   *
+   * // Output: 30000ms (capped)
+   * // Calculation: 2 * 2^4 = 32 seconds, but capped at 30 seconds
+   * ```
+   *
    * @remarks
    * Implements exponential backoff with jitter by default. The delay increases
    * exponentially with each attempt and includes random jitter to prevent
-   * thundering herd problems. Override this method to implement custom delay logic.
+   * thundering herd problems. Capped at 30 seconds maximum.
+   * Override this method to implement custom delay logic.
    */
   protected calculateFailoverDelay(
     attemptNumber: number,
@@ -3732,7 +3837,7 @@ export class AIPromptRunner {
 
   /**
    * Selects candidate models for failover based on the strategy and current failure.
-   * 
+   *
    * @param currentModel - The model that just failed
    * @param currentVendorId - The vendor ID that just failed
    * @param strategy - The failover strategy to use
@@ -3740,13 +3845,70 @@ export class AIPromptRunner {
    * @param allCandidates - All available model-vendor candidates
    * @param attemptHistory - History of previous failover attempts
    * @returns Array of candidates sorted by priority (highest first)
-   * 
+   *
+   * @example
+   * ```typescript
+   * // Input: SameModelDifferentVendor strategy
+   * const currentModel = { ID: "model-123", Name: "Claude 3.5 Sonnet" };
+   * const currentVendorId = "anthropic";
+   * const strategy = "SameModelDifferentVendor";
+   * const allCandidates = [
+   *   { model: { ID: "model-123", Name: "Claude 3.5 Sonnet" }, vendorId: "aws-bedrock", priority: 100 },
+   *   { model: { ID: "model-456", Name: "GPT-4" }, vendorId: "openai", priority: 90 }
+   * ];
+   * const attemptHistory = [];
+   *
+   * // Output: [{ model: Claude 3.5 Sonnet, vendorId: "aws-bedrock", priority: 100 }]
+   * // (Only returns same model with different vendor)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: NextBestModel strategy with failed attempts
+   * const currentModel = { ID: "model-123", Name: "Claude 3.5 Sonnet" };
+   * const strategy = "NextBestModel";
+   * const allCandidates = [
+   *   { model: { ID: "model-123" }, priority: 100 },
+   *   { model: { ID: "model-456" }, priority: 90 },
+   *   { model: { ID: "model-789" }, priority: 80 }
+   * ];
+   * const attemptHistory = [
+   *   { modelId: "model-123", vendorId: "anthropic", error: new Error("Failed") }
+   * ];
+   *
+   * // Output: [
+   * //   { model: { ID: "model-456" }, priority: 90 },
+   * //   { model: { ID: "model-789" }, priority: 80 }
+   * // ]
+   * // (Filters out failed model-123, returns remaining by priority)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Context length error triggers filtering
+   * const attemptHistory = [
+   *   { error: new Error("Context length exceeded"), errorType: "ContextLengthExceeded" }
+   * ];
+   * const allCandidates = [
+   *   { model: { MaxInputTokens: 8000 }, priority: 100 },
+   *   { model: { MaxInputTokens: 32000 }, priority: 90 },
+   *   { model: { MaxInputTokens: 128000 }, priority: 80 }
+   * ];
+   *
+   * // Output: [
+   * //   { model: { MaxInputTokens: 128000 }, priority: 80 },
+   * //   { model: { MaxInputTokens: 32000 }, priority: 90 }
+   * // ]
+   * // (Filters to models with larger context, sorted by token count descending)
+   * ```
+   *
    * @remarks
    * This method implements different strategies for selecting failover candidates:
    * - SameModelDifferentVendor: Try the same model with different vendors
    * - NextBestModel: Try different models in order of preference
    * - PowerRank: Use the global power ranking of models
-   * 
+   *
+   * Special handling for context length errors: filters to models with larger context windows.
    * Override this method to implement custom candidate selection logic.
    */
   protected selectFailoverCandidates(

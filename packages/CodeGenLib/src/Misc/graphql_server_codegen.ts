@@ -45,8 +45,51 @@ export class GraphQLServerGeneratorBase {
   /**
    * Sanitizes a string to be a valid GraphQL name component, preserving original capitalization.
    * GraphQL names must match the pattern [_A-Za-z][_0-9A-Za-z]* and cannot start with double underscore
+   *
    * @param input - The string to sanitize
    * @returns A valid GraphQL name component with special characters removed
+   *
+   * @example
+   * ```typescript
+   * // Input: Schema name with special characters
+   * sanitizeGraphQLName("my-schema")
+   * // Output: "myschema"
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Name starting with double underscore (reserved)
+   * sanitizeGraphQLName("__mj_User")
+   * // Output: "mjUser"
+   * // (Removes __ prefix and underscores)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Name starting with a digit
+   * sanitizeGraphQLName("123Orders")
+   * // Output: "_123Orders"
+   * // (Prepends underscore since GraphQL names can't start with digits)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Preserves capitalization
+   * sanitizeGraphQLName("MyTable_Name")
+   * // Output: "MyTableName"
+   * // (Removes underscores but preserves case)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Empty or invalid input
+   * sanitizeGraphQLName("")
+   * // Output: ""
+   *
+   * sanitizeGraphQLName("!!!###")
+   * // Output: "_"
+   * // (All chars removed, so prepends underscore)
+   * ```
    */
   protected sanitizeGraphQLName(input: string): string {
     if (!input || input.length === 0) {
