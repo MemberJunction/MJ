@@ -727,6 +727,10 @@ export class GeneratedCodeCategory_ {
     @MaxLength(510)
     Parent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [GeneratedCodeCategory_])
     GeneratedCodeCategories_ParentIDArray: GeneratedCodeCategory_[]; // Link to GeneratedCodeCategories
     
@@ -1740,6 +1744,14 @@ each time the agent processes a prompt step.`})
     @Field({nullable: true}) 
     @MaxLength(100)
     OverrideVendor?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentRunID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootLastRunID?: string;
         
     @Field(() => [AIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
@@ -2960,6 +2972,10 @@ if this limit is exceeded.`})
     @Field({nullable: true}) 
     @MaxLength(200)
     OwnerUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [AIAgentModel_])
     AIAgentModels_AgentIDArray: AIAgentModel_[]; // Link to AIAgentModels
@@ -5805,6 +5821,10 @@ export class Collection_ {
     @MaxLength(510)
     Parent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [CollectionArtifact_])
     MJ_CollectionArtifacts_CollectionIDArray: CollectionArtifact_[]; // Link to MJ_CollectionArtifacts
     
@@ -6392,6 +6412,10 @@ export class AIPrompt_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     ResultSelectorPrompt?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootResultSelectorPromptID?: string;
         
     @Field(() => [AIResultCache_])
     AIResultCache_AIPromptIDArray: AIResultCache_[]; // Link to AIResultCache
@@ -7228,6 +7252,10 @@ export class AIPromptCategory_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [AIPrompt_])
     AIPrompts_CategoryIDArray: AIPrompt_[]; // Link to AIPrompts
@@ -9039,6 +9067,10 @@ export class Skill_ {
     @Field({nullable: true}) 
     @MaxLength(100)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [EmployeeSkill_])
     EmployeeSkills_SkillIDArray: EmployeeSkill_[]; // Link to EmployeeSkills
@@ -17813,6 +17845,10 @@ export class Authorization_ {
     @MaxLength(200)
     Parent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [AuthorizationRole_])
     AuthorizationRoles_AuthorizationIDArray: AuthorizationRole_[]; // Link to AuthorizationRoles
     
@@ -18251,6 +18287,10 @@ export class AuditLogType_ {
     @Field({nullable: true}) 
     @MaxLength(200)
     Authorization?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [AuditLog_])
     AuditLogs_AuditLogTypeNameArray: AuditLog_[]; // Link to AuditLogs
@@ -22245,6 +22285,10 @@ export class Tag_ {
     @MaxLength(510)
     Parent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [Tag_])
     Tags_ParentIDArray: Tag_[]; // Link to Tags
     
@@ -23420,6 +23464,10 @@ export class ConversationDetail_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [Report_])
     Reports_ConversationDetailIDArray: Report_[]; // Link to Reports
@@ -25348,6 +25396,10 @@ export class QueryCategory_ {
     @Field() 
     @MaxLength(200)
     User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [QueryCategory_])
     QueryCategories_ParentIDArray: QueryCategory_[]; // Link to QueryCategories
@@ -27789,6 +27841,10 @@ export class UserViewCategory_ {
     @MaxLength(200)
     User: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [UserViewCategory_])
     UserViewCategories_ParentIDArray: UserViewCategory_[]; // Link to UserViewCategories
     
@@ -27998,6 +28054,10 @@ export class DashboardCategory_ {
     @MaxLength(200)
     User: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [Dashboard_])
     Dashboards_CategoryIDArray: Dashboard_[]; // Link to Dashboards
     
@@ -28200,6 +28260,10 @@ export class ReportCategory_ {
     @Field() 
     @MaxLength(200)
     User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [ReportCategory_])
     ReportCategories_ParentIDArray: ReportCategory_[]; // Link to ReportCategories
@@ -28813,6 +28877,10 @@ export class FileCategory_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [File_])
     Files_CategoryIDArray: File_[]; // Link to Files
@@ -30582,6 +30650,10 @@ export class ActionCategory_ {
     @MaxLength(510)
     Parent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [ActionCategory_])
     ActionCategories_ParentIDArray: ActionCategory_[]; // Link to ActionCategories
     
@@ -31545,6 +31617,10 @@ export class Action_ {
     @Field({nullable: true}) 
     @MaxLength(850)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [ActionParam_])
     ActionParams_ActionIDArray: ActionParam_[]; // Link to ActionParams
@@ -33624,6 +33700,10 @@ export class ListCategory_ {
     @MaxLength(200)
     User: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [ListCategory_])
     ListCategories_ParentIDArray: ListCategory_[]; // Link to ListCategories
     
@@ -35154,6 +35234,10 @@ export class TemplateCategory_ {
     @Field() 
     @MaxLength(200)
     User: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [Template_])
     Templates_CategoryIDArray: Template_[]; // Link to Templates
@@ -40554,6 +40638,10 @@ export class ArtifactType_ {
     @MaxLength(200)
     Parent?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [ConversationArtifact_])
     MJ_ConversationArtifacts_ArtifactTypeIDArray: ConversationArtifact_[]; // Link to MJ_ConversationArtifacts
     
@@ -45455,6 +45543,14 @@ export class AIPromptRun_ {
     @MaxLength(510)
     ChildPrompt?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootRerunFromPromptRunID?: string;
+        
     @Field(() => [AIPromptRun_])
     MJ_AIPromptRuns_ParentIDArray: AIPromptRun_[]; // Link to MJ_AIPromptRuns
     
@@ -46161,6 +46257,10 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
     Comments?: string;
         
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
+        
     @Field(() => [AIAgentRunStep_])
     MJ_AIAgentRunSteps_ParentIDArray: AIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
     
@@ -46429,6 +46529,10 @@ export class ConversationDetailArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    ArtifactVersion?: string;
+        
 }
 
 //****************************************************************************
@@ -46652,6 +46756,10 @@ export class Task_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [TaskDependency_])
     MJ_TaskDependencies_DependsOnTaskIDArray: TaskDependency_[]; // Link to MJ_TaskDependencies
@@ -46940,6 +47048,10 @@ export class Project_ {
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [Project_])
     MJ_Projects_ParentIDArray: Project_[]; // Link to MJ_Projects

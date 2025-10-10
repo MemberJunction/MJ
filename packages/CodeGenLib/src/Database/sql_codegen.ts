@@ -1002,6 +1002,88 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         return sOutput;
     }
 
+    /**
+     * Detects self-referential foreign keys in an entity (e.g., ParentTaskID pointing back to Task table)
+     * Returns array of field info objects representing recursive relationships
+     */
+    protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
+        return entity.Fields.filter(field =>
+            field.RelatedEntityID != null &&
+            field.RelatedEntityID === entity.ID
+        );
+    }
+
+    /**
+     * Generates the WITH clause containing recursive CTEs for root ID calculation
+     * Each recursive FK gets its own CTE that traverses the hierarchy to find the root
+     */
+    protected generateRecursiveCTEs(entity: EntityInfo, recursiveFKs: EntityFieldInfo[]): string {
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const classNameFirstChar = entity.ClassName.charAt(0).toLowerCase();
+
+        const ctes = recursiveFKs.map(field => {
+            const fieldName = field.Name;
+            const rootFieldName = `Root${fieldName}`;
+            const cteName = `CTE_${rootFieldName}`;
+
+            return `    ${cteName} AS (
+        -- Anchor: rows with no parent (root nodes)
+        SELECT
+            [${primaryKey}],
+            [${primaryKey}] AS [${rootFieldName}]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${fieldName}] IS NULL
+
+        UNION ALL
+
+        -- Recursive: traverse up the hierarchy
+        SELECT
+            child.[${primaryKey}],
+            parent.[${rootFieldName}]
+        FROM
+            [${schemaName}].[${tableName}] child
+        INNER JOIN
+            ${cteName} parent ON child.[${fieldName}] = parent.[${primaryKey}]
+    )`;
+        }).join(',\n');
+
+        return `WITH\n${ctes}\n`;
+    }
+
+    /**
+     * Generates the SELECT clause additions for root fields
+     * Example: , cte_root.[RootParentTaskID]
+     */
+    protected generateRootFieldSelects(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+        return recursiveFKs.map(field => {
+            const rootFieldName = `Root${field.Name}`;
+            const cteName = `CTE_${rootFieldName}`;
+            return `,\n    ${cteName}.[${rootFieldName}]`;
+        }).join('');
+    }
+
+    /**
+     * Generates LEFT OUTER JOINs to the recursive CTEs
+     */
+    protected generateRecursiveCTEJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        if (recursiveFKs.length === 0) {
+            return '';
+        }
+
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const joins = recursiveFKs.map(field => {
+            const rootFieldName = `Root${field.Name}`;
+            const cteName = `CTE_${rootFieldName}`;
+            return `LEFT OUTER JOIN\n    ${cteName}\n  ON\n    [${classNameFirstChar}].[${primaryKey}] = ${cteName}.[${primaryKey}]`;
+        }).join('\n');
+
+        return '\n' + joins;
+    }
+
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
@@ -1011,6 +1093,12 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
     ${classNameFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
 ` : '';
+
+        // Detect recursive foreign keys and generate CTEs
+        const recursiveFKs = this.detectRecursiveForeignKeys(entity);
+        const cteClause = recursiveFKs.length > 0 ? this.generateRecursiveCTEs(entity, recursiveFKs) : '';
+        const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
+
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -1023,10 +1111,10 @@ GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
-SELECT
-    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
+${cteClause}SELECT
+    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${this.generateRecursiveCTEJoins(recursiveFKs, classNameFirstChar, entity)}
 ${whereClause}GO${permissions}
     `
     }

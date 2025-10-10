@@ -131,14 +131,96 @@ Generates **optimized database objects** with best practices:
 
 ```sql
 -- Auto-generated indexes for performance
-CREATE INDEX IDX_AUTO_MJ_FKEY_AIPrompt_CategoryID 
+CREATE INDEX IDX_AUTO_MJ_FKEY_AIPrompt_CategoryID
 ON [AIPrompt] ([CategoryID]);
 
 -- Complete CRUD procedures with validation
-CREATE PROCEDURE [spCreateAIPrompt] 
+CREATE PROCEDURE [spCreateAIPrompt]
     @PromptRole nvarchar(20) -- Validated against CHECK constraint
 -- Full implementation auto-generated
 ```
+
+#### 🌲 Automatic Recursive Hierarchy Support
+
+CodeGen **automatically detects self-referential foreign keys** and generates `Root{FieldName}` columns in base views using efficient recursive CTEs. This enables instant root node lookup for hierarchical data structures with **zero overhead when not selected**.
+
+**How It Works:**
+
+For any table with a self-referential foreign key (like `ParentTaskID` → `Task.ID`), CodeGen automatically:
+
+1. **Detects the recursive relationship** - Identifies foreign keys where `RelatedEntityID === entity.ID`
+2. **Generates a recursive CTE** - Creates SQL that traverses the hierarchy to find the root
+3. **Adds Root columns** - Exposes `Root{FieldName}` in the base view (e.g., `RootParentTaskID`)
+4. **Zero-overhead when unused** - SQL optimizer eliminates the CTE when column not selected
+
+**Example - Task Hierarchy:**
+
+```sql
+CREATE TABLE [Task] (
+    [ID] uniqueidentifier PRIMARY KEY,
+    [ParentTaskID] uniqueidentifier FOREIGN KEY REFERENCES [Task]([ID]),
+    [Name] nvarchar(255)
+);
+```
+
+**CodeGen Automatically Generates:**
+
+```sql
+CREATE VIEW [vwTasks]
+AS
+WITH
+    CTE_RootParentTaskID AS (
+        -- Anchor: rows with no parent (root nodes)
+        SELECT
+            [ID],
+            [ID] AS [RootParentTaskID]
+        FROM
+            [__mj].[Task]
+        WHERE
+            [ParentTaskID] IS NULL
+
+        UNION ALL
+
+        -- Recursive: traverse up the hierarchy
+        SELECT
+            child.[ID],
+            parent.[RootParentTaskID]
+        FROM
+            [__mj].[Task] child
+        INNER JOIN
+            CTE_RootParentTaskID parent ON child.[ParentTaskID] = parent.[ID]
+    )
+SELECT
+    t.*,
+    CTE_RootParentTaskID.[RootParentTaskID]  -- Auto-generated root column
+FROM
+    [__mj].[Task] AS t
+LEFT OUTER JOIN
+    CTE_RootParentTaskID
+  ON
+    t.[ID] = CTE_RootParentTaskID.[ID]
+```
+
+**Benefits:**
+
+- ✅ **Automatic Detection** - No configuration needed, works for any recursive FK
+- ✅ **Multiple Recursive FKs** - Handles tables with multiple self-referential relationships
+- ✅ **SQL Optimizer Magic** - CTE only executes when `RootParentTaskID` is selected
+- ✅ **Always Correct** - No stale data (unlike computed columns or triggers)
+- ✅ **TypeScript Integration** - Root fields automatically appear in entity classes
+- ✅ **Naming Convention** - Consistent `Root{FieldName}` pattern across all entities
+
+**Use Cases:**
+
+- **Organizational Charts** - `Employee.ManagerID` → `RootManagerID` finds CEO
+- **Task Hierarchies** - `Task.ParentTaskID` → `RootParentTaskID` finds root project
+- **Category Trees** - `Category.ParentCategoryID` → `RootParentCategoryID` finds top level
+- **Comment Threads** - `Comment.ParentCommentID` → `RootParentCommentID` finds original post
+- **Bill of Materials** - `Part.ParentPartID` → `RootParentPartID` finds top-level assembly
+
+**Performance Note:**
+
+The CTE approach is **ideal for read-heavy workloads** (typical in business applications). The SQL optimizer completely eliminates the CTE from the execution plan when the root column isn't selected, meaning zero overhead for queries that don't need hierarchy information.
 
 #### 🎯 Smart Delete Procedures with Cascade Handling
 

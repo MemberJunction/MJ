@@ -102,6 +102,10 @@ export const ActionCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type ActionCategoryEntityType = z.infer<typeof ActionCategorySchema>;
@@ -623,6 +627,10 @@ export const ActionSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(425)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type ActionEntityType = z.infer<typeof ActionSchema>;
@@ -1305,6 +1313,10 @@ if this limit is exceeded.`),
         * * Field Name: OwnerUser
         * * Display Name: Owner User
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIAgentEntityType = z.infer<typeof AIAgentSchema>;
@@ -1521,6 +1533,10 @@ export const AIPromptCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIPromptCategoryEntityType = z.infer<typeof AIPromptCategorySchema>;
@@ -1921,6 +1937,10 @@ export const AIPromptSchema = z.object({
         * * Field Name: ResultSelectorPrompt
         * * Display Name: Result Selector Prompt
         * * SQL Data Type: nvarchar(255)`),
+    RootResultSelectorPromptID: z.string().nullable().describe(`
+        * * Field Name: RootResultSelectorPromptID
+        * * Display Name: Root Result Selector Prompt ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIPromptEntityType = z.infer<typeof AIPromptSchema>;
@@ -2236,6 +2256,10 @@ export const AuditLogTypeSchema = z.object({
         * * Field Name: Authorization
         * * Display Name: Authorization
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AuditLogTypeEntityType = z.infer<typeof AuditLogTypeSchema>;
@@ -2421,6 +2445,10 @@ export const AuthorizationSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AuthorizationEntityType = z.infer<typeof AuthorizationSchema>;
@@ -3827,6 +3855,10 @@ export const ConversationDetailSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type ConversationDetailEntityType = z.infer<typeof ConversationDetailSchema>;
@@ -3991,6 +4023,10 @@ export const DashboardCategorySchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type DashboardCategoryEntityType = z.infer<typeof DashboardCategorySchema>;
@@ -6855,6 +6891,10 @@ export const FileCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type FileCategoryEntityType = z.infer<typeof FileCategorySchema>;
@@ -7060,6 +7100,10 @@ export const GeneratedCodeCategorySchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type GeneratedCodeCategoryEntityType = z.infer<typeof GeneratedCodeCategorySchema>;
@@ -7426,6 +7470,10 @@ export const ListCategorySchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type ListCategoryEntityType = z.infer<typeof ListCategorySchema>;
@@ -8071,6 +8119,10 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
@@ -8335,6 +8387,14 @@ each time the agent processes a prompt step.`),
         * * Field Name: OverrideVendor
         * * Display Name: Override Vendor
         * * SQL Data Type: nvarchar(50)`),
+    RootParentRunID: z.string().nullable().describe(`
+        * * Field Name: RootParentRunID
+        * * Display Name: Root Parent Run ID
+        * * SQL Data Type: uniqueidentifier`),
+    RootLastRunID: z.string().nullable().describe(`
+        * * Field Name: RootLastRunID
+        * * Display Name: Root Last Run ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -9646,6 +9706,14 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: ChildPrompt
         * * Display Name: Child Prompt
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
+    RootRerunFromPromptRunID: z.string().nullable().describe(`
+        * * Field Name: RootRerunFromPromptRunID
+        * * Display Name: Root Rerun From Prompt Run ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
@@ -9828,6 +9896,10 @@ export const ArtifactTypeSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type ArtifactTypeEntityType = z.infer<typeof ArtifactTypeSchema>;
@@ -10143,6 +10215,10 @@ export const CollectionSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type CollectionEntityType = z.infer<typeof CollectionSchema>;
@@ -10801,6 +10877,10 @@ export const ConversationDetailArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type ConversationDetailArtifactEntityType = z.infer<typeof ConversationDetailArtifactSchema>;
@@ -11028,6 +11108,10 @@ export const ProjectSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type ProjectEntityType = z.infer<typeof ProjectSchema>;
@@ -11580,6 +11664,10 @@ export const TaskSchema = z.object({
         * * Field Name: Agent
         * * Display Name: Agent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type TaskEntityType = z.infer<typeof TaskSchema>;
@@ -11879,6 +11967,10 @@ export const QueryCategorySchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type QueryCategoryEntityType = z.infer<typeof QueryCategorySchema>;
@@ -12868,6 +12960,10 @@ export const ReportCategorySchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type ReportCategoryEntityType = z.infer<typeof ReportCategorySchema>;
@@ -13591,6 +13687,10 @@ export const SkillSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(50)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type SkillEntityType = z.infer<typeof SkillSchema>;
@@ -13682,6 +13782,10 @@ export const TagSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type TagEntityType = z.infer<typeof TagSchema>;
@@ -13733,6 +13837,10 @@ export const TemplateCategorySchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type TemplateCategoryEntityType = z.infer<typeof TemplateCategorySchema>;
@@ -14415,6 +14523,10 @@ export const UserViewCategorySchema = z.object({
         * * Field Name: User
         * * Display Name: User
         * * SQL Data Type: nvarchar(100)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type UserViewCategoryEntityType = z.infer<typeof UserViewCategorySchema>;
@@ -15439,6 +15551,15 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -16759,6 +16880,15 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -18595,6 +18725,15 @@ if this limit is exceeded.
     get OwnerUser(): string | null {
         return this.Get('OwnerUser');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -19216,6 +19355,15 @@ export class AIPromptCategoryEntity extends BaseEntity<AIPromptCategoryEntityTyp
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -20313,6 +20461,15 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     get ResultSelectorPrompt(): string | null {
         return this.Get('ResultSelectorPrompt');
     }
+
+    /**
+    * * Field Name: RootResultSelectorPromptID
+    * * Display Name: Root Result Selector Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootResultSelectorPromptID(): string | null {
+        return this.Get('RootResultSelectorPromptID');
+    }
 }
 
 
@@ -21140,6 +21297,15 @@ export class AuditLogTypeEntity extends BaseEntity<AuditLogTypeEntityType> {
     get Authorization(): string | null {
         return this.Get('Authorization');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -21613,6 +21779,15 @@ export class AuthorizationEntity extends BaseEntity<AuthorizationEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -25365,6 +25540,15 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     get Agent(): string | null {
         return this.Get('Agent');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -25818,6 +26002,15 @@ export class DashboardCategoryEntity extends BaseEntity<DashboardCategoryEntityT
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -33021,6 +33214,15 @@ export class FileCategoryEntity extends BaseEntity<FileCategoryEntityType> {
     get Parent(): string | null {
         return this.Get('Parent');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -33570,6 +33772,15 @@ export class GeneratedCodeCategoryEntity extends BaseEntity<GeneratedCodeCategor
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -34505,6 +34716,15 @@ export class ListCategoryEntity extends BaseEntity<ListCategoryEntityType> {
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -36184,6 +36404,15 @@ detailed information about what validation rules failed.
     set Comments(value: string | null) {
         this.Set('Comments', value);
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -36834,6 +37063,24 @@ each time the agent processes a prompt step.
     */
     get OverrideVendor(): string | null {
         return this.Get('OverrideVendor');
+    }
+
+    /**
+    * * Field Name: RootParentRunID
+    * * Display Name: Root Parent Run ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentRunID(): string | null {
+        return this.Get('RootParentRunID');
+    }
+
+    /**
+    * * Field Name: RootLastRunID
+    * * Display Name: Root Last Run ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootLastRunID(): string | null {
+        return this.Get('RootLastRunID');
     }
 }
 
@@ -40474,6 +40721,24 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     get ChildPrompt(): string | null {
         return this.Get('ChildPrompt');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
+
+    /**
+    * * Field Name: RootRerunFromPromptRunID
+    * * Display Name: Root Rerun From Prompt Run ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootRerunFromPromptRunID(): string | null {
+        return this.Get('RootRerunFromPromptRunID');
+    }
 }
 
 
@@ -40976,6 +41241,15 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -41791,6 +42065,15 @@ export class CollectionEntity extends BaseEntity<CollectionEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -43497,6 +43780,15 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
 }
 
 
@@ -44107,6 +44399,15 @@ export class ProjectEntity extends BaseEntity<ProjectEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -45596,6 +45897,15 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     get Agent(): string | null {
         return this.Get('Agent');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -46426,6 +46736,15 @@ export class QueryCategoryEntity extends BaseEntity<QueryCategoryEntityType> {
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -48985,6 +49304,15 @@ export class ReportCategoryEntity extends BaseEntity<ReportCategoryEntityType> {
     get User(): string {
         return this.Get('User');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -50951,6 +51279,15 @@ export class SkillEntity extends BaseEntity<SkillEntityType> {
     get Parent(): string | null {
         return this.Get('Parent');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -51197,6 +51534,15 @@ export class TagEntity extends BaseEntity<TagEntityType> {
     get Parent(): string | null {
         return this.Get('Parent');
     }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
+    }
 }
 
 
@@ -51331,6 +51677,15 @@ export class TemplateCategoryEntity extends BaseEntity<TemplateCategoryEntityTyp
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
@@ -53090,6 +53445,15 @@ export class UserViewCategoryEntity extends BaseEntity<UserViewCategoryEntityTyp
     */
     get User(): string {
         return this.Get('User');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
