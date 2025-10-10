@@ -1,7 +1,7 @@
 import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
 
 /**
@@ -43,6 +43,7 @@ import { TaskComponent } from '@memberjunction/ng-tasks';
           <mj-task
             [tasks]="subTasks"
             [ganttTasks]="subTasksWithParent"
+            [taskDependencies]="taskDependencies"
             [title]="selectedTask.Name"
             [description]="getTaskDetailDescription()"
             [showHeader]="true"
@@ -138,6 +139,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   public filteredTasks: TaskEntity[] = [];
   public subTasks: TaskEntity[] = [];
   public subTasksWithParent: TaskEntity[] = []; // Includes parent for Gantt hierarchy
+  public taskDependencies: TaskDependencyEntity[] = []; // Dependencies for Gantt links
   public selectedTask: TaskEntity | null = null;
   public showDetailAnimation: boolean = false;
   public isLoading: boolean = false;
@@ -246,10 +248,14 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         this.subTasksWithParent = allHierarchy;
 
         console.log(`📋 Loaded ${this.subTasks.length} tasks in hierarchy for root ${rootId}`);
+
+        // Load task dependencies for this hierarchy
+        await this.loadTaskDependencies(rootId);
       } else {
         console.error('❌ Failed to load task hierarchy:', hierarchyResult.ErrorMessage);
         this.subTasks = [];
         this.subTasksWithParent = [];
+        this.taskDependencies = [];
       }
     } catch (error) {
       console.error('Failed to load task hierarchy:', error);
@@ -257,10 +263,45 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     }
   }
 
+  private async loadTaskDependencies(rootId: string): Promise<void> {
+    try {
+      const rv = new RunView();
+
+      // Load task dependencies where either TaskID or DependsOnTaskID is in this hierarchy
+      // Use subquery to find all tasks with this RootParentID
+      // Note: Using __mj as the default schema - this is the standard MJ schema
+      const schema = '__mj';
+      const depsResult = await rv.RunView<TaskDependencyEntity>(
+        {
+          EntityName: 'MJ: Task Dependencies',
+          ExtraFilter: `
+            TaskID IN (SELECT ID FROM [${schema}].[vwTasks] WHERE RootParentID='${rootId}' OR ID='${rootId}')
+            OR
+            DependsOnTaskID IN (SELECT ID FROM [${schema}].[vwTasks] WHERE RootParentID='${rootId}' OR ID='${rootId}')
+          `,
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (depsResult.Success) {
+        this.taskDependencies = depsResult.Results || [];
+        console.log(`🔗 Loaded ${this.taskDependencies.length} task dependencies`);
+      } else {
+        console.error('❌ Failed to load task dependencies:', depsResult.ErrorMessage);
+        this.taskDependencies = [];
+      }
+    } catch (error) {
+      console.error('Failed to load task dependencies:', error);
+      this.taskDependencies = [];
+    }
+  }
+
   public backToTaskList(): void {
     this.selectedTask = null;
     this.subTasks = [];
     this.subTasksWithParent = [];
+    this.taskDependencies = [];
     this.showDetailAnimation = false;
   }
 

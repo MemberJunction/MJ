@@ -141,18 +141,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     const c = md.EntityByName('Conversations');
     if (!cd || !c) {
       console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
-      this.tasksFilter = `UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
+      this.tasksFilter = `ParentID IS NULL AND UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
       return;
     }
 
-    this.tasksFilter = `UserID = '${this.currentUser.ID}' OR ConversationDetailID IN (
+    this.tasksFilter = `ParentID IS NULL AND (UserID = '${this.currentUser.ID}' OR ConversationDetailID IN (
       SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}] 
       WHERE 
       UserID ='${this.currentUser.ID}' OR 
       ConversationID IN (
         SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${this.currentUser.ID}'
       )
-    )`;
+    ))`;
     console.log('📝 Conversations domain tasks filter built:', this.tasksFilter);
   }
 

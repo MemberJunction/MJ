@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TaskEntity } from '@memberjunction/core-entities';
+import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
 import { TaskViewMode } from '../models/task-view.models';
 import { SimpleTaskViewerComponent } from './simple-task-viewer.component';
 import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
@@ -53,6 +53,7 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
         <mj-gantt-task-viewer
           *ngIf="viewMode === 'gantt'"
           [tasks]="ganttTasks || tasks"
+          [taskDependencies]="taskDependencies || []"
           (taskClicked)="onTaskClicked($event)">
         </mj-gantt-task-viewer>
       </div>
@@ -143,6 +144,7 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
 export class TaskComponent {
   @Input() tasks: TaskEntity[] = [];
   @Input() ganttTasks?: TaskEntity[]; // Optional separate task list for Gantt (includes parent)
+  @Input() taskDependencies?: TaskDependencyEntity[]; // Task dependencies for Gantt links
   @Input() title?: string;
   @Input() description?: string;
   @Input() showHeader: boolean = true;
