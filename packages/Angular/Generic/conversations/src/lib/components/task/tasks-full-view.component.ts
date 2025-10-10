@@ -42,6 +42,7 @@ import { TaskComponent } from '@memberjunction/ng-tasks';
           <!-- Task Details & Sub-tasks with Gantt Toggle -->
           <mj-task
             [tasks]="subTasks"
+            [ganttTasks]="subTasksWithParent"
             [title]="selectedTask.Name"
             [description]="getTaskDetailDescription()"
             [showHeader]="true"
@@ -136,6 +137,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   public allTasks: TaskEntity[] = [];
   public filteredTasks: TaskEntity[] = [];
   public subTasks: TaskEntity[] = [];
+  public subTasksWithParent: TaskEntity[] = []; // Includes parent for Gantt hierarchy
   public selectedTask: TaskEntity | null = null;
   public showDetailAnimation: boolean = false;
   public isLoading: boolean = false;
@@ -210,19 +212,23 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     this.selectedTask = task;
     this.showDetailAnimation = true;
 
-    // Load sub-tasks for the selected task
-    await this.loadSubTasks(task.ID);
+    // Load all tasks in the hierarchy using RootParentID
+    await this.loadTaskHierarchy(task);
   }
 
-  private async loadSubTasks(parentTaskId: string): Promise<void> {
+  private async loadTaskHierarchy(task: TaskEntity): Promise<void> {
     try {
       const rv = new RunView();
 
-      // Load sub-tasks where ParentTaskID matches the selected task
-      const subTasksResult = await rv.RunView<TaskEntity>(
+      // Use RootParentID to load all tasks in this hierarchy
+      // If task has no RootParentID, it's the root itself, so use its ID
+      const rootId = task.RootParentID || task.ID;
+
+      // Load all tasks where RootParentID matches, or tasks that are the root itself
+      const hierarchyResult = await rv.RunView<TaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: `ParentTaskID='${parentTaskId}'`,
+          ExtraFilter: `RootParentID='${rootId}' OR ID='${rootId}'`,
           OrderBy: '__mj_CreatedAt ASC',
           MaxRows: 1000,
           ResultType: 'entity_object'
@@ -230,15 +236,23 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         this.currentUser
       );
 
-      if (subTasksResult.Success) {
-        this.subTasks = subTasksResult.Results || [];
-        console.log(`📋 Loaded ${this.subTasks.length} sub-tasks for task ${parentTaskId}`);
+      if (hierarchyResult.Success) {
+        const allHierarchy = hierarchyResult.Results || [];
+
+        // For list view: Filter out the clicked task itself - only show its children/descendants
+        this.subTasks = allHierarchy.filter(t => t.ID !== task.ID);
+
+        // For Gantt view: Include the parent task so hierarchy works correctly
+        this.subTasksWithParent = allHierarchy;
+
+        console.log(`📋 Loaded ${this.subTasks.length} tasks in hierarchy for root ${rootId}`);
       } else {
-        console.error('❌ Failed to load sub-tasks:', subTasksResult.ErrorMessage);
+        console.error('❌ Failed to load task hierarchy:', hierarchyResult.ErrorMessage);
         this.subTasks = [];
+        this.subTasksWithParent = [];
       }
     } catch (error) {
-      console.error('Failed to load sub-tasks:', error);
+      console.error('Failed to load task hierarchy:', error);
       this.subTasks = [];
     }
   }
@@ -246,6 +260,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   public backToTaskList(): void {
     this.selectedTask = null;
     this.subTasks = [];
+    this.subTasksWithParent = [];
     this.showDetailAnimation = false;
   }
 

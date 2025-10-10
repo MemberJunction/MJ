@@ -52,7 +52,7 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
 
         <mj-gantt-task-viewer
           *ngIf="viewMode === 'gantt'"
-          [tasks]="tasks"
+          [tasks]="ganttTasks || tasks"
           (taskClicked)="onTaskClicked($event)">
         </mj-gantt-task-viewer>
       </div>
@@ -142,6 +142,7 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
 })
 export class TaskComponent {
   @Input() tasks: TaskEntity[] = [];
+  @Input() ganttTasks?: TaskEntity[]; // Optional separate task list for Gantt (includes parent)
   @Input() title?: string;
   @Input() description?: string;
   @Input() showHeader: boolean = true;

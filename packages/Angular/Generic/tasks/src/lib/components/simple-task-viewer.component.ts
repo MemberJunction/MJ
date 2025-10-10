@@ -25,7 +25,21 @@ import { TaskEntity } from '@memberjunction/core-entities';
           <!-- Task Content -->
           <div class="task-content">
             <div class="task-header">
-              <span class="task-title">{{ task.Name }}</span>
+              <div class="task-title-row">
+                <span class="task-title" [class.completed-text]="task.Status === 'Complete'">
+                  {{ task.Name }}
+                  <i *ngIf="task.Status === 'Complete'" class="fas fa-check completed-check"></i>
+                </span>
+                <!-- Compact progress indicator for all tasks -->
+                <div *ngIf="task.PercentComplete != null" class="task-progress-compact">
+                  <div class="progress-bar-compact">
+                    <div class="progress-fill-compact"
+                         [style.width.%]="task.PercentComplete"
+                         [class.complete]="task.Status === 'Complete'"></div>
+                  </div>
+                  <span class="progress-text-compact">{{ task.PercentComplete }}%</span>
+                </div>
+              </div>
               <span class="task-meta">
                 <span *ngIf="task.DueAt" class="due-date">
                   <i class="far fa-calendar"></i>
@@ -39,12 +53,6 @@ import { TaskEntity } from '@memberjunction/core-entities';
             </div>
             <div *ngIf="task.Description" class="task-description">
               {{ task.Description }}
-            </div>
-            <div *ngIf="task.PercentComplete != null" class="task-progress">
-              <div class="progress-bar">
-                <div class="progress-fill" [style.width.%]="task.PercentComplete"></div>
-              </div>
-              <span class="progress-text">{{ task.PercentComplete }}%</span>
             </div>
           </div>
         </div>
@@ -87,8 +95,8 @@ import { TaskEntity } from '@memberjunction/core-entities';
     }
 
     .task-item.completed {
-      opacity: 0.6;
       background: #F9FAFB;
+      border-color: #D1D5DB;
     }
 
     .status-icon {
@@ -121,10 +129,32 @@ import { TaskEntity } from '@memberjunction/core-entities';
       margin-bottom: 6px;
     }
 
+    .task-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+    }
+
     .task-title {
       font-weight: 600;
       color: #111827;
       font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .task-title.completed-text {
+      color: #6B7280;
+      text-decoration: line-through;
+      text-decoration-thickness: 1.5px;
+    }
+
+    .completed-check {
+      color: #10B981;
+      font-size: 12px;
     }
 
     .task-meta {
@@ -146,32 +176,36 @@ import { TaskEntity } from '@memberjunction/core-entities';
       line-height: 1.5;
     }
 
-    .task-progress {
+    .task-progress-compact {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-top: 8px;
+      gap: 6px;
+      flex-shrink: 0;
     }
 
-    .progress-bar {
-      flex: 1;
-      height: 6px;
+    .progress-bar-compact {
+      width: 80px;
+      height: 4px;
       background: #E5E7EB;
-      border-radius: 3px;
+      border-radius: 2px;
       overflow: hidden;
     }
 
-    .progress-fill {
+    .progress-fill-compact {
       height: 100%;
       background: #3B82F6;
       transition: width 0.3s ease;
     }
 
-    .progress-text {
-      font-size: 11px;
+    .progress-fill-compact.complete {
+      background: #10B981;
+    }
+
+    .progress-text-compact {
+      font-size: 10px;
       font-weight: 600;
       color: #6B7280;
-      min-width: 35px;
+      min-width: 30px;
       text-align: right;
     }
 
