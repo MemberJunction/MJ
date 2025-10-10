@@ -10,6 +10,7 @@ export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 
 // Services - State
+export * from './lib/services/data-cache.service';
 export * from './lib/services/conversation-state.service';
 export * from './lib/services/artifact-state.service';
 export * from './lib/services/agent-state.service';
@@ -28,8 +29,7 @@ export * from './lib/components/navigation/conversation-navigation.component';
 export * from './lib/components/sidebar/conversation-sidebar.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
-export * from './lib/components/artifact/artifact-panel.component';
-export * from './lib/components/artifact/artifact-viewer.component';
+export * from './lib/components/artifact/artifact-viewer-panel.component';
 export * from './lib/components/artifact/artifact-version-history.component';
 export * from './lib/components/artifact/inline-artifact.component';
 export * from './lib/components/message/message-item.component';
@@ -43,6 +43,7 @@ export * from './lib/components/project/project-selector.component';
 export * from './lib/components/project/project-form-modal.component';
 export * from './lib/components/task/task-list.component';
 export * from './lib/components/task/task-item.component';
+export * from './lib/components/tasks/task-widget.component';
 export * from './lib/components/agent/agent-process-panel.component';
 export * from './lib/components/agent/active-agent-indicator.component';
 export * from './lib/components/active-tasks/active-tasks-panel.component';

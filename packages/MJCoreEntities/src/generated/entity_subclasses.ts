@@ -1273,6 +1273,18 @@ if this limit is exceeded.`),
     *   * Failed
     *   * Retry
         * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
+    DefaultArtifactTypeID: z.string().nullable().describe(`
+        * * Field Name: DefaultArtifactTypeID
+        * * Display Name: Default Artifact Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+        * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.`),
+    OwnerUserID: z.string().nullable().describe(`
+        * * Field Name: OwnerUserID
+        * * Display Name: Owner User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who owns and created this AI agent. Automatically set to the current user if not specified. Owner has full permissions (view, run, edit, delete) regardless of ACL entries.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1284,6 +1296,14 @@ if this limit is exceeded.`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
         * * Display Name: Type
+        * * SQL Data Type: nvarchar(100)`),
+    DefaultArtifactType: z.string().nullable().describe(`
+        * * Field Name: DefaultArtifactType
+        * * Display Name: Default Artifact Type
+        * * SQL Data Type: nvarchar(100)`),
+    OwnerUser: z.string().nullable().describe(`
+        * * Field Name: OwnerUser
+        * * Display Name: Owner User
         * * SQL Data Type: nvarchar(100)`),
 });
 
@@ -7637,6 +7657,135 @@ export const AccessControlRuleSchema = z.object({
 export type AccessControlRuleEntityType = z.infer<typeof AccessControlRuleSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Artifact Types
+ */
+export const AIAgentArtifactTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+        * * Description: AI Agent that can produce this artifact type`),
+    ArtifactTypeID: z.string().describe(`
+        * * Field Name: ArtifactTypeID
+        * * Display Name: Artifact Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+        * * Description: Artifact type that this agent can produce`),
+    Sequence: z.number().nullable().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Description: Optional sequence for ordering multiple artifact types for an agent`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    ArtifactType: z.string().describe(`
+        * * Field Name: ArtifactType
+        * * Display Name: Artifact Type
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIAgentArtifactTypeEntityType = z.infer<typeof AIAgentArtifactTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Agent Permissions
+ */
+export const AIAgentPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
+    RoleID: z.string().nullable().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Roles (vwRoles.ID)
+        * * Description: The role this permission is granted to. Either RoleID or UserID must be specified, but not both.`),
+    UserID: z.string().nullable().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user this permission is granted to. Either RoleID or UserID must be specified, but not both.`),
+    CanView: z.boolean().describe(`
+        * * Field Name: CanView
+        * * Display Name: Can View
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants permission to view the agent configuration and details.`),
+    CanRun: z.boolean().describe(`
+        * * Field Name: CanRun
+        * * Display Name: Can Run
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants permission to execute/run the agent. Typically implies CanView as well.`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants permission to modify the agent configuration, prompts, and settings. Typically implies CanView and CanRun as well.`),
+    CanDelete: z.boolean().describe(`
+        * * Field Name: CanDelete
+        * * Display Name: Can Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Grants permission to delete the agent. Typically implies all other permissions as well.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional comments explaining why this permission was granted or any special notes.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+    Role: z.string().nullable().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+    User: z.string().nullable().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type AIAgentPermissionEntityType = z.infer<typeof AIAgentPermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Prompts
  */
 export const AIAgentPromptSchema = z.object({
@@ -9664,9 +9813,83 @@ export const ArtifactTypeSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ParentID: z.string().nullable().describe(`
+        * * Field Name: ParentID
+        * * Display Name: Parent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+        * * Description: Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.`),
+    ExtractRules: z.string().nullable().describe(`
+        * * Field Name: ExtractRules
+        * * Display Name: Extract Rules
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`),
+    Parent: z.string().nullable().describe(`
+        * * Field Name: Parent
+        * * Display Name: Parent
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type ArtifactTypeEntityType = z.infer<typeof ArtifactTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Artifact Version Attributes
+ */
+export const ArtifactVersionAttributeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArtifactVersionID: z.string().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: The artifact version this attribute belongs to`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the extracted attribute (matches ExtractRule.name)`),
+    Type: z.string().describe(`
+        * * Field Name: Type
+        * * Display Name: Type
+        * * SQL Data Type: nvarchar(500)
+        * * Description: TypeScript type definition of the value (e.g., 'string', 'number', 'Date', 'Array<{x: number, y: string}>')`),
+    Value: z.string().nullable().describe(`
+        * * Field Name: Value
+        * * Display Name: Value
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON-serialized extracted value`),
+    StandardProperty: z.union([z.literal('name'), z.literal('description'), z.literal('displayMarkdown'), z.literal('displayHtml')]).nullable().describe(`
+        * * Field Name: StandardProperty
+        * * Display Name: Standard Property
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * name
+    *   * description
+    *   * displayMarkdown
+    *   * displayHtml
+        * * Description: Maps this attribute to a standard property for UI rendering: 'name', 'description', 'displayMarkdown', 'displayHtml', or NULL for custom attributes`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type ArtifactVersionAttributeEntityType = z.infer<typeof ArtifactVersionAttributeSchema>;
 
 /**
  * zod schema definition for the entity MJ: Artifact Versions
@@ -9722,6 +9945,16 @@ export const ArtifactVersionSchema = z.object({
         * * Display Name: Content Hash
         * * SQL Data Type: nvarchar(500)
         * * Description: SHA-256 hash of the Content field for duplicate detection and version comparison`),
+    Name: z.string().nullable().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of this artifact version. Can differ from Artifact.Name as it may evolve with versions.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.`),
     Artifact: z.string().describe(`
         * * Field Name: Artifact
         * * Display Name: Artifact
@@ -18291,6 +18524,34 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: DefaultArtifactTypeID
+    * * Display Name: Default Artifact Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+    * * Description: Default artifact type produced by this agent. This is the primary artifact type; additional artifact types can be linked via AIAgentArtifactType junction table. Can be NULL if agent does not produce artifacts by default.
+    */
+    get DefaultArtifactTypeID(): string | null {
+        return this.Get('DefaultArtifactTypeID');
+    }
+    set DefaultArtifactTypeID(value: string | null) {
+        this.Set('DefaultArtifactTypeID', value);
+    }
+
+    /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who owns and created this AI agent. Automatically set to the current user if not specified. Owner has full permissions (view, run, edit, delete) regardless of ACL entries.
+    */
+    get OwnerUserID(): string | null {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string | null) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent
     * * SQL Data Type: nvarchar(255)
@@ -18315,6 +18576,24 @@ if this limit is exceeded.
     */
     get Type(): string | null {
         return this.Get('Type');
+    }
+
+    /**
+    * * Field Name: DefaultArtifactType
+    * * Display Name: Default Artifact Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get DefaultArtifactType(): string | null {
+        return this.Get('DefaultArtifactType');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
     }
 }
 
@@ -34802,6 +35081,360 @@ export class AccessControlRuleEntity extends BaseEntity<AccessControlRuleEntityT
 
 
 /**
+ * MJ: AI Agent Artifact Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentArtifactType
+ * * Base View: vwAIAgentArtifactTypes
+ * * @description Junction table linking AI Agents to the artifact types they can produce. An agent can produce zero to many artifact types.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Artifact Types')
+export class AIAgentArtifactTypeEntity extends BaseEntity<AIAgentArtifactTypeEntityType> {
+    /**
+    * Loads the MJ: AI Agent Artifact Types record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Artifact Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentArtifactTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    * * Description: AI Agent that can produce this artifact type
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactTypeID
+    * * Display Name: Artifact Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+    * * Description: Artifact type that this agent can produce
+    */
+    get ArtifactTypeID(): string {
+        return this.Get('ArtifactTypeID');
+    }
+    set ArtifactTypeID(value: string) {
+        this.Set('ArtifactTypeID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Description: Optional sequence for ordering multiple artifact types for an agent
+    */
+    get Sequence(): number | null {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number | null) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: ArtifactType
+    * * Display Name: Artifact Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ArtifactType(): string {
+        return this.Get('ArtifactType');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentPermission
+ * * Base View: vwAIAgentPermissions
+ * * @description Defines access control permissions for AI agents using an ACL (Access Control List) model. Permissions can be granted to individual users or roles.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Permissions')
+export class AIAgentPermissionEntity extends BaseEntity<AIAgentPermissionEntityType> {
+    /**
+    * Loads the MJ: AI Agent Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Table-Level: This rule ensures that for each record, either a Role must be specified and a User left unspecified, or a User specified and a Role left unspecified. You cannot specify both or neither.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRoleIDAndUserIDExclusivity(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that for each record, either a Role must be specified and a User left unspecified, or a User specified and a Role left unspecified. You cannot specify both or neither.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRoleIDAndUserIDExclusivity(result: ValidationResult) {
+    	const roleSet = this.RoleID !== null;
+    	const userSet = this.UserID !== null;
+    	if ((roleSet && userSet) || (!roleSet && !userSet)) {
+    		result.Errors.push(new ValidationErrorInfo("RoleID/UserID", "You must specify either a Role or a User, but not both, and not neither.", { RoleID: this.RoleID, UserID: this.UserID }, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Roles (vwRoles.ID)
+    * * Description: The role this permission is granted to. Either RoleID or UserID must be specified, but not both.
+    */
+    get RoleID(): string | null {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string | null) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user this permission is granted to. Either RoleID or UserID must be specified, but not both.
+    */
+    get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanView
+    * * Display Name: Can View
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants permission to view the agent configuration and details.
+    */
+    get CanView(): boolean {
+        return this.Get('CanView');
+    }
+    set CanView(value: boolean) {
+        this.Set('CanView', value);
+    }
+
+    /**
+    * * Field Name: CanRun
+    * * Display Name: Can Run
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants permission to execute/run the agent. Typically implies CanView as well.
+    */
+    get CanRun(): boolean {
+        return this.Get('CanRun');
+    }
+    set CanRun(value: boolean) {
+        this.Set('CanRun', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants permission to modify the agent configuration, prompts, and settings. Typically implies CanView and CanRun as well.
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Grants permission to delete the agent. Typically implies all other permissions as well.
+    */
+    get CanDelete(): boolean {
+        return this.Get('CanDelete');
+    }
+    set CanDelete(value: boolean) {
+        this.Set('CanDelete', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional comments explaining why this permission was granted or any special notes.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string | null {
+        return this.Get('Role');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string | null {
+        return this.Get('User');
+    }
+}
+
+
+/**
  * MJ: AI Agent Prompts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentPrompt
@@ -40308,6 +40941,188 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: ParentID
+    * * Display Name: Parent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Types (vwArtifactTypes.ID)
+    * * Description: Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.
+    */
+    get ParentID(): string | null {
+        return this.Get('ParentID');
+    }
+    set ParentID(value: string | null) {
+        this.Set('ParentID', value);
+    }
+
+    /**
+    * * Field Name: ExtractRules
+    * * Display Name: Extract Rules
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.
+    */
+    get ExtractRules(): string | null {
+        return this.Get('ExtractRules');
+    }
+    set ExtractRules(value: string | null) {
+        this.Set('ExtractRules', value);
+    }
+
+    /**
+    * * Field Name: Parent
+    * * Display Name: Parent
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Parent(): string | null {
+        return this.Get('Parent');
+    }
+}
+
+
+/**
+ * MJ: Artifact Version Attributes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactVersionAttribute
+ * * Base View: vwArtifactVersionAttributes
+ * * @description Stores extracted attribute values from artifact content based on ArtifactType ExtractRules. Prevents re-running extraction logic on every access.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Version Attributes')
+export class ArtifactVersionAttributeEntity extends BaseEntity<ArtifactVersionAttributeEntityType> {
+    /**
+    * Loads the MJ: Artifact Version Attributes record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Version Attributes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ArtifactVersionAttributeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: The artifact version this attribute belongs to
+    */
+    get ArtifactVersionID(): string {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the extracted attribute (matches ExtractRule.name)
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Type
+    * * Display Name: Type
+    * * SQL Data Type: nvarchar(500)
+    * * Description: TypeScript type definition of the value (e.g., 'string', 'number', 'Date', 'Array<{x: number, y: string}>')
+    */
+    get Type(): string {
+        return this.Get('Type');
+    }
+    set Type(value: string) {
+        this.Set('Type', value);
+    }
+
+    /**
+    * * Field Name: Value
+    * * Display Name: Value
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-serialized extracted value
+    */
+    get Value(): string | null {
+        return this.Get('Value');
+    }
+    set Value(value: string | null) {
+        this.Set('Value', value);
+    }
+
+    /**
+    * * Field Name: StandardProperty
+    * * Display Name: Standard Property
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * name
+    *   * description
+    *   * displayMarkdown
+    *   * displayHtml
+    * * Description: Maps this attribute to a standard property for UI rendering: 'name', 'description', 'displayMarkdown', 'displayHtml', or NULL for custom attributes
+    */
+    get StandardProperty(): 'name' | 'description' | 'displayMarkdown' | 'displayHtml' | null {
+        return this.Get('StandardProperty');
+    }
+    set StandardProperty(value: 'name' | 'description' | 'displayMarkdown' | 'displayHtml' | null) {
+        this.Set('StandardProperty', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
 }
 
 
@@ -40463,6 +41278,32 @@ export class ArtifactVersionEntity extends BaseEntity<ArtifactVersionEntityType>
     }
     set ContentHash(value: string | null) {
         this.Set('ContentHash', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of this artifact version. Can differ from Artifact.Name as it may evolve with versions.
+    */
+    get Name(): string | null {
+        return this.Get('Name');
+    }
+    set Name(value: string | null) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of this artifact version. Can differ from Artifact.Description as it may evolve with versions.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
     }
 
     /**

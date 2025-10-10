@@ -566,11 +566,8 @@
 }
 
 .agent-run-icon.expanded {
-  color: #4B5563;
-}
-
-.agent-run-icon.expanded i.fa-cog {
-  animation: rotate 1s linear infinite;
+  color: #9333EA;
+  transform: scale(1.1);
 }
 
 @keyframes rotate {
@@ -745,4 +742,52 @@
 .run-id-link i.fa-external-link-alt {
   font-size: 10px;
   opacity: 0.7;
+}
+
+/* Tasks section in agent details */
+.agent-details-tasks {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.tasks-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tasks-section-header i {
+  color: #3B82F6;
+  font-size: 11px;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tasks-list mj-task-widget {
+  display: block;
+}
+
+/* Artifact version badge */
+.artifact-version-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: #EEF2FF;
+  color: #4F46E5;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: monospace;
+  border-radius: 4px;
+  vertical-align: middle;
 }

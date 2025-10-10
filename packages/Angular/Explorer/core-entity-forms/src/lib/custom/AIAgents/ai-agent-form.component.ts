@@ -16,7 +16,8 @@ import { PromptSelectorResult } from './prompt-selector-dialog.component';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
-            
+import { AgentPermissionsDialogComponent } from './agent-permissions-dialog.component';
+
 
 
 /**
@@ -775,6 +776,31 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         // Use the new test harness dialog service
         // Don't pass viewContainerRef so window is top-level
         this.testHarnessService.openForAgent(this.record.ID);
+    }
+
+    /**
+     * Opens the permissions management dialog for this agent.
+     * Allows viewing and editing user/role-based permissions for the agent.
+     */
+    public openPermissionsDialog() {
+        if (!this.record?.ID) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Please save the AI agent before managing permissions',
+                'warning',
+                4000
+            );
+            return;
+        }
+
+        const dialogRef = this.dialogService.open({
+            content: AgentPermissionsDialogComponent,
+            width: 900,
+            height: 600
+        });
+
+        const dialog = dialogRef.content.instance as AgentPermissionsDialogComponent;
+        dialog.agent = this.record;
+        dialog.dialogRef = dialogRef;
     }
 
     /**

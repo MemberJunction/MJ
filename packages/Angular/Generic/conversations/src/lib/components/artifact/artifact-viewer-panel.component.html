@@ -3,14 +3,43 @@
     <div class="panel-header-left">
       <h3>
         <i class="fas fa-cube"></i>
-        {{ artifact?.Name || 'Artifact' }}
+        {{ displayName }}
       </h3>
+      @if (displayDescription) {
+        <p class="header-description">{{ displayDescription }}</p>
+      }
     </div>
     <div class="panel-header-right">
-      <div class="version-selector">
+      <div class="version-selector" [class.clickable]="allVersions.length > 1" (click)="toggleVersionDropdown()">
         <i class="fas fa-history"></i>
-        <span class="version-label">v{{ artifactVersion?.VersionNumber || 1 }}</span>
+        <span class="version-label">v{{ selectedVersionNumber }}</span>
+        @if (allVersions.length > 1) {
+          <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
+        }
+        @if (showVersionDropdown) {
+          <div class="version-dropdown" (click)="$event.stopPropagation()">
+            @for (version of allVersions; track version.ID) {
+              <div class="version-option"
+                   [class.selected]="version.VersionNumber === selectedVersionNumber"
+                   (click)="selectVersion(version); $event.stopPropagation()">
+                <span class="version-number">v{{ version.VersionNumber }}</span>
+                <span class="version-date">{{ version.__mj_CreatedAt | date:'short' }}</span>
+                @if (version.VersionNumber === selectedVersionNumber) {
+                  <i class="fas fa-check"></i>
+                }
+              </div>
+            }
+          </div>
+        }
       </div>
+      @if (showSaveToCollection) {
+        <button class="save-to-collection-btn"
+                [class.in-collection]="isInCollection"
+                (click)="onSaveToLibrary()"
+                [title]="isInCollection ? 'View in Collection' : 'Save to Collection'">
+          <i [ngClass]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
+        </button>
+      }
       <button class="close-btn" (click)="onClose()" title="Close">
         <i class="fas fa-times"></i>
       </button>
@@ -34,43 +63,186 @@
 
     @if (!isLoading && !error && artifact) {
       <div class="artifact-content-wrapper">
-        <div class="artifact-meta">
-          <div class="meta-item">
-            <label>Type</label>
-            <span>{{ artifact.Type }}</span>
-          </div>
-          <div class="meta-item">
-            <label>Version</label>
-            <span>{{ artifactVersion?.VersionNumber || 1 }}</span>
-          </div>
-          <div class="meta-item">
-            <label>Created</label>
-            <span>{{ artifact.__mj_CreatedAt | date:'short' }}</span>
-          </div>
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+          @if (hasDisplayTab) {
+            <button class="tab-btn" [class.active]="activeTab === 'display'" (click)="setActiveTab('display')">
+              <i class="fas fa-eye"></i> Display
+            </button>
+          }
+          <button class="tab-btn" [class.active]="activeTab === 'json'" (click)="setActiveTab('json')">
+            <i class="fas fa-code"></i> JSON
+          </button>
+          <button class="tab-btn" [class.active]="activeTab === 'details'" (click)="setActiveTab('details')">
+            <i class="fas fa-info-circle"></i> Details
+          </button>
         </div>
 
-        @if (artifact.Description) {
-          <div class="artifact-description">
-            {{ artifact.Description }}
-          </div>
-        }
+        <!-- Tab Content -->
+        <div class="tab-content">
+          <!-- Display Tab (Markdown or HTML) -->
+          @if (activeTab === 'display' && hasDisplayTab) {
+            <div class="display-content">
+              <div class="display-toolbar">
+                <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
+                  <i class="fas fa-copy"></i> Copy
+                </button>
+              </div>
+              @if (displayMarkdown) {
+                <div class="markdown-content">
+                  <markdown [data]="displayMarkdown"></markdown>
+                </div>
+              } @else if (displayHtml) {
+                <div class="html-content" [innerHTML]="displayHtml"></div>
+              }
+            </div>
+          }
 
-        <div class="json-viewer">
-          <div class="json-toolbar">
-            <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
-              <i class="fas fa-copy"></i> Copy
-            </button>
-          </div>
-          <div class="json-editor-container">
-            <mj-code-editor
-              [(ngModel)]="jsonContent"
-              [language]="'json'"
-              [readonly]="true"
-              style="width: 100%; height: 100%;">
-            </mj-code-editor>
-          </div>
+          <!-- JSON Tab -->
+          @if (activeTab === 'json') {
+            <div class="json-viewer">
+              <div class="json-toolbar">
+                <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
+                  <i class="fas fa-copy"></i> Copy
+                </button>
+              </div>
+              <div class="json-editor-container">
+                <mj-code-editor
+                  [(ngModel)]="jsonContent"
+                  [language]="'json'"
+                  [readonly]="true"
+                  style="width: 100%; height: 100%;">
+                </mj-code-editor>
+              </div>
+            </div>
+          }
+
+          <!-- Details Tab -->
+          @if (activeTab === 'details') {
+            <div class="details-content">
+              <div class="artifact-meta">
+                <div class="meta-item">
+                  <label>Type</label>
+                  <span>{{ artifact.Type }}</span>
+                </div>
+                <div class="meta-item">
+                  <label>Version</label>
+                  <span>{{ artifactVersion?.VersionNumber || 1 }}</span>
+                </div>
+                <div class="meta-item">
+                  <label>Created</label>
+                  <span>{{ artifact.__mj_CreatedAt | date:'short' }}</span>
+                </div>
+                <div class="meta-item">
+                  <label>Updated</label>
+                  <span>{{ artifactVersion?.__mj_UpdatedAt | date:'short' }}</span>
+                </div>
+                @if (artifact.Description) {
+                  <div class="meta-item full-width">
+                    <label>Artifact Description</label>
+                    <span>{{ artifact.Description }}</span>
+                  </div>
+                }
+                @if (artifactVersion?.Description && artifact.Description && artifactVersion?.Description !== artifact.Description) {
+                  <div class="meta-item full-width">
+                    <label>Version Description</label>
+                    <span>{{ artifactVersion?.Description }}</span>
+                  </div>
+                }
+              </div>
+
+              <!-- Version Attributes -->
+              @if (filteredAttributes.length > 0) {
+                <div class="attributes-section">
+                  <h4>Version Attributes</h4>
+                  <div class="attributes-list">
+                    @for (attr of filteredAttributes; track attr.ID) {
+                      <div class="attribute-item">
+                        <label>{{ attr.Name }}</label>
+                        @if (attr.Value) {
+                          <span>{{ attr.Value }}</span>
+                        } @else {
+                          <span class="attribute-empty-pill">Empty</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          }
         </div>
       </div>
     }
   </div>
 </div>
+
+<!-- Save to Collection Dialog -->
+@if (showLibraryDialog) {
+  <div class="modal-overlay" (click)="cancelLibraryDialog()">
+    <div class="modal-content library-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h3>
+          <i class="fas fa-bookmark"></i>
+          Save to Collection
+        </h3>
+        <button class="close-btn" (click)="cancelLibraryDialog()">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-section">
+          <label>Select Collection</label>
+          <select [(ngModel)]="selectedCollectionId" class="form-select">
+            <option [ngValue]="null">-- Choose a collection --</option>
+            @for (collection of collections; track collection.ID) {
+              <option [ngValue]="collection.ID">{{ collection.Name }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="divider">
+          <span>OR</span>
+        </div>
+
+        <div class="form-section">
+          <label>Create New Collection</label>
+          <div class="create-collection-row">
+            <input
+              type="text"
+              [(ngModel)]="newCollectionName"
+              placeholder="Enter collection name"
+              class="form-input"
+              (keyup.enter)="createNewCollection()">
+            <button
+              class="btn btn-secondary"
+              (click)="createNewCollection()"
+              [disabled]="isCreatingCollection || !newCollectionName.trim()">
+              @if (isCreatingCollection) {
+                <i class="fas fa-spinner fa-spin"></i>
+              } @else {
+                <i class="fas fa-plus"></i>
+              }
+              Create
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" (click)="cancelLibraryDialog()">
+          Cancel
+        </button>
+        <button
+          class="btn btn-primary"
+          (click)="saveToSelectedCollection()"
+          [disabled]="!selectedCollectionId || isSavingToLibrary">
+          @if (isSavingToLibrary) {
+            <i class="fas fa-spinner fa-spin"></i> Saving...
+          } @else {
+            <i class="fas fa-save"></i> Save to Collection
+          }
+        </button>
+      </div>
+    </div>
+  </div>
+}

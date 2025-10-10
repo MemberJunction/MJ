@@ -32,8 +32,6 @@ import { ConversationSidebarComponent } from './components/sidebar/conversation-
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
 import { ThreadPanelComponent } from './components/thread/thread-panel.component';
-import { ArtifactPanelComponent } from './components/artifact/artifact-panel.component';
-import { ArtifactViewerComponent } from './components/artifact/artifact-viewer.component';
 import { ArtifactVersionHistoryComponent } from './components/artifact/artifact-version-history.component';
 import { ArtifactUploadModalComponent } from './components/artifact/artifact-upload-modal.component';
 import { InlineArtifactComponent } from './components/artifact/inline-artifact.component';
@@ -49,7 +47,10 @@ import { ProjectFormModalComponent } from './components/project/project-form-mod
 import { TaskListComponent } from './components/task/task-list.component';
 import { TaskItemComponent } from './components/task/task-item.component';
 import { TaskFormModalComponent } from './components/task/task-form-modal.component';
+import { TaskTimelineComponent } from './components/task/task-timeline.component';
+import { TasksFullViewComponent } from './components/task/tasks-full-view.component';
 import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.component';
+import { TaskWidgetComponent } from './components/tasks/task-widget.component';
 import { AgentProcessPanelComponent } from './components/agent/agent-process-panel.component';
 import { ActiveAgentIndicatorComponent } from './components/agent/active-agent-indicator.component';
 import { ActiveTasksPanelComponent } from './components/active-tasks/active-tasks-panel.component';
@@ -77,8 +78,6 @@ const COMPONENTS = [
   ConversationListComponent,
   ConversationChatAreaComponent,
   ThreadPanelComponent,
-  ArtifactPanelComponent,
-  ArtifactViewerComponent,
   ArtifactVersionHistoryComponent,
   ArtifactUploadModalComponent,
   InlineArtifactComponent,
@@ -94,7 +93,10 @@ const COMPONENTS = [
   TaskListComponent,
   TaskItemComponent,
   TaskFormModalComponent,
+  TaskTimelineComponent,
+  TasksFullViewComponent,
   TasksDropdownComponent,
+  TaskWidgetComponent,
   AgentProcessPanelComponent,
   ActiveAgentIndicatorComponent,
   ActiveTasksPanelComponent,

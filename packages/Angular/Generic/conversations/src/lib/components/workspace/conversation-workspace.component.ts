@@ -44,18 +44,27 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public isArtifactPanelOpen: boolean = false;
   public isSearchPanelOpen: boolean = false;
   public renamedConversationId: string | null = null;
+  public activeArtifactId: string | null = null;
+  public activeVersionNumber: number | null = null;
 
-  // Resize state
+  // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
   private isSidebarResizing: boolean = false;
   private sidebarResizeStartX: number = 0;
   private sidebarResizeStartWidth: number = 0;
+
+  // Resize state - Artifact Panel
+  public artifactPanelWidth: number = 40; // Default 40% width
+  private isArtifactPanelResizing: boolean = false;
+  private artifactPanelResizeStartX: number = 0;
+  private artifactPanelResizeStartWidth: number = 0;
 
   private previousConversationId: string | null = null;
   private destroy$ = new Subject<void>();
 
   // LocalStorage keys
   private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
+  private readonly ARTIFACT_PANEL_WIDTH_KEY = 'mj-artifact-panel-width';
 
   constructor(
     public conversationState: ConversationStateService,
@@ -65,12 +74,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async ngOnInit() {
-    // Load saved sidebar width from localStorage
+    // Load saved widths from localStorage
     this.loadSidebarWidth();
+    this.loadArtifactPanelWidth();
 
     // Setup resize listeners
-    window.addEventListener('mousemove', this.onSidebarResizeMove.bind(this));
-    window.addEventListener('mouseup', this.onSidebarResizeEnd.bind(this));
+    window.addEventListener('mousemove', this.onResizeMove.bind(this));
+    window.addEventListener('mouseup', this.onResizeEnd.bind(this));
 
     // Initialize AI Engine to load agent metadata cache
     // This ensures agent names and icons are available for display
@@ -86,6 +96,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       .pipe(takeUntil(this.destroy$))
       .subscribe(isOpen => {
         this.isArtifactPanelOpen = isOpen;
+      });
+
+    // Subscribe to active artifact ID
+    this.artifactState.activeArtifactId$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(id => {
+        this.activeArtifactId = id;
+      });
+
+    // Subscribe to active version number
+    this.artifactState.activeVersionNumber$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(versionNumber => {
+        this.activeVersionNumber = versionNumber;
       });
 
     // Set initial conversation if provided
@@ -117,12 +141,17 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.destroy$.complete();
 
     // Remove resize listeners
-    window.removeEventListener('mousemove', this.onSidebarResizeMove.bind(this));
-    window.removeEventListener('mouseup', this.onSidebarResizeEnd.bind(this));
+    window.removeEventListener('mousemove', this.onResizeMove.bind(this));
+    window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
   }
 
   onTabChanged(tab: NavigationTab): void {
     this.activeTab = tab;
+
+    // Auto-close artifact panel when switching away from collections
+    if (tab === 'conversations' || tab === 'tasks') {
+      this.artifactState.closeArtifact();
+    }
   }
 
   toggleSidebar(): void {
@@ -170,25 +199,52 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     document.body.style.userSelect = 'none';
   }
 
-  private onSidebarResizeMove(event: MouseEvent): void {
-    if (!this.isSidebarResizing) return;
-
-    const deltaX = event.clientX - this.sidebarResizeStartX;
-    let newWidth = this.sidebarResizeStartWidth + deltaX;
-
-    // Constrain between 200px and 500px
-    newWidth = Math.max(200, Math.min(500, newWidth));
-    this.sidebarWidth = newWidth;
+  /**
+   * Artifact panel resize methods
+   */
+  onArtifactPanelResizeStart(event: MouseEvent): void {
+    this.isArtifactPanelResizing = true;
+    this.artifactPanelResizeStartX = event.clientX;
+    this.artifactPanelResizeStartWidth = this.artifactPanelWidth;
+    event.preventDefault();
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
   }
 
-  private onSidebarResizeEnd(event: MouseEvent): void {
+  private onResizeMove(event: MouseEvent): void {
+    if (this.isSidebarResizing) {
+      const deltaX = event.clientX - this.sidebarResizeStartX;
+      let newWidth = this.sidebarResizeStartWidth + deltaX;
+
+      // Constrain between 200px and 500px
+      newWidth = Math.max(200, Math.min(500, newWidth));
+      this.sidebarWidth = newWidth;
+    } else if (this.isArtifactPanelResizing) {
+      const container = document.querySelector('.workspace-content') as HTMLElement;
+      if (!container) return;
+
+      const containerWidth = container.offsetWidth;
+      const deltaX = event.clientX - this.artifactPanelResizeStartX;
+      const deltaPercent = (deltaX / containerWidth) * -100; // Negative because we're pulling from the right
+      let newWidth = this.artifactPanelResizeStartWidth + deltaPercent;
+
+      // Constrain between 20% and 70%
+      newWidth = Math.max(20, Math.min(70, newWidth));
+      this.artifactPanelWidth = newWidth;
+    }
+  }
+
+  private onResizeEnd(event: MouseEvent): void {
     if (this.isSidebarResizing) {
       this.isSidebarResizing = false;
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-
-      // Save to localStorage
       this.saveSidebarWidth();
+    } else if (this.isArtifactPanelResizing) {
+      this.isArtifactPanelResizing = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      this.saveArtifactPanelWidth();
     }
   }
 
@@ -214,6 +270,28 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       localStorage.setItem(this.SIDEBAR_WIDTH_KEY, this.sidebarWidth.toString());
     } catch (error) {
       console.warn('Failed to save sidebar width to localStorage:', error);
+    }
+  }
+
+  private loadArtifactPanelWidth(): void {
+    try {
+      const saved = localStorage.getItem(this.ARTIFACT_PANEL_WIDTH_KEY);
+      if (saved) {
+        const width = parseFloat(saved);
+        if (!isNaN(width) && width >= 20 && width <= 70) {
+          this.artifactPanelWidth = width;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load artifact panel width from localStorage:', error);
+    }
+  }
+
+  private saveArtifactPanelWidth(): void {
+    try {
+      localStorage.setItem(this.ARTIFACT_PANEL_WIDTH_KEY, this.artifactPanelWidth.toString());
+    } catch (error) {
+      console.warn('Failed to save artifact panel width to localStorage:', error);
     }
   }
 
