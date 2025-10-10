@@ -1,6 +1,7 @@
-import { Component, Input, Output, EventEmitter, OnChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnChanges, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TaskEntity } from '@memberjunction/core-entities';
+import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
 /**
  * Simple list view for tasks
@@ -8,14 +9,16 @@ import { TaskEntity } from '@memberjunction/core-entities';
 @Component({
   selector: 'mj-simple-task-viewer',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TaskDetailPanelComponent],
   template: `
     <div class="simple-task-viewer">
-      <div class="task-list">
+      <div class="list-layout">
+        <div class="task-list" [class.with-detail]="selectedTask">
         <div *ngFor="let task of tasks"
              class="task-item"
              [class.completed]="task.Status === 'Complete'"
-             (click)="taskClicked.emit(task)">
+             [class.selected]="selectedTask?.ID === task.ID"
+             (click)="onTaskClick(task)">
 
           <!-- Status Icon -->
           <div class="status-icon" [class.complete]="task.Status === 'Complete'">
@@ -51,9 +54,6 @@ import { TaskEntity } from '@memberjunction/core-entities';
                 </span>
               </span>
             </div>
-            <div *ngIf="task.Description" class="task-description">
-              {{ task.Description }}
-            </div>
           </div>
         </div>
 
@@ -61,18 +61,65 @@ import { TaskEntity } from '@memberjunction/core-entities';
           <i class="fas fa-tasks"></i>
           <p>No tasks to display</p>
         </div>
+        </div>
+
+        <div *ngIf="selectedTask" class="list-resizer"
+             (mousedown)="startResize($event)"></div>
+
+        <div *ngIf="selectedTask" class="task-detail-panel" [style.width.px]="detailPanelWidth">
+          <mj-task-detail-panel
+            [task]="selectedTask"
+            [agentRunId]="getAgentRunId(selectedTask)"
+            (closePanel)="closeDetailPanel()"
+            (openEntityRecord)="onOpenEntityRecord($event)">
+          </mj-task-detail-panel>
+        </div>
       </div>
     </div>
   `,
   styles: [`
     .simple-task-viewer {
       height: 100%;
-      overflow-y: auto;
       background: #FAFAFA;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .list-layout {
+      display: flex;
+      height: 100%;
+      position: relative;
     }
 
     .task-list {
+      flex: 1;
+      min-width: 400px;
       padding: 16px;
+      overflow-y: auto;
+    }
+
+    .task-list.with-detail {
+      border-right: 1px solid #E5E7EB;
+    }
+
+    .list-resizer {
+      width: 4px;
+      background: #E5E7EB;
+      cursor: col-resize;
+      flex-shrink: 0;
+      transition: background 0.2s;
+    }
+
+    .list-resizer:hover {
+      background: #3B82F6;
+    }
+
+    .task-detail-panel {
+      min-width: 300px;
+      max-width: 600px;
+      height: 100%;
+      flex-shrink: 0;
     }
 
     .task-item {
@@ -92,6 +139,12 @@ import { TaskEntity } from '@memberjunction/core-entities';
       border-color: #3B82F6;
       box-shadow: 0 2px 8px rgba(59, 130, 246, 0.1);
       transform: translateY(-1px);
+    }
+
+    .task-item.selected {
+      border-color: #3B82F6;
+      background: #EFF6FF;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
     }
 
     .task-item.completed {
@@ -229,10 +282,59 @@ import { TaskEntity } from '@memberjunction/core-entities';
 })
 export class SimpleTaskViewerComponent implements OnChanges {
   @Input() tasks: TaskEntity[] = [];
+  @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
   @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+
+  public selectedTask: TaskEntity | null = null;
+  public detailPanelWidth: number = 400;
+
+  private isResizing = false;
+  private resizeStartX = 0;
+  private resizeStartWidth = 0;
 
   ngOnChanges() {
     // Tasks are already loaded
+  }
+
+  public onTaskClick(task: TaskEntity): void {
+    this.selectedTask = task;
+    this.taskClicked.emit(task);
+  }
+
+  public getAgentRunId(task: TaskEntity): string | null {
+    return this.agentRunMap?.get(task.ID) || null;
+  }
+
+  public closeDetailPanel(): void {
+    this.selectedTask = null;
+  }
+
+  public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    this.openEntityRecord.emit(event);
+  }
+
+  public startResize(event: MouseEvent): void {
+    this.isResizing = true;
+    this.resizeStartX = event.clientX;
+    this.resizeStartWidth = this.detailPanelWidth;
+    event.preventDefault();
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  handleResize(event: MouseEvent): void {
+    if (!this.isResizing) return;
+
+    const delta = this.resizeStartX - event.clientX;
+    const newWidth = this.resizeStartWidth + delta;
+
+    // Constrain width between min and max
+    this.detailPanelWidth = Math.max(300, Math.min(600, newWidth));
+  }
+
+  @HostListener('document:mouseup')
+  stopResize(): void {
+    this.isResizing = false;
   }
 
   public getStatusIcon(status: string): string {

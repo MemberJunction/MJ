@@ -15,7 +15,10 @@
         <i class="fas fa-cube"></i>
         <span>{{ artifactCount }} artifact{{ artifactCount !== 1 ? 's' : '' }}</span>
         </button>
-        <mj-tasks-dropdown [currentUser]="currentUser"></mj-tasks-dropdown>
+        <mj-tasks-dropdown
+          [currentUser]="currentUser"
+          (taskClicked)="onTaskClicked($event)">
+        </mj-tasks-dropdown>
         <mj-active-agent-indicator
         [conversationId]="conversationState.activeConversation.ID"
         [currentUser]="currentUser"

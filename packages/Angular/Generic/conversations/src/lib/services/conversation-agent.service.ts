@@ -11,7 +11,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Service for managing agent interactions within conversations.
- * Handles communication with the ambient Conversation Manager Agent and other agents.
+ * Handles communication with the ambient Sage Agent and other agents.
  */
 @Injectable({
   providedIn: 'root'
@@ -48,7 +48,7 @@ export class ConversationAgentService {
   }
 
   /**
-   * Get or load the Conversation Manager Agent
+   * Get or load the Sage Agent (formerly Conversation Manager Agent)
    */
   public async getConversationManagerAgent(): Promise<AIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
@@ -59,22 +59,22 @@ export class ConversationAgentService {
       // Ensure AIEngineBase is configured
       await AIEngineBase.Instance.Config(false);
 
-      // Find the Conversation Manager Agent
+      // Find the Sage Agent
       const agents = AIEngineBase.Instance.Agents;
       this._conversationManagerAgent = agents.find(
-        (agent: AIAgentEntityExtended) => agent.Name === 'Conversation Manager Agent'
+        (agent: AIAgentEntityExtended) => agent.Name === 'Sage'
       ) || null;
 
       if (!this._conversationManagerAgent) {
-        const errorMsg = 'Conversation Manager Agent not found in AIEngineBase.Agents';
+        const errorMsg = 'Sage Agent not found in AIEngineBase.Agents';
         console.warn(errorMsg);
         MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       }
 
       return this._conversationManagerAgent;
     } catch (error) {
-      const errorMsg = 'Error loading Conversation Manager Agent: ' + (error instanceof Error ? error.message : String(error));
-      console.error('Error loading Conversation Manager Agent:', error);
+      const errorMsg = 'Error loading Sage Agent: ' + (error instanceof Error ? error.message : String(error));
+      console.error('Error loading Sage Agent:', error);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       return null;
     }
@@ -92,7 +92,7 @@ export class ConversationAgentService {
   }
 
   /**
-   * Process a message through the ambient Conversation Manager Agent.
+   * Process a message through the ambient Sage Agent.
    * This should be called for every message sent in a conversation.
    *
    * @param conversationId The conversation ID
@@ -121,7 +121,7 @@ export class ConversationAgentService {
 
     const agent = await this.getConversationManagerAgent();
     if (!agent || !agent.ID) {
-      const errorMsg = 'Conversation Manager Agent not available';
+      const errorMsg = 'Sage Agent not available';
       console.warn(errorMsg);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
       return null;
@@ -218,8 +218,8 @@ export class ConversationAgentService {
   }
 
   /**
-   * Invoke a sub-agent based on Conversation Manager Agent's payload.
-   * This is called when the Conversation Manager decides to delegate to a specialist agent.
+   * Invoke a sub-agent based on Sage Agent's payload.
+   * This is called when Sage decides to delegate to a specialist agent.
    *
    * @param agentName Name of the agent to invoke
    * @param conversationId The conversation ID

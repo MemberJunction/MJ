@@ -1,8 +1,9 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
+import { TaskEntity, TaskDependencyEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Full-page tasks view with task list and Gantt chart
@@ -44,12 +45,14 @@ import { TaskComponent } from '@memberjunction/ng-tasks';
             [tasks]="subTasks"
             [ganttTasks]="subTasksWithParent"
             [taskDependencies]="taskDependencies"
+            [agentRunMap]="agentRunMap"
             [title]="selectedTask.Name"
             [description]="getTaskDetailDescription()"
             [showHeader]="true"
             [showViewToggle]="true"
-            [viewMode]="'simple'"
-            (taskClicked)="onSubTaskClick($event)">
+            [viewMode]="'gantt'"
+            (taskClicked)="onSubTaskClick($event)"
+            (openEntityRecord)="onOpenEntityRecord($event)">
           </mj-task>
         </div>
       }
@@ -134,15 +137,19 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Input() baseFilter: string = '1=1'; // SQL filter for tasks (default: show all)
+  @Input() activeTaskId?: string; // Task ID to auto-select and drill into
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   public allTasks: TaskEntity[] = [];
   public filteredTasks: TaskEntity[] = [];
   public subTasks: TaskEntity[] = [];
   public subTasksWithParent: TaskEntity[] = []; // Includes parent for Gantt hierarchy
   public taskDependencies: TaskDependencyEntity[] = []; // Dependencies for Gantt links
+  public agentRunMap = new Map<string, string>(); // Maps TaskID -> AgentRunID
   public selectedTask: TaskEntity | null = null;
   public showDetailAnimation: boolean = false;
   public isLoading: boolean = false;
+  private aiEngineConfigured: boolean = false;
 
   ngOnInit() {
     this.loadTasks();
@@ -153,12 +160,26 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     if (changes['baseFilter'] && !changes['baseFilter'].firstChange) {
       this.loadTasks();
     }
+
+    // Auto-drill into task if activeTaskId changes
+    if (changes['activeTaskId'] && this.activeTaskId) {
+      const task = this.allTasks.find(t => t.ID === this.activeTaskId);
+      if (task) {
+        this.onTaskClick(task);
+      }
+    }
   }
 
   public async loadTasks(): Promise<void> {
     this.isLoading = true;
 
     try {
+      // Configure AIEngineBase on first load (false = don't force refresh)
+      if (!this.aiEngineConfigured) {
+        await AIEngineBase.Instance.Config(false);
+        this.aiEngineConfigured = true;
+      }
+
       const rv = new RunView();
 
       console.log('📝 Tasks filter SQL:', this.baseFilter);
@@ -251,6 +272,9 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
         // Load task dependencies for this hierarchy
         await this.loadTaskDependencies(rootId);
+
+        // Load agent runs for this hierarchy
+        await this.loadAgentRuns(allHierarchy);
       } else {
         console.error('❌ Failed to load task hierarchy:', hierarchyResult.ErrorMessage);
         this.subTasks = [];
@@ -297,17 +321,97 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     }
   }
 
+  private async loadAgentRuns(tasks: TaskEntity[]): Promise<void> {
+    try {
+      // Clear existing map
+      this.agentRunMap.clear();
+
+      // Get all unique ConversationDetailIDs from tasks (filter out nulls)
+      const conversationDetailIds = tasks
+        .filter(t => t.ConversationDetailID != null)
+        .map(t => t.ConversationDetailID!);
+
+      if (conversationDetailIds.length === 0) {
+        console.log('💡 No tasks with ConversationDetailID');
+        return;
+      }
+
+      const rv = new RunView();
+      const schema = '__mj';
+
+      // Build filter to find agent runs for these conversation details
+      // Use a subquery to avoid passing large ID lists
+      const taskIds = tasks.map(t => `'${t.ID}'`).join(',');
+
+      const agentRunsResult = await rv.RunView<AIAgentRunEntity>(
+        {
+          EntityName: 'MJ: AI Agent Runs',
+          ExtraFilter: `
+            ConversationDetailID IN (
+              SELECT DISTINCT ConversationDetailID
+              FROM [${schema}].[vwTasks]
+              WHERE ID IN (${taskIds})
+              AND ConversationDetailID IS NOT NULL
+            )
+          `,
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (agentRunsResult.Success) {
+        const agentRuns = agentRunsResult.Results || [];
+        console.log(`🤖 Loaded ${agentRuns.length} agent runs`, agentRuns);
+
+        // Build map: ConversationDetailID -> AgentRunID
+        const convoToRunMap = new Map<string, string>();
+        agentRuns.forEach(run => {
+          if (run.ConversationDetailID) {
+            convoToRunMap.set(run.ConversationDetailID, run.ID);
+            console.log(`📝 Mapping ConvoDetailID ${run.ConversationDetailID} -> RunID ${run.ID}`);
+          }
+        });
+
+        // Map TaskID -> AgentRunID using ConversationDetailID as the link
+        tasks.forEach(task => {
+          console.log(`🔍 Task ${task.Name} - ConvoDetailID: ${task.ConversationDetailID}, AgentID: ${task.AgentID}`);
+          if (task.ConversationDetailID) {
+            const agentRunId = convoToRunMap.get(task.ConversationDetailID);
+            if (agentRunId) {
+              this.agentRunMap.set(task.ID, agentRunId);
+              console.log(`✅ Mapped Task ${task.ID} -> AgentRun ${agentRunId}`);
+            } else {
+              console.log(`⚠️ No agent run found for ConvoDetailID ${task.ConversationDetailID}`);
+            }
+          }
+        });
+
+        console.log(`🔗 Mapped ${this.agentRunMap.size} tasks to agent runs`, Array.from(this.agentRunMap.entries()));
+      } else {
+        console.error('❌ Failed to load agent runs:', agentRunsResult.ErrorMessage);
+      }
+    } catch (error) {
+      console.error('Failed to load agent runs:', error);
+    }
+  }
+
   public backToTaskList(): void {
     this.selectedTask = null;
     this.subTasks = [];
     this.subTasksWithParent = [];
     this.taskDependencies = [];
+    this.agentRunMap.clear();
     this.showDetailAnimation = false;
   }
 
   public onSubTaskClick(subTask: TaskEntity): void {
     console.log('Sub-task clicked:', subTask);
     // Could drill down further if needed
+  }
+
+  public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    // Bubble up the event to parent component
+    this.openEntityRecord.emit(event);
   }
 
   public getDescription(): string {

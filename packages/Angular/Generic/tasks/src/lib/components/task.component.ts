@@ -25,19 +25,19 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
         <div class="view-toggle" *ngIf="showViewToggle">
           <button
             class="toggle-btn"
-            [class.active]="viewMode === 'simple'"
-            (click)="setViewMode('simple')"
-            title="List View">
-            <i class="fas fa-list"></i>
-            <span>List</span>
-          </button>
-          <button
-            class="toggle-btn"
             [class.active]="viewMode === 'gantt'"
             (click)="setViewMode('gantt')"
             title="Gantt Chart">
             <i class="fas fa-chart-gantt"></i>
             <span>Gantt</span>
+          </button>
+          <button
+            class="toggle-btn"
+            [class.active]="viewMode === 'simple'"
+            (click)="setViewMode('simple')"
+            title="List View">
+            <i class="fas fa-list"></i>
+            <span>List</span>
           </button>
         </div>
       </div>
@@ -47,14 +47,18 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
         <mj-simple-task-viewer
           *ngIf="viewMode === 'simple'"
           [tasks]="tasks"
-          (taskClicked)="onTaskClicked($event)">
+          [agentRunMap]="agentRunMap"
+          (taskClicked)="onTaskClicked($event)"
+          (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-simple-task-viewer>
 
         <mj-gantt-task-viewer
           *ngIf="viewMode === 'gantt'"
           [tasks]="ganttTasks || tasks"
           [taskDependencies]="taskDependencies || []"
-          (taskClicked)="onTaskClicked($event)">
+          [agentRunMap]="agentRunMap"
+          (taskClicked)="onTaskClicked($event)"
+          (openEntityRecord)="onOpenEntityRecord($event)">
         </mj-gantt-task-viewer>
       </div>
     </div>
@@ -145,6 +149,7 @@ export class TaskComponent {
   @Input() tasks: TaskEntity[] = [];
   @Input() ganttTasks?: TaskEntity[]; // Optional separate task list for Gantt (includes parent)
   @Input() taskDependencies?: TaskDependencyEntity[]; // Task dependencies for Gantt links
+  @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
   @Input() title?: string;
   @Input() description?: string;
   @Input() showHeader: boolean = true;
@@ -153,6 +158,7 @@ export class TaskComponent {
 
   @Output() viewModeChanged = new EventEmitter<TaskViewMode>();
   @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   public setViewMode(mode: TaskViewMode): void {
     this.viewMode = mode;
@@ -161,5 +167,9 @@ export class TaskComponent {
 
   public onTaskClicked(task: TaskEntity): void {
     this.taskClicked.emit(task);
+  }
+
+  public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    this.openEntityRecord.emit(event);
   }
 }

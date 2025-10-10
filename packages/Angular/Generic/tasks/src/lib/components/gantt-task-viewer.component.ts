@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, AfterViewInit, Eleme
 import { CommonModule } from '@angular/common';
 import { TaskEntity, TaskDependencyEntity } from '@memberjunction/core-entities';
 import { gantt } from 'dhtmlx-gantt';
+import { TaskDetailPanelComponent } from './task-detail-panel.component';
 
 /**
  * Gantt chart view for tasks using DHTMLX Gantt
@@ -9,7 +10,7 @@ import { gantt } from 'dhtmlx-gantt';
 @Component({
   selector: 'mj-gantt-task-viewer',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, TaskDetailPanelComponent],
   template: `
     <div class="gantt-task-viewer">
       <div *ngIf="!tasks || tasks.length === 0" class="no-tasks">
@@ -24,59 +25,12 @@ import { gantt } from 'dhtmlx-gantt';
              (mousedown)="startResize($event)"></div>
 
         <div *ngIf="selectedTask" class="task-detail-panel" [style.width.px]="detailPanelWidth">
-          <div class="detail-header">
-            <h3>{{ selectedTask.Name }}</h3>
-            <button class="close-detail-btn" (click)="closeDetailPanel()">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-
-          <div class="detail-content">
-            <div class="detail-field" *ngIf="selectedTask.Description">
-              <label>Description</label>
-              <p>{{ selectedTask.Description }}</p>
-            </div>
-
-            <div class="detail-field">
-              <label>Status</label>
-              <p>{{ selectedTask.Status }}</p>
-            </div>
-
-            <div class="detail-field" *ngIf="selectedTask.PercentComplete != null">
-              <label>Progress</label>
-              <div class="detail-progress">
-                <div class="progress-bar-detail">
-                  <div class="progress-fill-detail" [style.width.%]="selectedTask.PercentComplete"></div>
-                </div>
-                <span>{{ selectedTask.PercentComplete }}%</span>
-              </div>
-            </div>
-
-            <div class="detail-field" *ngIf="selectedTask.StartedAt">
-              <label>Started</label>
-              <p>{{ formatDateTime(selectedTask.StartedAt) }}</p>
-            </div>
-
-            <div class="detail-field" *ngIf="selectedTask.DueAt">
-              <label>Due</label>
-              <p>{{ formatDateTime(selectedTask.DueAt) }}</p>
-            </div>
-
-            <div class="detail-field" *ngIf="selectedTask.CompletedAt">
-              <label>Completed</label>
-              <p>{{ formatDateTime(selectedTask.CompletedAt) }}</p>
-            </div>
-
-            <div class="detail-field" *ngIf="selectedTask.User">
-              <label>Assigned User</label>
-              <p>{{ selectedTask.User }}</p>
-            </div>
-
-            <div class="detail-field" *ngIf="selectedTask.Agent">
-              <label>Assigned Agent</label>
-              <p>{{ selectedTask.Agent }}</p>
-            </div>
-          </div>
+          <mj-task-detail-panel
+            [task]="selectedTask"
+            [agentRunId]="getAgentRunId(selectedTask)"
+            (closePanel)="closeDetailPanel()"
+            (openEntityRecord)="onOpenEntityRecord($event)">
+          </mj-task-detail-panel>
         </div>
       </div>
     </div>
@@ -120,103 +74,7 @@ import { gantt } from 'dhtmlx-gantt';
       max-width: 600px;
       height: 100%;
       border-left: 1px solid #E5E7EB;
-      background: white;
-      overflow-y: auto;
       flex-shrink: 0;
-    }
-
-    .detail-header {
-      padding: 20px;
-      border-bottom: 1px solid #E5E7EB;
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      background: #F9FAFB;
-    }
-
-    .detail-header h3 {
-      margin: 0;
-      font-size: 18px;
-      font-weight: 600;
-      color: #111827;
-      flex: 1;
-      padding-right: 12px;
-    }
-
-    .close-detail-btn {
-      background: none;
-      border: none;
-      color: #6B7280;
-      cursor: pointer;
-      padding: 4px;
-      width: 28px;
-      height: 28px;
-      border-radius: 4px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .close-detail-btn:hover {
-      background: #E5E7EB;
-      color: #111827;
-    }
-
-    .detail-content {
-      padding: 20px;
-    }
-
-    .detail-field {
-      margin-bottom: 20px;
-    }
-
-    .detail-field:last-child {
-      margin-bottom: 0;
-    }
-
-    .detail-field label {
-      display: block;
-      font-size: 12px;
-      font-weight: 600;
-      color: #6B7280;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-bottom: 6px;
-    }
-
-    .detail-field p {
-      margin: 0;
-      font-size: 14px;
-      color: #111827;
-      line-height: 1.5;
-    }
-
-    .detail-progress {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .progress-bar-detail {
-      flex: 1;
-      height: 8px;
-      background: #E5E7EB;
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .progress-fill-detail {
-      height: 100%;
-      background: #3B82F6;
-      transition: width 0.3s ease;
-    }
-
-    .detail-progress span {
-      font-size: 13px;
-      font-weight: 600;
-      color: #6B7280;
-      min-width: 40px;
     }
 
     /* Override DHTMLX Gantt default styles */
@@ -256,7 +114,9 @@ import { gantt } from 'dhtmlx-gantt';
 export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDestroy {
   @Input() tasks: TaskEntity[] = [];
   @Input() taskDependencies: TaskDependencyEntity[] = [];
+  @Input() agentRunMap?: Map<string, string>; // Maps TaskID -> AgentRunID
   @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   @ViewChild('ganttContainer', { static: false }) ganttContainer!: ElementRef<HTMLDivElement>;
 
@@ -288,6 +148,10 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
 
     if (this.ganttInitialized && this.ganttContainer) {
       this.updateGanttData();
+    } else if (!this.ganttInitialized && this.ganttContainer && this.tasks && this.tasks.length > 0) {
+      // Initialize if we have container and tasks but haven't initialized yet
+      console.log('🎨 Late initialization - gantt not initialized but container and tasks available');
+      this.initGantt();
     }
   }
 
@@ -316,15 +180,13 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       gantt.config.readonly = true; // Read-only for now
       gantt.config.fit_tasks = true; // Auto-fit timeline to tasks
 
-      // Enable auto-scheduling so dependent tasks position based on prerequisites
-      gantt.config.auto_scheduling = true;
-      gantt.config.auto_scheduling_strict = true;
-      gantt.config.auto_scheduling_compatibility = true;
+      // Disable auto-scheduling - we calculate dates ourselves based on dependencies
+      gantt.config.auto_scheduling = false;
 
       // Grid configuration
       gantt.config.grid_width = 350;
       gantt.config.row_height = 36;
-      gantt.config.scale_height = 50;
+      gantt.config.scale_height = 0; // Hide date scale - dates are just for positioning
 
       // Layout configuration - ensure timeline is visible
       gantt.config.layout = {
@@ -342,10 +204,9 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
         ]
       };
 
-      // Column configuration - emphasize task names and start dates, de-emphasize duration
+      // Column configuration - only show task names, hide dates
       gantt.config.columns = [
-        { name: 'text', label: 'Task name', tree: true, width: '*' },
-        { name: 'start_date', label: 'Start', align: 'center', width: 90 }
+        { name: 'text', label: 'Task name', tree: true, width: '*' }
       ];
 
       // Initialize Gantt in the container
@@ -362,18 +223,6 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
         return true;
       });
 
-      // Debug: Log auto-scheduling events
-      gantt.attachEvent('onAfterAutoSchedule', (taskId: string | number) => {
-        const task = gantt.getTask(taskId);
-        console.log('🔄 Auto-scheduled task:', { taskId, task });
-      });
-
-      gantt.attachEvent('onBeforeAutoSchedule', (taskId: string | number) => {
-        const task = gantt.getTask(taskId);
-        console.log('⏰ Before auto-schedule:', { taskId, task });
-        return true;
-      });
-
       // Load data
       this.updateGanttData();
 
@@ -381,6 +230,11 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       setTimeout(() => {
         gantt.setSizes();
       }, 0);
+
+      // Expand and select after render completes
+      setTimeout(() => {
+        this.expandAllAndSelectRoot();
+      }, 100);
 
       console.log('✅ DHTMLX Gantt initialized successfully');
     } catch (error) {
@@ -409,6 +263,11 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
         gantt.setSizes();
       }, 0);
 
+      // Expand and select after render completes
+      setTimeout(() => {
+        this.expandAllAndSelectRoot();
+      }, 100);
+
       console.log('✅ Gantt data updated');
     } catch (error) {
       console.error('❌ Error updating Gantt data:', error);
@@ -422,24 +281,111 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     console.log('🔍 Converting tasks:', tasks);
     console.log('🔗 Task dependencies:', this.taskDependencies);
 
+    // Build a map of task ID to task for quick lookup
+    const taskMap = new Map<string, TaskEntity>();
+    tasks.forEach(t => taskMap.set(t.ID, t));
+
+    // Build dependency map: taskId -> array of tasks it depends on
+    const dependencyMap = new Map<string, string[]>();
+    this.taskDependencies.forEach(dep => {
+      if (!dependencyMap.has(dep.TaskID)) {
+        dependencyMap.set(dep.TaskID, []);
+      }
+      dependencyMap.get(dep.TaskID)!.push(dep.DependsOnTaskID);
+    });
+
+    // Calculate start dates based on dependencies
+    const taskStartDates = new Map<string, Date>();
+    const baseDate = new Date();
+    baseDate.setHours(0, 0, 0, 0);
+
+    // Recursive function to calculate start date for a task
+    const calculateStartDate = (taskId: string, visited = new Set<string>()): Date => {
+      // Prevent circular dependencies
+      if (visited.has(taskId)) {
+        return new Date(baseDate);
+      }
+      visited.add(taskId);
+
+      // If already calculated, return it
+      if (taskStartDates.has(taskId)) {
+        return taskStartDates.get(taskId)!;
+      }
+
+      const task = taskMap.get(taskId);
+      if (!task) return new Date(baseDate);
+
+      const dependencies = dependencyMap.get(taskId) || [];
+
+      if (dependencies.length === 0) {
+        // No dependencies - use base date or task's actual start date
+        const startDate = task.StartedAt ? new Date(task.StartedAt) : new Date(baseDate);
+        taskStartDates.set(taskId, startDate);
+        return startDate;
+      }
+
+      // Has dependencies - start after the latest dependency ends
+      let latestEnd = new Date(baseDate);
+      for (const depId of dependencies) {
+        const depTask = taskMap.get(depId);
+        if (depTask) {
+          const depStart = calculateStartDate(depId, new Set(visited));
+          const depDuration = this.calculateDuration(depTask);
+          const depEnd = new Date(depStart);
+          depEnd.setDate(depEnd.getDate() + depDuration);
+
+          if (depEnd > latestEnd) {
+            latestEnd = depEnd;
+          }
+        }
+      }
+
+      taskStartDates.set(taskId, latestEnd);
+      return latestEnd;
+    };
+
+    // Calculate start dates for all tasks
+    tasks.forEach(task => calculateStartDate(task.ID));
+
+    // Calculate min/max dates for timeline display range
+    let minDate: Date | null = null;
+    let maxDate: Date | null = null;
+
+    tasks.forEach(task => {
+      const startDate = taskStartDates.get(task.ID);
+      if (startDate) {
+        const duration = this.calculateDuration(task);
+        const endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + duration);
+
+        if (!minDate || startDate < minDate) {
+          minDate = startDate;
+        }
+        if (!maxDate || endDate > maxDate) {
+          maxDate = endDate;
+        }
+      }
+    });
+
+    // Add 1 day padding before and after
+    if (minDate) {
+      const paddedStart = new Date(minDate);
+      paddedStart.setDate(paddedStart.getDate() - 1);
+      gantt.config.start_date = paddedStart;
+    }
+    if (maxDate) {
+      const paddedEnd = new Date(maxDate);
+      paddedEnd.setDate(paddedEnd.getDate() + 1);
+      gantt.config.end_date = paddedEnd;
+    }
+
+    // Now create Gantt tasks with calculated dates
     tasks.forEach((task) => {
       console.log('📝 Processing task:', {
         ID: task.ID,
         Name: task.Name,
-        StartedAt: task.StartedAt,
-        DueAt: task.DueAt,
         ParentID: task.ParentID
       });
-
-      // Calculate dates - use current date if no start date
-      const startDate = task.StartedAt ? new Date(task.StartedAt) : new Date();
-      let endDate = task.DueAt ? new Date(task.DueAt) : new Date(startDate);
-
-      // Ensure end date is after start date (at least 1 day)
-      if (endDate <= startDate) {
-        endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 1);
-      }
 
       // Calculate progress (0-1 scale for DHTMLX)
       let progress = (task.PercentComplete || 0) / 100;
@@ -447,8 +393,8 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
         progress = 1;
       }
 
-      // Calculate duration in days
-      const duration = Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+      const duration = this.calculateDuration(task);
+      const startDate = taskStartDates.get(task.ID) || new Date(baseDate);
 
       const ganttTask: any = {
         id: task.ID,
@@ -485,6 +431,15 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     return { data, links };
   }
 
+  private calculateDuration(task: TaskEntity): number {
+    if (task.StartedAt && task.DueAt) {
+      const startDate = new Date(task.StartedAt);
+      const endDate = new Date(task.DueAt);
+      return Math.max(1, Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)));
+    }
+    return 1; // Default to 1 day
+  }
+
   private formatDateForDHTMLX(date: Date): string {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -492,20 +447,16 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     return `${year}-${month}-${day} 00:00`;
   }
 
-  public formatDateTime(date: Date | null): string {
-    if (!date) return '';
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  public getAgentRunId(task: TaskEntity): string | null {
+    return this.agentRunMap?.get(task.ID) || null;
   }
 
   public closeDetailPanel(): void {
     this.selectedTask = null;
+  }
+
+  public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    this.openEntityRecord.emit(event);
   }
 
   public startResize(event: MouseEvent): void {
@@ -536,6 +487,38 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
           gantt.setSizes();
         }
       }, 0);
+    }
+  }
+
+  private expandAllAndSelectRoot(): void {
+    try {
+      // Expand all tasks
+      gantt.eachTask((task: any) => {
+        gantt.open(task.id);
+      });
+
+      // Find and select the root task (task with parent = 0)
+      let rootTask: any = null;
+      gantt.eachTask((task: any) => {
+        if (task.parent === 0 || task.parent === '0') {
+          rootTask = task;
+          return false; // Stop iteration
+        }
+      });
+
+      if (rootTask) {
+        gantt.selectTask(rootTask.id);
+        // Trigger task click event to open detail panel
+        const originalTask = this.tasks.find(t => t.ID === rootTask.id);
+        if (originalTask) {
+          this.selectedTask = originalTask;
+          this.taskClicked.emit(originalTask);
+        }
+      }
+
+      console.log('✅ Expanded all tasks and selected root:', rootTask?.id);
+    } catch (error) {
+      console.error('❌ Error expanding/selecting tasks:', error);
     }
   }
 }

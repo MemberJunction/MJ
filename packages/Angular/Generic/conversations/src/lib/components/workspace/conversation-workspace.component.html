@@ -37,7 +37,9 @@
       <mj-tasks-full-view
         [environmentId]="environmentId"
         [currentUser]="currentUser"
-        [baseFilter]="tasksFilter">
+        [baseFilter]="tasksFilter"
+        [activeTaskId]="activeTaskId"
+        (openEntityRecord)="onOpenEntityRecordFromTasks($event)">
       </mj-tasks-full-view>
     </div>
 
@@ -47,7 +49,8 @@
         [environmentId]="environmentId"
         [currentUser]="currentUser"
         (conversationRenamed)="onConversationRenamed($event)"
-        (openEntityRecord)="onOpenEntityRecord($event)">
+        (openEntityRecord)="onOpenEntityRecord($event)"
+        (taskClicked)="onTaskClicked($event)">
       </mj-conversation-chat-area>
     </div>
 
