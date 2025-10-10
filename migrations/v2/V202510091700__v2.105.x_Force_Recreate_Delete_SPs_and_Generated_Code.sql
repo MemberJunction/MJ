@@ -1,3 +1,8 @@
+-- This will force ALL validators to regenerate with new nullability logic
+DELETE FROM [${flyway:defaultSchema}].[GeneratedCode]
+WHERE CategoryID = 'ee2d433e-f36b-1410-8d9d-00021f8b792e';
+
+
 /* SQL text to delete entity field value ID 00CC453E-F36B-1410-8550-00D9FFED5EBA */
 DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='00CC453E-F36B-1410-8550-00D9FFED5EBA'
 
