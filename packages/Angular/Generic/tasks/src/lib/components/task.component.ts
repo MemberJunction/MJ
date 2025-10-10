@@ -22,7 +22,7 @@ import { GanttTaskViewerComponent } from './gantt-task-viewer.component';
           <p class="task-description" *ngIf="description">{{ description }}</p>
         </div>
 
-        <div class="view-toggle">
+        <div class="view-toggle" *ngIf="showViewToggle">
           <button
             class="toggle-btn"
             [class.active]="viewMode === 'simple'"
@@ -145,6 +145,7 @@ export class TaskComponent {
   @Input() title?: string;
   @Input() description?: string;
   @Input() showHeader: boolean = true;
+  @Input() showViewToggle: boolean = true; // Show Gantt/List toggle
   @Input() viewMode: TaskViewMode = 'simple';
 
   @Output() viewModeChanged = new EventEmitter<TaskViewMode>();
