@@ -22,6 +22,7 @@
     "@memberjunction/templates-base-types": "2.104.0",
     "@memberjunction/ai": "2.104.0",
     "@memberjunction/aiengine": "2.104.0",
+    "@memberjunction/ai-provider-bundle": "2.104.0",
     "@memberjunction/core-entities": "2.104.0",
     "@memberjunction/global": "2.100.3",
     "nunjucks": "3.2.4"
