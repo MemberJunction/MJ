@@ -3,8 +3,6 @@ import { BaseEntity, EntityInfo, LogError, Metadata } from "@memberjunction/core
 import { AIModelEntity, AIModelEntityExtended, UserViewEntityExtended } from '@memberjunction/core-entities'
 import { BaseLLM, ChatParams, GetAIAPIKey } from "@memberjunction/ai";
 import { AIEngine } from "@memberjunction/aiengine";
-import { LoadOpenAILLM } from "@memberjunction/ai-openai";
-LoadOpenAILLM(); // this is to prevent tree shaking since the openai package is not directly used and rather instantiated dynamically in the LoadOpenAILLM function. Since no static code path exists tree shaking can result in this class being optimized out
 
 @RegisterClass(BaseEntity, 'User Views')  
 export class UserViewEntity_Server extends UserViewEntityExtended  {

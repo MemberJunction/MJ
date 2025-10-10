@@ -7,19 +7,6 @@ export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
 export type PromptDefinition = { feature: string, systemPrompt: string, userMessage: string };
 
-import { LoadOpenAIEmbedding, LoadOpenAILLM } from "@memberjunction/ai-openai";
-LoadOpenAILLM();
-LoadOpenAIEmbedding();
-
-import { LoadMistralEmbedding, LoadMistralLLM } from "@memberjunction/ai-mistral";
-LoadMistralEmbedding();
-LoadMistralLLM();
-
-import { LoadAnthropicLLM } from "@memberjunction/ai-anthropic";
-LoadAnthropicLLM();
-
-import { LoadGroqLLM } from "@memberjunction/ai-groq";
-LoadGroqLLM();
 
 /**
  * This class is responsible for managing the advanced generation capabilities of the system. You can override the class to provide your own implementation.

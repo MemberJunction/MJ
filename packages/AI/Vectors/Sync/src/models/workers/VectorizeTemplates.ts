@@ -6,13 +6,8 @@ import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { LogError, ValidationResult } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseEmbeddings, EmbedTextsResult } from '@memberjunction/ai';
-
-import { LoadOpenAILLM } from '@memberjunction/ai-openai';
-import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 import { AnnotateWorkerContext, EmbeddingData } from '../../generic/vectorSync.types';
-
-LoadOpenAILLM();
-LoadMistralEmbedding();
+// AI provider loading now handled by @memberjunction/aiengine
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

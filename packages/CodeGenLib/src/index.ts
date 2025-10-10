@@ -1,41 +1,44 @@
 /**
  * @fileoverview Main entry point for the MemberJunction CodeGen Library.
- * 
+ *
  * This package provides comprehensive code generation capabilities for the MemberJunction platform,
  * including:
- * 
+ *
  * **Configuration Management:**
  * - Configuration file parsing and validation
  * - Database connection management
- * 
+ *
  * **Database Operations:**
  * - Schema introspection and metadata management
  * - SQL script generation (views, procedures, indexes)
  * - Database schema JSON export
- * 
+ *
  * **Code Generation:**
  * - TypeScript entity classes with Zod validation
  * - Angular components and forms
  * - GraphQL resolvers and schemas
  * - Action subclasses for business logic
- * 
+ *
  * **Utilities:**
  * - Status logging and error handling
  * - Command execution
  * - System integrity checks
- * 
+ *
  * @example
  * ```typescript
  * import { RunCodeGenBase, initializeConfig } from '@memberjunction/codegen-lib';
- * 
+ *
  * // Initialize configuration
  * const config = initializeConfig(process.cwd());
- * 
+ *
  * // Run code generation
  * const codeGen = new RunCodeGenBase();
  * await codeGen.Run();
  * ```
  */
+
+import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
+LoadAIProviders(); // Ensure all AI providers are loaded
 
 // Configuration exports
 export { initializeConfig } from './Config/config'
