@@ -1306,8 +1306,10 @@ NumberedRows AS (
                      // we only do this part if we are not skiping the database update as this code will sync values from the CHECK
                      // with the EntityFieldValues in the database.
 
-                     // 1st, flip the order of parsedValues because they come out in reverse order from SQL Server
-                     parsedValues.reverse();
+                     // Sort values alphabetically to ensure consistent sequences across all databases
+                     // This guarantees the same value always gets the same sequence number regardless of
+                     // how SQL Server returns CHECK constraint values (which can vary)
+                     parsedValues.sort();
 
                      // we have parsed values from the check constraint, so sync them with the entity field values
                      await this.syncEntityFieldValues(pool, r.EntityFieldID, parsedValues, allEntityFieldValues);
@@ -1519,12 +1521,15 @@ NumberedRows AS (
             let numAdded = 0;
             for (const v of possibleValues) {
                if (!existingValues.find((ev: { Value: string; }) => ev.Value === v)) {
-                  // add the value to the database
+                  // Generate a UUID for this new EntityFieldValue record
+                  const newId = uuidv4();
+
+                  // add the value to the database with explicit ID
                   const sSQLInsert = `INSERT INTO [${mj_core_schema()}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
-                  await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field values`);
+                                       ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
+                  await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field value with ID ${newId}`);
                   numAdded++;
                }
             }
