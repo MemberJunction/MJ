@@ -2,6 +2,7 @@ import { Component, Input, Output, EventEmitter, OnChanges, AfterViewInit, Eleme
 import { CommonModule } from '@angular/common';
 import { TaskEntity } from '@memberjunction/core-entities';
 import { GanttTask } from '../models/task-view.models';
+import Gantt from 'frappe-gantt/dist/frappe-gantt.js';
 
 /**
  * Gantt chart view for tasks using Frappe Gantt
@@ -72,8 +73,8 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
   private ganttInstance: any;
   private ganttLibraryLoaded = false;
 
-  async ngAfterViewInit() {
-    await this.loadGanttLibrary();
+  ngAfterViewInit() {
+    this.loadGanttLibrary();
     if (this.tasks && this.tasks.length > 0) {
       this.renderGantt();
     }
@@ -91,25 +92,18 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
     }
   }
 
-  private async loadGanttLibrary(): Promise<void> {
+  private loadGanttLibrary(): void {
     if (this.ganttLibraryLoaded) return;
 
-    try {
-      // @ts-ignore - Dynamic import
-      await import('frappe-gantt');
-
-      // Load Frappe Gantt CSS
-      if (!document.querySelector('link[href*="frappe-gantt"]')) {
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = 'https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.css';
-        document.head.appendChild(link);
-      }
-
-      this.ganttLibraryLoaded = true;
-    } catch (error) {
-      console.error('Failed to load Frappe Gantt:', error);
+    // Load Frappe Gantt CSS
+    if (!document.querySelector('link[href*="frappe-gantt"]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'node_modules/frappe-gantt/dist/frappe-gantt.min.css';
+      document.head.appendChild(link);
     }
+
+    this.ganttLibraryLoaded = true;
   }
 
   private renderGantt(): void {
@@ -130,7 +124,7 @@ export class GanttTaskViewerComponent implements OnChanges, AfterViewInit, OnDes
       }
 
       // Create new Gantt instance
-      this.ganttInstance = new (window as any).Gantt(this.ganttContainer.nativeElement, ganttTasks, {
+      this.ganttInstance = new Gantt(this.ganttContainer.nativeElement, ganttTasks, {
         view_mode: 'Day',
         bar_height: 30,
         bar_corner_radius: 3,
