@@ -65,10 +65,13 @@ export class TasksFullViewComponent implements OnInit {
       );
 
       if (!conversationsResult.Success || !conversationsResult.Results || conversationsResult.Results.length === 0) {
+        console.log('❌ No conversations found for user or query failed:', conversationsResult.ErrorMessage);
         this.allTasks = [];
         this.filteredTasks = [];
         return;
       }
+
+      console.log(`✅ Found ${conversationsResult.Results.length} conversations user has access to`);
 
       // Get conversation IDs
       const conversationIds = conversationsResult.Results.map(c => `'${c.ID}'`).join(',');
@@ -91,6 +94,11 @@ export class TasksFullViewComponent implements OnInit {
         this.allTasks = tasksResult.Results || [];
         this.filteredTasks = this.allTasks;
         console.log(`📋 Loaded ${this.allTasks.length} tasks across all conversations`);
+        if (this.allTasks.length === 0) {
+          console.log('💡 No tasks found. Tasks must be associated with ConversationDetailID (a message in the conversation)');
+        }
+      } else {
+        console.error('❌ Failed to load tasks:', tasksResult.ErrorMessage);
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
