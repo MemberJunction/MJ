@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
@@ -480,6 +480,8 @@ export class AIPromptRunner {
     let vendorDriverClass: string | undefined;
     let vendorApiName: string | undefined;
     let vendorSupportsEffortLevel: boolean | undefined;
+    let allCandidates: ModelVendorCandidate[] = [];
+
     if (modelSelectionInfo) {
       // we receivd model selection info, need to lookup vendor driver class and api name from there
       const vendorID = modelSelectionInfo.vendorSelected.ID;
@@ -507,6 +509,7 @@ export class AIPromptRunner {
       vendorApiName = modelResult.vendorApiName;
       vendorSupportsEffortLevel = modelResult.vendorSupportsEffortLevel;
       modelSelectionInfo = modelResult.selectionInfo;
+      allCandidates = modelResult.allCandidates || [];
       if (!selectedModel) {
         throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
       }
@@ -532,6 +535,7 @@ export class AIPromptRunner {
       prompt,
       params,
       promptRun,
+      allCandidates,
       vendorDriverClass,
       vendorApiName,
       vendorSupportsEffortLevel
@@ -1107,6 +1111,7 @@ export class AIPromptRunner {
     vendorApiName?: string;
     vendorSupportsEffortLevel?: boolean;
     selectionInfo?: AIModelSelectionInfo;
+    allCandidates?: ModelVendorCandidate[];
   }> {
     // Declare variables outside try block for catch block access
     let configurationName: string | undefined;
@@ -1162,6 +1167,7 @@ export class AIPromptRunner {
           vendorDriverClass: undefined,
           vendorApiName: undefined,
           vendorSupportsEffortLevel: undefined,
+          allCandidates: [],
           selectionInfo: {
             aiConfiguration: configuration,
             modelsConsidered: [],
@@ -1194,6 +1200,7 @@ export class AIPromptRunner {
           vendorDriverClass: undefined,
           vendorApiName: undefined,
           vendorSupportsEffortLevel: undefined,
+          allCandidates: candidates,
           selectionInfo: {
             aiConfiguration: configuration,
             modelsConsidered,
@@ -1236,6 +1243,7 @@ export class AIPromptRunner {
         vendorDriverClass: selected.driverClass,
         vendorApiName: selected.apiName,
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
+        allCandidates: candidates,
         selectionInfo: {
           aiConfiguration: configuration,
           modelsConsidered,
@@ -1257,6 +1265,7 @@ export class AIPromptRunner {
         vendorDriverClass: undefined,
         vendorApiName: undefined,
         vendorSupportsEffortLevel: undefined,
+        allCandidates: [],
         selectionInfo: {
           aiConfiguration: configuration,
           modelsConsidered: [],
@@ -1476,10 +1485,10 @@ export class AIPromptRunner {
     // PHASE 2: Check if SelectionStrategy='Specific' with AIPromptModel entries
     if (prompt.SelectionStrategy === 'Specific' && promptModels.length > 0) {
       const candidates: ModelVendorCandidate[] = [];
-      
+
       // Sort prompt models by priority (higher priority first)
       promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
-      
+
       for (const pm of promptModels) {
         const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
         if (model && model.IsActive) {
@@ -1488,7 +1497,7 @@ export class AIPromptRunner {
           candidates.push(...modelCandidates);
         }
       }
-      
+
       if (candidates.length > 0) {
         // Sort all candidates by priority (highest first)
         candidates.sort((a, b) => b.priority - a.priority);
@@ -1503,7 +1512,7 @@ export class AIPromptRunner {
       }
     }
 
-    // PHASE 3: Use general selection strategy (fallback)
+    // PHASE 3: Build candidates with configuration-aware fallback hierarchy
     const candidates: ModelVendorCandidate[] = [];
 
     if (promptModels.length > 0 && prompt.SelectionStrategy !== 'Specific') {
@@ -1513,6 +1522,29 @@ export class AIPromptRunner {
         if (model && model.IsActive) {
           const modelCandidates = createCandidatesForModel(model, 5000, 'prompt-model', pm.Priority);
           candidates.push(...modelCandidates);
+        }
+      }
+
+      // CONFIGURATION FALLBACK: If configurationId was specified but we want to include NULL config as fallback
+      // Add NULL configuration prompt models with lower priority for failover scenarios
+      if (configurationId) {
+        const nullConfigModels = AIEngine.Instance.PromptModels.filter(
+          pm => pm.PromptID === prompt.ID &&
+                (pm.Status === 'Active' || pm.Status === 'Preview') &&
+                !pm.ConfigurationID
+        );
+
+        if (nullConfigModels.length > 0 && verbose) {
+          LogStatus(`Adding ${nullConfigModels.length} NULL configuration models as fallback candidates`);
+        }
+
+        for (const pm of nullConfigModels) {
+          const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+          if (model && model.IsActive) {
+            // Use lower base priority (2000 instead of 5000) so config-specific models are tried first
+            const modelCandidates = createCandidatesForModel(model, 2000, 'prompt-model', pm.Priority);
+            candidates.push(...modelCandidates);
+          }
         }
       }
     } else {
@@ -2004,9 +2036,12 @@ export class AIPromptRunner {
     let currentVendorId = vendorId;
     let attemptNumber = 0;
     
-    // Get all model candidates if not provided
-    if (!allCandidates) {
+    // Get all model candidates if not provided (should always be provided from initial selection now)
+    if (!allCandidates || allCandidates.length === 0) {
+      // Fallback to old behavior if somehow candidates weren't provided
+      // This maintains backward compatibility but shouldn't normally be reached
       allCandidates = await this.buildFailoverCandidates(prompt);
+      LogStatus('⚠️ Warning: Failover candidates not provided from initial selection, rebuilding (may not respect configuration boundaries)');
     }
 
     // Main failover loop
@@ -2531,6 +2566,7 @@ export class AIPromptRunner {
     prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     promptRun: AIPromptRunEntityExtended,
+    allCandidates: ModelVendorCandidate[],
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean
@@ -2575,7 +2611,7 @@ export class AIPromptRunner {
           params.conversationMessages,
           params.templateMessageRole || 'system',
           params.cancellationToken,
-          undefined, // allCandidates - will be determined in executeModelWithFailover
+          allCandidates, // Pass the candidates from initial selection
           promptRun,
           vendorDriverClass,
           vendorApiName,
