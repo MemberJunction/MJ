@@ -3,7 +3,7 @@ import { AppContext } from '../types.js';
 import { LogError, Metadata, RunView, UserInfo, CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { QueryCategoryEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
-import { QueryResolver } from '../generated/generated.js';
+import { MJQueryResolver } from '../generated/generated.js';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 import { QueryEntityExtended } from '@memberjunction/core-entities-server';
@@ -294,7 +294,7 @@ export class DeleteQueryResultType {
 }
 
 @Resolver()
-export class QueryResolverExtended extends QueryResolver {
+export class MJQueryResolverExtended extends MJQueryResolver {
     /**
      * Creates a new query with the provided attributes. This mutation is restricted to system users only.
      * @param input - CreateQuerySystemUserInput containing all the query attributes
@@ -373,7 +373,7 @@ export class QueryResolverExtended extends QueryResolver {
             LogError(err);
             return {
                 Success: false,
-                ErrorMessage: `QueryResolverExtended::CreateQuerySystemUser --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
+                ErrorMessage: `MJQueryResolverExtended::CreateQuerySystemUser --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
     }
@@ -553,7 +553,7 @@ export class QueryResolverExtended extends QueryResolver {
             LogError(err);
             return {
                 Success: false,
-                ErrorMessage: `QueryResolverExtended::UpdateQuerySystemUser --- Error updating query: ${err instanceof Error ? err.message : String(err)}`
+                ErrorMessage: `MJQueryResolverExtended::UpdateQuerySystemUser --- Error updating query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
     }
@@ -578,7 +578,7 @@ export class QueryResolverExtended extends QueryResolver {
             if (!ID || ID.trim() === '') {
                 return {
                     Success: false,
-                    ErrorMessage: 'QueryResolverExtended::DeleteQuerySystemResolver --- Invalid query ID: ID cannot be null or empty'
+                    ErrorMessage: 'MJQueryResolverExtended::DeleteQuerySystemResolver --- Invalid query ID: ID cannot be null or empty'
                 };
             }
 
@@ -610,7 +610,7 @@ export class QueryResolverExtended extends QueryResolver {
             LogError(err);
             return {
                 Success: false,
-                ErrorMessage: `QueryResolverExtended::DeleteQuerySystemResolver --- Error deleting query: ${err instanceof Error ? err.message : String(err)}`
+                ErrorMessage: `MJQueryResolverExtended::DeleteQuerySystemResolver --- Error deleting query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
     }

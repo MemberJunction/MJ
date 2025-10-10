@@ -1,13 +1,13 @@
 import { EntityPermissionType, IRunViewProvider } from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { Arg, Ctx, Query, Resolver, InputType, Field } from 'type-graphql';
-import { Entity_, EntityResolverBase } from '../generated/generated.js';
+import { MJEntity_, MJEntityResolverBase } from '../generated/generated.js';
 import sql from 'mssql';
 import { GetReadOnlyProvider } from '../util.js';
 
-@Resolver(Entity_)
-export class EntityResolver extends EntityResolverBase {
-  @Query(() => [Entity_])
+@Resolver(MJEntity_)
+export class EntityResolver extends MJEntityResolverBase {
+  @Query(() => [MJEntity_])
   async EntitiesBySchemas(
     @Ctx() { providers, userPayload }: AppContext,
     @Arg('IncludeSchemas', () => [String], { nullable: true }) IncludeSchemas?: string[],

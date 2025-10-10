@@ -1,20 +1,20 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { EntitySaveOptions, Metadata } from '@memberjunction/core';
 import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@memberjunction/server';
-import { UserView_, UserViewResolverBase } from '../generated/generated.js';
+import { MJUserView_, MJUserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
 import { UserViewEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { GetReadOnlyProvider } from '../util.js';
 
-@Resolver(UserView_)
-export class UserViewResolver extends UserViewResolverBase {
-  @Query(() => [UserView_])
+@Resolver(MJUserView_)
+export class UserViewResolver extends MJUserViewResolverBase {
+  @Query(() => [MJUserView_])
   async UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { providers, userPayload }: AppContext) {
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
     return await this.findBy(provider, 'User Views', { UserID }, userPayload.userRecord);
   }
 
-  @Query(() => [UserView_])
+  @Query(() => [MJUserView_])
   async DefaultViewByUserAndEntity(
     @Arg('UserID', () => Int) UserID: number,
     @Arg('EntityID', () => Int) EntityID: number,
@@ -24,7 +24,7 @@ export class UserViewResolver extends UserViewResolverBase {
     return await this.findBy(provider, 'User Views', { UserID, EntityID, IsDefault: true }, userPayload.userRecord);
   }
 
-  @Query(() => [UserView_])
+  @Query(() => [MJUserView_])
   async CurrentUserDefaultViewByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
     return await this.findBy(provider, 'User Views', {
@@ -40,13 +40,13 @@ export class UserViewResolver extends UserViewResolverBase {
     return user.ID;
   }
 
-  @Query(() => [UserView_])
+  @Query(() => [MJUserView_])
   async CurrentUserUserViewsByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
     return this.findBy(provider, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID}, context.userPayload.userRecord);
   }
 
-  @Query(() => [UserView_])
+  @Query(() => [MJUserView_])
   async UpdateWhereClause(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext) {
     // in this query we want to update the uesrView record in the DB with a new where clause
     // this should normally not be a factor but we have this exposed in the GraphQL API so that
