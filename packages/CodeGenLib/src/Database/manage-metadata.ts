@@ -452,7 +452,11 @@ export class ManageMetadataBase {
    protected async checkDropSQLObject(pool: sql.ConnectionPool, proceed: boolean, type: 'procedure' | 'view' | 'function', schemaName: string, name: string) {
       try {
          if (proceed && schemaName && name && schemaName.trim().length > 0 && name.trim().length > 0) {
-            const sqlDelete = `DROP ${type} IF EXISTS [${schemaName}].[${name}]`;
+            // Use IF OBJECT_ID pattern for Flyway compatibility
+            // Object type codes: P = Stored Procedure, V = View, FN = Scalar Function, IF/TF = Table-Valued Function
+            const objectTypeCode = type === 'procedure' ? 'P' : type === 'view' ? 'V' : 'FN';
+            const upperType = type.toUpperCase();
+            const sqlDelete = `IF OBJECT_ID('[${schemaName}].[${name}]', '${objectTypeCode}') IS NOT NULL\n    DROP ${upperType} [${schemaName}].[${name}]`;
             await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove ${type} ${schemaName}.${name}`);
 
             // next up, we need to clean up the cache of saved DB objects that may exist for this entity in the appropriate sub-directory.
@@ -1426,8 +1430,18 @@ NumberedRows AS (
                return returnResult;
             }
             await AIEngine.Instance.Config(false, currentUser); // make sure metadata loaded
-            const model = AIEngine.Instance.Models.find(m => m.APINameOrName.trim().toLowerCase() === ag.AIModel.trim().toLowerCase() && 
-                                                             m.Vendor?.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase());
+            const model = AIEngine.Instance.Models.find(m => {
+                const modelMatch = m.APINameOrName.trim().toLowerCase() === ag.AIModel.trim().toLowerCase();
+                if (!modelMatch) return false;
+
+                // Check if model has a vendor matching the specified vendor
+                const hasVendor = AIEngine.Instance.ModelVendors.some(mv =>
+                    mv.ModelID === m.ID &&
+                    mv.Vendor.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase() &&
+                    mv.Status === 'Active'
+                );
+                return hasVendor;
+            });
             if (!model)
                throw new Error(`   >>> Error generating validator function from check constraint. Unable to find AI Model with name ${ag.AIModel} and vendor ${ag.AIVendor}.`);
 
