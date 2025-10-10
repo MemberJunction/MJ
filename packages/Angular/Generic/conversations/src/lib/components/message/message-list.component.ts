@@ -54,6 +54,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   public currentDateDisplay: string = 'Today';
   public showDateNav: boolean = false;
+  public shouldShowDateFilter: boolean = false;
 
   constructor(private cdRef: ChangeDetectorRef) {
     super();
@@ -93,6 +94,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     // React to messages array changes
     if (changes['messages'] && this.messages && this.messageContainerRef) {
       this.updateMessages(this.messages);
+      this.updateDateFilterVisibility();
     }
 
     // React to artifact map changes (when artifacts are added/updated)
@@ -236,6 +238,34 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return message.ID && message.ID.length > 0
       ? message.ID
       : `temp_${message.__mj_CreatedAt?.getTime() || Date.now()}`;
+  }
+
+  /**
+   * Determines whether to show the date filter dropdown
+   * Only show if conversation is long and spans multiple days
+   */
+  private updateDateFilterVisibility(): void {
+    if (!this.messages || this.messages.length < 20) {
+      this.shouldShowDateFilter = false;
+      return;
+    }
+
+    // Check if messages span more than 2 days
+    const dates = this.messages
+      .map(m => m.__mj_CreatedAt)
+      .filter(d => d != null)
+      .map(d => new Date(d!).setHours(0, 0, 0, 0));
+
+    if (dates.length === 0) {
+      this.shouldShowDateFilter = false;
+      return;
+    }
+
+    const uniqueDates = new Set(dates);
+    const daySpan = uniqueDates.size;
+
+    // Show filter if conversation has 20+ messages and spans 3+ days
+    this.shouldShowDateFilter = daySpan >= 3;
   }
 
   /**

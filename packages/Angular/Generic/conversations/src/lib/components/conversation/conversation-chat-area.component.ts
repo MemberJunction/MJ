@@ -103,7 +103,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       this.scrollToBottom = false;
       setTimeout(() => {
         this.scrollToBottomNow();
+        // Check scroll state after scrolling to bottom
+        this.checkScroll();
       }, 100);
+    } else {
+      // Always check scroll state to update button visibility
+      this.checkScroll();
     }
   }
 
@@ -824,13 +829,5 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
-  }
-
-  getScrollToBottomIconPosition(): number {
-    if (!this.scrollContainer) {
-      return window.innerWidth / 2;
-    }
-    const rect = this.scrollContainer.nativeElement.getBoundingClientRect();
-    return rect.left + (rect.width / 2);
   }
 }

@@ -58,15 +58,14 @@
             (messageEdited)="onMessageEdited($event)"
             (openEntityRecord)="onOpenEntityRecord($event)">
             </mj-conversation-message-list>
-        </div>
 
-        <!-- Scroll to Bottom Icon -->
-        <span class="scroll-to-bottom-icon"
-              *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
-              [style.left.px]="getScrollToBottomIconPosition()"
-              (click)="scrollToBottomAnimate()">
-            <i class="fas fa-arrow-down"></i>
-        </span>
+            <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
+            <span class="scroll-to-bottom-icon" style="left: 50%;"
+                  *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
+                  (click)="scrollToBottomAnimate()">
+                <i class="fas fa-arrow-down"></i>
+            </span>
+        </div>
 
         <!-- Fixed Input Area -->
         <div class="chat-input-container">
