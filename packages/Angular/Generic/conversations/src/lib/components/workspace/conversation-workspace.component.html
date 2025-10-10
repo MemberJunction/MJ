@@ -51,12 +51,19 @@
     </div>
 
     <!-- Right Artifact Panel -->
-    <div class="workspace-artifact-panel" *ngIf="isArtifactPanelOpen">
-      <mj-artifact-panel
-        [currentUser]="currentUser"
-        (close)="closeArtifactPanel()">
-      </mj-artifact-panel>
-    </div>
+    @if (isArtifactPanelOpen && activeArtifactId) {
+      <div class="artifact-panel-resize-handle" (mousedown)="onArtifactPanelResizeStart($event)"></div>
+      <div class="workspace-artifact-panel" [style.width.%]="artifactPanelWidth">
+        <mj-artifact-viewer-panel
+          [artifactId]="activeArtifactId"
+          [currentUser]="currentUser"
+          [environmentId]="environmentId"
+          [versionNumber]="activeVersionNumber ?? undefined"
+          [showSaveToCollection]="activeTab !== 'collections'"
+          (closed)="closeArtifactPanel()">
+        </mj-artifact-viewer-panel>
+      </div>
+    }
   </div>
 
   <!-- Global Search Panel -->

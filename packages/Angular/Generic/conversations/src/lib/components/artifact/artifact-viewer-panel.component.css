@@ -145,7 +145,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  color: #F59E0B;
+  color: #9CA3AF;
   padding: 6px;
   border-radius: 4px;
   transition: all 0.2s;
@@ -157,6 +157,15 @@
 }
 
 .save-to-collection-btn:hover {
+  background: #F3F4F6;
+  color: #6B7280;
+}
+
+.save-to-collection-btn.in-collection {
+  color: #F59E0B;
+}
+
+.save-to-collection-btn.in-collection:hover {
   background: #FEF3C7;
   color: #D97706;
 }

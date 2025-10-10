@@ -1,6 +1,7 @@
 import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CollectionEntity, ArtifactEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 type ViewMode = 'grid' | 'list';
 type SortBy = 'name' | 'date' | 'type';
@@ -64,6 +65,18 @@ type SortBy = 'name' | 'date' | 'type';
         </mj-collection-artifact-card>
       </div>
     </div>
+
+    <!-- Artifact Viewer Panel -->
+    <div class="artifact-viewer-overlay" *ngIf="showArtifactViewer && selectedArtifactId" (click)="onCloseArtifactViewer()">
+      <div class="artifact-viewer-container" (click)="$event.stopPropagation()">
+        <mj-artifact-viewer-panel
+          [artifactId]="selectedArtifactId"
+          [currentUser]="currentUser"
+          [environmentId]="environmentId"
+          (closed)="onCloseArtifactViewer()">
+        </mj-artifact-viewer-panel>
+      </div>
+    </div>
   `,
   styles: [`
     .collection-view { display: flex; flex-direction: column; height: 100%; background: white; }
@@ -91,15 +104,21 @@ type SortBy = 'name' | 'date' | 'type';
     .empty-state p { margin: 0 0 24px 0; font-size: 16px; }
     .btn-add-primary { padding: 12px 24px; background: #0076B6; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 8px; }
     .btn-add-primary:hover { background: #005A8C; }
+
+    .artifact-viewer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 10000; }
+    .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); }
   `]
 })
 export class CollectionViewComponent implements OnInit, OnChanges {
   @Input() collection!: CollectionEntity;
   @Input() currentUser!: UserInfo;
+  @Input() environmentId!: string;
 
   public artifacts: ArtifactEntity[] = [];
   public viewMode: ViewMode = 'grid';
   public sortBy: SortBy = 'date';
+  public selectedArtifactId: string | null = null;
+  public showArtifactViewer = false;
 
   public sortOptions = [
     { label: 'Name', value: 'name' },
@@ -162,7 +181,13 @@ export class CollectionViewComponent implements OnInit, OnChanges {
 
   onViewArtifact(artifact: ArtifactEntity): void {
     console.log('View artifact:', artifact.ID);
-    // TODO: Open artifact viewer modal or panel
+    this.selectedArtifactId = artifact.ID;
+    this.showArtifactViewer = true;
+  }
+
+  onCloseArtifactViewer(): void {
+    this.showArtifactViewer = false;
+    this.selectedArtifactId = null;
   }
 
   onEditArtifact(artifact: ArtifactEntity): void {
@@ -186,10 +211,18 @@ export class CollectionViewComponent implements OnInit, OnChanges {
         const joinRecord = result.Results[0];
         await joinRecord.Delete();
         await this.loadArtifacts();
+        MJNotificationService.Instance.CreateSimpleNotification(
+          `Removed "${artifact.Name}" from collection`,
+          'success',
+          3000
+        );
       }
     } catch (error) {
       console.error('Failed to remove artifact from collection:', error);
-      alert('Failed to remove artifact from collection');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Failed to remove artifact from collection',
+        'error'
+      );
     }
   }
 

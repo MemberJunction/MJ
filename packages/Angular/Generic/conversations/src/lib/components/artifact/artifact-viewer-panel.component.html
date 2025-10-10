@@ -32,9 +32,14 @@
           </div>
         }
       </div>
-      <button class="save-to-collection-btn" (click)="onSaveToLibrary()" title="Save to Collection">
-        <i class="fas fa-bookmark"></i>
-      </button>
+      @if (showSaveToCollection) {
+        <button class="save-to-collection-btn"
+                [class.in-collection]="isInCollection"
+                (click)="onSaveToLibrary()"
+                [title]="isInCollection ? 'View in Collection' : 'Save to Collection'">
+          <i [ngClass]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
+        </button>
+      }
       <button class="close-btn" (click)="onClose()" title="Close">
         <i class="fas fa-times"></i>
       </button>

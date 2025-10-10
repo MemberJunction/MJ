@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
 import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, CollectionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -14,6 +15,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
   @Input() versionNumber?: number; // Version to display
+  @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Output() closed = new EventEmitter<void>();
 
@@ -33,6 +35,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public newCollectionName = '';
   public isCreatingCollection = false;
   public isSavingToLibrary = false;
+  public artifactCollections: CollectionArtifactEntity[] = [];
+  public primaryCollection: CollectionEntity | null = null;
 
   // Tabbed interface
   public activeTab: 'display' | 'json' | 'details' = 'display';
@@ -145,6 +149,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         // Load version attributes
         await this.loadVersionAttributes();
 
+        // Load collection associations
+        await this.loadCollectionAssociations();
+
         console.log(`📦 Loaded ${this.allVersions.length} versions for artifact ${this.artifactId}, showing v${this.selectedVersionNumber}`);
       } else {
         this.error = 'No artifact version found';
@@ -241,6 +248,41 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     return value;
   }
 
+  private async loadCollectionAssociations(): Promise<void> {
+    if (!this.artifactId) return;
+
+    try {
+      const rv = new RunView();
+      const result = await rv.RunView<CollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (result.Success && result.Results) {
+        this.artifactCollections = result.Results;
+
+        // Load the primary collection details if exists
+        if (this.artifactCollections.length > 0) {
+          const collectionId = this.artifactCollections[0].CollectionID;
+          const md = new Metadata();
+          this.primaryCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+          await this.primaryCollection.Load(collectionId);
+
+          console.log(`📦 Artifact is in ${this.artifactCollections.length} collection(s)`);
+        } else {
+          this.primaryCollection = null;
+        }
+      }
+    } catch (err) {
+      console.error('Error loading collection associations:', err);
+    }
+  }
+
+  get isInCollection(): boolean {
+    return this.artifactCollections.length > 0;
+  }
+
   onCopyToClipboard(): void {
     if (this.jsonContent) {
       navigator.clipboard.writeText(this.jsonContent);
@@ -277,6 +319,20 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   async onSaveToLibrary(): Promise<void> {
+    // If already in a collection, navigate to that collection
+    if (this.isInCollection && this.primaryCollection) {
+      // TODO: Implement navigation to collection view
+      // For now, just log - will need ConversationStateService or similar to navigate
+      console.log('Navigate to collection:', this.primaryCollection.Name, this.primaryCollection.ID);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `This artifact is saved in collection: ${this.primaryCollection.Name}`,
+        'info',
+        3000
+      );
+      return;
+    }
+
+    // If not in a collection, show the save dialog
     try {
       // Load user's collections
       const rv = new RunView();
@@ -292,17 +348,27 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         this.showLibraryDialog = true;
       } else {
         console.error('Failed to load collections:', result.ErrorMessage);
-        alert('Failed to load collections. Please try again.');
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'Failed to load collections. Please try again.',
+          'error'
+        );
       }
     } catch (err) {
       console.error('Error loading collections:', err);
-      alert('Error loading collections. Please try again.');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error loading collections. Please try again.',
+        'error'
+      );
     }
   }
 
   async createNewCollection(): Promise<void> {
     if (!this.newCollectionName.trim()) {
-      alert('Please enter a collection name');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Please enter a collection name',
+        'warning',
+        2000
+      );
       return;
     }
 
@@ -322,13 +388,24 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         this.selectedCollectionId = collection.ID;
         this.newCollectionName = '';
         console.log('✅ Created new collection:', collection.Name);
+        MJNotificationService.Instance.CreateSimpleNotification(
+          `Collection "${collection.Name}" created successfully!`,
+          'success',
+          3000
+        );
       } else {
-        alert('Failed to create collection. Please try again.');
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'Failed to create collection. Please try again.',
+          'error'
+        );
       }
     } catch (err) {
       console.error('Error creating collection:', err);
       LogError(err);
-      alert('Error creating collection. Please try again.');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error creating collection. Please try again.',
+        'error'
+      );
     } finally {
       this.isCreatingCollection = false;
     }
@@ -336,12 +413,19 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   async saveToSelectedCollection(): Promise<void> {
     if (!this.selectedCollectionId) {
-      alert('Please select a collection');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Please select a collection',
+        'warning',
+        2000
+      );
       return;
     }
 
     if (!this.artifactId) {
-      alert('No artifact to save');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'No artifact to save',
+        'error'
+      );
       return;
     }
 
@@ -357,7 +441,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }, this.currentUser);
 
       if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
-        alert('This artifact is already in the selected collection');
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'This artifact is already in the selected collection',
+          'info',
+          3000
+        );
         this.showLibraryDialog = false;
         return;
       }
@@ -375,16 +463,29 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       if (saved) {
         const collectionName = this.collections.find(c => c.ID === this.selectedCollectionId)?.Name || 'collection';
         console.log(`✅ Saved artifact to ${collectionName}`);
-        alert(`Artifact saved to ${collectionName} successfully!`);
+        MJNotificationService.Instance.CreateSimpleNotification(
+          `Artifact saved to ${collectionName} successfully!`,
+          'success',
+          3000
+        );
         this.showLibraryDialog = false;
         this.selectedCollectionId = null;
+
+        // Reload collection associations to update the bookmark icon state
+        await this.loadCollectionAssociations();
       } else {
-        alert('Failed to save artifact to collection. Please try again.');
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'Failed to save artifact to collection. Please try again.',
+          'error'
+        );
       }
     } catch (err) {
       console.error('Error saving to collection:', err);
       LogError(err);
-      alert('Error saving artifact to collection. Please try again.');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error saving artifact to collection. Please try again.',
+        'error'
+      );
     } finally {
       this.isSavingToLibrary = false;
     }
