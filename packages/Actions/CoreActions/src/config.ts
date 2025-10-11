@@ -22,6 +22,19 @@ const apiIntegrationsSchema = z.object({
    * API keys follow format: sk-gamma-xxxxxxxx
    */
   gammaApiKey: z.string().optional(),
+
+  /**
+   * Google Custom Search API key for web search
+   * Used by: Google Custom Search action
+   * Get your API key from: https://developers.google.com/custom-search/v1/overview
+   */
+  googleCustomSearchApiKey: z.string().optional(),
+
+  /**
+   * Google Custom Search engine identifier (CX) for web search
+   * Used by: Google Custom Search action
+   */
+  googleCustomSearchCx: z.string().optional(),
 });
 
 /**
@@ -59,8 +72,10 @@ export function getCoreActionsConfig(): CoreActionsConfig {
     // Extract only the fields relevant to Core Actions
     const rawConfig = {
       apiIntegrations: {
-        perplexityApiKey: result.config.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
-        gammaApiKey: result.config.gammaApiKey || process.env.GAMMA_API_KEY,
+        perplexityApiKey: result.config?.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
+        gammaApiKey: result.config?.gammaApiKey || process.env.GAMMA_API_KEY,
+        googleCustomSearchApiKey: result.config?.googleCustomSearchApiKey || process.env.GOOGLE_CUSTOM_SEARCH_API_KEY,
+        googleCustomSearchCx: result.config?.googleCustomSearchCx || process.env.GOOGLE_CUSTOM_SEARCH_CX,
       },
     };
 

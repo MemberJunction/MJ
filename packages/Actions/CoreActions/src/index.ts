@@ -33,6 +33,7 @@ export * from './custom/web/web-page-content.action';
 export * from './custom/web/url-link-validator.action';
 export * from './custom/web/url-metadata-extractor.action';
 export * from './custom/web/perplexity-search.action';
+export * from './custom/web/google-custom-search.action';
 
 // Data Transformation Actions
 export * from './custom/data/csv-parser.action';
@@ -103,6 +104,7 @@ import { LoadWebPageContentAction } from './custom/web/web-page-content.action';
 import { LoadURLLinkValidatorAction } from './custom/web/url-link-validator.action';
 import { LoadURLMetadataExtractorAction } from './custom/web/url-metadata-extractor.action';
 import { LoadPerplexitySearchAction } from './custom/web/perplexity-search.action';
+import { LoadGoogleCustomSearchAction } from './custom/web/google-custom-search.action';
 import { LoadCSVParserAction } from './custom/data/csv-parser.action';
 import { LoadJSONTransformAction } from './custom/data/json-transform.action';
 import { LoadXMLParserAction } from './custom/data/xml-parser.action';
@@ -173,6 +175,7 @@ export function LoadAllCoreActions() {
     LoadURLLinkValidatorAction();
     LoadURLMetadataExtractorAction();
     LoadPerplexitySearchAction();
+    LoadGoogleCustomSearchAction();
     LoadCSVParserAction();
     LoadJSONTransformAction();
     LoadXMLParserAction();
