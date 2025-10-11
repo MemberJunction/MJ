@@ -1,9 +1,10 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, CollectionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 
 @Component({
   selector: 'mj-artifact-viewer-panel',
@@ -18,6 +19,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Output() closed = new EventEmitter<void>();
+
+  @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
   private destroy$ = new Subject<void>();
 
@@ -43,6 +46,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public versionAttributes: ArtifactVersionAttributeEntity[] = [];
+  private artifactTypeDriverClass: string | null = null;
+
+  // Cache plugin state to avoid losing it when switching tabs
+  private cachedPluginShouldShowRaw: boolean = false;
+  private cachedPluginIsElevated: boolean = false;
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
@@ -101,6 +109,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       this.isLoading = true;
       this.error = null;
 
+      // Reset cached plugin state when loading new artifact
+      this.cachedPluginShouldShowRaw = false;
+      this.cachedPluginIsElevated = false;
+
       const md = new Metadata();
 
       // Load artifact
@@ -111,6 +123,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         this.error = 'Failed to load artifact';
         return;
       }
+
+      // Load artifact type to check for DriverClass
+      await this.loadArtifactType();
 
       // Load ALL versions
       const rv = new RunView();
@@ -164,6 +179,25 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
   }
 
+  private async loadArtifactType(): Promise<void> {
+    if (!this.artifact?.Type) {
+      return;
+    }
+
+    try {
+      await ArtifactMetadataEngine.Instance.Config(false, this.currentUser);
+
+      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(this.artifact.Type);
+      if (artifactType) {
+        this.artifactTypeDriverClass = artifactType.DriverClass;
+        console.log(`📦 Loaded artifact type "${this.artifact.Type}", DriverClass: ${this.artifactTypeDriverClass || 'none'}`);
+      }
+    } catch (err) {
+      console.error('Error loading artifact type:', err);
+      // Don't fail the whole load if we can't get the artifact type
+    }
+  }
+
   private async loadVersionAttributes(): Promise<void> {
     if (!this.artifactVersion) return;
 
@@ -186,16 +220,17 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
         this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
 
-        // Set default tab based on available display attributes
-        if (this.displayMarkdown || this.displayHtml) {
+        // Default to display tab if we have a plugin or extracted display content
+        // Otherwise default to JSON tab for JSON types, or Details tab as last resort
+        if (this.hasDisplayTab) {
           this.activeTab = 'display';
-        } else if (this.artifact?.Type?.toLowerCase() === 'json' || this.jsonContent) {
+        } else if (this.jsonContent) {
           this.activeTab = 'json';
         } else {
           this.activeTab = 'details';
         }
 
-        console.log(`📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, activeTab=${this.activeTab}`);
+        console.log(`📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, hasDisplayTab=${this.hasDisplayTab}, activeTab=${this.activeTab}`);
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
@@ -217,7 +252,40 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   get hasDisplayTab(): boolean {
-    return !!(this.displayMarkdown || this.displayHtml);
+    // Show Display tab if:
+    // 1. We have a plugin for this artifact type (check if artifact type exists), OR
+    // 2. We have displayMarkdown or displayHtml attributes from extract rules
+    return this.hasPlugin || !!this.displayMarkdown || !!this.displayHtml;
+  }
+
+  get hasPlugin(): boolean {
+    // Check if the artifact type has a DriverClass configured
+    // If DriverClass is set, we have a plugin available
+    return !!this.artifactTypeDriverClass;
+  }
+
+  get hasJsonTab(): boolean {
+    // Try to get fresh plugin state if plugin viewer is available
+    const pluginInstance = this.pluginViewer?.pluginInstance;
+    if (pluginInstance) {
+      // Update cache with current values
+      this.cachedPluginShouldShowRaw = pluginInstance.parentShouldShowRawContent;
+      this.cachedPluginIsElevated = pluginInstance.isShowingElevatedDisplay;
+    }
+
+    // Use cached value (or current value if plugin is available)
+    // This ensures the JSON tab doesn't disappear when switching to it
+    return this.cachedPluginShouldShowRaw;
+  }
+
+  get artifactTypeName(): string {
+    return this.artifact?.Type || '';
+  }
+
+  get contentType(): string | undefined {
+    // Try to get content type from artifact type or attributes
+    const contentTypeAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'contenttype');
+    return contentTypeAttr?.Value || undefined;
   }
 
   get filteredAttributes(): ArtifactVersionAttributeEntity[] {

@@ -165,7 +165,7 @@ export class SkipSDK {
     constructor(config?: SkipSDKConfig) {
         // Use provided config or fall back to MJ server config
         this.config = {
-            apiUrl: config?.apiUrl || configInfo.askSkip?.url,
+            apiUrl: config?.apiUrl || configInfo.askSkip?.chatURL,
             apiKey: config?.apiKey || configInfo.askSkip?.apiKey,
             organizationId: config?.organizationId || configInfo.askSkip?.orgID,
             organizationInfo: config?.organizationInfo || configInfo.askSkip?.organizationInfo
@@ -176,9 +176,7 @@ export class SkipSDK {
      * Call the Skip chat API
      */
     async chat(options: SkipCallOptions): Promise<SkipCallResult> {
-        const chatURL = `${this.config.apiUrl}/chat`;
-
-        LogStatus(`[SkipSDK] Sending request to Skip API: ${chatURL}`);
+        LogStatus(`[SkipSDK] Sending request to Skip API: ${this.config.apiUrl}`);
 
         try {
             // Build the Skip API request
@@ -186,7 +184,7 @@ export class SkipSDK {
 
             // Call Skip API with streaming support
             const responses = await sendPostRequest(
-                chatURL,
+                this.config.apiUrl,
                 skipRequest,
                 true, // useCompression
                 this.buildHeaders(),

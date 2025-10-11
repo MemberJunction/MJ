@@ -168,6 +168,9 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         const saved = await this.safeSaveConversationDetail(message, `TaskProgress:${taskName}`);
         if (saved) {
           this.messageSent.emit(message);
+
+          // Also update the ActiveTasksService to keep the tasks dropdown in sync
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, progressMessage);
         }
       } catch (error) {
         console.error('Error updating task execution message:', error);
@@ -359,10 +362,10 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         // Check if this is the first message in the conversation
         const isFirstMessage = this.conversationHistory.length === 0;
 
-        // Determine routing: @mention > last agent context > Conversation Manager
+        // Determine routing: @mention > last agent context > Sage
         if (mentionResult.agentMention) {
-          // Direct @mention - skip Conversation Manager, invoke agent directly
-          console.log('🎯 Direct @mention detected, bypassing Conversation Manager');
+          // Direct @mention - skip Sage, invoke agent directly
+          console.log('🎯 Direct @mention detected, bypassing Sage');
           if (isFirstMessage) {
             Promise.all([
               this.invokeAgentDirectly(detail, mentionResult.agentMention, this.conversationId),
@@ -383,7 +386,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
             );
 
           if (lastAIMessage && lastAIMessage.AgentID) {
-            // Continue with same agent - skip Conversation Manager
+            // Continue with same agent - skip Sage
             console.log('🔄 Implicit continuation detected, continuing with last agent');
             if (isFirstMessage) {
               Promise.all([
@@ -394,8 +397,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
               this.continueWithAgent(detail, lastAIMessage.AgentID, this.conversationId);
             }
           } else {
-            // No context - use Conversation Manager
-            console.log('🤖 No agent context, using Conversation Manager');
+            // No context - use Sage
+            console.log('🤖 No agent context, using Sage');
             if (isFirstMessage) {
               Promise.all([
                 this.processMessageThroughAgent(detail, mentionResult),
@@ -507,7 +510,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Process the message through agents (multi-stage: Conversation Manager -> possible sub-agent)
+   * Process the message through agents (multi-stage: Sage -> possible sub-agent)
    * Only called when there's no @mention and no implicit agent context
    */
   private async processMessageThroughAgent(
@@ -522,7 +525,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     const conversationId = userMessage.ConversationID;
 
     try {
-      // Create AI message for Conversation Manager BEFORE invoking
+      // Create AI message for Sage BEFORE invoking
       conversationManagerMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       conversationManagerMessage.ConversationID = conversationId;
@@ -531,7 +534,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       conversationManagerMessage.ParentID = userMessage.ID;
       conversationManagerMessage.Status = 'In-Progress';
       conversationManagerMessage.HiddenToUser = false;
-      // Use the preloaded Conversation Manager agent instead of looking it up
+      // Use the preloaded Sage agent instead of looking it up
       if (this.converationManagerAgent?.ID) {
         conversationManagerMessage.AgentID = this.converationManagerAgent.ID;
       }
@@ -539,10 +542,10 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       await conversationManagerMessage.Save();
       this.messageSent.emit(conversationManagerMessage);
 
-      // Use Conversation Manager to evaluate and route
-      // Stage 1: Conversation Manager evaluates the message
+      // Use Sage to evaluate and route
+      // Stage 1: Sage evaluates the message
       taskId = this.activeTasks.add({
-        agentName: 'Conversation Manager',
+        agentName: 'Sage',
         status: 'Evaluating message...',
         relatedMessageId: userMessage.ID,
         conversationDetailId: conversationManagerMessage.ID
@@ -553,10 +556,10 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage, 'Conversation Manager')
+        this.createProgressCallback(conversationManagerMessage, 'Sage')
       );
 
-      // Remove Conversation Manager from active tasks
+      // Remove Sage from active tasks
       if (taskId) {
         this.activeTasks.remove(taskId);
         taskId = null;
@@ -573,11 +576,11 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         userMessage.Status = 'Complete';
         await userMessage.Save();
         this.messageSent.emit(userMessage);
-        console.warn('⚠️ Conversation Manager failed:', result?.agentRun?.ErrorMessage);
+        console.warn('⚠️ Sage failed:', result?.agentRun?.ErrorMessage);
         return;
       }
 
-      console.log('🤖 Conversation Manager Response:', {
+      console.log('🤖 Sage Response:', {
         finalStep: result.agentRun.FinalStep,
         hasPayload: !!result.payload,
         hasMessage: !!result.agentRun.Message,
@@ -603,7 +606,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
           this.activeTasks.remove(taskId);
         }
       }
-      // Stage 4: Direct chat response from Conversation Manager
+      // Stage 4: Direct chat response from Sage
       else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
         // Normal chat response
         conversationManagerMessage.Message = result.agentRun.Message;
@@ -615,7 +618,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         if (result.payload && Object.keys(result.payload).length > 0) {
           await this.createArtifactFromPayload(result.payload, conversationManagerMessage, result.agentRun.AgentID);
-          console.log('🎨 Artifact created and linked to Conversation Manager message');
+          console.log('🎨 Artifact created and linked to Sage message');
           this.messageSent.emit(conversationManagerMessage);
         }
 
@@ -632,7 +635,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       else {
         // Check if there's a message to display even without payload/taskGraph
         if (result.agentRun.Message) {
-          console.log('💬 Conversation Manager provided a message without payload');
+          console.log('💬 Sage provided a message without payload');
           conversationManagerMessage.Message = result.agentRun.Message;
           conversationManagerMessage.Status = 'Complete';
           conversationManagerMessage.HiddenToUser = false;
@@ -640,8 +643,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
           await conversationManagerMessage.Save();
           this.messageSent.emit(conversationManagerMessage);
         } else {
-          console.log('🔇 Conversation Manager chose to observe silently');
-          // Hide the Conversation Manager message
+          console.log('🔇 Sage chose to observe silently');
+          // Hide the Sage message
           conversationManagerMessage.HiddenToUser = true;
           conversationManagerMessage.Status = 'Complete';
           await conversationManagerMessage.Save();
@@ -681,7 +684,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle task graph execution based on Conversation Manager's payload
+   * Handle task graph execution based on Sage's payload
    * Creates tasks and orchestrates their execution
    */
   private async handleTaskGraphExecution(
@@ -966,7 +969,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle sub-agent invocation based on Conversation Manager's payload
+   * Handle sub-agent invocation based on Sage's payload
    * Reuses the existing conversationManagerMessage to avoid creating multiple records
    */
   private async handleSubAgentInvocation(
@@ -1113,14 +1116,14 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Handle silent observation - when Conversation Manager stays silent,
+   * Handle silent observation - when Sage stays silent,
    * check if we should continue with the last agent for iterative refinement
    */
   private async handleSilentObservation(
     userMessage: ConversationDetailEntity,
     conversationId: string
   ): Promise<void> {
-    // Find the last AI message (excluding Conversation Manager) in the conversation history
+    // Find the last AI message (excluding Sage) in the conversation history
     const lastAIMessage = this.conversationHistory
       .slice()
       .reverse()
@@ -1298,7 +1301,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   /**
    * Invoke an agent directly when mentioned with @ symbol
-   * Bypasses Conversation Manager completely - no status messages
+   * Bypasses Sage completely - no status messages
    */
   private async invokeAgentDirectly(
     userMessage: ConversationDetailEntity,
@@ -1419,7 +1422,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   /**
    * Continue with the same agent from previous message (implicit continuation)
-   * Bypasses Conversation Manager - no status messages
+   * Bypasses Sage - no status messages
    */
   private async continueWithAgent(
     userMessage: ConversationDetailEntity,
@@ -1435,7 +1438,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     }, this.currentUser);
 
     if (!agentResult.Success || !agentResult.Results || agentResult.Results.length === 0) {
-      console.warn('⚠️ Could not load agent for continuation - falling back to Conversation Manager');
+      console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
       await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });
       return;
     }

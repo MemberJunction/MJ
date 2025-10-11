@@ -70,9 +70,11 @@
               <i class="fas fa-eye"></i> Display
             </button>
           }
-          <button class="tab-btn" [class.active]="activeTab === 'json'" (click)="setActiveTab('json')">
-            <i class="fas fa-code"></i> JSON
-          </button>
+          @if (hasJsonTab) {
+            <button class="tab-btn" [class.active]="activeTab === 'json'" (click)="setActiveTab('json')">
+              <i class="fas fa-code"></i> JSON
+            </button>
+          }
           <button class="tab-btn" [class.active]="activeTab === 'details'" (click)="setActiveTab('details')">
             <i class="fas fa-info-circle"></i> Details
           </button>
@@ -80,26 +82,37 @@
 
         <!-- Tab Content -->
         <div class="tab-content">
-          <!-- Display Tab (Markdown or HTML) -->
+          <!-- Display Tab (uses plugin system OR extracted attributes) -->
           @if (activeTab === 'display' && hasDisplayTab) {
             <div class="display-content">
-              <div class="display-toolbar">
-                <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
-                  <i class="fas fa-copy"></i> Copy
-                </button>
-              </div>
-              @if (displayMarkdown) {
-                <div class="markdown-content">
-                  <markdown [data]="displayMarkdown"></markdown>
+              @if (hasPlugin && artifactVersion && artifactTypeName) {
+                <!-- Use plugin viewer if available -->
+                <mj-artifact-type-plugin-viewer
+                  [artifactVersion]="artifactVersion"
+                  [artifactTypeName]="artifactTypeName"
+                  [contentType]="contentType"
+                  [readonly]="true">
+                </mj-artifact-type-plugin-viewer>
+              } @else if (displayMarkdown || displayHtml) {
+                <!-- Fallback to extracted markdown/HTML attributes -->
+                <div class="display-toolbar">
+                  <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
+                    <i class="fas fa-copy"></i> Copy
+                  </button>
                 </div>
-              } @else if (displayHtml) {
-                <div class="html-content" [innerHTML]="displayHtml"></div>
+                @if (displayMarkdown) {
+                  <div class="markdown-content">
+                    <markdown [data]="displayMarkdown"></markdown>
+                  </div>
+                } @else if (displayHtml) {
+                  <div class="html-content" [innerHTML]="displayHtml"></div>
+                }
               }
             </div>
           }
 
-          <!-- JSON Tab -->
-          @if (activeTab === 'json') {
+          <!-- JSON Tab (only shown for elevated displays with JSON content) -->
+          @if (activeTab === 'json' && hasJsonTab) {
             <div class="json-viewer">
               <div class="json-toolbar">
                 <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">

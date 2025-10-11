@@ -1,4 +1,4 @@
-import { Component, Input, OnInit, OnDestroy, DoCheck } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { TaskEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -67,9 +67,10 @@ import { takeUntil } from 'rxjs/operators';
               *ngFor="let task of dbTasks"
               [task]="task"
               [compact]="true"
-              [clickable]="false"
+              [clickable]="true"
               [showProgress]="true"
-              [showDuration]="false">
+              [showDuration]="false"
+              (taskClick)="onTaskClick($event)">
             </mj-task-widget>
           </div>
 
@@ -299,6 +300,7 @@ import { takeUntil } from 'rxjs/operators';
 })
 export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
   @Input() currentUser!: UserInfo;
+  @Output() taskClicked = new EventEmitter<TaskEntity>();
 
   public isOpen: boolean = false;
   public activeTasks: ActiveTask[] = [];
@@ -307,6 +309,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
 
   private previousConversationId: string | null = null;
   private destroy$ = new Subject<void>();
+  private pollingInterval: any = null;
 
   constructor(
     private conversationState: ConversationStateService,
@@ -326,6 +329,24 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
     if (this.conversationState.activeConversationId) {
       this.loadDatabaseTasks();
     }
+
+    // Poll for task updates every 3 seconds when conversation is active
+    this.startPolling();
+  }
+
+  private startPolling(): void {
+    this.pollingInterval = setInterval(() => {
+      if (this.conversationState.activeConversationId) {
+        this.loadDatabaseTasks();
+      }
+    }, 3000); // Poll every 3 seconds
+  }
+
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
+    }
   }
 
   ngDoCheck() {
@@ -343,6 +364,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
   }
 
   ngOnDestroy() {
+    this.stopPolling();
     this.destroy$.next();
     this.destroy$.complete();
   }
@@ -392,11 +414,11 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
       // Get all conversation detail IDs
       const detailIds = detailsResult.Results.map(d => `'${d.ID}'`).join(',');
 
-      // Load tasks for these conversation details (only active ones)
+      // Load tasks for these conversation details (only top-level active ones)
       const result = await rv.RunView<TaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: `ConversationDetailID IN (${detailIds}) AND Status IN ('Pending', 'In Progress')`,
+          ExtraFilter: `ConversationDetailID IN (${detailIds}) AND Status IN ('Pending', 'In Progress') AND ParentID IS NULL`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 50,
           ResultType: 'entity_object'
@@ -432,5 +454,10 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
       return status;
     }
     return status.substring(0, maxLength) + '...';
+  }
+
+  onTaskClick(task: TaskEntity): void {
+    this.taskClicked.emit(task);
+    this.closeDropdown();
   }
 }

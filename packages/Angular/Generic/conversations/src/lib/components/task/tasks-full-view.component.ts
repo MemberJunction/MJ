@@ -1,130 +1,61 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { TaskEntity, ConversationEntity } from '@memberjunction/core-entities';
+import { TaskEntity, TaskDependencyEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
+import { TaskComponent } from '@memberjunction/ng-tasks';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
- * Full-page tasks view with comprehensive filtering
- * Shows all tasks across conversations the user has access to
+ * Full-page tasks view with task list and Gantt chart
+ * Generic component that displays tasks based on provided filter
+ * Supports drilling into individual tasks to see sub-tasks
  */
 @Component({
   selector: 'mj-tasks-full-view',
+  standalone: true,
+  imports: [CommonModule, TaskComponent],
   template: `
     <div class="tasks-full-view">
-      <!-- Header -->
-      <div class="tasks-header">
-        <div class="header-left">
-          <i class="fas fa-tasks"></i>
-          <h1>Tasks</h1>
-        </div>
-        <div class="header-stats">
-          <span class="stat">
-            <span class="stat-value">{{ activeTaskCount }}</span>
-            <span class="stat-label">Active</span>
-          </span>
-          <span class="stat">
-            <span class="stat-value">{{ completedTaskCount }}</span>
-            <span class="stat-label">Completed</span>
-          </span>
-          <span class="stat">
-            <span class="stat-value">{{ totalTaskCount }}</span>
-            <span class="stat-label">Total</span>
-          </span>
-        </div>
-      </div>
-
-      <!-- Filters -->
-      <div class="tasks-filters">
-        <div class="filter-section">
-          <label class="filter-label">Status:</label>
-          <div class="filter-buttons">
-            <button
-              class="filter-btn"
-              [class.active]="statusFilter === 'active'"
-              (click)="setStatusFilter('active')">
-              <i class="fas fa-circle-notch"></i>
-              Active
+      @if (!selectedTask) {
+        <!-- Task List View -->
+        <mj-task
+          [tasks]="filteredTasks"
+          [title]="'Tasks'"
+          [description]="getDescription()"
+          [showHeader]="true"
+          [showViewToggle]="false"
+          [viewMode]="'simple'"
+          (taskClicked)="onTaskClick($event)">
+        </mj-task>
+      } @else {
+        <!-- Task Detail View with Sub-tasks -->
+        <div class="task-detail-view" [class.swoosh-in]="showDetailAnimation">
+          <!-- Breadcrumb -->
+          <div class="breadcrumb-nav">
+            <button class="breadcrumb-back" (click)="backToTaskList()">
+              <i class="fas fa-arrow-left"></i>
+              <span>Back to Tasks</span>
             </button>
-            <button
-              class="filter-btn"
-              [class.active]="statusFilter === 'completed'"
-              (click)="setStatusFilter('completed')">
-              <i class="fas fa-check-circle"></i>
-              Completed
-            </button>
-            <button
-              class="filter-btn"
-              [class.active]="statusFilter === 'all'"
-              (click)="setStatusFilter('all')">
-              <i class="fas fa-list"></i>
-              All
-            </button>
+            <div class="breadcrumb-divider">/</div>
+            <span class="breadcrumb-current">{{ selectedTask.Name }}</span>
           </div>
-        </div>
 
-        <div class="filter-section">
-          <label class="filter-label">Assignment:</label>
-          <div class="filter-buttons">
-            <button
-              class="filter-btn"
-              [class.active]="assignmentFilter === 'all'"
-              (click)="setAssignmentFilter('all')">
-              <i class="fas fa-users"></i>
-              All
-            </button>
-            <button
-              class="filter-btn"
-              [class.active]="assignmentFilter === 'ai'"
-              (click)="setAssignmentFilter('ai')">
-              <i class="fas fa-robot"></i>
-              AI
-            </button>
-            <button
-              class="filter-btn"
-              [class.active]="assignmentFilter === 'human'"
-              (click)="setAssignmentFilter('human')">
-              <i class="fas fa-user"></i>
-              Human
-            </button>
-          </div>
+          <!-- Task Details & Sub-tasks with Gantt Toggle -->
+          <mj-task
+            [tasks]="subTasks"
+            [ganttTasks]="subTasksWithParent"
+            [taskDependencies]="taskDependencies"
+            [agentRunMap]="agentRunMap"
+            [title]="selectedTask.Name"
+            [description]="getTaskDetailDescription()"
+            [showHeader]="true"
+            [showViewToggle]="true"
+            [viewMode]="'gantt'"
+            (taskClicked)="onSubTaskClick($event)"
+            (openEntityRecord)="onOpenEntityRecord($event)">
+          </mj-task>
         </div>
-
-        <div class="filter-section">
-          <button
-            class="refresh-btn"
-            (click)="loadTasks()"
-            [disabled]="isLoading">
-            <i class="fas" [ngClass]="isLoading ? 'fa-spinner fa-spin' : 'fa-sync-alt'"></i>
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      <!-- Tasks List -->
-      <div class="tasks-content" *ngIf="!isLoading">
-        <div class="tasks-list" *ngIf="filteredTasks.length > 0">
-          <mj-task-widget
-            *ngFor="let task of filteredTasks"
-            [task]="task"
-            [compact]="false"
-            [clickable]="true"
-            [showProgress]="true"
-            [showDuration]="true"
-            (taskClick)="onTaskClick($event)">
-          </mj-task-widget>
-        </div>
-
-        <div class="no-tasks" *ngIf="filteredTasks.length === 0">
-          <i class="fas fa-tasks"></i>
-          <h3>No tasks found</h3>
-          <p>{{ getNoTasksMessage() }}</p>
-        </div>
-      </div>
-
-      <!-- Loading State -->
-      <div class="tasks-loading" *ngIf="isLoading">
-        <i class="fas fa-spinner fa-spin"></i>
-        <span>Loading tasks...</span>
-      </div>
+      }
     </div>
   `,
   styles: [`
@@ -135,272 +66,129 @@ import { TaskEntity, ConversationEntity } from '@memberjunction/core-entities';
       background: #F9FAFB;
     }
 
-    .tasks-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 24px 32px;
-      background: white;
-      border-bottom: 1px solid #E5E7EB;
-    }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .header-left i {
-      font-size: 28px;
-      color: #3B82F6;
-    }
-
-    .header-left h1 {
-      margin: 0;
-      font-size: 24px;
-      font-weight: 700;
-      color: #111827;
-    }
-
-    .header-stats {
-      display: flex;
-      gap: 32px;
-    }
-
-    .stat {
+    .task-detail-view {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .stat-value {
-      font-size: 24px;
-      font-weight: 700;
-      color: #111827;
-    }
-
-    .stat-label {
-      font-size: 12px;
-      color: #6B7280;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      font-weight: 600;
-    }
-
-    .tasks-filters {
-      display: flex;
-      gap: 32px;
-      padding: 20px 32px;
+      height: 100%;
       background: white;
-      border-bottom: 1px solid #E5E7EB;
-      align-items: center;
     }
 
-    .filter-section {
+    .swoosh-in {
+      animation: swooshIn 0.3s ease-out;
+    }
+
+    @keyframes swooshIn {
+      from {
+        opacity: 0;
+        transform: translateX(50px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .breadcrumb-nav {
       display: flex;
       align-items: center;
       gap: 12px;
+      padding: 16px 24px;
+      background: white;
+      border-bottom: 1px solid #E5E7EB;
     }
 
-    .filter-label {
-      font-size: 13px;
-      font-weight: 600;
-      color: #374151;
-    }
-
-    .filter-buttons {
+    .breadcrumb-back {
       display: flex;
+      align-items: center;
       gap: 8px;
-    }
-
-    .filter-btn {
-      padding: 8px 16px;
+      padding: 8px 12px;
+      background: transparent;
+      border: 1px solid #D1D5DB;
       border-radius: 6px;
-      border: 1px solid #E5E7EB;
-      background: white;
-      color: #6B7280;
-      font-size: 13px;
+      color: #374151;
+      font-size: 14px;
       font-weight: 500;
       cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 150ms ease;
+      transition: all 0.15s;
     }
 
-    .filter-btn:hover {
-      background: #F9FAFB;
-      border-color: #D1D5DB;
+    .breadcrumb-back:hover {
+      background: #F3F4F6;
+      border-color: #9CA3AF;
     }
 
-    .filter-btn.active {
-      background: #3B82F6;
-      border-color: #3B82F6;
-      color: white;
-    }
-
-    .filter-btn i {
+    .breadcrumb-back i {
       font-size: 12px;
     }
 
-    .refresh-btn {
-      padding: 8px 16px;
-      border-radius: 6px;
-      border: 1px solid #E5E7EB;
-      background: white;
-      color: #3B82F6;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 150ms ease;
-    }
-
-    .refresh-btn:hover:not(:disabled) {
-      background: #EFF6FF;
-      border-color: #3B82F6;
-    }
-
-    .refresh-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .tasks-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px 32px;
-    }
-
-    .tasks-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-
-    .tasks-list mj-task-widget {
-      display: block;
-    }
-
-    .no-tasks {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 80px 20px;
-      text-align: center;
+    .breadcrumb-divider {
       color: #9CA3AF;
-    }
-
-    .no-tasks i {
-      font-size: 64px;
-      margin-bottom: 16px;
-      opacity: 0.3;
-    }
-
-    .no-tasks h3 {
-      margin: 0 0 8px 0;
-      font-size: 20px;
-      color: #6B7280;
-    }
-
-    .no-tasks p {
-      margin: 0;
       font-size: 14px;
-      color: #9CA3AF;
     }
 
-    .tasks-loading {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 80px 20px;
-      gap: 16px;
-      color: #6B7280;
-    }
-
-    .tasks-loading i {
-      font-size: 48px;
-      color: #3B82F6;
-    }
-
-    .tasks-loading span {
-      font-size: 16px;
-      font-weight: 500;
+    .breadcrumb-current {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
     }
   `]
 })
-export class TasksFullViewComponent implements OnInit {
+export class TasksFullViewComponent implements OnInit, OnChanges {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Input() baseFilter: string = '1=1'; // SQL filter for tasks (default: show all)
+  @Input() activeTaskId?: string; // Task ID to auto-select and drill into
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   public allTasks: TaskEntity[] = [];
   public filteredTasks: TaskEntity[] = [];
+  public subTasks: TaskEntity[] = [];
+  public subTasksWithParent: TaskEntity[] = []; // Includes parent for Gantt hierarchy
+  public taskDependencies: TaskDependencyEntity[] = []; // Dependencies for Gantt links
+  public agentRunMap = new Map<string, string>(); // Maps TaskID -> AgentRunID
+  public selectedTask: TaskEntity | null = null;
+  public showDetailAnimation: boolean = false;
   public isLoading: boolean = false;
-
-  public statusFilter: 'active' | 'completed' | 'all' = 'active';
-  public assignmentFilter: 'all' | 'ai' | 'human' = 'all';
-
-  public get activeTaskCount(): number {
-    return this.allTasks.filter(t =>
-      t.Status === 'Pending' || t.Status === 'In Progress'
-    ).length;
-  }
-
-  public get completedTaskCount(): number {
-    return this.allTasks.filter(t => t.Status === 'Complete').length;
-  }
-
-  public get totalTaskCount(): number {
-    return this.allTasks.length;
-  }
+  private aiEngineConfigured: boolean = false;
 
   ngOnInit() {
     this.loadTasks();
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    // Reload tasks if baseFilter changes
+    if (changes['baseFilter'] && !changes['baseFilter'].firstChange) {
+      this.loadTasks();
+    }
+
+    // Auto-drill into task if activeTaskId changes
+    if (changes['activeTaskId'] && this.activeTaskId) {
+      const task = this.allTasks.find(t => t.ID === this.activeTaskId);
+      if (task) {
+        this.onTaskClick(task);
+      }
+    }
   }
 
   public async loadTasks(): Promise<void> {
     this.isLoading = true;
 
     try {
-      const rv = new RunView();
-
-      // First, get all conversations the user has access to
-      const conversationsResult = await rv.RunView<ConversationEntity>(
-        {
-          EntityName: 'Conversations',
-          ExtraFilter: `ID IN (
-            SELECT ConversationID FROM vwConversationDetails WHERE UserID='${this.currentUser.ID}'
-            UNION
-            SELECT ID FROM vwConversations WHERE UserID='${this.currentUser.ID}'
-          )`,
-          ResultType: 'entity_object'
-        },
-        this.currentUser
-      );
-
-      if (!conversationsResult.Success || !conversationsResult.Results || conversationsResult.Results.length === 0) {
-        this.allTasks = [];
-        this.applyFilters();
-        return;
+      // Configure AIEngineBase on first load (false = don't force refresh)
+      if (!this.aiEngineConfigured) {
+        await AIEngineBase.Instance.Config(false);
+        this.aiEngineConfigured = true;
       }
 
-      // Get conversation IDs
-      const conversationIds = conversationsResult.Results.map(c => `'${c.ID}'`).join(',');
+      const rv = new RunView();
 
-      // Load all tasks for conversation details in these conversations
+      console.log('📝 Tasks filter SQL:', this.baseFilter);
+
+      // Load all tasks with the provided filter
       const tasksResult = await rv.RunView<TaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: `ConversationDetailID IN (
-            SELECT ID FROM vwConversationDetails WHERE ConversationID IN (${conversationIds})
-          )`,
+          ExtraFilter: this.baseFilter,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1000,
           ResultType: 'entity_object'
@@ -408,63 +196,236 @@ export class TasksFullViewComponent implements OnInit {
         this.currentUser
       );
 
+      console.log('📊 Tasks query result:', {
+        success: tasksResult.Success,
+        resultCount: tasksResult.Results?.length || 0,
+        errorMessage: tasksResult.ErrorMessage
+      });
+
       if (tasksResult.Success) {
         this.allTasks = tasksResult.Results || [];
-        this.applyFilters();
-        console.log(`📋 Loaded ${this.allTasks.length} tasks across all conversations`);
+        this.filteredTasks = this.allTasks;
+        console.log(`📋 Loaded ${this.allTasks.length} tasks`);
+        if (this.allTasks.length === 0) {
+          console.log('💡 No tasks found with current filter');
+        } else {
+          console.log('✅ Sample task:', {
+            id: this.allTasks[0].ID,
+            name: this.allTasks[0].Name,
+            status: this.allTasks[0].Status,
+            conversationDetailID: this.allTasks[0].ConversationDetailID
+          });
+        }
+      } else {
+        console.error('❌ Failed to load tasks:', tasksResult.ErrorMessage);
+        this.allTasks = [];
+        this.filteredTasks = [];
       }
     } catch (error) {
       console.error('Failed to load tasks:', error);
+      this.allTasks = [];
+      this.filteredTasks = [];
     } finally {
       this.isLoading = false;
     }
   }
 
-  public setStatusFilter(filter: 'active' | 'completed' | 'all'): void {
-    this.statusFilter = filter;
-    this.applyFilters();
-  }
-
-  public setAssignmentFilter(filter: 'all' | 'ai' | 'human'): void {
-    this.assignmentFilter = filter;
-    this.applyFilters();
-  }
-
-  private applyFilters(): void {
-    let tasks = [...this.allTasks];
-
-    // Status filter
-    if (this.statusFilter === 'active') {
-      tasks = tasks.filter(t => t.Status === 'Pending' || t.Status === 'In Progress');
-    } else if (this.statusFilter === 'completed') {
-      tasks = tasks.filter(t => t.Status === 'Complete');
-    }
-
-    // Assignment filter
-    if (this.assignmentFilter === 'ai') {
-      tasks = tasks.filter(t => t.AgentID != null);
-    } else if (this.assignmentFilter === 'human') {
-      tasks = tasks.filter(t => t.UserID != null);
-    }
-
-    this.filteredTasks = tasks;
-  }
-
-  public getNoTasksMessage(): string {
-    if (this.statusFilter === 'active' && this.assignmentFilter === 'all') {
-      return 'No active tasks at the moment';
-    } else if (this.statusFilter === 'completed' && this.assignmentFilter === 'all') {
-      return 'No completed tasks yet';
-    } else if (this.assignmentFilter === 'ai') {
-      return 'No AI tasks found with the current filters';
-    } else if (this.assignmentFilter === 'human') {
-      return 'No human tasks found with the current filters';
-    }
-    return 'No tasks match your current filters';
-  }
-
-  public onTaskClick(task: TaskEntity): void {
+  public async onTaskClick(task: TaskEntity): Promise<void> {
     console.log('Task clicked:', task);
-    // TODO: Navigate to conversation or open task details
+    this.selectedTask = task;
+    this.showDetailAnimation = true;
+
+    // Load all tasks in the hierarchy using RootParentID
+    await this.loadTaskHierarchy(task);
+  }
+
+  private async loadTaskHierarchy(task: TaskEntity): Promise<void> {
+    try {
+      const rv = new RunView();
+
+      // Use RootParentID to load all tasks in this hierarchy
+      // If task has no RootParentID, it's the root itself, so use its ID
+      const rootId = task.RootParentID || task.ID;
+
+      // Load all tasks where RootParentID matches, or tasks that are the root itself
+      const hierarchyResult = await rv.RunView<TaskEntity>(
+        {
+          EntityName: 'MJ: Tasks',
+          ExtraFilter: `RootParentID='${rootId}' OR ID='${rootId}'`,
+          OrderBy: '__mj_CreatedAt ASC',
+          MaxRows: 1000,
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (hierarchyResult.Success) {
+        const allHierarchy = hierarchyResult.Results || [];
+
+        // For list view: Filter out the clicked task itself - only show its children/descendants
+        this.subTasks = allHierarchy.filter(t => t.ID !== task.ID);
+
+        // For Gantt view: Include the parent task so hierarchy works correctly
+        this.subTasksWithParent = allHierarchy;
+
+        console.log(`📋 Loaded ${this.subTasks.length} tasks in hierarchy for root ${rootId}`);
+
+        // Load task dependencies for this hierarchy
+        await this.loadTaskDependencies(rootId);
+
+        // Load agent runs for this hierarchy
+        await this.loadAgentRuns(allHierarchy);
+      } else {
+        console.error('❌ Failed to load task hierarchy:', hierarchyResult.ErrorMessage);
+        this.subTasks = [];
+        this.subTasksWithParent = [];
+        this.taskDependencies = [];
+      }
+    } catch (error) {
+      console.error('Failed to load task hierarchy:', error);
+      this.subTasks = [];
+    }
+  }
+
+  private async loadTaskDependencies(rootId: string): Promise<void> {
+    try {
+      const rv = new RunView();
+
+      // Load task dependencies where either TaskID or DependsOnTaskID is in this hierarchy
+      // Use subquery to find all tasks with this RootParentID
+      // Note: Using __mj as the default schema - this is the standard MJ schema
+      const schema = '__mj';
+      const depsResult = await rv.RunView<TaskDependencyEntity>(
+        {
+          EntityName: 'MJ: Task Dependencies',
+          ExtraFilter: `
+            TaskID IN (SELECT ID FROM [${schema}].[vwTasks] WHERE RootParentID='${rootId}' OR ID='${rootId}')
+            OR
+            DependsOnTaskID IN (SELECT ID FROM [${schema}].[vwTasks] WHERE RootParentID='${rootId}' OR ID='${rootId}')
+          `,
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (depsResult.Success) {
+        this.taskDependencies = depsResult.Results || [];
+        console.log(`🔗 Loaded ${this.taskDependencies.length} task dependencies`);
+      } else {
+        console.error('❌ Failed to load task dependencies:', depsResult.ErrorMessage);
+        this.taskDependencies = [];
+      }
+    } catch (error) {
+      console.error('Failed to load task dependencies:', error);
+      this.taskDependencies = [];
+    }
+  }
+
+  private async loadAgentRuns(tasks: TaskEntity[]): Promise<void> {
+    try {
+      // Clear existing map
+      this.agentRunMap.clear();
+
+      // Get all unique ConversationDetailIDs from tasks (filter out nulls)
+      const conversationDetailIds = tasks
+        .filter(t => t.ConversationDetailID != null)
+        .map(t => t.ConversationDetailID!);
+
+      if (conversationDetailIds.length === 0) {
+        console.log('💡 No tasks with ConversationDetailID');
+        return;
+      }
+
+      const rv = new RunView();
+      const schema = '__mj';
+
+      // Build filter to find agent runs for these conversation details
+      // Use a subquery to avoid passing large ID lists
+      const taskIds = tasks.map(t => `'${t.ID}'`).join(',');
+
+      const agentRunsResult = await rv.RunView<AIAgentRunEntity>(
+        {
+          EntityName: 'MJ: AI Agent Runs',
+          ExtraFilter: `
+            ConversationDetailID IN (
+              SELECT DISTINCT ConversationDetailID
+              FROM [${schema}].[vwTasks]
+              WHERE ID IN (${taskIds})
+              AND ConversationDetailID IS NOT NULL
+            )
+          `,
+          ResultType: 'entity_object'
+        },
+        this.currentUser
+      );
+
+      if (agentRunsResult.Success) {
+        const agentRuns = agentRunsResult.Results || [];
+        console.log(`🤖 Loaded ${agentRuns.length} agent runs`, agentRuns);
+
+        // Build map: ConversationDetailID -> AgentRunID
+        const convoToRunMap = new Map<string, string>();
+        agentRuns.forEach(run => {
+          if (run.ConversationDetailID) {
+            convoToRunMap.set(run.ConversationDetailID, run.ID);
+            console.log(`📝 Mapping ConvoDetailID ${run.ConversationDetailID} -> RunID ${run.ID}`);
+          }
+        });
+
+        // Map TaskID -> AgentRunID using ConversationDetailID as the link
+        tasks.forEach(task => {
+          console.log(`🔍 Task ${task.Name} - ConvoDetailID: ${task.ConversationDetailID}, AgentID: ${task.AgentID}`);
+          if (task.ConversationDetailID) {
+            const agentRunId = convoToRunMap.get(task.ConversationDetailID);
+            if (agentRunId) {
+              this.agentRunMap.set(task.ID, agentRunId);
+              console.log(`✅ Mapped Task ${task.ID} -> AgentRun ${agentRunId}`);
+            } else {
+              console.log(`⚠️ No agent run found for ConvoDetailID ${task.ConversationDetailID}`);
+            }
+          }
+        });
+
+        console.log(`🔗 Mapped ${this.agentRunMap.size} tasks to agent runs`, Array.from(this.agentRunMap.entries()));
+      } else {
+        console.error('❌ Failed to load agent runs:', agentRunsResult.ErrorMessage);
+      }
+    } catch (error) {
+      console.error('Failed to load agent runs:', error);
+    }
+  }
+
+  public backToTaskList(): void {
+    this.selectedTask = null;
+    this.subTasks = [];
+    this.subTasksWithParent = [];
+    this.taskDependencies = [];
+    this.agentRunMap.clear();
+    this.showDetailAnimation = false;
+  }
+
+  public onSubTaskClick(subTask: TaskEntity): void {
+    console.log('Sub-task clicked:', subTask);
+    // Could drill down further if needed
+  }
+
+  public onOpenEntityRecord(event: { entityName: string; recordId: string }): void {
+    // Bubble up the event to parent component
+    this.openEntityRecord.emit(event);
+  }
+
+  public getDescription(): string {
+    const activeCount = this.allTasks.filter(t => t.Status === 'Pending' || t.Status === 'In Progress').length;
+    const completedCount = this.allTasks.filter(t => t.Status === 'Complete').length;
+    return `${activeCount} active, ${completedCount} completed, ${this.allTasks.length} total`;
+  }
+
+  public getTaskDetailDescription(): string {
+    if (this.subTasks.length === 0) {
+      return 'No sub-tasks';
+    }
+    const activeCount = this.subTasks.filter(t => t.Status === 'Pending' || t.Status === 'In Progress').length;
+    const completedCount = this.subTasks.filter(t => t.Status === 'Complete').length;
+    return `${activeCount} active, ${completedCount} completed, ${this.subTasks.length} sub-tasks`;
   }
 }
