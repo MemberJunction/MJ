@@ -33,10 +33,6 @@ import { ConversationSidebarComponent } from './components/sidebar/conversation-
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
 import { ThreadPanelComponent } from './components/thread/thread-panel.component';
-import { ArtifactVersionHistoryComponent } from './components/artifact/artifact-version-history.component';
-import { ArtifactUploadModalComponent } from './components/artifact/artifact-upload-modal.component';
-import { InlineArtifactComponent } from './components/artifact/inline-artifact.component';
-import { ArtifactViewerPanelComponent } from './components/artifact/artifact-viewer-panel.component';
 import { CollectionTreeComponent } from './components/collection/collection-tree.component';
 import { CollectionViewComponent } from './components/collection/collection-view.component';
 import { CollectionArtifactCardComponent } from './components/collection/collection-artifact-card.component';
@@ -75,10 +71,6 @@ const COMPONENTS = [
   ConversationListComponent,
   ConversationChatAreaComponent,
   ThreadPanelComponent,
-  ArtifactVersionHistoryComponent,
-  ArtifactUploadModalComponent,
-  InlineArtifactComponent,
-  ArtifactViewerPanelComponent,
   CollectionTreeComponent,
   CollectionViewComponent,
   CollectionArtifactCardComponent,

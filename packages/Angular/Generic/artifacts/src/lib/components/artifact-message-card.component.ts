@@ -1,78 +1,74 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
-import { ArtifactStateService } from '../../services/artifact-state.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
 /**
- * Inline artifact display component that embeds rich artifact cards in conversation messages
- * Shows artifact preview, type badge, quick actions, and metadata
+ * Artifact message card component - displays a simple info bar for artifacts in conversation messages.
+ * Shows artifact icon, name, type badge, and version. Click to open full artifact viewer.
  */
 @Component({
-  selector: 'mj-inline-artifact',
+  selector: 'mj-artifact-message-card',
   template: `
-    <div class="inline-artifact-card" [class.loading]="loading" [class.error]="error">
+    <div class="artifact-message-card" [class.loading]="loading" [class.error]="error">
       @if (loading) {
         <div class="artifact-skeleton">
-          <div class="skeleton-header"></div>
-          <div class="skeleton-content"></div>
-          <div class="skeleton-actions"></div>
+          <div class="skeleton-icon"></div>
+          <div class="skeleton-text"></div>
         </div>
       } @else if (error) {
         <div class="artifact-error">
           <i class="fa-solid fa-exclamation-circle"></i>
           <span>Failed to load artifact</span>
         </div>
-      } @else if (_artifact) {
-        <div class="artifact-card" (click)="openFullView()">
+      } @else if (artifact) {
+        <div class="artifact-info-bar" (click)="openFullView()">
           <div class="artifact-icon">
             <i class="fa-solid" [ngClass]="getArtifactIcon()"></i>
           </div>
-          <div class="artifact-content">
-            <div class="artifact-title">{{ displayName }}</div>
+          <div class="artifact-info">
+            <span class="artifact-name">{{ displayName }}</span>
             <div class="artifact-meta">
               <span class="artifact-type-badge" [style.background]="getTypeBadgeColor()">
-                {{ _artifact.Type }}
+                {{ artifact.Type }}
               </span>
+              <span class="artifact-version">v{{ currentVersion?.VersionNumber || 1 }}</span>
             </div>
+          </div>
+          <div class="open-icon">
+            <i class="fa-solid fa-arrow-up-right-from-square"></i>
           </div>
         </div>
       }
     </div>
   `,
   styles: [`
-    .inline-artifact-card {
+    .artifact-message-card {
       margin: 12px 0;
     }
 
     .artifact-skeleton {
-      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
       background: #F9FAFB;
       border: 1px solid #E5E7EB;
-      border-radius: 8px;
+      border-radius: 6px;
     }
 
-    .skeleton-header {
-      height: 24px;
-      width: 60%;
-      background: #E5E7EB;
-      border-radius: 4px;
-      margin-bottom: 12px;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    .skeleton-content {
-      height: 80px;
-      background: #E5E7EB;
-      border-radius: 4px;
-      margin-bottom: 12px;
-      animation: pulse 1.5s ease-in-out infinite;
-    }
-
-    .skeleton-actions {
+    .skeleton-icon {
+      width: 32px;
       height: 32px;
-      width: 40%;
+      background: #E5E7EB;
+      border-radius: 6px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .skeleton-text {
+      flex: 1;
+      height: 32px;
       background: #E5E7EB;
       border-radius: 4px;
       animation: pulse 1.5s ease-in-out infinite;
@@ -87,57 +83,60 @@ import { takeUntil } from 'rxjs/operators';
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 16px;
+      padding: 12px 16px;
       background: #FEE2E2;
       border: 1px solid #FECACA;
-      border-radius: 8px;
+      border-radius: 6px;
       color: #DC2626;
+      font-size: 14px;
     }
 
     .artifact-error i {
-      font-size: 18px;
+      font-size: 16px;
     }
 
-    .artifact-card {
+    .artifact-info-bar {
       display: flex;
       align-items: center;
       gap: 12px;
       padding: 12px 16px;
       background: white;
       border: 1px solid #E5E7EB;
-      border-radius: 8px;
+      border-radius: 6px;
       cursor: pointer;
       transition: all 200ms ease;
     }
 
-    .artifact-card:hover {
+    .artifact-info-bar:hover {
       border-color: #1e40af;
       box-shadow: 0 2px 8px rgba(30, 64, 175, 0.1);
     }
 
     .artifact-icon {
-      width: 40px;
-      height: 40px;
+      width: 32px;
+      height: 32px;
       display: flex;
       align-items: center;
       justify-content: center;
       background: #F3F4F6;
       border-radius: 6px;
-      color: #6B7280;
-      font-size: 18px;
       flex-shrink: 0;
+      color: #6B7280;
+      font-size: 16px;
     }
 
-    .artifact-content {
+    .artifact-info {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
       min-width: 0;
     }
 
-    .artifact-title {
+    .artifact-name {
       font-size: 14px;
       font-weight: 600;
       color: #111827;
-      margin-bottom: 4px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -156,12 +155,29 @@ import { takeUntil } from 'rxjs/operators';
       font-size: 10px;
       font-weight: 600;
       letter-spacing: 0.5px;
-      border-radius: 4px;
+      border-radius: 3px;
       text-transform: uppercase;
+    }
+
+    .artifact-version {
+      font-size: 11px;
+      color: #6B7280;
+      font-weight: 500;
+    }
+
+    .open-icon {
+      flex-shrink: 0;
+      color: #9CA3AF;
+      font-size: 14px;
+      transition: color 200ms ease;
+    }
+
+    .artifact-info-bar:hover .open-icon {
+      color: #1e40af;
     }
   `]
 })
-export class InlineArtifactComponent implements OnInit, OnDestroy {
+export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   @Input() artifactId!: string;
   @Input() versionNumber?: number;
   @Input() currentUser!: UserInfo;
@@ -176,7 +192,7 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor(private artifactState: ArtifactStateService) {}
+  constructor() {}
 
   async ngOnInit(): Promise<void> {
     // If entities are provided, use them directly
@@ -215,16 +231,22 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
       this.loading = true;
       this.error = false;
 
-      // Load artifact
-      this._artifact = await this.artifactState.loadArtifact(this.artifactId, this.currentUser);
+      // Load artifact directly
+      const rv = new RunView();
+      const result = await rv.RunView<ArtifactEntity>({
+        EntityName: 'MJ: Conversation Artifacts',
+        ExtraFilter: `ID='${this.artifactId}'`,
+        MaxRows: 1,
+        ResultType: 'entity_object'
+      }, this.currentUser);
 
-      if (!this._artifact) {
+      if (result.Success && result.Results && result.Results.length > 0) {
+        this._artifact = result.Results[0];
+        // Load version content
+        await this.loadVersionContent();
+      } else {
         this.error = true;
-        return;
       }
-
-      // Load version content
-      await this.loadVersionContent();
 
     } catch (err) {
       console.error('Error loading artifact:', err);
@@ -279,14 +301,6 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
     return this._artifact?.Description || null;
   }
 
-  public get isNew(): boolean {
-    if (!this._artifact) return false;
-    const createdAt = new Date(this._artifact.__mj_CreatedAt);
-    const now = new Date();
-    const hoursDiff = (now.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
-    return hoursDiff < 24;
-  }
-
   public get isCodeArtifact(): boolean {
     if (!this._artifact) return false;
     const name = this._artifact.Name?.toLowerCase() || '';
@@ -323,14 +337,8 @@ export class InlineArtifactComponent implements OnInit, OnDestroy {
     return '#6B7280'; // Gray
   }
 
-  public openFullView(event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-
+  public openFullView(): void {
     if (this._artifact) {
-      // Only emit the action - don't call artifactState.openArtifact()
-      // Let the parent decide how to handle (opens side panel, not modal)
       this.actionPerformed.emit({ action: 'open', artifact: this._artifact, version: this._currentVersion || undefined });
     }
   }

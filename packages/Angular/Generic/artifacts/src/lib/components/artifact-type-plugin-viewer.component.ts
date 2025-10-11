@@ -16,13 +16,13 @@ import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.i
 import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.component';
 
 /**
- * Dynamic artifact viewer that loads the appropriate plugin based on the artifact's DriverClass.
+ * Artifact type plugin viewer that loads the appropriate plugin based on the artifact's DriverClass.
  * Uses MJGlobal.Instance.ClassFactory.CreateInstance() to dynamically load viewer plugins.
  */
 @Component({
-  selector: 'mj-artifact-viewer-dynamic',
+  selector: 'mj-artifact-type-plugin-viewer',
   template: `
-    <div class="artifact-viewer-dynamic">
+    <div class="artifact-type-plugin-viewer">
       @if (isLoading) {
         <div class="loading-state">
           <i class="fas fa-spinner fa-spin"></i>
@@ -39,7 +39,7 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
     </div>
   `,
   styles: [`
-    .artifact-viewer-dynamic {
+    .artifact-type-plugin-viewer {
       width: 100%;
       height: 100%;
       display: flex;
@@ -70,7 +70,7 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
     }
   `]
 })
-export class ArtifactViewerDynamicComponent implements OnInit, OnChanges {
+export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Input() artifactVersion!: ArtifactVersionEntity;
   @Input() artifactTypeName!: string;
   @Input() contentType?: string;
@@ -85,6 +85,13 @@ export class ArtifactViewerDynamicComponent implements OnInit, OnChanges {
   public error: string | null = null;
 
   private componentRef: ComponentRef<any> | null = null;
+
+  /**
+   * Get the loaded plugin instance (if available)
+   */
+  public get pluginInstance(): BaseArtifactViewerPluginComponent | null {
+    return this.componentRef?.instance as BaseArtifactViewerPluginComponent || null;
+  }
 
   async ngOnInit(): Promise<void> {
     await this.loadViewer();

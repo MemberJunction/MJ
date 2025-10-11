@@ -30,6 +30,7 @@
     "@memberjunction/ng-base-types": "2.104.0",
     "@memberjunction/ng-code-editor": "2.104.0",
     "@memberjunction/ng-react": "2.104.0",
+    "@memberjunction/ng-notifications": "2.104.0",
     "@angular/cdk": "18.0.2",
     "tslib": "^2.3.0",
     "rxjs": "^7.8.1",

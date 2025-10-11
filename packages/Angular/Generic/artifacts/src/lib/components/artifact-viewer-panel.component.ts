@@ -1,9 +1,10 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, CollectionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
 
 @Component({
   selector: 'mj-artifact-viewer-panel',
@@ -18,6 +19,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Output() closed = new EventEmitter<void>();
+
+  @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
   private destroy$ = new Subject<void>();
 
@@ -43,6 +46,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public versionAttributes: ArtifactVersionAttributeEntity[] = [];
+  private artifactTypeDriverClass: string | null = null;
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
@@ -112,6 +116,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         return;
       }
 
+      // Load artifact type to check for DriverClass
+      await this.loadArtifactType();
+
       // Load ALL versions
       const rv = new RunView();
       const result = await rv.RunView<ArtifactVersionEntity>({
@@ -161,6 +168,25 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       this.error = 'Error loading artifact: ' + (err as Error).message;
     } finally {
       this.isLoading = false;
+    }
+  }
+
+  private async loadArtifactType(): Promise<void> {
+    if (!this.artifact?.Type) {
+      return;
+    }
+
+    try {
+      await ArtifactMetadataEngine.Instance.Config(false, this.currentUser);
+
+      const artifactType = ArtifactMetadataEngine.Instance.FindArtifactType(this.artifact.Type);
+      if (artifactType) {
+        this.artifactTypeDriverClass = artifactType.DriverClass;
+        console.log(`📦 Loaded artifact type "${this.artifact.Type}", DriverClass: ${this.artifactTypeDriverClass || 'none'}`);
+      }
+    } catch (err) {
+      console.error('Error loading artifact type:', err);
+      // Don't fail the whole load if we can't get the artifact type
     }
   }
 
@@ -225,8 +251,22 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   get hasPlugin(): boolean {
-    // Check if artifact type exists - the dynamic viewer will determine if a plugin is registered
-    return !!this.artifact?.Type;
+    // Check if the artifact type has a DriverClass configured
+    // If DriverClass is set, we have a plugin available
+    return !!this.artifactTypeDriverClass;
+  }
+
+  get hasJsonTab(): boolean {
+    // Show JSON tab only if:
+    // 1. Plugin says parent should show raw content AND
+    // 2. Plugin is showing elevated display (e.g., displayMarkdown/displayHtml) AND
+    // 3. Content type is JSON
+    const pluginInstance = this.pluginViewer?.pluginInstance;
+    if (pluginInstance?.parentShouldShowRawContent && pluginInstance?.isShowingElevatedDisplay) {
+      const ct = this.contentType?.toLowerCase() || '';
+      return ct.includes('json') || ct.includes('application/json');
+    }
+    return false;
   }
 
   get artifactTypeName(): string {

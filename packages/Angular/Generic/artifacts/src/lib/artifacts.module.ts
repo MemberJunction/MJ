@@ -15,8 +15,11 @@ import { HtmlArtifactViewerComponent } from './components/plugins/html-artifact-
 import { SvgArtifactViewerComponent } from './components/plugins/svg-artifact-viewer.component';
 import { ComponentArtifactViewerComponent } from './components/plugins/component-artifact-viewer.component';
 
-// Import dynamic viewer component
-import { ArtifactViewerDynamicComponent } from './components/artifact-viewer-dynamic.component';
+// Import artifact type plugin viewer component
+import { ArtifactTypePluginViewerComponent } from './components/artifact-type-plugin-viewer.component';
+import { ArtifactVersionHistoryComponent } from './components/artifact-version-history.component';
+import { ArtifactViewerPanelComponent } from './components/artifact-viewer-panel.component';
+import { ArtifactMessageCardComponent } from './components/artifact-message-card.component';
 
 /**
  * Module for artifact viewer plugin system.
@@ -27,8 +30,13 @@ import { ArtifactViewerDynamicComponent } from './components/artifact-viewer-dyn
  */
 @NgModule({
   declarations: [
-    // Dynamic viewer
-    ArtifactViewerDynamicComponent,
+    // Artifact type plugin viewer (loads appropriate plugin based on DriverClass)
+    ArtifactTypePluginViewerComponent,
+
+    // Artifact viewer UI components
+    ArtifactViewerPanelComponent,
+    ArtifactVersionHistoryComponent,
+    ArtifactMessageCardComponent,
 
     // Plugin components
     JsonArtifactViewerComponent,
@@ -46,8 +54,13 @@ import { ArtifactViewerDynamicComponent } from './components/artifact-viewer-dyn
     MJReactModule
   ],
   exports: [
-    // Export dynamic viewer (main entry point)
-    ArtifactViewerDynamicComponent,
+    // Export artifact type plugin viewer
+    ArtifactTypePluginViewerComponent,
+
+    // Export artifact viewer UI components
+    ArtifactViewerPanelComponent,
+    ArtifactVersionHistoryComponent,
+    ArtifactMessageCardComponent,
 
     // Export plugin components
     JsonArtifactViewerComponent,

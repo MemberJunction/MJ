@@ -11,8 +11,13 @@ export * from './lib/interfaces/artifact-viewer-plugin.interface';
 // Base component
 export * from './lib/components/base-artifact-viewer.component';
 
-// Dynamic viewer component (main entry point)
-export * from './lib/components/artifact-viewer-dynamic.component';
+// Artifact type plugin viewer (loads appropriate plugin based on DriverClass)
+export * from './lib/components/artifact-type-plugin-viewer.component';
+
+// Artifact viewer UI components
+export * from './lib/components/artifact-viewer-panel.component';
+export * from './lib/components/artifact-version-history.component';
+export * from './lib/components/artifact-message-card.component';
 
 // Plugin components
 export * from './lib/components/plugins/json-artifact-viewer.component';

@@ -32,6 +32,36 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   @Input() cssClass?: string;
 
   /**
+   * Whether this plugin is showing an "elevated" display (e.g., extracted markdown/HTML)
+   * vs raw content. When true and content type is JSON, the wrapper will show a JSON tab.
+   *
+   * Subclasses should override this getter to return the appropriate value based on their
+   * current display state. For example, JSON plugin returns true when showing displayMarkdown
+   * or displayHtml, false when showing raw JSON editor.
+   *
+   * Default: false (showing raw content)
+   */
+  public get isShowingElevatedDisplay(): boolean {
+    return false;
+  }
+
+  /**
+   * Whether the parent wrapper should show a raw content tab (e.g., JSON tab for JSON content).
+   * This gives plugins fine-grained control over the parent's tab display.
+   *
+   * Use cases:
+   * - JSON plugin with extract rules: true (show JSON tab to view source)
+   * - Component plugin: true (show JSON tab even when displaying elevated component)
+   * - Code plugin: false (already showing raw content)
+   *
+   * Subclasses can override this to control parent behavior.
+   * Default: true (parent should show raw content tab if applicable)
+   */
+  public get parentShouldShowRawContent(): boolean {
+    return true;
+  }
+
+  /**
    * Get the content from the artifact version.
    * Handles both string content and JSON objects.
    */
