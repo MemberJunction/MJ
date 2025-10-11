@@ -33,7 +33,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
-  @Input() public artifactMap: Map<string, {artifact: ArtifactEntity; version: ArtifactVersionEntity}> = new Map();
+  @Input() public artifactMap: Map<string, Array<{artifact: ArtifactEntity; version: ArtifactVersionEntity}>> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
@@ -164,9 +164,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.message = message;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
-          const artifactInfo = this.artifactMap.get(message.ID);
-          instance.artifact = artifactInfo?.artifact;
-          instance.artifactVersion = artifactInfo?.version;
+          const artifactList = this.artifactMap.get(message.ID);
+          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          instance.artifact = firstArtifact?.artifact;
+          instance.artifactVersion = firstArtifact?.version;
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
         } else {
@@ -180,9 +181,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.currentUser = this.currentUser;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
-          const artifactInfo = this.artifactMap.get(message.ID);
-          instance.artifact = artifactInfo?.artifact;
-          instance.artifactVersion = artifactInfo?.version;
+          const artifactList = this.artifactMap.get(message.ID);
+          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          instance.artifact = firstArtifact?.artifact;
+          instance.artifactVersion = firstArtifact?.version;
           // Pass agent run from map (loaded once per conversation)
           const agentRun = this.agentRunMap.get(message.ID) || null;
           console.log(`✨ Creating new message ${message.ID} component with agentRun:`, {

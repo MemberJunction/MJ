@@ -17,7 +17,7 @@
       <div class="suggestion-icon">
         <i
           *ngIf="suggestion.type === 'agent' && suggestion.icon"
-          class="fa-solid {{ suggestion.icon }}"
+          [ngClass]="getIconClasses(suggestion.icon)"
         ></i>
         <i
           *ngIf="suggestion.type === 'user'"

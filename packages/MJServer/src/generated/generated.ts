@@ -40634,6 +40634,10 @@ export class ArtifactType_ {
     @Field({nullable: true, description: `JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`}) 
     ExtractRules?: string;
         
+    @Field({nullable: true, description: `Driver class name for the artifact viewer plugin. References Angular component registered with @RegisterClass decorator.`}) 
+    @MaxLength(510)
+    DriverClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(200)
     Parent?: string;
@@ -40684,6 +40688,9 @@ export class CreateArtifactTypeInput {
 
     @Field({ nullable: true })
     ExtractRules: string | null;
+
+    @Field({ nullable: true })
+    DriverClass: string | null;
 }
     
 
@@ -40712,6 +40719,9 @@ export class UpdateArtifactTypeInput {
 
     @Field({ nullable: true })
     ExtractRules?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

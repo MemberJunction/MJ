@@ -7,8 +7,8 @@ import {
   OnDestroy,
   DoCheck
 } from '@angular/core';
-import { ConversationEntity, ArtifactEntity } from '@memberjunction/core-entities';
-import { UserInfo, CompositeKey } from '@memberjunction/core';
+import { ConversationEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
+import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -35,9 +35,56 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   @Input() activeContext?: 'library' | 'task';
   @Input() contextItemId?: string;
 
+  // Navigation properties for external control (deep linking from URL)
+  @Input() set activeTabInput(value: 'conversations' | 'collections' | 'tasks' | undefined) {
+    if (value && value !== this.activeTab) {
+      this.activeTab = value;
+    }
+  }
+
+  @Input() set activeConversationInput(value: string | undefined) {
+    if (value && value !== this.conversationState.activeConversationId) {
+      // TODO: Navigate to this conversation
+      console.log('🔗 Deep link to conversation:', value);
+    }
+  }
+
+  @Input() set activeCollectionInput(value: string | undefined) {
+    if (value) {
+      // TODO: Navigate to this collection (collections not yet fully integrated with state service)
+      console.log('🔗 Deep link to collection:', value);
+    }
+  }
+
+  @Input() set activeArtifactInput(value: string | undefined) {
+    if (value && value !== this.activeArtifactId) {
+      this.activeArtifactId = value;
+      // TODO: Open this artifact in viewer
+      console.log('🔗 Deep link to artifact:', value);
+    }
+  }
+
+  @Input() set activeTaskInput(value: string | undefined) {
+    if (value && value !== this._activeTaskId) {
+      this._activeTaskId = value;
+    }
+  }
+
+  private _activeTaskId?: string;
+  get activeTaskId(): string | undefined {
+    return this._activeTaskId;
+  }
+
   @Output() conversationChanged = new EventEmitter<ConversationEntity>();
   @Output() artifactOpened = new EventEmitter<ArtifactEntity>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() navigationChanged = new EventEmitter<{
+    tab: 'conversations' | 'collections' | 'tasks';
+    conversationId?: string;
+    collectionId?: string;
+    artifactId?: string;
+    taskId?: string;
+  }>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -60,11 +107,16 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private artifactPanelResizeStartWidth: number = 0;
 
   private previousConversationId: string | null = null;
+  private previousTaskId: string | undefined = undefined;
+  private previousArtifactId: string | null = null;
   private destroy$ = new Subject<void>();
 
   // LocalStorage keys
   private readonly SIDEBAR_WIDTH_KEY = 'mj-conversations-sidebar-width';
   private readonly ARTIFACT_PANEL_WIDTH_KEY = 'mj-artifact-panel-width';
+
+  // Task filter for conversation-specific filtering
+  public tasksFilter: string = '1=1';
 
   constructor(
     public conversationState: ConversationStateService,
@@ -122,6 +174,35 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.activeTab = 'collections';
     }
     // Task context will be handled by chat header dropdown, not navigation tabs
+
+    // Build task filter for conversations domain
+    this.buildTasksFilter();
+  }
+
+  /**
+   * Builds the SQL filter for tasks in conversations the user has access to
+   */
+  private buildTasksFilter(): void {
+    // Filter tasks by conversations the user owns or is a participant in, or tasks owned
+    // by the user
+    const md = new Metadata();
+    const cd = md.EntityByName('Conversation Details');
+    const c = md.EntityByName('Conversations');
+    if (!cd || !c) {
+      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
+      this.tasksFilter = `ParentID IS NULL AND UserID = '${this.currentUser.ID}'`; // Fallback to user-owned tasks only
+      return;
+    }
+
+    this.tasksFilter = `ParentID IS NULL AND (UserID = '${this.currentUser.ID}' OR ConversationDetailID IN (
+      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}] 
+      WHERE 
+      UserID ='${this.currentUser.ID}' OR 
+      ConversationID IN (
+        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${this.currentUser.ID}'
+      )
+    ))`;
+    console.log('📝 Conversations domain tasks filter built:', this.tasksFilter);
   }
 
   ngDoCheck() {
@@ -132,6 +213,43 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       const conversation = this.conversationState.activeConversation;
       if (conversation) {
         this.conversationChanged.emit(conversation);
+
+        // Also emit navigationChanged for URL updates (only if on conversations tab)
+        if (this.activeTab === 'conversations' && currentId) {
+          this.navigationChanged.emit({
+            tab: 'conversations',
+            conversationId: currentId
+          });
+        }
+      }
+    }
+
+    // Detect task selection changes (when on tasks tab)
+    if (this.activeTab === 'tasks') {
+      const currentTaskId = this.activeTaskId;
+      if (currentTaskId !== this.previousTaskId) {
+        this.previousTaskId = currentTaskId;
+        if (currentTaskId) {
+          this.navigationChanged.emit({
+            tab: 'tasks',
+            taskId: currentTaskId
+          });
+        }
+      }
+    }
+
+    // Detect artifact selection changes (when on collections tab)
+    if (this.activeTab === 'collections') {
+      const currentArtifactId = this.activeArtifactId;
+      if (currentArtifactId !== this.previousArtifactId) {
+        this.previousArtifactId = currentArtifactId;
+        if (currentArtifactId) {
+          this.navigationChanged.emit({
+            tab: 'collections',
+            artifactId: currentArtifactId
+            // TODO: Add collectionId when collections are integrated with state service
+          });
+        }
       }
     }
   }
@@ -147,6 +265,23 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   onTabChanged(tab: NavigationTab): void {
     this.activeTab = tab;
+
+    // Emit navigation change event with current state
+    const navEvent: any = {
+      tab: tab as 'conversations' | 'collections' | 'tasks'
+    };
+
+    if (tab === 'conversations') {
+      navEvent.conversationId = this.conversationState.activeConversationId || undefined;
+    } else if (tab === 'collections') {
+      // TODO: Get active collection ID from collections state service when integrated
+      navEvent.collectionId = undefined;
+      navEvent.artifactId = this.activeArtifactId || undefined;
+    } else if (tab === 'tasks') {
+      navEvent.taskId = this.activeTaskId || undefined;
+    }
+
+    this.navigationChanged.emit(navEvent);
 
     // Auto-close artifact panel when switching away from collections
     if (tab === 'conversations' || tab === 'tasks') {
@@ -309,5 +444,28 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (chat-wrapper in explorer-core)
     this.openEntityRecord.emit(event);
+  }
+
+  onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
+    // Convert from tasks format (recordId) to workspace format (compositeKey)
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', event.recordId)
+    ]);
+    this.openEntityRecord.emit({
+      entityName: event.entityName,
+      compositeKey
+    });
+  }
+
+  onTaskClicked(task: TaskEntity): void {
+    // Switch to Tasks tab and set active task ID
+    this.activeTab = 'tasks';
+    this._activeTaskId = task.ID;
+
+    // Emit navigation change
+    this.navigationChanged.emit({
+      tab: 'tasks',
+      taskId: task.ID
+    });
   }
 }

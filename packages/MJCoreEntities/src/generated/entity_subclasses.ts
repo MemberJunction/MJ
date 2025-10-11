@@ -9892,6 +9892,11 @@ export const ArtifactTypeSchema = z.object({
         * * Display Name: Extract Rules
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`),
+    DriverClass: z.string().nullable().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Driver class name for the artifact viewer plugin. References Angular component registered with @RegisterClass decorator.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -41232,6 +41237,19 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
     }
     set ExtractRules(value: string | null) {
         this.Set('ExtractRules', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Driver class name for the artifact viewer plugin. References Angular component registered with @RegisterClass decorator.
+    */
+    get DriverClass(): string | null {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string | null) {
+        this.Set('DriverClass', value);
     }
 
     /**

@@ -91,6 +91,9 @@ export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
 
+export * from './agents/skip-agent.js';
+export * from './agents/skip-sdk.js';
+
 export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';
 export * from './resolvers/ComponentRegistryResolver.js';

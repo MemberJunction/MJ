@@ -23,7 +23,10 @@ import { MentionAutocompleteService } from '../../services/mention-autocomplete.
 @Component({
   selector: 'mj-conversation-message-item',
   templateUrl: './message-item.component.html',
-  styleUrls: ['./message-item.component.css']
+  styleUrls: [
+    './message-item.component.css',
+    '../../styles/custom-agent-icons.css'
+  ]
 })
 export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() public message!: ConversationDetailEntity;
@@ -159,13 +162,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   public get isConversationManager(): boolean {
-    return this.aiAgentInfo?.name === 'Conversation Manager Agent' || this.aiAgentInfo?.name === 'Conversation Manager';
+    return this.aiAgentInfo?.name === 'Sage';
   }
 
   public get displayMessage(): string {
     let text = this.message.Message || '';
 
-    // For Conversation Manager, only show the delegation line (starts with emoji)
+    // For Sage, only show the delegation line (starts with emoji)
     if (this.isConversationManager && text) {
       const delegationMatch = text.match(/🤖.*Delegating to.*Agent.*/);
       if (delegationMatch) {

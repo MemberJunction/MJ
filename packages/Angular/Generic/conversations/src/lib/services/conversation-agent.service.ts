@@ -11,7 +11,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
  * Service for managing agent interactions within conversations.
- * Handles communication with the ambient Conversation Manager Agent and other agents.
+ * Handles communication with the ambient Sage Agent and other agents.
  */
 @Injectable({
   providedIn: 'root'
@@ -48,7 +48,7 @@ export class ConversationAgentService {
   }
 
   /**
-   * Get or load the Conversation Manager Agent
+   * Get or load the Sage Agent (formerly Conversation Manager Agent)
    */
   public async getConversationManagerAgent(): Promise<AIAgentEntityExtended | null> {
     if (this._conversationManagerAgent) {
@@ -59,22 +59,22 @@ export class ConversationAgentService {
       // Ensure AIEngineBase is configured
       await AIEngineBase.Instance.Config(false);
 
-      // Find the Conversation Manager Agent
+      // Find the Sage Agent
       const agents = AIEngineBase.Instance.Agents;
       this._conversationManagerAgent = agents.find(
-        (agent: AIAgentEntityExtended) => agent.Name === 'Conversation Manager Agent'
+        (agent: AIAgentEntityExtended) => agent.Name === 'Sage'
       ) || null;
 
       if (!this._conversationManagerAgent) {
-        const errorMsg = 'Conversation Manager Agent not found in AIEngineBase.Agents';
+        const errorMsg = 'Sage Agent not found in AIEngineBase.Agents';
         console.warn(errorMsg);
         MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       }
 
       return this._conversationManagerAgent;
     } catch (error) {
-      const errorMsg = 'Error loading Conversation Manager Agent: ' + (error instanceof Error ? error.message : String(error));
-      console.error('Error loading Conversation Manager Agent:', error);
+      const errorMsg = 'Error loading Sage Agent: ' + (error instanceof Error ? error.message : String(error));
+      console.error('Error loading Sage Agent:', error);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
       return null;
     }
@@ -92,7 +92,7 @@ export class ConversationAgentService {
   }
 
   /**
-   * Process a message through the ambient Conversation Manager Agent.
+   * Process a message through the ambient Sage Agent.
    * This should be called for every message sent in a conversation.
    *
    * @param conversationId The conversation ID
@@ -121,7 +121,7 @@ export class ConversationAgentService {
 
     const agent = await this.getConversationManagerAgent();
     if (!agent || !agent.ID) {
-      const errorMsg = 'Conversation Manager Agent not available';
+      const errorMsg = 'Sage Agent not available';
       console.warn(errorMsg);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'warning', 5000);
       return null;
@@ -132,7 +132,8 @@ export class ConversationAgentService {
       this._isProcessing$.next(true);
 
       // Build conversation messages for the agent
-      const conversationMessages = this.buildAgentMessages(conversationHistory, message);
+      // Note: conversationHistory already includes the current message
+      const conversationMessages = this.buildAgentMessages(conversationHistory);
 
       // Prepare parameters using the correct ExecuteAgentParams type
       const availAgents = AIEngineBase.Instance.Agents.filter(a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active');
@@ -171,14 +172,15 @@ export class ConversationAgentService {
 
   /**
    * Build the message array for the agent from conversation history
+   * Note: conversationHistory already includes the current message, so we don't add it separately
    */
   private buildAgentMessages(
-    history: ConversationDetailEntity[],
-    currentMessage: ConversationDetailEntity
+    history: ConversationDetailEntity[]
   ): ChatMessage[] {
     const messages: ChatMessage[] = [];
 
     // Add historical messages (limit to recent context, e.g., last 20 messages)
+    // History already includes the current message from the caller
     const recentHistory = history.slice(-20);
     for (const msg of recentHistory) {
       messages.push({
@@ -186,12 +188,6 @@ export class ConversationAgentService {
         content: msg.Message || ''
       });
     }
-
-    // Add the current message
-    messages.push({
-      role: this.mapRoleToAgentRole(currentMessage.Role) as 'system' | 'user' | 'assistant',
-      content: currentMessage.Message || ''
-    });
 
     return messages;
   }
@@ -218,8 +214,8 @@ export class ConversationAgentService {
   }
 
   /**
-   * Invoke a sub-agent based on Conversation Manager Agent's payload.
-   * This is called when the Conversation Manager decides to delegate to a specialist agent.
+   * Invoke a sub-agent based on Sage Agent's payload.
+   * This is called when Sage decides to delegate to a specialist agent.
    *
    * @param agentName Name of the agent to invoke
    * @param conversationId The conversation ID
@@ -265,7 +261,8 @@ export class ConversationAgentService {
       console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload });
 
       // Build conversation messages for the sub-agent
-      const conversationMessages = this.buildAgentMessages(conversationHistory, message);
+      // Note: conversationHistory already includes the current message
+      const conversationMessages = this.buildAgentMessages(conversationHistory);
 
       // Prepare parameters with optional payload and progress callback
       const params: ExecuteAgentParams = {
