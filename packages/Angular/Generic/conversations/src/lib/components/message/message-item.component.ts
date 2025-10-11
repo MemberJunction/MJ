@@ -23,7 +23,10 @@ import { MentionAutocompleteService } from '../../services/mention-autocomplete.
 @Component({
   selector: 'mj-conversation-message-item',
   templateUrl: './message-item.component.html',
-  styleUrls: ['./message-item.component.css']
+  styleUrls: [
+    './message-item.component.css',
+    '../../styles/custom-agent-icons.css'
+  ]
 })
 export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() public message!: ConversationDetailEntity;

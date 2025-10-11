@@ -168,6 +168,9 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         const saved = await this.safeSaveConversationDetail(message, `TaskProgress:${taskName}`);
         if (saved) {
           this.messageSent.emit(message);
+
+          // Also update the ActiveTasksService to keep the tasks dropdown in sync
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, progressMessage);
         }
       } catch (error) {
         console.error('Error updating task execution message:', error);

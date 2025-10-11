@@ -300,8 +300,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   onMessageSent(message: ConversationDetailEntity): void {
-    // Add the new message to the list
-    this.messages = [...this.messages, message];
+    // Check if message already exists in the array (by ID) to prevent duplicates
+    // Messages can be emitted multiple times as they're updated (e.g., status changes)
+    const existingIndex = this.messages.findIndex(m => m.ID === message.ID);
+
+    if (existingIndex >= 0) {
+      // Update existing message in place (replace with updated version)
+      this.messages = [
+        ...this.messages.slice(0, existingIndex),
+        message,
+        ...this.messages.slice(existingIndex + 1)
+      ];
+    } else {
+      // Add new message to the list
+      this.messages = [...this.messages, message];
+    }
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;

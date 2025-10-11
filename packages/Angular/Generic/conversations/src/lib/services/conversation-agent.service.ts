@@ -132,7 +132,8 @@ export class ConversationAgentService {
       this._isProcessing$.next(true);
 
       // Build conversation messages for the agent
-      const conversationMessages = this.buildAgentMessages(conversationHistory, message);
+      // Note: conversationHistory already includes the current message
+      const conversationMessages = this.buildAgentMessages(conversationHistory);
 
       // Prepare parameters using the correct ExecuteAgentParams type
       const availAgents = AIEngineBase.Instance.Agents.filter(a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active');
@@ -171,14 +172,15 @@ export class ConversationAgentService {
 
   /**
    * Build the message array for the agent from conversation history
+   * Note: conversationHistory already includes the current message, so we don't add it separately
    */
   private buildAgentMessages(
-    history: ConversationDetailEntity[],
-    currentMessage: ConversationDetailEntity
+    history: ConversationDetailEntity[]
   ): ChatMessage[] {
     const messages: ChatMessage[] = [];
 
     // Add historical messages (limit to recent context, e.g., last 20 messages)
+    // History already includes the current message from the caller
     const recentHistory = history.slice(-20);
     for (const msg of recentHistory) {
       messages.push({
@@ -186,12 +188,6 @@ export class ConversationAgentService {
         content: msg.Message || ''
       });
     }
-
-    // Add the current message
-    messages.push({
-      role: this.mapRoleToAgentRole(currentMessage.Role) as 'system' | 'user' | 'assistant',
-      content: currentMessage.Message || ''
-    });
 
     return messages;
   }
@@ -265,7 +261,8 @@ export class ConversationAgentService {
       console.log(`🎯 Invoking sub-agent: ${agentName}`, { reasoning, hasPayload: !!payload });
 
       // Build conversation messages for the sub-agent
-      const conversationMessages = this.buildAgentMessages(conversationHistory, message);
+      // Note: conversationHistory already includes the current message
+      const conversationMessages = this.buildAgentMessages(conversationHistory);
 
       // Prepare parameters with optional payload and progress callback
       const params: ExecuteAgentParams = {

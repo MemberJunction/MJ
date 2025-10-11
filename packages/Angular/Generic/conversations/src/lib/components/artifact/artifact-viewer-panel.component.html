@@ -80,20 +80,32 @@
 
         <!-- Tab Content -->
         <div class="tab-content">
-          <!-- Display Tab (Markdown or HTML) -->
+          <!-- Display Tab (uses plugin system) -->
           @if (activeTab === 'display' && hasDisplayTab) {
             <div class="display-content">
-              <div class="display-toolbar">
-                <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
-                  <i class="fas fa-copy"></i> Copy
-                </button>
-              </div>
-              @if (displayMarkdown) {
-                <div class="markdown-content">
-                  <markdown [data]="displayMarkdown"></markdown>
+              @if (artifactVersion && artifactTypeName) {
+                <!-- Use new dynamic artifact viewer -->
+                <mj-artifact-viewer-dynamic
+                  [artifactVersion]="artifactVersion"
+                  [artifactTypeName]="artifactTypeName"
+                  [contentType]="contentType"
+                  [height]="'100%'"
+                  [readonly]="true">
+                </mj-artifact-viewer-dynamic>
+              } @else {
+                <!-- Legacy fallback for markdown/HTML attributes -->
+                <div class="display-toolbar">
+                  <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
+                    <i class="fas fa-copy"></i> Copy
+                  </button>
                 </div>
-              } @else if (displayHtml) {
-                <div class="html-content" [innerHTML]="displayHtml"></div>
+                @if (displayMarkdown) {
+                  <div class="markdown-content">
+                    <markdown [data]="displayMarkdown"></markdown>
+                  </div>
+                } @else if (displayHtml) {
+                  <div class="html-content" [innerHTML]="displayHtml"></div>
+                }
               }
             </div>
           }

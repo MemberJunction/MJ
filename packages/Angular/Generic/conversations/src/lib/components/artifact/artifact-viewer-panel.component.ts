@@ -186,8 +186,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
         this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
 
-        // Set default tab based on available display attributes
-        if (this.displayMarkdown || this.displayHtml) {
+        // Default to display tab if we have a plugin or extracted display content
+        // Otherwise default to JSON tab for JSON types, or Details tab as last resort
+        if (this.hasDisplayTab) {
           this.activeTab = 'display';
         } else if (this.artifact?.Type?.toLowerCase() === 'json' || this.jsonContent) {
           this.activeTab = 'json';
@@ -195,7 +196,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           this.activeTab = 'details';
         }
 
-        console.log(`📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, activeTab=${this.activeTab}`);
+        console.log(`📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, hasDisplayTab=${this.hasDisplayTab}, activeTab=${this.activeTab}`);
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
@@ -217,7 +218,25 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   get hasDisplayTab(): boolean {
-    return !!(this.displayMarkdown || this.displayHtml);
+    // Show Display tab if:
+    // 1. We have a plugin for this artifact type (check if artifact type exists), OR
+    // 2. We have displayMarkdown or displayHtml attributes from extract rules
+    return this.hasPlugin || !!this.displayMarkdown || !!this.displayHtml;
+  }
+
+  get hasPlugin(): boolean {
+    // Check if artifact type exists - the dynamic viewer will determine if a plugin is registered
+    return !!this.artifact?.Type;
+  }
+
+  get artifactTypeName(): string {
+    return this.artifact?.Type || '';
+  }
+
+  get contentType(): string | undefined {
+    // Try to get content type from artifact type or attributes
+    const contentTypeAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'contenttype');
+    return contentTypeAttr?.Value || undefined;
   }
 
   get filteredAttributes(): ArtifactVersionAttributeEntity[] {
