@@ -215,6 +215,20 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     // Component initialization happens automatically via mj-react-component
   }
 
+  /**
+   * Component plugin always shows elevated display (interactive React component).
+   */
+  public override get isShowingElevatedDisplay(): boolean {
+    return true;
+  }
+
+  /**
+   * Component plugin should tell parent to show JSON tab so users can view the component spec source.
+   */
+  public override get parentShouldShowRawContent(): boolean {
+    return true;
+  }
+
   private extractComponentParts(): void {
     if (this.component?.name) {
       this.componentName = this.component?.name;

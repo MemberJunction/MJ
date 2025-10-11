@@ -48,6 +48,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public versionAttributes: ArtifactVersionAttributeEntity[] = [];
   private artifactTypeDriverClass: string | null = null;
 
+  // Cache plugin state to avoid losing it when switching tabs
+  private cachedPluginShouldShowRaw: boolean = false;
+  private cachedPluginIsElevated: boolean = false;
+
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
     if (this.refreshTrigger) {
@@ -104,6 +108,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     try {
       this.isLoading = true;
       this.error = null;
+
+      // Reset cached plugin state when loading new artifact
+      this.cachedPluginShouldShowRaw = false;
+      this.cachedPluginIsElevated = false;
 
       const md = new Metadata();
 
@@ -216,7 +224,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         // Otherwise default to JSON tab for JSON types, or Details tab as last resort
         if (this.hasDisplayTab) {
           this.activeTab = 'display';
-        } else if (this.artifact?.Type?.toLowerCase() === 'json' || this.jsonContent) {
+        } else if (this.jsonContent) {
           this.activeTab = 'json';
         } else {
           this.activeTab = 'details';
@@ -257,16 +265,17 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   get hasJsonTab(): boolean {
-    // Show JSON tab only if:
-    // 1. Plugin says parent should show raw content AND
-    // 2. Plugin is showing elevated display (e.g., displayMarkdown/displayHtml) AND
-    // 3. Content type is JSON
+    // Try to get fresh plugin state if plugin viewer is available
     const pluginInstance = this.pluginViewer?.pluginInstance;
-    if (pluginInstance?.parentShouldShowRawContent && pluginInstance?.isShowingElevatedDisplay) {
-      const ct = this.contentType?.toLowerCase() || '';
-      return ct.includes('json') || ct.includes('application/json');
+    if (pluginInstance) {
+      // Update cache with current values
+      this.cachedPluginShouldShowRaw = pluginInstance.parentShouldShowRawContent;
+      this.cachedPluginIsElevated = pluginInstance.isShowingElevatedDisplay;
     }
-    return false;
+
+    // Use cached value (or current value if plugin is available)
+    // This ensures the JSON tab doesn't disappear when switching to it
+    return this.cachedPluginShouldShowRaw;
   }
 
   get artifactTypeName(): string {

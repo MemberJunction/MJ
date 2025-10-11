@@ -130,6 +130,15 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     return !!(this.displayMarkdown || this.displayHtml);
   }
 
+  /**
+   * Override to tell parent whether to show raw JSON tab.
+   * When showing elevated display (markdown/HTML), return true so parent shows JSON tab.
+   * When showing raw JSON editor, return false (no need for duplicate JSON tab).
+   */
+  public override get parentShouldShowRawContent(): boolean {
+    return this.isShowingElevatedDisplay;
+  }
+
   private async loadVersionAttributes(): Promise<void> {
     if (!this.artifactVersion?.ID) {
       console.log('📦 JSON Plugin: No artifactVersion.ID, skipping attribute load');
