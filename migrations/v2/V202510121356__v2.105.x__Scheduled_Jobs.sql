@@ -168,7 +168,19 @@ BEGIN
                                     CONSTRAINT [DF_ScheduledJob_NotifyViaEmail] DEFAULT(0),
 
         [NotifyViaInApp]            BIT NOT NULL
-                                    CONSTRAINT [DF_ScheduledJob_NotifyViaInApp] DEFAULT(1)
+                                    CONSTRAINT [DF_ScheduledJob_NotifyViaInApp] DEFAULT(1),
+
+        -- Distributed Locking (for multi-server environments)
+        [LockToken]                 UNIQUEIDENTIFIER NULL,
+        [LockedAt]                  DATETIMEOFFSET(7) NULL,
+        [LockedByInstance]          NVARCHAR(255) NULL,
+        [ExpectedCompletionAt]      DATETIMEOFFSET(7) NULL,
+
+        -- Concurrency Control
+        [ConcurrencyMode]           NVARCHAR(20) NOT NULL
+                                    CONSTRAINT [DF_ScheduledJob_ConcurrencyMode] DEFAULT('Skip')
+                                    CONSTRAINT [CK_ScheduledJob_ConcurrencyMode]
+                                    CHECK ([ConcurrencyMode] IN ('Skip', 'Queue', 'Concurrent'))
     );
 END
 GO
@@ -341,6 +353,46 @@ EXEC sys.sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = N'NotifyViaInApp';
 GO
 
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Unique token used for distributed locking across multiple server instances. Set when a server claims the job for execution. Prevents duplicate executions in multi-server environments.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE', @level1name = N'ScheduledJob',
+    @level2type = N'COLUMN', @level2name = N'LockToken';
+GO
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Timestamp when the lock was acquired. Used with ExpectedCompletionAt to detect stale locks from crashed server instances.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE', @level1name = N'ScheduledJob',
+    @level2type = N'COLUMN', @level2name = N'LockedAt';
+GO
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Identifier of the server instance that currently holds the lock (e.g., "hostname-12345"). Used for troubleshooting and monitoring which server is executing which job.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE', @level1name = N'ScheduledJob',
+    @level2type = N'COLUMN', @level2name = N'LockedByInstance';
+GO
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Expected completion time for the current execution. If current time exceeds this and lock still exists, the lock is considered stale and can be claimed by another instance. Handles crashed server cleanup.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE', @level1name = N'ScheduledJob',
+    @level2type = N'COLUMN', @level2name = N'ExpectedCompletionAt';
+GO
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE', @level1name = N'ScheduledJob',
+    @level2type = N'COLUMN', @level2name = N'ConcurrencyMode';
+GO
+
 /******************************************************************************************
 * TABLE: ScheduledJobRun
 * Description: Tracks execution history for all scheduled jobs
@@ -379,7 +431,10 @@ BEGIN
         -- Execution Context
         [ExecutedByUserID]          UNIQUEIDENTIFIER NULL
                                     CONSTRAINT [FK_ScheduledJobRun_ExecutedByUser]
-                                    FOREIGN KEY REFERENCES [__mj].[User]([ID])
+                                    FOREIGN KEY REFERENCES [__mj].[User]([ID]),
+
+        -- Queued Execution Support
+        [QueuedAt]                  DATETIMEOFFSET(7) NULL
     );
 END
 GO
@@ -446,6 +501,14 @@ EXEC sys.sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'__mj',
     @level1type = N'TABLE', @level1name = N'ScheduledJobRun',
     @level2type = N'COLUMN', @level2name = N'ExecutedByUserID';
+GO
+
+EXEC sys.sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Timestamp when this execution was queued (for ConcurrencyMode=Queue). NULL for immediate executions. When set, indicates this run is waiting for a previous execution to complete before starting.',
+    @level0type = N'SCHEMA', @level0name = N'__mj',
+    @level1type = N'TABLE', @level1name = N'ScheduledJobRun',
+    @level2type = N'COLUMN', @level2name = N'QueuedAt';
 GO
 
 /******************************************************************************************
