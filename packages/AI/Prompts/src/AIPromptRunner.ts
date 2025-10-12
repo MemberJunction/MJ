@@ -1825,24 +1825,14 @@ export class AIPromptRunner {
       }
       
       // Set original model tracking for failover
-      // TODO: Remove type assertions after CodeGen updates entities with new fields
-      const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
-        OriginalModelID?: string;
-        OriginalRequestStartTime?: Date;
-        FailoverAttempts?: number;
-        FailoverErrors?: string;
-        FailoverDurations?: string;
-        TotalFailoverDuration?: number;
-      };
-      
-      promptRunWithFailover.OriginalModelID = model.ID;
-      promptRunWithFailover.OriginalRequestStartTime = startTime;
-      
+      promptRun.OriginalModelID = model.ID;
+      promptRun.OriginalRequestStartTime = startTime;
+
       // Initialize failover tracking fields
-      promptRunWithFailover.FailoverAttempts = 0;
-      promptRunWithFailover.FailoverErrors = null;
-      promptRunWithFailover.FailoverDurations = null;
-      promptRunWithFailover.TotalFailoverDuration = 0;
+      promptRun.FailoverAttempts = 0;
+      promptRun.FailoverErrors = null;
+      promptRun.FailoverDurations = null;
+      promptRun.TotalFailoverDuration = 0;
       
       // Check if model has pre-selected vendor info from selectModel
       const modelWithVendor = model as AIModelEntityExtended & { 
@@ -2309,28 +2299,18 @@ export class AIPromptRunner {
     currentModel: AIModelEntityExtended,
     currentVendorId: string | null
   ): void {
-    // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
-      OriginalModelID?: string;
-      OriginalRequestStartTime?: Date;
-      FailoverAttempts?: number;
-      FailoverErrors?: string;
-      FailoverDurations?: string;
-      TotalFailoverDuration?: number;
-    };
-    
-    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
-    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+    promptRun.FailoverAttempts = failoverAttempts.length;
+    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
       vendor: a.vendorId,
       error: a.error.message,
       errorType: a.errorType
     })));
-    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-    
+    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+
     // Update ModelID if we ended up using a different model
-    if (currentModel.ID !== promptRunWithFailover.OriginalModelID) {
+    if (currentModel.ID !== promptRun.OriginalModelID) {
       promptRun.ModelID = currentModel.ID;
     }
     if (currentVendorId && currentVendorId !== promptRun.VendorID) {
@@ -2345,25 +2325,15 @@ export class AIPromptRunner {
     promptRun: AIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
-    // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
-      OriginalModelID?: string;
-      OriginalRequestStartTime?: Date;
-      FailoverAttempts?: number;
-      FailoverErrors?: string;
-      FailoverDurations?: string;
-      TotalFailoverDuration?: number;
-    };
-    
-    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
-    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+    promptRun.FailoverAttempts = failoverAttempts.length;
+    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
       vendor: a.vendorId,
       error: a.error.message,
       errorType: a.errorType
     })));
-    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
   }
 
   /**
@@ -3878,21 +3848,12 @@ export class AIPromptRunner {
    * implement custom failover configuration logic.
    */
   protected getFailoverConfiguration(prompt: AIPromptEntityExtended): FailoverConfiguration {
-    // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptWithFailover = prompt as AIPromptEntityExtended & {
-      FailoverStrategy?: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
-      FailoverMaxAttempts?: number;
-      FailoverDelaySeconds?: number;
-      FailoverModelStrategy?: 'PreferSameModel' | 'PreferDifferentModel' | 'RequireSameModel';
-      FailoverErrorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly';
-    };
-    
     return {
-      strategy: promptWithFailover.FailoverStrategy || 'None',
-      maxAttempts: promptWithFailover.FailoverMaxAttempts || 3,
-      delaySeconds: promptWithFailover.FailoverDelaySeconds || 1,
-      modelStrategy: promptWithFailover.FailoverModelStrategy || 'PreferSameModel',
-      errorScope: promptWithFailover.FailoverErrorScope || 'All'
+      strategy: prompt.FailoverStrategy || 'None',
+      maxAttempts: prompt.FailoverMaxAttempts || 3,
+      delaySeconds: prompt.FailoverDelaySeconds || 1,
+      modelStrategy: prompt.FailoverModelStrategy || 'PreferSameModel',
+      errorScope: prompt.FailoverErrorScope || 'All'
     };
   }
 
