@@ -282,10 +282,10 @@ export class ErrorAnalyzer {
             case 'NetworkError':           // Different provider/region may be reachable
             case 'ModelError':             // Different provider may have working model
             case 'ContextLengthExceeded':  // Different model may have larger context
+            case 'Authentication':         // Different vendor may have valid API key
                 return true;
 
             // Clear client-side errors - DO NOT failover (won't help)
-            case 'Authentication':         // Invalid API key won't work elsewhere
             case 'InvalidRequest':         // Malformed request won't work elsewhere
                 return false;
 

@@ -2118,6 +2118,9 @@ export class AIPromptRunner {
       try {
         // Log the attempt if not the first one
         if (attemptNumber > 1) {
+          const vendorName = currentVendorId
+            ? AIEngine.Instance.Vendors.find(v => v.ID === currentVendorId)?.Name || 'Unknown'
+            : 'default';
           LogStatusEx({
             message: `🔄 Failover attempt ${attemptNumber} with model ${currentModel.Name} (vendor: ${currentVendorId || 'default'})`,
             category: 'AI',
@@ -2161,53 +2164,62 @@ export class AIPromptRunner {
         };
         failoverAttempts.push(failoverAttempt);
         
-        // Check if we should attempt failover
+        // Handle authentication errors by removing all candidates from the failed vendor
+        allCandidates = this.filterAuthenticationFailedVendor(
+          errorAnalysis.errorType,
+          currentVendorId,
+          allCandidates
+        );
+
+        // Check if we should retry for rate limit (before attempting failover)
+        const shouldContinueRateLimit = await this.handleRateLimitRetry(
+          errorAnalysis,
+          currentModel,
+          currentVendorId,
+          failoverAttempts,
+          prompt,
+          attemptNumber,
+          failoverConfig.maxAttempts,
+          failoverAttempt
+        );
+
+        if (shouldContinueRateLimit) {
+          continue; // Retry same model/vendor after backoff
+        }
+
+        // Check if we should attempt failover (different model/vendor)
         const shouldFailover = this.shouldAttemptFailover(
           lastError, failoverConfig, attemptNumber
         );
-        
+
         if (!shouldFailover) {
           // Log the final failure
           this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
           break;
         }
-        
-        // Select next candidate
-        const nextCandidates = this.selectFailoverCandidates(
+
+        // Transition to next candidate
+        const transitionResult = await this.transitionToNextCandidate(
           currentModel,
           currentVendorId,
-          failoverConfig.strategy,
-          failoverConfig.modelStrategy,
+          failoverConfig,
           allCandidates,
-          failoverAttempts
+          failoverAttempts,
+          prompt.ID,
+          failoverAttempt,
+          attemptNumber
         );
-        
-        if (nextCandidates.length === 0) {
-          // No more candidates available
-          this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-          break;
+
+        if (!transitionResult) {
+          break; // No more candidates available
         }
-        
-        // Get the next candidate
-        const nextCandidate = nextCandidates[0];
-        currentModel = nextCandidate.model;
-        currentVendorId = nextCandidate.vendorId;
-        // Update vendor info for the next attempt
-        vendorDriverClass = nextCandidate.driverClass;
-        vendorApiName = nextCandidate.apiName;
-        vendorSupportsEffortLevel = nextCandidate.supportsEffortLevel;
-        
-        // Log the attempt
-        this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
-        
-        // Wait before retry (if not the last attempt)
-        if (attemptNumber < failoverConfig.maxAttempts) {
-          const delay = this.calculateFailoverDelay(
-            attemptNumber, 
-            failoverConfig.delaySeconds
-          );
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
+
+        // Update current state with next candidate
+        currentModel = transitionResult.model;
+        currentVendorId = transitionResult.vendorId;
+        vendorDriverClass = transitionResult.driverClass;
+        vendorApiName = transitionResult.apiName;
+        vendorSupportsEffortLevel = transitionResult.supportsEffortLevel;
       }
     }
     
@@ -2786,7 +2798,20 @@ export class AIPromptRunner {
   /**
    * Applies retry delay based on the prompt's retry strategy
    */
-  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number): Promise<void> {
+  /**
+   * Calculates retry delay for rate limit and other retriable errors.
+   * Uses the prompt's RetryStrategy and can respect suggested delays from provider.
+   */
+  private calculateRetryDelay(
+    prompt: AIPromptEntityExtended,
+    attemptNumber: number,
+    suggestedDelaySeconds?: number
+  ): number {
+    // Use provider's suggested delay if available
+    if (suggestedDelaySeconds && suggestedDelaySeconds > 0) {
+      return suggestedDelaySeconds * 1000; // Convert to milliseconds
+    }
+
     const baseDelay = prompt.RetryDelayMS || 1000; // Default 1 second
     let delay = baseDelay;
 
@@ -2804,10 +2829,160 @@ export class AIPromptRunner {
         delay = baseDelay;
     }
 
-    LogStatus(`   Applying retry delay: ${delay}ms (strategy: ${prompt.RetryStrategy})`);
+    return delay;
+  }
+
+  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
+    const delay = this.calculateRetryDelay(prompt, attemptNumber, suggestedDelaySeconds);
+    const delaySeconds = (delay / 1000).toFixed(1);
+    LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
+  /**
+   * Filters out all candidates from a vendor when authentication fails.
+   * Authentication errors indicate invalid API keys which affect all models from that vendor.
+   */
+  private filterAuthenticationFailedVendor(
+    errorType: string,
+    currentVendorId: string | undefined,
+    allCandidates: ModelVendorCandidate[]
+  ): ModelVendorCandidate[] {
+    if (errorType !== 'Authentication') {
+      return allCandidates; // No filtering needed for non-auth errors
+    }
+
+    const failedVendorId = currentVendorId || 'default';
+    const beforeCount = allCandidates.length;
+
+    // Filter out ALL candidates from this vendor
+    const filteredCandidates = allCandidates.filter(c =>
+      (c.vendorId || 'default') !== failedVendorId
+    );
+
+    const removedCount = beforeCount - filteredCandidates.length;
+    if (removedCount > 0) {
+      const vendorName = AIEngine.Instance.Vendors.find(v => v.ID === failedVendorId)?.Name || failedVendorId;
+      const remainingCount = filteredCandidates.length;
+      this.logStatus(
+        `   🔒 Invalid API key for ${vendorName} - excluding ${removedCount} model${removedCount === 1 ? '' : 's'} from this vendor (${remainingCount} remaining)`,
+        true
+      );
+    }
+
+    return filteredCandidates;
+  }
+
+  /**
+   * Handles rate limit errors by retrying the same model/vendor with backoff.
+   * Returns true if the caller should continue (retry), false if should proceed to failover.
+   */
+  private async handleRateLimitRetry(
+    errorAnalysis: { errorType: string; suggestedRetryDelaySeconds?: number },
+    currentModel: AIModelEntityExtended,
+    currentVendorId: string | undefined,
+    failoverAttempts: FailoverAttempt[],
+    prompt: AIPromptEntityExtended,
+    attemptNumber: number,
+    maxAttempts: number,
+    failoverAttempt: FailoverAttempt
+  ): Promise<boolean> {
+    const isRateLimit = errorAnalysis.errorType === 'RateLimit';
+    if (!isRateLimit) {
+      return false; // Not a rate limit error
+    }
+
+    // Count how many times we've retried this specific model/vendor for rate limits
+    const rateLimitRetryCount = failoverAttempts.filter(a =>
+      a.modelId === currentModel.ID &&
+      a.vendorId === currentVendorId &&
+      a.errorType === 'RateLimit'
+    ).length;
+
+    // Use MaxRetries from prompt configuration, default to 3 if not set
+    const maxRetries = prompt.MaxRetries ?? 3;
+
+    // Retry up to MaxRetries times before giving up and failing over
+    const shouldRetry = rateLimitRetryCount <= maxRetries;
+
+    if (shouldRetry) {
+      const modelName = currentModel.Name;
+      const vendorName = currentVendorId
+        ? AIEngine.Instance.Vendors.find(v => v.ID === currentVendorId)?.Name || 'default'
+        : 'default';
+
+      this.logStatus(
+        `   ⏳ Rate limit hit - retrying ${modelName} (${vendorName}) with backoff (attempt ${rateLimitRetryCount}/${maxRetries})`,
+        true
+      );
+      this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
+
+      // Apply backoff delay before retry
+      if (attemptNumber < maxAttempts) {
+        await this.applyRetryDelay(prompt, rateLimitRetryCount, errorAnalysis.suggestedRetryDelaySeconds);
+      }
+
+      return true; // Signal to continue with same model/vendor
+    }
+
+    return false; // Too many retries, proceed to failover
+  }
+
+  /**
+   * Transitions to the next failover candidate.
+   * Returns the next candidate info or null if no candidates are available.
+   */
+  private async transitionToNextCandidate(
+    currentModel: AIModelEntityExtended,
+    currentVendorId: string | undefined,
+    failoverConfig: FailoverConfiguration,
+    allCandidates: ModelVendorCandidate[],
+    failoverAttempts: FailoverAttempt[],
+    promptId: string,
+    failoverAttempt: FailoverAttempt,
+    attemptNumber: number
+  ): Promise<{
+    model: AIModelEntityExtended;
+    vendorId: string | undefined;
+    driverClass: string;
+    apiName: string | undefined;
+    supportsEffortLevel: boolean;
+  } | null> {
+    // Select next candidate using failover strategy
+    const nextCandidates = this.selectFailoverCandidates(
+      currentModel,
+      currentVendorId,
+      failoverConfig.strategy,
+      failoverConfig.modelStrategy,
+      allCandidates,
+      failoverAttempts
+    );
+
+    if (nextCandidates.length === 0) {
+      // No more candidates available
+      this.logFailoverAttempt(promptId, failoverAttempt, false);
+      return null;
+    }
+
+    const nextCandidate = nextCandidates[0];
+
+    // Log the successful transition
+    this.logFailoverAttempt(promptId, failoverAttempt, true);
+
+    // Apply delay before next attempt (if not the last attempt)
+    if (attemptNumber < failoverConfig.maxAttempts) {
+      const delay = this.calculateFailoverDelay(attemptNumber, failoverConfig.delaySeconds);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    return {
+      model: nextCandidate.model,
+      vendorId: nextCandidate.vendorId,
+      driverClass: nextCandidate.driverClass,
+      apiName: nextCandidate.apiName,
+      supportsEffortLevel: nextCandidate.supportsEffortLevel || false
+    };
+  }
 
   /**
    * Provides a human-readable description of the validation decision
@@ -3824,10 +3999,12 @@ export class AIPromptRunner {
     attemptHistory: FailoverAttempt[]
   ): ModelVendorCandidate[] {
     // Filter out candidates that have already failed
+    // Note: Authentication errors are already filtered from allCandidates upstream,
+    // so we only need to filter out specific model/vendor pairs that have failed
     const failedPairs = new Set(
       attemptHistory.map(a => `${a.modelId}:${a.vendorId || 'default'}`)
     );
-    
+
     const availableCandidates = allCandidates.filter(c => {
       const key = `${c.model.ID}:${c.vendorId || 'default'}`;
       return !failedPairs.has(key);
