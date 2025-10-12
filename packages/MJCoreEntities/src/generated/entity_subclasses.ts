@@ -1885,11 +1885,17 @@ export const AIPromptSchema = z.object({
         * * Display Name: Top Log Probs
         * * SQL Data Type: int
         * * Description: Default number of top log probabilities to include when IncludeLogProbs is true. Can be overridden at runtime.`),
-    FailoverStrategy: z.string().describe(`
+    FailoverStrategy: z.union([z.literal('NextBestModel'), z.literal('None'), z.literal('PowerRank'), z.literal('SameModelDifferentVendor')]).describe(`
         * * Field Name: FailoverStrategy
         * * Display Name: Failover Strategy
         * * SQL Data Type: nvarchar(50)
         * * Default Value: SameModelDifferentVendor
+    * * Value List Type: List
+    * * Possible Values 
+    *   * NextBestModel
+    *   * PowerRank
+    *   * None
+    *   * SameModelDifferentVendor
         * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
     FailoverMaxAttempts: z.number().nullable().describe(`
         * * Field Name: FailoverMaxAttempts
@@ -1903,17 +1909,28 @@ export const AIPromptSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Initial delay in seconds between failover attempts`),
-    FailoverModelStrategy: z.string().describe(`
+    FailoverModelStrategy: z.union([z.literal('PreferDifferentModel'), z.literal('PreferSameModel'), z.literal('RequireSameModel')]).describe(`
         * * Field Name: FailoverModelStrategy
         * * Display Name: Failover Model Strategy
         * * SQL Data Type: nvarchar(50)
         * * Default Value: PreferSameModel
+    * * Value List Type: List
+    * * Possible Values 
+    *   * PreferSameModel
+    *   * RequireSameModel
+    *   * PreferDifferentModel
         * * Description: Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel`),
-    FailoverErrorScope: z.string().describe(`
+    FailoverErrorScope: z.union([z.literal('All'), z.literal('NetworkOnly'), z.literal('RateLimitOnly'), z.literal('ServiceErrorOnly')]).describe(`
         * * Field Name: FailoverErrorScope
         * * Display Name: Failover Error Scope
         * * SQL Data Type: nvarchar(50)
         * * Default Value: All
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ServiceErrorOnly
+    *   * All
+    *   * RateLimitOnly
+    *   * NetworkOnly
         * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly`),
     EffortLevel: z.number().nullable().describe(`
         * * Field Name: EffortLevel
@@ -8098,10 +8115,16 @@ export const AIAgentRunStepSchema = z.object({
         * * Display Name: Payload At End
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON serialization of the Payload state at the end of this step`),
-    FinalPayloadValidationResult: z.string().nullable().describe(`
+    FinalPayloadValidationResult: z.union([z.literal('Fail'), z.literal('Pass'), z.literal('Retry'), z.literal('Warn')]).nullable().describe(`
         * * Field Name: FinalPayloadValidationResult
         * * Display Name: Final Payload Validation Result
         * * SQL Data Type: nvarchar(25)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Warn
+    *   * Retry
+    *   * Fail
+    *   * Pass
         * * Description: Result of the final payload validation for this step. Pass indicates successful
 validation, Retry means validation failed but will retry, Fail means validation failed
 permanently, Warn means validation failed but execution continues.`),
@@ -19506,9 +19529,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * CacheSimilarityThreshold: This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
     * * CacheTTLSeconds: This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
     * * EffortLevel: This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
-    * * FailoverErrorScope: This rule ensures that the FailoverErrorScope field, if set, can only be 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', or 'All'. It can also be left blank (no value). Any other value is not allowed.
-    * * FailoverModelStrategy: This rule ensures that the Failover Model Strategy can only be 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not specified). No other values are allowed.
-    * * FailoverStrategy: This rule ensures that the Failover Strategy field can only be set to one of the following values: 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.
     * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
     * * Table-Level: This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
     * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
@@ -19523,9 +19543,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
         this.ValidateCacheSimilarityThresholdBetweenZeroAndOne(result);
         this.ValidateCacheTTLSecondsIsPositive(result);
         this.ValidateEffortLevelIsBetween1And100(result);
-        this.ValidateFailoverErrorScopeAgainstAllowedValues(result);
-        this.ValidateFailoverModelStrategyAgainstAllowedValues(result);
-        this.ValidateFailoverStrategyAllowedValues(result);
         this.ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result);
         this.ValidateOutputExampleRequiredWhenOutputTypeIsObject(result);
         this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
@@ -19569,59 +19586,6 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
     	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
     		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort Level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the FailoverErrorScope field, if set, can only be 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', or 'All'. It can also be left blank (no value). Any other value is not allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFailoverErrorScopeAgainstAllowedValues(result: ValidationResult) {
-    	if (
-    		this.FailoverErrorScope != null &&
-    		this.FailoverErrorScope !== "ServiceErrorOnly" &&
-    		this.FailoverErrorScope !== "RateLimitOnly" &&
-    		this.FailoverErrorScope !== "NetworkOnly" &&
-    		this.FailoverErrorScope !== "All"
-    	) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FailoverErrorScope",
-    			"FailoverErrorScope can only be 'ServiceErrorOnly', 'RateLimitOnly', 'NetworkOnly', or 'All'.",
-    			this.FailoverErrorScope,
-    			ValidationErrorType.Failure
-    		));
-    	}
-    }
-
-    /**
-    * This rule ensures that the Failover Model Strategy can only be 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank (not specified). No other values are allowed.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFailoverModelStrategyAgainstAllowedValues(result: ValidationResult) {
-    	if (this.FailoverModelStrategy != null && this.FailoverModelStrategy !== "RequireSameModel" && this.FailoverModelStrategy !== "PreferDifferentModel" && this.FailoverModelStrategy !== "PreferSameModel") {
-    		result.Errors.push(new ValidationErrorInfo("FailoverModelStrategy", "Failover Model Strategy must be one of: 'RequireSameModel', 'PreferDifferentModel', 'PreferSameModel', or left blank.", this.FailoverModelStrategy, ValidationErrorType.Failure));
-    	}
-    }
-
-    /**
-    * This rule ensures that the Failover Strategy field can only be set to one of the following values: 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank.
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFailoverStrategyAllowedValues(result: ValidationResult) {
-    	if (
-    		this.FailoverStrategy != null &&
-    		this.FailoverStrategy !== "None" &&
-    		this.FailoverStrategy !== "PowerRank" &&
-    		this.FailoverStrategy !== "NextBestModel" &&
-    		this.FailoverStrategy !== "SameModelDifferentVendor"
-    	) {
-    		result.Errors.push(new ValidationErrorInfo("FailoverStrategy", "FailoverStrategy must be 'None', 'PowerRank', 'NextBestModel', 'SameModelDifferentVendor', or left blank (null).", this.FailoverStrategy, ValidationErrorType.Failure));
     	}
     }
 
@@ -20349,12 +20313,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Failover Strategy
     * * SQL Data Type: nvarchar(50)
     * * Default Value: SameModelDifferentVendor
+    * * Value List Type: List
+    * * Possible Values 
+    *   * NextBestModel
+    *   * PowerRank
+    *   * None
+    *   * SameModelDifferentVendor
     * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
     */
-    get FailoverStrategy(): string {
+    get FailoverStrategy(): 'NextBestModel' | 'None' | 'PowerRank' | 'SameModelDifferentVendor' {
         return this.Get('FailoverStrategy');
     }
-    set FailoverStrategy(value: string) {
+    set FailoverStrategy(value: 'NextBestModel' | 'None' | 'PowerRank' | 'SameModelDifferentVendor') {
         this.Set('FailoverStrategy', value);
     }
 
@@ -20391,12 +20361,17 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Failover Model Strategy
     * * SQL Data Type: nvarchar(50)
     * * Default Value: PreferSameModel
+    * * Value List Type: List
+    * * Possible Values 
+    *   * PreferSameModel
+    *   * RequireSameModel
+    *   * PreferDifferentModel
     * * Description: Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel
     */
-    get FailoverModelStrategy(): string {
+    get FailoverModelStrategy(): 'PreferDifferentModel' | 'PreferSameModel' | 'RequireSameModel' {
         return this.Get('FailoverModelStrategy');
     }
-    set FailoverModelStrategy(value: string) {
+    set FailoverModelStrategy(value: 'PreferDifferentModel' | 'PreferSameModel' | 'RequireSameModel') {
         this.Set('FailoverModelStrategy', value);
     }
 
@@ -20405,12 +20380,18 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Display Name: Failover Error Scope
     * * SQL Data Type: nvarchar(50)
     * * Default Value: All
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ServiceErrorOnly
+    *   * All
+    *   * RateLimitOnly
+    *   * NetworkOnly
     * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly
     */
-    get FailoverErrorScope(): string {
+    get FailoverErrorScope(): 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly' {
         return this.Get('FailoverErrorScope');
     }
-    set FailoverErrorScope(value: string) {
+    set FailoverErrorScope(value: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly') {
         this.Set('FailoverErrorScope', value);
     }
 
@@ -36074,7 +36055,6 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
 
     /**
     * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * FinalPayloadValidationResult: This rule ensures that if the FinalPayloadValidationResult field has a value, it must be one of the following: 'Warn', 'Fail', 'Retry', or 'Pass'. The field can also be empty (null).
     * * StepNumber: This rule ensures that the step number must be greater than zero.
     * @public
     * @method
@@ -36082,34 +36062,10 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateFinalPayloadValidationResultAllowedValues(result);
         this.ValidateStepNumberGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
-    }
-
-    /**
-    * This rule ensures that if the FinalPayloadValidationResult field has a value, it must be one of the following: 'Warn', 'Fail', 'Retry', or 'Pass'. The field can also be empty (null).
-    * @param result - the ValidationResult object to add any errors or warnings to
-    * @public
-    * @method
-    */
-    public ValidateFinalPayloadValidationResultAllowedValues(result: ValidationResult) {
-    	if (
-    		this.FinalPayloadValidationResult != null &&
-    		this.FinalPayloadValidationResult !== "Warn" &&
-    		this.FinalPayloadValidationResult !== "Fail" &&
-    		this.FinalPayloadValidationResult !== "Retry" &&
-    		this.FinalPayloadValidationResult !== "Pass"
-    	) {
-    		result.Errors.push(new ValidationErrorInfo(
-    			"FinalPayloadValidationResult",
-    			"FinalPayloadValidationResult must be 'Warn', 'Fail', 'Retry', or 'Pass' if it is provided.",
-    			this.FinalPayloadValidationResult,
-    			ValidationErrorType.Failure
-    		));
-    	}
     }
 
     /**
@@ -36375,14 +36331,20 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     * * Field Name: FinalPayloadValidationResult
     * * Display Name: Final Payload Validation Result
     * * SQL Data Type: nvarchar(25)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Warn
+    *   * Retry
+    *   * Fail
+    *   * Pass
     * * Description: Result of the final payload validation for this step. Pass indicates successful
 validation, Retry means validation failed but will retry, Fail means validation failed
 permanently, Warn means validation failed but execution continues.
     */
-    get FinalPayloadValidationResult(): string | null {
+    get FinalPayloadValidationResult(): 'Fail' | 'Pass' | 'Retry' | 'Warn' | null {
         return this.Get('FinalPayloadValidationResult');
     }
-    set FinalPayloadValidationResult(value: string | null) {
+    set FinalPayloadValidationResult(value: 'Fail' | 'Pass' | 'Retry' | 'Warn' | null) {
         this.Set('FinalPayloadValidationResult', value);
     }
 
