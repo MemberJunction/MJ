@@ -483,8 +483,8 @@ export class AIPromptRunner {
     let allCandidates: ModelVendorCandidate[] = [];
 
     if (modelSelectionInfo) {
-      // we receivd model selection info, need to lookup vendor driver class and api name from there
-      const vendorID = modelSelectionInfo.vendorSelected.ID;
+      // we received model selection info, need to lookup vendor driver class and api name from there
+      const vendorID = modelSelectionInfo.vendorSelected?.ID;
       const modelID = modelSelectionInfo.modelSelected.ID;
       const modelVendor = AIEngine.Instance.ModelVendors.find(mv => mv.VendorID === vendorID &&
                                                                     mv.ModelID === modelID);
@@ -493,6 +493,9 @@ export class AIPromptRunner {
         vendorApiName = modelVendor.APIName;
         vendorSupportsEffortLevel = modelVendor.SupportsEffortLevel;
       }
+
+      // Extract valid candidates from selection info for retry logic
+      allCandidates = this.buildCandidatesFromSelectionInfo(modelSelectionInfo);
     }
 
     if (!selectedModel) {
@@ -1168,19 +1171,19 @@ export class AIPromptRunner {
           vendorApiName: undefined,
           vendorSupportsEffortLevel: undefined,
           allCandidates: [],
-          selectionInfo: {
+          selectionInfo: this.createSelectionInfo({
             aiConfiguration: configuration,
             modelsConsidered: [],
             modelSelected: undefined as any, // Type requirement, but null model means no selection
             selectionReason: 'No suitable model candidates found',
             fallbackUsed: false,
             selectionStrategy
-          }
+          })
         };
       }
 
       // this.logStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`, true, params);
-      
+
       // if (candidates.length <= 5) {
       //   candidates.forEach((c, i) => {
       //     this.logStatus(`   ${i + 1}. ${c.model.Name} via ${c.vendorName || 'default'} (${c.driverClass}) - Priority: ${c.priority}${c.isPreferredVendor ? ' [PREFERRED]' : ''}`, true, params);
@@ -1189,7 +1192,7 @@ export class AIPromptRunner {
 
       // Select the first candidate with an available API key and track all attempts
       const { selected, consideredModels } = await this.selectModelWithAPIKeyTracked(candidates, params);
-      
+
       // Merge considered models into our tracking
       modelsConsidered.push(...consideredModels);
 
@@ -1201,14 +1204,14 @@ export class AIPromptRunner {
           vendorApiName: undefined,
           vendorSupportsEffortLevel: undefined,
           allCandidates: candidates,
-          selectionInfo: {
+          selectionInfo: this.createSelectionInfo({
             aiConfiguration: configuration,
             modelsConsidered,
             modelSelected: undefined as any, // Type requirement, but null model means no selection
             selectionReason: 'No API keys found for any model-vendor combination',
             fallbackUsed: false,
             selectionStrategy
-          }
+          })
         };
       }
 
@@ -1244,7 +1247,7 @@ export class AIPromptRunner {
         vendorApiName: selected.apiName,
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
         allCandidates: candidates,
-        selectionInfo: {
+        selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
           modelsConsidered,
           modelSelected: selected.model,
@@ -1252,7 +1255,7 @@ export class AIPromptRunner {
           selectionReason,
           fallbackUsed,
           selectionStrategy
-        }
+        })
       };
     } catch (error) {
       this.logError(error, {
@@ -1266,14 +1269,14 @@ export class AIPromptRunner {
         vendorApiName: undefined,
         vendorSupportsEffortLevel: undefined,
         allCandidates: [],
-        selectionInfo: {
+        selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
           modelsConsidered: [],
           modelSelected: undefined as any, // Type requirement, but null model means no selection
           selectionReason: `Error during model selection: ${error.message}`,
           fallbackUsed: false,
           selectionStrategy: 'Default'
-        }
+        })
       };
     }
   }
@@ -1613,9 +1616,68 @@ export class AIPromptRunner {
   }
 
   /**
+   * Creates a properly typed AIModelSelectionInfo instance.
+   * TypeScript requires instantiating the class to get the getValidCandidates() method.
+   */
+  private createSelectionInfo(data: {
+    aiConfiguration?: AIConfigurationEntity;
+    modelsConsidered: Array<{
+      model: AIModelEntityExtended;
+      vendor?: AIVendorEntity;
+      priority: number;
+      available: boolean;
+      unavailableReason?: string;
+    }>;
+    modelSelected: AIModelEntityExtended;
+    vendorSelected?: AIVendorEntity;
+    selectionReason: string;
+    fallbackUsed: boolean;
+    selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
+  }): AIModelSelectionInfo {
+    const info = new AIModelSelectionInfo();
+    Object.assign(info, data);
+    return info;
+  }
+
+  /**
+   * Converts model selection info into ModelVendorCandidate array for retry logic.
+   * Extracts only the valid candidates (those with available API keys) from the selection info.
+   *
+   * @param selectionInfo - Model selection information containing considered models
+   * @returns Array of valid model-vendor candidates sorted by priority
+   */
+  private buildCandidatesFromSelectionInfo(
+    selectionInfo: AIModelSelectionInfo
+  ): ModelVendorCandidate[] {
+    const validModels = selectionInfo.extractValidCandidates();
+
+    return validModels.map(considered => {
+      // Find matching model vendor for driver and API info
+      const modelVendor = considered.vendor
+        ? AIEngine.Instance.ModelVendors.find(mv =>
+            mv.ModelID === considered.model.ID &&
+            mv.VendorID === considered.vendor!.ID
+          )
+        : undefined;
+
+      return {
+        model: considered.model,
+        vendorId: considered.vendor?.ID,
+        vendorName: considered.vendor?.Name,
+        driverClass: modelVendor?.DriverClass || considered.model.DriverClass,
+        apiName: modelVendor?.APIName || considered.model.APIName,
+        supportsEffortLevel: modelVendor?.SupportsEffortLevel ?? considered.model.SupportsEffortLevel ?? false,
+        isPreferredVendor: false, // Can't determine from selection info alone
+        priority: considered.priority,
+        source: (selectionInfo.selectionStrategy === 'ByPower' ? 'power-rank' : 'model-type') as 'power-rank' | 'model-type'
+      };
+    }).sort((a, b) => b.priority - a.priority); // Sort by priority descending
+  }
+
+  /**
    * Enhanced version of selectModelWithAPIKey that tracks all considered models
    * for model selection reporting.
-   * 
+   *
    * @param candidates - Ordered array of model-vendor candidates
    * @param params - Optional prompt parameters for verbose logging
    * @returns Object containing selected candidate and all considered models
@@ -1641,12 +1703,9 @@ export class AIPromptRunner {
       available: boolean;
       unavailableReason?: string;
     }> = [];
-    
-    let attemptCount = 0;
-    
+
+    // Check ALL candidates to build complete list of valid and invalid options
     for (const candidate of candidates) {
-      attemptCount++;
-      
       // Check cache first
       let hasKey: boolean;
       if (checkedDrivers.has(candidate.driverClass)) {
@@ -1657,14 +1716,14 @@ export class AIPromptRunner {
         hasKey = this.isValidAPIKey(apiKey);
         checkedDrivers.set(candidate.driverClass, hasKey);
       }
-      
+
       // Get vendor entity from AIEngine cache if vendorId is available
       let vendorEntity: AIVendorEntity | undefined;
       if (candidate.vendorId) {
         vendorEntity = AIEngine.Instance.Vendors.find(v => v.ID === candidate.vendorId);
       }
-      
-      // Track this model as considered
+
+      // Track this model as considered with availability status
       consideredModels.push({
         model: candidate.model,
         vendor: vendorEntity,
@@ -1672,33 +1731,40 @@ export class AIPromptRunner {
         available: hasKey,
         unavailableReason: hasKey ? undefined : `No API key for driver ${candidate.driverClass}`
       });
-      
-      if (hasKey) {
-        this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`, true);
-        if (candidate.isPreferredVendor) {
-          this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
-        }
-        this.logStatus(`   Checked ${attemptCount} candidate(s) before finding valid API key`, true, params);
-        return { selected: candidate, consideredModels };
-      }
     }
-    
-    // Log what we tried
-    const triedSummary = candidates.slice(0, 5).map(c => 
-      `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
-    ).join(', ');
-    
-    this.logError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`, {
-      category: 'APIKeyValidation',
-      severity: 'critical',
-      metadata: {
-        candidatesChecked: candidates.length,
-        modelsChecked: consideredModels.length
-      },
-      maxErrorLength: params?.maxErrorLength
-    });
-    
-    return { selected: null, consideredModels };
+
+    // Select the first available candidate (highest priority with API key)
+    const selected = consideredModels.find(m => m.available);
+    const selectedCandidate = selected ? candidates.find(c =>
+      c.model.ID === selected.model.ID &&
+      c.vendorId === selected.vendor?.ID
+    ) : null;
+
+    if (selectedCandidate) {
+      const validCount = consideredModels.filter(m => m.available).length;
+      this.logStatus(`   Selected model ${selectedCandidate.model.Name} with ${selectedCandidate.vendorName || 'default'} vendor (driver: ${selectedCandidate.driverClass})`, true);
+      if (selectedCandidate.isPreferredVendor) {
+        this.logStatus(`   Using preferred vendor${selectedCandidate.vendorId ? ` (${selectedCandidate.vendorName})` : ''}`, true, params);
+      }
+      this.logStatus(`   Found ${validCount} valid candidate(s) out of ${candidates.length} total`, true, params);
+    } else {
+      // Log what we tried
+      const triedSummary = candidates.slice(0, 5).map(c =>
+        `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
+      ).join(', ');
+
+      this.logError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`, {
+        category: 'APIKeyValidation',
+        severity: 'critical',
+        metadata: {
+          candidatesChecked: candidates.length,
+          modelsChecked: consideredModels.length
+        },
+        maxErrorLength: params?.maxErrorLength
+      });
+    }
+
+    return { selected: selectedCandidate, consideredModels };
   }
  
   /**
@@ -2042,7 +2108,6 @@ export class AIPromptRunner {
       // Fallback to old behavior if somehow candidates weren't provided
       // This maintains backward compatibility but shouldn't normally be reached
       allCandidates = await this.buildFailoverCandidates(prompt);
-      LogStatus('⚠️ Warning: Failover candidates not provided from initial selection, rebuilding (may not respect configuration boundaries)');
     }
 
     // Main failover loop
