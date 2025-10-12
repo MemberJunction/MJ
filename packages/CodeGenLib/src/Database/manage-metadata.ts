@@ -1563,9 +1563,31 @@ NumberedRows AS (
       // This regex checks for the overall structure including field name and 'OR' sequences
       // an example of a valid constraint definition would be: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName]='Value3')
       // like: ([AutoRunIntervalUnits]='Years' OR [AutoRunIntervalUnits]='Months' OR [AutoRunIntervalUnits]='Weeks' OR [AutoRunIntervalUnits]='Days' OR [AutoRunIntervalUnits]='Hours' OR [AutoRunIntervalUnits]='Minutes')
+      // Also handles constraints with optional NULL: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName] IS NULL)
+      // Also handles nested NULL pattern: ([FieldName] IS NULL OR ([FieldName]='Value1' OR [FieldName]='Value2'))
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
-      const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");      
-      const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
+      const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
+
+      // Check for nested pattern: ([Field] IS NULL OR ([Field]='Value1' OR ...))
+      const nestedNullRegex = new RegExp(`^\\(\\[${fieldName}\\] IS NULL OR \\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)\\)$`);
+      if (nestedNullRegex.test(processedConstraint)) {
+         // Extract values from nested pattern - same extraction logic works
+         const valueRegex = new RegExp(`\\[${fieldName}\\]='([^']+)\'`, 'g');
+         let match;
+         const possibleValues: string[] = [];
+         while ((match = valueRegex.exec(processedConstraint)) !== null) {
+            if (match.index === valueRegex.lastIndex) {
+               valueRegex.lastIndex++;
+            }
+            if (match[1]) {
+               possibleValues.push(match[1]);
+            }
+         }
+         return possibleValues.length > 0 ? possibleValues : null;
+      }
+
+      // Check for standard pattern with optional trailing IS NULL
+      const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+(?: OR \\[${fieldName}\\] IS NULL)?\\)$`);
       if (!structureRegex.test(processedConstraint)) {
          // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of
          // check constraints that are not simple OR conditions
