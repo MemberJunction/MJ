@@ -214,6 +214,8 @@ export class ${serverGraphQLTypeName} {`;
       case 'uniqueidentifier': //treat this as a string
         return '';
       case 'datetime':
+      case 'datetime2':
+      case 'smalldatetime':
       case 'datetimeoffset':
       case 'date':
       case 'time':
