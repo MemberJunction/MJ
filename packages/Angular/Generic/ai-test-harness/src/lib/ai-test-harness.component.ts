@@ -1397,27 +1397,24 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
             // Update assistant message with result
             assistantMessage.isStreaming = false;
-            
+
             if (executionResult?.success) {
-                // Parse the payload to get the full execution result
+                // executionResult is now an ExecuteAgentResult from the GraphQL client
+                // It has already been parsed and contains: success, payload, agentRun, etc.
                 const parseOptions: ParseJSONOptions = {
                     extractInlineJson: true,
                     maxDepth: 100,
                     debug: false
                 };
-                
-                // Check if payload is already parsed (from GraphQL client)
-                let fullResult = typeof executionResult.payload === 'string'
-                    ? JSON.parse(executionResult.payload)
-                    : executionResult.payload;
+
                 // Apply recursive JSON parsing to extract any nested JSON strings
-                fullResult = ParseJSONRecursive(fullResult, parseOptions);
-                
+                const fullResult = ParseJSONRecursive(executionResult, parseOptions);
+
                 // Store agent run ID with the message
                 if (fullResult && fullResult.agentRun?.ID) {
-                    assistantMessage.agentRunId = fullResult.agentRunID;
+                    assistantMessage.agentRunId = fullResult.agentRun.ID;
                 }
-                
+
                 // Load the agent run for display
                 if (fullResult && fullResult.agentRun) {
                     await this.loadAgentRunFromData(fullResult.agentRun);
@@ -1429,30 +1426,30 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     // If no agent run ID, keep showing live steps
                     console.log('⚠️ No agent run ID in result, keeping live mode');
                 }
-                
+
                 // Auto-expand all monitoring nodes once execution is complete
                 setTimeout(() => {
                     this.expandAllMonitoringNodes();
                 }, 100);
-                
+
                 // Preserve conversation state from the result
                 if (fullResult.payload) {
                     this.lastAgentPayload = fullResult.payload;
-                    
+
                     // Extract conversation state if present
                     if (fullResult.payload.conversationState) {
                         this.agentConversationState = fullResult.payload.conversationState;
-                    } 
+                    }
                 }
-                
+
                 // Extract the user message from the nested payload structure
                 let displayContent = 'No response generated';
                 let payloadData = fullResult.payload;
-                
+
                 if (fullResult.agentRun?.Message?.length > 0) {
                     displayContent = fullResult.agentRun.Message;
                 }
-                
+
                 assistantMessage.content = displayContent;
                 assistantMessage.payload = payloadData; // Store the payload if present
                 const startedAt = executionResult.agentRun?.StartedAt ? new Date(executionResult.agentRun.StartedAt).getTime() : 0;
@@ -1460,18 +1457,18 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                 const executionTime = (startedAt && completedAt) ? (completedAt - startedAt) : 0;
                 assistantMessage.executionTime = executionTime;
                 assistantMessage.agentRunId = fullResult.agentRun?.ID || assistantMessage.agentRunId;
-                
+
                 // Update the tracking ID when we set new execution data
                 this.lastProcessedRunId = assistantMessage.agentRunId || null;
-                
+
                 // Update the last agent run ID for run chaining
                 if (fullResult.agentRun?.ID) {
                     this.lastAgentRunId = fullResult.agentRun.ID;
                 }
-                
+
                 // Store the full result as raw content for debugging/inspection
-                assistantMessage.rawContent = executionResult.payload;
-                
+                assistantMessage.rawContent = JSON.stringify(fullResult, null, 2);
+
                 // Force change detection to update the execution monitor
                 this.cdr.detectChanges();
             } else {
@@ -1488,15 +1485,10 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     this.executionMonitorMode = 'historical';
                     this.liveAgentSteps = [];
                 }
-                
-                // Try to parse error payload if available
-                if (executionResult?.payload) {
-                    try {
-                        JSON.parse(executionResult.payload); // Validate it's valid JSON
-                        assistantMessage.rawContent = executionResult.payload;
-                    } catch {
-                        // Ignore parse errors
-                    }
+
+                // Store the error result as raw content
+                if (executionResult) {
+                    assistantMessage.rawContent = JSON.stringify(executionResult, null, 2);
                 }
             }
 
