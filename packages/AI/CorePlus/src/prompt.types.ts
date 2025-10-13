@@ -266,6 +266,15 @@ export class AIModelSelectionInfo {
   fallbackUsed: boolean;
   /** The selection strategy that was used */
   selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
+
+  /**
+   * Gets all model/vendor combinations that have available API keys.
+   * These are the valid candidates that can be used for execution or retry.
+   * @returns Array of models considered that are available (have API keys)
+   */
+  extractValidCandidates() {
+    return this.modelsConsidered.filter(m => m.available);
+  }
 }  
 
 /**

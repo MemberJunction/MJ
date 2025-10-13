@@ -5,10 +5,7 @@ import { AIEngine } from "@memberjunction/aiengine";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams } from "@memberjunction/ai-core-plus";
 import { BaseEmbeddings, EmbedTextParams, GetAIAPIKey } from "@memberjunction/ai";
-import { LoadLocalEmbedding } from "@memberjunction/ai-local-embeddings";
 import { EmbedTextLocalHelper } from "./util";
-
-LoadLocalEmbedding(); // Ensure local embedding model is registered
 
 interface ExtractedParameter {
     name: string;

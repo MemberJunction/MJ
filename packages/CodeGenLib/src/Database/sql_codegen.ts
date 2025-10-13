@@ -562,8 +562,10 @@ export class SQLCodeGenBase {
             }
 
             // BASE VIEW
-            if (!options.onlyPermissions && 
-                (options.entity.BaseViewGenerated || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.baseViews)) && 
+            // Only generate if BaseViewGenerated is true (respects custom views where it's false)
+            // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
+            if (!options.onlyPermissions &&
+                options.entity.BaseViewGenerated &&
                 !options.entity.VirtualEntity) {
                 // generate the base view
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
@@ -595,9 +597,9 @@ export class SQLCodeGenBase {
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Create);
-                if (!options.onlyPermissions && 
-                    (options.entity.spCreateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spCreate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spCreateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spCreateGenerated=true
+                if (!options.onlyPermissions && options.entity.spCreateGenerated) {
                     // generate the create SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
                     if (options.writeFiles) {
@@ -631,9 +633,9 @@ export class SQLCodeGenBase {
             // UPDATE SP
             if (options.entity.AllowUpdateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Update);
-                if (!options.onlyPermissions && 
-                    (options.entity.spUpdateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spUpdate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spUpdateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spUpdateGenerated=true
+                if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
                     // generate the update SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
                     if (options.writeFiles) {
@@ -667,9 +669,11 @@ export class SQLCodeGenBase {
             // DELETE SP
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
-                if (!options.onlyPermissions && 
-                    (options.entity.spDeleteGenerated || // Generate if marked as generated (not custom)
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
+                // Only generate if spDeleteGenerated is true (respects custom SPs where it's false)
+                // OR if this entity has cascade delete dependencies that require regeneration
+                // forceRegeneration only forces regeneration of SPs where spDeleteGenerated=true
+                if (!options.onlyPermissions &&
+                    (options.entity.spDeleteGenerated ||
                      this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID))) {
                     // generate the delete SP
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
@@ -1106,7 +1110,8 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map(pk => pk.Name).join(', ')}
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${entity.SchemaName}].[${viewName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${viewName}]', 'V') IS NOT NULL
+    DROP VIEW [${entity.SchemaName}].[${viewName}];
 GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
@@ -1330,7 +1335,8 @@ ${whereClause}GO${permissions}
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1365,7 +1371,8 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${entity.SchemaName}].trgUpdate${entity.ClassName}
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
 GO
 CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
@@ -1405,7 +1412,8 @@ GO`;
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1593,7 +1601,8 @@ ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't updat
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]

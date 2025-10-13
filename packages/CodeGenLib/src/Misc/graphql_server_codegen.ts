@@ -42,6 +42,106 @@ export class GraphQLServerGeneratorBase {
     return this._graphQLTypeSuffix;
   }
 
+  /**
+   * Sanitizes a string to be a valid GraphQL name component, preserving original capitalization.
+   * GraphQL names must match the pattern [_A-Za-z][_0-9A-Za-z]* and cannot start with double underscore
+   *
+   * @param input - The string to sanitize
+   * @returns A valid GraphQL name component with special characters removed
+   *
+   * @example
+   * ```typescript
+   * // Input: Schema name with special characters
+   * sanitizeGraphQLName("my-schema")
+   * // Output: "myschema"
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Name starting with double underscore (reserved)
+   * sanitizeGraphQLName("__mj_User")
+   * // Output: "mjUser"
+   * // (Removes __ prefix and underscores)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Name starting with a digit
+   * sanitizeGraphQLName("123Orders")
+   * // Output: "_123Orders"
+   * // (Prepends underscore since GraphQL names can't start with digits)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Preserves capitalization
+   * sanitizeGraphQLName("MyTable_Name")
+   * // Output: "MyTableName"
+   * // (Removes underscores but preserves case)
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Input: Empty or invalid input
+   * sanitizeGraphQLName("")
+   * // Output: ""
+   *
+   * sanitizeGraphQLName("!!!###")
+   * // Output: "_"
+   * // (All chars removed, so prepends underscore)
+   * ```
+   */
+  protected sanitizeGraphQLName(input: string): string {
+    if (!input || input.length === 0) {
+      return '';
+    }
+
+    // Replace any non-alphanumeric characters (except underscore) with nothing to preserve capitalization
+    let sanitized = input.replace(/[^A-Za-z0-9_]/g, '');
+
+    // If the name starts with two underscores, remove them
+    // (double underscore is reserved for GraphQL introspection)
+    if (sanitized.startsWith('__')) {
+      sanitized = sanitized.substring(2);
+    }
+
+    // Remove any remaining underscores
+    sanitized = sanitized.replace(/_/g, '');
+
+    // If the result starts with a digit or is empty, prepend an underscore
+    if (sanitized.length === 0 || /^[0-9]/.test(sanitized)) {
+      return '_' + sanitized;
+    }
+
+    return sanitized;
+  }
+
+  /**
+   * Generates the base GraphQL type name for an entity using SchemaBaseTable pattern.
+   * Preserves original capitalization. Special case: MJ core schema uses "MJ" prefix.
+   * This ensures unique type names across different schemas.
+   * @param entity - The entity to generate the type name for
+   * @returns The base GraphQL type name (without suffix)
+   */
+  protected getServerGraphQLTypeNameBase(entity: EntityInfo): string {
+    // Special case for MJ core schema - use "MJ" instead of the schema name
+    const schemaPrefix = entity.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
+      ? 'MJ'
+      : this.sanitizeGraphQLName(entity.SchemaName);
+
+    const sanitizedBaseTable = this.sanitizeGraphQLName(entity.BaseTable);
+    return `${schemaPrefix}${sanitizedBaseTable}`;
+  }
+
+  /**
+   * Generates the full server GraphQL type name for an entity (with suffix).
+   * @param entity - The entity to generate the type name for
+   * @returns The full GraphQL type name (with suffix)
+   */
+  protected getServerGraphQLTypeName(entity: EntityInfo): string {
+    return this.getServerGraphQLTypeNameBase(entity) + this.GraphQLTypeSuffix;
+  }
+
   public generateServerEntityString(
     entity: EntityInfo,
     includeFileHeader: boolean,
@@ -53,7 +153,7 @@ export class GraphQLServerGeneratorBase {
     try {
       const md = new Metadata();
       const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
-      const serverGraphQLTypeName: string = entity.ClassName + this.GraphQLTypeSuffix;
+      const serverGraphQLTypeName: string = this.getServerGraphQLTypeName(entity);
 
       if (includeFileHeader)
         sEntityOutput = this.generateEntitySpecificServerFileHeader(
@@ -241,7 +341,8 @@ export class ${serverGraphQLTypeName} {`;
   protected generateServerRelationship(md: Metadata, r: EntityRelationshipInfo, isInternal: boolean): string {
     const re = md.Entities.find((e) => e.Name.toLowerCase() === r.RelatedEntity.toLowerCase())!;
     const classPackagePrefix: string = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
-    const relatedClassName = classPackagePrefix + r.RelatedEntityBaseTableCodeName;
+    const relatedTypeName = this.getServerGraphQLTypeName(re);
+    const relatedClassName = classPackagePrefix + relatedTypeName;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
@@ -249,14 +350,14 @@ export class ${serverGraphQLTypeName} {`;
 
     if (r.Type.toLowerCase().trim() == 'one to many') {
       return `
-    @Field(() => [${relatedClassName + this.GraphQLTypeSuffix}])
-    ${uniqueCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix}[]; // Link to ${r.RelatedEntityCodeName}
+    @Field(() => [${relatedClassName}])
+    ${uniqueCodeName}Array: ${relatedClassName}[]; // Link to ${r.RelatedEntityCodeName}
     `;
     } else {
       // many to many
       return `
-    @Field(() => [${relatedClassName + this.GraphQLTypeSuffix}])
-    ${uniqueCodeName}Array: ${relatedClassName + this.GraphQLTypeSuffix}[]; // Link to ${r.RelatedEntity}
+    @Field(() => [${relatedClassName}])
+    ${uniqueCodeName}Array: ${relatedClassName}[]; // Link to ${r.RelatedEntity}
     `;
     }
   }
@@ -268,6 +369,7 @@ export class ${serverGraphQLTypeName} {`;
     isInternal: boolean
   ): string {
     const md = new Metadata();
+    const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     let sRet = '';
 
     // we only generate resolvers for entities that have a primary key field
@@ -283,7 +385,7 @@ export class ${serverGraphQLTypeName} {`;
 // RESOLVER for ${entity.Name}
 //****************************************************************************
 @ObjectType()
-export class Run${entity.BaseTableCodeName}ViewResult {
+export class Run${typeNameBase}ViewResult {
     @Field(() => [${serverGraphQLTypeName}])
     Results: ${serverGraphQLTypeName}[];
 
@@ -307,21 +409,21 @@ export class Run${entity.BaseTableCodeName}ViewResult {
 }
 
 @Resolver(${serverGraphQLTypeName})
-export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Base' : ''} extends ResolverBase {
-    @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-    async Run${entity.BaseTableCodeName}ViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} extends ResolverBase {
+    @Query(() => Run${typeNameBase}ViewResult)
+    async Run${typeNameBase}ViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
     }
 
-    @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-    async Run${entity.BaseTableCodeName}ViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    @Query(() => Run${typeNameBase}ViewResult)
+    async Run${typeNameBase}ViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
     }
 
-    @Query(() => Run${entity.BaseTableCodeName}ViewResult)
-    async Run${entity.BaseTableCodeName}DynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    @Query(() => Run${typeNameBase}ViewResult)
+    async Run${typeNameBase}DynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         input.EntityName = '${entity.Name}';
         return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
@@ -341,7 +443,7 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
 
       sRet += `
     @Query(() => ${serverGraphQLTypeName}, { nullable: true })
-    async ${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
+    async ${typeNameBase}(${graphQLPKEYArgs}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<${serverGraphQLTypeName} | null> {
         this.CheckUserReadPermissions('${entity.Name}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -415,13 +517,14 @@ export class ${entity.BaseTableCodeName}Resolver${entity.CustomResolverAPI ? 'Ba
   }
 
   protected generateServerGraphQLInputTypeInner(entity: EntityInfo, classPrefix: 'Create' | 'Update', nonPKEYFieldsOptional: boolean): string {
+    const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     let sRet: string = '';
     sRet += `\n
 //****************************************************************************
 // INPUT TYPE for ${entity.Name}
 //****************************************************************************
 @InputType()
-export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
+export class ${classPrefix}${typeNameBase}Input {`;
     // first, filter the fields
     const fieldsToInclude = entity.Fields.filter((f) => {
       // include primary key for updates and also for creates if it is not an autoincrement field
@@ -466,6 +569,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
   }
 
   protected generateServerGraphQLMutations(entity: EntityInfo, serverGraphQLTypeName: string): string {
+    const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     let sRet: string = '';
 
     // MUTATIONS
@@ -474,8 +578,8 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
       // generate a create mutation
       sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
-    async Create${entity.BaseTableCodeName}(
-        @Arg('input', () => Create${entity.BaseTableCodeName}Input) input: Create${entity.BaseTableCodeName}Input,
+    async Create${typeNameBase}(
+        @Arg('input', () => Create${typeNameBase}Input) input: Create${typeNameBase}Input,
         @Ctx() { providers, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
@@ -489,8 +593,8 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
       const loadParamString: string = entity.PrimaryKeys.map((f) => `input.${f.CodeName}`).join(', ');
       sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
-    async Update${entity.BaseTableCodeName}(
-        @Arg('input', () => Update${entity.BaseTableCodeName}Input) input: Update${entity.BaseTableCodeName}Input,
+    async Update${typeNameBase}(
+        @Arg('input', () => Update${typeNameBase}Input) input: Update${typeNameBase}Input,
         @Ctx() { providers, userPayload }: AppContext,
         @PubSub() pubSub: PubSubEngine
     ) {
@@ -527,7 +631,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
       sRet += `
     @Mutation(() => ${serverGraphQLTypeName})
-    async Delete${entity.BaseTableCodeName}(${graphQLPKEYArgs}, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async Delete${typeNameBase}(${graphQLPKEYArgs}, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([${compositeKeyString}]);
         return this.DeleteRecord('${entity.Name}', key, options, provider, userPayload, pubSub);
@@ -540,7 +644,8 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
   protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
     const md = new Metadata();
     const re = md.EntityByName(r.RelatedEntity);
-    const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix;
+    const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
+    const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
 
     let filterFieldName: string = '';
     if (!r.EntityKeyField) {
@@ -567,7 +672,8 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema && !isInternal ? 'mj_core_schema_server_object_types.' : '';
-    const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix;
+    const relatedTypeName = this.getServerGraphQLTypeName(re);
+    const serverClassName = serverPackagePrefix + relatedTypeName;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
@@ -575,7 +681,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -590,7 +696,8 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
   protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
     const md = new Metadata();
     const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
-    const instanceName = entity.BaseTableCodeName.toLowerCase() + this.GraphQLTypeSuffix;
+    const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
+    const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
     let filterFieldName: string = '';
     if (!r.EntityKeyField) {
       filterFieldName = entity.FirstPrimaryKey.CodeName;
@@ -616,7 +723,8 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     const quotes = filterField.NeedsQuotes ? "'" : '';
     const serverPackagePrefix = re.SchemaName === mjCoreSchema ? 'mj_core_schema_server_object_types.' : '';
-    const serverClassName = serverPackagePrefix + r.RelatedEntityBaseTableCodeName + this.GraphQLTypeSuffix;
+    const relatedTypeName = this.getServerGraphQLTypeName(re);
+    const serverClassName = serverPackagePrefix + relatedTypeName;
 
     // create a code name that is the combination of the relatedentitycode name plus the relatedentityjoinfield that has spaces stripped
     // and replace all special characters with an underscore
@@ -624,7 +732,7 @@ export class ${classPrefix}${entity.BaseTableCodeName}Input {`;
 
     return `
     @FieldResolver(() => [${serverClassName}])
-    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${entity.BaseTableCodeName + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    async ${uniqueCodeName}Array(@Root() ${instanceName}: ${typeNameBase + this.GraphQLTypeSuffix}, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('${r.RelatedEntity}', userPayload);
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
