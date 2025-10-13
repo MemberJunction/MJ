@@ -4,91 +4,49 @@
  */
 
 import {
-    BaseEngine,
-    BaseEnginePropertyConfig,
-    IMetadataProvider,
     UserInfo,
     Metadata,
     LogError,
     LogStatusEx,
     IsVerboseLoggingEnabled
 } from '@memberjunction/core';
-import { ScheduledJobEntity, ScheduledJobTypeEntity, ScheduledJobRunEntity } from '@memberjunction/core-entities';
+import { ScheduledJobEntity, ScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { ScheduledJobResult, NotificationChannel } from '@memberjunction/scheduling-base-types';
+import { SchedulingEngineBase, LoadBaseSchedulingEngine } from '@memberjunction/scheduling-engine-base';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from './BaseScheduledJob';
 import { CronExpressionHelper } from './CronExpressionHelper';
 import { NotificationManager } from './NotificationManager';
 
+LoadBaseSchedulingEngine(); // Ensure extended entities are loaded
+
 /**
  * Engine for managing scheduled job execution
  *
- * This engine:
- * - Loads scheduled jobs and their types from metadata
+ * This engine extends SchedulingEngineBase with execution capabilities:
  * - Evaluates cron expressions to determine which jobs are due
  * - Instantiates the appropriate plugin for each job type
  * - Executes jobs and tracks results in ScheduledJobRun
  * - Sends notifications based on job configuration
  * - Updates job statistics (RunCount, SuccessCount, FailureCount)
+ * - Manages distributed locking for multi-server environments
+ *
+ * @description ONLY USE ON SERVER-SIDE. For metadata only, use SchedulingEngineBase which can be used anywhere.
  *
  * @example
  * ```typescript
- * const engine = ScheduledJobEngine.Instance;
+ * const engine = SchedulingEngine.Instance;
  * await engine.Config(false, contextUser);
  * const runs = await engine.ExecuteScheduledJobs(contextUser);
  * console.log(`Executed ${runs.length} scheduled jobs`);
  * ```
  */
-export class ScheduledJobEngine extends BaseEngine<ScheduledJobEngine> {
-    private _scheduledJobs: ScheduledJobEntity[] = [];
-    private _scheduledJobTypes: ScheduledJobTypeEntity[] = [];
-
-    /**
-     * Configure the engine by loading metadata
-     *
-     * @param forceRefresh - Whether to force reload from database
-     * @param contextUser - User context for data access
-     * @param provider - Optional metadata provider
-     */
-    public async Config(
-        forceRefresh?: boolean,
-        contextUser?: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<boolean> {
-        const configs: Partial<BaseEnginePropertyConfig>[] = [
-            {
-                EntityName: 'Scheduled Job Types',
-                PropertyName: '_scheduledJobTypes'
-            },
-            {
-                EntityName: 'Scheduled Jobs',
-                PropertyName: '_scheduledJobs',
-                ExtraFilter: "Status = 'Active'"  // Only load active jobs
-            }
-        ];
-
-        return await this.Load(configs, provider, forceRefresh, contextUser);
-    }
-
-    /**
-     * Get all scheduled job types
-     */
-    public get ScheduledJobTypes(): ScheduledJobTypeEntity[] {
-        return this._scheduledJobTypes;
-    }
-
-    /**
-     * Get all active scheduled jobs
-     */
-    public get ScheduledJobs(): ScheduledJobEntity[] {
-        return this._scheduledJobs;
-    }
-
+export class SchedulingEngine extends SchedulingEngineBase {
     /**
      * Get singleton instance
      */
-    public static get Instance(): ScheduledJobEngine {
-        return super.getInstance<ScheduledJobEngine>();
+    public static get Instance(): SchedulingEngine {
+        return super.getInstance<SchedulingEngine>();
     }
 
     /**

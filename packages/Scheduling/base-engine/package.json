@@ -1,7 +1,7 @@
 {
-  "name": "@memberjunction/scheduling-engine",
+  "name": "@memberjunction/scheduling-engine-base",
   "version": "2.104.0",
-  "description": "MemberJunction: Scheduling Engine - core engine for executing scheduled jobs with plugin architecture",
+  "description": "MemberJunction: Base Scheduling Engine Package - extended entity types and metadata caching, can be used anywhere.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -15,10 +15,9 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/core": "2.100.3",
-    "@memberjunction/core-entities": "2.104.0",
     "@memberjunction/global": "2.100.3",
-    "@memberjunction/scheduling-base-types": "2.104.0",
-    "cron-parser": "^4.9.0"
+    "@memberjunction/core-entities": "2.104.0",
+    "@memberjunction/scheduling-base-types": "2.104.0"
   },
   "devDependencies": {
     "@types/node": "20.14.2",
