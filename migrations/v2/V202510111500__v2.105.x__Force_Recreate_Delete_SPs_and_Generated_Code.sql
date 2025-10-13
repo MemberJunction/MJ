@@ -1,17 +1,3 @@
--- This will force ALL validators to regenerate with new nullability logic
-DELETE FROM [${flyway:defaultSchema}].[GeneratedCode]
-WHERE CategoryID = 'ee2d433e-f36b-1410-8d9d-00021f8b792e';
-
-
-/* SQL text to delete entity field value ID 00CC453E-F36B-1410-8550-00D9FFED5EBA */
-DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='00CC453E-F36B-1410-8550-00D9FFED5EBA'
-
-/* SQL text to delete entity field value ID F1CB453E-F36B-1410-8550-00D9FFED5EBA */
-DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE ID='F1CB453E-F36B-1410-8550-00D9FFED5EBA'
-
-/* SQL text to update entity field value sequence */
-UPDATE [${flyway:defaultSchema}].EntityFieldValue SET Sequence=7 WHERE ID='21CD453E-F36B-1410-8550-00D9FFED5EBA'
-
 /* spDelete SQL for Action Authorizations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -10718,7 +10704,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteWorkspace] TO [cdp_UI], [cdp
 
 
 
-
+-- This will force ALL validators to regenerate with new nullability logic
+DELETE FROM [${flyway:defaultSchema}].[GeneratedCode]
+WHERE CategoryID = 'ee2d433e-f36b-1410-8d9d-00021f8b792e';
 
 
 /* Generated Validation Functions for AI Agent Actions */
