@@ -1,0 +1,53 @@
+[
+    {
+        "name": "name",
+        "description": "Extracts the marketing content headline/title",
+        "type": "string",
+        "standardProperty": "name",
+        "extractor": "@file:marketing-content/marketing-content-name.js"
+    },
+    {
+        "name": "description",
+        "description": "Extracts the marketing content subheadline or brief",
+        "type": "string",
+        "standardProperty": "description",
+        "extractor": "@file:marketing-content/marketing-content-description.js"
+    },
+    {
+        "name": "displayMarkdown",
+        "description": "Extracts the full marketing content body in markdown format",
+        "type": "string",
+        "standardProperty": "displayMarkdown",
+        "extractor": "@file:marketing-content/marketing-content-body.js"
+    },
+    {
+        "name": "contentType",
+        "description": "The type of marketing content (blog_post, social_media, email, etc.)",
+        "type": "string",
+        "extractor": "@file:marketing-content/marketing-content-type.js"
+    },
+    {
+        "name": "targetAudience",
+        "description": "The intended audience for this content",
+        "type": "string",
+        "extractor": "@file:marketing-content/marketing-target-audience.js"
+    },
+    {
+        "name": "seoScore",
+        "description": "SEO optimization score (0-100)",
+        "type": "number",
+        "extractor": "@file:marketing-content/marketing-seo-score.js"
+    },
+    {
+        "name": "brandAlignment",
+        "description": "Brand alignment score (0-100)",
+        "type": "number",
+        "extractor": "@file:marketing-content/marketing-brand-alignment.js"
+    },
+    {
+        "name": "wordCount",
+        "description": "Total word count of the content",
+        "type": "number",
+        "extractor": "@file:marketing-content/marketing-word-count.js"
+    }
+]

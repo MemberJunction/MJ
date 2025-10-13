@@ -16,6 +16,19 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
+                    <mj-tab Name="MJ: Artifact Version Attributes" [Visible]="record.IsSaved"> 
+                        MJ: Artifact Version Attributes
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Version Attributes','ArtifactVersionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Artifact Version Attributes')"
+                            [AllowLoad]="IsCurrentTab('MJ: Artifact Version Attributes')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: Conversation Detail Artifacts" [Visible]="record.IsSaved"> 
                         MJ: Conversation Detail Artifacts
                     </mj-tab>

@@ -4,6 +4,7 @@
     "autoCreateMissingRecords": true
   },
   "directoryOrder": [
+    "artifact-types",
     "action-categories",
     "actions",
     "prompt-categories",

@@ -212,7 +212,6 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
-    position: relative;
 }
 .chat-messages-container {
     flex: 1;
@@ -220,13 +219,18 @@
     overflow-x: hidden;
     background: #FFF;
     min-height: 0;
+    position: relative;
 }
 .scroll-to-bottom-icon {
-    position: absolute;
-    bottom: 80px;
+    position: sticky;
+    bottom: 21px; // 21px from bottom of visible scroll area (moved up 5px from original 16px)
+    left: 50%;
     transform: translateX(-50%);
     width: 40px;
     height: 40px;
+    margin-top: -40px; // Negative margin to not affect scroll height
+    margin-left: auto;
+    margin-right: auto;
     background: white;
     border: 1px solid #D1D5DB;
     border-radius: 50%;
@@ -237,6 +241,7 @@
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     transition: all 0.2s ease;
     z-index: 100;
+    pointer-events: auto;
 }
 .scroll-to-bottom-icon:hover {
     background: #F3F4F6;
@@ -256,6 +261,20 @@
     flex-shrink: 0;
     background: #FFF;
     border-top: 1px solid #E5E7EB;
+}
+
+// Loading placeholder - replaces input while loading
+.loading-peripheral-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 140px; // Match typical input area height
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.5);
+    backdrop-filter: blur(2px);
+    border-radius: 12px;
+    margin: 12px;
+    animation: fadeIn 0.2s ease-in-out;
 }
 .modal-overlay {
     position: fixed;
@@ -331,14 +350,25 @@
 }
 .artifact-modal-card {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px;
+    flex-direction: column;
     background: white;
     border: 1.5px solid #E5E7EB;
     border-radius: 12px;
-    cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+}
+.artifact-modal-card.expanded {
+    border-color: #3B82F6;
+}
+.artifact-card-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    cursor: pointer;
+}
+.artifact-card-header:hover {
+    background: #F9FAFB;
 }
 .artifact-modal-card:hover {
     border-color: #3B82F6;
@@ -379,4 +409,104 @@
 }
 .artifact-modal-card:hover .artifact-modal-action {
     color: #3B82F6;
+}
+.expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: #6B7280;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+
+    &:hover {
+        background: #F3F4F6;
+        color: #3B82F6;
+    }
+}
+.artifact-versions-list {
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid #E5E7EB;
+    background: #F9FAFB;
+}
+.artifact-version-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px 12px 68px; // Indent to align with title
+    cursor: pointer;
+    transition: background 0.15s;
+
+    &:hover {
+        background: #F3F4F6;
+    }
+
+    .version-badge {
+        display: inline-block;
+        padding: 4px 8px;
+        background: #EEF2FF;
+        color: #4F46E5;
+        font-size: 12px;
+        font-weight: 600;
+        font-family: monospace;
+        border-radius: 4px;
+    }
+
+    .version-open-text {
+        flex: 1;
+        font-size: 13px;
+        color: #6B7280;
+    }
+
+    i {
+        color: #9CA3AF;
+        font-size: 12px;
+    }
+
+    &:hover {
+        .version-badge {
+            background: #4F46E5;
+            color: white;
+        }
+        .version-open-text {
+            color: #3B82F6;
+        }
+        i {
+            color: #3B82F6;
+        }
+    }
+}
+
+// Loading content styling
+.loading-peripheral-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 24px;
+    background: white;
+    border: 2px solid #E5E7EB;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    color: #4B5563;
+    font-size: 14px;
+    font-weight: 500;
+
+    i {
+        font-size: 20px;
+        color: #9333EA;
+    }
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
 }
