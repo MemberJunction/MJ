@@ -8363,6 +8363,12 @@ each time the agent processes a prompt step.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run`),
+    ScheduledJobRunID: z.string().nullable().describe(`
+        * * Field Name: ScheduledJobRunID
+        * * Display Name: Scheduled Job Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: Links to the scheduled job run that triggered this agent execution. NULL for manually-triggered agent runs. Enables tracking which scheduled jobs spawned which agent executions.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -11458,6 +11464,336 @@ export const ReportVersionSchema = z.object({
 });
 
 export type ReportVersionEntityType = z.infer<typeof ReportVersionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Scheduled Job Runs
+ */
+export const ScheduledJobRunSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ScheduledJobID: z.string().describe(`
+        * * Field Name: ScheduledJobID
+        * * Display Name: Scheduled Job ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)`),
+    StartedAt: z.date().describe(`
+        * * Field Name: StartedAt
+        * * Display Name: Started At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: sysdatetimeoffset()
+        * * Description: Timestamp when this job execution began. Set immediately before calling the job plugin's Execute method.`),
+    CompletedAt: z.date().nullable().describe(`
+        * * Field Name: CompletedAt
+        * * Display Name: Completed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this job execution completed (successfully or with failure). NULL while the job is still running.`),
+    Status: z.union([z.literal('Running'), z.literal('Completed'), z.literal('Failed'), z.literal('Cancelled'), z.literal('Timeout')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    *   * Timeout
+        * * Description: Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.`),
+    Success: z.boolean().nullable().describe(`
+        * * Field Name: Success
+        * * Display Name: Success
+        * * SQL Data Type: bit
+        * * Description: Whether the job execution completed successfully. NULL while running, TRUE if successful, FALSE if failed. This is the job-level success from the plugin's Execute method, separate from domain-specific success tracking.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error message if the job failed. NULL for successful runs. Contains exception messages or error details from the plugin's Execute method.`),
+    Details: z.string().nullable().describe(`
+        * * Field Name: Details
+        * * Display Name: Details
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Job-type specific execution details stored as JSON. May include references to domain-specific run records (e.g., {"AgentRunID": "...", "TokensUsed": 5000}), performance metrics, or other execution metadata. Schema is defined by the job type plugin.`),
+    ExecutedByUserID: z.string().nullable().describe(`
+        * * Field Name: ExecutedByUserID
+        * * Display Name: Executed By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: User context under which the job was executed. Typically the OwnerUserID from the schedule, but can be overridden in job-specific configuration.`),
+    QueuedAt: z.date().nullable().describe(`
+        * * Field Name: QueuedAt
+        * * Display Name: Queued At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when this execution was queued (for ConcurrencyMode=Queue). NULL for immediate executions. When set, indicates this run is waiting for a previous execution to complete before starting.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ScheduledJob: z.string().describe(`
+        * * Field Name: ScheduledJob
+        * * Display Name: Scheduled Job
+        * * SQL Data Type: nvarchar(200)`),
+    ExecutedByUser: z.string().nullable().describe(`
+        * * Field Name: ExecutedByUser
+        * * Display Name: Executed By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ScheduledJobRunEntityType = z.infer<typeof ScheduledJobRunSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Scheduled Job Types
+ */
+export const ScheduledJobTypeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique name identifying this job type (e.g., Agent, Action, Report).`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Human-readable description of what this job type does and when it should be used.`),
+    DriverClass: z.string().describe(`
+        * * Field Name: DriverClass
+        * * Display Name: Driver Class
+        * * SQL Data Type: nvarchar(255)
+        * * Description: TypeScript class name that implements BaseScheduledJob for this job type. Used by ClassFactory to instantiate the correct plugin at runtime.`),
+    DomainRunEntity: z.string().nullable().describe(`
+        * * Field Name: DomainRunEntity
+        * * Display Name: Domain Run Entity
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the entity that stores execution records for this job type (e.g., "MJ: AI Agent Runs", "Action Execution Logs"). Used for generic UI linking to domain-specific run records. NULL if job type uses ScheduledJobRun as its only execution record.`),
+    DomainRunEntityFKey: z.string().nullable().describe(`
+        * * Field Name: DomainRunEntityFKey
+        * * Display Name: Domain Run Entity F Key
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Name of the foreign key field in the DomainRunEntity that links back to ScheduledJobRun (e.g., "ScheduleID"). Used for querying related domain runs. NULL if DomainRunEntity is NULL.`),
+    NotificationsAvailable: z.boolean().describe(`
+        * * Field Name: NotificationsAvailable
+        * * Display Name: Notifications Available
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Indicates whether this job type supports sending notifications on completion or failure.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type ScheduledJobTypeEntityType = z.infer<typeof ScheduledJobTypeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Scheduled Jobs
+ */
+export const ScheduledJobSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    JobTypeID: z.string().describe(`
+        * * Field Name: JobTypeID
+        * * Display Name: Job Type ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Types (vwScheduledJobTypes.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Human-readable name for this scheduled job. Should clearly identify what the job does.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed description of the job's purpose, what it does, and any important notes about its execution.`),
+    CronExpression: z.string().describe(`
+        * * Field Name: CronExpression
+        * * Display Name: Cron Expression
+        * * SQL Data Type: nvarchar(120)
+        * * Description: Cron expression defining when the job should execute (e.g., "0 30 9 * * MON-FRI" for weekdays at 9:30 AM). Uses standard cron syntax with seconds precision.`),
+    Timezone: z.string().describe(`
+        * * Field Name: Timezone
+        * * Display Name: Timezone
+        * * SQL Data Type: nvarchar(64)
+        * * Default Value: UTC
+        * * Description: IANA timezone identifier for interpreting the cron expression (e.g., "America/Chicago", "UTC"). Ensures consistent scheduling across different server locations.`),
+    StartAt: z.date().nullable().describe(`
+        * * Field Name: StartAt
+        * * Display Name: Start At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional start date/time for when this schedule becomes active. Job will not execute before this time. NULL means active immediately upon creation.`),
+    EndAt: z.date().nullable().describe(`
+        * * Field Name: EndAt
+        * * Display Name: End At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Optional end date/time for when this schedule expires. Job will not execute after this time. NULL means no expiration.`),
+    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Paused'), z.literal('Disabled'), z.literal('Expired')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Paused
+    *   * Disabled
+    *   * Expired
+        * * Description: Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Job-type specific configuration stored as JSON. Schema is defined by the ScheduledJobType plugin. For Agents: includes AgentID, StartingPayload, InitialMessage, etc. For Actions: includes ActionID and parameter mappings.`),
+    OwnerUserID: z.string().nullable().describe(`
+        * * Field Name: OwnerUserID
+        * * Display Name: Owner User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.`),
+    LastRunID: z.string().nullable().describe(`
+        * * Field Name: LastRunID
+        * * Display Name: Last Run ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+        * * Description: Reference to the most recent execution of this schedule. Provides quick access to last run status and details.`),
+    LastRunAt: z.date().nullable().describe(`
+        * * Field Name: LastRunAt
+        * * Display Name: Last Run At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the most recent execution. Updated after each run. Used for monitoring and dashboard displays.`),
+    NextRunAt: z.date().nullable().describe(`
+        * * Field Name: NextRunAt
+        * * Display Name: Next Run At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Calculated timestamp of when this job should next execute based on the cron expression. Updated after each run. Used by scheduler to determine which jobs are due.`),
+    RunCount: z.number().describe(`
+        * * Field Name: RunCount
+        * * Display Name: Run Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Total number of times this schedule has been executed, including both successful and failed runs.`),
+    SuccessCount: z.number().describe(`
+        * * Field Name: SuccessCount
+        * * Display Name: Success Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of times this schedule has executed successfully (Success = true in ScheduledJobRun).`),
+    FailureCount: z.number().describe(`
+        * * Field Name: FailureCount
+        * * Display Name: Failure Count
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Number of times this schedule has executed but failed (Success = false in ScheduledJobRun).`),
+    NotifyOnSuccess: z.boolean().describe(`
+        * * Field Name: NotifyOnSuccess
+        * * Display Name: Notify On Success
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether to send notifications when the job completes successfully.`),
+    NotifyOnFailure: z.boolean().describe(`
+        * * Field Name: NotifyOnFailure
+        * * Display Name: Notify On Failure
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether to send notifications when the job fails. Defaults to true for alerting on failures.`),
+    NotifyUserID: z.string().nullable().describe(`
+        * * Field Name: NotifyUserID
+        * * Display Name: Notify User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.`),
+    NotifyViaEmail: z.boolean().describe(`
+        * * Field Name: NotifyViaEmail
+        * * Display Name: Notify Via Email
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.`),
+    NotifyViaInApp: z.boolean().describe(`
+        * * Field Name: NotifyViaInApp
+        * * Display Name: Notify Via In App
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.`),
+    LockToken: z.string().nullable().describe(`
+        * * Field Name: LockToken
+        * * Display Name: Lock Token
+        * * SQL Data Type: uniqueidentifier
+        * * Description: Unique token used for distributed locking across multiple server instances. Set when a server claims the job for execution. Prevents duplicate executions in multi-server environments.`),
+    LockedAt: z.date().nullable().describe(`
+        * * Field Name: LockedAt
+        * * Display Name: Locked At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp when the lock was acquired. Used with ExpectedCompletionAt to detect stale locks from crashed server instances.`),
+    LockedByInstance: z.string().nullable().describe(`
+        * * Field Name: LockedByInstance
+        * * Display Name: Locked By Instance
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Identifier of the server instance that currently holds the lock (e.g., "hostname-12345"). Used for troubleshooting and monitoring which server is executing which job.`),
+    ExpectedCompletionAt: z.date().nullable().describe(`
+        * * Field Name: ExpectedCompletionAt
+        * * Display Name: Expected Completion At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Expected completion time for the current execution. If current time exceeds this and lock still exists, the lock is considered stale and can be claimed by another instance. Handles crashed server cleanup.`),
+    ConcurrencyMode: z.union([z.literal('Skip'), z.literal('Queue'), z.literal('Concurrent')]).describe(`
+        * * Field Name: ConcurrencyMode
+        * * Display Name: Concurrency Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Skip
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Skip
+    *   * Queue
+    *   * Concurrent
+        * * Description: Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    JobType: z.string().describe(`
+        * * Field Name: JobType
+        * * Display Name: Job Type
+        * * SQL Data Type: nvarchar(100)`),
+    OwnerUser: z.string().nullable().describe(`
+        * * Field Name: OwnerUser
+        * * Display Name: Owner User
+        * * SQL Data Type: nvarchar(100)`),
+    NotifyUser: z.string().nullable().describe(`
+        * * Field Name: NotifyUser
+        * * Display Name: Notify User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ScheduledJobEntityType = z.infer<typeof ScheduledJobSchema>;
 
 /**
  * zod schema definition for the entity MJ: Task Dependencies
@@ -37017,6 +37353,20 @@ each time the agent processes a prompt step.
     }
 
     /**
+    * * Field Name: ScheduledJobRunID
+    * * Display Name: Scheduled Job Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: Links to the scheduled job run that triggered this agent execution. NULL for manually-triggered agent runs. Enables tracking which scheduled jobs spawned which agent executions.
+    */
+    get ScheduledJobRunID(): string | null {
+        return this.Get('ScheduledJobRunID');
+    }
+    set ScheduledJobRunID(value: string | null) {
+        this.Set('ScheduledJobRunID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -45315,6 +45665,875 @@ export class ReportVersionEntity extends BaseEntity<ReportVersionEntityType> {
     */
     get Report(): string {
         return this.Get('Report');
+    }
+}
+
+
+/**
+ * MJ: Scheduled Job Runs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ScheduledJobRun
+ * * Base View: vwScheduledJobRuns
+ * * @description Records execution history for scheduled jobs. Provides uniform tracking across all job types. Each record represents one execution attempt of a scheduled job.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Scheduled Job Runs')
+export class ScheduledJobRunEntity extends BaseEntity<ScheduledJobRunEntityType> {
+    /**
+    * Loads the MJ: Scheduled Job Runs record from the database
+    * @param ID: string - primary key value to load the MJ: Scheduled Job Runs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ScheduledJobRunEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Scheduled Job Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Details: This rule ensures that if there is any information in the Details field, it must be valid JSON data. If the Details field is empty, this rule is always satisfied.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDetailsIfPresentMustBeJson(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if there is any information in the Details field, it must be valid JSON data. If the Details field is empty, this rule is always satisfied.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDetailsIfPresentMustBeJson(result: ValidationResult) {
+    	if (this.Details !== null && typeof this.Details === "string" && this.Details.trim() !== "") {
+    		try {
+    			JSON.parse(this.Details);
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo("Details", "The Details field must contain valid JSON if it is provided.", this.Details, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ScheduledJobID
+    * * Display Name: Scheduled Job ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Jobs (vwScheduledJobs.ID)
+    */
+    get ScheduledJobID(): string {
+        return this.Get('ScheduledJobID');
+    }
+    set ScheduledJobID(value: string) {
+        this.Set('ScheduledJobID', value);
+    }
+
+    /**
+    * * Field Name: StartedAt
+    * * Display Name: Started At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: sysdatetimeoffset()
+    * * Description: Timestamp when this job execution began. Set immediately before calling the job plugin's Execute method.
+    */
+    get StartedAt(): Date {
+        return this.Get('StartedAt');
+    }
+    set StartedAt(value: Date) {
+        this.Set('StartedAt', value);
+    }
+
+    /**
+    * * Field Name: CompletedAt
+    * * Display Name: Completed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this job execution completed (successfully or with failure). NULL while the job is still running.
+    */
+    get CompletedAt(): Date | null {
+        return this.Get('CompletedAt');
+    }
+    set CompletedAt(value: Date | null) {
+        this.Set('CompletedAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Running
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Running
+    *   * Completed
+    *   * Failed
+    *   * Cancelled
+    *   * Timeout
+    * * Description: Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.
+    */
+    get Status(): 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Timeout' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Timeout') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Success
+    * * Display Name: Success
+    * * SQL Data Type: bit
+    * * Description: Whether the job execution completed successfully. NULL while running, TRUE if successful, FALSE if failed. This is the job-level success from the plugin's Execute method, separate from domain-specific success tracking.
+    */
+    get Success(): boolean | null {
+        return this.Get('Success');
+    }
+    set Success(value: boolean | null) {
+        this.Set('Success', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message if the job failed. NULL for successful runs. Contains exception messages or error details from the plugin's Execute method.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: Details
+    * * Display Name: Details
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Job-type specific execution details stored as JSON. May include references to domain-specific run records (e.g., {"AgentRunID": "...", "TokensUsed": 5000}), performance metrics, or other execution metadata. Schema is defined by the job type plugin.
+    */
+    get Details(): string | null {
+        return this.Get('Details');
+    }
+    set Details(value: string | null) {
+        this.Set('Details', value);
+    }
+
+    /**
+    * * Field Name: ExecutedByUserID
+    * * Display Name: Executed By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User context under which the job was executed. Typically the OwnerUserID from the schedule, but can be overridden in job-specific configuration.
+    */
+    get ExecutedByUserID(): string | null {
+        return this.Get('ExecutedByUserID');
+    }
+    set ExecutedByUserID(value: string | null) {
+        this.Set('ExecutedByUserID', value);
+    }
+
+    /**
+    * * Field Name: QueuedAt
+    * * Display Name: Queued At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when this execution was queued (for ConcurrencyMode=Queue). NULL for immediate executions. When set, indicates this run is waiting for a previous execution to complete before starting.
+    */
+    get QueuedAt(): Date | null {
+        return this.Get('QueuedAt');
+    }
+    set QueuedAt(value: Date | null) {
+        this.Set('QueuedAt', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ScheduledJob
+    * * Display Name: Scheduled Job
+    * * SQL Data Type: nvarchar(200)
+    */
+    get ScheduledJob(): string {
+        return this.Get('ScheduledJob');
+    }
+
+    /**
+    * * Field Name: ExecutedByUser
+    * * Display Name: Executed By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ExecutedByUser(): string | null {
+        return this.Get('ExecutedByUser');
+    }
+}
+
+
+/**
+ * MJ: Scheduled Job Types - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ScheduledJobType
+ * * Base View: vwScheduledJobTypes
+ * * @description Defines types of schedulable jobs and their plugin implementations. Each job type represents a different kind of work that can be scheduled (e.g., Agents, Actions, Reports).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Scheduled Job Types')
+export class ScheduledJobTypeEntity extends BaseEntity<ScheduledJobTypeEntityType> {
+    /**
+    * Loads the MJ: Scheduled Job Types record from the database
+    * @param ID: string - primary key value to load the MJ: Scheduled Job Types record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ScheduledJobTypeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique name identifying this job type (e.g., Agent, Action, Report).
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Human-readable description of what this job type does and when it should be used.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: DriverClass
+    * * Display Name: Driver Class
+    * * SQL Data Type: nvarchar(255)
+    * * Description: TypeScript class name that implements BaseScheduledJob for this job type. Used by ClassFactory to instantiate the correct plugin at runtime.
+    */
+    get DriverClass(): string {
+        return this.Get('DriverClass');
+    }
+    set DriverClass(value: string) {
+        this.Set('DriverClass', value);
+    }
+
+    /**
+    * * Field Name: DomainRunEntity
+    * * Display Name: Domain Run Entity
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the entity that stores execution records for this job type (e.g., "MJ: AI Agent Runs", "Action Execution Logs"). Used for generic UI linking to domain-specific run records. NULL if job type uses ScheduledJobRun as its only execution record.
+    */
+    get DomainRunEntity(): string | null {
+        return this.Get('DomainRunEntity');
+    }
+    set DomainRunEntity(value: string | null) {
+        this.Set('DomainRunEntity', value);
+    }
+
+    /**
+    * * Field Name: DomainRunEntityFKey
+    * * Display Name: Domain Run Entity F Key
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Name of the foreign key field in the DomainRunEntity that links back to ScheduledJobRun (e.g., "ScheduleID"). Used for querying related domain runs. NULL if DomainRunEntity is NULL.
+    */
+    get DomainRunEntityFKey(): string | null {
+        return this.Get('DomainRunEntityFKey');
+    }
+    set DomainRunEntityFKey(value: string | null) {
+        this.Set('DomainRunEntityFKey', value);
+    }
+
+    /**
+    * * Field Name: NotificationsAvailable
+    * * Display Name: Notifications Available
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Indicates whether this job type supports sending notifications on completion or failure.
+    */
+    get NotificationsAvailable(): boolean {
+        return this.Get('NotificationsAvailable');
+    }
+    set NotificationsAvailable(value: boolean) {
+        this.Set('NotificationsAvailable', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Scheduled Jobs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ScheduledJob
+ * * Base View: vwScheduledJobs
+ * * @description Defines schedules for automated job execution across all schedulable types. Each record represents a scheduled job with its cron expression, configuration, and execution tracking.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Scheduled Jobs')
+export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
+    /**
+    * Loads the MJ: Scheduled Jobs record from the database
+    * @param ID: string - primary key value to load the MJ: Scheduled Jobs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ScheduledJobEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Scheduled Jobs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
+    * * Configuration: This rule ensures that if the Configuration field is not empty, it must contain valid JSON data.  
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateConfigurationIsJson(result);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the Configuration field is not empty, it must contain valid JSON data.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateConfigurationIsJson(result: ValidationResult) {
+    	if (this.Configuration !== null && typeof this.Configuration === "string") {
+    		try {
+    			JSON.parse(this.Configuration);
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo("Configuration", "When provided, the Configuration field must contain valid JSON.", this.Configuration, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: JobTypeID
+    * * Display Name: Job Type ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Types (vwScheduledJobTypes.ID)
+    */
+    get JobTypeID(): string {
+        return this.Get('JobTypeID');
+    }
+    set JobTypeID(value: string) {
+        this.Set('JobTypeID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Human-readable name for this scheduled job. Should clearly identify what the job does.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed description of the job's purpose, what it does, and any important notes about its execution.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: CronExpression
+    * * Display Name: Cron Expression
+    * * SQL Data Type: nvarchar(120)
+    * * Description: Cron expression defining when the job should execute (e.g., "0 30 9 * * MON-FRI" for weekdays at 9:30 AM). Uses standard cron syntax with seconds precision.
+    */
+    get CronExpression(): string {
+        return this.Get('CronExpression');
+    }
+    set CronExpression(value: string) {
+        this.Set('CronExpression', value);
+    }
+
+    /**
+    * * Field Name: Timezone
+    * * Display Name: Timezone
+    * * SQL Data Type: nvarchar(64)
+    * * Default Value: UTC
+    * * Description: IANA timezone identifier for interpreting the cron expression (e.g., "America/Chicago", "UTC"). Ensures consistent scheduling across different server locations.
+    */
+    get Timezone(): string {
+        return this.Get('Timezone');
+    }
+    set Timezone(value: string) {
+        this.Set('Timezone', value);
+    }
+
+    /**
+    * * Field Name: StartAt
+    * * Display Name: Start At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional start date/time for when this schedule becomes active. Job will not execute before this time. NULL means active immediately upon creation.
+    */
+    get StartAt(): Date | null {
+        return this.Get('StartAt');
+    }
+    set StartAt(value: Date | null) {
+        this.Set('StartAt', value);
+    }
+
+    /**
+    * * Field Name: EndAt
+    * * Display Name: End At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Optional end date/time for when this schedule expires. Job will not execute after this time. NULL means no expiration.
+    */
+    get EndAt(): Date | null {
+        return this.Get('EndAt');
+    }
+    set EndAt(value: Date | null) {
+        this.Set('EndAt', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Pending
+    *   * Active
+    *   * Paused
+    *   * Disabled
+    *   * Expired
+    * * Description: Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.
+    */
+    get Status(): 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Job-type specific configuration stored as JSON. Schema is defined by the ScheduledJobType plugin. For Agents: includes AgentID, StartingPayload, InitialMessage, etc. For Actions: includes ActionID and parameter mappings.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
+    }
+
+    /**
+    * * Field Name: OwnerUserID
+    * * Display Name: Owner User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.
+    */
+    get OwnerUserID(): string | null {
+        return this.Get('OwnerUserID');
+    }
+    set OwnerUserID(value: string | null) {
+        this.Set('OwnerUserID', value);
+    }
+
+    /**
+    * * Field Name: LastRunID
+    * * Display Name: Last Run ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
+    * * Description: Reference to the most recent execution of this schedule. Provides quick access to last run status and details.
+    */
+    get LastRunID(): string | null {
+        return this.Get('LastRunID');
+    }
+    set LastRunID(value: string | null) {
+        this.Set('LastRunID', value);
+    }
+
+    /**
+    * * Field Name: LastRunAt
+    * * Display Name: Last Run At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the most recent execution. Updated after each run. Used for monitoring and dashboard displays.
+    */
+    get LastRunAt(): Date | null {
+        return this.Get('LastRunAt');
+    }
+    set LastRunAt(value: Date | null) {
+        this.Set('LastRunAt', value);
+    }
+
+    /**
+    * * Field Name: NextRunAt
+    * * Display Name: Next Run At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Calculated timestamp of when this job should next execute based on the cron expression. Updated after each run. Used by scheduler to determine which jobs are due.
+    */
+    get NextRunAt(): Date | null {
+        return this.Get('NextRunAt');
+    }
+    set NextRunAt(value: Date | null) {
+        this.Set('NextRunAt', value);
+    }
+
+    /**
+    * * Field Name: RunCount
+    * * Display Name: Run Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Total number of times this schedule has been executed, including both successful and failed runs.
+    */
+    get RunCount(): number {
+        return this.Get('RunCount');
+    }
+    set RunCount(value: number) {
+        this.Set('RunCount', value);
+    }
+
+    /**
+    * * Field Name: SuccessCount
+    * * Display Name: Success Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of times this schedule has executed successfully (Success = true in ScheduledJobRun).
+    */
+    get SuccessCount(): number {
+        return this.Get('SuccessCount');
+    }
+    set SuccessCount(value: number) {
+        this.Set('SuccessCount', value);
+    }
+
+    /**
+    * * Field Name: FailureCount
+    * * Display Name: Failure Count
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Number of times this schedule has executed but failed (Success = false in ScheduledJobRun).
+    */
+    get FailureCount(): number {
+        return this.Get('FailureCount');
+    }
+    set FailureCount(value: number) {
+        this.Set('FailureCount', value);
+    }
+
+    /**
+    * * Field Name: NotifyOnSuccess
+    * * Display Name: Notify On Success
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether to send notifications when the job completes successfully.
+    */
+    get NotifyOnSuccess(): boolean {
+        return this.Get('NotifyOnSuccess');
+    }
+    set NotifyOnSuccess(value: boolean) {
+        this.Set('NotifyOnSuccess', value);
+    }
+
+    /**
+    * * Field Name: NotifyOnFailure
+    * * Display Name: Notify On Failure
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether to send notifications when the job fails. Defaults to true for alerting on failures.
+    */
+    get NotifyOnFailure(): boolean {
+        return this.Get('NotifyOnFailure');
+    }
+    set NotifyOnFailure(value: boolean) {
+        this.Set('NotifyOnFailure', value);
+    }
+
+    /**
+    * * Field Name: NotifyUserID
+    * * Display Name: Notify User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.
+    */
+    get NotifyUserID(): string | null {
+        return this.Get('NotifyUserID');
+    }
+    set NotifyUserID(value: string | null) {
+        this.Set('NotifyUserID', value);
+    }
+
+    /**
+    * * Field Name: NotifyViaEmail
+    * * Display Name: Notify Via Email
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.
+    */
+    get NotifyViaEmail(): boolean {
+        return this.Get('NotifyViaEmail');
+    }
+    set NotifyViaEmail(value: boolean) {
+        this.Set('NotifyViaEmail', value);
+    }
+
+    /**
+    * * Field Name: NotifyViaInApp
+    * * Display Name: Notify Via In App
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.
+    */
+    get NotifyViaInApp(): boolean {
+        return this.Get('NotifyViaInApp');
+    }
+    set NotifyViaInApp(value: boolean) {
+        this.Set('NotifyViaInApp', value);
+    }
+
+    /**
+    * * Field Name: LockToken
+    * * Display Name: Lock Token
+    * * SQL Data Type: uniqueidentifier
+    * * Description: Unique token used for distributed locking across multiple server instances. Set when a server claims the job for execution. Prevents duplicate executions in multi-server environments.
+    */
+    get LockToken(): string | null {
+        return this.Get('LockToken');
+    }
+    set LockToken(value: string | null) {
+        this.Set('LockToken', value);
+    }
+
+    /**
+    * * Field Name: LockedAt
+    * * Display Name: Locked At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp when the lock was acquired. Used with ExpectedCompletionAt to detect stale locks from crashed server instances.
+    */
+    get LockedAt(): Date | null {
+        return this.Get('LockedAt');
+    }
+    set LockedAt(value: Date | null) {
+        this.Set('LockedAt', value);
+    }
+
+    /**
+    * * Field Name: LockedByInstance
+    * * Display Name: Locked By Instance
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Identifier of the server instance that currently holds the lock (e.g., "hostname-12345"). Used for troubleshooting and monitoring which server is executing which job.
+    */
+    get LockedByInstance(): string | null {
+        return this.Get('LockedByInstance');
+    }
+    set LockedByInstance(value: string | null) {
+        this.Set('LockedByInstance', value);
+    }
+
+    /**
+    * * Field Name: ExpectedCompletionAt
+    * * Display Name: Expected Completion At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Expected completion time for the current execution. If current time exceeds this and lock still exists, the lock is considered stale and can be claimed by another instance. Handles crashed server cleanup.
+    */
+    get ExpectedCompletionAt(): Date | null {
+        return this.Get('ExpectedCompletionAt');
+    }
+    set ExpectedCompletionAt(value: Date | null) {
+        this.Set('ExpectedCompletionAt', value);
+    }
+
+    /**
+    * * Field Name: ConcurrencyMode
+    * * Display Name: Concurrency Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Skip
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Skip
+    *   * Queue
+    *   * Concurrent
+    * * Description: Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.
+    */
+    get ConcurrencyMode(): 'Skip' | 'Queue' | 'Concurrent' {
+        return this.Get('ConcurrencyMode');
+    }
+    set ConcurrencyMode(value: 'Skip' | 'Queue' | 'Concurrent') {
+        this.Set('ConcurrencyMode', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: JobType
+    * * Display Name: Job Type
+    * * SQL Data Type: nvarchar(100)
+    */
+    get JobType(): string {
+        return this.Get('JobType');
+    }
+
+    /**
+    * * Field Name: OwnerUser
+    * * Display Name: Owner User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get OwnerUser(): string | null {
+        return this.Get('OwnerUser');
+    }
+
+    /**
+    * * Field Name: NotifyUser
+    * * Display Name: Notify User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get NotifyUser(): string | null {
+        return this.Get('NotifyUser');
     }
 }
 
