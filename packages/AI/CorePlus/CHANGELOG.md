@@ -1,5 +1,21 @@
 # @memberjunction/ai-core-plus
 
+## 2.105.0
+
+### Minor Changes
+
+- 4807f35: migration
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/actions-base@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Patch Changes

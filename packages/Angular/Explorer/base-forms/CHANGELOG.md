@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ng-base-forms
 
+## 2.105.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.105.0
+- @memberjunction/ng-base-types@2.105.0
+- @memberjunction/ng-code-editor@2.105.0
+- @memberjunction/ng-record-changes@2.105.0
+- @memberjunction/ng-link-directives@2.105.0
+- @memberjunction/ng-container-directives@2.105.0
+- @memberjunction/ng-tabstrip@2.105.0
+- @memberjunction/core@2.105.0
+- @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Patch Changes

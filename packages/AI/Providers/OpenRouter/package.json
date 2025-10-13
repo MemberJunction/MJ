@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-openrouter",
-  "version": "2.104.0",
+  "version": "2.105.0",
   "description": "MemberJunction Wrapper for OpenRouter AI inference services",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.104.0",
-    "@memberjunction/ai-openai": "2.104.0",
-    "@memberjunction/global": "2.100.3"
+    "@memberjunction/ai": "2.105.0",
+    "@memberjunction/ai-openai": "2.105.0",
+    "@memberjunction/global": "2.105.0"
   }
 }
