@@ -55,6 +55,14 @@ import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/a
 import { GridModule } from '@progress/kendo-angular-grid';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
+// Scheduling Dashboard Components
+import { SchedulingDashboardComponent } from './Scheduling/scheduling-dashboard.component';
+import { SchedulingMonitoringComponent } from './Scheduling/components/scheduling-monitoring.component';
+import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs.component';
+import { SchedulingHistoryComponent } from './Scheduling/components/scheduling-history.component';
+import { SchedulingTypesComponent } from './Scheduling/components/scheduling-types.component';
+import { SchedulingHealthComponent } from './Scheduling/components/scheduling-health.component';
+import { SchedulingInstrumentationService } from './Scheduling/services/scheduling-instrumentation.service';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -92,7 +100,14 @@ import { SplitterModule } from '@progress/kendo-angular-layout';
     // Component Studio Components
     ComponentStudioDashboardComponent,
     TextImportDialogComponent,
-    ArtifactSelectionDialogComponent
+    ArtifactSelectionDialogComponent,
+    // Scheduling Dashboard Components
+    SchedulingDashboardComponent,
+    SchedulingMonitoringComponent,
+    SchedulingJobsComponent,
+    SchedulingHistoryComponent,
+    SchedulingTypesComponent,
+    SchedulingHealthComponent
   ],
   imports: [
     CommonModule,
@@ -119,13 +134,15 @@ import { SplitterModule } from '@progress/kendo-angular-layout';
     PanelBarModule
   ],
   providers: [
-    AIInstrumentationService
+    AIInstrumentationService,
+    SchedulingInstrumentationService
   ],
   exports: [
     EntityAdminDashboardComponent,
     AIDashboardComponent,
     ActionsManagementDashboardComponent,
-    ComponentStudioDashboardComponent
+    ComponentStudioDashboardComponent,
+    SchedulingDashboardComponent
   ]
 })
 export class DashboardsModule { }
