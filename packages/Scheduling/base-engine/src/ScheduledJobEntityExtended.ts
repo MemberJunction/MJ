@@ -5,6 +5,7 @@
 
 import { ScheduledJobEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
+import { SchedulingEngineBase } from './SchedulingEngineBase';
 
 /**
  * Extended ScheduledJob entity with scheduling helper methods
@@ -91,6 +92,44 @@ export class ScheduledJobEntityExtended extends ScheduledJobEntity {
             return 0;
         }
         return (this.FailureCount / this.RunCount) * 100;
+    }
+
+    /**
+     * Override Save to update polling interval cache after saving
+     */
+    public override async Save(options?: any): Promise<boolean> {
+        const result = await super.Save(options);
+
+        if (result) {
+            // Update the polling interval in the engine singleton
+            try {
+                SchedulingEngineBase.Instance.UpdatePollingInterval();
+            } catch (error) {
+                // Log but don't fail the save operation
+                console.error('Failed to update polling interval after save:', error);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Override Delete to update polling interval cache after deletion
+     */
+    public override async Delete(): Promise<boolean> {
+        const result = await super.Delete();
+
+        if (result) {
+            // Update the polling interval in the engine singleton
+            try {
+                SchedulingEngineBase.Instance.UpdatePollingInterval();
+            } catch (error) {
+                // Log but don't fail the delete operation
+                console.error('Failed to update polling interval after delete:', error);
+            }
+        }
+
+        return result;
     }
 }
 

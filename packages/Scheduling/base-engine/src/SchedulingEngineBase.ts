@@ -21,6 +21,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
     private _scheduledJobTypes: ScheduledJobTypeEntity[] = [];
     private _scheduledJobs: ScheduledJobEntity[] = [];
     private _scheduledJobRuns: ScheduledJobRunEntity[] = [];
+    private _activePollingInterval: number = 60000; // Default 1 minute
 
     /**
      * Configure the engine by loading metadata
@@ -45,8 +46,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
             },
             {
                 EntityName: 'Scheduled Jobs',
-                PropertyName: '_scheduledJobs',
-                ExtraFilter: includeAllJobs ? undefined : "Status = 'Active'"
+                PropertyName: '_scheduledJobs'
             }
         ];
 
@@ -54,13 +54,25 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
         if (includeRuns) {
             configs.push({
                 EntityName: 'Scheduled Job Runs',
-                PropertyName: '_scheduledJobRuns',
-                ExtraFilter: 'StartedAt >= DATEADD(day, -7, GETUTCDATE())', // Last 7 days
-                OrderBy: 'StartedAt DESC'
+                PropertyName: '_scheduledJobRuns'
             });
         }
 
-        return await this.Load(configs, provider, forceRefresh, contextUser);
+        await this.Load(configs, provider, forceRefresh, contextUser);
+
+        // Filter jobs to only active if requested
+        if (!includeAllJobs) {
+            this._scheduledJobs = this._scheduledJobs.filter(j => j.Status === 'Active');
+        }
+
+        // Filter runs to last 7 days if loaded
+        if (includeRuns) {
+            const sevenDaysAgo = new Date();
+            sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+            this._scheduledJobRuns = this._scheduledJobRuns.filter(r => r.StartedAt >= sevenDaysAgo);
+        }
+
+        return true;
     }
 
     /**
@@ -110,6 +122,49 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
      */
     public GetRunsForJob(jobId: string): ScheduledJobRunEntity[] {
         return this._scheduledJobRuns.filter(r => r.ScheduledJobID === jobId);
+    }
+
+    /**
+     * Get the current active polling interval in milliseconds
+     */
+    public get ActivePollingInterval(): number {
+        return this._activePollingInterval;
+    }
+
+    /**
+     * Calculate and update the active polling interval based on scheduled jobs
+     * This should be called whenever jobs are added, modified, or deleted
+     */
+    public UpdatePollingInterval(): void {
+        if (this._scheduledJobs.length === 0) {
+            // No active jobs, use default interval
+            this._activePollingInterval = 60000; // 1 minute
+            return;
+        }
+
+        // Find the minimum time until next run across all active jobs
+        let minInterval = Number.MAX_SAFE_INTEGER;
+        const now = Date.now();
+
+        for (const job of this._scheduledJobs) {
+            if (job.Status !== 'Active' || !job.NextRunAt) {
+                continue;
+            }
+
+            const timeUntilNext = Math.max(0, job.NextRunAt.getTime() - now);
+            if (timeUntilNext < minInterval) {
+                minInterval = timeUntilNext;
+            }
+        }
+
+        // Set polling interval to half the minimum interval, with bounds
+        // Min: 10 seconds, Max: 5 minutes
+        if (minInterval === Number.MAX_SAFE_INTEGER) {
+            this._activePollingInterval = 60000; // Default 1 minute
+        } else {
+            const halfInterval = Math.floor(minInterval / 2);
+            this._activePollingInterval = Math.max(10000, Math.min(300000, halfInterval));
+        }
     }
 
     /**

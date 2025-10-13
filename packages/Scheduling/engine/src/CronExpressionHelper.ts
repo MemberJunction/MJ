@@ -4,7 +4,7 @@
  */
 
 import * as cronParser from 'cron-parser';
-import { ValidationResult } from '@memberjunction/core';
+import { ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
 
 /**
  * Utility class for cron expression parsing and evaluation
@@ -76,7 +76,12 @@ export class CronExpressionHelper {
         const result = new ValidationResult();
 
         if (!cronExpression || cronExpression.trim().length === 0) {
-            result.AddError('CronExpression', 'Cron expression is required');
+            result.Errors.push(new ValidationErrorInfo(
+                'CronExpression',
+                'Cron expression is required',
+                cronExpression,
+                ValidationErrorType.Failure
+            ));
             return result;
         }
 
@@ -85,7 +90,12 @@ export class CronExpressionHelper {
             result.Success = true;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid cron expression';
-            result.AddError('CronExpression', errorMessage);
+            result.Errors.push(new ValidationErrorInfo(
+                'CronExpression',
+                errorMessage,
+                cronExpression,
+                ValidationErrorType.Failure
+            ));
         }
 
         return result;

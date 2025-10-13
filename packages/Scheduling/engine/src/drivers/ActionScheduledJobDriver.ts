@@ -3,17 +3,17 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { ValidationResult, UserInfo, Metadata } from '@memberjunction/core';
-import { ActionEntityExtended, ActionParam, ActionEngineServer } from '@memberjunction/actions';
+import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { SafeJSONParse } from '@memberjunction/global';
 import {
     ScheduledJobResult,
     NotificationContent,
     ActionJobConfiguration
 } from '@memberjunction/scheduling-base-types';
+import { ActionParam } from '@memberjunction/actions-base';
 
 /**
  * Driver for executing scheduled Action jobs
@@ -65,7 +65,7 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
             Success: actionResult.Success,
             ErrorMessage: actionResult.Message || undefined,
             Details: {
-                ResultCode: actionResult.ResultCode,
+                ResultCode: actionResult.Result?.ResultCode,
                 IsSuccess: actionResult.Success,
                 OutputParams: actionResult.Params
             }
@@ -79,21 +79,41 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
             const config = this.parseConfiguration<ActionJobConfiguration>(schedule);
 
             if (!config.ActionID) {
-                result.AddError('Configuration.ActionID', 'ActionID is required');
+                result.Errors.push(new ValidationErrorInfo(
+                    'Configuration.ActionID',
+                    'ActionID is required',
+                    config.ActionID,
+                    ValidationErrorType.Failure
+                ));
             }
 
             // Validate params structure
             if (config.Params) {
                 if (!Array.isArray(config.Params)) {
-                    result.AddError('Configuration.Params', 'Params must be an array');
+                    result.Errors.push(new ValidationErrorInfo(
+                        'Configuration.Params',
+                        'Params must be an array',
+                        config.Params,
+                        ValidationErrorType.Failure
+                    ));
                 } else {
                     for (let i = 0; i < config.Params.length; i++) {
                         const param = config.Params[i];
                         if (!param.ActionParamID) {
-                            result.AddError(`Configuration.Params[${i}].ActionParamID`, 'ActionParamID is required');
+                            result.Errors.push(new ValidationErrorInfo(
+                                `Configuration.Params[${i}].ActionParamID`,
+                                'ActionParamID is required',
+                                param.ActionParamID,
+                                ValidationErrorType.Failure
+                            ));
                         }
                         if (!param.ValueType || !['Static', 'SQL Statement'].includes(param.ValueType)) {
-                            result.AddError(`Configuration.Params[${i}].ValueType`, 'ValueType must be "Static" or "SQL Statement"');
+                            result.Errors.push(new ValidationErrorInfo(
+                                `Configuration.Params[${i}].ValueType`,
+                                'ValueType must be "Static" or "SQL Statement"',
+                                param.ValueType,
+                                ValidationErrorType.Failure
+                            ));
                         }
                     }
                 }
@@ -101,7 +121,12 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid configuration';
-            result.AddError('Configuration', errorMessage);
+            result.Errors.push(new ValidationErrorInfo(
+                'Configuration',
+                errorMessage,
+                schedule.Configuration,
+                ValidationErrorType.Failure
+            ));
         }
 
         result.Success = result.Errors.length === 0;

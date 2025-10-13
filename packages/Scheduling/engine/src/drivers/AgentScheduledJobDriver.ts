@@ -5,8 +5,8 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { ValidationResult, UserInfo, Metadata } from '@memberjunction/core';
-import { AIAgentEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
+import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import {
     ScheduledJobResult,
@@ -48,32 +48,35 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
 
         // Execute the agent
         const runner = new AgentRunner();
-        const agentRun = await runner.RunAgent({
+
+        // Build conversation messages - if initial message provided, add it as user message
+        const conversationMessages = config.InitialMessage
+            ? [{ role: 'user' as const, content: config.InitialMessage }]
+            : [];
+
+        const result = await runner.RunAgent({
             agent: agent,
-            conversationID: config.ConversationID,
-            initialMessage: config.InitialMessage,
-            startingPayload: config.StartingPayload,
-            configurationID: config.ConfigurationID,
-            overrideModelID: config.OverrideModelID,
+            conversationMessages: conversationMessages,
+            payload: config.StartingPayload,
             contextUser: context.ContextUser
         });
 
         // Link agent run back to scheduled job run
-        if (agentRun.ID && context.Run.ID) {
-            agentRun.ScheduledJobRunID = context.Run.ID;
-            await agentRun.Save();
+        if (result.agentRun.ID && context.Run.ID) {
+            result.agentRun.ScheduledJobRunID = context.Run.ID;
+            await result.agentRun.Save();
         }
 
         // Build result with agent-specific details
         return {
-            Success: agentRun.Success ?? false,
-            ErrorMessage: agentRun.ErrorMessage || undefined,
+            Success: result.success,
+            ErrorMessage: result.agentRun.ErrorMessage || undefined,
             Details: {
-                AgentRunID: agentRun.ID,
-                TokensUsed: agentRun.TotalTokensUsed,
-                Cost: agentRun.TotalCost,
-                ConversationID: agentRun.ConversationID,
-                Status: agentRun.Status
+                AgentRunID: result.agentRun.ID,
+                TokensUsed: result.agentRun.TotalTokensUsed,
+                Cost: result.agentRun.TotalCost,
+                ConversationID: result.agentRun.ConversationID,
+                Status: result.agentRun.Status
             }
         };
     }
@@ -86,7 +89,12 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
 
             // Validate required fields
             if (!config.AgentID) {
-                result.AddError('Configuration.AgentID', 'AgentID is required');
+                result.Errors.push(new ValidationErrorInfo(
+                    'Configuration.AgentID',
+                    'AgentID is required',
+                    config.AgentID,
+                    ValidationErrorType.Failure
+                ));
             }
 
             // Validate StartingPayload is valid JSON if provided
@@ -94,13 +102,23 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
                 try {
                     JSON.stringify(config.StartingPayload);
                 } catch {
-                    result.AddError('Configuration.StartingPayload', 'StartingPayload must be valid JSON');
+                    result.Errors.push(new ValidationErrorInfo(
+                        'Configuration.StartingPayload',
+                        'StartingPayload must be valid JSON',
+                        config.StartingPayload,
+                        ValidationErrorType.Failure
+                    ));
                 }
             }
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Invalid configuration';
-            result.AddError('Configuration', errorMessage);
+            result.Errors.push(new ValidationErrorInfo(
+                'Configuration',
+                errorMessage,
+                schedule.Configuration,
+                ValidationErrorType.Failure
+            ));
         }
 
         result.Success = result.Errors.length === 0;
@@ -140,9 +158,9 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         };
     }
 
-    private async loadAgent(agentId: string, contextUser: UserInfo): Promise<AIAgentEntity> {
+    private async loadAgent(agentId: string, contextUser: UserInfo): Promise<AIAgentEntityExtended> {
         const md = new Metadata();
-        const agent = await md.GetEntityObject<AIAgentEntity>('AI Agents', contextUser);
+        const agent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', contextUser);
         const loaded = await agent.Load(agentId);
 
         if (!loaded) {

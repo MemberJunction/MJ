@@ -18,6 +18,9 @@
     "@memberjunction/core-entities": "2.104.0",
     "@memberjunction/global": "2.100.3",
     "@memberjunction/scheduling-base-types": "2.104.0",
+    "@memberjunction/scheduling-engine-base": "2.104.0",
+    "@memberjunction/ai-agents": "2.104.0",
+    "@memberjunction/actions": "2.104.0",
     "cron-parser": "^4.9.0"
   },
   "devDependencies": {
