@@ -41,11 +41,11 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
     ): Promise<boolean> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
-                EntityName: 'Scheduled Job Types',
+                EntityName: 'MJ: Scheduled Job Types',
                 PropertyName: '_scheduledJobTypes'
             },
             {
-                EntityName: 'Scheduled Jobs',
+                EntityName: 'MJ: Scheduled Jobs',
                 PropertyName: '_scheduledJobs'
             }
         ];
@@ -53,7 +53,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
         // Optionally load recent runs
         if (includeRuns) {
             configs.push({
-                EntityName: 'Scheduled Job Runs',
+                EntityName: 'MJ: Scheduled Job Runs',
                 PropertyName: '_scheduledJobRuns'
             });
         }
@@ -158,12 +158,12 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
         }
 
         // Set polling interval to half the minimum interval, with bounds
-        // Min: 10 seconds, Max: 5 minutes
+        // Min: 1 minute (60000ms), Max: 1 week (604800000ms)
         if (minInterval === Number.MAX_SAFE_INTEGER) {
             this._activePollingInterval = 60000; // Default 1 minute
         } else {
             const halfInterval = Math.floor(minInterval / 2);
-            this._activePollingInterval = Math.max(10000, Math.min(300000, halfInterval));
+            this._activePollingInterval = Math.max(60000, Math.min(604800000, halfInterval));
         }
     }
 

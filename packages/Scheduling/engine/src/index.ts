@@ -4,6 +4,7 @@
  */
 
 import { LoadScheduledJobDrivers } from './drivers';
+import { LoadBaseSchedulingEngine } from '@memberjunction/scheduling-engine-base';
 
 export * from './BaseScheduledJob';
 export * from './ScheduledJobEngine';
@@ -16,5 +17,6 @@ export * from './drivers';
  * Call this at application startup
  */
 export function LoadSchedulingEngine(): void {
+    LoadBaseSchedulingEngine();
     LoadScheduledJobDrivers();
 }

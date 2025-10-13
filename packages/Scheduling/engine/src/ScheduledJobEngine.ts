@@ -51,6 +51,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
     private pollingTimer?: NodeJS.Timeout;
     private isPolling: boolean = false;
+    private hasInitialized: boolean = false;
 
     /**
      * Start continuous polling for scheduled jobs
@@ -65,16 +66,27 @@ export class SchedulingEngine extends SchedulingEngineBase {
         }
 
         this.isPolling = true;
-        this.log('Starting scheduled job polling');
 
         const poll = async () => {
+            // Initialize NextRunAt and clean up stale locks on first poll only
+            if (!this.hasInitialized) {
+                await this.initializeNextRunTimes(contextUser);
+                await this.cleanupStaleLocks(contextUser);
+                // Force reload after cleaning locks to ensure we have fresh data
+                await this.Config(true, contextUser);
+                this.hasInitialized = true;
+            }
             try {
-                await this.ExecuteScheduledJobs(contextUser);
+                const runs = await this.ExecuteScheduledJobs(contextUser);
+
+                // Only log if jobs were actually executed
+                if (runs.length > 0) {
+                    console.log(`📅 Scheduled Jobs: Executed ${runs.length} job(s)`);
+                }
 
                 // Schedule next poll based on current ActivePollingInterval
                 if (this.isPolling) {
                     this.pollingTimer = setTimeout(poll, this.ActivePollingInterval);
-                    this.log(`Next poll in ${this.ActivePollingInterval}ms`);
                 }
             } catch (error) {
                 this.logError('Error during polling', error);
@@ -121,20 +133,33 @@ export class SchedulingEngine extends SchedulingEngineBase {
     ): Promise<ScheduledJobRunEntity[]> {
         await this.Config(false, contextUser);
 
+        console.log(`📅 Polling: Checking ${this.ScheduledJobs.length} job(s) at ${evalTime.toISOString()}`);
+
         const runs: ScheduledJobRunEntity[] = [];
 
         for (const job of this.ScheduledJobs) {
+            console.log(`  - ${job.Name}: NextRunAt=${job.NextRunAt?.toISOString() || 'NULL'}, Status=${job.Status}`);
+
             if (this.isJobDue(job, evalTime)) {
+                console.log(`    ✓ Job is due, executing...`);
                 try {
                     const run = await this.executeJob(job, contextUser);
                     if (run) { // null if skipped
                         runs.push(run);
+                    } else {
+                        console.log(`    ⊘ Job was skipped (locked or queued)`);
                     }
                 } catch (error) {
                     this.logError(`Failed to execute job ${job.Name}`, error);
                 }
+            } else {
+                console.log(`    ⊗ Job is not due yet`);
             }
         }
+
+        // Recalculate polling interval after each poll cycle
+        // This ensures we adapt to the narrowest active job schedule
+        this.UpdatePollingInterval();
 
         return runs;
     }
@@ -177,12 +202,13 @@ export class SchedulingEngine extends SchedulingEngineBase {
             return false;
         }
 
-        // Evaluate cron expression
-        return CronExpressionHelper.IsExpressionDue(
-            job.CronExpression,
-            job.Timezone,
-            evalTime
-        );
+        // Check if NextRunAt is set and has passed
+        if (!job.NextRunAt) {
+            return false;
+        }
+
+        // Job is due if NextRunAt is in the past or very close to now (within 1 second tolerance)
+        return job.NextRunAt.getTime() <= evalTime.getTime() + 1000;
     }
 
     /**
@@ -233,7 +259,8 @@ export class SchedulingEngine extends SchedulingEngineBase {
                 throw new Error(`Failed to create plugin instance: ${jobType.DriverClass}`);
             }
 
-            this.log(`Executing job: ${job.Name} (Type: ${jobType.Name})`);
+            // Console log job start
+            console.log(`  ▶️  Starting: ${job.Name}`);
 
             // Build execution context
             const context: ScheduledJobExecutionContext = {
@@ -259,7 +286,10 @@ export class SchedulingEngine extends SchedulingEngineBase {
             // Send notifications if configured
             await this.sendNotificationsIfNeeded(job, context, result, plugin);
 
-            this.log(`Job completed: ${job.Name} (Success: ${result.Success})`);
+            // Console log job completion
+            const duration = run.CompletedAt.getTime() - run.StartedAt.getTime();
+            const status = result.Success ? '✅' : '❌';
+            console.log(`  ${status} Completed: ${job.Name} (${duration}ms)`);
 
             return run;
 
@@ -299,7 +329,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
     ): Promise<ScheduledJobRunEntity> {
         const md = new Metadata();
         const run = await md.GetEntityObject<ScheduledJobRunEntity>(
-            'Scheduled Job Runs',
+            'MJ: Scheduled Job Runs',
             contextUser
         );
 
@@ -395,49 +425,70 @@ export class SchedulingEngine extends SchedulingEngineBase {
      */
     private async tryAcquireLock(job: ScheduledJobEntity): Promise<boolean> {
         // Check if already locked and not stale
+        console.log(`    🔒 tryAcquireLock: job.LockToken=${job.LockToken?.substring(0, 8) || 'NULL'}, ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString() || 'NULL'}`);
+
         if (job.LockToken != null) {
-            if (job.ExpectedCompletionAt && new Date() > job.ExpectedCompletionAt) {
+            const now = new Date();
+            console.log(`      Lock exists! Checking if stale: ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString()}, now=${now.toISOString()}`);
+
+            if (job.ExpectedCompletionAt && now > job.ExpectedCompletionAt) {
+                console.log(`      → Lock is STALE, cleaning up...`);
                 this.log(`Detected stale lock on job ${job.Name}, cleaning up`);
                 await this.cleanupStaleLock(job);
             } else {
                 // Lock is active and not stale
+                console.log(`      → Lock is ACTIVE (not stale), returning false`);
                 return false;
             }
+        } else {
+            console.log(`      → No lock exists, will try to acquire`);
         }
 
-        // Try to acquire lock atomically via direct SQL to avoid race conditions
+        // Try to acquire lock using BaseEntity Save for proper change tracking
         const lockToken = this.generateGuid();
         const instanceId = this.getInstanceIdentifier();
         const expectedCompletion = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes default
 
         try {
-            const provider = Metadata.Provider as any;
+            // Reload job from database to ensure we have latest state and enable dirty checking
+            await job.Load(job.ID);
 
-            // Atomic UPDATE with WHERE clause to ensure only one server succeeds
-            // TODO: Get schema name from config instead of hardcoding
-            const sql = `
-                UPDATE [dbo].[ScheduledJob]
-                SET
-                    LockToken = '${lockToken}',
-                    LockedAt = SYSDATETIMEOFFSET(),
-                    LockedByInstance = '${instanceId}',
-                    ExpectedCompletionAt = '${expectedCompletion.toISOString()}'
-                WHERE ID = '${job.ID}'
-                  AND LockToken IS NULL;
-            `;
-
-            const result = await provider.ExecuteSQL(sql);
-
-            // Check if the update affected a row (lock acquired)
-            if (result && result.rowsAffected > 0) {
-                // Reload job to get updated lock info
-                await job.Load(job.ID);
-                return true;
+            // Verify lock is still null after reload (race condition check)
+            if (job.LockToken != null) {
+                console.log(`      ❌ Lock was acquired by another process during reload`);
+                return false;
             }
 
-            return false;
+            // Set lock fields
+            job.LockToken = lockToken;
+            job.LockedAt = new Date();
+            job.LockedByInstance = instanceId;
+            job.ExpectedCompletionAt = expectedCompletion;
+
+            console.log(`      → Attempting to save with lock: ${lockToken.substring(0, 8)}...`);
+
+            // Save will use optimistic concurrency - fails if another process updated the record
+            const saveResult = await job.Save();
+
+            if (saveResult) {
+                console.log(`      ✅ Lock acquired successfully!`);
+                return true;
+            } else {
+                console.log(`      ❌ Save failed - likely race condition with another server`);
+                // Clear lock state on failure
+                job.LockToken = null;
+                job.LockedAt = null;
+                job.LockedByInstance = null;
+                job.ExpectedCompletionAt = null;
+                return false;
+            }
         } catch (error) {
             this.logError(`Failed to acquire lock for job ${job.Name}`, error);
+            // Clear any partial lock state
+            job.LockToken = null;
+            job.LockedAt = null;
+            job.LockedByInstance = null;
+            job.ExpectedCompletionAt = null;
             return false;
         }
     }
@@ -485,7 +536,7 @@ export class SchedulingEngine extends SchedulingEngineBase {
     ): Promise<ScheduledJobRunEntity> {
         const md = new Metadata();
         const run = await md.GetEntityObject<ScheduledJobRunEntity>(
-            'Scheduled Job Runs',
+            'MJ: Scheduled Job Runs',
             contextUser
         );
 
@@ -524,6 +575,81 @@ export class SchedulingEngine extends SchedulingEngineBase {
             const v = c === 'x' ? r : (r & 0x3) | 0x8;
             return v.toString(16);
         });
+    }
+
+    /**
+     * Initialize NextRunAt for jobs that don't have it set
+     * @param contextUser - User context
+     * @private
+     */
+    private async initializeNextRunTimes(contextUser: UserInfo): Promise<void> {
+        for (const job of this.ScheduledJobs) {
+            if (!job.NextRunAt) {
+                job.NextRunAt = CronExpressionHelper.GetNextRunTime(job.CronExpression, job.Timezone);
+                try {
+                    await job.Save();
+                    console.log(`  ⚙️  Initialized NextRunAt for ${job.Name} -> ${job.NextRunAt.toISOString()}`);
+                } catch (error) {
+                    this.logError(`Failed to initialize NextRunAt for job ${job.Name}`, error);
+                }
+            }
+        }
+    }
+
+    /**
+     * Clean up stale locks on startup
+     * Releases any locks that have expired (ExpectedCompletionAt in the past)
+     * @param contextUser - User context
+     * @private
+     */
+    private async cleanupStaleLocks(contextUser: UserInfo): Promise<void> {
+        const now = new Date();
+        let cleanedCount = 0;
+
+        console.log(`  🔍 Checking for stale locks (current time: ${now.toISOString()})...`);
+
+        for (const job of this.ScheduledJobs) {
+            if (job.LockToken) {
+                console.log(`    Job "${job.Name}": LockToken=${job.LockToken?.substring(0, 8)}..., ExpectedCompletionAt=${job.ExpectedCompletionAt?.toISOString() || 'NULL'}`);
+
+                if (job.ExpectedCompletionAt) {
+                    const isStale = job.ExpectedCompletionAt < now;
+                    console.log(`      → Is stale? ${isStale} (${job.ExpectedCompletionAt.getTime()} < ${now.getTime()} = ${job.ExpectedCompletionAt.getTime() < now.getTime()})`);
+
+                    if (isStale) {
+                        console.log(`      🔓 Cleaning stale lock (locked by ${job.LockedByInstance})`);
+                        job.LockToken = null;
+                        job.LockedAt = null;
+                        job.LockedByInstance = null;
+                        job.ExpectedCompletionAt = null;
+                        try {
+                            await job.Save();
+                            cleanedCount++;
+                        } catch (error) {
+                            this.logError(`Failed to clean stale lock for job ${job.Name}`, error);
+                        }
+                    }
+                } else {
+                    console.log(`      ⚠️  Lock exists but no ExpectedCompletionAt - clearing anyway`);
+                    job.LockToken = null;
+                    job.LockedAt = null;
+                    job.LockedByInstance = null;
+                    job.ExpectedCompletionAt = null;
+                    try {
+                        await job.Save();
+                        cleanedCount++;
+                    } catch (error) {
+                        this.logError(`Failed to clean stale lock for job ${job.Name}`, error);
+                    }
+                }
+            }
+        }
+
+        if (cleanedCount > 0) {
+            console.log(`  ✅ Cleaned ${cleanedCount} stale lock(s)`);
+        } else {
+            console.log(`  ✓ No stale locks found`);
+        }
     }
 
     private log(message: string): void {

@@ -129,7 +129,7 @@ export abstract class BaseScheduledJob {
         contextUser: UserInfo
     ): Promise<ScheduledJobTypeEntity> {
         const md = new Metadata();
-        const jobType = await md.GetEntityObject<ScheduledJobTypeEntity>('Scheduled Job Types', contextUser);
+        const jobType = await md.GetEntityObject<ScheduledJobTypeEntity>('MJ: Scheduled Job Types', contextUser);
         await jobType.Load(schedule.JobTypeID);
         return jobType;
     }
