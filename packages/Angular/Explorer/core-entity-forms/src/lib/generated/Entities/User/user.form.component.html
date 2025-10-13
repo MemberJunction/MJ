@@ -484,19 +484,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Dashboard User Preferences" [Visible]="record.IsSaved"> 
-                        MJ: Dashboard User Preferences
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','UserID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
-                            [AllowLoad]="IsCurrentTab('MJ: Dashboard User Preferences')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: Dashboard User States" [Visible]="record.IsSaved"> 
                         MJ: Dashboard User States
                     </mj-tab>
@@ -510,14 +497,14 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Public Links" [Visible]="record.IsSaved"> 
-                        MJ: Public Links
+                    <mj-tab Name="MJ: Dashboard User Preferences" [Visible]="record.IsSaved"> 
+                        MJ: Dashboard User Preferences
                     </mj-tab>
                     <mj-tab-body>
                         <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Public Links','UserID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Public Links')"
-                            [AllowLoad]="IsCurrentTab('MJ: Public Links')"  
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
+                            [AllowLoad]="IsCurrentTab('MJ: Dashboard User Preferences')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -531,6 +518,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Versions','UserID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Artifact Versions')"
                             [AllowLoad]="IsCurrentTab('MJ: Artifact Versions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Public Links" [Visible]="record.IsSaved"> 
+                        MJ: Public Links
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Public Links','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Public Links')"
+                            [AllowLoad]="IsCurrentTab('MJ: Public Links')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
