@@ -12050,7 +12050,7 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 		result.Errors.push(new ValidationErrorInfo(
 			"RoleID/UserID",
 			"You must specify either a Role or a User, but not both and not neither.",
-			`RoleID: ${this.RoleID}, UserID: ${this.UserID}`,
+			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
 			ValidationErrorType.Failure
 		));
 	}
