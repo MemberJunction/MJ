@@ -231,7 +231,7 @@ import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 ${componentImports.join('\n')}
-${sections.map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
+${sections.filter(s => !s.IsRelatedEntity && s.ClassName && s.EntityClassName && s.FileNameWithoutExtension).map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
 ${
     relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-user-view-grid' )
                                  .map(remi => `import { ${remi.modules.map(m => m).join(', ')} } from "${remi.library}"`)
@@ -246,7 +246,7 @@ export function Load${modulePrefix}GeneratedForms() {
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
     ${componentNames.map(c => `Load${c.componentName}();`).join('\n    ')}
-    ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
+    ${sections.filter(s => !s.IsRelatedEntity && s.ClassName).map(s => `Load${s.ClassName}();`).join('\n    ')}
 }
     `
       }
@@ -746,6 +746,7 @@ ${componentCodeWithTabs}
                 Name: tabName,
                 TabCode: tabCode,
                 GeneratedOutput: generateResults,
+                EntityClassName: entity.ClassName,
             })
             index++;
         }
