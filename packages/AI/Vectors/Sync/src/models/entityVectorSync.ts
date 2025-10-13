@@ -2,8 +2,8 @@ import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { VectorDBBase } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
 import { BaseEntity, EntityField, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
-import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, TemplateContentEntity, 
-  TemplateContentTypeEntity, TemplateEntity, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
+import { AIModelEntity, EntityDocumentEntity, EntityDocumentTypeEntity, TemplateContentEntity,
+  TemplateContentTypeEntity, TemplateEntity, TemplateEntityExtended, TemplateParamEntity, VectorDatabaseEntity, VectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { pipeline } from 'node:stream/promises';
 import { EmbeddingData, TemplateParamData, VectorEmeddingData, VectorizeEntityParams, VectorizeEntityResponse } from '../generic/vectorSync.types';
@@ -14,7 +14,6 @@ import { resolve } from 'node:path';
 import { PassThrough, Transform } from 'node:stream';
 import { AIEngine } from '@memberjunction/aiengine';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 
 /**
  * Class that specializes in vectorizing entities using embedding models and upserting them into Vector Databases 

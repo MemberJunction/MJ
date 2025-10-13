@@ -15,7 +15,6 @@
         <i class="fas fa-cube"></i>
         <span>{{ artifactCount }} artifact{{ artifactCount !== 1 ? 's' : '' }}</span>
         </button>
-        <mj-tasks-dropdown [currentUser]="currentUser"></mj-tasks-dropdown>
         <mj-active-agent-indicator
         [conversationId]="conversationState.activeConversation.ID"
         [currentUser]="currentUser"
@@ -24,6 +23,10 @@
         </mj-active-agent-indicator>
     </div>
     <div class="chat-actions">
+        <mj-tasks-dropdown
+          [currentUser]="currentUser"
+          (taskClicked)="onTaskClicked($event)">
+        </mj-tasks-dropdown>
         <button class="action-btn" (click)="exportConversation()" title="Export conversation">
         <i class="fas fa-download"></i>
         Export
@@ -58,30 +61,40 @@
             (messageEdited)="onMessageEdited($event)"
             (openEntityRecord)="onOpenEntityRecord($event)">
             </mj-conversation-message-list>
-        </div>
 
-        <!-- Scroll to Bottom Icon -->
-        <span class="scroll-to-bottom-icon"
-              *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
-              [style.left.px]="getScrollToBottomIconPosition()"
-              (click)="scrollToBottomAnimate()">
-            <i class="fas fa-arrow-down"></i>
-        </span>
+            <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
+            <span class="scroll-to-bottom-icon" style="left: 50%;"
+                  *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
+                  (click)="scrollToBottomAnimate()">
+                <i class="fas fa-arrow-down"></i>
+            </span>
+        </div>
 
         <!-- Fixed Input Area -->
         <div class="chat-input-container">
-            <mj-message-input
-            *ngIf="conversationState.activeConversation"
-            [conversationId]="conversationState.activeConversation.ID"
-            [currentUser]="currentUser"
-            [conversationHistory]="messages"
-            [disabled]="isProcessing"
-            (messageSent)="onMessageSent($event)"
-            (agentResponse)="onAgentResponse($event)"
-            (agentRunDetected)="onAgentRunDetected($event)"
-            (artifactCreated)="onArtifactCreated($event)"
-            (conversationRenamed)="onConversationRenamed($event)">
-            </mj-message-input>
+            @if (isLoadingPeripheralData) {
+              <!-- Loading State -->
+              <div class="loading-peripheral-placeholder">
+                <div class="loading-peripheral-content">
+                  <i class="fas fa-spinner fa-spin"></i>
+                  <span>Loading conversation data...</span>
+                </div>
+              </div>
+            } @else {
+              <!-- Input Component -->
+              <mj-message-input
+              *ngIf="conversationState.activeConversation"
+              [conversationId]="conversationState.activeConversation.ID"
+              [currentUser]="currentUser"
+              [conversationHistory]="messages"
+              [disabled]="isProcessing"
+              (messageSent)="onMessageSent($event)"
+              (agentResponse)="onAgentResponse($event)"
+              (agentRunDetected)="onAgentRunDetected($event)"
+              (artifactCreated)="onArtifactCreated($event)"
+              (conversationRenamed)="onConversationRenamed($event)">
+              </mj-message-input>
+            }
         </div>
         </div>
     </div>
@@ -93,6 +106,9 @@
         <mj-artifact-viewer-panel
             [artifactId]="selectedArtifactId"
             [currentUser]="currentUser"
+            [environmentId]="environmentId"
+            [versionNumber]="selectedVersionNumber"
+            [refreshTrigger]="artifactViewerRefresh$"
             (closed)="onCloseArtifactPanel()">
         </mj-artifact-viewer-panel>
         </div>
@@ -151,9 +167,6 @@
     </div>
 }
 
-<!-- Active Tasks Panel -->
-<mj-active-tasks-panel></mj-active-tasks-panel>
-
 <!-- Artifacts Modal -->
 @if (showArtifactsModal) {
     <div class="modal-overlay" (click)="showArtifactsModal = false">
@@ -172,17 +185,45 @@
             </div>
         }
         @for (artifact of getArtifactsArray(); track artifact.artifactId) {
-            <div class="artifact-modal-card" (click)="openArtifactFromModal(artifact.artifactId)">
-            <div class="artifact-modal-icon">
-                <i class="fas fa-file-code"></i>
-            </div>
-            <div class="artifact-modal-info">
-                <div class="artifact-modal-title">{{artifact.name}}</div>
-                <div class="artifact-modal-meta">Version {{artifact.versionId.substring(0, 8)}}</div>
-            </div>
-            <div class="artifact-modal-action">
-                <i class="fas fa-external-link-alt"></i>
-            </div>
+            <div class="artifact-modal-card" [class.expanded]="expandedArtifactId === artifact.artifactId">
+              <!-- Main card header - click to open latest version -->
+              <div class="artifact-card-header" (click)="openArtifactFromModal(artifact.artifactId)">
+                <div class="artifact-modal-icon">
+                    <i class="fas fa-file-code"></i>
+                </div>
+                <div class="artifact-modal-info">
+                    <div class="artifact-modal-title">{{artifact.name}}</div>
+                    <div class="artifact-modal-meta">
+                      @if (artifact.versionCount > 1) {
+                        {{artifact.versionCount}} versions
+                      } @else {
+                        1 version
+                      }
+                    </div>
+                </div>
+                @if (artifact.versionCount > 1) {
+                  <button class="expand-btn" (click)="toggleArtifactExpansion(artifact.artifactId, $event)">
+                    <i class="fas" [class.fa-chevron-down]="expandedArtifactId !== artifact.artifactId"
+                       [class.fa-chevron-up]="expandedArtifactId === artifact.artifactId"></i>
+                  </button>
+                }
+                <div class="artifact-modal-action">
+                    <i class="fas fa-external-link-alt"></i>
+                </div>
+              </div>
+
+              <!-- Expanded version list -->
+              @if (expandedArtifactId === artifact.artifactId && artifact.versionCount > 1) {
+                <div class="artifact-versions-list">
+                  @for (version of artifact.versions; track version.versionId) {
+                    <div class="artifact-version-item" (click)="openArtifactFromModal(artifact.artifactId, version.versionNumber); $event.stopPropagation()">
+                      <span class="version-badge">v{{version.versionNumber}}</span>
+                      <span class="version-open-text">Open this version</span>
+                      <i class="fas fa-arrow-right"></i>
+                    </div>
+                  }
+                </div>
+              }
             </div>
         }
         </div>

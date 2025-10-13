@@ -2,9 +2,9 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
-import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity } from '@memberjunction/core-entities';
+import { AIModelEntityExtended, AIPromptEntityExtended, AIPromptRunEntityExtended, AIPromptModelEntity, AIModelVendorEntity, AIConfigurationEntity, AIVendorEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { TemplateEntityExtended, TemplateRenderResult } from '@memberjunction/templates-base-types';
+import { TemplateRenderResult } from '@memberjunction/templates-base-types';
 import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
@@ -480,9 +480,11 @@ export class AIPromptRunner {
     let vendorDriverClass: string | undefined;
     let vendorApiName: string | undefined;
     let vendorSupportsEffortLevel: boolean | undefined;
+    let allCandidates: ModelVendorCandidate[] = [];
+
     if (modelSelectionInfo) {
-      // we receivd model selection info, need to lookup vendor driver class and api name from there
-      const vendorID = modelSelectionInfo.vendorSelected.ID;
+      // we received model selection info, need to lookup vendor driver class and api name from there
+      const vendorID = modelSelectionInfo.vendorSelected?.ID;
       const modelID = modelSelectionInfo.modelSelected.ID;
       const modelVendor = AIEngine.Instance.ModelVendors.find(mv => mv.VendorID === vendorID &&
                                                                     mv.ModelID === modelID);
@@ -491,6 +493,9 @@ export class AIPromptRunner {
         vendorApiName = modelVendor.APIName;
         vendorSupportsEffortLevel = modelVendor.SupportsEffortLevel;
       }
+
+      // Extract valid candidates from selection info for retry logic
+      allCandidates = this.buildCandidatesFromSelectionInfo(modelSelectionInfo);
     }
 
     if (!selectedModel) {
@@ -507,6 +512,7 @@ export class AIPromptRunner {
       vendorApiName = modelResult.vendorApiName;
       vendorSupportsEffortLevel = modelResult.vendorSupportsEffortLevel;
       modelSelectionInfo = modelResult.selectionInfo;
+      allCandidates = modelResult.allCandidates || [];
       if (!selectedModel) {
         throw new Error(`No suitable model found for prompt ${modelSelectionPrompt.Name}`);
       }
@@ -532,6 +538,7 @@ export class AIPromptRunner {
       prompt,
       params,
       promptRun,
+      allCandidates,
       vendorDriverClass,
       vendorApiName,
       vendorSupportsEffortLevel
@@ -1107,6 +1114,7 @@ export class AIPromptRunner {
     vendorApiName?: string;
     vendorSupportsEffortLevel?: boolean;
     selectionInfo?: AIModelSelectionInfo;
+    allCandidates?: ModelVendorCandidate[];
   }> {
     // Declare variables outside try block for catch block access
     let configurationName: string | undefined;
@@ -1162,19 +1170,20 @@ export class AIPromptRunner {
           vendorDriverClass: undefined,
           vendorApiName: undefined,
           vendorSupportsEffortLevel: undefined,
-          selectionInfo: {
+          allCandidates: [],
+          selectionInfo: this.createSelectionInfo({
             aiConfiguration: configuration,
             modelsConsidered: [],
             modelSelected: undefined as any, // Type requirement, but null model means no selection
             selectionReason: 'No suitable model candidates found',
             fallbackUsed: false,
             selectionStrategy
-          }
+          })
         };
       }
 
       // this.logStatus(`🔍 Found ${candidates.length} model-vendor candidates for prompt ${prompt.Name}`, true, params);
-      
+
       // if (candidates.length <= 5) {
       //   candidates.forEach((c, i) => {
       //     this.logStatus(`   ${i + 1}. ${c.model.Name} via ${c.vendorName || 'default'} (${c.driverClass}) - Priority: ${c.priority}${c.isPreferredVendor ? ' [PREFERRED]' : ''}`, true, params);
@@ -1183,7 +1192,7 @@ export class AIPromptRunner {
 
       // Select the first candidate with an available API key and track all attempts
       const { selected, consideredModels } = await this.selectModelWithAPIKeyTracked(candidates, params);
-      
+
       // Merge considered models into our tracking
       modelsConsidered.push(...consideredModels);
 
@@ -1194,14 +1203,15 @@ export class AIPromptRunner {
           vendorDriverClass: undefined,
           vendorApiName: undefined,
           vendorSupportsEffortLevel: undefined,
-          selectionInfo: {
+          allCandidates: candidates,
+          selectionInfo: this.createSelectionInfo({
             aiConfiguration: configuration,
             modelsConsidered,
             modelSelected: undefined as any, // Type requirement, but null model means no selection
             selectionReason: 'No API keys found for any model-vendor combination',
             fallbackUsed: false,
             selectionStrategy
-          }
+          })
         };
       }
 
@@ -1236,7 +1246,8 @@ export class AIPromptRunner {
         vendorDriverClass: selected.driverClass,
         vendorApiName: selected.apiName,
         vendorSupportsEffortLevel: selected.supportsEffortLevel,
-        selectionInfo: {
+        allCandidates: candidates,
+        selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
           modelsConsidered,
           modelSelected: selected.model,
@@ -1244,7 +1255,7 @@ export class AIPromptRunner {
           selectionReason,
           fallbackUsed,
           selectionStrategy
-        }
+        })
       };
     } catch (error) {
       this.logError(error, {
@@ -1257,14 +1268,15 @@ export class AIPromptRunner {
         vendorDriverClass: undefined,
         vendorApiName: undefined,
         vendorSupportsEffortLevel: undefined,
-        selectionInfo: {
+        allCandidates: [],
+        selectionInfo: this.createSelectionInfo({
           aiConfiguration: configuration,
           modelsConsidered: [],
           modelSelected: undefined as any, // Type requirement, but null model means no selection
           selectionReason: `Error during model selection: ${error.message}`,
           fallbackUsed: false,
           selectionStrategy: 'Default'
-        }
+        })
       };
     }
   }
@@ -1476,10 +1488,10 @@ export class AIPromptRunner {
     // PHASE 2: Check if SelectionStrategy='Specific' with AIPromptModel entries
     if (prompt.SelectionStrategy === 'Specific' && promptModels.length > 0) {
       const candidates: ModelVendorCandidate[] = [];
-      
+
       // Sort prompt models by priority (higher priority first)
       promptModels.sort((a, b) => (b.Priority || 0) - (a.Priority || 0));
-      
+
       for (const pm of promptModels) {
         const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
         if (model && model.IsActive) {
@@ -1488,7 +1500,7 @@ export class AIPromptRunner {
           candidates.push(...modelCandidates);
         }
       }
-      
+
       if (candidates.length > 0) {
         // Sort all candidates by priority (highest first)
         candidates.sort((a, b) => b.priority - a.priority);
@@ -1503,7 +1515,7 @@ export class AIPromptRunner {
       }
     }
 
-    // PHASE 3: Use general selection strategy (fallback)
+    // PHASE 3: Build candidates with configuration-aware fallback hierarchy
     const candidates: ModelVendorCandidate[] = [];
 
     if (promptModels.length > 0 && prompt.SelectionStrategy !== 'Specific') {
@@ -1513,6 +1525,30 @@ export class AIPromptRunner {
         if (model && model.IsActive) {
           const modelCandidates = createCandidatesForModel(model, 5000, 'prompt-model', pm.Priority);
           candidates.push(...modelCandidates);
+        }
+      }
+
+      // CONFIGURATION FALLBACK: If configurationId was specified, we still want to include PromptModels
+      // as fallbacks that do NOT have a ConfigurationID specified (i.e. universal fallback options).
+      // These are added with lower priority so config-specific models are tried first.
+      if (configurationId) {
+        const nullConfigModels = AIEngine.Instance.PromptModels.filter(
+          pm => pm.PromptID === prompt.ID &&
+                (pm.Status === 'Active' || pm.Status === 'Preview') &&
+                !pm.ConfigurationID
+        );
+
+        if (nullConfigModels.length > 0 && verbose) {
+          LogStatus(`Adding ${nullConfigModels.length} NULL configuration models as fallback candidates`);
+        }
+
+        for (const pm of nullConfigModels) {
+          const model = AIEngine.Instance.Models.find(m => m.ID === pm.ModelID);
+          if (model && model.IsActive) {
+            // Use lower base priority (2000 instead of 5000) so config-specific models are tried first
+            const modelCandidates = createCandidatesForModel(model, 2000, 'prompt-model', pm.Priority);
+            candidates.push(...modelCandidates);
+          }
         }
       }
     } else {
@@ -1580,9 +1616,68 @@ export class AIPromptRunner {
   }
 
   /**
+   * Creates a properly typed AIModelSelectionInfo instance.
+   * TypeScript requires instantiating the class to get the getValidCandidates() method.
+   */
+  private createSelectionInfo(data: {
+    aiConfiguration?: AIConfigurationEntity;
+    modelsConsidered: Array<{
+      model: AIModelEntityExtended;
+      vendor?: AIVendorEntity;
+      priority: number;
+      available: boolean;
+      unavailableReason?: string;
+    }>;
+    modelSelected: AIModelEntityExtended;
+    vendorSelected?: AIVendorEntity;
+    selectionReason: string;
+    fallbackUsed: boolean;
+    selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
+  }): AIModelSelectionInfo {
+    const info = new AIModelSelectionInfo();
+    Object.assign(info, data);
+    return info;
+  }
+
+  /**
+   * Converts model selection info into ModelVendorCandidate array for retry logic.
+   * Extracts only the valid candidates (those with available API keys) from the selection info.
+   *
+   * @param selectionInfo - Model selection information containing considered models
+   * @returns Array of valid model-vendor candidates sorted by priority
+   */
+  private buildCandidatesFromSelectionInfo(
+    selectionInfo: AIModelSelectionInfo
+  ): ModelVendorCandidate[] {
+    const validModels = selectionInfo.extractValidCandidates();
+
+    return validModels.map(considered => {
+      // Find matching model vendor for driver and API info
+      const modelVendor = considered.vendor
+        ? AIEngine.Instance.ModelVendors.find(mv =>
+            mv.ModelID === considered.model.ID &&
+            mv.VendorID === considered.vendor!.ID
+          )
+        : undefined;
+
+      return {
+        model: considered.model,
+        vendorId: considered.vendor?.ID,
+        vendorName: considered.vendor?.Name,
+        driverClass: modelVendor?.DriverClass || considered.model.DriverClass,
+        apiName: modelVendor?.APIName || considered.model.APIName,
+        supportsEffortLevel: modelVendor?.SupportsEffortLevel ?? considered.model.SupportsEffortLevel ?? false,
+        isPreferredVendor: false, // Can't determine from selection info alone
+        priority: considered.priority,
+        source: (selectionInfo.selectionStrategy === 'ByPower' ? 'power-rank' : 'model-type') as 'power-rank' | 'model-type'
+      };
+    }).sort((a, b) => b.priority - a.priority); // Sort by priority descending
+  }
+
+  /**
    * Enhanced version of selectModelWithAPIKey that tracks all considered models
    * for model selection reporting.
-   * 
+   *
    * @param candidates - Ordered array of model-vendor candidates
    * @param params - Optional prompt parameters for verbose logging
    * @returns Object containing selected candidate and all considered models
@@ -1608,12 +1703,9 @@ export class AIPromptRunner {
       available: boolean;
       unavailableReason?: string;
     }> = [];
-    
-    let attemptCount = 0;
-    
+
+    // Check ALL candidates to build complete list of valid and invalid options
     for (const candidate of candidates) {
-      attemptCount++;
-      
       // Check cache first
       let hasKey: boolean;
       if (checkedDrivers.has(candidate.driverClass)) {
@@ -1624,14 +1716,14 @@ export class AIPromptRunner {
         hasKey = this.isValidAPIKey(apiKey);
         checkedDrivers.set(candidate.driverClass, hasKey);
       }
-      
+
       // Get vendor entity from AIEngine cache if vendorId is available
       let vendorEntity: AIVendorEntity | undefined;
       if (candidate.vendorId) {
         vendorEntity = AIEngine.Instance.Vendors.find(v => v.ID === candidate.vendorId);
       }
-      
-      // Track this model as considered
+
+      // Track this model as considered with availability status
       consideredModels.push({
         model: candidate.model,
         vendor: vendorEntity,
@@ -1639,33 +1731,40 @@ export class AIPromptRunner {
         available: hasKey,
         unavailableReason: hasKey ? undefined : `No API key for driver ${candidate.driverClass}`
       });
-      
-      if (hasKey) {
-        this.logStatus(`   Selected model ${candidate.model.Name} with ${candidate.vendorName || 'default'} vendor (driver: ${candidate.driverClass})`, true);
-        if (candidate.isPreferredVendor) {
-          this.logStatus(`   Using preferred vendor${candidate.vendorId ? ` (${candidate.vendorName})` : ''}`, true, params);
-        }
-        this.logStatus(`   Checked ${attemptCount} candidate(s) before finding valid API key`, true, params);
-        return { selected: candidate, consideredModels };
-      }
     }
-    
-    // Log what we tried
-    const triedSummary = candidates.slice(0, 5).map(c => 
-      `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
-    ).join(', ');
-    
-    this.logError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`, {
-      category: 'APIKeyValidation',
-      severity: 'critical',
-      metadata: {
-        candidatesChecked: candidates.length,
-        modelsChecked: consideredModels.length
-      },
-      maxErrorLength: params?.maxErrorLength
-    });
-    
-    return { selected: null, consideredModels };
+
+    // Select the first available candidate (highest priority with API key)
+    const selected = consideredModels.find(m => m.available);
+    const selectedCandidate = selected ? candidates.find(c =>
+      c.model.ID === selected.model.ID &&
+      c.vendorId === selected.vendor?.ID
+    ) : null;
+
+    if (selectedCandidate) {
+      const validCount = consideredModels.filter(m => m.available).length;
+      this.logStatus(`   Selected model ${selectedCandidate.model.Name} with ${selectedCandidate.vendorName || 'default'} vendor (driver: ${selectedCandidate.driverClass})`, true);
+      if (selectedCandidate.isPreferredVendor) {
+        this.logStatus(`   Using preferred vendor${selectedCandidate.vendorId ? ` (${selectedCandidate.vendorName})` : ''}`, true, params);
+      }
+      this.logStatus(`   Found ${validCount} valid candidate(s) out of ${candidates.length} total`, true, params);
+    } else {
+      // Log what we tried
+      const triedSummary = candidates.slice(0, 5).map(c =>
+        `${c.model.Name}/${c.vendorName || 'default'}(${c.driverClass})`
+      ).join(', ');
+
+      this.logError(`No API keys found for any model-vendor combination. Tried: ${triedSummary}${candidates.length > 5 ? `... (${candidates.length} total)` : ''}`, {
+        category: 'APIKeyValidation',
+        severity: 'critical',
+        metadata: {
+          candidatesChecked: candidates.length,
+          modelsChecked: consideredModels.length
+        },
+        maxErrorLength: params?.maxErrorLength
+      });
+    }
+
+    return { selected: selectedCandidate, consideredModels };
   }
  
   /**
@@ -1726,24 +1825,14 @@ export class AIPromptRunner {
       }
       
       // Set original model tracking for failover
-      // TODO: Remove type assertions after CodeGen updates entities with new fields
-      const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
-        OriginalModelID?: string;
-        OriginalRequestStartTime?: Date;
-        FailoverAttempts?: number;
-        FailoverErrors?: string;
-        FailoverDurations?: string;
-        TotalFailoverDuration?: number;
-      };
-      
-      promptRunWithFailover.OriginalModelID = model.ID;
-      promptRunWithFailover.OriginalRequestStartTime = startTime;
-      
+      promptRun.OriginalModelID = model.ID;
+      promptRun.OriginalRequestStartTime = startTime;
+
       // Initialize failover tracking fields
-      promptRunWithFailover.FailoverAttempts = 0;
-      promptRunWithFailover.FailoverErrors = null;
-      promptRunWithFailover.FailoverDurations = null;
-      promptRunWithFailover.TotalFailoverDuration = 0;
+      promptRun.FailoverAttempts = 0;
+      promptRun.FailoverErrors = null;
+      promptRun.FailoverDurations = null;
+      promptRun.TotalFailoverDuration = 0;
       
       // Check if model has pre-selected vendor info from selectModel
       const modelWithVendor = model as AIModelEntityExtended & { 
@@ -2004,8 +2093,10 @@ export class AIPromptRunner {
     let currentVendorId = vendorId;
     let attemptNumber = 0;
     
-    // Get all model candidates if not provided
-    if (!allCandidates) {
+    // Get all model candidates if not provided (should always be provided from initial selection now)
+    if (!allCandidates || allCandidates.length === 0) {
+      // Fallback to old behavior if somehow candidates weren't provided
+      // This maintains backward compatibility but shouldn't normally be reached
       allCandidates = await this.buildFailoverCandidates(prompt);
     }
 
@@ -2017,6 +2108,9 @@ export class AIPromptRunner {
       try {
         // Log the attempt if not the first one
         if (attemptNumber > 1) {
+          const vendorName = currentVendorId
+            ? AIEngine.Instance.Vendors.find(v => v.ID === currentVendorId)?.Name || 'Unknown'
+            : 'default';
           LogStatusEx({
             message: `🔄 Failover attempt ${attemptNumber} with model ${currentModel.Name} (vendor: ${currentVendorId || 'default'})`,
             category: 'AI',
@@ -2060,53 +2154,62 @@ export class AIPromptRunner {
         };
         failoverAttempts.push(failoverAttempt);
         
-        // Check if we should attempt failover
+        // Handle authentication errors by removing all candidates from the failed vendor
+        allCandidates = this.filterAuthenticationFailedVendor(
+          errorAnalysis.errorType,
+          currentVendorId,
+          allCandidates
+        );
+
+        // Check if we should retry for rate limit (before attempting failover)
+        const shouldContinueRateLimit = await this.handleRateLimitRetry(
+          errorAnalysis,
+          currentModel,
+          currentVendorId,
+          failoverAttempts,
+          prompt,
+          attemptNumber,
+          failoverConfig.maxAttempts,
+          failoverAttempt
+        );
+
+        if (shouldContinueRateLimit) {
+          continue; // Retry same model/vendor after backoff
+        }
+
+        // Check if we should attempt failover (different model/vendor)
         const shouldFailover = this.shouldAttemptFailover(
           lastError, failoverConfig, attemptNumber
         );
-        
+
         if (!shouldFailover) {
           // Log the final failure
           this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
           break;
         }
-        
-        // Select next candidate
-        const nextCandidates = this.selectFailoverCandidates(
+
+        // Transition to next candidate
+        const transitionResult = await this.transitionToNextCandidate(
           currentModel,
           currentVendorId,
-          failoverConfig.strategy,
-          failoverConfig.modelStrategy,
+          failoverConfig,
           allCandidates,
-          failoverAttempts
+          failoverAttempts,
+          prompt.ID,
+          failoverAttempt,
+          attemptNumber
         );
-        
-        if (nextCandidates.length === 0) {
-          // No more candidates available
-          this.logFailoverAttempt(prompt.ID, failoverAttempt, false);
-          break;
+
+        if (!transitionResult) {
+          break; // No more candidates available
         }
-        
-        // Get the next candidate
-        const nextCandidate = nextCandidates[0];
-        currentModel = nextCandidate.model;
-        currentVendorId = nextCandidate.vendorId;
-        // Update vendor info for the next attempt
-        vendorDriverClass = nextCandidate.driverClass;
-        vendorApiName = nextCandidate.apiName;
-        vendorSupportsEffortLevel = nextCandidate.supportsEffortLevel;
-        
-        // Log the attempt
-        this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
-        
-        // Wait before retry (if not the last attempt)
-        if (attemptNumber < failoverConfig.maxAttempts) {
-          const delay = this.calculateFailoverDelay(
-            attemptNumber, 
-            failoverConfig.delaySeconds
-          );
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
+
+        // Update current state with next candidate
+        currentModel = transitionResult.model;
+        currentVendorId = transitionResult.vendorId;
+        vendorDriverClass = transitionResult.driverClass;
+        vendorApiName = transitionResult.apiName;
+        vendorSupportsEffortLevel = transitionResult.supportsEffortLevel;
       }
     }
     
@@ -2196,28 +2299,18 @@ export class AIPromptRunner {
     currentModel: AIModelEntityExtended,
     currentVendorId: string | null
   ): void {
-    // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
-      OriginalModelID?: string;
-      OriginalRequestStartTime?: Date;
-      FailoverAttempts?: number;
-      FailoverErrors?: string;
-      FailoverDurations?: string;
-      TotalFailoverDuration?: number;
-    };
-    
-    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
-    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+    promptRun.FailoverAttempts = failoverAttempts.length;
+    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
       vendor: a.vendorId,
       error: a.error.message,
       errorType: a.errorType
     })));
-    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
-    
+    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+
     // Update ModelID if we ended up using a different model
-    if (currentModel.ID !== promptRunWithFailover.OriginalModelID) {
+    if (currentModel.ID !== promptRun.OriginalModelID) {
       promptRun.ModelID = currentModel.ID;
     }
     if (currentVendorId && currentVendorId !== promptRun.VendorID) {
@@ -2232,25 +2325,15 @@ export class AIPromptRunner {
     promptRun: AIPromptRunEntityExtended,
     failoverAttempts: FailoverAttempt[]
   ): void {
-    // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptRunWithFailover = promptRun as AIPromptRunEntityExtended & {
-      OriginalModelID?: string;
-      OriginalRequestStartTime?: Date;
-      FailoverAttempts?: number;
-      FailoverErrors?: string;
-      FailoverDurations?: string;
-      TotalFailoverDuration?: number;
-    };
-    
-    promptRunWithFailover.FailoverAttempts = failoverAttempts.length;
-    promptRunWithFailover.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
+    promptRun.FailoverAttempts = failoverAttempts.length;
+    promptRun.FailoverErrors = JSON.stringify(failoverAttempts.map(a => ({
       model: a.modelId,
       vendor: a.vendorId,
       error: a.error.message,
       errorType: a.errorType
     })));
-    promptRunWithFailover.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
-    promptRunWithFailover.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
+    promptRun.FailoverDurations = JSON.stringify(failoverAttempts.map(a => a.duration));
+    promptRun.TotalFailoverDuration = failoverAttempts.reduce((sum, a) => sum + a.duration, 0);
   }
 
   /**
@@ -2531,6 +2614,7 @@ export class AIPromptRunner {
     prompt: AIPromptEntityExtended,
     params: AIPromptParams,
     promptRun: AIPromptRunEntityExtended,
+    allCandidates: ModelVendorCandidate[],
     vendorDriverClass?: string,
     vendorApiName?: string,
     vendorSupportsEffortLevel?: boolean
@@ -2575,7 +2659,7 @@ export class AIPromptRunner {
           params.conversationMessages,
           params.templateMessageRole || 'system',
           params.cancellationToken,
-          undefined, // allCandidates - will be determined in executeModelWithFailover
+          allCandidates, // Pass the candidates from initial selection
           promptRun,
           vendorDriverClass,
           vendorApiName,
@@ -2684,7 +2768,20 @@ export class AIPromptRunner {
   /**
    * Applies retry delay based on the prompt's retry strategy
    */
-  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number): Promise<void> {
+  /**
+   * Calculates retry delay for rate limit and other retriable errors.
+   * Uses the prompt's RetryStrategy and can respect suggested delays from provider.
+   */
+  private calculateRetryDelay(
+    prompt: AIPromptEntityExtended,
+    attemptNumber: number,
+    suggestedDelaySeconds?: number
+  ): number {
+    // Use provider's suggested delay if available
+    if (suggestedDelaySeconds && suggestedDelaySeconds > 0) {
+      return suggestedDelaySeconds * 1000; // Convert to milliseconds
+    }
+
     const baseDelay = prompt.RetryDelayMS || 1000; // Default 1 second
     let delay = baseDelay;
 
@@ -2702,10 +2799,160 @@ export class AIPromptRunner {
         delay = baseDelay;
     }
 
-    LogStatus(`   Applying retry delay: ${delay}ms (strategy: ${prompt.RetryStrategy})`);
+    return delay;
+  }
+
+  private async applyRetryDelay(prompt: AIPromptEntityExtended, attemptNumber: number, suggestedDelaySeconds?: number): Promise<void> {
+    const delay = this.calculateRetryDelay(prompt, attemptNumber, suggestedDelaySeconds);
+    const delaySeconds = (delay / 1000).toFixed(1);
+    LogStatus(`   Waiting ${delaySeconds}s before retry (strategy: ${prompt.RetryStrategy || 'Fixed'})...`);
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
+  /**
+   * Filters out all candidates from a vendor when authentication fails.
+   * Authentication errors indicate invalid API keys which affect all models from that vendor.
+   */
+  private filterAuthenticationFailedVendor(
+    errorType: string,
+    currentVendorId: string | undefined,
+    allCandidates: ModelVendorCandidate[]
+  ): ModelVendorCandidate[] {
+    if (errorType !== 'Authentication') {
+      return allCandidates; // No filtering needed for non-auth errors
+    }
+
+    const failedVendorId = currentVendorId || 'default';
+    const beforeCount = allCandidates.length;
+
+    // Filter out ALL candidates from this vendor
+    const filteredCandidates = allCandidates.filter(c =>
+      (c.vendorId || 'default') !== failedVendorId
+    );
+
+    const removedCount = beforeCount - filteredCandidates.length;
+    if (removedCount > 0) {
+      const vendorName = AIEngine.Instance.Vendors.find(v => v.ID === failedVendorId)?.Name || failedVendorId;
+      const remainingCount = filteredCandidates.length;
+      this.logStatus(
+        `   🔒 Invalid API key for ${vendorName} - excluding ${removedCount} model${removedCount === 1 ? '' : 's'} from this vendor (${remainingCount} remaining)`,
+        true
+      );
+    }
+
+    return filteredCandidates;
+  }
+
+  /**
+   * Handles rate limit errors by retrying the same model/vendor with backoff.
+   * Returns true if the caller should continue (retry), false if should proceed to failover.
+   */
+  private async handleRateLimitRetry(
+    errorAnalysis: { errorType: string; suggestedRetryDelaySeconds?: number },
+    currentModel: AIModelEntityExtended,
+    currentVendorId: string | undefined,
+    failoverAttempts: FailoverAttempt[],
+    prompt: AIPromptEntityExtended,
+    attemptNumber: number,
+    maxAttempts: number,
+    failoverAttempt: FailoverAttempt
+  ): Promise<boolean> {
+    const isRateLimit = errorAnalysis.errorType === 'RateLimit';
+    if (!isRateLimit) {
+      return false; // Not a rate limit error
+    }
+
+    // Count how many times we've retried this specific model/vendor for rate limits
+    const rateLimitRetryCount = failoverAttempts.filter(a =>
+      a.modelId === currentModel.ID &&
+      a.vendorId === currentVendorId &&
+      a.errorType === 'RateLimit'
+    ).length;
+
+    // Use MaxRetries from prompt configuration, default to 3 if not set
+    const maxRetries = prompt.MaxRetries ?? 3;
+
+    // Retry up to MaxRetries times before giving up and failing over
+    const shouldRetry = rateLimitRetryCount <= maxRetries;
+
+    if (shouldRetry) {
+      const modelName = currentModel.Name;
+      const vendorName = currentVendorId
+        ? AIEngine.Instance.Vendors.find(v => v.ID === currentVendorId)?.Name || 'default'
+        : 'default';
+
+      this.logStatus(
+        `   ⏳ Rate limit hit - retrying ${modelName} (${vendorName}) with backoff (attempt ${rateLimitRetryCount}/${maxRetries})`,
+        true
+      );
+      this.logFailoverAttempt(prompt.ID, failoverAttempt, true);
+
+      // Apply backoff delay before retry
+      if (attemptNumber < maxAttempts) {
+        await this.applyRetryDelay(prompt, rateLimitRetryCount, errorAnalysis.suggestedRetryDelaySeconds);
+      }
+
+      return true; // Signal to continue with same model/vendor
+    }
+
+    return false; // Too many retries, proceed to failover
+  }
+
+  /**
+   * Transitions to the next failover candidate.
+   * Returns the next candidate info or null if no candidates are available.
+   */
+  private async transitionToNextCandidate(
+    currentModel: AIModelEntityExtended,
+    currentVendorId: string | undefined,
+    failoverConfig: FailoverConfiguration,
+    allCandidates: ModelVendorCandidate[],
+    failoverAttempts: FailoverAttempt[],
+    promptId: string,
+    failoverAttempt: FailoverAttempt,
+    attemptNumber: number
+  ): Promise<{
+    model: AIModelEntityExtended;
+    vendorId: string | undefined;
+    driverClass: string;
+    apiName: string | undefined;
+    supportsEffortLevel: boolean;
+  } | null> {
+    // Select next candidate using failover strategy
+    const nextCandidates = this.selectFailoverCandidates(
+      currentModel,
+      currentVendorId,
+      failoverConfig.strategy,
+      failoverConfig.modelStrategy,
+      allCandidates,
+      failoverAttempts
+    );
+
+    if (nextCandidates.length === 0) {
+      // No more candidates available
+      this.logFailoverAttempt(promptId, failoverAttempt, false);
+      return null;
+    }
+
+    const nextCandidate = nextCandidates[0];
+
+    // Log the successful transition
+    this.logFailoverAttempt(promptId, failoverAttempt, true);
+
+    // Apply delay before next attempt (if not the last attempt)
+    if (attemptNumber < failoverConfig.maxAttempts) {
+      const delay = this.calculateFailoverDelay(attemptNumber, failoverConfig.delaySeconds);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    return {
+      model: nextCandidate.model,
+      vendorId: nextCandidate.vendorId,
+      driverClass: nextCandidate.driverClass,
+      apiName: nextCandidate.apiName,
+      supportsEffortLevel: nextCandidate.supportsEffortLevel || false
+    };
+  }
 
   /**
    * Provides a human-readable description of the validation decision
@@ -3591,42 +3838,33 @@ export class AIPromptRunner {
 
   /**
    * Retrieves failover configuration from the prompt entity.
-   * 
+   *
    * @param prompt - The AI prompt entity containing failover settings
    * @returns FailoverConfiguration object with strategy and settings
-   * 
+   *
    * @remarks
    * This method extracts failover configuration from the prompt entity and provides
    * default values when configuration is not specified. Override this method to
    * implement custom failover configuration logic.
    */
   protected getFailoverConfiguration(prompt: AIPromptEntityExtended): FailoverConfiguration {
-    // TODO: Remove type assertions after CodeGen updates entities with new fields
-    const promptWithFailover = prompt as AIPromptEntityExtended & {
-      FailoverStrategy?: 'SameModelDifferentVendor' | 'NextBestModel' | 'PowerRank' | 'None';
-      FailoverMaxAttempts?: number;
-      FailoverDelaySeconds?: number;
-      FailoverModelStrategy?: 'PreferSameModel' | 'PreferDifferentModel' | 'RequireSameModel';
-      FailoverErrorScope?: 'All' | 'NetworkOnly' | 'RateLimitOnly' | 'ServiceErrorOnly';
-    };
-    
     return {
-      strategy: promptWithFailover.FailoverStrategy || 'None',
-      maxAttempts: promptWithFailover.FailoverMaxAttempts || 3,
-      delaySeconds: promptWithFailover.FailoverDelaySeconds || 1,
-      modelStrategy: promptWithFailover.FailoverModelStrategy || 'PreferSameModel',
-      errorScope: promptWithFailover.FailoverErrorScope || 'All'
+      strategy: prompt.FailoverStrategy || 'None',
+      maxAttempts: prompt.FailoverMaxAttempts || 3,
+      delaySeconds: prompt.FailoverDelaySeconds || 1,
+      modelStrategy: prompt.FailoverModelStrategy || 'PreferSameModel',
+      errorScope: prompt.FailoverErrorScope || 'All'
     };
   }
 
   /**
    * Determines whether a failover attempt should be made based on the error and configuration.
-   * 
+   *
    * @param error - The error that occurred during execution
    * @param config - The failover configuration
    * @param attemptNumber - The current attempt number (1-based)
    * @returns True if failover should be attempted, false otherwise
-   * 
+   *
    * @remarks
    * This method uses the ErrorAnalyzer to classify errors and determine if they are
    * eligible for failover based on the configured error scope. Override this method
@@ -3667,12 +3905,12 @@ export class AIPromptRunner {
 
   /**
    * Calculates the delay before the next failover attempt.
-   * 
+   *
    * @param attemptNumber - The current attempt number (1-based)
    * @param baseDelaySeconds - The base delay in seconds from configuration
    * @param previousError - The error from the previous attempt
    * @returns Delay in milliseconds before the next attempt
-   * 
+   *
    * @remarks
    * Implements exponential backoff with jitter by default. The delay increases
    * exponentially with each attempt and includes random jitter to prevent
@@ -3696,7 +3934,7 @@ export class AIPromptRunner {
 
   /**
    * Selects candidate models for failover based on the strategy and current failure.
-   * 
+   *
    * @param currentModel - The model that just failed
    * @param currentVendorId - The vendor ID that just failed
    * @param strategy - The failover strategy to use
@@ -3704,13 +3942,13 @@ export class AIPromptRunner {
    * @param allCandidates - All available model-vendor candidates
    * @param attemptHistory - History of previous failover attempts
    * @returns Array of candidates sorted by priority (highest first)
-   * 
+   *
    * @remarks
    * This method implements different strategies for selecting failover candidates:
    * - SameModelDifferentVendor: Try the same model with different vendors
    * - NextBestModel: Try different models in order of preference
    * - PowerRank: Use the global power ranking of models
-   * 
+   *
    * Override this method to implement custom candidate selection logic.
    */
   protected selectFailoverCandidates(
@@ -3722,10 +3960,12 @@ export class AIPromptRunner {
     attemptHistory: FailoverAttempt[]
   ): ModelVendorCandidate[] {
     // Filter out candidates that have already failed
+    // Note: Authentication errors are already filtered from allCandidates upstream,
+    // so we only need to filter out specific model/vendor pairs that have failed
     const failedPairs = new Set(
       attemptHistory.map(a => `${a.modelId}:${a.vendorId || 'default'}`)
     );
-    
+
     const availableCandidates = allCandidates.filter(c => {
       const key = `${c.model.ID}:${c.vendorId || 'default'}`;
       return !failedPairs.has(key);

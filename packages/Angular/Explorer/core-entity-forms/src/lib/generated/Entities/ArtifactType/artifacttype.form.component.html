@@ -29,6 +29,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: AI Agent Artifact Types" [Visible]="record.IsSaved"> 
+                        MJ: AI Agent Artifact Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Artifact Types','ArtifactTypeID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Artifact Types')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Artifact Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: Artifacts" [Visible]="record.IsSaved"> 
                         MJ: Artifacts
                     </mj-tab>
@@ -37,6 +50,32 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifacts','TypeID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Artifacts')"
                             [AllowLoad]="IsCurrentTab('MJ: Artifacts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Artifact Types" [Visible]="record.IsSaved"> 
+                        MJ: Artifact Types
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Types','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Artifact Types')"
+                            [AllowLoad]="IsCurrentTab('MJ: Artifact Types')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="AI Agents" [Visible]="record.IsSaved"> 
+                        AI Agents
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('AI Agents','DefaultArtifactTypeID')"  
+                            [NewRecordValues]="NewRecordValues('AI Agents')"
+                            [AllowLoad]="IsCurrentTab('AI Agents')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

@@ -350,6 +350,7 @@ export class GraphQLAIClient {
                     $messages: String!,
                     $sessionId: String!,
                     $data: String,
+                    $payload: String,
                     $templateData: String,
                     $lastRunId: String,
                     $autoPopulateLastRunPayload: Boolean,
@@ -361,6 +362,7 @@ export class GraphQLAIClient {
                         messages: $messages,
                         sessionId: $sessionId,
                         data: $data,
+                        payload: $payload,
                         templateData: $templateData,
                         lastRunId: $lastRunId,
                         autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
@@ -410,6 +412,9 @@ export class GraphQLAIClient {
         if (params.data !== undefined) {
             variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
         } 
+        if (params.payload !== undefined) {
+            variables.payload = typeof params.payload === 'object' ? JSON.stringify(params.payload) : params.payload;
+        }
 
         // Add optional scalar parameters
         if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;

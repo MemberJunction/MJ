@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Marketing Content",
+      "Description": "JSON schema for marketing content artifacts.",
+      "ParentID": "@lookup:MJ: Artifact Types.Name=JSON",
+      "ContentType": "application/json",
+      "ExtractRules": "@file:extract-rules/marketing-content.json"
+    },
+    "primaryKey": {
+      "ID": "931E8903-7937-4ED1-8C00-6A6568133C7A"
+    },
+    "sync": {
+      "lastModified": "2025-10-09T13:12:33.191Z",
+      "checksum": "de5849272ad9a2385e900143dc93eff427351228e5d61001fe851abb0caaff1a"
+    }
+  }
+]

@@ -1,10 +1,11 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ConversationStateService } from '../../services/conversation-state.service';
+import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -12,13 +13,17 @@ import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunct
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'mj-message-input',
   templateUrl: './message-input.component.html',
   styleUrl: './message-input.component.scss'
 })
-export class MessageInputComponent implements OnInit {
+export class MessageInputComponent implements OnInit, OnDestroy {
+  // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
+  private readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+
   @Input() conversationId!: string;
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
@@ -29,7 +34,7 @@ export class MessageInputComponent implements OnInit {
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
-  @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; conversationDetailId: string; name: string}>();
+  @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
 
   @ViewChild('messageTextarea') messageTextarea!: ElementRef;
@@ -47,11 +52,17 @@ export class MessageInputComponent implements OnInit {
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
 
+  // PubSub subscription for task progress updates
+  private pushStatusSubscription?: Subscription;
+  // Track active task execution message IDs for real-time updates
+  private activeTaskExecutionMessageIds = new Set<string>();
+
   constructor(
     private dialogService: DialogService,
     private toastService: ToastService,
     private agentService: ConversationAgentService,
     private conversationState: ConversationStateService,
+    private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
     private mentionAutocomplete: MentionAutocompleteService,
     private mentionParser: MentionParserService
@@ -62,6 +73,109 @@ export class MessageInputComponent implements OnInit {
 
     // Initialize mention autocomplete
     await this.mentionAutocomplete.initialize(this.currentUser);
+
+    // Subscribe to PubSub for task progress updates
+    this.subscribeToPushStatus();
+  }
+
+  ngOnDestroy() {
+    // Clean up PubSub subscription
+    if (this.pushStatusSubscription) {
+      this.pushStatusSubscription.unsubscribe();
+    }
+  }
+
+  /**
+   * Subscribe to PubSub for real-time task orchestration progress updates
+   */
+  private subscribeToPushStatus() {
+    const dataProvider = GraphQLDataProvider.Instance;
+    this.pushStatusSubscription = dataProvider.PushStatusUpdates().subscribe((status: any) => {
+      if (!status || !status.message) return;
+
+      try {
+        const statusObj = JSON.parse(status.message);
+
+        // Filter for TaskOrchestrator messages
+        if (statusObj.resolver === 'TaskOrchestrator') {
+          this.handleTaskProgress(statusObj);
+        }
+      } catch (error) {
+        console.error('Error parsing push status update:', error);
+      }
+    });
+  }
+
+  /**
+   * Handle task progress updates from PubSub
+   */
+  private async handleTaskProgress(statusObj: any) {
+    if (statusObj.type === 'TaskProgress') {
+      // High-level task progress
+      const { taskName, message, percentComplete } = statusObj.data;
+      console.log(`[Task Progress] ${taskName}: ${message} (${percentComplete}%)`);
+
+      // Update any active task execution messages
+      await this.updateTaskExecutionMessages(taskName, message, percentComplete);
+    } else if (statusObj.type === 'AgentProgress') {
+      // Detailed agent progress (shown as smaller sub-text)
+      const { taskName, agentStep, agentMessage } = statusObj.data;
+      console.log(`[Agent Progress] ${taskName} → ${agentStep}: ${agentMessage}`);
+
+      // Update with agent details
+      await this.updateTaskExecutionMessages(taskName, `${agentStep}: ${agentMessage}`, undefined, true);
+    }
+  }
+
+  /**
+   * Update task execution messages in real-time based on progress updates
+   */
+  private async updateTaskExecutionMessages(
+    taskName: string,
+    progressMessage: string,
+    percentComplete?: number,
+    isAgentDetail: boolean = false
+  ) {
+    // Update all active task execution messages using the cache
+    for (const messageId of this.activeTaskExecutionMessageIds) {
+      try {
+        // Get message from cache (single source of truth)
+        const message = await this.dataCache.getConversationDetail(messageId, this.currentUser);
+        if (!message) {
+          console.warn(`Task execution message ${messageId} not found in cache`);
+          continue;
+        }
+
+        // Skip if already complete
+        if (message.Status === 'Complete' || message.Status === 'Error') {
+          continue;
+        }
+
+        // Build progress message
+        let updatedMessage = message.Message || '';
+
+        if (isAgentDetail) {
+          // Agent details shown as sub-text
+          updatedMessage = `⏳ **${taskName}**\n\n_${progressMessage}_`;
+        } else if (percentComplete != null) {
+          updatedMessage = `⏳ **${taskName}** (${percentComplete}%)\n\n${progressMessage}`;
+        } else {
+          updatedMessage = `⏳ **${taskName}**\n\n${progressMessage}`;
+        }
+
+        message.Message = updatedMessage;
+        // Use safe save to prevent race conditions with completion
+        const saved = await this.safeSaveConversationDetail(message, `TaskProgress:${taskName}`);
+        if (saved) {
+          this.messageSent.emit(message);
+
+          // Also update the ActiveTasksService to keep the tasks dropdown in sync
+          this.activeTasks.updateStatusByConversationDetailId(message.ID, progressMessage);
+        }
+      } catch (error) {
+        console.error('Error updating task execution message:', error);
+      }
+    }
   }
 
   get canSend(): boolean {
@@ -218,8 +332,7 @@ export class MessageInputComponent implements OnInit {
 
     this.isSending = true;
     try {
-      const md = new Metadata();
-      const detail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+      const detail = await this.dataCache.createConversationDetail(this.currentUser);
 
       detail.ConversationID = this.conversationId;
       detail.Message = this.messageText.trim();
@@ -249,10 +362,10 @@ export class MessageInputComponent implements OnInit {
         // Check if this is the first message in the conversation
         const isFirstMessage = this.conversationHistory.length === 0;
 
-        // Determine routing: @mention > last agent context > Conversation Manager
+        // Determine routing: @mention > last agent context > Sage
         if (mentionResult.agentMention) {
-          // Direct @mention - skip Conversation Manager, invoke agent directly
-          console.log('🎯 Direct @mention detected, bypassing Conversation Manager');
+          // Direct @mention - skip Sage, invoke agent directly
+          console.log('🎯 Direct @mention detected, bypassing Sage');
           if (isFirstMessage) {
             Promise.all([
               this.invokeAgentDirectly(detail, mentionResult.agentMention, this.conversationId),
@@ -273,7 +386,7 @@ export class MessageInputComponent implements OnInit {
             );
 
           if (lastAIMessage && lastAIMessage.AgentID) {
-            // Continue with same agent - skip Conversation Manager
+            // Continue with same agent - skip Sage
             console.log('🔄 Implicit continuation detected, continuing with last agent');
             if (isFirstMessage) {
               Promise.all([
@@ -284,8 +397,8 @@ export class MessageInputComponent implements OnInit {
               this.continueWithAgent(detail, lastAIMessage.AgentID, this.conversationId);
             }
           } else {
-            // No context - use Conversation Manager
-            console.log('🤖 No agent context, using Conversation Manager');
+            // No context - use Sage
+            console.log('🤖 No agent context, using Sage');
             if (isFirstMessage) {
               Promise.all([
                 this.processMessageThroughAgent(detail, mentionResult),
@@ -316,12 +429,33 @@ export class MessageInputComponent implements OnInit {
   }
 
   /**
+   * Safe save for ConversationDetail - prevents overwrites of completed/errored messages
+   * Use this ONLY in progress update paths to prevent race conditions
+   * @param detail The conversation detail to save
+   * @param context Description of who is saving (for logging)
+   * @returns true if saved, false if blocked
+   */
+  private async safeSaveConversationDetail(
+    detail: ConversationDetailEntity,
+    context: string
+  ): Promise<boolean> {
+    // Never modify completed or errored messages
+    if (detail.Status === 'Complete' || detail.Status === 'Error') {
+      console.log(`[${context}] 🛡️ Blocked save - message is ${detail.Status}`);
+      return false;
+    }
+
+    await detail.Save();
+    return true;
+  }
+
+  /**
    * Create a progress callback for agent execution
    * This callback updates both the active task and the ConversationDetail message
    * IMPORTANT: Filters by agentRunId to prevent cross-contamination when multiple agents run in parallel
    */
   private createProgressCallback(
-    conversationDetailId: string,
+    conversationDetail: ConversationDetailEntity,
     agentName: string
   ): AgentExecutionProgressCallback {
     return async (progress) => {
@@ -332,53 +466,37 @@ export class MessageInputComponent implements OnInit {
       const progressText = progress.message;
 
       // Update the active task with progress details (if it exists)
-      this.activeTasks.updateStatusByConversationDetailId(conversationDetailId, progressText);
+      this.activeTasks.updateStatusByConversationDetailId(conversationDetail.ID, progressText);
 
       // Update the ConversationDetail message in real-time
       try {
-        const md = new Metadata();
-        const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
+        if (conversationDetail) {
+          console.log(`[${agentName}] Got conversation detail from cache - Status: ${conversationDetail.Status}, ID: ${conversationDetail.ID}`);
 
-        if (await conversationDetail.Load(conversationDetailId)) {
           // Skip progress updates if message is already complete
+          // Since we're using the cached instance, this check sees the ACTUAL current state
           if (conversationDetail.Status === 'Complete') {
-            console.log(`[${agentName}] Skipping progress update - message already complete`);
+            console.log(`[${agentName}] ⛔ Skipping progress update - message already complete`);
             return;
           }
 
-          // CRITICAL: Only update if agentRunIds match (prevents cross-contamination)
-          const storedAgentRunId = (conversationDetail as any).AgentRunID;
-
-          // If AgentRunID not yet set, set it from the first progress update
-          if (!storedAgentRunId && progressAgentRunId) {
-            (conversationDetail as any).AgentRunID = progressAgentRunId;
-            console.log(`[${agentName}] Setting AgentRunID from progress update:`, progressAgentRunId);
-
-            // Emit event to parent so it can load the agent run into the map immediately
+          // Emit agentRunId if we have it (for parent to track)
+          if (progressAgentRunId) {
             this.agentRunDetected.emit({
-              conversationDetailId,
+              conversationDetailId: conversationDetail.ID,
               agentRunId: progressAgentRunId
             });
           }
-          // If we have both IDs, verify they match before updating
-          else if (progressAgentRunId && storedAgentRunId) {
-            if (progressAgentRunId !== storedAgentRunId) {
-              console.log(`[${agentName}] Skipping progress update - agentRunId mismatch:`, {
-                progressAgentRunId,
-                storedAgentRunId,
-                conversationDetailId
-              });
-              return; // Skip this update - it's for a different agent run
+
+          if (conversationDetail.Status === 'In-Progress') {
+            conversationDetail.Message = progressText;
+            // Use safe save to prevent race conditions with completion
+            const saved = await this.safeSaveConversationDetail(conversationDetail, `Progress:${agentName}`);
+            if (saved) {
+              // Emit update to trigger UI refresh
+              this.messageSent.emit(conversationDetail);
             }
           }
-
-          conversationDetail.Message = progressText;
-          await conversationDetail.Save();
-          // Emit update to trigger UI refresh
-          this.messageSent.emit(conversationDetail);
         }
       } catch (error) {
         console.warn('Failed to save progress update to ConversationDetail:', error);
@@ -386,13 +504,13 @@ export class MessageInputComponent implements OnInit {
 
       console.log(`[${agentName}] Progress: ${progress.step} - ${progress.message} (${progress.percentage}%)`, {
         agentRunId: progressAgentRunId,
-        conversationDetailId
+        conversationDetailId: conversationDetail.ID
       });
     };
   }
 
   /**
-   * Process the message through agents (multi-stage: Conversation Manager -> possible sub-agent)
+   * Process the message through agents (multi-stage: Sage -> possible sub-agent)
    * Only called when there's no @mention and no implicit agent context
    */
   private async processMessageThroughAgent(
@@ -407,12 +525,8 @@ export class MessageInputComponent implements OnInit {
     const conversationId = userMessage.ConversationID;
 
     try {
-      // Create AI message for Conversation Manager BEFORE invoking
-      const md = new Metadata();
-      conversationManagerMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      // Create AI message for Sage BEFORE invoking
+      conversationManagerMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       conversationManagerMessage.ConversationID = conversationId;
       conversationManagerMessage.Role = 'AI';
@@ -420,7 +534,7 @@ export class MessageInputComponent implements OnInit {
       conversationManagerMessage.ParentID = userMessage.ID;
       conversationManagerMessage.Status = 'In-Progress';
       conversationManagerMessage.HiddenToUser = false;
-      // Use the preloaded Conversation Manager agent instead of looking it up
+      // Use the preloaded Sage agent instead of looking it up
       if (this.converationManagerAgent?.ID) {
         conversationManagerMessage.AgentID = this.converationManagerAgent.ID;
       }
@@ -428,10 +542,10 @@ export class MessageInputComponent implements OnInit {
       await conversationManagerMessage.Save();
       this.messageSent.emit(conversationManagerMessage);
 
-      // Use Conversation Manager to evaluate and route
-      // Stage 1: Conversation Manager evaluates the message
+      // Use Sage to evaluate and route
+      // Stage 1: Sage evaluates the message
       taskId = this.activeTasks.add({
-        agentName: 'Conversation Manager',
+        agentName: 'Sage',
         status: 'Evaluating message...',
         relatedMessageId: userMessage.ID,
         conversationDetailId: conversationManagerMessage.ID
@@ -442,10 +556,10 @@ export class MessageInputComponent implements OnInit {
         userMessage,
         this.conversationHistory,
         conversationManagerMessage.ID,
-        this.createProgressCallback(conversationManagerMessage.ID, 'Conversation Manager')
+        this.createProgressCallback(conversationManagerMessage, 'Sage')
       );
 
-      // Remove Conversation Manager from active tasks
+      // Remove Sage from active tasks
       if (taskId) {
         this.activeTasks.remove(taskId);
         taskId = null;
@@ -462,53 +576,87 @@ export class MessageInputComponent implements OnInit {
         userMessage.Status = 'Complete';
         await userMessage.Save();
         this.messageSent.emit(userMessage);
-        console.warn('⚠️ Conversation Manager failed:', result?.agentRun?.ErrorMessage);
+        console.warn('⚠️ Sage failed:', result?.agentRun?.ErrorMessage);
         return;
       }
 
-      console.log('🤖 Conversation Manager Response:', {
+      console.log('🤖 Sage Response:', {
         finalStep: result.agentRun.FinalStep,
         hasPayload: !!result.payload,
-        hasMessage: !!result.agentRun.Message
+        hasMessage: !!result.agentRun.Message,
+        payloadKeys: result.payload ? Object.keys(result.payload) : [],
+        payload: result.payload // Full payload for debugging
       });
 
-      // Stage 2: Check for sub-agent invocation
-      if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
+      // Stage 2: Check for task graph (multi-step orchestration)
+      if (result.payload?.taskGraph) {
+        console.log('📋 Task graph detected, starting task orchestration');
+        await this.handleTaskGraphExecution(userMessage, result, this.conversationId, conversationManagerMessage);
+        // Remove CM from active tasks
+        if (taskId) {
+          this.activeTasks.remove(taskId);
+        }
+      }
+      // Stage 3: Check for sub-agent invocation (single-step delegation)
+      else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
         // Reuse the existing conversationManagerMessage instead of creating new ones
         await this.handleSubAgentInvocation(userMessage, result, this.conversationId, conversationManagerMessage);
+        // Remove CM from active tasks
+        if (taskId) {
+          this.activeTasks.remove(taskId);
+        }
       }
-      // Stage 3: Direct chat response from Conversation Manager
+      // Stage 4: Direct chat response from Sage
       else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
-        // Update the existing message with the response
+        // Normal chat response
         conversationManagerMessage.Message = result.agentRun.Message;
         conversationManagerMessage.Status = 'Complete';
-        if (result.agentRun.ID) {
-          (conversationManagerMessage as any).AgentRunID = result.agentRun.ID;
-        }
+
         await conversationManagerMessage.Save();
         this.messageSent.emit(conversationManagerMessage);
 
-        // Handle artifacts if any
+        // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         if (result.payload && Object.keys(result.payload).length > 0) {
           await this.createArtifactFromPayload(result.payload, conversationManagerMessage, result.agentRun.AgentID);
-          console.log('🎨 Artifact created and linked to Conversation Manager message');
+          console.log('🎨 Artifact created and linked to Sage message');
           this.messageSent.emit(conversationManagerMessage);
         }
 
         userMessage.Status = 'Complete';
         await userMessage.Save();
         this.messageSent.emit(userMessage);
-      }
-      // Stage 4: Silent observation - check for agent continuity
-      else {
-        console.log('🔇 Conversation Manager chose to observe silently');
-        // Hide the Conversation Manager message
-        conversationManagerMessage.HiddenToUser = true;
-        conversationManagerMessage.Status = 'Complete';
-        await conversationManagerMessage.Save();
-        this.messageSent.emit(conversationManagerMessage);
 
-        await this.handleSilentObservation(userMessage, this.conversationId);
+        // Remove CM from active tasks
+        if (taskId) {
+          this.activeTasks.remove(taskId);
+        }
+      }
+      // Stage 5: Silent observation - but check for message content first
+      else {
+        // Check if there's a message to display even without payload/taskGraph
+        if (result.agentRun.Message) {
+          console.log('💬 Sage provided a message without payload');
+          conversationManagerMessage.Message = result.agentRun.Message;
+          conversationManagerMessage.Status = 'Complete';
+          conversationManagerMessage.HiddenToUser = false;
+
+          await conversationManagerMessage.Save();
+          this.messageSent.emit(conversationManagerMessage);
+        } else {
+          console.log('🔇 Sage chose to observe silently');
+          // Hide the Sage message
+          conversationManagerMessage.HiddenToUser = true;
+          conversationManagerMessage.Status = 'Complete';
+          await conversationManagerMessage.Save();
+          this.messageSent.emit(conversationManagerMessage);
+
+          await this.handleSilentObservation(userMessage, this.conversationId);
+        }
+
+        // Remove CM from active tasks
+        if (taskId) {
+          this.activeTasks.remove(taskId);
+        }
       }
 
     } catch (error) {
@@ -536,7 +684,292 @@ export class MessageInputComponent implements OnInit {
   }
 
   /**
-   * Handle sub-agent invocation based on Conversation Manager's payload
+   * Handle task graph execution based on Sage's payload
+   * Creates tasks and orchestrates their execution
+   */
+  private async handleTaskGraphExecution(
+    userMessage: ConversationDetailEntity,
+    managerResult: ExecuteAgentResult,
+    conversationId: string,
+    conversationManagerMessage: ConversationDetailEntity
+  ): Promise<void> {
+    const taskGraph = managerResult.payload.taskGraph;
+    const workflowName = taskGraph.workflowName || 'Workflow';
+    const reasoning = taskGraph.reasoning || 'Executing multi-step workflow';
+    const taskCount = taskGraph.tasks?.length || 0;
+
+    console.log(`📋 Task graph execution requested: ${workflowName}`, {
+      reasoning,
+      taskCount
+    });
+
+    const md = new Metadata();
+
+    // Deduplicate tasks by tempId (LLM sometimes returns duplicates)
+    const seenTempIds = new Set<string>();
+    const uniqueTasks = taskGraph.tasks.filter((task: any) => {
+      if (seenTempIds.has(task.tempId)) {
+        console.warn(`⚠️ Duplicate tempId detected on client, filtering: ${task.tempId} (${task.name})`);
+        return false;
+      }
+      seenTempIds.add(task.tempId);
+      return true;
+    });
+
+    const uniqueTaskCount = uniqueTasks.length;
+    console.log(`Filtered to ${uniqueTaskCount} unique tasks (${taskCount - uniqueTaskCount} duplicates removed)`);
+
+    const isSingleTask = uniqueTaskCount === 1;
+
+    // If single task, use direct agent execution (existing pattern with great PubSub support)
+    if (isSingleTask) {
+      const task = uniqueTasks[0];
+      const agentName = task.agentName;
+
+      // Update CM message
+      const delegationMessage = `👉 Delegating to **${agentName}**`;
+      await this.updateConversationDetail(conversationManagerMessage, delegationMessage, 'Complete');
+
+      // Execute single agent directly using existing pattern
+      await this.handleSingleTaskExecution(
+        userMessage,
+        task,
+        agentName,
+        conversationId,
+        conversationManagerMessage
+      );
+
+      return;
+    }
+
+    // Multi-step workflow - use server-side task orchestration
+    console.log(`📋 Multi-step workflow detected (${uniqueTaskCount} tasks), using task orchestration`);
+
+    // Update CM message with task summary (use unique tasks only)
+    const taskSummary = uniqueTasks.map((t: any) => `• ${t.name}`).join('\n');
+
+    await this.updateConversationDetail(conversationManagerMessage, `📋 Setting up multi-step workflow...\n\n**${workflowName}**\n${taskSummary}`, 'Complete');
+
+    // Step 2: Create new ConversationDetail for task execution updates
+    const taskExecutionMessage = await this.dataCache.createConversationDetail(this.currentUser);
+    taskExecutionMessage.ConversationID = conversationId;
+    taskExecutionMessage.Role = 'AI';
+    taskExecutionMessage.Message = '⏳ Starting workflow execution...';
+    taskExecutionMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation message
+    taskExecutionMessage.Status = 'In-Progress';
+    taskExecutionMessage.HiddenToUser = false;
+    // No AgentID for now - this represents the task orchestration system
+    await taskExecutionMessage.Save();
+    this.messageSent.emit(taskExecutionMessage);
+
+    // Register for real-time updates via PubSub
+    this.activeTaskExecutionMessageIds.add(taskExecutionMessage.ID);
+
+    try {
+      // Get environment ID from user
+      const environmentId = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+
+      // Get session ID for PubSub
+      const sessionId = (GraphQLDataProvider.Instance as any).sessionId || '';
+
+      // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
+      const mutation = `
+        mutation ExecuteTaskGraph($taskGraphJson: String!, $conversationDetailId: String!, $environmentId: String!, $sessionId: String!) {
+          ExecuteTaskGraph(
+            taskGraphJson: $taskGraphJson
+            conversationDetailId: $conversationDetailId
+            environmentId: $environmentId
+            sessionId: $sessionId
+          ) {
+            success
+            errorMessage
+            results {
+              taskId
+              success
+              output
+              error
+            }
+          }
+        }
+      `;
+
+      const variables = {
+        taskGraphJson: JSON.stringify(taskGraph),
+        conversationDetailId: taskExecutionMessage.ID, // Link tasks to execution message, not CM message
+        environmentId: environmentId,
+        sessionId: sessionId
+      };
+
+      const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, variables);
+
+      console.log('📊 ExecuteTaskGraph result:', {
+        hasData: !!result?.data,
+        hasErrors: !!result?.errors,
+        data: result?.data,
+        errors: result?.errors
+      });
+
+      // Step 4: Update task execution message with results
+      // Check for GraphQL errors first
+      if (result?.errors && result.errors.length > 0) {
+        const errorMsg = result.errors.map((e: any) => e.message).join(', ');
+        console.error('❌ GraphQL errors:', result.errors);
+        taskExecutionMessage.Message = `❌ **${workflowName}** failed: ${errorMsg}`;
+        taskExecutionMessage.Status = 'Error';
+        taskExecutionMessage.Error = errorMsg;
+      } else if (result?.data?.ExecuteTaskGraph?.success) {
+        console.log('✅ Task graph execution completed successfully');
+        taskExecutionMessage.Message = `✅ **${workflowName}** completed successfully`;
+        taskExecutionMessage.Status = 'Complete';
+      } else {
+        const errorMsg = result?.data?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
+        console.error('❌ Task graph execution failed:', errorMsg);
+        taskExecutionMessage.Message = `❌ **${workflowName}** failed: ${errorMsg}`;
+        taskExecutionMessage.Status = 'Error';
+        taskExecutionMessage.Error = errorMsg;
+      }
+
+      await taskExecutionMessage.Save();
+      this.messageSent.emit(taskExecutionMessage);
+
+      // Unregister from real-time updates (task complete)
+      this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
+
+      // Mark user message as complete
+      userMessage.Status = 'Complete';
+      await userMessage.Save();
+      this.messageSent.emit(userMessage);
+
+    } catch (error) {
+      console.error('❌ Error executing task graph:', error);
+      taskExecutionMessage.Message = `❌ **${workflowName}** - Error: ${String(error)}`;
+      taskExecutionMessage.Status = 'Error';
+      taskExecutionMessage.Error = String(error);
+      await taskExecutionMessage.Save();
+      this.messageSent.emit(taskExecutionMessage);
+
+      // Unregister from real-time updates (task failed)
+      this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
+
+      userMessage.Status = 'Complete';
+      await userMessage.Save();
+      this.messageSent.emit(userMessage);
+    }
+  }
+
+  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error') {
+    if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
+      return; // Do not update completed or errored messages
+    }
+
+    const maxAttempts = 2;
+    let attempts = 0, done = false;
+    while (attempts < maxAttempts && !done) {
+      convoDetail.Message = message;
+      convoDetail.Status = status;
+      await convoDetail.Save();
+      if (convoDetail.Message === message && convoDetail.Status === status) {
+        done = true;
+        this.messageSent.emit(convoDetail);
+      }
+      else {
+        console.warn(`   ⚠️ ConversationDetail update attempt ${attempts + 1} did not persist. ${attempts + 1 < maxAttempts ? 'Retrying...' : 'Giving up.'}`);
+      }
+      attempts++;
+    }
+  }
+
+  /**
+   * Handle single task execution from task graph using direct agent execution
+   * Uses the existing agent execution pattern with PubSub support
+   */
+  private async handleSingleTaskExecution(
+    userMessage: ConversationDetailEntity,
+    task: any, // Task definition from taskGraph
+    agentName: string,
+    conversationId: string,
+    conversationManagerMessage: ConversationDetailEntity
+  ): Promise<void> {
+    try {
+      // Look up the agent
+      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+      if (!agent) {
+        throw new Error(`Agent not found: ${agentName}`);
+      }
+
+      // Create AI response message for the agent execution
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
+
+      agentResponseMessage.ConversationID = conversationId;
+      agentResponseMessage.Role = 'AI';
+      agentResponseMessage.Message = '⏳ Starting...';
+      agentResponseMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation
+      agentResponseMessage.Status = 'In-Progress';
+      agentResponseMessage.HiddenToUser = false;
+      agentResponseMessage.AgentID = agent.ID;
+
+      await agentResponseMessage.Save();
+      this.messageSent.emit(agentResponseMessage);
+
+      // Add to active tasks
+      const newTaskId = this.activeTasks.add({
+        agentName: agentName,
+        status: 'Starting...',
+        relatedMessageId: userMessage.ID,
+        conversationDetailId: agentResponseMessage.ID
+      });
+
+      // Invoke agent with task's input payload
+      const agentResult = await this.agentService.invokeSubAgent(
+        agentName,
+        conversationId,
+        userMessage,
+        this.conversationHistory,
+        task.description || task.name,
+        agentResponseMessage.ID,
+        task.inputPayload, // Pass the task's input payload
+        this.createProgressCallback(agentResponseMessage, agentName)
+      );
+
+      // Remove from active tasks
+      this.activeTasks.remove(newTaskId);
+
+      if (agentResult && agentResult.success) {
+        // Update message with result
+        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+
+        // Handle artifacts
+        if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
+          await this.createArtifactFromPayload(agentResult.payload, agentResponseMessage, agentResult.agentRun.AgentID);
+          console.log('🎨 Artifact created from single task execution');
+          this.messageSent.emit(agentResponseMessage);
+        }
+      } else {
+        // Handle failure
+        const errorMsg = agentResult?.agentRun?.ErrorMessage || 'Agent execution failed';
+        agentResponseMessage.Message = `❌ **${agentName}** failed: ${errorMsg}`;
+        agentResponseMessage.Status = 'Error';
+        agentResponseMessage.Error = errorMsg;
+
+        await agentResponseMessage.Save();
+        this.messageSent.emit(agentResponseMessage);
+      }
+
+      // Mark user message as complete
+      userMessage.Status = 'Complete';
+      await userMessage.Save();
+      this.messageSent.emit(userMessage);
+
+    } catch (error) {
+      console.error('❌ Error in single task execution:', error);
+      userMessage.Status = 'Complete';
+      await userMessage.Save();
+      this.messageSent.emit(userMessage);
+    }
+  }
+
+  /**
+   * Handle sub-agent invocation based on Sage's payload
    * Reuses the existing conversationManagerMessage to avoid creating multiple records
    */
   private async handleSubAgentInvocation(
@@ -549,29 +982,13 @@ export class MessageInputComponent implements OnInit {
     const agentName = payload.invokeAgent;
     const reasoning = payload.reasoning || 'Delegating to specialist agent';
 
-    console.log(`👉 Sub-agent invocation requested: ${agentName}`, { reasoning });
-
-    // Update the existing Conversation Manager message to show delegation
-    conversationManagerMessage.Message = `👉 **${agentName}** will handle this request...`;
-    conversationManagerMessage.Status = 'Complete';
-    // Keep AgentID as Conversation Manager (already set)
-    if (managerResult.agentRun.ID) {
-      (conversationManagerMessage as any).AgentRunID = managerResult.agentRun.ID;
-    }
-    await conversationManagerMessage.Save();
-    this.messageSent.emit(conversationManagerMessage);
-
     // Now create a NEW message for the sub-agent execution
     try {
       // Look up the agent to get its ID
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const md = new Metadata();
-      const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -605,7 +1022,7 @@ export class MessageInputComponent implements OnInit {
         reasoning,
         agentResponseMessage.ID,
         undefined, // no payload for initial invocation
-        this.createProgressCallback(agentResponseMessage.ID, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName)
       );
 
       // Remove from active tasks
@@ -613,20 +1030,12 @@ export class MessageInputComponent implements OnInit {
 
       if (subResult && subResult.success) {
         // Update the response message with agent result
-        agentResponseMessage.Message = subResult.agentRun?.Message || `✅ **${agentName}** completed`;
-        agentResponseMessage.Status = 'Complete';
-
-        // Store the agent ID and AgentRunID for display and tracking
+        // Store the agent ID for display
         if (subResult.agentRun.AgentID) {
           agentResponseMessage.AgentID = subResult.agentRun.AgentID;
         }
-        if (subResult.agentRun.ID) {
-          (agentResponseMessage as any).AgentRunID = subResult.agentRun.ID;
-        }
-
-        // Save updates - this sets __mj_UpdatedAt for duration calculation
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        
+        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
         // Handle artifacts from sub-agent if any
         if (subResult.payload && Object.keys(subResult.payload).length > 0) {
@@ -644,15 +1053,10 @@ export class MessageInputComponent implements OnInit {
         // Sub-agent failed - attempt auto-retry once
         console.log(`⚠️ ${agentName} failed, attempting auto-retry...`);
 
-        // Update delegation message to show retry
-        conversationManagerMessage.Message = `👉 **${agentName}** will handle this request...\n\n⚠️ First attempt failed, retrying...`;
-        await conversationManagerMessage.Save();
-        this.messageSent.emit(conversationManagerMessage);
+        await this.updateConversationDetail(conversationManagerMessage, `👉 **${agentName}** will handle this request...\n\n⚠️ First attempt failed, retrying...`, conversationManagerMessage.Status);
 
         // Update the existing agentResponseMessage to show retry status
-        agentResponseMessage.Message = 'Retrying...';
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage, "Retrying...", agentResponseMessage.Status);
 
         // Retry the sub-agent
         const retryResult = await this.agentService.invokeSubAgent(
@@ -663,24 +1067,16 @@ export class MessageInputComponent implements OnInit {
           reasoning,
           agentResponseMessage.ID,
           undefined, // no payload for retry
-          this.createProgressCallback(agentResponseMessage.ID, `${agentName} (retry)`)
+          this.createProgressCallback(agentResponseMessage, `${agentName} (retry)`)
         );
 
         if (retryResult && retryResult.success) {
           // Retry succeeded - update the same message
-          agentResponseMessage.Message = retryResult.agentRun?.Message || `✅ **${agentName}** completed`;
-          agentResponseMessage.Status = 'Complete';
-
           if (retryResult.agentRun.AgentID) {
             agentResponseMessage.AgentID = retryResult.agentRun.AgentID;
           }
-          if (retryResult.agentRun.ID) {
-            (agentResponseMessage as any).AgentRunID = retryResult.agentRun.ID;
-          }
 
-          // Save updates - maintains original CreatedAt for accurate duration
-          await agentResponseMessage.Save();
-          this.messageSent.emit(agentResponseMessage);
+          await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
           // Handle artifacts
           if (retryResult.payload && Object.keys(retryResult.payload).length > 0) {
@@ -720,14 +1116,14 @@ export class MessageInputComponent implements OnInit {
   }
 
   /**
-   * Handle silent observation - when Conversation Manager stays silent,
+   * Handle silent observation - when Sage stays silent,
    * check if we should continue with the last agent for iterative refinement
    */
   private async handleSilentObservation(
     userMessage: ConversationDetailEntity,
     conversationId: string
   ): Promise<void> {
-    // Find the last AI message (excluding Conversation Manager) in the conversation history
+    // Find the last AI message (excluding Sage) in the conversation history
     const lastAIMessage = this.conversationHistory
       .slice()
       .reverse()
@@ -747,7 +1143,6 @@ export class MessageInputComponent implements OnInit {
     }
 
     // Load the agent entity to get its name
-    const md = new Metadata();
     const rv = new RunView();
     const agentResult = await rv.RunView<AIAgentEntityExtended>({
       EntityName: 'AI Agents',
@@ -776,6 +1171,8 @@ export class MessageInputComponent implements OnInit {
     }, this.currentUser);
 
     let previousPayload: any = null;
+    let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
+
     if (artifactResult.Success && artifactResult.Results && artifactResult.Results.length > 0) {
       // Load the artifact version content
       const junctionRecord = artifactResult.Results[0];
@@ -790,7 +1187,12 @@ export class MessageInputComponent implements OnInit {
         if (version.Content) {
           try {
             previousPayload = JSON.parse(version.Content);
-            console.log('📦 Loaded previous OUTPUT artifact as payload for continuity');
+            previousArtifactInfo = {
+              artifactId: version.ArtifactID,
+              versionId: version.ID,
+              versionNumber: version.VersionNumber || 1
+            };
+            console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
           } catch (error) {
             console.warn('⚠️ Could not parse previous artifact content:', error);
           }
@@ -799,10 +1201,7 @@ export class MessageInputComponent implements OnInit {
     }
 
     // Create status message showing agent continuity
-    const statusMessage = await md.GetEntityObject<ConversationDetailEntity>(
-      'Conversation Details',
-      this.currentUser
-    );
+    const statusMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
     statusMessage.ConversationID = conversationId;
     statusMessage.Role = 'AI';
@@ -833,7 +1232,7 @@ export class MessageInputComponent implements OnInit {
         'Continuing previous work based on user feedback',
         statusMessage.ID,
         previousPayload,
-        this.createProgressCallback(statusMessage.ID, agentName)
+        this.createProgressCallback(statusMessage, agentName)
       );
 
       // Remove from active tasks
@@ -841,10 +1240,7 @@ export class MessageInputComponent implements OnInit {
 
       if (continuityResult && continuityResult.success) {
         // Create response message
-        const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
+        const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
         agentResponseMessage.ConversationID = conversationId;
         agentResponseMessage.Role = 'AI';
@@ -857,9 +1253,14 @@ export class MessageInputComponent implements OnInit {
         await agentResponseMessage.Save();
         this.messageSent.emit(agentResponseMessage);
 
-        // Handle artifacts from agent if any
+        // Handle artifacts from agent if any - create new version if continuing same agent
         if (continuityResult.payload && Object.keys(continuityResult.payload).length > 0) {
-          await this.createArtifactFromPayload(continuityResult.payload, agentResponseMessage, lastAIMessage.AgentID);
+          await this.createArtifactFromPayload(
+            continuityResult.payload,
+            agentResponseMessage,
+            lastAIMessage.AgentID,
+            previousArtifactInfo // Pass artifact info to create new version
+          );
           console.log('🎨 Artifact created from agent continuity');
           this.messageSent.emit(agentResponseMessage);
         }
@@ -896,62 +1297,11 @@ export class MessageInputComponent implements OnInit {
       this.messageSent.emit(userMessage);
     }
   }
-
-  /**
-   * Handle agent response - create AI message from agent result
-   */
-  private async handleAgentResponse(
-    userMessage: ConversationDetailEntity,
-    result: ExecuteAgentResult,
-    conversationId: string
-  ): Promise<void> {
-    if (!result.agentRun.Message) return;
-
-    const md = new Metadata();
-    const agentMessage = await md.GetEntityObject<ConversationDetailEntity>(
-      'Conversation Details',
-      this.currentUser
-    );
-
-    agentMessage.ConversationID = conversationId;
-    agentMessage.Message = result.agentRun.Message;
-    agentMessage.Role = 'AI';
-    agentMessage.Status = 'Complete';
-    agentMessage.AgentID = this.converationManagerAgent?.ID || null; // Default to Conversation Manager
-
-    // Populate denormalized AgentID for fast lookup
-    if (result.agentRun.AgentID) {
-      agentMessage.AgentID = result.agentRun.AgentID;
-      console.log(`✅ Set AgentID=${result.agentRun.AgentID} for message from agent`);
-    } else {
-      console.warn('⚠️ AgentID not found in agentRun result');
-    }
-
-    const saved = await agentMessage.Save();
-    if (saved) {
-      console.log('💾 Agent response saved');
-
-      // If agent returned a payload, create an artifact version linked to this message
-      if (result.payload && Object.keys(result.payload).length > 0) {
-        await this.createArtifactFromPayload(result.payload, agentMessage, result.agentRun.AgentID);
-        console.log('🎨 Artifact created and linked to conversation detail:', agentMessage.ID);
-      }
-
-      this.agentResponse.emit({
-        message: agentMessage,
-        agentResult: result
-      });
-
-      // Mark user message as complete
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
-    }
-  }
+ 
 
   /**
    * Invoke an agent directly when mentioned with @ symbol
-   * Bypasses Conversation Manager completely - no status messages
+   * Bypasses Sage completely - no status messages
    */
   private async invokeAgentDirectly(
     userMessage: ConversationDetailEntity,
@@ -978,11 +1328,7 @@ export class MessageInputComponent implements OnInit {
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const md = new Metadata();
-      const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -1008,27 +1354,18 @@ export class MessageInputComponent implements OnInit {
         `User mentioned agent directly with @${agentName}`,
         agentResponseMessage.ID,
         undefined, // no payload for direct mention
-        this.createProgressCallback(agentResponseMessage.ID, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName)
       );
 
       // Remove from active tasks
       this.activeTasks.remove(taskId);
 
       if (result && result.success) {
-        // Update the response message with agent result
-        agentResponseMessage.Message = result.agentRun?.Message || `✅ **${agentName}** completed`;
-        agentResponseMessage.Status = 'Complete';
-
         if (result.agentRun.AgentID) {
           agentResponseMessage.AgentID = result.agentRun.AgentID;
         }
-        if (result.agentRun.ID) {
-          (agentResponseMessage as any).AgentRunID = result.agentRun.ID;
-        }
 
-        // Save updates - this sets __mj_UpdatedAt for duration calculation
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
 
         // Handle artifacts
         if (result.payload && Object.keys(result.payload).length > 0) {
@@ -1042,11 +1379,7 @@ export class MessageInputComponent implements OnInit {
         this.messageSent.emit(userMessage);
       } else {
         // Agent failed - create error message
-        const md = new Metadata();
-        const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
+        const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
         errorMessage.ConversationID = conversationId;
         errorMessage.Role = 'AI';
@@ -1068,11 +1401,7 @@ export class MessageInputComponent implements OnInit {
 
       this.activeTasks.remove(taskId);
 
-      const md = new Metadata();
-      const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       errorMessage.ConversationID = conversationId;
       errorMessage.Role = 'AI';
@@ -1093,7 +1422,7 @@ export class MessageInputComponent implements OnInit {
 
   /**
    * Continue with the same agent from previous message (implicit continuation)
-   * Bypasses Conversation Manager - no status messages
+   * Bypasses Sage - no status messages
    */
   private async continueWithAgent(
     userMessage: ConversationDetailEntity,
@@ -1101,7 +1430,6 @@ export class MessageInputComponent implements OnInit {
     conversationId: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const md = new Metadata();
     const rv = new RunView();
     const agentResult = await rv.RunView<AIAgentEntityExtended>({
       EntityName: 'AI Agents',
@@ -1110,13 +1438,58 @@ export class MessageInputComponent implements OnInit {
     }, this.currentUser);
 
     if (!agentResult.Success || !agentResult.Results || agentResult.Results.length === 0) {
-      console.warn('⚠️ Could not load agent for continuation - falling back to Conversation Manager');
+      console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
       await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });
       return;
     }
 
     const agent = agentResult.Results[0];
     const agentName = agent.Name || 'Agent';
+
+    // Find the last AI message from this same agent to get the previous OUTPUT artifact
+    const lastAIMessage = this.conversationHistory
+      .slice()
+      .reverse()
+      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+
+    let previousPayload: any = null;
+    let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
+
+    if (lastAIMessage) {
+      // Load the OUTPUT artifact from the last agent message
+      const artifactResult = await rv.RunView<ConversationDetailArtifactEntity>({
+        EntityName: 'MJ: Conversation Detail Artifacts',
+        ExtraFilter: `ConversationDetailID='${lastAIMessage.ID}' AND Direction='Output'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (artifactResult.Success && artifactResult.Results && artifactResult.Results.length > 0) {
+        // Load the artifact version content
+        const junctionRecord = artifactResult.Results[0];
+        const versionResult = await rv.RunView<ArtifactVersionEntity>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID='${junctionRecord.ArtifactVersionID}'`,
+          ResultType: 'entity_object'
+        }, this.currentUser);
+
+        if (versionResult.Success && versionResult.Results && versionResult.Results.length > 0) {
+          const version = versionResult.Results[0];
+          if (version.Content) {
+            try {
+              previousPayload = JSON.parse(version.Content);
+              previousArtifactInfo = {
+                artifactId: version.ArtifactID,
+                versionId: version.ID,
+                versionNumber: version.VersionNumber || 1
+              };
+              console.log('📦 Loaded previous OUTPUT artifact as payload for continuation', previousArtifactInfo);
+            } catch (error) {
+              console.warn('⚠️ Could not parse previous artifact content:', error);
+            }
+          }
+        }
+      }
+    }
 
     // Add agent to active tasks
     const taskId = this.activeTasks.add({
@@ -1133,10 +1506,7 @@ export class MessageInputComponent implements OnInit {
       this.messageSent.emit(userMessage);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const agentResponseMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -1150,7 +1520,7 @@ export class MessageInputComponent implements OnInit {
       await agentResponseMessage.Save();
       this.messageSent.emit(agentResponseMessage);
 
-      // Invoke the agent directly (continuation)
+      // Invoke the agent directly (continuation) with previous payload if available
       const result = await this.agentService.invokeSubAgent(
         agentName,
         conversationId,
@@ -1158,8 +1528,8 @@ export class MessageInputComponent implements OnInit {
         this.conversationHistory,
         'Continuing previous conversation with user',
         agentResponseMessage.ID,
-        undefined, // no payload for continuation
-        this.createProgressCallback(agentResponseMessage.ID, agentName)
+        previousPayload, // Pass previous OUTPUT artifact payload for continuity
+        this.createProgressCallback(agentResponseMessage, agentName)
       );
 
       // Remove from active tasks
@@ -1167,20 +1537,16 @@ export class MessageInputComponent implements OnInit {
 
       if (result && result.success) {
         // Update the response message with agent result
-        agentResponseMessage.Message = result.agentRun?.Message || `✅ **${agentName}** completed`;
-        agentResponseMessage.Status = 'Complete';
+        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
-        if (result.agentRun.ID) {
-          (agentResponseMessage as any).AgentRunID = result.agentRun.ID;
-        }
-
-        // Save updates - this sets __mj_UpdatedAt for duration calculation
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
-
-        // Handle artifacts
+        // Handle artifacts - create new version if continuing with same agent and artifact
         if (result.payload && Object.keys(result.payload).length > 0) {
-          await this.createArtifactFromPayload(result.payload, agentResponseMessage, agentId);
+          await this.createArtifactFromPayload(
+            result.payload,
+            agentResponseMessage,
+            agentId,
+            previousArtifactInfo // Pass artifact info to create new version instead of new artifact
+          );
           this.messageSent.emit(agentResponseMessage);
         }
 
@@ -1190,10 +1556,7 @@ export class MessageInputComponent implements OnInit {
         this.messageSent.emit(userMessage);
       } else {
         // Agent failed - create error message
-        const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-          'Conversation Details',
-          this.currentUser
-        );
+        const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
         errorMessage.ConversationID = conversationId;
         errorMessage.Role = 'AI';
@@ -1215,10 +1578,7 @@ export class MessageInputComponent implements OnInit {
 
       this.activeTasks.remove(taskId);
 
-      const errorMessage = await md.GetEntityObject<ConversationDetailEntity>(
-        'Conversation Details',
-        this.currentUser
-      );
+      const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       errorMessage.ConversationID = conversationId;
       errorMessage.Role = 'AI';
@@ -1239,43 +1599,64 @@ export class MessageInputComponent implements OnInit {
 
   /**
    * Creates an artifact from an agent's payload and links it to the conversation detail
+   * If previousArtifactInfo is provided, creates a new version of the existing artifact
+   * Otherwise, creates a new artifact with version 1
    * @param payload The agent's payload object
    * @param message The conversation detail message to link to
    * @param agentId The ID of the agent that produced the payload
+   * @param previousArtifactInfo Optional info about previous artifact to create new version
    */
   private async createArtifactFromPayload(
     payload: any,
     message: ConversationDetailEntity,
-    agentId?: string
+    agentId?: string,
+    previousArtifactInfo?: {artifactId: string; versionId: string; versionNumber: number} | null
   ): Promise<void> {
     try {
       const md = new Metadata();
+      let artifactId: string;
+      let newVersionNumber: number;
 
-      // Create Artifact header
-      const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+      // If we have previous artifact info, we're creating a new version of existing artifact
+      if (previousArtifactInfo) {
+        artifactId = previousArtifactInfo.artifactId;
+        newVersionNumber = previousArtifactInfo.versionNumber + 1;
+        console.log(`📦 Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
+      } else {
+        // Create new Artifact header
+        const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
 
-      // Generate artifact name based on agent name and timestamp
-      const agentName = agentId
-        ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)?.Name || 'Agent'
-        : 'Agent';
-      artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
-      artifact.Description = `Payload returned by ${agentName}`;
+        // Look up agent to get name and default artifact type
+        const agent = agentId
+          ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)
+          : null;
+        const agentName = agent?.Name || 'Agent';
 
-      // Use JSON artifact type (hardcoded ID from migration)
-      artifact.TypeID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4'; // JSON type
-      artifact.UserID = this.currentUser.ID;
-      artifact.EnvironmentID = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+        artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
+        artifact.Description = `Payload returned by ${agentName}`;
 
-      const artifactSaved = await artifact.Save();
-      if (!artifactSaved) {
-        console.error('Failed to save artifact');
-        return;
+        // Use agent's DefaultArtifactTypeID if available, otherwise fall back to JSON
+        const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
+        artifact.TypeID = defaultArtifactTypeId || this.JSON_ARTIFACT_TYPE_ID;
+
+        artifact.UserID = this.currentUser.ID;
+        artifact.EnvironmentID = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+
+        const artifactSaved = await artifact.Save();
+        if (!artifactSaved) {
+          console.error('Failed to save artifact');
+          return;
+        }
+
+        artifactId = artifact.ID;
+        newVersionNumber = 1;
+        console.log(`📦 Creating new artifact ${artifactId} with version 1`);
       }
 
       // Create Artifact Version with content
       const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
-      version.ArtifactID = artifact.ID;
-      version.VersionNumber = 1;
+      version.ArtifactID = artifactId;
+      version.VersionNumber = newVersionNumber;
       version.Content = JSON.stringify(payload, null, 2);
       version.UserID = this.currentUser.ID;
 
@@ -1299,7 +1680,29 @@ export class MessageInputComponent implements OnInit {
         console.error('Failed to create artifact-message association');
       }
 
-      this.artifactCreated.emit({ artifactId: artifact.ID, versionId: version.ID, conversationDetailId: message.ID, name: artifact.Name });
+      // Emit with artifact name (load from DB if versioning existing artifact)
+      let artifactName: string;
+      if (previousArtifactInfo) {
+        const artifactEntity = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
+        if (await artifactEntity.Load(artifactId)) {
+          artifactName = artifactEntity.Name || 'Artifact';
+        } else {
+          artifactName = 'Artifact';
+        }
+      } else {
+        const agentName = agentId
+          ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)?.Name || 'Agent'
+          : 'Agent';
+        artifactName = `${agentName} Payload - ${new Date().toLocaleString()}`;
+      }
+
+      this.artifactCreated.emit({
+        artifactId,
+        versionId: version.ID,
+        versionNumber: newVersionNumber,
+        conversationDetailId: message.ID,
+        name: artifactName
+      });
     } catch (error) {
       console.error('Error creating artifact from payload:', error);
     }

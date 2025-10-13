@@ -9,6 +9,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
+import { SafeJSONParse } from '@memberjunction/global';
 
 @ObjectType()
 export class AIAgentRunResult {
@@ -312,6 +313,7 @@ export class RunAIAgentResolver extends ResolverBase {
         sessionId: string,
         pubSub: PubSubEngine,
         data?: string,
+        payload?: string,   
         templateData?: string,
         lastRunId?: string,
         autoPopulateLastRunPayload?: boolean,
@@ -356,6 +358,7 @@ export class RunAIAgentResolver extends ResolverBase {
             const result = await agentRunner.RunAgent({
                 agent: agentEntity,
                 conversationMessages: parsedMessages,
+                payload: payload ? SafeJSONParse(payload) : undefined,
                 contextUser: currentUser,
                 onProgress: this.createProgressCallback(pubSub, sessionId, userPayload, agentRunRef),
                 onStreaming: this.createStreamingCallback(pubSub, sessionId, userPayload, agentRunRef),
@@ -464,6 +467,7 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
         @Arg('data', { nullable: true }) data?: string,
+        @Arg('payload', { nullable: true }) payload?: string,
         @Arg('templateData', { nullable: true }) templateData?: string,
         @Arg('lastRunId', { nullable: true }) lastRunId?: string,
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
@@ -479,6 +483,7 @@ export class RunAIAgentResolver extends ResolverBase {
             sessionId,
             pubSub,
             data,
+            payload,
             templateData,
             lastRunId,
             autoPopulateLastRunPayload,
@@ -500,6 +505,7 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
         @Arg('data', { nullable: true }) data?: string,
+        @Arg('payload', { nullable: true }) payload?: string,
         @Arg('templateData', { nullable: true }) templateData?: string,
         @Arg('lastRunId', { nullable: true }) lastRunId?: string,
         @Arg('autoPopulateLastRunPayload', { nullable: true }) autoPopulateLastRunPayload?: boolean,
@@ -515,6 +521,7 @@ export class RunAIAgentResolver extends ResolverBase {
             sessionId,
             pubSub,
             data,
+            payload,
             templateData,
             lastRunId,
             autoPopulateLastRunPayload,

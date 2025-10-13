@@ -19,6 +19,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@memberjunction/ai-provider-bundle": "2.104.0",
     "@memberjunction/core": "2.100.3",
     "@memberjunction/global": "2.100.3",
     "@memberjunction/core-entities": "2.104.0",
@@ -27,7 +28,6 @@
     "@memberjunction/ai-prompts": "2.104.0",
     "@memberjunction/skip-types": "2.104.0",
     "@memberjunction/aiengine": "2.104.0",
-    "@memberjunction/ai-local-embeddings": "2.104.0",
     "@memberjunction/sqlserver-dataprovider": "2.104.0",
     "zod": "^3.23.8"
   }

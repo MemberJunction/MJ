@@ -562,8 +562,10 @@ export class SQLCodeGenBase {
             }
 
             // BASE VIEW
-            if (!options.onlyPermissions && 
-                (options.entity.BaseViewGenerated || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.baseViews)) && 
+            // Only generate if BaseViewGenerated is true (respects custom views where it's false)
+            // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
+            if (!options.onlyPermissions &&
+                options.entity.BaseViewGenerated &&
                 !options.entity.VirtualEntity) {
                 // generate the base view
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
@@ -595,9 +597,9 @@ export class SQLCodeGenBase {
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Create);
-                if (!options.onlyPermissions && 
-                    (options.entity.spCreateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spCreate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spCreateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spCreateGenerated=true
+                if (!options.onlyPermissions && options.entity.spCreateGenerated) {
                     // generate the create SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
                     if (options.writeFiles) {
@@ -631,9 +633,9 @@ export class SQLCodeGenBase {
             // UPDATE SP
             if (options.entity.AllowUpdateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Update);
-                if (!options.onlyPermissions && 
-                    (options.entity.spUpdateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spUpdate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spUpdateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spUpdateGenerated=true
+                if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
                     // generate the update SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
                     if (options.writeFiles) {
@@ -667,9 +669,11 @@ export class SQLCodeGenBase {
             // DELETE SP
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
-                if (!options.onlyPermissions && 
-                    (options.entity.spDeleteGenerated || // Generate if marked as generated (not custom)
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
+                // Only generate if spDeleteGenerated is true (respects custom SPs where it's false)
+                // OR if this entity has cascade delete dependencies that require regeneration
+                // forceRegeneration only forces regeneration of SPs where spDeleteGenerated=true
+                if (!options.onlyPermissions &&
+                    (options.entity.spDeleteGenerated ||
                      this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID))) {
                     // generate the delete SP
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
@@ -1002,6 +1006,88 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         return sOutput;
     }
 
+    /**
+     * Detects self-referential foreign keys in an entity (e.g., ParentTaskID pointing back to Task table)
+     * Returns array of field info objects representing recursive relationships
+     */
+    protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
+        return entity.Fields.filter(field =>
+            field.RelatedEntityID != null &&
+            field.RelatedEntityID === entity.ID
+        );
+    }
+
+    /**
+     * Generates the WITH clause containing recursive CTEs for root ID calculation
+     * Each recursive FK gets its own CTE that traverses the hierarchy to find the root
+     */
+    protected generateRecursiveCTEs(entity: EntityInfo, recursiveFKs: EntityFieldInfo[]): string {
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const classNameFirstChar = entity.ClassName.charAt(0).toLowerCase();
+
+        const ctes = recursiveFKs.map(field => {
+            const fieldName = field.Name;
+            const rootFieldName = `Root${fieldName}`;
+            const cteName = `CTE_${rootFieldName}`;
+
+            return `    ${cteName} AS (
+        -- Anchor: rows with no parent (root nodes)
+        SELECT
+            [${primaryKey}],
+            [${primaryKey}] AS [${rootFieldName}]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${fieldName}] IS NULL
+
+        UNION ALL
+
+        -- Recursive: traverse up the hierarchy
+        SELECT
+            child.[${primaryKey}],
+            parent.[${rootFieldName}]
+        FROM
+            [${schemaName}].[${tableName}] child
+        INNER JOIN
+            ${cteName} parent ON child.[${fieldName}] = parent.[${primaryKey}]
+    )`;
+        }).join(',\n');
+
+        return `WITH\n${ctes}\n`;
+    }
+
+    /**
+     * Generates the SELECT clause additions for root fields
+     * Example: , cte_root.[RootParentTaskID]
+     */
+    protected generateRootFieldSelects(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+        return recursiveFKs.map(field => {
+            const rootFieldName = `Root${field.Name}`;
+            const cteName = `CTE_${rootFieldName}`;
+            return `,\n    ${cteName}.[${rootFieldName}]`;
+        }).join('');
+    }
+
+    /**
+     * Generates LEFT OUTER JOINs to the recursive CTEs
+     */
+    protected generateRecursiveCTEJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        if (recursiveFKs.length === 0) {
+            return '';
+        }
+
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const joins = recursiveFKs.map(field => {
+            const rootFieldName = `Root${field.Name}`;
+            const cteName = `CTE_${rootFieldName}`;
+            return `LEFT OUTER JOIN\n    ${cteName}\n  ON\n    [${classNameFirstChar}].[${primaryKey}] = ${cteName}.[${primaryKey}]`;
+        }).join('\n');
+
+        return '\n' + joins;
+    }
+
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
@@ -1011,6 +1097,12 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
     ${classNameFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
 ` : '';
+
+        // Detect recursive foreign keys and generate CTEs
+        const recursiveFKs = this.detectRecursiveForeignKeys(entity);
+        const cteClause = recursiveFKs.length > 0 ? this.generateRecursiveCTEs(entity, recursiveFKs) : '';
+        const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
+
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -1018,15 +1110,16 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map(pk => pk.Name).join(', ')}
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${entity.SchemaName}].[${viewName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${viewName}]', 'V') IS NOT NULL
+    DROP VIEW [${entity.SchemaName}].[${viewName}];
 GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
-SELECT
-    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
+${cteClause}SELECT
+    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${this.generateRecursiveCTEJoins(recursiveFKs, classNameFirstChar, entity)}
 ${whereClause}GO${permissions}
     `
     }
@@ -1242,7 +1335,8 @@ ${whereClause}GO${permissions}
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1277,7 +1371,8 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${entity.SchemaName}].trgUpdate${entity.ClassName}
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
 GO
 CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
@@ -1317,7 +1412,8 @@ GO`;
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1505,7 +1601,8 @@ ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't updat
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]

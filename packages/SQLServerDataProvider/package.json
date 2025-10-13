@@ -23,6 +23,7 @@
   "dependencies": {
     "@memberjunction/actions": "2.104.0",
     "@memberjunction/ai": "2.104.0",
+    "@memberjunction/ai-provider-bundle": "2.104.0",
     "@memberjunction/ai-vector-dupe": "2.104.0",
     "@memberjunction/aiengine": "2.104.0",
     "@memberjunction/core": "2.100.3",

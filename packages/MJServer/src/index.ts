@@ -44,28 +44,10 @@ LoadAgentManagementActions();
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 import { LoadAIEngine } from '@memberjunction/aiengine';
-import { LoadOpenAILLM } from '@memberjunction/ai-openai';
-import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
-import { LoadGroqLLM } from '@memberjunction/ai-groq';
-import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
-import { LoadMistralLLM } from '@memberjunction/ai-mistral';
-import { LoadLMStudioLLM } from '@memberjunction/ai-lmstudio';
-import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
-import { LoadOllamaLLM } from '@memberjunction/ai-ollama';
-import { LoadLocalEmbedding } from '@memberjunction/ai-local-embeddings';
-// Load AI LLMs and Base AI Engine
-// These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
-// system. They are not tree-shaken because they are dynamically loaded at runtime.
+import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
+// Load AI Engine and all providers to prevent tree shaking
 LoadAIEngine();
-LoadOpenAILLM();
-LoadAnthropicLLM();
-LoadGroqLLM();
-LoadCerebrasLLM();
-LoadMistralLLM();
-LoadLMStudioLLM();
-LoadOpenRouterLLM();
-LoadOllamaLLM();
-LoadLocalEmbedding();
+LoadAIProviders();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 
@@ -86,9 +68,13 @@ export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
+
+export * from './agents/skip-agent.js';
+export * from './agents/skip-sdk.js';
 
 export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';

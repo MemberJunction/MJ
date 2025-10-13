@@ -1,11 +1,12 @@
 /**
  * Categorizes error types that can occur during AI model operations.
  * These categories help determine appropriate retry and failover strategies.
- * 
- * @typedef {'RateLimit' | 'Authentication' | 'ServiceUnavailable' | 'InternalServerError' | 'NetworkError' | 'InvalidRequest' | 'ContextLengthExceeded' | 'ModelError' | 'Unknown'} AIErrorType
- * 
+ *
+ * @typedef {'RateLimit' | 'NoCredit' | 'Authentication' | 'ServiceUnavailable' | 'InternalServerError' | 'NetworkError' | 'InvalidRequest' | 'ContextLengthExceeded' | 'ModelError' | 'Unknown'} AIErrorType
+ *
  * @description
  * - `RateLimit`: Rate limit exceeded - typically HTTP 429. Suggests switching to another provider or waiting
+ * - `NoCredit`: Insufficient credits or quota for billing - typically HTTP 402/403. Account has no credits/balance or quota exhausted. Suggests switching to another provider
  * - `Authentication`: Authentication or authorization failure - typically HTTP 401/403. Usually indicates invalid API key or permissions issue
  * - `ServiceUnavailable`: Service temporarily unavailable - typically HTTP 503. Suggests the service is down or overloaded
  * - `InternalServerError`: Internal server error - typically HTTP 500. Indicates a problem on the provider's side
@@ -14,11 +15,12 @@
  * - `ContextLengthExceeded`: Context length exceeded - typically HTTP 400 with context_length_exceeded code. Suggests switching to a model with larger context window
  * - `ModelError`: Model-specific errors. Model not found, model overloaded, etc.
  * - `Unknown`: Unknown or unclassified error
- * 
+ *
  * @since 2.47.0
  */
-export type AIErrorType = 
+export type AIErrorType =
     | 'RateLimit'
+    | 'NoCredit'
     | 'Authentication'
     | 'ServiceUnavailable'
     | 'InternalServerError'

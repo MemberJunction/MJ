@@ -119,10 +119,14 @@ export class AngularClientGeneratorBase {
                       const sectionPath = path.join(thisEntityPath, 'sections');
                       if (!fs.existsSync(sectionPath))
                           fs.mkdirSync(sectionPath, { recursive: true }); // create the directory if it doesn't exist
-      
+
                       for (let j:number = 0; j < additionalSections.length; ++j) {
-                          fs.writeFileSync(path.join(sectionPath, `${additionalSections[j].FileName}`), additionalSections[j].ComponentCode!);
-                          sections.push(additionalSections[j]); // add the entity's secitons one by one to the master/global list of sections
+                          const section = additionalSections[j];
+                          // Only write file if FileName and ComponentCode are populated
+                          if (section.FileName && section.ComponentCode) {
+                              fs.writeFileSync(path.join(sectionPath, section.FileName), section.ComponentCode);
+                          }
+                          sections.push(section); // add the entity's secitons one by one to the master/global list of sections
                       }
                   }
       
@@ -227,7 +231,7 @@ import { DropDownListModule } from '@progress/kendo-angular-dropdowns';
 
 // Import Generated Components
 ${componentImports.join('\n')}
-${sections.map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
+${sections.filter(s => !s.IsRelatedEntity && s.ClassName && s.EntityClassName && s.FileNameWithoutExtension).map(s => `import { ${s.ClassName}, Load${s.ClassName} } from "./Entities/${s.EntityClassName}/sections/${s.FileNameWithoutExtension}"`).join('\n')}
 ${
     relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-user-view-grid' )
                                  .map(remi => `import { ${remi.modules.map(m => m).join(', ')} } from "${remi.library}"`)
@@ -242,7 +246,7 @@ export function Load${modulePrefix}GeneratedForms() {
     // since it is dynamically instantiated on demand, and the Angular compiler has no way to know that,
     // in production builds tree shaking will eliminate the code unless we do this
     ${componentNames.map(c => `Load${c.componentName}();`).join('\n    ')}
-    ${sections.map(s => `Load${s.ClassName}();`).join('\n    ')}
+    ${sections.filter(s => !s.IsRelatedEntity && s.ClassName).map(s => `Load${s.ClassName}();`).join('\n    ')}
 }
     `
       }
@@ -742,6 +746,7 @@ ${componentCodeWithTabs}
                 Name: tabName,
                 TabCode: tabCode,
                 GeneratedOutput: generateResults,
+                EntityClassName: entity.ClassName,
             })
             index++;
         }
