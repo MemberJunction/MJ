@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.105.0",
-    "@memberjunction/core": "2.105.0",
+    "@memberjunction/global": "2.100.3",
+    "@memberjunction/core": "2.100.3",
     "@memberjunction/templates": "2.105.0",
     "@memberjunction/core-entities": "2.105.0",
     "@memberjunction/communication-types": "2.105.0",

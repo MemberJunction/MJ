@@ -20,8 +20,8 @@
   },
   "dependencies": {
     "@memberjunction/ai-provider-bundle": "2.105.0",
-    "@memberjunction/core": "2.105.0",
-    "@memberjunction/global": "2.105.0",
+    "@memberjunction/core": "2.100.3",
+    "@memberjunction/global": "2.100.3",
     "@memberjunction/core-entities": "2.105.0",
     "@memberjunction/ai-vector-dupe": "2.105.0",
     "@memberjunction/ai-core-plus": "2.105.0",
