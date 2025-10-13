@@ -1,5 +1,22 @@
 # @memberjunction/ai-agents
 
+## 2.105.0
+
+### Patch Changes
+
+- d66070e: migration
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/ai-core-plus@2.105.0
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/aiengine@2.105.0
+  - @memberjunction/ai-prompts@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/actions-base@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Patch Changes

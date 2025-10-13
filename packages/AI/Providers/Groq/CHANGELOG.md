@@ -1,5 +1,13 @@
 # Change Log - @memberjunction/ai-groq
 
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [9b67e0c]
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Patch Changes

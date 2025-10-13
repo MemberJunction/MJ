@@ -1,10 +1,10 @@
 import { Component, Output, EventEmitter, Input, OnInit } from '@angular/core';
 import { CommunicationEngineBase, Message, ProcessedMessage } from '@memberjunction/communication-types';
 import { EntityInfo, RunView, RunViewParams } from '@memberjunction/core';
-import { TemplateContentEntity } from '@memberjunction/core-entities';
+import { TemplateContentEntity, TemplateEntityExtended } from '@memberjunction/core-entities';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
 import { EntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
-import { TemplateEngineBase, TemplateEntityExtended } from '@memberjunction/templates-base-types';
+import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 
 /**
  * Component for previewing in the UI what a communication will look like when sent using a specific entity and parameters for running a view that drive a dataset against a given template

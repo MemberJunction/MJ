@@ -39,7 +39,7 @@ const downloadFromUrl = async (url: string, fileName: string, contentType?: stri
 
 const FileDownloadQuery = gql`
   query FileDownloadUrl($FileID: String!) {
-    File(ID: $FileID) {
+    MJFile(ID: $FileID) {
       ContentType
       DownloadUrl
     }
@@ -47,7 +47,7 @@ const FileDownloadQuery = gql`
 `;
 
 const FileDownloadQuerySchema = z.object({
-  File: z.object({
+  MJFile: z.object({
     ContentType: z.string().optional(),
     DownloadUrl: z.string(),
   }),
@@ -127,7 +127,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
     const parsedResult = FileDownloadQuerySchema.safeParse(result);
 
     if (parsedResult.success) {
-      const downloadUrl = parsedResult.data.File.DownloadUrl;
+      const downloadUrl = parsedResult.data.MJFile.DownloadUrl;
       const success = downloadFromUrl(downloadUrl, file.Name, file.ContentType);
       if (!success) {
         this.sharedService.CreateSimpleNotification(`Unable to download file ${file.ID} ${file.Name}`, 'error');

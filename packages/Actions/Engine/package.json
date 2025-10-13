@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/actions",
-  "version": "2.104.0",
+  "version": "2.105.0",
   "description": "Main library for MemberJunction Actions. This library is only intended to be imported on the server side.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,12 +21,12 @@
   "dependencies": {
     "@memberjunction/global": "2.100.3",
     "@memberjunction/core": "2.100.3",
-    "@memberjunction/actions-base": "2.104.0",
-    "@memberjunction/core-entities": "2.104.0",
-    "@memberjunction/ai": "2.104.0",
-    "@memberjunction/ai-core-plus": "2.104.0",
-    "@memberjunction/aiengine": "2.104.0",
-    "@memberjunction/ai-prompts": "2.104.0",
-    "@memberjunction/doc-utils": "2.104.0"
+    "@memberjunction/actions-base": "2.105.0",
+    "@memberjunction/core-entities": "2.105.0",
+    "@memberjunction/ai": "2.105.0",
+    "@memberjunction/ai-core-plus": "2.105.0",
+    "@memberjunction/aiengine": "2.105.0",
+    "@memberjunction/ai-prompts": "2.105.0",
+    "@memberjunction/doc-utils": "2.105.0"
   }
 }

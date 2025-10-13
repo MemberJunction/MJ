@@ -1,5 +1,50 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 2.105.0
+
+### Patch Changes
+
+- 9b67e0c: This release addresses critical stability issues across build processes, runtime execution, and AI model management in the MemberJunction platform. The changes focus on three main areas: production build reliability, database migration consistency, and intelligent AI error handling.
+
+  Resolved critical issues where Angular production builds with optimization enabled would remove essential classes through aggressive tree-shaking. Moved `TemplateEntityExtended` to `@memberjunction/core-entities` and created new `@memberjunction/ai-provider-bundle` package to centralize AI provider loading while maintaining clean separation between core infrastructure and provider implementations. Added `LoadEntityCommunicationsEngineClient()` calls to prevent removal of inherited singleton methods. These changes prevent runtime errors in production deployments where previously registered classes would become inaccessible, while improving architectural separation of concerns.
+
+  Enhanced CodeGen SQL generation to use `IF OBJECT_ID()` patterns instead of `DROP ... IF EXISTS` syntax, fixing silent failures with Flyway placeholder substitution. Improved validator generation to properly handle nullable fields and correctly set `result.Success` status. Centralized GraphQL type name generation using schema-aware naming (`{schema}_{basetable}_`) to eliminate type collisions between entities with identical base table names across different schemas. These changes ensure reliable database migrations and prevent recurring cascade delete regressions.
+
+  Implemented sophisticated error classification with new `NoCredit` error type for billing failures, message-first error detection, and permissive failover for 403 errors. Added hierarchical configuration-aware failover that respects configuration boundaries (Production vs Development models) while maintaining candidate list caching for performance. Enhanced error analysis to properly classify credit/quota issues and enable appropriate failover behavior.
+
+  Improved model selection caching by checking all candidates for valid API keys instead of stopping at first match, ensuring retry logic has access to complete list of viable model/vendor combinations. Added `extractValidCandidates()` method to `AIModelSelectionInfo` class and `buildCandidatesFromSelectionInfo()` helper to properly reconstruct candidate lists from selection metadata during hierarchical template execution.
+
+  Enhanced error-based retry and failover with intelligent handling for authentication and rate limit errors. Authentication errors now trigger vendor-level filtering (excluding all models from vendors with invalid API keys) and immediate failover to different vendors. Rate limit errors now retry the same model/vendor using configurable `MaxRetries` (default: 3) with backoff delay based on `RetryStrategy` (Fixed/Linear/Exponential) before failing over. Improved log messages with human-readable formatting showing model/vendor names, time in seconds, and clear status indicators. Fixed MJCLI sync commands to properly propagate exit codes for CI/CD integration.
+
+- Updated dependencies [4807f35]
+- Updated dependencies [5c2119c]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ng-conversations@2.105.0
+  - @memberjunction/ng-user-view-grid@2.105.0
+  - @memberjunction/communication-types@2.105.0
+  - @memberjunction/entity-communications-client@2.105.0
+  - @memberjunction/templates-base-types@2.105.0
+  - @memberjunction/ng-ask-skip@2.105.0
+  - @memberjunction/ng-compare-records@2.105.0
+  - @memberjunction/ng-dashboards@2.105.0
+  - @memberjunction/ng-entity-form-dialog@2.105.0
+  - @memberjunction/ng-explorer-settings@2.105.0
+  - @memberjunction/ng-shared@2.105.0
+  - @memberjunction/ng-user-view-properties@2.105.0
+  - @memberjunction/ng-file-storage@2.105.0
+  - @memberjunction/ng-query-grid@2.105.0
+  - @memberjunction/ng-record-selector@2.105.0
+  - @memberjunction/ng-resource-permissions@2.105.0
+  - @memberjunction/ng-skip-chat@2.105.0
+  - @memberjunction/ng-record-changes@2.105.0
+  - @memberjunction/ng-base-forms@2.105.0
+  - @memberjunction/ng-auth-services@2.105.0
+  - @memberjunction/ng-container-directives@2.105.0
+  - @memberjunction/ng-tabstrip@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Minor Changes

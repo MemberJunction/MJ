@@ -9,7 +9,7 @@ import { z } from 'zod';
 export type FileUploadEvent = { success: true; file: FileEntity } | { success: false; file: FileInfo };
 
 const FileFieldsFragment = gql`
-  fragment FileFields on File_ {
+  fragment FileFields on MJFile_ {
     Category
     CategoryID
     ContentType
@@ -27,8 +27,8 @@ const FileFieldsFragment = gql`
 
 const FileUploadMutation = gql`
   ${FileFieldsFragment}
-  mutation CreateFile($input: CreateFileInput!) {
-    CreateFile(input: $input) {
+  mutation CreateMJFile($input: CreateMJFileInput!) {
+    CreateMJFile(input: $input) {
       NameExists
       UploadUrl
       File {
@@ -39,14 +39,14 @@ const FileUploadMutation = gql`
 `;
 
 const FileUploadMutationSchema = z.object({
-  CreateFile: z.object({
+  CreateMJFile: z.object({
     NameExists: z.boolean(),
     UploadUrl: z.string(),
     File: FileSchema.omit({ __mj_CreatedAt: true, __mj_UpdatedAt: true }).passthrough(),
   }),
 });
 
-type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateFile']['File'];
+type ApiFile = z.infer<typeof FileUploadMutationSchema>['CreateMJFile']['File'];
 type UploadTuple = [FileInfo, ApiFile, string];
 
 @Component({
@@ -129,7 +129,7 @@ export class FileUploadComponent implements OnInit {
       // make sure the response is correct
       const parsedResult = FileUploadMutationSchema.safeParse(result);
       if (parsedResult.success) {
-        const { File, UploadUrl, NameExists } = parsedResult.data.CreateFile;
+        const { File, UploadUrl, NameExists } = parsedResult.data.CreateMJFile;
         const uploadTuple: UploadTuple = [file, File, UploadUrl];
 
         // Confirm we want to overwrite

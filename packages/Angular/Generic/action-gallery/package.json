@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-action-gallery",
-  "version": "2.104.0",
+  "version": "2.105.0",
   "description": "MemberJunction Action Gallery - A beautiful, filterable gallery component for browsing and selecting actions",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -31,9 +31,9 @@
   },
   "dependencies": {
     "@memberjunction/core": "2.100.3",
-    "@memberjunction/core-entities": "2.104.0",
-    "@memberjunction/ng-container-directives": "2.104.0",
-    "@memberjunction/ng-ai-test-harness": "2.104.0",
+    "@memberjunction/core-entities": "2.105.0",
+    "@memberjunction/ng-container-directives": "2.105.0",
+    "@memberjunction/ng-ai-test-harness": "2.105.0",
     "@progress/kendo-angular-buttons": "16.2.0",
     "@progress/kendo-angular-dialog": "16.2.0",
     "@progress/kendo-angular-dropdowns": "16.2.0",

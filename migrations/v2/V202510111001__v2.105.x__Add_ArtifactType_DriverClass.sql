@@ -168,7 +168,7 @@ GO
          (
             '2fede9af-f0fe-438c-a369-93ac24a882c1',
             '91797885-7128-4B71-8C4B-81C5FEE24F38', -- Entity: MJ: Artifact Types
-            100021,
+            100022,
             'DriverClass',
             'Driver Class',
             'Driver class name for the artifact viewer plugin. References Angular component registered with @RegisterClass decorator.',
