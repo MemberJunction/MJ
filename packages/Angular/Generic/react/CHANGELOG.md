@@ -1,5 +1,14 @@
 # @memberjunction/ng-react
 
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ng-notifications@2.106.0
+- @memberjunction/interactive-component-types@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/react-runtime@2.106.0
+
 ## 2.105.0
 
 ### Patch Changes

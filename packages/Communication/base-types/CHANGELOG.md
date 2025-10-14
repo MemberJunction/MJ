@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/communication-types
 
+## 2.106.0
+
+### Patch Changes
+
+- 6f2cd0c: Add console log when Communication Entity Saves fail
+  - @memberjunction/core@2.106.0
+  - @memberjunction/core-entities@2.106.0
+  - @memberjunction/global@2.106.0
+  - @memberjunction/templates-base-types@2.106.0
+
 ## 2.105.0
 
 ### Patch Changes
