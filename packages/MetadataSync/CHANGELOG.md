@@ -1,5 +1,17 @@
 # @memberjunction/metadata-sync
 
+## 2.106.0
+
+### Patch Changes
+
+- 3ca1b36: Fix: Database default value handling in CodeGen and MetadataSync This changeset fixes issues with non-nullable fields that have database-defined default values. CodeGen now properly handles NULL parameters for these fields by wrapping them in ISNULL checks in stored procedures, and MetadataSync correctly applies defaults from .mj-sync.json configuration files.
+  - @memberjunction/graphql-dataprovider@2.106.0
+  - @memberjunction/core@2.106.0
+  - @memberjunction/core-entities@2.106.0
+  - @memberjunction/core-entities-server@2.106.0
+  - @memberjunction/global@2.106.0
+  - @memberjunction/sqlserver-dataprovider@2.106.0
+
 ## 2.105.0
 
 ### Patch Changes

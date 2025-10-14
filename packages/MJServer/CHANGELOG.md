@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/server
 
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/core-actions@2.106.0
+- @memberjunction/entity-communications-server@2.106.0
+- @memberjunction/ai-agent-manager-actions@2.106.0
+- @memberjunction/ai-agents@2.106.0
+- @memberjunction/ai@2.106.0
+- @memberjunction/ai-core-plus@2.106.0
+- @memberjunction/aiengine@2.106.0
+- @memberjunction/ai-prompts@2.106.0
+- @memberjunction/ai-provider-bundle@2.106.0
+- @memberjunction/ai-vectors-pinecone@2.106.0
+- @memberjunction/actions-apollo@2.106.0
+- @memberjunction/actions-bizapps-accounting@2.106.0
+- @memberjunction/actions-bizapps-crm@2.106.0
+- @memberjunction/actions-bizapps-lms@2.106.0
+- @memberjunction/actions-bizapps-social@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/component-registry-client-sdk@2.106.0
+- @memberjunction/doc-utils@2.106.0
+- @memberjunction/external-change-detection@2.106.0
+- @memberjunction/graphql-dataprovider@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/core-entities-server@2.106.0
+- @memberjunction/data-context@2.106.0
+- @memberjunction/data-context-server@2.106.0
+- @memberjunction/global@2.106.0
+- @memberjunction/queue@2.106.0
+- @memberjunction/storage@2.106.0
+- @memberjunction/sqlserver-dataprovider@2.106.0
+- @memberjunction/skip-types@2.106.0
+- @memberjunction/templates@2.106.0
+
 ## 2.105.0
 
 ### Patch Changes

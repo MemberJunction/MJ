@@ -1,5 +1,17 @@
 # @memberjunction/ng-artifacts
 
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@2.106.0
+- @memberjunction/ng-code-editor@2.106.0
+- @memberjunction/ng-notifications@2.106.0
+- @memberjunction/ng-react@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/global@2.106.0
+
 ## 2.105.0
 
 ### Minor Changes

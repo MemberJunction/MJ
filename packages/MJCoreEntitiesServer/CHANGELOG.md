@@ -1,5 +1,20 @@
 # @memberjunction/core-entities-server
 
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.106.0
+- @memberjunction/aiengine@2.106.0
+- @memberjunction/ai-prompts@2.106.0
+- @memberjunction/ai-provider-bundle@2.106.0
+- @memberjunction/ai-vector-dupe@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/global@2.106.0
+- @memberjunction/sqlserver-dataprovider@2.106.0
+- @memberjunction/skip-types@2.106.0
+
 ## 2.105.0
 
 ### Patch Changes
