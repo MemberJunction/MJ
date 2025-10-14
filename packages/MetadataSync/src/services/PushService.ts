@@ -417,7 +417,8 @@ export class PushService {
                       entityDir,
                       options,
                       batchContext,
-                      callbacks
+                      callbacks,
+                      entityConfig
                     );
                     return { success: true, result };
                   } catch (error) {
@@ -470,7 +471,8 @@ export class PushService {
                 entityDir,
                 options,
                 batchContext,
-                callbacks
+                callbacks,
+                entityConfig
               );
               
               // Update stats
@@ -516,7 +518,8 @@ export class PushService {
     entityDir: string,
     options: PushOptions,
     batchContext: Map<string, BaseEntity>,
-    callbacks?: PushCallbacks
+    callbacks?: PushCallbacks,
+    entityConfig?: any
   ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped'; isDuplicate?: boolean }> {
     const metadata = new Metadata();
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
@@ -581,7 +584,7 @@ export class PushService {
     if (!exists) {
       entity.NewRecord();
       isNew = true;
-      
+
       // Set primary key values for new records if provided
       if (primaryKey) {
         for (const [pkField, pkValue] of Object.entries(primaryKey)) {
@@ -589,7 +592,19 @@ export class PushService {
         }
       }
     }
-    
+
+    // Apply defaults if entityConfig is provided
+    if (entityConfig) {
+      const defaults = await this.syncEngine.buildDefaults(flattenedRecord.path, entityConfig);
+
+      // Apply defaults only to fields not explicitly set in record.fields
+      for (const [field, value] of Object.entries(defaults)) {
+        if (!(field in record.fields) && field in entity) {
+          entity.Set(field, value);
+        }
+      }
+    }
+
     // Store original field values to preserve @ references
     const originalFields = { ...record.fields };
     
