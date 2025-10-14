@@ -375,7 +375,8 @@ function initializeSkipLearningCycleScheduler() {
             return;
           }
           if (!skipConfigInfo.learningCycleEnabled) {
-            LogStatus('Skip AI Learning Cycles not enabled in configuration');
+            // Skip AI Learning Cycles not enabled - disabled logging to reduce startup noise
+            // LogStatus('Skip AI Learning Cycles not enabled in configuration');
             return;
           }
           
@@ -428,8 +429,9 @@ function initializeSkipLearningCycleScheduler() {
     LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
   }
 }
-// now call the function to initialize the scheduler
-initializeSkipLearningCycleScheduler();
+// Disabled: Skip AI Learning Cycles no longer used - commented out to prevent startup initialization
+// If needed in the future, uncomment the line below:
+// initializeSkipLearningCycleScheduler();
 
 /**
  * Base type for Skip API requests containing common fields
