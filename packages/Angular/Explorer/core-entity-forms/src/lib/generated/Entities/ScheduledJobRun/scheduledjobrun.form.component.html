@@ -16,19 +16,6 @@
                         </mj-form-section>
                     </mj-tab-body>
                     
-                    <mj-tab Name="MJ: Scheduled Jobs" [Visible]="record.IsSaved"> 
-                        MJ: Scheduled Jobs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','LastRunID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
-                            [AllowLoad]="IsCurrentTab('MJ: Scheduled Jobs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: AI Agent Runs" [Visible]="record.IsSaved"> 
                         MJ: AI Agent Runs
                     </mj-tab>

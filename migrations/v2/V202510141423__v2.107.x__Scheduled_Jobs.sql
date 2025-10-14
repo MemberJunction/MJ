@@ -5,8 +5,8 @@
 *              through a plugin architecture. Includes ScheduledJobType registry,
 *              ScheduledJob configuration, and ScheduledJobRun execution history.
 *
-* Version: 2.105.x
-* Date: 2025-10-12
+* Version: 2.107.x
+* Date: 2025-10-14
 ******************************************************************************************/
 
 /******************************************************************************************
@@ -138,9 +138,6 @@ BEGIN
                                     CONSTRAINT [FK_ScheduledJob_OwnerUser]
                                     FOREIGN KEY REFERENCES [${flyway:defaultSchema}].[User]([ID]),
 
-        -- Execution Tracking
-        [LastRunID]                 UNIQUEIDENTIFIER NULL,  -- FK added after ScheduledJobRun table exists
-
         [LastRunAt]                 DATETIMEOFFSET(7) NULL,
         [NextRunAt]                 DATETIMEOFFSET(7) NULL,
 
@@ -263,14 +260,6 @@ EXEC sys.sp_addextendedproperty
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = N'ScheduledJob',
     @level2type = N'COLUMN', @level2name = N'OwnerUserID';
-GO
-
-EXEC sys.sp_addextendedproperty
-    @name = N'MS_Description',
-    @value = N'Reference to the most recent execution of this schedule. Provides quick access to last run status and details.',
-    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
-    @level1type = N'TABLE', @level1name = N'ScheduledJob',
-    @level2type = N'COLUMN', @level2name = N'LastRunID';
 GO
 
 EXEC sys.sp_addextendedproperty
@@ -511,21 +500,6 @@ EXEC sys.sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = N'QueuedAt';
 GO
 
-/******************************************************************************************
-* Add Foreign Key from ScheduledJob.LastRunID to ScheduledJobRun
-* (Must be done after ScheduledJobRun table exists)
-******************************************************************************************/
-IF NOT EXISTS (
-    SELECT * FROM sys.foreign_keys
-    WHERE name = 'FK_ScheduledJob_LastRun'
-    AND parent_object_id = OBJECT_ID('[${flyway:defaultSchema}].[ScheduledJob]')
-)
-BEGIN
-    ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob]
-    ADD CONSTRAINT [FK_ScheduledJob_LastRun]
-    FOREIGN KEY ([LastRunID]) REFERENCES [${flyway:defaultSchema}].[ScheduledJobRun]([ID]);
-END
-GO
 
 /******************************************************************************************
 * TABLE MODIFICATION: Add ScheduledJobRunID to AIAgentRun
@@ -698,134 +672,7 @@ GO
 
 
 
--- CODE GEN RUN
-/* SQL generated to create new entity MJ: Scheduled Job Types */
-
-      INSERT INTO [${flyway:defaultSchema}].Entity (
-         ID,
-         Name,
-         DisplayName,
-         Description,
-         NameSuffix,
-         BaseTable,
-         BaseView,
-         SchemaName,
-         IncludeInAPI,
-         AllowUserSearchAPI
-         , TrackRecordChanges
-         , AuditRecordAccess
-         , AuditViewRuns
-         , AllowAllRowsAPI
-         , AllowCreateAPI
-         , AllowUpdateAPI
-         , AllowDeleteAPI
-         , UserViewMaxRows
-      )
-      VALUES (
-         '98254b66-599e-48fe-9051-1a033b32ae43',
-         'MJ: Scheduled Job Types',
-         'Scheduled Job Types',
-         NULL,
-         NULL,
-         'ScheduledJobType',
-         'vwScheduledJobTypes',
-         '${flyway:defaultSchema}',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
-      )
-   
-
-/* SQL generated to add new entity MJ: Scheduled Job Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
-                                       (ApplicationID, EntityID, Sequence) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '98254b66-599e-48fe-9051-1a033b32ae43', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
-
-/* SQL generated to add new permission for entity MJ: Scheduled Job Types for role UI */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('98254b66-599e-48fe-9051-1a033b32ae43', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
-
-/* SQL generated to add new permission for entity MJ: Scheduled Job Types for role Developer */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('98254b66-599e-48fe-9051-1a033b32ae43', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
-
-/* SQL generated to add new permission for entity MJ: Scheduled Job Types for role Integration */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('98254b66-599e-48fe-9051-1a033b32ae43', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
-
-/* SQL generated to create new entity MJ: Scheduled Jobs */
-
-      INSERT INTO [${flyway:defaultSchema}].Entity (
-         ID,
-         Name,
-         DisplayName,
-         Description,
-         NameSuffix,
-         BaseTable,
-         BaseView,
-         SchemaName,
-         IncludeInAPI,
-         AllowUserSearchAPI
-         , TrackRecordChanges
-         , AuditRecordAccess
-         , AuditViewRuns
-         , AllowAllRowsAPI
-         , AllowCreateAPI
-         , AllowUpdateAPI
-         , AllowDeleteAPI
-         , UserViewMaxRows
-      )
-      VALUES (
-         '302a55b5-aef0-4c57-8f35-73ee6b17e234',
-         'MJ: Scheduled Jobs',
-         'Scheduled Jobs',
-         NULL,
-         NULL,
-         'ScheduledJob',
-         'vwScheduledJobs',
-         '${flyway:defaultSchema}',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
-      )
-   
-
-/* SQL generated to add new entity MJ: Scheduled Jobs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
-INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
-                                       (ApplicationID, EntityID, Sequence) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '302a55b5-aef0-4c57-8f35-73ee6b17e234', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
-
-/* SQL generated to add new permission for entity MJ: Scheduled Jobs for role UI */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('302a55b5-aef0-4c57-8f35-73ee6b17e234', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
-
-/* SQL generated to add new permission for entity MJ: Scheduled Jobs for role Developer */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('302a55b5-aef0-4c57-8f35-73ee6b17e234', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
-
-/* SQL generated to add new permission for entity MJ: Scheduled Jobs for role Integration */
-INSERT INTO ${flyway:defaultSchema}.EntityPermission
-                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('302a55b5-aef0-4c57-8f35-73ee6b17e234', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+-- CODE GEN RUN 
 
 /* SQL generated to create new entity MJ: Scheduled Job Runs */
 
@@ -850,7 +697,7 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
          , UserViewMaxRows
       )
       VALUES (
-         '257a461e-ac75-4ae5-aadc-124d2ca1f383',
+         '05853432-5e13-4f2a-8618-77857adf17fa',
          'MJ: Scheduled Job Runs',
          'Scheduled Job Runs',
          NULL,
@@ -874,22 +721,150 @@ INSERT INTO ${flyway:defaultSchema}.EntityPermission
 /* SQL generated to add new entity MJ: Scheduled Job Runs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
                                        (ApplicationID, EntityID, Sequence) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '257a461e-ac75-4ae5-aadc-124d2ca1f383', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '05853432-5e13-4f2a-8618-77857adf17fa', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
 
 /* SQL generated to add new permission for entity MJ: Scheduled Job Runs for role UI */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('257a461e-ac75-4ae5-aadc-124d2ca1f383', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+                                                   ('05853432-5e13-4f2a-8618-77857adf17fa', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
 
 /* SQL generated to add new permission for entity MJ: Scheduled Job Runs for role Developer */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('257a461e-ac75-4ae5-aadc-124d2ca1f383', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+                                                   ('05853432-5e13-4f2a-8618-77857adf17fa', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
 
 /* SQL generated to add new permission for entity MJ: Scheduled Job Runs for role Integration */
 INSERT INTO ${flyway:defaultSchema}.EntityPermission
                                                    (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
-                                                   ('257a461e-ac75-4ae5-aadc-124d2ca1f383', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+                                                   ('05853432-5e13-4f2a-8618-77857adf17fa', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+
+/* SQL generated to create new entity MJ: Scheduled Job Types */
+
+      INSERT INTO [${flyway:defaultSchema}].Entity (
+         ID,
+         Name,
+         DisplayName,
+         Description,
+         NameSuffix,
+         BaseTable,
+         BaseView,
+         SchemaName,
+         IncludeInAPI,
+         AllowUserSearchAPI
+         , TrackRecordChanges
+         , AuditRecordAccess
+         , AuditViewRuns
+         , AllowAllRowsAPI
+         , AllowCreateAPI
+         , AllowUpdateAPI
+         , AllowDeleteAPI
+         , UserViewMaxRows
+      )
+      VALUES (
+         '33e01250-c0fe-4b35-af8f-a4f444490065',
+         'MJ: Scheduled Job Types',
+         'Scheduled Job Types',
+         NULL,
+         NULL,
+         'ScheduledJobType',
+         'vwScheduledJobTypes',
+         '${flyway:defaultSchema}',
+         1,
+         0
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+      )
+   
+
+/* SQL generated to add new entity MJ: Scheduled Job Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '33e01250-c0fe-4b35-af8f-a4f444490065', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+
+/* SQL generated to add new permission for entity MJ: Scheduled Job Types for role UI */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('33e01250-c0fe-4b35-af8f-a4f444490065', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+
+/* SQL generated to add new permission for entity MJ: Scheduled Job Types for role Developer */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('33e01250-c0fe-4b35-af8f-a4f444490065', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+
+/* SQL generated to add new permission for entity MJ: Scheduled Job Types for role Integration */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('33e01250-c0fe-4b35-af8f-a4f444490065', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
+
+/* SQL generated to create new entity MJ: Scheduled Jobs */
+
+      INSERT INTO [${flyway:defaultSchema}].Entity (
+         ID,
+         Name,
+         DisplayName,
+         Description,
+         NameSuffix,
+         BaseTable,
+         BaseView,
+         SchemaName,
+         IncludeInAPI,
+         AllowUserSearchAPI
+         , TrackRecordChanges
+         , AuditRecordAccess
+         , AuditViewRuns
+         , AllowAllRowsAPI
+         , AllowCreateAPI
+         , AllowUpdateAPI
+         , AllowDeleteAPI
+         , UserViewMaxRows
+      )
+      VALUES (
+         'f48d2e6c-61c8-46b8-a617-c8228601eb3c',
+         'MJ: Scheduled Jobs',
+         'Scheduled Jobs',
+         NULL,
+         NULL,
+         'ScheduledJob',
+         'vwScheduledJobs',
+         '${flyway:defaultSchema}',
+         1,
+         0
+         , 1
+         , 0
+         , 0
+         , 0
+         , 1
+         , 1
+         , 1
+         , 1000
+      )
+   
+
+/* SQL generated to add new entity MJ: Scheduled Jobs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
+INSERT INTO ${flyway:defaultSchema}.ApplicationEntity
+                                       (ApplicationID, EntityID, Sequence) VALUES
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'f48d2e6c-61c8-46b8-a617-c8228601eb3c', (SELECT ISNULL(MAX(Sequence),0)+1 FROM ${flyway:defaultSchema}.ApplicationEntity WHERE ApplicationID = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'))
+
+/* SQL generated to add new permission for entity MJ: Scheduled Jobs for role UI */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('f48d2e6c-61c8-46b8-a617-c8228601eb3c', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0)
+
+/* SQL generated to add new permission for entity MJ: Scheduled Jobs for role Developer */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('f48d2e6c-61c8-46b8-a617-c8228601eb3c', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0)
+
+/* SQL generated to add new permission for entity MJ: Scheduled Jobs for role Integration */
+INSERT INTO ${flyway:defaultSchema}.EntityPermission
+                                                   (EntityID, RoleID, CanRead, CanCreate, CanUpdate, CanDelete) VALUES
+                                                   ('f48d2e6c-61c8-46b8-a617-c8228601eb3c', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1)
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.ScheduledJobRun */
 ALTER TABLE [${flyway:defaultSchema}].[ScheduledJobRun] ADD __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE()
@@ -913,7 +888,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '0f496206-b3c0-400c-ba6d-0f943fc416bd'  OR 
+         WHERE ID = '77918e52-6ba1-4fa6-9ae1-f5987906d0c8'  OR 
                (EntityID = '5190AF93-4C39-4429-BDAA-0AEB492A0256' AND Name = 'ScheduledJobRunID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -947,7 +922,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '0f496206-b3c0-400c-ba6d-0f943fc416bd',
+            '77918e52-6ba1-4fa6-9ae1-f5987906d0c8',
             '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- Entity: MJ: AI Agent Runs
             100087,
             'ScheduledJobRunID',
@@ -962,7 +937,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
             0,
             1,
             0,
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383',
+            '05853432-5E13-4F2A-8618-77857ADF17FA',
             'ID',
             0,
             0,
@@ -978,8 +953,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '3bd9f88a-0fc1-4c68-a8ba-228afe803c40'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'ID')
+         WHERE ID = '4bf98789-c7d3-4515-a980-17ca936545b7'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'ID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1012,8 +987,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '3bd9f88a-0fc1-4c68-a8ba-228afe803c40',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            '4bf98789-c7d3-4515-a980-17ca936545b7',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100001,
             'ID',
             'ID',
@@ -1043,8 +1018,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'd8c590c7-e726-4f2a-9adc-7fae0cb58600'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'ScheduledJobID')
+         WHERE ID = 'a8f8edbb-8304-4738-92da-6186f220eb94'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'ScheduledJobID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1077,8 +1052,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'd8c590c7-e726-4f2a-9adc-7fae0cb58600',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            'a8f8edbb-8304-4738-92da-6186f220eb94',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100002,
             'ScheduledJobID',
             'Scheduled Job ID',
@@ -1092,7 +1067,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
             0,
             1,
             0,
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C',
             'ID',
             0,
             0,
@@ -1108,8 +1083,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a463fd3f-17b3-4a3a-8e3f-95f863ba67ea'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'StartedAt')
+         WHERE ID = '257da11e-68b7-475e-9710-5c27d5805365'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'StartedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1142,8 +1117,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'a463fd3f-17b3-4a3a-8e3f-95f863ba67ea',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            '257da11e-68b7-475e-9710-5c27d5805365',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100003,
             'StartedAt',
             'Started At',
@@ -1173,8 +1148,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'ef349d93-fcae-4775-a7f5-4a196c0bf669'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'CompletedAt')
+         WHERE ID = 'e4460981-1ab2-421e-953f-aea182e2bcf7'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'CompletedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1207,8 +1182,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'ef349d93-fcae-4775-a7f5-4a196c0bf669',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            'e4460981-1ab2-421e-953f-aea182e2bcf7',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100004,
             'CompletedAt',
             'Completed At',
@@ -1238,8 +1213,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '82438f9d-6b8a-4317-b27b-5eab51a56d68'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'Status')
+         WHERE ID = '9b974e30-454a-4f22-977e-efcc7114683a'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'Status')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1272,8 +1247,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '82438f9d-6b8a-4317-b27b-5eab51a56d68',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            '9b974e30-454a-4f22-977e-efcc7114683a',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100005,
             'Status',
             'Status',
@@ -1303,8 +1278,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '089052ce-164e-4a43-a1f7-87804d3aaf84'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'Success')
+         WHERE ID = 'c5f7c0ab-98b5-4251-b8ce-1a04a073df81'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'Success')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1337,8 +1312,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '089052ce-164e-4a43-a1f7-87804d3aaf84',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            'c5f7c0ab-98b5-4251-b8ce-1a04a073df81',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100006,
             'Success',
             'Success',
@@ -1368,8 +1343,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'c962b5d5-b7a3-453b-96f7-4f5f237b2281'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'ErrorMessage')
+         WHERE ID = '6f7f73d4-6e65-42a8-b9eb-8182c0851c97'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'ErrorMessage')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1402,8 +1377,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'c962b5d5-b7a3-453b-96f7-4f5f237b2281',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            '6f7f73d4-6e65-42a8-b9eb-8182c0851c97',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100007,
             'ErrorMessage',
             'Error Message',
@@ -1433,8 +1408,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '8509832e-7783-4129-8493-1327fddb1ff7'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'Details')
+         WHERE ID = '796599ef-b0c9-474c-845b-7c030b55159f'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'Details')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1467,8 +1442,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '8509832e-7783-4129-8493-1327fddb1ff7',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            '796599ef-b0c9-474c-845b-7c030b55159f',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100008,
             'Details',
             'Details',
@@ -1498,8 +1473,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '90a6e720-9e0e-40c0-ab0d-224d59b98a3e'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'ExecutedByUserID')
+         WHERE ID = '6a782ba2-97df-45e0-9060-8fa0c9cd8c43'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'ExecutedByUserID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1532,8 +1507,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '90a6e720-9e0e-40c0-ab0d-224d59b98a3e',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            '6a782ba2-97df-45e0-9060-8fa0c9cd8c43',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100009,
             'ExecutedByUserID',
             'Executed By User ID',
@@ -1563,8 +1538,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '4dfe2445-9f01-40f7-8912-69496dd607ae'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'QueuedAt')
+         WHERE ID = 'fd44bd10-011e-4b64-a9e1-0348660499d4'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'QueuedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1597,8 +1572,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '4dfe2445-9f01-40f7-8912-69496dd607ae',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            'fd44bd10-011e-4b64-a9e1-0348660499d4',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100010,
             'QueuedAt',
             'Queued At',
@@ -1628,8 +1603,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'd512685e-1931-40b5-a09e-7ab2d4ad67ce'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = '__mj_CreatedAt')
+         WHERE ID = 'db448dc4-a2d1-43f9-a932-07ba0d224c9a'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = '__mj_CreatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1662,8 +1637,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'd512685e-1931-40b5-a09e-7ab2d4ad67ce',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            'db448dc4-a2d1-43f9-a932-07ba0d224c9a',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100011,
             '__mj_CreatedAt',
             'Created At',
@@ -1693,8 +1668,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'bc7ff345-5c2e-4313-972a-e5ed56b0dde3'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = '__mj_UpdatedAt')
+         WHERE ID = '92729f75-665e-4fc0-a997-6fc7843d5b07'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = '__mj_UpdatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1727,8 +1702,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'bc7ff345-5c2e-4313-972a-e5ed56b0dde3',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            '92729f75-665e-4fc0-a997-6fc7843d5b07',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100012,
             '__mj_UpdatedAt',
             'Updated At',
@@ -1758,8 +1733,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'd563a319-78a7-4df4-bcec-c3df7e151fdd'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = 'ID')
+         WHERE ID = 'a3cdfb40-ff2d-4c59-a7ad-5c284b498ab6'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = 'ID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1792,8 +1767,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'd563a319-78a7-4df4-bcec-c3df7e151fdd',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            'a3cdfb40-ff2d-4c59-a7ad-5c284b498ab6',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100001,
             'ID',
             'ID',
@@ -1823,8 +1798,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '483fcb56-c15c-474b-aad1-7874f9c1fcae'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = 'Name')
+         WHERE ID = '532e7665-6b66-4e22-a326-a4d5ee119eea'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = 'Name')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1857,8 +1832,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '483fcb56-c15c-474b-aad1-7874f9c1fcae',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            '532e7665-6b66-4e22-a326-a4d5ee119eea',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100002,
             'Name',
             'Name',
@@ -1888,8 +1863,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '3405901f-dbff-41ad-8c7f-f2ebd167633a'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = 'Description')
+         WHERE ID = '7c04e794-ef4b-4d80-a810-452b542ac4e1'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = 'Description')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1922,8 +1897,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '3405901f-dbff-41ad-8c7f-f2ebd167633a',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            '7c04e794-ef4b-4d80-a810-452b542ac4e1',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100003,
             'Description',
             'Description',
@@ -1953,8 +1928,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '921ee969-dd08-4f93-a4e6-094b5a677d1d'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = 'DriverClass')
+         WHERE ID = '4fd18ef8-7a48-40d2-8b84-a853e1fd4fc7'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = 'DriverClass')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -1987,8 +1962,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '921ee969-dd08-4f93-a4e6-094b5a677d1d',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            '4fd18ef8-7a48-40d2-8b84-a853e1fd4fc7',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100004,
             'DriverClass',
             'Driver Class',
@@ -2018,8 +1993,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '8753a3d1-618d-45f5-8905-e3aa61ab176c'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = 'DomainRunEntity')
+         WHERE ID = '614c9f85-ccab-44d2-865c-37f59ff04a09'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = 'DomainRunEntity')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2052,8 +2027,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '8753a3d1-618d-45f5-8905-e3aa61ab176c',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            '614c9f85-ccab-44d2-865c-37f59ff04a09',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100005,
             'DomainRunEntity',
             'Domain Run Entity',
@@ -2083,8 +2058,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b05d5abd-d614-4951-b665-bf623f4dcc8b'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = 'DomainRunEntityFKey')
+         WHERE ID = '40ee05c3-83bd-4fd8-80fc-7ad82967e376'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = 'DomainRunEntityFKey')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2117,8 +2092,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'b05d5abd-d614-4951-b665-bf623f4dcc8b',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            '40ee05c3-83bd-4fd8-80fc-7ad82967e376',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100006,
             'DomainRunEntityFKey',
             'Domain Run Entity F Key',
@@ -2148,8 +2123,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '5515ce9b-2956-4d90-a9e9-5689d405a21e'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = 'NotificationsAvailable')
+         WHERE ID = 'e96901de-c9a4-4175-8357-1ad36d4f01e8'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = 'NotificationsAvailable')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2182,8 +2157,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '5515ce9b-2956-4d90-a9e9-5689d405a21e',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            'e96901de-c9a4-4175-8357-1ad36d4f01e8',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100007,
             'NotificationsAvailable',
             'Notifications Available',
@@ -2213,8 +2188,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '2c9760b4-6f42-4059-b30b-e2a0c98381ef'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = '__mj_CreatedAt')
+         WHERE ID = 'a7dadef6-7749-403a-8ebd-f967037a582d'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = '__mj_CreatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2247,8 +2222,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '2c9760b4-6f42-4059-b30b-e2a0c98381ef',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            'a7dadef6-7749-403a-8ebd-f967037a582d',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100008,
             '__mj_CreatedAt',
             'Created At',
@@ -2278,8 +2253,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'c3d05021-b698-4165-b095-361c89c1716a'  OR 
-               (EntityID = '98254B66-599E-48FE-9051-1A033B32AE43' AND Name = '__mj_UpdatedAt')
+         WHERE ID = '66491623-fd77-48a3-a3a2-965daab228ef'  OR 
+               (EntityID = '33E01250-C0FE-4B35-AF8F-A4F444490065' AND Name = '__mj_UpdatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2312,8 +2287,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'c3d05021-b698-4165-b095-361c89c1716a',
-            '98254B66-599E-48FE-9051-1A033B32AE43', -- Entity: MJ: Scheduled Job Types
+            '66491623-fd77-48a3-a3a2-965daab228ef',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065', -- Entity: MJ: Scheduled Job Types
             100009,
             '__mj_UpdatedAt',
             'Updated At',
@@ -2343,8 +2318,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a7019576-a2b1-4765-aacf-e1f7eb75857b'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'ID')
+         WHERE ID = '5ff3a193-496f-4a52-bfc4-c34a72b47170'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'ID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2377,8 +2352,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'a7019576-a2b1-4765-aacf-e1f7eb75857b',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            '5ff3a193-496f-4a52-bfc4-c34a72b47170',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100001,
             'ID',
             'ID',
@@ -2408,8 +2383,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '80851c94-5ac0-4de9-8a07-a84e3c545d6c'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'JobTypeID')
+         WHERE ID = 'c30ff21a-65a1-4ef3-8978-430ce036c280'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'JobTypeID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2442,8 +2417,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '80851c94-5ac0-4de9-8a07-a84e3c545d6c',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            'c30ff21a-65a1-4ef3-8978-430ce036c280',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100002,
             'JobTypeID',
             'Job Type ID',
@@ -2457,7 +2432,7 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
             0,
             1,
             0,
-            '98254B66-599E-48FE-9051-1A033B32AE43',
+            '33E01250-C0FE-4B35-AF8F-A4F444490065',
             'ID',
             0,
             0,
@@ -2473,8 +2448,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '66858ae4-390a-4573-90a3-54448c968841'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'Name')
+         WHERE ID = '4b118964-92d4-49de-8c3e-fb5736ed5397'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'Name')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2507,8 +2482,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '66858ae4-390a-4573-90a3-54448c968841',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            '4b118964-92d4-49de-8c3e-fb5736ed5397',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100003,
             'Name',
             'Name',
@@ -2538,8 +2513,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a2f74c27-3727-42af-82f2-32af4ae79165'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'Description')
+         WHERE ID = '3b91e50a-c0eb-47b7-89f5-b896933309ea'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'Description')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2572,8 +2547,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'a2f74c27-3727-42af-82f2-32af4ae79165',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            '3b91e50a-c0eb-47b7-89f5-b896933309ea',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100004,
             'Description',
             'Description',
@@ -2603,8 +2578,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '81361c3d-ff60-45d8-b935-1e1015dcb991'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'CronExpression')
+         WHERE ID = '9fefb2a6-873f-4788-9f53-225baedf7333'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'CronExpression')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2637,8 +2612,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '81361c3d-ff60-45d8-b935-1e1015dcb991',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            '9fefb2a6-873f-4788-9f53-225baedf7333',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100005,
             'CronExpression',
             'Cron Expression',
@@ -2668,8 +2643,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '83be170e-3909-4466-a515-af0b70cb5994'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'Timezone')
+         WHERE ID = 'e57ef025-b07c-4d17-8602-6120a345addf'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'Timezone')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2702,8 +2677,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '83be170e-3909-4466-a515-af0b70cb5994',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            'e57ef025-b07c-4d17-8602-6120a345addf',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100006,
             'Timezone',
             'Timezone',
@@ -2733,8 +2708,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '8987da31-99d7-4e2b-9c30-20cceae4926d'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'StartAt')
+         WHERE ID = '0f3b6855-16d4-486b-a589-698650bfff96'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'StartAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2767,8 +2742,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '8987da31-99d7-4e2b-9c30-20cceae4926d',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            '0f3b6855-16d4-486b-a589-698650bfff96',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100007,
             'StartAt',
             'Start At',
@@ -2798,8 +2773,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '0f33b6b4-6e15-43fa-9217-a62339ce1211'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'EndAt')
+         WHERE ID = 'b2917c35-8b6b-4c02-a42a-6ca26d70125f'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'EndAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2832,8 +2807,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '0f33b6b4-6e15-43fa-9217-a62339ce1211',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            'b2917c35-8b6b-4c02-a42a-6ca26d70125f',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100008,
             'EndAt',
             'End At',
@@ -2863,8 +2838,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '3e785803-85e6-446e-a4f2-b2970bb6766c'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'Status')
+         WHERE ID = 'd34a3e50-e7a0-4241-8a1c-6fd61e3f7ee7'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'Status')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2897,8 +2872,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '3e785803-85e6-446e-a4f2-b2970bb6766c',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            'd34a3e50-e7a0-4241-8a1c-6fd61e3f7ee7',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100009,
             'Status',
             'Status',
@@ -2928,8 +2903,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '0475c76c-f2cc-47cf-9751-3e4dd9c9a177'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'Configuration')
+         WHERE ID = 'ac6d67f0-d805-4e42-9c4a-34e136107b46'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'Configuration')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -2962,8 +2937,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '0475c76c-f2cc-47cf-9751-3e4dd9c9a177',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            'ac6d67f0-d805-4e42-9c4a-34e136107b46',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100010,
             'Configuration',
             'Configuration',
@@ -2993,8 +2968,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '76aa6de8-dace-4243-800f-fdf6d7908a7c'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'OwnerUserID')
+         WHERE ID = 'e4dccf26-14b1-4033-818d-180af7c04097'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'OwnerUserID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3027,8 +3002,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '76aa6de8-dace-4243-800f-fdf6d7908a7c',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            'e4dccf26-14b1-4033-818d-180af7c04097',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100011,
             'OwnerUserID',
             'Owner User ID',
@@ -3058,8 +3033,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '4354b2e1-5705-45d8-89d8-0327d5fdb423'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'LastRunID')
+         WHERE ID = 'e4f4b083-a687-43eb-b9e4-2b41273d82d7'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'LastRunAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3092,74 +3067,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '4354b2e1-5705-45d8-89d8-0327d5fdb423',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
+            'e4f4b083-a687-43eb-b9e4-2b41273d82d7',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
             100012,
-            'LastRunID',
-            'Last Run ID',
-            'Reference to the most recent execution of this schedule. Provides quick access to last run status and details.',
-            'uniqueidentifier',
-            16,
-            0,
-            0,
-            1,
-            'null',
-            0,
-            1,
-            0,
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383',
-            'ID',
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            'Search'
-         )
-      END
-
-/* SQL text to insert new entity field */
-
-      IF NOT EXISTS (
-         SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'e6253f7e-9f86-43ab-b8d9-a2a4e28a022d'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'LastRunAt')
-         -- check to make sure we're not inserting a duplicate entity field metadata record
-      )
-      BEGIN
-         INSERT INTO [${flyway:defaultSchema}].EntityField
-         (
-            ID,
-            EntityID,
-            Sequence,
-            Name,
-            DisplayName,
-            Description,
-            Type,
-            Length,
-            Precision,
-            Scale,
-            AllowsNull,
-            DefaultValue,
-            AutoIncrement,
-            AllowUpdateAPI,
-            IsVirtual,
-            RelatedEntityID,
-            RelatedEntityFieldName,
-            IsNameField,
-            IncludeInUserSearchAPI,
-            IncludeRelatedEntityNameFieldInBaseView,
-            DefaultInView,
-            IsPrimaryKey,
-            IsUnique,
-            RelatedEntityDisplayType
-         )
-         VALUES
-         (
-            'e6253f7e-9f86-43ab-b8d9-a2a4e28a022d',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100013,
             'LastRunAt',
             'Last Run At',
             'Timestamp of the most recent execution. Updated after each run. Used for monitoring and dashboard displays.',
@@ -3188,8 +3098,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'c5940a79-563a-49e9-99c2-fd694bdbf9cc'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'NextRunAt')
+         WHERE ID = 'b44e0249-46e7-4c54-a0a5-a6a8e79fb4cd'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'NextRunAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3222,9 +3132,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'c5940a79-563a-49e9-99c2-fd694bdbf9cc',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100014,
+            'b44e0249-46e7-4c54-a0a5-a6a8e79fb4cd',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100013,
             'NextRunAt',
             'Next Run At',
             'Calculated timestamp of when this job should next execute based on the cron expression. Updated after each run. Used by scheduler to determine which jobs are due.',
@@ -3253,8 +3163,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '1c689256-2688-4b40-9e21-6dc51d0a2ac3'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'RunCount')
+         WHERE ID = 'cc28664e-cf7b-4791-b4be-d96cbd4e4549'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'RunCount')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3287,9 +3197,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '1c689256-2688-4b40-9e21-6dc51d0a2ac3',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100015,
+            'cc28664e-cf7b-4791-b4be-d96cbd4e4549',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100014,
             'RunCount',
             'Run Count',
             'Total number of times this schedule has been executed, including both successful and failed runs.',
@@ -3318,8 +3228,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'a9b442a6-6f10-49be-9313-977b203c74f0'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'SuccessCount')
+         WHERE ID = 'a0b299b6-fea3-4d84-a56e-0a5369b288d2'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'SuccessCount')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3352,9 +3262,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'a9b442a6-6f10-49be-9313-977b203c74f0',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100016,
+            'a0b299b6-fea3-4d84-a56e-0a5369b288d2',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100015,
             'SuccessCount',
             'Success Count',
             'Number of times this schedule has executed successfully (Success = true in ScheduledJobRun).',
@@ -3383,8 +3293,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '9385a799-ac29-4261-ba45-8fd28325f124'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'FailureCount')
+         WHERE ID = '53667e7f-001e-4977-b588-3619d9a982c6'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'FailureCount')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3417,9 +3327,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '9385a799-ac29-4261-ba45-8fd28325f124',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100017,
+            '53667e7f-001e-4977-b588-3619d9a982c6',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100016,
             'FailureCount',
             'Failure Count',
             'Number of times this schedule has executed but failed (Success = false in ScheduledJobRun).',
@@ -3448,8 +3358,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'b7412ab0-300c-4761-bbaf-c5cffb195972'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'NotifyOnSuccess')
+         WHERE ID = 'ab6d25bb-b06b-454d-8216-8d8416a856d6'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'NotifyOnSuccess')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3482,9 +3392,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'b7412ab0-300c-4761-bbaf-c5cffb195972',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100018,
+            'ab6d25bb-b06b-454d-8216-8d8416a856d6',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100017,
             'NotifyOnSuccess',
             'Notify On Success',
             'Whether to send notifications when the job completes successfully.',
@@ -3513,8 +3423,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '04af2794-421d-4f97-a436-bc30dc84cef6'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'NotifyOnFailure')
+         WHERE ID = 'd089dc8a-e08c-4295-b5ea-4c96dddeb8d1'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'NotifyOnFailure')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3547,9 +3457,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '04af2794-421d-4f97-a436-bc30dc84cef6',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100019,
+            'd089dc8a-e08c-4295-b5ea-4c96dddeb8d1',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100018,
             'NotifyOnFailure',
             'Notify On Failure',
             'Whether to send notifications when the job fails. Defaults to true for alerting on failures.',
@@ -3578,8 +3488,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '0f32d762-ac95-4567-8741-aa332da8b80b'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'NotifyUserID')
+         WHERE ID = '1ffb0397-c54b-4a7d-9394-cff8a392502a'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'NotifyUserID')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3612,9 +3522,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '0f32d762-ac95-4567-8741-aa332da8b80b',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100020,
+            '1ffb0397-c54b-4a7d-9394-cff8a392502a',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100019,
             'NotifyUserID',
             'Notify User ID',
             'User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.',
@@ -3643,8 +3553,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '87208171-0df5-4079-9b07-bfa27affafe0'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'NotifyViaEmail')
+         WHERE ID = '4c6d0b08-d852-444f-9394-c5387c91139f'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'NotifyViaEmail')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3677,9 +3587,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '87208171-0df5-4079-9b07-bfa27affafe0',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100021,
+            '4c6d0b08-d852-444f-9394-c5387c91139f',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100020,
             'NotifyViaEmail',
             'Notify Via Email',
             'Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.',
@@ -3708,8 +3618,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '673ad91a-0a6d-4ea8-8b8b-cc8a8221a05b'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'NotifyViaInApp')
+         WHERE ID = '03768220-f023-4e46-87e2-5738aac55985'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'NotifyViaInApp')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3742,9 +3652,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '673ad91a-0a6d-4ea8-8b8b-cc8a8221a05b',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100022,
+            '03768220-f023-4e46-87e2-5738aac55985',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100021,
             'NotifyViaInApp',
             'Notify Via In App',
             'Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.',
@@ -3773,8 +3683,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'f8c10b8a-14ab-4a0d-ac72-2d564c6643e2'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'LockToken')
+         WHERE ID = '105ceab7-9967-4956-b143-cbc983632481'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'LockToken')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3807,9 +3717,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'f8c10b8a-14ab-4a0d-ac72-2d564c6643e2',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100023,
+            '105ceab7-9967-4956-b143-cbc983632481',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100022,
             'LockToken',
             'Lock Token',
             'Unique token used for distributed locking across multiple server instances. Set when a server claims the job for execution. Prevents duplicate executions in multi-server environments.',
@@ -3838,8 +3748,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '18bd33a7-d370-440e-91ae-7f2633c75c9d'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'LockedAt')
+         WHERE ID = '4d1f66e6-e7dd-4463-bd85-6a34dadfd096'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'LockedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3872,9 +3782,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '18bd33a7-d370-440e-91ae-7f2633c75c9d',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100024,
+            '4d1f66e6-e7dd-4463-bd85-6a34dadfd096',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100023,
             'LockedAt',
             'Locked At',
             'Timestamp when the lock was acquired. Used with ExpectedCompletionAt to detect stale locks from crashed server instances.',
@@ -3903,8 +3813,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'ae143496-0733-44d8-adf3-a602b2d1777c'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'LockedByInstance')
+         WHERE ID = '12ed9986-1339-4f4c-88dc-b8b479950062'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'LockedByInstance')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -3937,9 +3847,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            'ae143496-0733-44d8-adf3-a602b2d1777c',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100025,
+            '12ed9986-1339-4f4c-88dc-b8b479950062',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100024,
             'LockedByInstance',
             'Locked By Instance',
             'Identifier of the server instance that currently holds the lock (e.g., "hostname-12345"). Used for troubleshooting and monitoring which server is executing which job.',
@@ -3968,8 +3878,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '1f61006f-c854-4062-a827-3af8ade49f54'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'ExpectedCompletionAt')
+         WHERE ID = '4cef1a8f-edc1-4551-b3b8-2b8a6da3deaa'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'ExpectedCompletionAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -4002,9 +3912,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '1f61006f-c854-4062-a827-3af8ade49f54',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100026,
+            '4cef1a8f-edc1-4551-b3b8-2b8a6da3deaa',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100025,
             'ExpectedCompletionAt',
             'Expected Completion At',
             'Expected completion time for the current execution. If current time exceeds this and lock still exists, the lock is considered stale and can be claimed by another instance. Handles crashed server cleanup.',
@@ -4033,8 +3943,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '6afd6fcd-3f9b-4c04-b82d-e477744c2556'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'ConcurrencyMode')
+         WHERE ID = 'bb4bfda6-0001-43d3-9f48-e9bdb1ac0331'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'ConcurrencyMode')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -4067,9 +3977,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '6afd6fcd-3f9b-4c04-b82d-e477744c2556',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100027,
+            'bb4bfda6-0001-43d3-9f48-e9bdb1ac0331',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100026,
             'ConcurrencyMode',
             'Concurrency Mode',
             'Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.',
@@ -4098,8 +4008,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '9259cf45-fe01-43c9-baa8-2576571e5bec'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = '__mj_CreatedAt')
+         WHERE ID = '68ae196c-1cbd-44b9-a24d-c9f69cf1215d'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = '__mj_CreatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -4132,9 +4042,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '9259cf45-fe01-43c9-baa8-2576571e5bec',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100028,
+            '68ae196c-1cbd-44b9-a24d-c9f69cf1215d',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100027,
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -4163,8 +4073,8 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '239ce41b-d71f-4366-9d35-f8c1366ef3d9'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = '__mj_UpdatedAt')
+         WHERE ID = '0a7acd60-27e1-46f5-b162-00e87ee996e3'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = '__mj_UpdatedAt')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -4197,9 +4107,9 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
          VALUES
          (
-            '239ce41b-d71f-4366-9d35-f8c1366ef3d9',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100029,
+            '0a7acd60-27e1-46f5-b162-00e87ee996e3',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100028,
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -4224,123 +4134,113 @@ ALTER TABLE [${flyway:defaultSchema}].[ScheduledJob] ADD __mj_UpdatedAt DATETIME
          )
       END
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID b5977215-0ed2-4e5f-9627-6fea3d761583 */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('3E785803-85E6-446E-A4F2-B2970BB6766C', 1, 'Pending', 'Pending')
+                                       ('b5977215-0ed2-4e5f-9627-6fea3d761583', 'BB4BFDA6-0001-43D3-9F48-E9BDB1AC0331', 1, 'Concurrent', 'Concurrent')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 5fdfb6d8-b3db-4064-917d-0ef7a7ad7c30 */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('3E785803-85E6-446E-A4F2-B2970BB6766C', 2, 'Active', 'Active')
+                                       ('5fdfb6d8-b3db-4064-917d-0ef7a7ad7c30', 'BB4BFDA6-0001-43D3-9F48-E9BDB1AC0331', 2, 'Queue', 'Queue')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 8f748296-e050-48ca-853b-dfd156b2bbdf */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('3E785803-85E6-446E-A4F2-B2970BB6766C', 3, 'Paused', 'Paused')
+                                       ('8f748296-e050-48ca-853b-dfd156b2bbdf', 'BB4BFDA6-0001-43D3-9F48-E9BDB1AC0331', 3, 'Skip', 'Skip')
 
-/* SQL text to insert entity field values */
+/* SQL text to update ValueListType for entity field ID BB4BFDA6-0001-43D3-9F48-E9BDB1AC0331 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='BB4BFDA6-0001-43D3-9F48-E9BDB1AC0331'
+
+/* SQL text to insert entity field value with ID 1f48f9be-415c-448a-a932-e1a677f3fd57 */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('3E785803-85E6-446E-A4F2-B2970BB6766C', 4, 'Disabled', 'Disabled')
+                                       ('1f48f9be-415c-448a-a932-e1a677f3fd57', '9B974E30-454A-4F22-977E-EFCC7114683A', 1, 'Cancelled', 'Cancelled')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 59785053-5012-4a37-89b5-bbacbcfa01e2 */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('3E785803-85E6-446E-A4F2-B2970BB6766C', 5, 'Expired', 'Expired')
+                                       ('59785053-5012-4a37-89b5-bbacbcfa01e2', '9B974E30-454A-4F22-977E-EFCC7114683A', 2, 'Completed', 'Completed')
 
-/* SQL text to update ValueListType for entity field ID 3E785803-85E6-446E-A4F2-B2970BB6766C */
-UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='3E785803-85E6-446E-A4F2-B2970BB6766C'
-
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 2b5ff775-6fdc-41b7-b16b-ecb79f11bb42 */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('6AFD6FCD-3F9B-4C04-B82D-E477744C2556', 1, 'Skip', 'Skip')
+                                       ('2b5ff775-6fdc-41b7-b16b-ecb79f11bb42', '9B974E30-454A-4F22-977E-EFCC7114683A', 3, 'Failed', 'Failed')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 395efe5b-9f90-4208-a396-8197d82cedfd */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('6AFD6FCD-3F9B-4C04-B82D-E477744C2556', 2, 'Queue', 'Queue')
+                                       ('395efe5b-9f90-4208-a396-8197d82cedfd', '9B974E30-454A-4F22-977E-EFCC7114683A', 4, 'Running', 'Running')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID fa90770d-3645-40ab-81d2-b1401519ec1c */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('6AFD6FCD-3F9B-4C04-B82D-E477744C2556', 3, 'Concurrent', 'Concurrent')
+                                       ('fa90770d-3645-40ab-81d2-b1401519ec1c', '9B974E30-454A-4F22-977E-EFCC7114683A', 5, 'Timeout', 'Timeout')
 
-/* SQL text to update ValueListType for entity field ID 6AFD6FCD-3F9B-4C04-B82D-E477744C2556 */
-UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='6AFD6FCD-3F9B-4C04-B82D-E477744C2556'
+/* SQL text to update ValueListType for entity field ID 9B974E30-454A-4F22-977E-EFCC7114683A */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='9B974E30-454A-4F22-977E-EFCC7114683A'
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 92b4bb4b-3ae0-407b-b314-c24ced8d061a */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('82438F9D-6B8A-4317-B27B-5EAB51A56D68', 1, 'Running', 'Running')
+                                       ('92b4bb4b-3ae0-407b-b314-c24ced8d061a', 'D34A3E50-E7A0-4241-8A1C-6FD61E3F7EE7', 1, 'Active', 'Active')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 4ce91b85-b2cc-4cfd-8544-2ea3203a80ef */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('82438F9D-6B8A-4317-B27B-5EAB51A56D68', 2, 'Completed', 'Completed')
+                                       ('4ce91b85-b2cc-4cfd-8544-2ea3203a80ef', 'D34A3E50-E7A0-4241-8A1C-6FD61E3F7EE7', 2, 'Disabled', 'Disabled')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 96b3c8cd-916f-419b-9572-55d66b5bda76 */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('82438F9D-6B8A-4317-B27B-5EAB51A56D68', 3, 'Failed', 'Failed')
+                                       ('96b3c8cd-916f-419b-9572-55d66b5bda76', 'D34A3E50-E7A0-4241-8A1C-6FD61E3F7EE7', 3, 'Expired', 'Expired')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID 54d9f9ad-e350-4fbb-bf6c-00634851c260 */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('82438F9D-6B8A-4317-B27B-5EAB51A56D68', 4, 'Cancelled', 'Cancelled')
+                                       ('54d9f9ad-e350-4fbb-bf6c-00634851c260', 'D34A3E50-E7A0-4241-8A1C-6FD61E3F7EE7', 4, 'Paused', 'Paused')
 
-/* SQL text to insert entity field values */
+/* SQL text to insert entity field value with ID d0084569-5947-416b-91ce-95c410ac90fd */
 INSERT INTO [${flyway:defaultSchema}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('82438F9D-6B8A-4317-B27B-5EAB51A56D68', 5, 'Timeout', 'Timeout')
+                                       ('d0084569-5947-416b-91ce-95c410ac90fd', 'D34A3E50-E7A0-4241-8A1C-6FD61E3F7EE7', 5, 'Pending', 'Pending')
 
-/* SQL text to update ValueListType for entity field ID 82438F9D-6B8A-4317-B27B-5EAB51A56D68 */
-UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='82438F9D-6B8A-4317-B27B-5EAB51A56D68'
+/* SQL text to update ValueListType for entity field ID D34A3E50-E7A0-4241-8A1C-6FD61E3F7EE7 */
+UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='D34A3E50-E7A0-4241-8A1C-6FD61E3F7EE7'
 
 /* SQL text to create Entitiy Relationships */
 
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '6bd91e6c-99e3-4f41-9766-f4522fa6513b'
+      WHERE ID = '29b73ccf-1517-4bda-9bb5-ee6d48e1609a'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('6bd91e6c-99e3-4f41-9766-f4522fa6513b', '257A461E-AC75-4AE5-AADC-124D2CA1F383', '5190AF93-4C39-4429-BDAA-0AEB492A0256', 'ScheduledJobRunID', 'One To Many', 1, 1, 'MJ: AI Agent Runs', 4);
+                              VALUES ('29b73ccf-1517-4bda-9bb5-ee6d48e1609a', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'NotifyUserID', 'One To Many', 1, 1, 'MJ: Scheduled Jobs', 1);
    END
                               
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = 'eb5eca09-33a0-405f-b236-3884f517a667'
+      WHERE ID = 'fea0a41e-14a4-4c1d-929b-bade744a889c'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('eb5eca09-33a0-405f-b236-3884f517a667', '257A461E-AC75-4AE5-AADC-124D2CA1F383', '302A55B5-AEF0-4C57-8F35-73EE6B17E234', 'LastRunID', 'One To Many', 1, 1, 'MJ: Scheduled Jobs', 1);
-   END
-                              
-   IF NOT EXISTS (
-      SELECT 1
-      FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '152d0e56-9c6c-457f-9601-4845063acec7'
-   )
-   BEGIN
-      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('152d0e56-9c6c-457f-9601-4845063acec7', '98254B66-599E-48FE-9051-1A033B32AE43', '302A55B5-AEF0-4C57-8F35-73EE6B17E234', 'JobTypeID', 'One To Many', 1, 1, 'MJ: Scheduled Jobs', 2);
+                              VALUES ('fea0a41e-14a4-4c1d-929b-bade744a889c', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'OwnerUserID', 'One To Many', 1, 1, 'MJ: Scheduled Jobs', 2);
    END
                               
 
@@ -4349,21 +4249,11 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = 'edecabaf-b187-4fc0-858b-50713c61eac2'
+      WHERE ID = '2c88f441-7624-4e1a-b4bb-98be9036ad83'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('edecabaf-b187-4fc0-858b-50713c61eac2', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '302A55B5-AEF0-4C57-8F35-73EE6B17E234', 'OwnerUserID', 'One To Many', 1, 1, 'MJ: Scheduled Jobs', 3);
-   END
-                              
-   IF NOT EXISTS (
-      SELECT 1
-      FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '85b35234-65be-4c35-b678-6c38d26546c1'
-   )
-   BEGIN
-      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('85b35234-65be-4c35-b678-6c38d26546c1', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '302A55B5-AEF0-4C57-8F35-73EE6B17E234', 'NotifyUserID', 'One To Many', 1, 1, 'MJ: Scheduled Jobs', 4);
+                              VALUES ('2c88f441-7624-4e1a-b4bb-98be9036ad83', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '05853432-5E13-4F2A-8618-77857ADF17FA', 'ExecutedByUserID', 'One To Many', 1, 1, 'MJ: Scheduled Job Runs', 1);
    END
                               
 
@@ -4372,11 +4262,11 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '422ca569-1e4f-4b7b-8ecf-5fbbbcff8eeb'
+      WHERE ID = 'f698138e-3441-464c-865a-ce7108c237cb'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('422ca569-1e4f-4b7b-8ecf-5fbbbcff8eeb', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '257A461E-AC75-4AE5-AADC-124D2CA1F383', 'ExecutedByUserID', 'One To Many', 1, 1, 'MJ: Scheduled Job Runs', 1);
+                              VALUES ('f698138e-3441-464c-865a-ce7108c237cb', '05853432-5E13-4F2A-8618-77857ADF17FA', '5190AF93-4C39-4429-BDAA-0AEB492A0256', 'ScheduledJobRunID', 'One To Many', 1, 1, 'MJ: AI Agent Runs', 4);
    END
                               
 
@@ -4385,13 +4275,460 @@ UPDATE [${flyway:defaultSchema}].EntityField SET ValueListType='List' WHERE ID='
    IF NOT EXISTS (
       SELECT 1
       FROM [${flyway:defaultSchema}].EntityRelationship
-      WHERE ID = '33b3f058-af76-4bcb-a00d-a43ae5a2fb49'
+      WHERE ID = '03b54bb6-2212-44f5-9f86-a8401bbad5d4'
    )
    BEGIN
       INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
-                              VALUES ('33b3f058-af76-4bcb-a00d-a43ae5a2fb49', '302A55B5-AEF0-4C57-8F35-73EE6B17E234', '257A461E-AC75-4AE5-AADC-124D2CA1F383', 'ScheduledJobID', 'One To Many', 1, 1, 'MJ: Scheduled Job Runs', 2);
+                              VALUES ('03b54bb6-2212-44f5-9f86-a8401bbad5d4', '33E01250-C0FE-4B35-AF8F-A4F444490065', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'JobTypeID', 'One To Many', 1, 1, 'MJ: Scheduled Jobs', 3);
    END
                               
+
+/* SQL text to create Entitiy Relationships */
+
+   IF NOT EXISTS (
+      SELECT 1
+      FROM [${flyway:defaultSchema}].EntityRelationship
+      WHERE ID = 'a7ecb826-ac8f-4a3c-b992-d81bb8a0b4f9'
+   )
+   BEGIN
+      INSERT INTO ${flyway:defaultSchema}.EntityRelationship (ID, EntityID, RelatedEntityID, RelatedEntityJoinField, Type, BundleInAPI, DisplayInForm, DisplayName, Sequence)
+                              VALUES ('a7ecb826-ac8f-4a3c-b992-d81bb8a0b4f9', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', '05853432-5E13-4F2A-8618-77857ADF17FA', 'ScheduledJobID', 'One To Many', 1, 1, 'MJ: Scheduled Job Runs', 2);
+   END
+                              
+
+/* SQL text to update entity field related entity name field map for entity field ID 6A62443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='6A62443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentItem'
+
+/* SQL text to update entity field related entity name field map for entity field ID 8E62443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='8E62443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='Item'
+
+/* SQL text to update entity field related entity name field map for entity field ID 2262443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='2262443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSource'
+
+/* SQL text to update entity field related entity name field map for entity field ID D860443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='D860443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='Source'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3861443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3861443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSource'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3462443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3462443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 3A62443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='3A62443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 4062443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='4062443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentFileType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 0E61443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='0E61443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentType'
+
+/* SQL text to update entity field related entity name field map for entity field ID B661443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='B661443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='AIModel'
+
+/* SQL text to update entity field related entity name field map for entity field ID 1461443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='1461443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentSourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 1A61443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='1A61443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ContentFileType'
+
+/* Index for Foreign Keys for EntityRelationship */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Entity Relationships
+-- Item: Index for Foreign Keys
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+-- Index for foreign key EntityID in table EntityRelationship
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_EntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_EntityID ON [${flyway:defaultSchema}].[EntityRelationship] ([EntityID]);
+
+-- Index for foreign key RelatedEntityID in table EntityRelationship
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_RelatedEntityID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_RelatedEntityID ON [${flyway:defaultSchema}].[EntityRelationship] ([RelatedEntityID]);
+
+-- Index for foreign key DisplayUserViewID in table EntityRelationship
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayUserViewID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayUserViewID ON [${flyway:defaultSchema}].[EntityRelationship] ([DisplayUserViewID]);
+
+-- Index for foreign key DisplayComponentID in table EntityRelationship
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayComponentID' 
+    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
+)
+CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayComponentID ON [${flyway:defaultSchema}].[EntityRelationship] ([DisplayComponentID]);
+
+/* Base View Permissions SQL for Entity Relationships */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Entity Relationships
+-- Item: Permissions for vwEntityRelationships
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+GRANT SELECT ON [${flyway:defaultSchema}].[vwEntityRelationships] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
+
+/* spCreate SQL for Entity Relationships */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Entity Relationships
+-- Item: spCreateEntityRelationship
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- CREATE PROCEDURE FOR EntityRelationship
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateEntityRelationship]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateEntityRelationship];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEntityRelationship]
+    @ID uniqueidentifier = NULL,
+    @EntityID uniqueidentifier,
+    @Sequence int = NULL,
+    @RelatedEntityID uniqueidentifier,
+    @BundleInAPI bit = NULL,
+    @IncludeInParentAllQuery bit = NULL,
+    @Type nchar(20) = NULL,
+    @EntityKeyField nvarchar(255),
+    @RelatedEntityJoinField nvarchar(255),
+    @JoinView nvarchar(255),
+    @JoinEntityJoinField nvarchar(255),
+    @JoinEntityInverseJoinField nvarchar(255),
+    @DisplayInForm bit = NULL,
+    @DisplayLocation nvarchar(50) = NULL,
+    @DisplayName nvarchar(255),
+    @DisplayIconType nvarchar(50) = NULL,
+    @DisplayIcon nvarchar(255),
+    @DisplayComponentID uniqueidentifier,
+    @DisplayComponentConfiguration nvarchar(MAX),
+    @AutoUpdateFromSchema bit = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @InsertedRow TABLE ([ID] UNIQUEIDENTIFIER)
+    
+    IF @ID IS NOT NULL
+    BEGIN
+        -- User provided a value, use it
+        INSERT INTO [${flyway:defaultSchema}].[EntityRelationship]
+            (
+                [ID],
+                [EntityID],
+                [Sequence],
+                [RelatedEntityID],
+                [BundleInAPI],
+                [IncludeInParentAllQuery],
+                [Type],
+                [EntityKeyField],
+                [RelatedEntityJoinField],
+                [JoinView],
+                [JoinEntityJoinField],
+                [JoinEntityInverseJoinField],
+                [DisplayInForm],
+                [DisplayLocation],
+                [DisplayName],
+                [DisplayIconType],
+                [DisplayIcon],
+                [DisplayComponentID],
+                [DisplayComponentConfiguration],
+                [AutoUpdateFromSchema]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @ID,
+                @EntityID,
+                ISNULL(@Sequence, 0),
+                @RelatedEntityID,
+                ISNULL(@BundleInAPI, 1),
+                ISNULL(@IncludeInParentAllQuery, 0),
+                ISNULL(@Type, 'One To Many'),
+                @EntityKeyField,
+                @RelatedEntityJoinField,
+                @JoinView,
+                @JoinEntityJoinField,
+                @JoinEntityInverseJoinField,
+                ISNULL(@DisplayInForm, 1),
+                ISNULL(@DisplayLocation, 'After Field Tabs'),
+                @DisplayName,
+                ISNULL(@DisplayIconType, 'Related Entity Icon'),
+                @DisplayIcon,
+                @DisplayComponentID,
+                @DisplayComponentConfiguration,
+                ISNULL(@AutoUpdateFromSchema, 1)
+            )
+    END
+    ELSE
+    BEGIN
+        -- No value provided, let database use its default (e.g., NEWSEQUENTIALID())
+        INSERT INTO [${flyway:defaultSchema}].[EntityRelationship]
+            (
+                [EntityID],
+                [Sequence],
+                [RelatedEntityID],
+                [BundleInAPI],
+                [IncludeInParentAllQuery],
+                [Type],
+                [EntityKeyField],
+                [RelatedEntityJoinField],
+                [JoinView],
+                [JoinEntityJoinField],
+                [JoinEntityInverseJoinField],
+                [DisplayInForm],
+                [DisplayLocation],
+                [DisplayName],
+                [DisplayIconType],
+                [DisplayIcon],
+                [DisplayComponentID],
+                [DisplayComponentConfiguration],
+                [AutoUpdateFromSchema]
+            )
+        OUTPUT INSERTED.[ID] INTO @InsertedRow
+        VALUES
+            (
+                @EntityID,
+                ISNULL(@Sequence, 0),
+                @RelatedEntityID,
+                ISNULL(@BundleInAPI, 1),
+                ISNULL(@IncludeInParentAllQuery, 0),
+                ISNULL(@Type, 'One To Many'),
+                @EntityKeyField,
+                @RelatedEntityJoinField,
+                @JoinView,
+                @JoinEntityJoinField,
+                @JoinEntityInverseJoinField,
+                ISNULL(@DisplayInForm, 1),
+                ISNULL(@DisplayLocation, 'After Field Tabs'),
+                @DisplayName,
+                ISNULL(@DisplayIconType, 'Related Entity Icon'),
+                @DisplayIcon,
+                @DisplayComponentID,
+                @DisplayComponentConfiguration,
+                ISNULL(@AutoUpdateFromSchema, 1)
+            )
+    END
+    -- return the new record from the base view, which might have some calculated fields
+    SELECT * FROM [${flyway:defaultSchema}].[vwEntityRelationships] WHERE [ID] = (SELECT [ID] FROM @InsertedRow)
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntityRelationship] TO [cdp_Integration], [cdp_Developer]
+    
+
+/* spCreate Permissions for Entity Relationships */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateEntityRelationship] TO [cdp_Integration], [cdp_Developer]
+
+
+
+/* spUpdate SQL for Entity Relationships */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Entity Relationships
+-- Item: spUpdateEntityRelationship
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- UPDATE PROCEDURE FOR EntityRelationship
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateEntityRelationship]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityRelationship];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEntityRelationship]
+    @ID uniqueidentifier,
+    @EntityID uniqueidentifier,
+    @Sequence int,
+    @RelatedEntityID uniqueidentifier,
+    @BundleInAPI bit,
+    @IncludeInParentAllQuery bit,
+    @Type nchar(20),
+    @EntityKeyField nvarchar(255),
+    @RelatedEntityJoinField nvarchar(255),
+    @JoinView nvarchar(255),
+    @JoinEntityJoinField nvarchar(255),
+    @JoinEntityInverseJoinField nvarchar(255),
+    @DisplayInForm bit,
+    @DisplayLocation nvarchar(50),
+    @DisplayName nvarchar(255),
+    @DisplayIconType nvarchar(50),
+    @DisplayIcon nvarchar(255),
+    @DisplayComponentID uniqueidentifier,
+    @DisplayComponentConfiguration nvarchar(MAX),
+    @AutoUpdateFromSchema bit
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[EntityRelationship]
+    SET
+        [EntityID] = @EntityID,
+        [Sequence] = @Sequence,
+        [RelatedEntityID] = @RelatedEntityID,
+        [BundleInAPI] = @BundleInAPI,
+        [IncludeInParentAllQuery] = @IncludeInParentAllQuery,
+        [Type] = @Type,
+        [EntityKeyField] = @EntityKeyField,
+        [RelatedEntityJoinField] = @RelatedEntityJoinField,
+        [JoinView] = @JoinView,
+        [JoinEntityJoinField] = @JoinEntityJoinField,
+        [JoinEntityInverseJoinField] = @JoinEntityInverseJoinField,
+        [DisplayInForm] = @DisplayInForm,
+        [DisplayLocation] = @DisplayLocation,
+        [DisplayName] = @DisplayName,
+        [DisplayIconType] = @DisplayIconType,
+        [DisplayIcon] = @DisplayIcon,
+        [DisplayComponentID] = @DisplayComponentID,
+        [DisplayComponentConfiguration] = @DisplayComponentConfiguration,
+        [AutoUpdateFromSchema] = @AutoUpdateFromSchema
+    WHERE
+        [ID] = @ID
+
+    -- Check if the update was successful
+    IF @@ROWCOUNT = 0
+        -- Nothing was updated, return no rows, but column structure from base view intact, semantically correct this way.
+        SELECT TOP 0 * FROM [${flyway:defaultSchema}].[vwEntityRelationships] WHERE 1=0
+    ELSE
+        -- Return the updated record so the caller can see the updated values and any calculated fields
+        SELECT
+                                        *
+                                    FROM
+                                        [${flyway:defaultSchema}].[vwEntityRelationships]
+                                    WHERE
+                                        [ID] = @ID
+                                    
+END
+GO
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityRelationship] TO [cdp_Integration], [cdp_Developer]
+GO
+
+------------------------------------------------------------
+----- TRIGGER FOR __mj_UpdatedAt field for the EntityRelationship table
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateEntityRelationship]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateEntityRelationship];
+GO
+CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateEntityRelationship
+ON [${flyway:defaultSchema}].[EntityRelationship]
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    UPDATE
+        [${flyway:defaultSchema}].[EntityRelationship]
+    SET
+        __mj_UpdatedAt = GETUTCDATE()
+    FROM
+        [${flyway:defaultSchema}].[EntityRelationship] AS _organicTable
+    INNER JOIN
+        INSERTED AS I ON
+        _organicTable.[ID] = I.[ID];
+END;
+GO
+        
+
+/* spUpdate Permissions for Entity Relationships */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityRelationship] TO [cdp_Integration], [cdp_Developer]
+
+
+
+/* spDelete SQL for Entity Relationships */
+-----------------------------------------------------------------
+-- SQL Code Generation
+-- Entity: Entity Relationships
+-- Item: spDeleteEntityRelationship
+--
+-- This was generated by the MemberJunction CodeGen tool.
+-- This file should NOT be edited by hand.
+-----------------------------------------------------------------
+
+------------------------------------------------------------
+----- DELETE PROCEDURE FOR EntityRelationship
+------------------------------------------------------------
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntityRelationship]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityRelationship];
+GO
+
+CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityRelationship]
+    @ID uniqueidentifier
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DELETE FROM
+        [${flyway:defaultSchema}].[EntityRelationship]
+    WHERE
+        [ID] = @ID
+
+
+    -- Check if the delete was successful
+    IF @@ROWCOUNT = 0
+        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
+    ELSE
+        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
+END
+GO
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityRelationship] TO [cdp_Integration], [cdp_Developer]
+    
+
+/* spDelete Permissions for Entity Relationships */
+
+GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityRelationship] TO [cdp_Integration], [cdp_Developer]
+
+
 
 /* Index for Foreign Keys for AIAgentRun */
 -----------------------------------------------------------------
@@ -4508,7 +4845,8 @@ CREATE INDEX IDX_AUTO_MJ_FKEY_AIAgentRun_ScheduledJobRunID ON [${flyway:defaultS
 -----               BASE TABLE:  AIAgentRun
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwAIAgentRuns]
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwAIAgentRuns]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwAIAgentRuns];
 GO
 
 CREATE VIEW [${flyway:defaultSchema}].[vwAIAgentRuns]
@@ -4629,15 +4967,16 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwAIAgentRuns] TO [cdp_UI], [cdp_Deve
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR AIAgentRun
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateAIAgentRun]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateAIAgentRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentRun];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentRun]
     @ID uniqueidentifier = NULL,
     @AgentID uniqueidentifier,
     @ParentRunID uniqueidentifier,
-    @Status nvarchar(50),
-    @StartedAt datetimeoffset,
+    @Status nvarchar(50) = NULL,
+    @StartedAt datetimeoffset = NULL,
     @CompletedAt datetimeoffset,
     @Success bit,
     @ErrorMessage nvarchar(MAX),
@@ -4661,7 +5000,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgentRun]
     @Message nvarchar(MAX),
     @LastRunID uniqueidentifier,
     @StartingPayload nvarchar(MAX),
-    @TotalPromptIterations int,
+    @TotalPromptIterations int = NULL,
     @ConfigurationID uniqueidentifier,
     @OverrideModelID uniqueidentifier,
     @OverrideVendorID uniqueidentifier,
@@ -4726,8 +5065,8 @@ BEGIN
                 @ID,
                 @AgentID,
                 @ParentRunID,
-                @Status,
-                @StartedAt,
+                ISNULL(@Status, 'Running'),
+                ISNULL(@StartedAt, sysdatetimeoffset()),
                 @CompletedAt,
                 @Success,
                 @ErrorMessage,
@@ -4751,7 +5090,7 @@ BEGIN
                 @Message,
                 @LastRunID,
                 @StartingPayload,
-                @TotalPromptIterations,
+                ISNULL(@TotalPromptIterations, 0),
                 @ConfigurationID,
                 @OverrideModelID,
                 @OverrideVendorID,
@@ -4811,8 +5150,8 @@ BEGIN
             (
                 @AgentID,
                 @ParentRunID,
-                @Status,
-                @StartedAt,
+                ISNULL(@Status, 'Running'),
+                ISNULL(@StartedAt, sysdatetimeoffset()),
                 @CompletedAt,
                 @Success,
                 @ErrorMessage,
@@ -4836,7 +5175,7 @@ BEGIN
                 @Message,
                 @LastRunID,
                 @StartingPayload,
-                @TotalPromptIterations,
+                ISNULL(@TotalPromptIterations, 0),
                 @ConfigurationID,
                 @OverrideModelID,
                 @OverrideVendorID,
@@ -4874,7 +5213,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateAIAgentRun] TO [cdp_Develope
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR AIAgentRun
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateAIAgentRun]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateAIAgentRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgentRun];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgentRun]
@@ -4984,7 +5324,8 @@ GO
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the AIAgentRun table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateAIAgentRun
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateAIAgentRun]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateAIAgentRun];
 GO
 CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateAIAgentRun
 ON [${flyway:defaultSchema}].[AIAgentRun]
@@ -5024,7 +5365,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateAIAgentRun] TO [cdp_Develope
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR AIAgentRun
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteAIAgentRun]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteAIAgentRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgentRun];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteAIAgentRun]
@@ -5082,9 +5424,9 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ScheduledJobRun_ExecutedByUserID ON [${flyway:defaultSchema}].[ScheduledJobRun] ([ExecutedByUserID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID D8C590C7-E726-4F2A-9ADC-7FAE0CB58600 */
+/* SQL text to update entity field related entity name field map for entity field ID A8F8EDBB-8304-4738-92DA-6186F220EB94 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='D8C590C7-E726-4F2A-9ADC-7FAE0CB58600',
+         @EntityFieldID='A8F8EDBB-8304-4738-92DA-6186F220EB94',
          @RelatedEntityNameFieldMap='ScheduledJob'
 
 /* Index for Foreign Keys for ScheduledJobType */
@@ -5125,15 +5467,6 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ScheduledJob_OwnerUserID ON [${flyway:defaultSchema}].[ScheduledJob] ([OwnerUserID]);
 
--- Index for foreign key LastRunID in table ScheduledJob
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_ScheduledJob_LastRunID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[ScheduledJob]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_ScheduledJob_LastRunID ON [${flyway:defaultSchema}].[ScheduledJob] ([LastRunID]);
-
 -- Index for foreign key NotifyUserID in table ScheduledJob
 IF NOT EXISTS (
     SELECT 1
@@ -5143,9 +5476,9 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_ScheduledJob_NotifyUserID ON [${flyway:defaultSchema}].[ScheduledJob] ([NotifyUserID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 80851C94-5AC0-4DE9-8A07-A84E3C545D6C */
+/* SQL text to update entity field related entity name field map for entity field ID C30FF21A-65A1-4EF3-8978-430CE036C280 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='80851C94-5AC0-4DE9-8A07-A84E3C545D6C',
+         @EntityFieldID='C30FF21A-65A1-4EF3-8978-430CE036C280',
          @RelatedEntityNameFieldMap='JobType'
 
 /* Base View SQL for MJ: Scheduled Job Types */
@@ -5164,7 +5497,8 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
 -----               BASE TABLE:  ScheduledJobType
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwScheduledJobTypes]
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwScheduledJobTypes]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwScheduledJobTypes];
 GO
 
 CREATE VIEW [${flyway:defaultSchema}].[vwScheduledJobTypes]
@@ -5202,7 +5536,8 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwScheduledJobTypes] TO [cdp_UI], [cd
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ScheduledJobType
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateScheduledJobType]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateScheduledJobType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJobType];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJobType]
@@ -5212,7 +5547,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJobType]
     @DriverClass nvarchar(255),
     @DomainRunEntity nvarchar(255),
     @DomainRunEntityFKey nvarchar(100),
-    @NotificationsAvailable bit
+    @NotificationsAvailable bit = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -5240,7 +5575,7 @@ BEGIN
                 @DriverClass,
                 @DomainRunEntity,
                 @DomainRunEntityFKey,
-                @NotificationsAvailable
+                ISNULL(@NotificationsAvailable, 1)
             )
     END
     ELSE
@@ -5263,7 +5598,7 @@ BEGIN
                 @DriverClass,
                 @DomainRunEntity,
                 @DomainRunEntityFKey,
-                @NotificationsAvailable
+                ISNULL(@NotificationsAvailable, 1)
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -5292,7 +5627,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateScheduledJobType] TO [cdp_De
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ScheduledJobType
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateScheduledJobType]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateScheduledJobType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJobType];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJobType]
@@ -5340,7 +5676,8 @@ GO
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the ScheduledJobType table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateScheduledJobType
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateScheduledJobType]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateScheduledJobType];
 GO
 CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateScheduledJobType
 ON [${flyway:defaultSchema}].[ScheduledJobType]
@@ -5380,7 +5717,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateScheduledJobType] TO [cdp_De
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ScheduledJobType
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteScheduledJobType]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteScheduledJobType]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteScheduledJobType];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteScheduledJobType]
@@ -5411,20 +5749,15 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteScheduledJobType] TO [cdp_In
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID 76AA6DE8-DACE-4243-800F-FDF6D7908A7C */
+/* SQL text to update entity field related entity name field map for entity field ID 6A782BA2-97DF-45E0-9060-8FA0C9CD8C43 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='76AA6DE8-DACE-4243-800F-FDF6D7908A7C',
-         @RelatedEntityNameFieldMap='OwnerUser'
-
-/* SQL text to update entity field related entity name field map for entity field ID 90A6E720-9E0E-40C0-AB0D-224D59B98A3E */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='90A6E720-9E0E-40C0-AB0D-224D59B98A3E',
+         @EntityFieldID='6A782BA2-97DF-45E0-9060-8FA0C9CD8C43',
          @RelatedEntityNameFieldMap='ExecutedByUser'
 
-/* SQL text to update entity field related entity name field map for entity field ID 0F32D762-AC95-4567-8741-AA332DA8B80B */
+/* SQL text to update entity field related entity name field map for entity field ID E4DCCF26-14B1-4033-818D-180AF7C04097 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='0F32D762-AC95-4567-8741-AA332DA8B80B',
-         @RelatedEntityNameFieldMap='NotifyUser'
+         @EntityFieldID='E4DCCF26-14B1-4033-818D-180AF7C04097',
+         @RelatedEntityNameFieldMap='OwnerUser'
 
 /* Base View SQL for MJ: Scheduled Job Runs */
 -----------------------------------------------------------------
@@ -5442,7 +5775,8 @@ EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
 -----               BASE TABLE:  ScheduledJobRun
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwScheduledJobRuns]
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwScheduledJobRuns]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwScheduledJobRuns];
 GO
 
 CREATE VIEW [${flyway:defaultSchema}].[vwScheduledJobRuns]
@@ -5490,15 +5824,16 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwScheduledJobRuns] TO [cdp_UI], [cdp
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ScheduledJobRun
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateScheduledJobRun]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateScheduledJobRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJobRun];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJobRun]
     @ID uniqueidentifier = NULL,
     @ScheduledJobID uniqueidentifier,
-    @StartedAt datetimeoffset,
+    @StartedAt datetimeoffset = NULL,
     @CompletedAt datetimeoffset,
-    @Status nvarchar(20),
+    @Status nvarchar(20) = NULL,
     @Success bit,
     @ErrorMessage nvarchar(MAX),
     @Details nvarchar(MAX),
@@ -5530,9 +5865,9 @@ BEGIN
             (
                 @ID,
                 @ScheduledJobID,
-                @StartedAt,
+                ISNULL(@StartedAt, sysdatetimeoffset()),
                 @CompletedAt,
-                @Status,
+                ISNULL(@Status, 'Running'),
                 @Success,
                 @ErrorMessage,
                 @Details,
@@ -5559,9 +5894,9 @@ BEGIN
         VALUES
             (
                 @ScheduledJobID,
-                @StartedAt,
+                ISNULL(@StartedAt, sysdatetimeoffset()),
                 @CompletedAt,
-                @Status,
+                ISNULL(@Status, 'Running'),
                 @Success,
                 @ErrorMessage,
                 @Details,
@@ -5595,7 +5930,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateScheduledJobRun] TO [cdp_Dev
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ScheduledJobRun
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateScheduledJobRun]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateScheduledJobRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJobRun];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJobRun]
@@ -5649,7 +5985,8 @@ GO
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the ScheduledJobRun table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateScheduledJobRun
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateScheduledJobRun]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateScheduledJobRun];
 GO
 CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateScheduledJobRun
 ON [${flyway:defaultSchema}].[ScheduledJobRun]
@@ -5689,7 +6026,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateScheduledJobRun] TO [cdp_Dev
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ScheduledJobRun
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteScheduledJobRun]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteScheduledJobRun]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteScheduledJobRun];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteScheduledJobRun]
@@ -5720,6 +6058,11 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteScheduledJobRun] TO [cdp_Int
 
 
 
+/* SQL text to update entity field related entity name field map for entity field ID 1FFB0397-C54B-4A7D-9394-CFF8A392502A */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='1FFB0397-C54B-4A7D-9394-CFF8A392502A',
+         @RelatedEntityNameFieldMap='NotifyUser'
+
 /* Base View SQL for MJ: Scheduled Jobs */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -5736,7 +6079,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteScheduledJobRun] TO [cdp_Int
 -----               BASE TABLE:  ScheduledJob
 -----               PRIMARY KEY: ID
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${flyway:defaultSchema}].[vwScheduledJobs]
+IF OBJECT_ID('[${flyway:defaultSchema}].[vwScheduledJobs]', 'V') IS NOT NULL
+    DROP VIEW [${flyway:defaultSchema}].[vwScheduledJobs];
 GO
 
 CREATE VIEW [${flyway:defaultSchema}].[vwScheduledJobs]
@@ -5789,7 +6133,8 @@ GRANT SELECT ON [${flyway:defaultSchema}].[vwScheduledJobs] TO [cdp_UI], [cdp_De
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ScheduledJob
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spCreateScheduledJob]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spCreateScheduledJob]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJob];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJob]
@@ -5798,28 +6143,27 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateScheduledJob]
     @Name nvarchar(200),
     @Description nvarchar(MAX),
     @CronExpression nvarchar(120),
-    @Timezone nvarchar(64),
+    @Timezone nvarchar(64) = NULL,
     @StartAt datetimeoffset,
     @EndAt datetimeoffset,
-    @Status nvarchar(20),
+    @Status nvarchar(20) = NULL,
     @Configuration nvarchar(MAX),
     @OwnerUserID uniqueidentifier,
-    @LastRunID uniqueidentifier,
     @LastRunAt datetimeoffset,
     @NextRunAt datetimeoffset,
-    @RunCount int,
-    @SuccessCount int,
-    @FailureCount int,
-    @NotifyOnSuccess bit,
-    @NotifyOnFailure bit,
+    @RunCount int = NULL,
+    @SuccessCount int = NULL,
+    @FailureCount int = NULL,
+    @NotifyOnSuccess bit = NULL,
+    @NotifyOnFailure bit = NULL,
     @NotifyUserID uniqueidentifier,
-    @NotifyViaEmail bit,
-    @NotifyViaInApp bit,
+    @NotifyViaEmail bit = NULL,
+    @NotifyViaInApp bit = NULL,
     @LockToken uniqueidentifier,
     @LockedAt datetimeoffset,
     @LockedByInstance nvarchar(255),
     @ExpectedCompletionAt datetimeoffset,
-    @ConcurrencyMode nvarchar(20)
+    @ConcurrencyMode nvarchar(20) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -5841,7 +6185,6 @@ BEGIN
                 [Status],
                 [Configuration],
                 [OwnerUserID],
-                [LastRunID],
                 [LastRunAt],
                 [NextRunAt],
                 [RunCount],
@@ -5866,28 +6209,27 @@ BEGIN
                 @Name,
                 @Description,
                 @CronExpression,
-                @Timezone,
+                ISNULL(@Timezone, 'UTC'),
                 @StartAt,
                 @EndAt,
-                @Status,
+                ISNULL(@Status, 'Pending'),
                 @Configuration,
                 @OwnerUserID,
-                @LastRunID,
                 @LastRunAt,
                 @NextRunAt,
-                @RunCount,
-                @SuccessCount,
-                @FailureCount,
-                @NotifyOnSuccess,
-                @NotifyOnFailure,
+                ISNULL(@RunCount, 0),
+                ISNULL(@SuccessCount, 0),
+                ISNULL(@FailureCount, 0),
+                ISNULL(@NotifyOnSuccess, 0),
+                ISNULL(@NotifyOnFailure, 1),
                 @NotifyUserID,
-                @NotifyViaEmail,
-                @NotifyViaInApp,
+                ISNULL(@NotifyViaEmail, 0),
+                ISNULL(@NotifyViaInApp, 1),
                 @LockToken,
                 @LockedAt,
                 @LockedByInstance,
                 @ExpectedCompletionAt,
-                @ConcurrencyMode
+                ISNULL(@ConcurrencyMode, 'Skip')
             )
     END
     ELSE
@@ -5905,7 +6247,6 @@ BEGIN
                 [Status],
                 [Configuration],
                 [OwnerUserID],
-                [LastRunID],
                 [LastRunAt],
                 [NextRunAt],
                 [RunCount],
@@ -5929,28 +6270,27 @@ BEGIN
                 @Name,
                 @Description,
                 @CronExpression,
-                @Timezone,
+                ISNULL(@Timezone, 'UTC'),
                 @StartAt,
                 @EndAt,
-                @Status,
+                ISNULL(@Status, 'Pending'),
                 @Configuration,
                 @OwnerUserID,
-                @LastRunID,
                 @LastRunAt,
                 @NextRunAt,
-                @RunCount,
-                @SuccessCount,
-                @FailureCount,
-                @NotifyOnSuccess,
-                @NotifyOnFailure,
+                ISNULL(@RunCount, 0),
+                ISNULL(@SuccessCount, 0),
+                ISNULL(@FailureCount, 0),
+                ISNULL(@NotifyOnSuccess, 0),
+                ISNULL(@NotifyOnFailure, 1),
                 @NotifyUserID,
-                @NotifyViaEmail,
-                @NotifyViaInApp,
+                ISNULL(@NotifyViaEmail, 0),
+                ISNULL(@NotifyViaInApp, 1),
                 @LockToken,
                 @LockedAt,
                 @LockedByInstance,
                 @ExpectedCompletionAt,
-                @ConcurrencyMode
+                ISNULL(@ConcurrencyMode, 'Skip')
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -5979,7 +6319,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spCreateScheduledJob] TO [cdp_Develo
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ScheduledJob
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spUpdateScheduledJob]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spUpdateScheduledJob]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJob];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJob]
@@ -5994,7 +6335,6 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateScheduledJob]
     @Status nvarchar(20),
     @Configuration nvarchar(MAX),
     @OwnerUserID uniqueidentifier,
-    @LastRunID uniqueidentifier,
     @LastRunAt datetimeoffset,
     @NextRunAt datetimeoffset,
     @RunCount int,
@@ -6026,7 +6366,6 @@ BEGIN
         [Status] = @Status,
         [Configuration] = @Configuration,
         [OwnerUserID] = @OwnerUserID,
-        [LastRunID] = @LastRunID,
         [LastRunAt] = @LastRunAt,
         [NextRunAt] = @NextRunAt,
         [RunCount] = @RunCount,
@@ -6067,7 +6406,8 @@ GO
 ------------------------------------------------------------
 ----- TRIGGER FOR __mj_UpdatedAt field for the ScheduledJob table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${flyway:defaultSchema}].trgUpdateScheduledJob
+IF OBJECT_ID('[${flyway:defaultSchema}].[trgUpdateScheduledJob]', 'TR') IS NOT NULL
+    DROP TRIGGER [${flyway:defaultSchema}].[trgUpdateScheduledJob];
 GO
 CREATE TRIGGER [${flyway:defaultSchema}].trgUpdateScheduledJob
 ON [${flyway:defaultSchema}].[ScheduledJob]
@@ -6107,7 +6447,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateScheduledJob] TO [cdp_Develo
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ScheduledJob
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteScheduledJob]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteScheduledJob]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteScheduledJob];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteScheduledJob]
@@ -6138,6 +6479,31 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteScheduledJob] TO [cdp_Integr
 
 
 
+/* SQL text to update entity field related entity name field map for entity field ID 4963443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='4963443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='User'
+
+/* SQL text to update entity field related entity name field map for entity field ID 0263443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='0263443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ResourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 5063443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='5063443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='ResourceType'
+
+/* SQL text to update entity field related entity name field map for entity field ID 0E63443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='0E63443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='Role'
+
+/* SQL text to update entity field related entity name field map for entity field ID 1163443E-F36B-1410-8DCA-00021F8B792E */
+EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
+         @EntityFieldID='1163443E-F36B-1410-8DCA-00021F8B792E',
+         @RelatedEntityNameFieldMap='User'
+
 /* spDelete SQL for Conversation Details */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -6151,7 +6517,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteScheduledJob] TO [cdp_Integr
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ConversationDetail
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteConversationDetail]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteConversationDetail]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteConversationDetail];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteConversationDetail]
@@ -6398,7 +6765,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversationDetail] TO [cdp_
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR Conversation
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${flyway:defaultSchema}].[spDeleteConversation]
+IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteConversation]', 'P') IS NOT NULL
+    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteConversation];
 GO
 
 CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteConversation]
@@ -6577,8 +6945,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '80bf04b1-c88a-4e23-a343-0c9b09207c93'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'ScheduledJob')
+         WHERE ID = 'bac1c342-aa76-4821-980f-084b6a4e658d'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'ScheduledJob')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -6611,8 +6979,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
          )
          VALUES
          (
-            '80bf04b1-c88a-4e23-a343-0c9b09207c93',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            'bac1c342-aa76-4821-980f-084b6a4e658d',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100025,
             'ScheduledJob',
             'Scheduled Job',
@@ -6642,8 +7010,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '59887993-956a-4364-bd2e-78730656c38d'  OR 
-               (EntityID = '257A461E-AC75-4AE5-AADC-124D2CA1F383' AND Name = 'ExecutedByUser')
+         WHERE ID = 'd2685b34-024e-4412-b5c7-4ea5eba0a6f0'  OR 
+               (EntityID = '05853432-5E13-4F2A-8618-77857ADF17FA' AND Name = 'ExecutedByUser')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -6676,8 +7044,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
          )
          VALUES
          (
-            '59887993-956a-4364-bd2e-78730656c38d',
-            '257A461E-AC75-4AE5-AADC-124D2CA1F383', -- Entity: MJ: Scheduled Job Runs
+            'd2685b34-024e-4412-b5c7-4ea5eba0a6f0',
+            '05853432-5E13-4F2A-8618-77857ADF17FA', -- Entity: MJ: Scheduled Job Runs
             100026,
             'ExecutedByUser',
             'Executed By User',
@@ -6707,8 +7075,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '7b677da7-bb9d-4e7d-994e-ea2d498bee8b'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'JobType')
+         WHERE ID = '7ced4f5b-2a51-4d30-968a-7cb0c302f5be'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'JobType')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -6741,9 +7109,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
          )
          VALUES
          (
-            '7b677da7-bb9d-4e7d-994e-ea2d498bee8b',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100059,
+            '7ced4f5b-2a51-4d30-968a-7cb0c302f5be',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100057,
             'JobType',
             'Job Type',
             NULL,
@@ -6772,8 +7140,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '5e807b26-e743-4f10-ad40-9db1bd298630'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'OwnerUser')
+         WHERE ID = 'c8ac395c-04d8-4e85-881b-d4f5a70b759d'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'OwnerUser')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -6806,9 +7174,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
          )
          VALUES
          (
-            '5e807b26-e743-4f10-ad40-9db1bd298630',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100060,
+            'c8ac395c-04d8-4e85-881b-d4f5a70b759d',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100058,
             'OwnerUser',
             'Owner User',
             NULL,
@@ -6837,8 +7205,8 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '77611f73-1175-4d08-bb11-316df7bed3c6'  OR 
-               (EntityID = '302A55B5-AEF0-4C57-8F35-73EE6B17E234' AND Name = 'NotifyUser')
+         WHERE ID = '0ea25537-7efd-4fb3-83dd-2e876202d09d'  OR 
+               (EntityID = 'F48D2E6C-61C8-46B8-A617-C8228601EB3C' AND Name = 'NotifyUser')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -6871,9 +7239,9 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
          )
          VALUES
          (
-            '77611f73-1175-4d08-bb11-316df7bed3c6',
-            '302A55B5-AEF0-4C57-8F35-73EE6B17E234', -- Entity: MJ: Scheduled Jobs
-            100061,
+            '0ea25537-7efd-4fb3-83dd-2e876202d09d',
+            'F48D2E6C-61C8-46B8-A617-C8228601EB3C', -- Entity: MJ: Scheduled Jobs
+            100059,
             'NotifyUser',
             'Notify User',
             NULL,
@@ -6901,15 +7269,15 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteConversation] TO [cdp_Develo
 /* Generated Validation Functions for MJ: Scheduled Job Runs */
 -- CHECK constraint for MJ: Scheduled Job Runs: Field: Details was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '287E317F-BF26-F011-A770-AC1A3D21423D', GETUTCDATE(), 'TypeScript','Approved', '([Details] IS NULL OR isjson([Details])=(1))', 'public ValidateDetailsIfPresentMustBeJson(result: ValidationResult) {
-	if (this.Details !== null && typeof this.Details === "string" && this.Details.trim() !== "") {
+                      VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '287E317F-BF26-F011-A770-AC1A3D21423D', GETUTCDATE(), 'TypeScript','Approved', '([Details] IS NULL OR isjson([Details])=(1))', 'public ValidateDetailsAsJson(result: ValidationResult) {
+	if (this.Details != null) {
 		try {
 			JSON.parse(this.Details);
 		} catch (e) {
-			result.Errors.push(new ValidationErrorInfo("Details", "The Details field must contain valid JSON if it is provided.", this.Details, ValidationErrorType.Failure));
+			result.Errors.push(new ValidationErrorInfo("Details", "Details must be a valid JSON if provided.", this.Details, ValidationErrorType.Failure));
 		}
 	}
-}', 'This rule ensures that if there is any information in the Details field, it must be valid JSON data. If the Details field is empty, this rule is always satisfied.', 'ValidateDetailsIfPresentMustBeJson', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '8509832E-7783-4129-8493-1327FDDB1FF7');
+}', 'This rule ensures that if the Details field is not empty, it must contain a valid JSON value.', 'ValidateDetailsAsJson', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '796599EF-B0C9-474C-845B-7C030B55159F');
   
             
 
@@ -6917,14 +7285,14 @@ INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByMo
 -- CHECK constraint for MJ: Scheduled Jobs: Field: Configuration was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
                       VALUES ((SELECT ID FROM ${flyway:defaultSchema}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators'), '287E317F-BF26-F011-A770-AC1A3D21423D', GETUTCDATE(), 'TypeScript','Approved', '([Configuration] IS NULL OR isjson([Configuration])=(1))', 'public ValidateConfigurationIsJson(result: ValidationResult) {
-	if (this.Configuration !== null && typeof this.Configuration === "string") {
+	if (this.Configuration != null) {
 		try {
 			JSON.parse(this.Configuration);
 		} catch (e) {
-			result.Errors.push(new ValidationErrorInfo("Configuration", "When provided, the Configuration field must contain valid JSON.", this.Configuration, ValidationErrorType.Failure));
+			result.Errors.push(new ValidationErrorInfo("Configuration", "If specified, Configuration must be valid JSON.", this.Configuration, ValidationErrorType.Failure));
 		}
 	}
-}', 'This rule ensures that if the Configuration field is not empty, it must contain valid JSON data.', 'ValidateConfigurationIsJson', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '0475C76C-F2CC-47CF-9751-3E4DD9C9A177');
+}', 'This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.', 'ValidateConfigurationIsJson', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'AC6D67F0-D805-4E42-9C4A-34E136107B46');
   
             
 

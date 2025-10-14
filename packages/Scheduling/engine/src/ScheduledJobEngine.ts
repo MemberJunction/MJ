@@ -361,7 +361,6 @@ export class SchedulingEngine extends SchedulingEngineBase {
         } else {
             job.FailureCount++;
         }
-        job.LastRunID = runId;
         job.LastRunAt = new Date();
         job.NextRunAt = CronExpressionHelper.GetNextRunTime(
             job.CronExpression,

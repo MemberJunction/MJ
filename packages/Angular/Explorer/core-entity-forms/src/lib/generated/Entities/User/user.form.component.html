@@ -484,19 +484,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Dashboard User States" [Visible]="record.IsSaved"> 
-                        MJ: Dashboard User States
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User States','UserID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Dashboard User States')"
-                            [AllowLoad]="IsCurrentTab('MJ: Dashboard User States')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: Dashboard User Preferences" [Visible]="record.IsSaved"> 
                         MJ: Dashboard User Preferences
                     </mj-tab>
@@ -505,6 +492,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','UserID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
                             [AllowLoad]="IsCurrentTab('MJ: Dashboard User Preferences')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Dashboard User States" [Visible]="record.IsSaved"> 
+                        MJ: Dashboard User States
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User States','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Dashboard User States')"
+                            [AllowLoad]="IsCurrentTab('MJ: Dashboard User States')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -531,6 +531,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Public Links','UserID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Public Links')"
                             [AllowLoad]="IsCurrentTab('MJ: Public Links')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Scheduled Jobs" [Visible]="record.IsSaved"> 
+                        MJ: Scheduled Jobs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','NotifyUserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
+                            [AllowLoad]="IsCurrentTab('MJ: Scheduled Jobs')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    
@@ -614,6 +627,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Scheduled Jobs" [Visible]="record.IsSaved"> 
+                        MJ: Scheduled Jobs
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','OwnerUserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
+                            [AllowLoad]="IsCurrentTab('MJ: Scheduled Jobs')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: AI Agent Runs" [Visible]="record.IsSaved"> 
                         MJ: AI Agent Runs
                     </mj-tab>
@@ -640,19 +666,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Scheduled Jobs" [Visible]="record.IsSaved"> 
-                        MJ: Scheduled Jobs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','OwnerUserID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
-                            [AllowLoad]="IsCurrentTab('MJ: Scheduled Jobs')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
                         MJ: Tasks
                     </mj-tab>
@@ -661,19 +674,6 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','UserID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Tasks')"
                             [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
-                    <mj-tab Name="MJ: Scheduled Jobs" [Visible]="record.IsSaved"> 
-                        MJ: Scheduled Jobs
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Scheduled Jobs','NotifyUserID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Scheduled Jobs')"
-                            [AllowLoad]="IsCurrentTab('MJ: Scheduled Jobs')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

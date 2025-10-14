@@ -19,7 +19,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, AIVendorEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, EnvironmentEntity, AIAgentActionEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, ScheduledJobEntity, QueryEntityEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, ConversationArtifactEntity, AIAgentPromptEntity, ComponentLibraryEntity, DashboardUserPreferenceEntity, QueryParameterEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
+import { ScheduledActionEntity, ScheduledActionParamEntity, ExplorerNavigationItemEntity, GeneratedCodeCategoryEntity, AIAgentModelEntity, ComponentRegistryEntity, AIAgentNoteTypeEntity, ComponentDependencyEntity, AIAgentRunEntity, AIVendorEntity, TaskTypeEntity, AIConfigurationEntity, AIAgentEntity, AIAgentStepEntity, AIModelCostEntity, AIPromptModelEntity, AIAgentTypeEntity, AIAgentNoteEntity, EnvironmentEntity, AIAgentActionEntity, TaskDependencyEntity, CollectionArtifactEntity, AIModelPriceTypeEntity, CollectionEntity, RecordLinkEntity, AIPromptEntity, AIResultCacheEntity, AIPromptCategoryEntity, AIPromptTypeEntity, CompanyEntity, EmployeeEntity, UserFavoriteEntity, EmployeeCompanyIntegrationEntity, EmployeeRoleEntity, EmployeeSkillEntity, RoleEntity, SkillEntity, IntegrationURLFormatEntity, IntegrationEntity, CompanyIntegrationEntity, EntityFieldEntity, EntityEntity, UserEntity, EntityRelationshipEntity, UserRecordLogEntity, UserViewEntity, CompanyIntegrationRunEntity, CompanyIntegrationRunDetailEntity, ErrorLogEntity, ApplicationEntity, ApplicationEntityEntity, EntityPermissionEntity, UserApplicationEntityEntity, UserApplicationEntity, CompanyIntegrationRunAPILogEntity, ListEntity, ListDetailEntity, UserViewRunEntity, UserViewRunDetailEntity, WorkflowRunEntity, WorkflowEntity, WorkflowEngineEntity, RecordChangeEntity, UserRoleEntity, RowLevelSecurityFilterEntity, AuditLogEntity, AuthorizationEntity, AuthorizationRoleEntity, AuditLogTypeEntity, EntityFieldValueEntity, AIModelEntity, AIActionEntity, AIModelActionEntity, EntityAIActionEntity, AIModelTypeEntity, QueueTypeEntity, QueueEntity, QueueTaskEntity, DashboardEntity, OutputTriggerTypeEntity, OutputFormatTypeEntity, OutputDeliveryTypeEntity, ReportEntity, ReportSnapshotEntity, ResourceTypeEntity, TagEntity, TaggedItemEntity, WorkspaceEntity, WorkspaceItemEntity, DatasetEntity, DatasetItemEntity, ConversationDetailEntity, ConversationEntity, UserNotificationEntity, SchemaInfoEntity, CompanyIntegrationRecordMapEntity, RecordMergeLogEntity, RecordMergeDeletionLogEntity, QueryFieldEntity, QueryCategoryEntity, QueryEntity, QueryPermissionEntity, VectorIndexEntity, EntityDocumentTypeEntity, EntityDocumentRunEntity, VectorDatabaseEntity, EntityRecordDocumentEntity, EntityDocumentEntity, DataContextItemEntity, DataContextEntity, UserViewCategoryEntity, DashboardCategoryEntity, ReportCategoryEntity, FileStorageProviderEntity, FileEntity, FileCategoryEntity, FileEntityRecordLinkEntity, VersionInstallationEntity, DuplicateRunDetailMatchEntity, EntityDocumentSettingEntity, EntitySettingEntity, DuplicateRunEntity, DuplicateRunDetailEntity, ApplicationSettingEntity, ActionCategoryEntity, EntityActionEntity, EntityActionInvocationEntity, ActionAuthorizationEntity, EntityActionInvocationTypeEntity, ActionEntity, EntityActionFilterEntity, ActionFilterEntity, ActionContextTypeEntity, ActionResultCodeEntity, ActionContextEntity, ActionExecutionLogEntity, ActionParamEntity, ActionLibraryEntity, LibraryEntity, ListCategoryEntity, CommunicationProviderEntity, CommunicationRunEntity, CommunicationProviderMessageTypeEntity, CommunicationLogEntity, CommunicationBaseMessageTypeEntity, TemplateEntity, TemplateCategoryEntity, TemplateContentEntity, TemplateParamEntity, TemplateContentTypeEntity, RecommendationEntity, RecommendationProviderEntity, RecommendationRunEntity, RecommendationItemEntity, EntityCommunicationMessageTypeEntity, EntityCommunicationFieldEntity, RecordChangeReplayRunEntity, LibraryItemEntity, EntityRelationshipDisplayComponentEntity, EntityActionParamEntity, ResourcePermissionEntity, ResourceLinkEntity, AIAgentArtifactTypeEntity, ConversationArtifactVersionEntity, AIAgentRequestEntity, AIModelVendorEntity, AIVendorTypeDefinitionEntity, ReportUserStateEntity, QueryEntityEntity, ScheduledJobRunEntity, DashboardUserStateEntity, ComponentEntity, AccessControlRuleEntity, PublicLinkEntity, ArtifactTypeEntity, AIVendorTypeEntity, ArtifactEntity, ConversationArtifactEntity, AIAgentPromptEntity, ComponentLibraryEntity, ScheduledJobTypeEntity, DashboardUserPreferenceEntity, QueryParameterEntity, AIAgentPermissionEntity, AIAgentRelationshipEntity, ComponentLibraryLinkEntity, ContentProcessRunEntity, ContentSourceEntity, ContentSourceParamEntity, ContentSourceTypeEntity, ContentSourceTypeParamEntity, ContentTypeEntity, ContentTypeAttributeEntity, ContentFileTypeEntity, ContentItemEntity, ContentItemAttributeEntity, ContentItemTagEntity, GeneratedCodeEntity, ScheduledJobEntity, AIPromptRunEntity, AIAgentRunStepEntity, ConversationDetailArtifactEntity, TaskEntity, ProjectEntity, ConversationArtifactPermissionEntity, AIModelPriceUnitTypeEntity, ArtifactVersionEntity, AIAgentStepPathEntity, AIAgentLearningCycleEntity, ReportVersionEntity, AIConfigurationParamEntity, ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -1757,11 +1757,11 @@ each time the agent processes a prompt step.`})
     @MaxLength(16)
     RootLastRunID?: string;
         
-    @Field(() => [MJAIAgentRun_])
-    MJ_AIAgentRuns_ParentRunIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
-    
     @Field(() => [MJAIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: MJAIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
+    
+    @Field(() => [MJAIAgentRun_])
+    MJ_AIAgentRuns_ParentRunIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
     
     @Field(() => [MJAIPromptRun_])
     MJ_AIPromptRuns_AgentRunIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -2070,17 +2070,6 @@ export class MJAIAgentRunResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAIAgentRun_])
-    async MJ_AIAgentRuns_ParentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ParentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentRunStep_])
     async MJ_AIAgentRunSteps_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
@@ -2089,6 +2078,17 @@ export class MJAIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [AgentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentRun_])
+    async MJ_AIAgentRuns_ParentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ParentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
         return result;
     }
         
@@ -2162,11 +2162,11 @@ export class MJAIVendor_ {
     @Field(() => [MJAIResultCache_])
     AIResultCache_VendorIDArray: MJAIResultCache_[]; // Link to AIResultCache
     
-    @Field(() => [MJAIPromptRun_])
-    MJ_AIPromptRuns_VendorIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
-    
     @Field(() => [MJAIModelVendor_])
     MJ_AIModelVendors_VendorIDArray: MJAIModelVendor_[]; // Link to MJ_AIModelVendors
+    
+    @Field(() => [MJAIPromptRun_])
+    MJ_AIPromptRuns_VendorIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
     
     @Field(() => [MJAIVendorType_])
     MJ_AIVendorTypes_VendorIDArray: MJAIVendorType_[]; // Link to MJ_AIVendorTypes
@@ -2293,17 +2293,6 @@ export class MJAIVendorResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAIPromptRun_])
-    async MJ_AIPromptRuns_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [VendorID]='${mjaivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIModelVendor_])
     async MJ_AIModelVendors_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Model Vendors', userPayload);
@@ -2312,6 +2301,17 @@ export class MJAIVendorResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIModelVendors] WHERE [VendorID]='${mjaivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Vendors', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Model Vendors', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIPromptRun_])
+    async MJ_AIPromptRuns_VendorIDArray(@Root() mjaivendor_: MJAIVendor_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [VendorID]='${mjaivendor_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
         
@@ -2373,457 +2373,6 @@ export class MJAIVendorResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: AI Vendors', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for MJ: Scheduled Job Runs
-//****************************************************************************
-@ObjectType({ description: `Records execution history for scheduled jobs. Provides uniform tracking across all job types. Each record represents one execution attempt of a scheduled job.` })
-export class ScheduledJobRun_ {
-    @Field() 
-    @MaxLength(16)
-    ID: string;
-        
-    @Field() 
-    @MaxLength(16)
-    ScheduledJobID: string;
-        
-    @Field({description: `Timestamp when this job execution began. Set immediately before calling the job plugin's Execute method.`}) 
-    @MaxLength(10)
-    StartedAt: Date;
-        
-    @Field({nullable: true, description: `Timestamp when this job execution completed (successfully or with failure). NULL while the job is still running.`}) 
-    @MaxLength(10)
-    CompletedAt?: Date;
-        
-    @Field({description: `Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.`}) 
-    @MaxLength(40)
-    Status: string;
-        
-    @Field(() => Boolean, {nullable: true, description: `Whether the job execution completed successfully. NULL while running, TRUE if successful, FALSE if failed. This is the job-level success from the plugin's Execute method, separate from domain-specific success tracking.`}) 
-    Success?: boolean;
-        
-    @Field({nullable: true, description: `Error message if the job failed. NULL for successful runs. Contains exception messages or error details from the plugin's Execute method.`}) 
-    ErrorMessage?: string;
-        
-    @Field({nullable: true, description: `Job-type specific execution details stored as JSON. May include references to domain-specific run records (e.g., {"AgentRunID": "...", "TokensUsed": 5000}), performance metrics, or other execution metadata. Schema is defined by the job type plugin.`}) 
-    Details?: string;
-        
-    @Field({nullable: true, description: `User context under which the job was executed. Typically the OwnerUserID from the schedule, but can be overridden in job-specific configuration.`}) 
-    @MaxLength(16)
-    ExecutedByUserID?: string;
-        
-    @Field({nullable: true, description: `Timestamp when this execution was queued (for ConcurrencyMode=Queue). NULL for immediate executions. When set, indicates this run is waiting for a previous execution to complete before starting.`}) 
-    @MaxLength(10)
-    QueuedAt?: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(400)
-    ScheduledJob: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    ExecutedByUser?: string;
-        
-    @Field(() => [ScheduledJob_])
-    MJ_ScheduledJobs_LastRunIDArray: ScheduledJob_[]; // Link to MJ_ScheduledJobs
-    
-    @Field(() => [AIAgentRun_])
-    MJ_AIAgentRuns_ScheduledJobRunIDArray: AIAgentRun_[]; // Link to MJ_AIAgentRuns
-    
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: Scheduled Job Runs
-//****************************************************************************
-@InputType()
-export class CreateScheduledJobRunInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    ScheduledJobID?: string;
-
-    @Field({ nullable: true })
-    StartedAt?: Date;
-
-    @Field({ nullable: true })
-    CompletedAt: Date | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    Success: boolean | null;
-
-    @Field({ nullable: true })
-    ErrorMessage: string | null;
-
-    @Field({ nullable: true })
-    Details: string | null;
-
-    @Field({ nullable: true })
-    ExecutedByUserID: string | null;
-
-    @Field({ nullable: true })
-    QueuedAt: Date | null;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: Scheduled Job Runs
-//****************************************************************************
-@InputType()
-export class UpdateScheduledJobRunInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    ScheduledJobID?: string;
-
-    @Field({ nullable: true })
-    StartedAt?: Date;
-
-    @Field({ nullable: true })
-    CompletedAt?: Date | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field(() => Boolean, { nullable: true })
-    Success?: boolean | null;
-
-    @Field({ nullable: true })
-    ErrorMessage?: string | null;
-
-    @Field({ nullable: true })
-    Details?: string | null;
-
-    @Field({ nullable: true })
-    ExecutedByUserID?: string | null;
-
-    @Field({ nullable: true })
-    QueuedAt?: Date | null;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: Scheduled Job Runs
-//****************************************************************************
-@ObjectType()
-export class RunScheduledJobRunViewResult {
-    @Field(() => [ScheduledJobRun_])
-    Results: ScheduledJobRun_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ScheduledJobRun_)
-export class ScheduledJobRunResolver extends ResolverBase {
-    @Query(() => RunScheduledJobRunViewResult)
-    async RunScheduledJobRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunScheduledJobRunViewResult)
-    async RunScheduledJobRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunScheduledJobRunViewResult)
-    async RunScheduledJobRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: Scheduled Job Runs';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => ScheduledJobRun_, { nullable: true })
-    async ScheduledJobRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledJobRun_ | null> {
-        this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.MapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows && rows.length > 0 ? rows[0] : {})
-        return result;
-    }
-    
-    @FieldResolver(() => [ScheduledJob_])
-    async MJ_ScheduledJobs_LastRunIDArray(@Root() scheduledjobrun_: ScheduledJobRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [LastRunID]='${scheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [AIAgentRun_])
-    async MJ_AIAgentRuns_ScheduledJobRunIDArray(@Root() scheduledjobrun_: ScheduledJobRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ScheduledJobRunID]='${scheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
-        return result;
-    }
-        
-    @Mutation(() => ScheduledJobRun_)
-    async CreateScheduledJobRun(
-        @Arg('input', () => CreateScheduledJobRunInput) input: CreateScheduledJobRunInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: Scheduled Job Runs', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => ScheduledJobRun_)
-    async UpdateScheduledJobRun(
-        @Arg('input', () => UpdateScheduledJobRunInput) input: UpdateScheduledJobRunInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: Scheduled Job Runs', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => ScheduledJobRun_)
-    async DeleteScheduledJobRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: Scheduled Job Runs', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
-// ENTITY CLASS for MJ: Scheduled Job Types
-//****************************************************************************
-@ObjectType({ description: `Defines types of schedulable jobs and their plugin implementations. Each job type represents a different kind of work that can be scheduled (e.g., Agents, Actions, Reports).` })
-export class ScheduledJobType_ {
-    @Field() 
-    @MaxLength(16)
-    ID: string;
-        
-    @Field({description: `Unique name identifying this job type (e.g., Agent, Action, Report).`}) 
-    @MaxLength(200)
-    Name: string;
-        
-    @Field({nullable: true, description: `Human-readable description of what this job type does and when it should be used.`}) 
-    Description?: string;
-        
-    @Field({description: `TypeScript class name that implements BaseScheduledJob for this job type. Used by ClassFactory to instantiate the correct plugin at runtime.`}) 
-    @MaxLength(510)
-    DriverClass: string;
-        
-    @Field({nullable: true, description: `Name of the entity that stores execution records for this job type (e.g., "MJ: AI Agent Runs", "Action Execution Logs"). Used for generic UI linking to domain-specific run records. NULL if job type uses ScheduledJobRun as its only execution record.`}) 
-    @MaxLength(510)
-    DomainRunEntity?: string;
-        
-    @Field({nullable: true, description: `Name of the foreign key field in the DomainRunEntity that links back to ScheduledJobRun (e.g., "ScheduleID"). Used for querying related domain runs. NULL if DomainRunEntity is NULL.`}) 
-    @MaxLength(200)
-    DomainRunEntityFKey?: string;
-        
-    @Field(() => Boolean, {description: `Indicates whether this job type supports sending notifications on completion or failure.`}) 
-    NotificationsAvailable: boolean;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field(() => [ScheduledJob_])
-    MJ_ScheduledJobs_JobTypeIDArray: ScheduledJob_[]; // Link to MJ_ScheduledJobs
-    
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: Scheduled Job Types
-//****************************************************************************
-@InputType()
-export class CreateScheduledJobTypeInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description: string | null;
-
-    @Field({ nullable: true })
-    DriverClass?: string;
-
-    @Field({ nullable: true })
-    DomainRunEntity: string | null;
-
-    @Field({ nullable: true })
-    DomainRunEntityFKey: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    NotificationsAvailable?: boolean;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: Scheduled Job Types
-//****************************************************************************
-@InputType()
-export class UpdateScheduledJobTypeInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description?: string | null;
-
-    @Field({ nullable: true })
-    DriverClass?: string;
-
-    @Field({ nullable: true })
-    DomainRunEntity?: string | null;
-
-    @Field({ nullable: true })
-    DomainRunEntityFKey?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    NotificationsAvailable?: boolean;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: Scheduled Job Types
-//****************************************************************************
-@ObjectType()
-export class RunScheduledJobTypeViewResult {
-    @Field(() => [ScheduledJobType_])
-    Results: ScheduledJobType_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ScheduledJobType_)
-export class ScheduledJobTypeResolver extends ResolverBase {
-    @Query(() => RunScheduledJobTypeViewResult)
-    async RunScheduledJobTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunScheduledJobTypeViewResult)
-    async RunScheduledJobTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunScheduledJobTypeViewResult)
-    async RunScheduledJobTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: Scheduled Job Types';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => ScheduledJobType_, { nullable: true })
-    async ScheduledJobType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledJobType_ | null> {
-        this.CheckUserReadPermissions('MJ: Scheduled Job Types', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Types', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.MapFieldNamesToCodeNames('MJ: Scheduled Job Types', rows && rows.length > 0 ? rows[0] : {})
-        return result;
-    }
-    
-    @FieldResolver(() => [ScheduledJob_])
-    async MJ_ScheduledJobs_JobTypeIDArray(@Root() scheduledjobtype_: ScheduledJobType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [JobTypeID]='${scheduledjobtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
-        return result;
-    }
-        
-    @Mutation(() => ScheduledJobType_)
-    async CreateScheduledJobType(
-        @Arg('input', () => CreateScheduledJobTypeInput) input: CreateScheduledJobTypeInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: Scheduled Job Types', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => ScheduledJobType_)
-    async UpdateScheduledJobType(
-        @Arg('input', () => UpdateScheduledJobTypeInput) input: UpdateScheduledJobTypeInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: Scheduled Job Types', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => ScheduledJobType_)
-    async DeleteScheduledJobType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: Scheduled Job Types', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -3042,14 +2591,14 @@ export class MJAIConfiguration_ {
     @Field(() => [MJAIAgentPrompt_])
     MJ_AIAgentPrompts_ConfigurationIDArray: MJAIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
-    @Field(() => [MJAIPromptRun_])
-    MJ_AIPromptRuns_ConfigurationIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
+    @Field(() => [MJAIPromptModel_])
+    MJ_AIPromptModels_ConfigurationIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
     
     @Field(() => [MJAIResultCache_])
     AIResultCache_ConfigurationIDArray: MJAIResultCache_[]; // Link to AIResultCache
     
-    @Field(() => [MJAIPromptModel_])
-    MJ_AIPromptModels_ConfigurationIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
+    @Field(() => [MJAIPromptRun_])
+    MJ_AIPromptRuns_ConfigurationIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
     
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_ConfigurationIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
@@ -3194,14 +2743,14 @@ export class MJAIConfigurationResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAIPromptRun_])
-    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
+    @FieldResolver(() => [MJAIPromptModel_])
+    async MJ_AIPromptModels_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${mjaiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [ConfigurationID]='${mjaiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
         
@@ -3216,14 +2765,14 @@ export class MJAIConfigurationResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAIPromptModel_])
-    async MJ_AIPromptModels_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
+    @FieldResolver(() => [MJAIPromptRun_])
+    async MJ_AIPromptRuns_ConfigurationIDArray(@Root() mjaiconfiguration_: MJAIConfiguration_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [ConfigurationID]='${mjaiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptRuns] WHERE [ConfigurationID]='${mjaiconfiguration_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Runs', rows);
         return result;
     }
         
@@ -3438,11 +2987,11 @@ if this limit is exceeded.`})
     @MaxLength(16)
     RootParentID?: string;
         
-    @Field(() => [MJAIAgentAction_])
-    AIAgentActions_AgentIDArray: MJAIAgentAction_[]; // Link to AIAgentActions
-    
     @Field(() => [MJAIAgentModel_])
     AIAgentModels_AgentIDArray: MJAIAgentModel_[]; // Link to AIAgentModels
+    
+    @Field(() => [MJAIAgentAction_])
+    AIAgentActions_AgentIDArray: MJAIAgentAction_[]; // Link to AIAgentActions
     
     @Field(() => [MJAIAgentLearningCycle_])
     AIAgentLearningCycles_AgentIDArray: MJAIAgentLearningCycle_[]; // Link to AIAgentLearningCycles
@@ -3790,17 +3339,6 @@ export class MJAIAgentResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAIAgentAction_])
-    async AIAgentActions_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('AI Agent Actions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [AgentID]='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentModel_])
     async AIAgentModels_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('AI Agent Models', userPayload);
@@ -3809,6 +3347,17 @@ export class MJAIAgentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentModels] WHERE [AgentID]='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Models', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentAction_])
+    async AIAgentActions_AgentIDArray(@Root() mjaiagent_: MJAIAgent_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [AgentID]='${mjaiagent_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', rows);
         return result;
     }
         
@@ -5322,20 +4871,20 @@ export class MJEnvironment_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => [MJCollection_])
-    MJ_Collections_EnvironmentIDArray: MJCollection_[]; // Link to MJ_Collections
-    
     @Field(() => [MJProject_])
     MJ_Projects_EnvironmentIDArray: MJProject_[]; // Link to MJ_Projects
+    
+    @Field(() => [MJCollection_])
+    MJ_Collections_EnvironmentIDArray: MJCollection_[]; // Link to MJ_Collections
     
     @Field(() => [MJArtifact_])
     MJ_Artifacts_EnvironmentIDArray: MJArtifact_[]; // Link to MJ_Artifacts
     
-    @Field(() => [MJDashboard_])
-    Dashboards_EnvironmentIDArray: MJDashboard_[]; // Link to Dashboards
-    
     @Field(() => [MJTask_])
     MJ_Tasks_EnvironmentIDArray: MJTask_[]; // Link to MJ_Tasks
+    
+    @Field(() => [MJDashboard_])
+    Dashboards_EnvironmentIDArray: MJDashboard_[]; // Link to Dashboards
     
     @Field(() => [MJReport_])
     Reports_EnvironmentIDArray: MJReport_[]; // Link to Reports
@@ -5449,17 +4998,6 @@ export class MJEnvironmentResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJCollection_])
-    async MJ_Collections_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Collections', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCollections] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJProject_])
     async MJ_Projects_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Projects', userPayload);
@@ -5468,6 +5006,17 @@ export class MJEnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwProjects] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Projects', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Projects', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCollection_])
+    async MJ_Collections_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Collections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCollections] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows);
         return result;
     }
         
@@ -5482,17 +5031,6 @@ export class MJEnvironmentResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJDashboard_])
-    async Dashboards_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('Dashboards', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Dashboards', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJTask_])
     async MJ_Tasks_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
@@ -5501,6 +5039,17 @@ export class MJEnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTasks] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDashboard_])
+    async Dashboards_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Dashboards', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboards] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Dashboards', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Dashboards', rows);
         return result;
     }
         
@@ -6893,11 +6442,11 @@ export class MJAIPrompt_ {
     @Field(() => [MJAIPrompt_])
     AIPrompts_ResultSelectorPromptIDArray: MJAIPrompt_[]; // Link to AIPrompts
     
-    @Field(() => [MJAIAgentPrompt_])
-    MJ_AIAgentPrompts_PromptIDArray: MJAIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
-    
     @Field(() => [MJAIPromptModel_])
     MJ_AIPromptModels_PromptIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
+    
+    @Field(() => [MJAIAgentPrompt_])
+    MJ_AIAgentPrompts_PromptIDArray: MJAIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
     
     @Field(() => [MJAIAgentStep_])
     MJ_AIAgentSteps_PromptIDArray: MJAIAgentStep_[]; // Link to MJ_AIAgentSteps
@@ -7333,17 +6882,6 @@ export class MJAIPromptResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAIAgentPrompt_])
-    async MJ_AIAgentPrompts_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIPromptModel_])
     async MJ_AIPromptModels_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
@@ -7352,6 +6890,17 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentPrompt_])
+    async MJ_AIAgentPrompts_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
         return result;
     }
         
@@ -12407,11 +11956,11 @@ export class MJUser_ {
     @Field(() => [MJReportUserState_])
     MJ_ReportUserStates_UserIDArray: MJReportUserState_[]; // Link to MJ_ReportUserStates
     
-    @Field(() => [MJDashboardUserState_])
-    MJ_DashboardUserStates_UserIDArray: MJDashboardUserState_[]; // Link to MJ_DashboardUserStates
-    
     @Field(() => [MJDashboardUserPreference_])
     MJ_DashboardUserPreferences_UserIDArray: MJDashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
+    
+    @Field(() => [MJDashboardUserState_])
+    MJ_DashboardUserStates_UserIDArray: MJDashboardUserState_[]; // Link to MJ_DashboardUserStates
     
     @Field(() => [MJArtifactVersion_])
     MJ_ArtifactVersions_UserIDArray: MJArtifactVersion_[]; // Link to MJ_ArtifactVersions
@@ -12419,8 +11968,11 @@ export class MJUser_ {
     @Field(() => [MJPublicLink_])
     MJ_PublicLinks_UserIDArray: MJPublicLink_[]; // Link to MJ_PublicLinks
     
-    @Field(() => [ScheduledJobRun_])
-    MJ_ScheduledJobRuns_ExecutedByUserIDArray: ScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
+    @Field(() => [MJScheduledJob_])
+    MJ_ScheduledJobs_NotifyUserIDArray: MJScheduledJob_[]; // Link to MJ_ScheduledJobs
+    
+    @Field(() => [MJScheduledJobRun_])
+    MJ_ScheduledJobRuns_ExecutedByUserIDArray: MJScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
     
     @Field(() => [MJResourcePermission_])
     ResourcePermissions_UserIDArray: MJResourcePermission_[]; // Link to ResourcePermissions
@@ -12437,20 +11989,17 @@ export class MJUser_ {
     @Field(() => [MJArtifact_])
     MJ_Artifacts_UserIDArray: MJArtifact_[]; // Link to MJ_Artifacts
     
+    @Field(() => [MJScheduledJob_])
+    MJ_ScheduledJobs_OwnerUserIDArray: MJScheduledJob_[]; // Link to MJ_ScheduledJobs
+    
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_UserIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
     
     @Field(() => [MJAIAgentPermission_])
     MJ_AIAgentPermissions_UserIDArray: MJAIAgentPermission_[]; // Link to MJ_AIAgentPermissions
     
-    @Field(() => [ScheduledJob_])
-    MJ_ScheduledJobs_OwnerUserIDArray: ScheduledJob_[]; // Link to MJ_ScheduledJobs
-    
     @Field(() => [MJTask_])
     MJ_Tasks_UserIDArray: MJTask_[]; // Link to MJ_Tasks
-    
-    @Field(() => [ScheduledJob_])
-    MJ_ScheduledJobs_NotifyUserIDArray: ScheduledJob_[]; // Link to MJ_ScheduledJobs
     
     @Field(() => [MJAIAgent_])
     AIAgents_OwnerUserIDArray: MJAIAgent_[]; // Link to AIAgents
@@ -13010,23 +12559,23 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJDashboardUserState_])
-    async MJ_DashboardUserStates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJDashboardUserPreference_])
     async MJ_DashboardUserPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDashboardUserState_])
+    async MJ_DashboardUserStates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
         return result;
@@ -13050,27 +12599,27 @@ export class MJUserResolverBase extends ResolverBase {
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwPublicLinks] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Public Links', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Artifact Versions', rows);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Public Links', rows);
         return result;
     }
         
-    @FieldResolver(() => [ScheduledJobRun_])
-    async MJ_ScheduledJobRuns_ExecutedByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
+    @FieldResolver(() => [MJScheduledJob_])
+    async MJ_ScheduledJobs_NotifyUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ExecutedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [NotifyUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows);
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
         return result;
     }
         
-    @FieldResolver(() => [ScheduledJobRun_])
-    async MJ_ScheduledJobRuns_ExecutedByUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+    @FieldResolver(() => [MJScheduledJobRun_])
+    async MJ_ScheduledJobRuns_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
         const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
         const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ExecutedByUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ExecutedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows);
         return result;
@@ -13131,6 +12680,17 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJScheduledJob_])
+    async MJ_ScheduledJobs_OwnerUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [OwnerUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIAgentRun_])
     async MJ_AIAgentRuns_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
@@ -13153,28 +12713,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [ScheduledJob_])
-    async MJ_ScheduledJobs_OwnerUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [OwnerUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [ScheduledJob_])
-    async MJ_ScheduledJobs_OwnerUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [OwnerUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJTask_])
     async MJ_Tasks_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Tasks', userPayload);
@@ -13183,28 +12721,6 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwTasks] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Tasks', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Tasks', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [ScheduledJob_])
-    async MJ_ScheduledJobs_NotifyUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [NotifyUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
-        return result;
-    }
-        
-    @FieldResolver(() => [ScheduledJob_])
-    async MJ_ScheduledJobs_NotifyUserIDArray(@Root() user_: User_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [NotifyUserID]='${user_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
         return result;
     }
         
@@ -39914,411 +39430,6 @@ export class MJReportUserStateResolver extends ResolverBase {
 }
 
 //****************************************************************************
-// ENTITY CLASS for MJ: Scheduled Jobs
-//****************************************************************************
-@ObjectType({ description: `Defines schedules for automated job execution across all schedulable types. Each record represents a scheduled job with its cron expression, configuration, and execution tracking.` })
-export class ScheduledJob_ {
-    @Field() 
-    @MaxLength(16)
-    ID: string;
-        
-    @Field() 
-    @MaxLength(16)
-    JobTypeID: string;
-        
-    @Field({description: `Human-readable name for this scheduled job. Should clearly identify what the job does.`}) 
-    @MaxLength(400)
-    Name: string;
-        
-    @Field({nullable: true, description: `Detailed description of the job's purpose, what it does, and any important notes about its execution.`}) 
-    Description?: string;
-        
-    @Field({description: `Cron expression defining when the job should execute (e.g., "0 30 9 * * MON-FRI" for weekdays at 9:30 AM). Uses standard cron syntax with seconds precision.`}) 
-    @MaxLength(240)
-    CronExpression: string;
-        
-    @Field({description: `IANA timezone identifier for interpreting the cron expression (e.g., "America/Chicago", "UTC"). Ensures consistent scheduling across different server locations.`}) 
-    @MaxLength(128)
-    Timezone: string;
-        
-    @Field({nullable: true, description: `Optional start date/time for when this schedule becomes active. Job will not execute before this time. NULL means active immediately upon creation.`}) 
-    @MaxLength(10)
-    StartAt?: Date;
-        
-    @Field({nullable: true, description: `Optional end date/time for when this schedule expires. Job will not execute after this time. NULL means no expiration.`}) 
-    @MaxLength(10)
-    EndAt?: Date;
-        
-    @Field({description: `Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.`}) 
-    @MaxLength(40)
-    Status: string;
-        
-    @Field({nullable: true, description: `Job-type specific configuration stored as JSON. Schema is defined by the ScheduledJobType plugin. For Agents: includes AgentID, StartingPayload, InitialMessage, etc. For Actions: includes ActionID and parameter mappings.`}) 
-    Configuration?: string;
-        
-    @Field({nullable: true, description: `User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.`}) 
-    @MaxLength(16)
-    OwnerUserID?: string;
-        
-    @Field({nullable: true, description: `Reference to the most recent execution of this schedule. Provides quick access to last run status and details.`}) 
-    @MaxLength(16)
-    LastRunID?: string;
-        
-    @Field({nullable: true, description: `Timestamp of the most recent execution. Updated after each run. Used for monitoring and dashboard displays.`}) 
-    @MaxLength(10)
-    LastRunAt?: Date;
-        
-    @Field({nullable: true, description: `Calculated timestamp of when this job should next execute based on the cron expression. Updated after each run. Used by scheduler to determine which jobs are due.`}) 
-    @MaxLength(10)
-    NextRunAt?: Date;
-        
-    @Field(() => Int, {description: `Total number of times this schedule has been executed, including both successful and failed runs.`}) 
-    RunCount: number;
-        
-    @Field(() => Int, {description: `Number of times this schedule has executed successfully (Success = true in ScheduledJobRun).`}) 
-    SuccessCount: number;
-        
-    @Field(() => Int, {description: `Number of times this schedule has executed but failed (Success = false in ScheduledJobRun).`}) 
-    FailureCount: number;
-        
-    @Field(() => Boolean, {description: `Whether to send notifications when the job completes successfully.`}) 
-    NotifyOnSuccess: boolean;
-        
-    @Field(() => Boolean, {description: `Whether to send notifications when the job fails. Defaults to true for alerting on failures.`}) 
-    NotifyOnFailure: boolean;
-        
-    @Field({nullable: true, description: `User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.`}) 
-    @MaxLength(16)
-    NotifyUserID?: string;
-        
-    @Field(() => Boolean, {description: `Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.`}) 
-    NotifyViaEmail: boolean;
-        
-    @Field(() => Boolean, {description: `Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.`}) 
-    NotifyViaInApp: boolean;
-        
-    @Field({nullable: true, description: `Unique token used for distributed locking across multiple server instances. Set when a server claims the job for execution. Prevents duplicate executions in multi-server environments.`}) 
-    @MaxLength(16)
-    LockToken?: string;
-        
-    @Field({nullable: true, description: `Timestamp when the lock was acquired. Used with ExpectedCompletionAt to detect stale locks from crashed server instances.`}) 
-    @MaxLength(10)
-    LockedAt?: Date;
-        
-    @Field({nullable: true, description: `Identifier of the server instance that currently holds the lock (e.g., "hostname-12345"). Used for troubleshooting and monitoring which server is executing which job.`}) 
-    @MaxLength(510)
-    LockedByInstance?: string;
-        
-    @Field({nullable: true, description: `Expected completion time for the current execution. If current time exceeds this and lock still exists, the lock is considered stale and can be claimed by another instance. Handles crashed server cleanup.`}) 
-    @MaxLength(10)
-    ExpectedCompletionAt?: Date;
-        
-    @Field({description: `Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.`}) 
-    @MaxLength(40)
-    ConcurrencyMode: string;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__CreatedAt: Date;
-        
-    @Field() 
-    @MaxLength(10)
-    _mj__UpdatedAt: Date;
-        
-    @Field() 
-    @MaxLength(200)
-    JobType: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    OwnerUser?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(200)
-    NotifyUser?: string;
-        
-    @Field(() => [ScheduledJobRun_])
-    MJ_ScheduledJobRuns_ScheduledJobIDArray: ScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
-    
-}
-
-//****************************************************************************
-// INPUT TYPE for MJ: Scheduled Jobs
-//****************************************************************************
-@InputType()
-export class CreateScheduledJobInput {
-    @Field({ nullable: true })
-    ID?: string;
-
-    @Field({ nullable: true })
-    JobTypeID?: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description: string | null;
-
-    @Field({ nullable: true })
-    CronExpression?: string;
-
-    @Field({ nullable: true })
-    Timezone?: string;
-
-    @Field({ nullable: true })
-    StartAt: Date | null;
-
-    @Field({ nullable: true })
-    EndAt: Date | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    Configuration: string | null;
-
-    @Field({ nullable: true })
-    OwnerUserID: string | null;
-
-    @Field({ nullable: true })
-    LastRunID: string | null;
-
-    @Field({ nullable: true })
-    LastRunAt: Date | null;
-
-    @Field({ nullable: true })
-    NextRunAt: Date | null;
-
-    @Field(() => Int, { nullable: true })
-    RunCount?: number;
-
-    @Field(() => Int, { nullable: true })
-    SuccessCount?: number;
-
-    @Field(() => Int, { nullable: true })
-    FailureCount?: number;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyOnSuccess?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyOnFailure?: boolean;
-
-    @Field({ nullable: true })
-    NotifyUserID: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaEmail?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaInApp?: boolean;
-
-    @Field({ nullable: true })
-    LockToken: string | null;
-
-    @Field({ nullable: true })
-    LockedAt: Date | null;
-
-    @Field({ nullable: true })
-    LockedByInstance: string | null;
-
-    @Field({ nullable: true })
-    ExpectedCompletionAt: Date | null;
-
-    @Field({ nullable: true })
-    ConcurrencyMode?: string;
-}
-    
-
-//****************************************************************************
-// INPUT TYPE for MJ: Scheduled Jobs
-//****************************************************************************
-@InputType()
-export class UpdateScheduledJobInput {
-    @Field()
-    ID: string;
-
-    @Field({ nullable: true })
-    JobTypeID?: string;
-
-    @Field({ nullable: true })
-    Name?: string;
-
-    @Field({ nullable: true })
-    Description?: string | null;
-
-    @Field({ nullable: true })
-    CronExpression?: string;
-
-    @Field({ nullable: true })
-    Timezone?: string;
-
-    @Field({ nullable: true })
-    StartAt?: Date | null;
-
-    @Field({ nullable: true })
-    EndAt?: Date | null;
-
-    @Field({ nullable: true })
-    Status?: string;
-
-    @Field({ nullable: true })
-    Configuration?: string | null;
-
-    @Field({ nullable: true })
-    OwnerUserID?: string | null;
-
-    @Field({ nullable: true })
-    LastRunID?: string | null;
-
-    @Field({ nullable: true })
-    LastRunAt?: Date | null;
-
-    @Field({ nullable: true })
-    NextRunAt?: Date | null;
-
-    @Field(() => Int, { nullable: true })
-    RunCount?: number;
-
-    @Field(() => Int, { nullable: true })
-    SuccessCount?: number;
-
-    @Field(() => Int, { nullable: true })
-    FailureCount?: number;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyOnSuccess?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyOnFailure?: boolean;
-
-    @Field({ nullable: true })
-    NotifyUserID?: string | null;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaEmail?: boolean;
-
-    @Field(() => Boolean, { nullable: true })
-    NotifyViaInApp?: boolean;
-
-    @Field({ nullable: true })
-    LockToken?: string | null;
-
-    @Field({ nullable: true })
-    LockedAt?: Date | null;
-
-    @Field({ nullable: true })
-    LockedByInstance?: string | null;
-
-    @Field({ nullable: true })
-    ExpectedCompletionAt?: Date | null;
-
-    @Field({ nullable: true })
-    ConcurrencyMode?: string;
-
-    @Field(() => [KeyValuePairInput], { nullable: true })
-    OldValues___?: KeyValuePairInput[];
-}
-    
-//****************************************************************************
-// RESOLVER for MJ: Scheduled Jobs
-//****************************************************************************
-@ObjectType()
-export class RunScheduledJobViewResult {
-    @Field(() => [ScheduledJob_])
-    Results: ScheduledJob_[];
-
-    @Field(() => String, {nullable: true})
-    UserViewRunID?: string;
-
-    @Field(() => Int, {nullable: true})
-    RowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    TotalRowCount: number;
-
-    @Field(() => Int, {nullable: true})
-    ExecutionTime: number;
-
-    @Field({nullable: true})
-    ErrorMessage?: string;
-
-    @Field(() => Boolean, {nullable: false})
-    Success: boolean;
-}
-
-@Resolver(ScheduledJob_)
-export class ScheduledJobResolver extends ResolverBase {
-    @Query(() => RunScheduledJobViewResult)
-    async RunScheduledJobViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunScheduledJobViewResult)
-    async RunScheduledJobViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-    }
-
-    @Query(() => RunScheduledJobViewResult)
-    async RunScheduledJobDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        input.EntityName = 'MJ: Scheduled Jobs';
-        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
-    }
-    @Query(() => ScheduledJob_, { nullable: true })
-    async ScheduledJob(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<ScheduledJob_ | null> {
-        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.MapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows && rows.length > 0 ? rows[0] : {})
-        return result;
-    }
-    
-    @FieldResolver(() => [ScheduledJobRun_])
-    async MJ_ScheduledJobRuns_ScheduledJobIDArray(@Root() scheduledjob_: ScheduledJob_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ScheduledJobID]='${scheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows);
-        return result;
-    }
-        
-    @Mutation(() => ScheduledJob_)
-    async CreateScheduledJob(
-        @Arg('input', () => CreateScheduledJobInput) input: CreateScheduledJobInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.CreateRecord('MJ: Scheduled Jobs', input, provider, userPayload, pubSub)
-    }
-        
-    @Mutation(() => ScheduledJob_)
-    async UpdateScheduledJob(
-        @Arg('input', () => UpdateScheduledJobInput) input: UpdateScheduledJobInput,
-        @Ctx() { providers, userPayload }: AppContext,
-        @PubSub() pubSub: PubSubEngine
-    ) {
-        const provider = GetReadWriteProvider(providers);
-        return this.UpdateRecord('MJ: Scheduled Jobs', input, provider, userPayload, pubSub);
-    }
-    
-    @Mutation(() => ScheduledJob_)
-    async DeleteScheduledJob(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        const provider = GetReadWriteProvider(providers);
-        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
-        return this.DeleteRecord('MJ: Scheduled Jobs', key, options, provider, userPayload, pubSub);
-    }
-    
-}
-
-//****************************************************************************
 // ENTITY CLASS for Query Entities
 //****************************************************************************
 @ObjectType({ description: `Tracks which entities are involved in a given query. The Queries table stores SQL and descriptions for stored queries that can be executed and serve as examples for AI.` })
@@ -40489,6 +39600,243 @@ export class MJQueryEntityResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Query Entities', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Scheduled Job Runs
+//****************************************************************************
+@ObjectType({ description: `Records execution history for scheduled jobs. Provides uniform tracking across all job types. Each record represents one execution attempt of a scheduled job.` })
+export class MJScheduledJobRun_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    ScheduledJobID: string;
+        
+    @Field({description: `Timestamp when this job execution began. Set immediately before calling the job plugin's Execute method.`}) 
+    @MaxLength(10)
+    StartedAt: Date;
+        
+    @Field({nullable: true, description: `Timestamp when this job execution completed (successfully or with failure). NULL while the job is still running.`}) 
+    @MaxLength(10)
+    CompletedAt?: Date;
+        
+    @Field({description: `Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether the job execution completed successfully. NULL while running, TRUE if successful, FALSE if failed. This is the job-level success from the plugin's Execute method, separate from domain-specific success tracking.`}) 
+    Success?: boolean;
+        
+    @Field({nullable: true, description: `Error message if the job failed. NULL for successful runs. Contains exception messages or error details from the plugin's Execute method.`}) 
+    ErrorMessage?: string;
+        
+    @Field({nullable: true, description: `Job-type specific execution details stored as JSON. May include references to domain-specific run records (e.g., {"AgentRunID": "...", "TokensUsed": 5000}), performance metrics, or other execution metadata. Schema is defined by the job type plugin.`}) 
+    Details?: string;
+        
+    @Field({nullable: true, description: `User context under which the job was executed. Typically the OwnerUserID from the schedule, but can be overridden in job-specific configuration.`}) 
+    @MaxLength(16)
+    ExecutedByUserID?: string;
+        
+    @Field({nullable: true, description: `Timestamp when this execution was queued (for ConcurrencyMode=Queue). NULL for immediate executions. When set, indicates this run is waiting for a previous execution to complete before starting.`}) 
+    @MaxLength(10)
+    QueuedAt?: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(400)
+    ScheduledJob: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    ExecutedByUser?: string;
+        
+    @Field(() => [MJAIAgentRun_])
+    MJ_AIAgentRuns_ScheduledJobRunIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Scheduled Job Runs
+//****************************************************************************
+@InputType()
+export class CreateMJScheduledJobRunInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ScheduledJobID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    CompletedAt: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Success: boolean | null;
+
+    @Field({ nullable: true })
+    ErrorMessage: string | null;
+
+    @Field({ nullable: true })
+    Details: string | null;
+
+    @Field({ nullable: true })
+    ExecutedByUserID: string | null;
+
+    @Field({ nullable: true })
+    QueuedAt: Date | null;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Scheduled Job Runs
+//****************************************************************************
+@InputType()
+export class UpdateMJScheduledJobRunInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ScheduledJobID?: string;
+
+    @Field({ nullable: true })
+    StartedAt?: Date;
+
+    @Field({ nullable: true })
+    CompletedAt?: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    Success?: boolean | null;
+
+    @Field({ nullable: true })
+    ErrorMessage?: string | null;
+
+    @Field({ nullable: true })
+    Details?: string | null;
+
+    @Field({ nullable: true })
+    ExecutedByUserID?: string | null;
+
+    @Field({ nullable: true })
+    QueuedAt?: Date | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Scheduled Job Runs
+//****************************************************************************
+@ObjectType()
+export class RunMJScheduledJobRunViewResult {
+    @Field(() => [MJScheduledJobRun_])
+    Results: MJScheduledJobRun_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJScheduledJobRun_)
+export class MJScheduledJobRunResolver extends ResolverBase {
+    @Query(() => RunMJScheduledJobRunViewResult)
+    async RunMJScheduledJobRunViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJScheduledJobRunViewResult)
+    async RunMJScheduledJobRunViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJScheduledJobRunViewResult)
+    async RunMJScheduledJobRunDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Scheduled Job Runs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJScheduledJobRun_, { nullable: true })
+    async MJScheduledJobRun(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJScheduledJobRun_ | null> {
+        this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJAIAgentRun_])
+    async MJ_AIAgentRuns_ScheduledJobRunIDArray(@Root() mjscheduledjobrun_: MJScheduledJobRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ScheduledJobRunID]='${mjscheduledjobrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJScheduledJobRun_)
+    async CreateMJScheduledJobRun(
+        @Arg('input', () => CreateMJScheduledJobRunInput) input: CreateMJScheduledJobRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Scheduled Job Runs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJScheduledJobRun_)
+    async UpdateMJScheduledJobRun(
+        @Arg('input', () => UpdateMJScheduledJobRunInput) input: UpdateMJScheduledJobRunInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Scheduled Job Runs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJScheduledJobRun_)
+    async DeleteMJScheduledJobRun(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Scheduled Job Runs', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -42919,6 +42267,206 @@ export class MJComponentLibraryResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Component Libraries', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Scheduled Job Types
+//****************************************************************************
+@ObjectType({ description: `Defines types of schedulable jobs and their plugin implementations. Each job type represents a different kind of work that can be scheduled (e.g., Agents, Actions, Reports).` })
+export class MJScheduledJobType_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field({description: `Unique name identifying this job type (e.g., Agent, Action, Report).`}) 
+    @MaxLength(200)
+    Name: string;
+        
+    @Field({nullable: true, description: `Human-readable description of what this job type does and when it should be used.`}) 
+    Description?: string;
+        
+    @Field({description: `TypeScript class name that implements BaseScheduledJob for this job type. Used by ClassFactory to instantiate the correct plugin at runtime.`}) 
+    @MaxLength(510)
+    DriverClass: string;
+        
+    @Field({nullable: true, description: `Name of the entity that stores execution records for this job type (e.g., "MJ: AI Agent Runs", "Action Execution Logs"). Used for generic UI linking to domain-specific run records. NULL if job type uses ScheduledJobRun as its only execution record.`}) 
+    @MaxLength(510)
+    DomainRunEntity?: string;
+        
+    @Field({nullable: true, description: `Name of the foreign key field in the DomainRunEntity that links back to ScheduledJobRun (e.g., "ScheduleID"). Used for querying related domain runs. NULL if DomainRunEntity is NULL.`}) 
+    @MaxLength(200)
+    DomainRunEntityFKey?: string;
+        
+    @Field(() => Boolean, {description: `Indicates whether this job type supports sending notifications on completion or failure.`}) 
+    NotificationsAvailable: boolean;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [MJScheduledJob_])
+    MJ_ScheduledJobs_JobTypeIDArray: MJScheduledJob_[]; // Link to MJ_ScheduledJobs
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Scheduled Job Types
+//****************************************************************************
+@InputType()
+export class CreateMJScheduledJobTypeInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DomainRunEntity: string | null;
+
+    @Field({ nullable: true })
+    DomainRunEntityFKey: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NotificationsAvailable?: boolean;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Scheduled Job Types
+//****************************************************************************
+@InputType()
+export class UpdateMJScheduledJobTypeInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    DriverClass?: string;
+
+    @Field({ nullable: true })
+    DomainRunEntity?: string | null;
+
+    @Field({ nullable: true })
+    DomainRunEntityFKey?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NotificationsAvailable?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Scheduled Job Types
+//****************************************************************************
+@ObjectType()
+export class RunMJScheduledJobTypeViewResult {
+    @Field(() => [MJScheduledJobType_])
+    Results: MJScheduledJobType_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJScheduledJobType_)
+export class MJScheduledJobTypeResolver extends ResolverBase {
+    @Query(() => RunMJScheduledJobTypeViewResult)
+    async RunMJScheduledJobTypeViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJScheduledJobTypeViewResult)
+    async RunMJScheduledJobTypeViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJScheduledJobTypeViewResult)
+    async RunMJScheduledJobTypeDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Scheduled Job Types';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJScheduledJobType_, { nullable: true })
+    async MJScheduledJobType(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJScheduledJobType_ | null> {
+        this.CheckUserReadPermissions('MJ: Scheduled Job Types', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobTypes] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Types', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Scheduled Job Types', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJScheduledJob_])
+    async MJ_ScheduledJobs_JobTypeIDArray(@Root() mjscheduledjobtype_: MJScheduledJobType_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [JobTypeID]='${mjscheduledjobtype_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJScheduledJobType_)
+    async CreateMJScheduledJobType(
+        @Arg('input', () => CreateMJScheduledJobTypeInput) input: CreateMJScheduledJobTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Scheduled Job Types', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJScheduledJobType_)
+    async UpdateMJScheduledJobType(
+        @Arg('input', () => UpdateMJScheduledJobTypeInput) input: UpdateMJScheduledJobTypeInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Scheduled Job Types', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJScheduledJobType_)
+    async DeleteMJScheduledJobType(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Scheduled Job Types', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -46174,6 +45722,401 @@ export class MJGeneratedCodeResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('Generated Codes', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Scheduled Jobs
+//****************************************************************************
+@ObjectType({ description: `Defines schedules for automated job execution across all schedulable types. Each record represents a scheduled job with its cron expression, configuration, and execution tracking.` })
+export class MJScheduledJob_ {
+    @Field() 
+    @MaxLength(16)
+    ID: string;
+        
+    @Field() 
+    @MaxLength(16)
+    JobTypeID: string;
+        
+    @Field({description: `Human-readable name for this scheduled job. Should clearly identify what the job does.`}) 
+    @MaxLength(400)
+    Name: string;
+        
+    @Field({nullable: true, description: `Detailed description of the job's purpose, what it does, and any important notes about its execution.`}) 
+    Description?: string;
+        
+    @Field({description: `Cron expression defining when the job should execute (e.g., "0 30 9 * * MON-FRI" for weekdays at 9:30 AM). Uses standard cron syntax with seconds precision.`}) 
+    @MaxLength(240)
+    CronExpression: string;
+        
+    @Field({description: `IANA timezone identifier for interpreting the cron expression (e.g., "America/Chicago", "UTC"). Ensures consistent scheduling across different server locations.`}) 
+    @MaxLength(128)
+    Timezone: string;
+        
+    @Field({nullable: true, description: `Optional start date/time for when this schedule becomes active. Job will not execute before this time. NULL means active immediately upon creation.`}) 
+    @MaxLength(10)
+    StartAt?: Date;
+        
+    @Field({nullable: true, description: `Optional end date/time for when this schedule expires. Job will not execute after this time. NULL means no expiration.`}) 
+    @MaxLength(10)
+    EndAt?: Date;
+        
+    @Field({description: `Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.`}) 
+    @MaxLength(40)
+    Status: string;
+        
+    @Field({nullable: true, description: `Job-type specific configuration stored as JSON. Schema is defined by the ScheduledJobType plugin. For Agents: includes AgentID, StartingPayload, InitialMessage, etc. For Actions: includes ActionID and parameter mappings.`}) 
+    Configuration?: string;
+        
+    @Field({nullable: true, description: `User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.`}) 
+    @MaxLength(16)
+    OwnerUserID?: string;
+        
+    @Field({nullable: true, description: `Timestamp of the most recent execution. Updated after each run. Used for monitoring and dashboard displays.`}) 
+    @MaxLength(10)
+    LastRunAt?: Date;
+        
+    @Field({nullable: true, description: `Calculated timestamp of when this job should next execute based on the cron expression. Updated after each run. Used by scheduler to determine which jobs are due.`}) 
+    @MaxLength(10)
+    NextRunAt?: Date;
+        
+    @Field(() => Int, {description: `Total number of times this schedule has been executed, including both successful and failed runs.`}) 
+    RunCount: number;
+        
+    @Field(() => Int, {description: `Number of times this schedule has executed successfully (Success = true in ScheduledJobRun).`}) 
+    SuccessCount: number;
+        
+    @Field(() => Int, {description: `Number of times this schedule has executed but failed (Success = false in ScheduledJobRun).`}) 
+    FailureCount: number;
+        
+    @Field(() => Boolean, {description: `Whether to send notifications when the job completes successfully.`}) 
+    NotifyOnSuccess: boolean;
+        
+    @Field(() => Boolean, {description: `Whether to send notifications when the job fails. Defaults to true for alerting on failures.`}) 
+    NotifyOnFailure: boolean;
+        
+    @Field({nullable: true, description: `User to notify about job execution results. If NULL and notifications are enabled, falls back to OwnerUserID.`}) 
+    @MaxLength(16)
+    NotifyUserID?: string;
+        
+    @Field(() => Boolean, {description: `Whether to send email notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled.`}) 
+    NotifyViaEmail: boolean;
+        
+    @Field(() => Boolean, {description: `Whether to send in-app notifications. Requires NotifyOnSuccess or NotifyOnFailure to also be enabled. Defaults to true.`}) 
+    NotifyViaInApp: boolean;
+        
+    @Field({nullable: true, description: `Unique token used for distributed locking across multiple server instances. Set when a server claims the job for execution. Prevents duplicate executions in multi-server environments.`}) 
+    @MaxLength(16)
+    LockToken?: string;
+        
+    @Field({nullable: true, description: `Timestamp when the lock was acquired. Used with ExpectedCompletionAt to detect stale locks from crashed server instances.`}) 
+    @MaxLength(10)
+    LockedAt?: Date;
+        
+    @Field({nullable: true, description: `Identifier of the server instance that currently holds the lock (e.g., "hostname-12345"). Used for troubleshooting and monitoring which server is executing which job.`}) 
+    @MaxLength(510)
+    LockedByInstance?: string;
+        
+    @Field({nullable: true, description: `Expected completion time for the current execution. If current time exceeds this and lock still exists, the lock is considered stale and can be claimed by another instance. Handles crashed server cleanup.`}) 
+    @MaxLength(10)
+    ExpectedCompletionAt?: Date;
+        
+    @Field({description: `Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.`}) 
+    @MaxLength(40)
+    ConcurrencyMode: string;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    @MaxLength(10)
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(200)
+    JobType: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    OwnerUser?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(200)
+    NotifyUser?: string;
+        
+    @Field(() => [MJScheduledJobRun_])
+    MJ_ScheduledJobRuns_ScheduledJobIDArray: MJScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
+    
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Scheduled Jobs
+//****************************************************************************
+@InputType()
+export class CreateMJScheduledJobInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    JobTypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    CronExpression?: string;
+
+    @Field({ nullable: true })
+    Timezone?: string;
+
+    @Field({ nullable: true })
+    StartAt: Date | null;
+
+    @Field({ nullable: true })
+    EndAt: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration: string | null;
+
+    @Field({ nullable: true })
+    OwnerUserID: string | null;
+
+    @Field({ nullable: true })
+    LastRunAt: Date | null;
+
+    @Field({ nullable: true })
+    NextRunAt: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    RunCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    SuccessCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    FailureCount?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyOnSuccess?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyOnFailure?: boolean;
+
+    @Field({ nullable: true })
+    NotifyUserID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyViaEmail?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyViaInApp?: boolean;
+
+    @Field({ nullable: true })
+    LockToken: string | null;
+
+    @Field({ nullable: true })
+    LockedAt: Date | null;
+
+    @Field({ nullable: true })
+    LockedByInstance: string | null;
+
+    @Field({ nullable: true })
+    ExpectedCompletionAt: Date | null;
+
+    @Field({ nullable: true })
+    ConcurrencyMode?: string;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Scheduled Jobs
+//****************************************************************************
+@InputType()
+export class UpdateMJScheduledJobInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    JobTypeID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    CronExpression?: string;
+
+    @Field({ nullable: true })
+    Timezone?: string;
+
+    @Field({ nullable: true })
+    StartAt?: Date | null;
+
+    @Field({ nullable: true })
+    EndAt?: Date | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Configuration?: string | null;
+
+    @Field({ nullable: true })
+    OwnerUserID?: string | null;
+
+    @Field({ nullable: true })
+    LastRunAt?: Date | null;
+
+    @Field({ nullable: true })
+    NextRunAt?: Date | null;
+
+    @Field(() => Int, { nullable: true })
+    RunCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    SuccessCount?: number;
+
+    @Field(() => Int, { nullable: true })
+    FailureCount?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyOnSuccess?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyOnFailure?: boolean;
+
+    @Field({ nullable: true })
+    NotifyUserID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyViaEmail?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    NotifyViaInApp?: boolean;
+
+    @Field({ nullable: true })
+    LockToken?: string | null;
+
+    @Field({ nullable: true })
+    LockedAt?: Date | null;
+
+    @Field({ nullable: true })
+    LockedByInstance?: string | null;
+
+    @Field({ nullable: true })
+    ExpectedCompletionAt?: Date | null;
+
+    @Field({ nullable: true })
+    ConcurrencyMode?: string;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Scheduled Jobs
+//****************************************************************************
+@ObjectType()
+export class RunMJScheduledJobViewResult {
+    @Field(() => [MJScheduledJob_])
+    Results: MJScheduledJob_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJScheduledJob_)
+export class MJScheduledJobResolver extends ResolverBase {
+    @Query(() => RunMJScheduledJobViewResult)
+    async RunMJScheduledJobViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJScheduledJobViewResult)
+    async RunMJScheduledJobViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJScheduledJobViewResult)
+    async RunMJScheduledJobDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Scheduled Jobs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJScheduledJob_, { nullable: true })
+    async MJScheduledJob(@Arg('ID', () => String) ID: string, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJScheduledJob_ | null> {
+        this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [ID]='${ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.MapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows && rows.length > 0 ? rows[0] : {})
+        return result;
+    }
+    
+    @FieldResolver(() => [MJScheduledJobRun_])
+    async MJ_ScheduledJobRuns_ScheduledJobIDArray(@Root() mjscheduledjob_: MJScheduledJob_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ScheduledJobID]='${mjscheduledjob_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows);
+        return result;
+    }
+        
+    @Mutation(() => MJScheduledJob_)
+    async CreateMJScheduledJob(
+        @Arg('input', () => CreateMJScheduledJobInput) input: CreateMJScheduledJobInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Scheduled Jobs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJScheduledJob_)
+    async UpdateMJScheduledJob(
+        @Arg('input', () => UpdateMJScheduledJobInput) input: UpdateMJScheduledJobInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Scheduled Jobs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJScheduledJob_)
+    async DeleteMJScheduledJob(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Scheduled Jobs', key, options, provider, userPayload, pubSub);
     }
     
 }

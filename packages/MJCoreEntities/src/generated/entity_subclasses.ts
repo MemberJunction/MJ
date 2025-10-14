@@ -11532,7 +11532,7 @@ export const ScheduledJobRunSchema = z.object({
         * * Display Name: Completed At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp when this job execution completed (successfully or with failure). NULL while the job is still running.`),
-    Status: z.union([z.literal('Running'), z.literal('Completed'), z.literal('Failed'), z.literal('Cancelled'), z.literal('Timeout')]).describe(`
+    Status: z.union([z.literal('Cancelled'), z.literal('Completed'), z.literal('Failed'), z.literal('Running'), z.literal('Timeout')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
@@ -11540,10 +11540,10 @@ export const ScheduledJobRunSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Running
-    *   * Completed
-    *   * Failed
-    *   * Cancelled
     *   * Timeout
+    *   * Completed
+    *   * Cancelled
+    *   * Failed
         * * Description: Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.`),
     Success: z.boolean().nullable().describe(`
         * * Field Name: Success
@@ -11692,18 +11692,18 @@ export const ScheduledJobSchema = z.object({
         * * Display Name: End At
         * * SQL Data Type: datetimeoffset
         * * Description: Optional end date/time for when this schedule expires. Job will not execute after this time. NULL means no expiration.`),
-    Status: z.union([z.literal('Pending'), z.literal('Active'), z.literal('Paused'), z.literal('Disabled'), z.literal('Expired')]).describe(`
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Expired'), z.literal('Paused'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Active
     *   * Paused
     *   * Disabled
     *   * Expired
+    *   * Pending
+    *   * Active
         * * Description: Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
@@ -11716,12 +11716,6 @@ export const ScheduledJobSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Description: User who owns this schedule. Used as the execution context if no specific user is configured in the job-specific configuration.`),
-    LastRunID: z.string().nullable().describe(`
-        * * Field Name: LastRunID
-        * * Display Name: Last Run ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
-        * * Description: Reference to the most recent execution of this schedule. Provides quick access to last run status and details.`),
     LastRunAt: z.date().nullable().describe(`
         * * Field Name: LastRunAt
         * * Display Name: Last Run At
@@ -11800,16 +11794,16 @@ export const ScheduledJobSchema = z.object({
         * * Display Name: Expected Completion At
         * * SQL Data Type: datetimeoffset
         * * Description: Expected completion time for the current execution. If current time exceeds this and lock still exists, the lock is considered stale and can be claimed by another instance. Handles crashed server cleanup.`),
-    ConcurrencyMode: z.union([z.literal('Skip'), z.literal('Queue'), z.literal('Concurrent')]).describe(`
+    ConcurrencyMode: z.union([z.literal('Concurrent'), z.literal('Queue'), z.literal('Skip')]).describe(`
         * * Field Name: ConcurrencyMode
         * * Display Name: Concurrency Mode
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Skip
     * * Value List Type: List
     * * Possible Values 
-    *   * Skip
     *   * Queue
     *   * Concurrent
+    *   * Skip
         * * Description: Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -35842,7 +35836,7 @@ export class AIAgentPermissionEntity extends BaseEntity<AIAgentPermissionEntityT
     		result.Errors.push(new ValidationErrorInfo(
     			"RoleID/UserID",
     			"You must specify either a Role or a User, but not both and not neither.",
-    			`RoleID: ${this.RoleID}, UserID: ${this.UserID}`,
+    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
     			ValidationErrorType.Failure
     		));
     	}
@@ -45714,31 +45708,32 @@ export class ScheduledJobRunEntity extends BaseEntity<ScheduledJobRunEntityType>
     }
 
     /**
-    * Validate() method override for MJ: Scheduled Job Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Details: This rule ensures that if there is any information in the Details field, it must be valid JSON data. If the Details field is empty, this rule is always satisfied.  
+    * Validate() method override for MJ: Scheduled Job Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Details: This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
-        this.ValidateDetailsIfPresentMustBeJson(result);
+        this.ValidateDetailsAsJson(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that if there is any information in the Details field, it must be valid JSON data. If the Details field is empty, this rule is always satisfied.
+    * This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
-    public ValidateDetailsIfPresentMustBeJson(result: ValidationResult) {
-    	if (this.Details !== null && typeof this.Details === "string" && this.Details.trim() !== "") {
+    public ValidateDetailsAsJson(result: ValidationResult) {
+    	if (this.Details != null) {
     		try {
     			JSON.parse(this.Details);
     		} catch (e) {
-    			result.Errors.push(new ValidationErrorInfo("Details", "The Details field must contain valid JSON if it is provided.", this.Details, ValidationErrorType.Failure));
+    			result.Errors.push(new ValidationErrorInfo("Details", "Details must be a valid JSON if provided.", this.Details, ValidationErrorType.Failure));
     		}
     	}
     }
@@ -45804,16 +45799,16 @@ export class ScheduledJobRunEntity extends BaseEntity<ScheduledJobRunEntityType>
     * * Value List Type: List
     * * Possible Values 
     *   * Running
-    *   * Completed
-    *   * Failed
-    *   * Cancelled
     *   * Timeout
+    *   * Completed
+    *   * Cancelled
+    *   * Failed
     * * Description: Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.
     */
-    get Status(): 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Timeout' {
+    get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Running' | 'Timeout' {
         return this.Get('Status');
     }
-    set Status(value: 'Running' | 'Completed' | 'Failed' | 'Cancelled' | 'Timeout') {
+    set Status(value: 'Cancelled' | 'Completed' | 'Failed' | 'Running' | 'Timeout') {
         this.Set('Status', value);
     }
 
@@ -46098,8 +46093,8 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
     }
 
     /**
-    * Validate() method override for MJ: Scheduled Jobs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-    * * Configuration: This rule ensures that if the Configuration field is not empty, it must contain valid JSON data.  
+    * Validate() method override for MJ: Scheduled Jobs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Configuration: This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
     * @public
     * @method
     * @override
@@ -46107,22 +46102,23 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateConfigurationIsJson(result);
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
 
     /**
-    * This rule ensures that if the Configuration field is not empty, it must contain valid JSON data.
+    * This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateConfigurationIsJson(result: ValidationResult) {
-    	if (this.Configuration !== null && typeof this.Configuration === "string") {
+    	if (this.Configuration != null) {
     		try {
     			JSON.parse(this.Configuration);
     		} catch (e) {
-    			result.Errors.push(new ValidationErrorInfo("Configuration", "When provided, the Configuration field must contain valid JSON.", this.Configuration, ValidationErrorType.Failure));
+    			result.Errors.push(new ValidationErrorInfo("Configuration", "If specified, Configuration must be valid JSON.", this.Configuration, ValidationErrorType.Failure));
     		}
     	}
     }
@@ -46239,17 +46235,17 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Active
     *   * Paused
     *   * Disabled
     *   * Expired
+    *   * Pending
+    *   * Active
     * * Description: Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.
     */
-    get Status(): 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired' {
+    get Status(): 'Active' | 'Disabled' | 'Expired' | 'Paused' | 'Pending' {
         return this.Get('Status');
     }
-    set Status(value: 'Pending' | 'Active' | 'Paused' | 'Disabled' | 'Expired') {
+    set Status(value: 'Active' | 'Disabled' | 'Expired' | 'Paused' | 'Pending') {
         this.Set('Status', value);
     }
 
@@ -46278,20 +46274,6 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
     }
     set OwnerUserID(value: string | null) {
         this.Set('OwnerUserID', value);
-    }
-
-    /**
-    * * Field Name: LastRunID
-    * * Display Name: Last Run ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Scheduled Job Runs (vwScheduledJobRuns.ID)
-    * * Description: Reference to the most recent execution of this schedule. Provides quick access to last run status and details.
-    */
-    get LastRunID(): string | null {
-        return this.Get('LastRunID');
-    }
-    set LastRunID(value: string | null) {
-        this.Set('LastRunID', value);
     }
 
     /**
@@ -46491,15 +46473,15 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
     * * Default Value: Skip
     * * Value List Type: List
     * * Possible Values 
-    *   * Skip
     *   * Queue
     *   * Concurrent
+    *   * Skip
     * * Description: Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.
     */
-    get ConcurrencyMode(): 'Skip' | 'Queue' | 'Concurrent' {
+    get ConcurrencyMode(): 'Concurrent' | 'Queue' | 'Skip' {
         return this.Get('ConcurrencyMode');
     }
-    set ConcurrencyMode(value: 'Skip' | 'Queue' | 'Concurrent') {
+    set ConcurrencyMode(value: 'Concurrent' | 'Queue' | 'Skip') {
         this.Set('ConcurrencyMode', value);
     }
 
