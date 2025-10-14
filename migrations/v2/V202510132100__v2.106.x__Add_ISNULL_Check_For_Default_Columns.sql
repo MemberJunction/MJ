@@ -3194,7 +3194,7 @@ BEGIN
                 @DefaultPromptEffortLevel,
                 @ChatHandlingOption,
                 @DefaultArtifactTypeID,
-                ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E')
+                CASE @OwnerUserID WHEN '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END
             )
     END
     ELSE
@@ -3277,7 +3277,7 @@ BEGIN
                 @DefaultPromptEffortLevel,
                 @ChatHandlingOption,
                 @DefaultArtifactTypeID,
-                ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E')
+                CASE @OwnerUserID WHEN '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -8223,11 +8223,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateCompanyIntegration] TO [cdp_
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID CB64453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='CB64453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentItem'
-
 /* spCreate SQL for Content File Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -8540,26 +8535,6 @@ GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItemAttribute] TO [cdp_Developer], [cdp_Integration]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID E364453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E364453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='Item'
-
-/* SQL text to update entity field related entity name field map for entity field ID 9B64453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='9B64453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentSource'
-
-/* SQL text to update entity field related entity name field map for entity field ID BF63453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='BF63453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='Source'
-
-/* SQL text to update entity field related entity name field map for entity field ID FF63453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='FF63453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentSource'
 
 /* spCreate SQL for Content Source Type Params */
 -----------------------------------------------------------------
@@ -8887,11 +8862,6 @@ GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItemTag] TO [cdp_Developer], [cdp_Integration]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID A764453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='A764453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentType'
 
 /* spCreate SQL for Content Process Runs */
 -----------------------------------------------------------------
@@ -9227,16 +9197,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentSourceParam] TO [cdp_
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID AB64453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='AB64453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentSourceType'
-
-/* SQL text to update entity field related entity name field map for entity field ID AF64453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='AF64453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentFileType'
-
 /* spCreate SQL for Content Items */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -9438,16 +9398,6 @@ GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentItem] TO [cdp_Developer], [cdp_Integration]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID E363453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E363453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentType'
-
-/* SQL text to update entity field related entity name field map for entity field ID 5364453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='5364453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='AIModel'
 
 /* spCreate SQL for Content Source Types */
 -----------------------------------------------------------------
@@ -10034,11 +9984,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateConversationDetail] TO [cdp_
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID E763453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E763453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentSourceType'
-
 /* spCreate SQL for Content Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -10212,11 +10157,6 @@ GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateContentType] TO [cdp_Developer], [cdp_Integration]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID EB63453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='EB63453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ContentFileType'
 
 /* spCreate SQL for Content Sources */
 -----------------------------------------------------------------
@@ -10463,7 +10403,7 @@ BEGIN
                 @LinkedRecordID,
                 @DataContextID,
                 ISNULL(@Status, 'Available'),
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ProjectID,
                 ISNULL(@IsPinned, 0)
             )
@@ -10500,7 +10440,7 @@ BEGIN
                 @LinkedRecordID,
                 @DataContextID,
                 ISNULL(@Status, 'Available'),
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ProjectID,
                 ISNULL(@IsPinned, 0)
             )
@@ -10859,7 +10799,7 @@ BEGIN
                 @ApplicationID,
                 @DriverClass,
                 @Code,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09')
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END
             )
     END
     ELSE
@@ -10894,7 +10834,7 @@ BEGIN
                 @ApplicationID,
                 @DriverClass,
                 @Code,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09')
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -15380,45 +15320,6 @@ GO
 
 
 
-/* Index for Foreign Keys for EntityField */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: Entity Fields
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key EntityID in table EntityField
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityField_EntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityField]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityField_EntityID ON [${flyway:defaultSchema}].[EntityField] ([EntityID]);
-
--- Index for foreign key RelatedEntityID in table EntityField
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityField_RelatedEntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityField]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityField_RelatedEntityID ON [${flyway:defaultSchema}].[EntityField] ([RelatedEntityID]);
-
-/* Base View Permissions SQL for Entity Fields */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: Entity Fields
--- Item: Permissions for vwEntityFields
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEntityFields] TO [cdp_UI], [cdp_Integration], [cdp_Developer]
-
 /* spCreate SQL for Entity Fields */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -15765,51 +15666,6 @@ GO
 /* spUpdate Permissions for Entity Fields */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityField] TO [cdp_Integration], [cdp_Developer]
-
-
-
-/* spDelete SQL for Entity Fields */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: Entity Fields
--- Item: spDeleteEntityField
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR EntityField
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntityField]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityField];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityField]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[EntityField]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityField] TO [cdp_Integration], [cdp_Developer]
-    
-
-/* spDelete Permissions for Entity Fields */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityField] TO [cdp_Integration], [cdp_Developer]
 
 
 
@@ -16377,63 +16233,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityDocument] TO [cdp_Inte
 
 
 
-/* Index for Foreign Keys for EntityRelationship */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: Entity Relationships
--- Item: Index for Foreign Keys
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
--- Index for foreign key EntityID in table EntityRelationship
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_EntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_EntityID ON [${flyway:defaultSchema}].[EntityRelationship] ([EntityID]);
-
--- Index for foreign key RelatedEntityID in table EntityRelationship
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_RelatedEntityID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_RelatedEntityID ON [${flyway:defaultSchema}].[EntityRelationship] ([RelatedEntityID]);
-
--- Index for foreign key DisplayUserViewID in table EntityRelationship
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayUserViewID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayUserViewID ON [${flyway:defaultSchema}].[EntityRelationship] ([DisplayUserViewID]);
-
--- Index for foreign key DisplayComponentID in table EntityRelationship
-IF NOT EXISTS (
-    SELECT 1
-    FROM sys.indexes
-    WHERE name = 'IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayComponentID' 
-    AND object_id = OBJECT_ID('[${flyway:defaultSchema}].[EntityRelationship]')
-)
-CREATE INDEX IDX_AUTO_MJ_FKEY_EntityRelationship_DisplayComponentID ON [${flyway:defaultSchema}].[EntityRelationship] ([DisplayComponentID]);
-
-/* Base View Permissions SQL for Entity Relationships */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: Entity Relationships
--- Item: Permissions for vwEntityRelationships
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-GRANT SELECT ON [${flyway:defaultSchema}].[vwEntityRelationships] TO [cdp_Integration], [cdp_Developer], [cdp_UI]
-
 /* spCreate SQL for Entity Relationships */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -16703,51 +16502,6 @@ GO
 /* spUpdate Permissions for Entity Relationships */
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateEntityRelationship] TO [cdp_Integration], [cdp_Developer]
-
-
-
-/* spDelete SQL for Entity Relationships */
------------------------------------------------------------------
--- SQL Code Generation
--- Entity: Entity Relationships
--- Item: spDeleteEntityRelationship
---
--- This was generated by the MemberJunction CodeGen tool.
--- This file should NOT be edited by hand.
------------------------------------------------------------------
-
-------------------------------------------------------------
------ DELETE PROCEDURE FOR EntityRelationship
-------------------------------------------------------------
-IF OBJECT_ID('[${flyway:defaultSchema}].[spDeleteEntityRelationship]', 'P') IS NOT NULL
-    DROP PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityRelationship];
-GO
-
-CREATE PROCEDURE [${flyway:defaultSchema}].[spDeleteEntityRelationship]
-    @ID uniqueidentifier
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    DELETE FROM
-        [${flyway:defaultSchema}].[EntityRelationship]
-    WHERE
-        [ID] = @ID
-
-
-    -- Check if the delete was successful
-    IF @@ROWCOUNT = 0
-        SELECT NULL AS [ID] -- Return NULL for all primary key fields to indicate no record was deleted
-    ELSE
-        SELECT @ID AS [ID] -- Return the primary key values to indicate we successfully deleted the record
-END
-GO
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityRelationship] TO [cdp_Integration], [cdp_Developer]
-    
-
-/* spDelete Permissions for Entity Relationships */
-
-GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityRelationship] TO [cdp_Integration], [cdp_Developer]
 
 
 
@@ -25260,7 +25014,7 @@ BEGIN
         VALUES
             (
                 @ID,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @Name,
                 @Description,
                 @TypeID,
@@ -25283,7 +25037,7 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @Name,
                 @Description,
                 @TypeID,
@@ -25603,7 +25357,7 @@ BEGIN
         VALUES
             (
                 @ID,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ParentID,
                 @Name,
                 @Description,
@@ -25628,7 +25382,7 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ParentID,
                 @Name,
                 @Description,
@@ -28005,7 +27759,7 @@ BEGIN
         VALUES
             (
                 @ID,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ParentID,
                 @Name,
                 @Description,
@@ -28030,7 +27784,7 @@ BEGIN
         OUTPUT INSERTED.[ID] INTO @InsertedRow
         VALUES
             (
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ParentID,
                 @Name,
                 @Description,
@@ -29464,7 +29218,7 @@ BEGIN
                 @Name,
                 @Description,
                 @TypeID,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ProjectID,
                 @ConversationDetailID,
                 @UserID,
@@ -29503,7 +29257,7 @@ BEGIN
                 @Name,
                 @Description,
                 @TypeID,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09'),
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END,
                 @ProjectID,
                 @ConversationDetailID,
                 @UserID,
@@ -32949,11 +32703,6 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateRecordMergeDeletionLog] TO [
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID 9965453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='9965453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='User'
-
 /* spCreate SQL for Record Merge Logs */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -33575,7 +33324,7 @@ BEGIN
                 @OutputTargetEmail,
                 @OutputWorkflowID,
                 @Thumbnail,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09')
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END
             )
     END
     ELSE
@@ -33620,7 +33369,7 @@ BEGIN
                 @OutputTargetEmail,
                 @OutputWorkflowID,
                 @Thumbnail,
-                ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09')
+                CASE @EnvironmentID WHEN '00000000-0000-0000-0000-000000000000' THEN 'F51358F3-9447-4176-B313-BF8025FD8D09' ELSE ISNULL(@EnvironmentID, 'F51358F3-9447-4176-B313-BF8025FD8D09') END
             )
     END
     -- return the new record from the base view, which might have some calculated fields
@@ -33747,11 +33496,6 @@ GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateReport] TO [cdp_Developer], [cdp_UI]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID 9D65453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='9D65453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ResourceType'
 
 /* spCreate SQL for Resource Links */
 -----------------------------------------------------------------
@@ -33919,11 +33663,6 @@ GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateResourceLink] TO [cdp_Developer], [cdp_Integration]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID 2F65453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='2F65453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='ResourceType'
 
 /* spCreate SQL for Resource Types */
 -----------------------------------------------------------------
@@ -34602,16 +34341,6 @@ GO
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spUpdateScheduledActionParam] TO [cdp_Developer], [cdp_Integration]
 
 
-
-/* SQL text to update entity field related entity name field map for entity field ID 4765453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='4765453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='Role'
-
-/* SQL text to update entity field related entity name field map for entity field ID 4D65453E-F36B-1410-8551-00D9FFED5EBA */
-EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='4D65453E-F36B-1410-8551-00D9FFED5EBA',
-         @RelatedEntityNameFieldMap='User'
 
 /* spCreate SQL for Resource Permissions */
 -----------------------------------------------------------------

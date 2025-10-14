@@ -1554,9 +1554,10 @@ ${updatedAtTrigger}
             }
             else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue && !ef.AllowsNull) {
                 // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column with a default value and does NOT allow NULL
-                // Use ISNULL to apply the default value when the parameter is NULL
+                // We need to handle both NULL and the special value '00000000-0000-0000-0000-000000000000' for backward compatibility
+                // Existing code uses the special value to indicate "use the default", so we preserve that behavior
                 const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-                sOutput += `ISNULL(@${ef.CodeName}, ${formattedDefault})`;
+                sOutput += `CASE @${ef.CodeName} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(@${ef.CodeName}, ${formattedDefault}) END`;
             }
             else {
                 let sVal: string = '';
@@ -1569,9 +1570,15 @@ ${updatedAtTrigger}
                     sVal = prefix + ef.CodeName;
 
                     // If this field has a default value and doesn't allow NULL, wrap with ISNULL
+                    // For UniqueIdentifier fields, also handle the special value '00000000-0000-0000-0000-000000000000' for backward compatibility
                     if (ef.HasDefaultValue && !ef.AllowsNull) {
                         const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-                        sVal = `ISNULL(${sVal}, ${formattedDefault})`;
+                        if (ef.IsUniqueIdentifier) {
+                            // Handle both NULL and the special UUID value for backward compatibility with existing code
+                            sVal = `CASE ${sVal} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(${sVal}, ${formattedDefault}) END`;
+                        } else {
+                            sVal = `ISNULL(${sVal}, ${formattedDefault})`;
+                        }
                     }
                 }
 
