@@ -803,26 +803,20 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, variables);
 
       console.log('📊 ExecuteTaskGraph result:', {
-        hasData: !!result?.data,
-        hasErrors: !!result?.errors,
-        data: result?.data,
-        errors: result?.errors
+        hasExecuteTaskGraph: !!result?.ExecuteTaskGraph,
+        success: result?.ExecuteTaskGraph?.success,
+        resultsCount: result?.ExecuteTaskGraph?.results?.length,
+        result: result
       });
 
       // Step 4: Update task execution message with results
-      // Check for GraphQL errors first
-      if (result?.errors && result.errors.length > 0) {
-        const errorMsg = result.errors.map((e: any) => e.message).join(', ');
-        console.error('❌ GraphQL errors:', result.errors);
-        taskExecutionMessage.Message = `❌ **${workflowName}** failed: ${errorMsg}`;
-        taskExecutionMessage.Status = 'Error';
-        taskExecutionMessage.Error = errorMsg;
-      } else if (result?.data?.ExecuteTaskGraph?.success) {
+      // ExecuteGQL returns data directly (not wrapped in {data, errors})
+      if (result?.ExecuteTaskGraph?.success) {
         console.log('✅ Task graph execution completed successfully');
         taskExecutionMessage.Message = `✅ **${workflowName}** completed successfully`;
         taskExecutionMessage.Status = 'Complete';
       } else {
-        const errorMsg = result?.data?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
+        const errorMsg = result?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
         console.error('❌ Task graph execution failed:', errorMsg);
         taskExecutionMessage.Message = `❌ **${workflowName}** failed: ${errorMsg}`;
         taskExecutionMessage.Status = 'Error';
