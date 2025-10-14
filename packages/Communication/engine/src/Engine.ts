@@ -109,7 +109,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
                     log.ErrorMessage = sendResult.Error;
                     if (!await log.Save()){
-                        throw new Error(`Failed to complete log for message.`);
+                        throw new Error(`Failed to complete log for message: ${log.LatestResult?.Message}`);
                     }
                     else{
                         return sendResult;

@@ -1,0 +1,181 @@
+[
+  {
+    "fields": {
+      "Name": "Sage",
+      "Description": "Ambient agent in MJ that is always present in all conversations to help the user navigate functionality in MJ, handle basic requests, and bring in other agents to delegate work to",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-brands fa-superpowers"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Sage - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "17E3764B-6B6C-479D-A995-7FFA4ABE39AB"
+          },
+          "sync": {
+            "lastModified": "2025-10-10T22:32:03.139Z",
+            "checksum": "c3b2c7ceaf3f664f2cb3711791b876f7de504b802e00266dc0eeb3a183c54700"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "70D4B719-94EA-45A7-99EB-0A543BFA3CE6"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.331Z",
+            "checksum": "8bd3bdf5d8fa68be03b2a57fd560871a4913d0202766cca18e2140fbeae0c685"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "855CD725-8CAB-4307-B5C7-62184C9C2CA9"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.344Z",
+            "checksum": "69aa35cc41c7c2b9f59f19566e8e2d557c3fc4dbcedea5a4723b3febeaba34a1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Update Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "161E3EF2-F5F6-4ABD-9CCE-033F512032F7"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.356Z",
+            "checksum": "df1be674a0bab35106c0da849ac708368740b297dee5d6fd60dae743e8e40d90"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Delete Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "89444FC1-B71A-4243-9529-56501E0941E5"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.368Z",
+            "checksum": "ca4306509c62aef0550a04c0129e99926d1446c968ab4e37709f282306e697d5"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "02862A6E-5AAB-4DE2-B16D-8553145F668C"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.379Z",
+            "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Calculate Expression",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E37EC417-5CC0-4911-9F2C-390E63340421"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.393Z",
+            "checksum": "7a0862dbadb572018f72356925a405d423864e2322c0624c9162edec7bf0d7e5"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Text Analyzer",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CC75EA61-9C03-402C-AF10-D56CBC9621C1"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.404Z",
+            "checksum": "886cf8aebf28d972c031e5cd7471325a3e6c0e55e1eae670d630dbd999485067"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Page Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "24F29104-E203-45DA-AC4C-344E337621CE"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.414Z",
+            "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=URL Metadata Extractor",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E763AC7F-DBF8-42FE-9D3D-C3644E2C393D"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.427Z",
+            "checksum": "e92d05e2d3dd1ea076a8239f6ff973750bd6992f3d3459069b09b7911d3fc904"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Weather",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "27882351-BDC8-414E-B2B5-D74E5F5C8D46"
+          },
+          "sync": {
+            "lastModified": "2025-10-04T15:53:26.446Z",
+            "checksum": "bfd0856ee8119698eed7b76b888f9736680ca59d333a427685e8b16591a4df73"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
+    },
+    "sync": {
+      "lastModified": "2025-10-14T04:02:49.220Z",
+      "checksum": "145e8d17f46c3da20b6701e3ca4a238617c4db513d884cc6ce925f7767c9cb8d"
+    }
+  }
+]

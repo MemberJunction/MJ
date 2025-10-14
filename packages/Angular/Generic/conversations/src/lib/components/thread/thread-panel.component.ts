@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { ConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { DataCacheService } from '../../services/data-cache.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -30,7 +31,10 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor(private cdRef: ChangeDetectorRef) {}
+  constructor(
+    private dataCache: DataCacheService,
+    private cdRef: ChangeDetectorRef
+  ) {}
 
   async ngOnInit() {
     await this.loadThreadData();
@@ -49,12 +53,10 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
 
     try {
-      // Load parent message
-      const md = new Metadata();
-      const parent = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
-      const parentLoaded = await parent.Load(this.parentMessageId);
+      // Load parent message from cache
+      const parent = await this.dataCache.getConversationDetail(this.parentMessageId, this.currentUser);
 
-      if (!parentLoaded) {
+      if (!parent) {
         this.errorMessage = 'Failed to load parent message';
         this.isLoading = false;
         return;
@@ -111,8 +113,7 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
 
     try {
-      const md = new Metadata();
-      const reply = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+      const reply = await this.dataCache.createConversationDetail(this.currentUser);
 
       reply.ConversationID = this.conversationId;
       reply.ParentID = this.parentMessageId;

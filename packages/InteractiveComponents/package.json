@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/interactive-component-types",
-  "version": "2.104.0",
+  "version": "2.106.0",
   "description": "MemberJunction: Interactive Component - Type specifications for MJ Interactive UI Componentry",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,6 +20,6 @@
   },
   "dependencies": {
     "@memberjunction/core": "2.100.3",
-    "@memberjunction/ai-vectors-memory": "2.104.0"
+    "@memberjunction/ai-vectors-memory": "2.106.0"
   }
 }

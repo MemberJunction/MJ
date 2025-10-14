@@ -1,6 +1,6 @@
 <div class="message-list-container" #scrollContainer>
-  <!-- Sticky Date Header -->
-  <div class="sticky-date-header" *ngIf="messages.length > 0">
+  <!-- Sticky Date Header (only show for long conversations spanning multiple days) -->
+  <div class="sticky-date-header" *ngIf="shouldShowDateFilter && messages.length > 0">
     <div class="sticky-date-wrapper">
       <button class="sticky-date-button" (click)="toggleDateNav()">
         <span>{{ currentDateDisplay }}</span>

@@ -1,10 +1,12 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef, ViewChild, ElementRef, AfterViewChecked } from '@angular/core';
 import { UserInfo, RunView, Metadata, CompositeKey } from '@memberjunction/core';
-import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, AIAgentRunEntityExtended, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, AIAgentRunEntityExtended, ConversationDetailArtifactEntity, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
+import { DataCacheService } from '../../services/data-cache.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
+import { Subject } from 'rxjs';
 
 @Component({
   selector: 'mj-conversation-chat-area',
@@ -17,6 +19,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() taskClicked = new EventEmitter<TaskEntity>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
 
@@ -35,14 +38,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showArtifactPanel: boolean = false;
   public showArtifactsModal: boolean = false;
   public selectedArtifactId: string | null = null;
+  public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
+  public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
 
-  // Artifact mapping: ConversationDetailID -> {artifactId, versionId, name}
-  public artifactsByDetailId = new Map<string, {artifactId: string; versionId: string; name: string}>();
+  // Artifact mapping: ConversationDetailID -> Array of {artifact, version}
+  // Full entities loaded once and reused across all message components
+  // Supports multiple artifacts per conversation detail (0-N relationship)
+  public artifactsByDetailId = new Map<string, Array<{
+    artifact: ArtifactEntity;
+    version: ArtifactVersionEntity;
+  }>>();
 
   // Agent run mapping: ConversationDetailID -> AIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
   public agentRunsByDetailId = new Map<string, AIAgentRunEntityExtended>();
+
+  // Loading state for peripheral data
+  public isLoadingPeripheralData: boolean = false;
+
+  // Subject to trigger artifact viewer refresh when new version is created
+  public artifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
 
   // Resize state
   private isResizing: boolean = false;
@@ -54,6 +70,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   constructor(
     public conversationState: ConversationStateService,
+    private dataCache: DataCacheService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
@@ -88,7 +105,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       this.scrollToBottom = false;
       setTimeout(() => {
         this.scrollToBottomNow();
+        // Check scroll state after scrolling to bottom
+        this.checkScroll();
       }, 100);
+    } else {
+      // Always check scroll state to update button visibility
+      this.checkScroll();
     }
   }
 
@@ -119,26 +141,45 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   private async loadMessages(conversationId: string): Promise<void> {
     try {
-      const rv = new RunView();
+      // PHASE 1: Load messages from cache (fast, shows content immediately)
+      // The cache will load from DB if not already cached
+      const loadedMessages = await this.dataCache.loadConversationDetails(conversationId, this.currentUser);
 
-      // Load messages and agent runs in parallel
+      this.messages = loadedMessages;
+      this.scrollToBottom = true;
+      this.cdr.detectChanges(); // Show messages immediately
+
+      // PHASE 2: Load peripheral data in background (agent runs & artifacts)
+      this.isLoadingPeripheralData = true;
+      this.loadPeripheralData(conversationId).finally(() => {
+        this.isLoadingPeripheralData = false;
+        this.cdr.detectChanges();
+      });
+    } catch (error) {
+      console.error('Error loading messages:', error);
+      this.messages = [];
+    }
+  }
+
+  /**
+   * Load peripheral data (agent runs and artifacts) in background
+   * This allows messages to display immediately while slower queries complete
+   */
+  private async loadPeripheralData(conversationId: string): Promise<void> {
+    try {
+      const rv = new RunView();
       const md = new Metadata();
       const convoDetailEntity = md.EntityByName("Conversation Details");
-      const [messagesResult, agentRunsResult, conversationDetailArtifacts] = await Promise.all([
-        rv.RunView<ConversationDetailEntity>(
-          {
-            EntityName: 'Conversation Details',
-            ExtraFilter: `ConversationID='${conversationId}'`,
-            OrderBy: '__mj_CreatedAt ASC', 
-            ResultType: 'entity_object'
-          },
-          this.currentUser
-        ),
+
+      // Load agent runs and artifacts in parallel
+      const [agentRunsResult, conversationDetailArtifacts] = await Promise.all([
         rv.RunView<AIAgentRunEntityExtended>(
           {
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ConversationDetailID IN (SELECT ID FROM [${convoDetailEntity.SchemaName}].[${convoDetailEntity.BaseView}] WHERE ConversationID='${conversationId}')`,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
+            // Only fetch fields we actually display to reduce payload size
+            Fields: ['ID', 'AgentID', 'Agent', 'Status', '__mj_CreatedAt', '__mj_UpdatedAt', 'TotalPromptTokensUsed', 'TotalCompletionTokensUsed', 'TotalCost', 'ConversationDetailID']
           },
           this.currentUser
         ),
@@ -152,154 +193,128 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         )
       ]);
 
-      if (messagesResult.Success) {
-        const loadedMessages = messagesResult.Results || [];
-
-        // Build agent runs map - single query loads all runs for this conversation
-        this.agentRunsByDetailId.clear();
-        console.log(`🔍 Agent Runs Query Result:`, {
-          success: agentRunsResult.Success,
-          resultCount: agentRunsResult.Results?.length || 0,
-          errorMessage: agentRunsResult.ErrorMessage
-        });
-
-        if (agentRunsResult.Success && agentRunsResult.Results) {
-          for (const run of agentRunsResult.Results) {
-            console.log(`  📌 Agent Run:`, {
-              id: run.ID,
-              agentName: run.Agent,
-              conversationDetailID: run.ConversationDetailID,
-              status: run.Status
-            });
-            if (run.ConversationDetailID) {
-              this.agentRunsByDetailId.set(run.ConversationDetailID, run);
-            }
-          }
-          console.log(`📊 Loaded ${this.agentRunsByDetailId.size} agent runs for conversation ${conversationId}`);
-          console.log(`📊 Map keys:`, Array.from(this.agentRunsByDetailId.keys()));
-        } else {
-          console.error(`❌ Failed to load agent runs:`, agentRunsResult.ErrorMessage);
-        }
-
-        // Build artifact map from preloaded artifacts
-        this.artifactsByDetailId.clear();
-        if (conversationDetailArtifacts.Success && conversationDetailArtifacts.Results && conversationDetailArtifacts.Results.length > 0) {
-          // Load artifact versions to get ArtifactID
-          const versionIds = conversationDetailArtifacts.Results.map(a => `'${a.ArtifactVersionID}'`).join(',');
-          const versionsResult = await rv.RunView<ArtifactVersionEntity>(
-            {
-              EntityName: 'MJ: Artifact Versions',
-              ExtraFilter: `ID IN (${versionIds})`,
-              ResultType: 'entity_object'
-            },
-            this.currentUser
-          );
-
-          if (versionsResult.Success && versionsResult.Results) {
-            // Create map of versionId -> {artifactId, artifactName}
-            const versionToArtifact = new Map<string, {artifactId: string; artifactName: string}>();
-
-            // Get all unique artifact IDs
-            const artifactIds = [...new Set(versionsResult.Results.map(v => v.ArtifactID))];
-
-            // Load artifact entities to get names
-            const artifactsResult = await rv.RunView({
-              EntityName: 'MJ: Artifacts',
-              ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
-              ResultType: 'entity_object'
-            }, this.currentUser);
-
-            // Create map of artifactId -> name
-            const artifactNames = new Map<string, string>();
-            if (artifactsResult.Success && artifactsResult.Results) {
-              for (const artifact of artifactsResult.Results) {
-                artifactNames.set(artifact.ID, artifact.Name || 'Unnamed Artifact');
-              }
-            }
-
-            // Build versionId to artifact info map
-            for (const version of versionsResult.Results) {
-              versionToArtifact.set(version.ID, {
-                artifactId: version.ArtifactID,
-                artifactName: artifactNames.get(version.ArtifactID) || 'Unnamed Artifact'
-              });
-            }
-
-            // Build final artifact map with IDs and names
-            for (const artifact of conversationDetailArtifacts.Results) {
-              const artifactInfo = versionToArtifact.get(artifact.ArtifactVersionID);
-              if (artifact.ConversationDetailID && artifactInfo) {
-                this.artifactsByDetailId.set(artifact.ConversationDetailID, {
-                  artifactId: artifactInfo.artifactId,
-                  versionId: artifact.ArtifactVersionID,
-                  name: artifactInfo.artifactName
-                });
-              }
-            }
-            console.log(`📦 Preloaded ${this.artifactsByDetailId.size} artifacts for conversation ${conversationId}`);
+      // Build agent runs map - single query loads all runs for this conversation
+      this.agentRunsByDetailId.clear();
+      if (agentRunsResult.Success && agentRunsResult.Results) {
+        for (const run of agentRunsResult.Results) {
+          if (run.ConversationDetailID) {
+            this.agentRunsByDetailId.set(run.ConversationDetailID, run);
           }
         }
-
-        // Update artifact count for header display
-        this.artifactCount = conversationDetailArtifacts.Results?.length || 0;
-
-        // Debug: Log all artifacts to console
-        console.log(`📊 Artifact Count: ${this.artifactCount}`);
-        console.log(`📦 Artifacts by Detail ID:`, Array.from(this.artifactsByDetailId.entries()).map(([detailId, info]) => ({
-          conversationDetailId: detailId,
-          artifactId: info.artifactId,
-          versionId: info.versionId
-        })));
-
-        // NOW set messages to trigger rendering (after artifacts are loaded)
-        this.messages = loadedMessages;
       }
+
+      // Build artifact map from preloaded artifacts
+      this.artifactsByDetailId.clear();
+      if (conversationDetailArtifacts.Success && conversationDetailArtifacts.Results && conversationDetailArtifacts.Results.length > 0) {
+        // Load artifact versions to get ArtifactID
+        const versionIds = conversationDetailArtifacts.Results.map(a => `'${a.ArtifactVersionID}'`).join(',');
+        const versionsResult = await rv.RunView<ArtifactVersionEntity>(
+          {
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN (${versionIds})`,
+            ResultType: 'entity_object'
+          },
+          this.currentUser
+        );
+
+        if (versionsResult.Success && versionsResult.Results) {
+          // Get all unique artifact IDs
+          const artifactIds = [...new Set(versionsResult.Results.map(v => v.ArtifactID))];
+
+          // Load full artifact entities
+          const artifactsResult = await rv.RunView<ArtifactEntity>({
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          // Create maps of entities by ID for fast lookup
+          const artifactEntities = new Map<string, ArtifactEntity>();
+          const versionEntities = new Map<string, ArtifactVersionEntity>();
+
+          if (artifactsResult.Success && artifactsResult.Results) {
+            for (const artifact of artifactsResult.Results) {
+              artifactEntities.set(artifact.ID, artifact);
+            }
+          }
+
+          for (const version of versionsResult.Results) {
+            versionEntities.set(version.ID, version);
+          }
+
+          // Build final artifact map with FULL entities
+          // Group artifacts by ConversationDetailID (supports multiple artifacts per detail)
+          for (const junctionRecord of conversationDetailArtifacts.Results) {
+            const version = versionEntities.get(junctionRecord.ArtifactVersionID);
+            const artifact = version ? artifactEntities.get(version.ArtifactID) : undefined;
+
+            if (junctionRecord.ConversationDetailID && version && artifact) {
+              const existing = this.artifactsByDetailId.get(junctionRecord.ConversationDetailID) || [];
+              existing.push({
+                artifact: artifact,      // Full ArtifactEntity
+                version: version         // Full ArtifactVersionEntity
+              });
+              this.artifactsByDetailId.set(junctionRecord.ConversationDetailID, existing);
+            }
+          }
+
+          // Create new Map reference to trigger Angular change detection
+          this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+
+          console.log(`📦 Preloaded ${this.artifactsByDetailId.size} artifacts for conversation ${conversationId}`);
+        }
+      }
+
+      // Update artifact count for header display (unique artifacts, not versions)
+      this.artifactCount = this.calculateUniqueArtifactCount();
+
+      // Debug: Log all artifacts to console
+      console.log(`📊 Artifact Count: ${this.artifactCount}`);
+      console.log(`📦 Artifacts by Detail ID:`, Array.from(this.artifactsByDetailId.entries()).flatMap(([detailId, artifactList]) =>
+        artifactList.map(info => ({
+          conversationDetailId: detailId,
+          artifactId: info.artifact.ID,
+          artifactName: info.artifact.Name,
+          versionId: info.version.ID,
+          versionNumber: info.version.VersionNumber
+        }))
+      ));
+
+      // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
+      // This updates all message components with the newly loaded agent run data
+      this.messages = [...this.messages]; // Create new array reference to trigger change detection
+      this.cdr.detectChanges();
     } catch (error) {
-      console.error('Failed to load messages:', error);
+      console.error('Failed to load peripheral data:', error);
     }
   }
 
   /**
-   * Restore active tasks from the database for this conversation
-   * Queries for messages with Status='In-Progress' and recreates the active task tracking
+   * REMOVED: Active tasks should only track currently-running tasks in this browser session.
+   * Database tasks with 'In-Progress' status are shown in the Tasks dropdown via loadDatabaseTasks().
+   * Restoring them here causes duplicate "Agent Processing..." entries.
    */
   private async restoreActiveTasks(conversationId: string): Promise<void> {
-    try {
-      // Clear existing tasks for this conversation first
-      // (We'll filter by conversation in the UI later)
-
-      const rv = new RunView();
-      const result = await rv.RunView<ConversationDetailEntity>(
-        {
-          EntityName: 'Conversation Details',
-          ExtraFilter: `ConversationID='${conversationId}' AND Status='In-Progress'`,
-          OrderBy: '__mj_CreatedAt ASC',
-          ResultType: 'entity_object'
-        },
-        this.currentUser
-      );
-
-      if (result.Success && result.Results) {
-        for (const message of result.Results) {
-          // Restore the task to the active tasks service
-          this.activeTasks.add({
-            agentName: 'Agent', // We'll need to enhance this with actual agent name from AgentRunID
-            status: 'Processing...',
-            relatedMessageId: message.ID,
-            conversationDetailId: message.ID
-          });
-        }
-
-        console.log(`✅ Restored ${result.Results.length} active tasks for conversation ${conversationId}`);
-      }
-    } catch (error) {
-      console.error('Failed to restore active tasks:', error);
-    }
+    // Intentionally empty - ActiveTasksService only tracks in-memory running tasks
+    // Database tasks are loaded separately by TasksDropdownComponent
   }
 
   onMessageSent(message: ConversationDetailEntity): void {
-    // Add the new message to the list
-    this.messages = [...this.messages, message];
+    // Check if message already exists in the array (by ID) to prevent duplicates
+    // Messages can be emitted multiple times as they're updated (e.g., status changes)
+    const existingIndex = this.messages.findIndex(m => m.ID === message.ID);
+
+    if (existingIndex >= 0) {
+      // Update existing message in place (replace with updated version)
+      this.messages = [
+        ...this.messages.slice(0, existingIndex),
+        message,
+        ...this.messages.slice(existingIndex + 1)
+      ];
+    } else {
+      // Add new message to the list
+      this.messages = [...this.messages, message];
+    }
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;
@@ -310,7 +325,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * This is called when the first progress update arrives with an agent run ID
    */
   async onAgentRunDetected(event: {conversationDetailId: string; agentRunId: string}): Promise<void> {
-    console.log('🎯 Agent run detected from progress update:', event);
     await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId);
   }
 
@@ -320,34 +334,25 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
     // Scroll to bottom when agent responds
     this.scrollToBottom = true;
-    console.log('Agent responded:', event.agentResult);
 
     // Add agent run to the map if present (fallback if not already loaded from progress)
     // agentResult is ExecuteAgentResult which contains agentRun property
     if (event.agentResult?.agentRun?.ID) {
       // Only load if not already in map (progress update may have already loaded it)
       if (!this.agentRunsByDetailId.has(event.message.ID)) {
-        console.log('🔄 Loading agent run after execution:', {
-          agentRunId: event.agentResult.agentRun.ID,
-          conversationDetailId: event.message.ID,
-          agentName: event.agentResult.agentRun.Agent
-        });
         await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID);
-      } else {
-        console.log('✅ Agent run already in map from progress update');
       }
-    } else {
-      console.warn('⚠️ No agent run ID in agent response:', event.agentResult);
     }
 
     // Reload artifact mapping for this message to pick up newly created artifacts
     await this.reloadArtifactsForMessage(event.message.ID);
 
-    // Auto-open artifact panel if this message has an artifact and no artifact is currently shown
+    // Auto-open artifact panel if this message has artifacts and no artifact is currently shown
     if (this.artifactsByDetailId.has(event.message.ID) && !this.showArtifactPanel) {
-      const artifactInfo = this.artifactsByDetailId.get(event.message.ID);
-      if (artifactInfo) {
-        this.selectedArtifactId = artifactInfo.artifactId;
+      const artifactList = this.artifactsByDetailId.get(event.message.ID);
+      if (artifactList && artifactList.length > 0) {
+        // Show the first (or most recent) artifact
+        this.selectedArtifactId = artifactList[0].artifact.ID;
         this.showArtifactPanel = true;
       }
     }
@@ -362,23 +367,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    */
   private async addAgentRunToMap(conversationDetailId: string, agentRunId: string): Promise<void> {
     try {
-      console.log(`🔄 Adding agent run to map:`, { conversationDetailId, agentRunId });
       const md = new Metadata();
       const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
       if (await agentRun.Load(agentRunId)) {
         this.agentRunsByDetailId.set(conversationDetailId, agentRun);
-        console.log(`✅ Added agent run to map:`, {
-          agentRunId,
-          conversationDetailId,
-          agentName: agentRun.Agent,
-          status: agentRun.Status,
-          mapSize: this.agentRunsByDetailId.size
-        });
-      } else {
-        console.warn(`⚠️ Failed to load agent run ${agentRunId}`);
       }
     } catch (error) {
-      console.error('❌ Failed to load agent run for map:', error);
+      console.error('Failed to load agent run for map:', error);
     }
   }
 
@@ -387,6 +382,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * Called after an artifact is created to update the UI immediately
    */
   private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
+    console.log(`🔄 Reloading artifacts for message ${conversationDetailId}`);
     try {
       const rv = new RunView();
       const artifactsResult = await rv.RunView<ConversationDetailArtifactEntity>(
@@ -398,8 +394,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         this.currentUser
       );
 
+      console.log(`📊 Junction query result:`, {
+        success: artifactsResult.Success,
+        count: artifactsResult.Results?.length || 0,
+        error: artifactsResult.ErrorMessage
+      });
+
       if (artifactsResult.Success && artifactsResult.Results && artifactsResult.Results.length > 0) {
-        // Load artifact versions to get ArtifactID
+        // Load full artifact versions and artifacts
         const versionIds = artifactsResult.Results.map(a => `'${a.ArtifactVersionID}'`).join(',');
         const versionsResult = await rv.RunView<ArtifactVersionEntity>(
           {
@@ -411,26 +413,54 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         );
 
         if (versionsResult.Success && versionsResult.Results) {
-          const versionToArtifact = new Map<string, string>();
-          for (const version of versionsResult.Results) {
-            versionToArtifact.set(version.ID, version.ArtifactID);
-          }
+          // Load full artifact entities
+          const artifactIds = versionsResult.Results.map(v => `'${v.ArtifactID}'`).join(',');
+          const fullArtifactsResult = await rv.RunView<ArtifactEntity>(
+            {
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `ID IN (${artifactIds})`,
+              ResultType: 'entity_object'
+            },
+            this.currentUser
+          );
 
-          // Update artifact map
-          for (const artifact of artifactsResult.Results) {
-            const artifactId = versionToArtifact.get(artifact.ArtifactVersionID);
-            if (artifactId) {
-              this.artifactsByDetailId.set(conversationDetailId, {
-                artifactId: artifactId,
-                versionId: artifact.ArtifactVersionID,
-                name: 'Artifact' // Note: This method is deprecated, name should come from event
-              });
-              console.log(`✅ Loaded artifact ${artifactId} for message ${conversationDetailId}`);
+          if (fullArtifactsResult.Success && fullArtifactsResult.Results) {
+            // Create maps for fast lookup
+            const artifactEntities = new Map<string, ArtifactEntity>();
+            const versionEntities = new Map<string, ArtifactVersionEntity>();
+
+            for (const artifact of fullArtifactsResult.Results) {
+              artifactEntities.set(artifact.ID, artifact);
             }
-          }
 
-          // Update artifact count
-          this.artifactCount = this.artifactsByDetailId.size;
+            for (const version of versionsResult.Results) {
+              versionEntities.set(version.ID, version);
+            }
+
+            // Update artifact map with full entities (supports multiple artifacts per detail)
+            const artifactList: Array<{artifact: ArtifactEntity; version: ArtifactVersionEntity}> = [];
+            for (const junctionRecord of artifactsResult.Results) {
+              const version = versionEntities.get(junctionRecord.ArtifactVersionID);
+              const artifact = version ? artifactEntities.get(version.ArtifactID) : undefined;
+
+              if (version && artifact) {
+                artifactList.push({
+                  artifact: artifact,
+                  version: version
+                });
+                console.log(`✅ Loaded artifact ${artifact.ID} v${version.VersionNumber} for message ${conversationDetailId}`);
+              }
+            }
+            if (artifactList.length > 0) {
+              this.artifactsByDetailId.set(conversationDetailId, artifactList);
+            }
+
+            // Create new Map reference to trigger Angular change detection
+            this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+
+            // Update artifact count
+            this.artifactCount = this.calculateUniqueArtifactCount();
+          }
         }
       }
     } catch (error) {
@@ -450,12 +480,82 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.showArtifactsModal = true;
   }
 
-  getArtifactsArray(): Array<{artifactId: string; versionId: string; name: string}> {
-    return Array.from(this.artifactsByDetailId.values());
+  /**
+   * Calculate count of unique artifacts (not versions)
+   */
+  private calculateUniqueArtifactCount(): number {
+    const uniqueArtifactIds = new Set<string>();
+    for (const artifactList of this.artifactsByDetailId.values()) {
+      for (const info of artifactList) {
+        uniqueArtifactIds.add(info.artifact.ID);
+      }
+    }
+    return uniqueArtifactIds.size;
   }
 
-  openArtifactFromModal(artifactId: string): void {
+  /**
+   * Get unique artifacts grouped by artifact ID (not by conversation detail)
+   * Returns the latest version info for each unique artifact with all versions
+   */
+  getArtifactsArray(): Array<{
+    artifactId: string;
+    versionId: string;
+    name: string;
+    versionCount: number;
+    versions: Array<{versionId: string; versionNumber: number}>
+  }> {
+    const artifactMap = new Map<string, {
+      artifactId: string;
+      versionId: string;
+      name: string;
+      versions: Array<{versionId: string; versionNumber: number}>
+    }>();
+
+    // Group by artifactId, collecting all version details
+    for (const artifactList of this.artifactsByDetailId.values()) {
+      for (const info of artifactList) {
+        const artifactId = info.artifact.ID;
+        const versionId = info.version.ID;
+        const versionNumber = info.version.VersionNumber || 1;
+        const name = info.version.Name || info.artifact.Name || 'Untitled';
+
+        if (!artifactMap.has(artifactId)) {
+          artifactMap.set(artifactId, {
+            artifactId: artifactId,
+            versionId: versionId, // Latest version ID
+            name: name,
+            versions: [{versionId: versionId, versionNumber: versionNumber}]
+          });
+        } else {
+          // Add version if not already present
+          const existing = artifactMap.get(artifactId)!;
+          if (!existing.versions.some(v => v.versionId === versionId)) {
+            existing.versions.push({versionId: versionId, versionNumber: versionNumber});
+            // Update to latest version ID (assuming versions are added chronologically)
+            existing.versionId = versionId;
+          }
+        }
+      }
+    }
+
+    // Convert to array with version count, sorted by version number descending
+    return Array.from(artifactMap.values()).map(item => ({
+      artifactId: item.artifactId,
+      versionId: item.versionId,
+      name: item.name,
+      versionCount: item.versions.length,
+      versions: item.versions.sort((a, b) => b.versionNumber - a.versionNumber)
+    }));
+  }
+
+  toggleArtifactExpansion(artifactId: string, event: Event): void {
+    event.stopPropagation(); // Prevent opening artifact when clicking expand button
+    this.expandedArtifactId = this.expandedArtifactId === artifactId ? null : artifactId;
+  }
+
+  openArtifactFromModal(artifactId: string, versionNumber?: number): void {
     this.selectedArtifactId = artifactId;
+    this.selectedVersionNumber = versionNumber;
     this.showArtifactPanel = true;
     this.showArtifactsModal = false;
   }
@@ -562,15 +662,29 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   onArtifactClicked(data: {artifactId: string; versionId?: string}): void {
     this.selectedArtifactId = data.artifactId;
+
+    // If versionId is provided, find the version number
+    if (data.versionId) {
+      for (const [detailId, artifactList] of this.artifactsByDetailId.entries()) {
+        for (const artifactInfo of artifactList) {
+          if (artifactInfo.version.ID === data.versionId) {
+            this.selectedVersionNumber = artifactInfo.version.VersionNumber;
+            console.log(`📦 Opening artifact viewer for v${this.selectedVersionNumber}`);
+            break;
+          }
+        }
+      }
+    } else {
+      // No specific version, let viewer default to latest
+      this.selectedVersionNumber = undefined;
+    }
+
     this.showArtifactPanel = true;
   }
 
-  onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; name: string}): void {
-    this.artifactsByDetailId.set(data.conversationDetailId, {
-      artifactId: data.artifactId,
-      versionId: data.versionId,
-      name: data.name
-    });
+  async onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
+    // Reload artifacts to get full entities
+    await this.reloadArtifactsForMessage(data.conversationDetailId);
 
     // if we don't already have another artifact showing, let's show the newly created one
     if (!this.showArtifactPanel) {
@@ -578,7 +692,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       this.showArtifactPanel = true;
     }
 
-    this.artifactCount++; // increment artifact count
+    // If artifact viewer is already open for this artifact, trigger refresh to show new version
+    if (this.showArtifactPanel && this.selectedArtifactId === data.artifactId) {
+      // Emit event to refresh artifact viewer with new version
+      this.artifactViewerRefresh$.next({artifactId: data.artifactId, versionNumber: data.versionNumber});
+    }
+
+    // Force change detection to update the UI immediately
+    this.cdr.detectChanges();
   }
 
   onCloseArtifactPanel(): void {
@@ -596,9 +717,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   /**
    * Get artifact info for a conversation detail
+   * Returns the first artifact if multiple exist (for backward compatibility with message display)
    */
-  public getArtifactInfo(conversationDetailId: string): {artifactId: string; versionId: string} | undefined {
-    return this.artifactsByDetailId.get(conversationDetailId);
+  public getArtifactInfo(conversationDetailId: string): {artifact: ArtifactEntity; version: ArtifactVersionEntity} | undefined {
+    const artifactList = this.artifactsByDetailId.get(conversationDetailId);
+    return artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+  }
+
+  /**
+   * Get ALL artifacts for a conversation detail
+   * Use this when you need to display all artifacts (e.g., in a list)
+   */
+  public getAllArtifactsForDetail(conversationDetailId: string): Array<{artifact: ArtifactEntity; version: ArtifactVersionEntity}> {
+    return this.artifactsByDetailId.get(conversationDetailId) || [];
   }
 
   /**
@@ -673,6 +804,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.openEntityRecord.emit(event);
   }
 
+  onTaskClicked(task: TaskEntity): void {
+    // Pass task click up to workspace to navigate to Tasks tab
+    this.taskClicked.emit(task);
+  }
+
   // Scroll functionality (pattern from skip-chat)
   checkScroll(): void {
     if (!this.scrollContainer) return;
@@ -711,13 +847,5 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
-  }
-
-  getScrollToBottomIconPosition(): number {
-    if (!this.scrollContainer) {
-      return window.innerWidth / 2;
-    }
-    const rect = this.scrollContainer.nativeElement.getBoundingClientRect();
-    return rect.left + (rect.width / 2);
   }
 }

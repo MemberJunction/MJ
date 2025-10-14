@@ -435,7 +435,7 @@ const configInfoSchema = z.object({
 /**
  * Current working directory for the code generation process
  */
-export let currentWorkingDirectory: string;
+export let currentWorkingDirectory: string = process.cwd();
 
 /** Parse and validate the configuration file */
 const configParsing = configInfoSchema.safeParse(configSearchResult?.config);

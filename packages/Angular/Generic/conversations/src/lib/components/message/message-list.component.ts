@@ -13,7 +13,7 @@ import {
   ElementRef,
   AfterViewChecked
 } from '@angular/core';
-import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
@@ -33,7 +33,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
-  @Input() public artifactMap: Map<string, {artifactId: string; versionId: string}> = new Map();
+  @Input() public artifactMap: Map<string, Array<{artifact: ArtifactEntity; version: ArtifactVersionEntity}>> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
@@ -54,6 +54,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
   public currentDateDisplay: string = 'Today';
   public showDateNav: boolean = false;
+  public shouldShowDateFilter: boolean = false;
 
   constructor(private cdRef: ChangeDetectorRef) {
     super();
@@ -92,6 +93,12 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   ngOnChanges(changes: SimpleChanges) {
     // React to messages array changes
     if (changes['messages'] && this.messages && this.messageContainerRef) {
+      this.updateMessages(this.messages);
+      this.updateDateFilterVisibility();
+    }
+
+    // React to artifact map changes (when artifacts are added/updated)
+    if (changes['artifactMap'] && this.messages && this.messageContainerRef) {
       this.updateMessages(this.messages);
     }
   }
@@ -157,9 +164,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.message = message;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
-          const artifactInfo = this.artifactMap.get(message.ID);
-          instance.artifactId = artifactInfo?.artifactId;
-          instance.artifactVersionId = artifactInfo?.versionId;
+          const artifactList = this.artifactMap.get(message.ID);
+          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          instance.artifact = firstArtifact?.artifact;
+          instance.artifactVersion = firstArtifact?.version;
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
         } else {
@@ -173,11 +181,20 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.currentUser = this.currentUser;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
-          const artifactInfo = this.artifactMap.get(message.ID);
-          instance.artifactId = artifactInfo?.artifactId;
-          instance.artifactVersionId = artifactInfo?.versionId;
+          const artifactList = this.artifactMap.get(message.ID);
+          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          instance.artifact = firstArtifact?.artifact;
+          instance.artifactVersion = firstArtifact?.version;
           // Pass agent run from map (loaded once per conversation)
-          instance.agentRun = this.agentRunMap.get(message.ID) || null;
+          const agentRun = this.agentRunMap.get(message.ID) || null;
+          console.log(`✨ Creating new message ${message.ID} component with agentRun:`, {
+            messageId: message.ID,
+            agentRunExists: !!agentRun,
+            agentRunId: agentRun?.ID,
+            mapSize: this.agentRunMap.size,
+            mapHasKey: this.agentRunMap.has(message.ID)
+          });
+          instance.agentRun = agentRun;
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));
@@ -223,6 +240,34 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     return message.ID && message.ID.length > 0
       ? message.ID
       : `temp_${message.__mj_CreatedAt?.getTime() || Date.now()}`;
+  }
+
+  /**
+   * Determines whether to show the date filter dropdown
+   * Only show if conversation is long and spans multiple days
+   */
+  private updateDateFilterVisibility(): void {
+    if (!this.messages || this.messages.length < 20) {
+      this.shouldShowDateFilter = false;
+      return;
+    }
+
+    // Check if messages span more than 2 days
+    const dates = this.messages
+      .map(m => m.__mj_CreatedAt)
+      .filter(d => d != null)
+      .map(d => new Date(d!).setHours(0, 0, 0, 0));
+
+    if (dates.length === 0) {
+      this.shouldShowDateFilter = false;
+      return;
+    }
+
+    const uniqueDates = new Set(dates);
+    const daySpan = uniqueDates.size;
+
+    // Show filter if conversation has 20+ messages and spans 3+ days
+    this.shouldShowDateFilter = daySpan >= 3;
   }
 
   /**

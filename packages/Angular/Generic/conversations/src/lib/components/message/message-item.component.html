@@ -46,19 +46,15 @@
           }
         </div>
 
-        <!-- Artifact Card (Claude.ai Style) -->
-        @if (hasArtifact) {
-          <div class="artifact-card" (click)="onArtifactClick()">
-            <div class="artifact-card-header">
-              <div class="artifact-card-icon">
-                <i class="fas fa-file-code"></i>
-              </div>
-              <div class="artifact-card-content">
-                <div class="artifact-card-label">Generated Artifact</div>
-                <div class="artifact-card-description">Click to view the generated content</div>
-              </div>
-            </div>
-          </div>
+        <!-- Artifact Message Card -->
+        @if (hasArtifact && artifact && artifactVersion) {
+          <mj-artifact-message-card
+            [artifactId]="artifact.ID"
+            [artifact]="artifact"
+            [artifactVersion]="artifactVersion"
+            [currentUser]="currentUser"
+            (actionPerformed)="onArtifactActionPerformed($event)">
+          </mj-artifact-message-card>
         }
       }
 
@@ -138,6 +134,26 @@
                     {{ agentRun.Status }}
                   </span>
                 </div>
+              </div>
+            </div>
+          }
+
+          <!-- Tasks Section -->
+          @if (detailTasks.length > 0) {
+            <div class="agent-details-tasks">
+              <div class="tasks-section-header">
+                <i class="fas fa-tasks"></i>
+                <span>Associated Tasks ({{ detailTasks.length }})</span>
+              </div>
+              <div class="tasks-list">
+                <mj-task-widget
+                  *ngFor="let task of detailTasks"
+                  [task]="task"
+                  [compact]="false"
+                  [clickable]="false"
+                  [showProgress]="true"
+                  [showDuration]="true">
+                </mj-task-widget>
               </div>
             </div>
           }

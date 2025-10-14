@@ -1,11 +1,16 @@
-import { Component, Input, OnInit, OnDestroy, DoCheck } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck } from '@angular/core';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { TaskEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
+import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.service';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 /**
- * Tasks dropdown component for chat header
- * Displays active tasks from the current conversation
+ * Enhanced tasks dropdown component for chat header.
+ * Shows both:
+ * 1. Active (running) tasks from ActiveTasksService
+ * 2. Database tasks for the current conversation
  */
 @Component({
   selector: 'mj-tasks-dropdown',
@@ -15,46 +20,64 @@ import { ConversationStateService } from '../../services/conversation-state.serv
         class="active-tasks-btn"
         (click)="toggleDropdown()"
         [class.active]="isOpen"
-        title="View active tasks">
+        title="View tasks">
         <i class="fas fa-tasks"></i>
         <span>Tasks</span>
-        <span class="task-count-badge" *ngIf="taskCount > 0">{{ taskCount }}</span>
+        <span class="task-count-badge" *ngIf="totalTaskCount > 0">{{ totalTaskCount }}</span>
       </button>
 
       <div class="active-tasks-dropdown" *ngIf="isOpen">
         <div class="dropdown-header">
           <div class="header-left">
             <i class="fas fa-tasks"></i>
-            <span>Active Tasks</span>
+            <span>Tasks</span>
           </div>
           <button class="close-btn" (click)="closeDropdown()">
             <i class="fas fa-times"></i>
           </button>
         </div>
+
         <div class="dropdown-content">
-          <div *ngIf="tasks.length === 0" class="no-tasks">
-            <i class="fas fa-tasks"></i>
-            <p>No active tasks</p>
-          </div>
-          <div *ngFor="let task of tasks" class="task-item">
-            <div class="task-status" [attr.data-status]="task.Status"></div>
-            <div class="task-content">
-              <div class="task-title">{{ task.Name }}</div>
-              <div class="task-meta">
-                <span class="task-progress" *ngIf="task.PercentComplete != null">
-                  <i class="fas fa-chart-line"></i>
-                  {{ task.PercentComplete }}%
-                </span>
-                <span class="task-assigned" *ngIf="task.User">
-                  <i class="fas fa-user"></i>
-                  {{ task.User }}
-                </span>
-                <span class="task-assigned" *ngIf="task.Agent">
+          <!-- Active Running Tasks Section -->
+          <div class="section" *ngIf="activeTasks.length > 0">
+            <div class="section-header">
+              <i class="fas fa-circle-notch fa-spin"></i>
+              <span>Active ({{ activeTasks.length }})</span>
+            </div>
+            <div class="active-task-item" *ngFor="let task of activeTasks">
+              <div class="task-status-indicator active"></div>
+              <div class="task-content">
+                <div class="task-title">
                   <i class="fas fa-robot"></i>
-                  {{ task.Agent }}
-                </span>
+                  {{ task.agentName }}
+                </div>
+                <div class="task-status-text">{{ getTrimmedStatus(task.status) }}</div>
+                <div class="task-elapsed">{{ getElapsedTime(task) }}</div>
               </div>
             </div>
+          </div>
+
+          <!-- Database Tasks Section -->
+          <div class="section" *ngIf="dbTasks.length > 0">
+            <div class="section-header">
+              <i class="fas fa-list-check"></i>
+              <span>In Progress ({{ dbTasks.length }})</span>
+            </div>
+            <mj-task-widget
+              *ngFor="let task of dbTasks"
+              [task]="task"
+              [compact]="true"
+              [clickable]="true"
+              [showProgress]="true"
+              [showDuration]="false"
+              (taskClick)="onTaskClick($event)">
+            </mj-task-widget>
+          </div>
+
+          <!-- No Tasks State -->
+          <div *ngIf="activeTasks.length === 0 && dbTasks.length === 0" class="no-tasks">
+            <i class="fas fa-tasks"></i>
+            <p>No active tasks</p>
           </div>
         </div>
       </div>
@@ -152,13 +175,104 @@ import { ConversationStateService } from '../../services/conversation-state.serv
     }
 
     .dropdown-content {
-      max-height: 400px;
+      max-height: 500px;
       overflow-y: auto;
-      padding: 8px;
+    }
+
+    .section {
+      padding: 12px;
+      border-bottom: 1px solid #F3F4F6;
+    }
+
+    .section:last-child {
+      border-bottom: none;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #6B7280;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+      padding: 0 4px;
+    }
+
+    .section-header i {
+      font-size: 11px;
+    }
+
+    .active-task-item {
+      display: flex;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: #F9FAFB;
+      border: 1px solid #E5E7EB;
+      margin-bottom: 8px;
+    }
+
+    .active-task-item:last-child {
+      margin-bottom: 0;
+    }
+
+    .task-status-indicator {
+      width: 4px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    .task-status-indicator.active {
+      background: #3B82F6;
+      animation: pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .task-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .task-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .task-title i {
+      color: #3B82F6;
+      font-size: 12px;
+    }
+
+    .task-status-text {
+      font-size: 12px;
+      color: #6B7280;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .task-elapsed {
+      font-size: 11px;
+      color: #3B82F6;
+      font-weight: 600;
     }
 
     .no-tasks {
-      padding: 32px 16px;
+      padding: 40px 16px;
       text-align: center;
       color: #9CA3AF;
     }
@@ -174,99 +288,64 @@ import { ConversationStateService } from '../../services/conversation-state.serv
       font-size: 14px;
     }
 
-    .task-item {
-      display: flex;
-      gap: 12px;
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 4px;
-      cursor: pointer;
-      transition: background 150ms ease;
+    mj-task-widget {
+      display: block;
+      margin-bottom: 8px;
     }
 
-    .task-item:hover {
-      background: #F9FAFB;
-    }
-
-    .task-status {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      margin-top: 6px;
-      flex-shrink: 0;
-    }
-
-    .task-status[data-status="Pending"] {
-      background: #9CA3AF;
-    }
-
-    .task-status[data-status="In Progress"] {
-      background: #3B82F6;
-    }
-
-    .task-status[data-status="Complete"] {
-      background: #10B981;
-    }
-
-    .task-status[data-status="Blocked"] {
-      background: #EF4444;
-    }
-
-    .task-status[data-status="Failed"] {
-      background: #DC2626;
-    }
-
-    .task-status[data-status="Cancelled"], .task-status[data-status="Deferred"] {
-      background: #6B7280;
-    }
-
-    .task-content {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .task-title {
-      font-size: 14px;
-      font-weight: 500;
-      color: #111827;
-      margin-bottom: 4px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .task-meta {
-      display: flex;
-      gap: 12px;
-      font-size: 12px;
-      color: #6B7280;
-    }
-
-    .task-progress, .task-assigned {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .task-progress i, .task-assigned i {
-      font-size: 10px;
+    mj-task-widget:last-child {
+      margin-bottom: 0;
     }
   `]
 })
 export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
   @Input() currentUser!: UserInfo;
+  @Output() taskClicked = new EventEmitter<TaskEntity>();
 
   public isOpen: boolean = false;
-  public tasks: TaskEntity[] = [];
-  public taskCount: number = 0;
-  private previousConversationId: string | null = null;
+  public activeTasks: ActiveTask[] = [];
+  public dbTasks: TaskEntity[] = [];
+  public totalTaskCount: number = 0;
 
-  constructor(private conversationState: ConversationStateService) {}
+  private previousConversationId: string | null = null;
+  private destroy$ = new Subject<void>();
+  private pollingInterval: any = null;
+
+  constructor(
+    private conversationState: ConversationStateService,
+    private activeTasksService: ActiveTasksService
+  ) {}
 
   ngOnInit() {
+    // Subscribe to active tasks from the service
+    this.activeTasksService.tasks$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(tasks => {
+        this.activeTasks = tasks;
+        this.updateTotalCount();
+      });
+
     // Initial load if there's an active conversation
     if (this.conversationState.activeConversationId) {
-      this.loadTasks();
+      this.loadDatabaseTasks();
+    }
+
+    // Poll for task updates every 3 seconds when conversation is active
+    this.startPolling();
+  }
+
+  private startPolling(): void {
+    this.pollingInterval = setInterval(() => {
+      if (this.conversationState.activeConversationId) {
+        this.loadDatabaseTasks();
+      }
+    }, 3000); // Poll every 3 seconds
+  }
+
+  private stopPolling(): void {
+    if (this.pollingInterval) {
+      clearInterval(this.pollingInterval);
+      this.pollingInterval = null;
     }
   }
 
@@ -276,27 +355,37 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
     if (currentId !== this.previousConversationId) {
       this.previousConversationId = currentId;
       if (currentId) {
-        this.loadTasks();
+        this.loadDatabaseTasks();
       } else {
-        this.tasks = [];
-        this.taskCount = 0;
+        this.dbTasks = [];
+        this.updateTotalCount();
       }
     }
   }
 
   ngOnDestroy() {
-    // Cleanup if needed
+    this.stopPolling();
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   toggleDropdown(): void {
     this.isOpen = !this.isOpen;
+    if (this.isOpen) {
+      // Refresh database tasks when opening
+      this.loadDatabaseTasks();
+    }
   }
 
   closeDropdown(): void {
     this.isOpen = false;
   }
 
-  private async loadTasks(): Promise<void> {
+  private updateTotalCount(): void {
+    this.totalTaskCount = this.activeTasks.length + this.dbTasks.length;
+  }
+
+  private async loadDatabaseTasks(): Promise<void> {
     const activeId = this.conversationState.activeConversationId;
     if (!activeId) {
       return;
@@ -317,19 +406,19 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
       );
 
       if (!detailsResult.Success || !detailsResult.Results || detailsResult.Results.length === 0) {
-        this.tasks = [];
-        this.taskCount = 0;
+        this.dbTasks = [];
+        this.updateTotalCount();
         return;
       }
 
       // Get all conversation detail IDs
       const detailIds = detailsResult.Results.map(d => `'${d.ID}'`).join(',');
 
-      // Load tasks for these conversation details
+      // Load tasks for these conversation details (only top-level active ones)
       const result = await rv.RunView<TaskEntity>(
         {
           EntityName: 'MJ: Tasks',
-          ExtraFilter: `ConversationDetailID IN (${detailIds}) AND Status IN ('Pending', 'In Progress')`,
+          ExtraFilter: `ConversationDetailID IN (${detailIds}) AND Status IN ('Pending', 'In Progress') AND ParentID IS NULL`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 50,
           ResultType: 'entity_object'
@@ -338,11 +427,37 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
       );
 
       if (result.Success) {
-        this.tasks = result.Results || [];
-        this.taskCount = this.tasks.length;
+        this.dbTasks = result.Results || [];
+        this.updateTotalCount();
       }
     } catch (error) {
-      console.error('Failed to load tasks:', error);
+      console.error('Failed to load database tasks:', error);
     }
+  }
+
+  getElapsedTime(task: ActiveTask): string {
+    const elapsed = Date.now() - task.startTime;
+    const seconds = Math.floor(elapsed / 1000);
+
+    if (seconds < 60) {
+      return `${seconds}s`;
+    }
+
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+
+  getTrimmedStatus(status: string): string {
+    const maxLength = 60;
+    if (status.length <= maxLength) {
+      return status;
+    }
+    return status.substring(0, maxLength) + '...';
+  }
+
+  onTaskClick(task: TaskEntity): void {
+    this.taskClicked.emit(task);
+    this.closeDropdown();
   }
 }

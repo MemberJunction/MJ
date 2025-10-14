@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core
 
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/global@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Patch Changes

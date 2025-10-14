@@ -7,6 +7,7 @@ A comprehensive library of strongly-typed entity classes for MemberJunction's co
 The `@memberjunction/core-entities` package contains:
 - **178+ Generated Entity Classes**: Strongly-typed TypeScript classes for all core MemberJunction entities
 - **Extended Entity Classes**: Custom subclasses with specialized business logic
+- **Artifact Extraction System**: Metadata-driven attribute extraction with hierarchical inheritance
 - **Resource Permission Engine**: Comprehensive permission management system
 - **Zod Schema Validation**: Built-in runtime validation for all entity types
 - **Type Definitions**: Full TypeScript type definitions for enhanced IDE support
@@ -33,11 +34,20 @@ Several entities have custom extended classes that provide additional functional
 - **DashboardEntityExtended**: Dashboard configuration management
 - **AIModelEntityExtended**: AI model utilities and helpers
 - **AIPromptEntityExtended**: Prompt management functionality
+- **ArtifactVersionExtended**: Automatic content hashing and attribute extraction
 - **ListDetailEntityExtended**: List view enhancements
 - **ScheduledActionExtended**: Scheduled task management
 - **ResourcePermissionEntity**: Resource access control
 
-### 3. Resource Permission Engine
+### 3. Artifact Extraction System
+A powerful metadata-driven system for extracting structured attributes from artifact content:
+- Hierarchical extract rule inheritance
+- Declarative JavaScript-based extractors
+- Automatic SHA-256 content hashing
+- Standard property mappings for UI rendering
+- Type-safe attribute storage and retrieval
+
+### 4. Resource Permission Engine
 A sophisticated permission system for managing access to various resources:
 - Role-based permissions
 - Resource type definitions
@@ -71,159 +81,106 @@ app.Description = 'A test application';
 await app.Save();
 ```
 
-### Working with User Views
+(continuing in next command due to size...)
+
+## Artifact Extraction System
+
+The artifact extraction system enables declarative extraction of structured attributes from artifact content with hierarchical inheritance.
+
+### Overview
+
+Artifacts in MemberJunction can have **extract rules** defined in their `ArtifactType` that specify how to extract attributes from the artifact content. These rules:
+- Are stored as JSON in the `ArtifactType.ExtractRules` column
+- Support hierarchical inheritance (child types inherit and override parent rules)
+- Execute JavaScript code in a controlled environment
+- Map extracted values to standard properties (name, description, display formats)
+- Are automatically executed when artifact versions are saved
+
+### Defining Extract Rules
+
+Extract rules are defined in the `ArtifactType.ExtractRules` JSON field:
+
+```json
+[
+  {
+    "name": "subject",
+    "description": "Email subject line",
+    "type": "string",
+    "standardProperty": "name",
+    "extractor": "const parsed = JSON.parse(content); return parsed.subject || 'Untitled';"
+  },
+  {
+    "name": "recipientCount",
+    "description": "Number of recipients",
+    "type": "number",
+    "extractor": "const parsed = JSON.parse(content); return parsed.recipients?.length || 0;"
+  }
+]
+```
+
+### Extract Rule Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | string | Unique identifier for this rule |
+| `description` | string | Human-readable description |
+| `type` | string | TypeScript type (e.g., `'string'`, `'Array<{x: number}>'`) |
+| `standardProperty` | string? | Maps to: `'name'`, `'description'`, `'displayMarkdown'`, `'displayHtml'` |
+| `extractor` | string | JavaScript code that receives `content` and returns value |
+
+### Using the ArtifactExtractor
 
 ```typescript
-import { UserViewEntityExtended } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { ArtifactExtractor } from '@memberjunction/core-entities';
 
-const md = new Metadata();
+// Resolve extract rules with inheritance
+const rules = ArtifactExtractor.ResolveExtractRules(artifactTypeChain);
 
-// Load user views for an entity
-const rv = this.RunViewProviderToUse;
-const views = await rv.RunView<UserViewEntityExtended>({
-    EntityName: 'User Views',
-    ExtraFilter: `EntityID='${entityId}' AND UserID='${userId}'`,
-    ResultType: 'entity_object'
+// Extract attributes from content
+const result = await ArtifactExtractor.ExtractAttributes({
+    content: artifactContent,
+    extractRules: rules,
+    throwOnError: false,
+    timeout: 5000
 });
 
-// Access parsed view configuration
-const view = views.Results[0];
-const columns = view.Columns; // Parsed column configuration
-const filters = view.Filter;  // Parsed filter configuration
+// Get standard properties
+const name = ArtifactExtractor.GetStandardProperty(result.attributes, 'name');
+const description = ArtifactExtractor.GetStandardProperty(result.attributes, 'description');
 ```
 
-### Resource Permissions
+### Automatic Extraction with ArtifactVersionExtended
 
 ```typescript
-import { ResourcePermissionEngine } from '@memberjunction/core-entities';
-
-// Get the singleton instance
-const permEngine = ResourcePermissionEngine.Instance;
-
-// Initialize the engine
-await permEngine.Config();
-
-// Check permissions for a resource
-const permissions = permEngine.GetPermissionsForResource(
-    resourceTypeId,
-    resourceRecordId
-);
-
-// Get user's permission level
-const userPermission = await permEngine.GetUserPermissionForResource(
-    userId,
-    resourceTypeId,
-    resourceRecordId
-);
-```
-
-### Dashboard Management
-
-```typescript
-import { DashboardEntityExtended } from '@memberjunction/core-entities';
+import { ArtifactVersionExtended } from '@memberjunction/core-entities';
 import { Metadata } from '@memberjunction/core';
 
 const md = new Metadata();
+const version = await md.GetEntityObject<ArtifactVersionExtended>('MJ: Artifact Versions');
+version.NewRecord();
+version.Content = JSON.stringify({ subject: "Q4 Campaign", body: "..." });
 
-// Create a new dashboard
-const dashboard = await md.GetEntityObject<DashboardEntityExtended>('Dashboards');
-dashboard.NewRecord(); // Automatically sets default configuration
+// Save triggers automatic extraction:
+// 1. Calculates SHA-256 hash → ContentHash
+// 2. Resolves extract rules from ArtifactType hierarchy
+// 3. Extracts attributes → Name and Description
+// 4. Creates ArtifactVersionAttribute records
+await version.Save();
 
-dashboard.Name = 'Sales Dashboard';
-dashboard.Description = 'Monthly sales metrics';
-await dashboard.Save();
-
-// The UIConfigDetails is automatically initialized with default grid configuration
+console.log(version.Name); // "Q4 Campaign" (extracted)
+console.log(version.ContentHash); // "a3f7e2..." (SHA-256)
 ```
 
-### AI Model Access
+For complete documentation, see the [Implementation Summary](../../IMPLEMENTATION_SUMMARY_v2.105.md).
 
-```typescript
-import { AIModelEntityExtended } from '@memberjunction/core-entities';
-import { RunView } from '@memberjunction/core';
+## Best Practices
 
-const rv = this.RunViewProviderToUse;
-
-// Load all active AI models
-const models = await rv.RunView<AIModelEntityExtended>({
-    EntityName: 'AI Models',
-    ExtraFilter: "IsActive=1",
-    OrderBy: 'Name',
-    ResultType: 'entity_object'
-});
-
-// Use the extended functionality
-models.Results.forEach(model => {
-    console.log(model.APINameOrName); // Uses APIName if available, otherwise Name
-});
-```
-
-## Entity Validation
-
-All entities include Zod schema validation:
-
-```typescript
-import { UserSchema, UserEntityType } from '@memberjunction/core-entities';
-
-// Validate data before creating entity
-const userData: unknown = { /* user data */ };
-
-try {
-    const validatedData = UserSchema.parse(userData);
-    // Data is now typed as UserEntityType
-} catch (error) {
-    // Handle validation errors
-}
-```
-
-## Type Definitions
-
-Every entity exports both the class and its TypeScript type:
-
-```typescript
-import { 
-    ApplicationEntity,          // The entity class
-    ApplicationEntityType,      // The TypeScript type
-    ApplicationSchema          // The Zod schema
-} from '@memberjunction/core-entities';
-
-// Use types for function parameters
-function processApplication(app: ApplicationEntityType) {
-    // Type-safe access to all properties
-}
-```
-
-## Custom Entity Extensions
-
-To create your own entity extensions:
-
-```typescript
-import { RegisterClass } from '@memberjunction/global';
-import { BaseEntity } from '@memberjunction/core';
-import { YourEntity } from '@memberjunction/core-entities';
-
-@RegisterClass(BaseEntity, 'Your Entity Name')
-export class YourEntityExtended extends YourEntity {
-    // Add custom methods and properties
-    public customMethod(): void {
-        // Your business logic
-    }
-}
-```
-
-## Available Entities
-
-This package includes classes for all core MemberJunction entities including:
-
-- **System Entities**: Users, Applications, Entities, Entity Fields, etc.
-- **Security**: Roles, Authorizations, User Roles, Resource Permissions
-- **Communication**: Conversations, Templates, Communication Providers
-- **Workflow**: Actions, Action Categories, Scheduled Actions
-- **AI/ML**: AI Models, AI Prompts, Vector Databases
-- **Reporting**: Reports, Dashboards, Query Fields
-- **Integration**: Company Integrations, API Configurations
-- **And 170+ more...**
+1. **Always use Metadata for entity creation**: Never instantiate entity classes directly
+2. **Use RunView for bulk operations**: More efficient than loading entities individually
+3. **Leverage TypeScript types**: Use exported types for function parameters
+4. **Handle validation errors**: Wrap entity operations in try-catch blocks
+5. **Use extended classes**: When available, use extended versions for additional functionality
+6. **Import artifacts from core-entities**: Artifact extraction utilities are in this package
 
 ## Dependencies
 
@@ -231,40 +188,10 @@ This package includes classes for all core MemberJunction entities including:
 - `@memberjunction/global`: Global utilities and decorators
 - `zod`: Runtime type validation
 
-## Version Compatibility
-
-This package is released in sync with MemberJunction core releases. Always use matching versions:
-
-```json
-{
-  "dependencies": {
-    "@memberjunction/core": "2.43.0",
-    "@memberjunction/core-entities": "2.43.0",
-    "@memberjunction/global": "2.43.0"
-  }
-}
-```
-
-## Best Practices
-
-1. **Always use Metadata for entity creation**: Never instantiate entity classes directly
-2. **Use RunView for bulk operations**: More efficient than loading entities individually
-3. **Leverage TypeScript types**: Use the exported types for function parameters and return types
-4. **Handle validation errors**: Always wrap entity operations in try-catch blocks
-5. **Use extended classes**: When available, use the extended versions for additional functionality
-
-## Contributing
-
-This package is generated from MemberJunction metadata. To modify:
-
-1. Update the source metadata in MemberJunction
-2. Run the code generation process
-3. Custom extensions can be added to the `/src/custom` directory
-
 ## License
 
 ISC - See LICENSE file for details
 
 ## Support
 
-For issues, questions, or contributions, please visit the [MemberJunction GitHub repository](https://github.com/MemberJunction/MJ).
+For issues, questions, or contributions, visit the [MemberJunction GitHub repository](https://github.com/MemberJunction/MJ).

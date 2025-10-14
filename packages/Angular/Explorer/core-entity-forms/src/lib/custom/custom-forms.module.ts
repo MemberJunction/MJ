@@ -32,6 +32,7 @@ import { SubAgentAdvancedSettingsDialogComponent } from "./AIAgents/sub-agent-ad
 import { SubAgentSelectorDialogComponent } from "./AIAgents/sub-agent-selector-dialog.component";
 import { CreatePromptDialogComponent } from "./AIAgents/create-prompt-dialog.component";
 import { CreateSubAgentDialogComponent } from "./AIAgents/create-sub-agent-dialog.component";
+import { AgentPermissionsDialogComponent } from "./AIAgents/agent-permissions-dialog.component";
 import { AIAgentManagementService } from "./AIAgents/ai-agent-management.service";
 import { AITestHarnessModule } from "@memberjunction/ng-ai-test-harness";
 import { ActionGalleryModule } from "@memberjunction/ng-action-gallery";
@@ -81,6 +82,7 @@ import { MJIntegratedFlowEditorComponent } from "./AIAgents/FlowAgentType/mj-int
         SubAgentSelectorDialogComponent,
         CreatePromptDialogComponent,
         CreateSubAgentDialogComponent,
+        AgentPermissionsDialogComponent,
         EntitySelectorDialogComponent,
         AIPromptRunFormComponentExtended,
         ChatMessageViewerComponent,

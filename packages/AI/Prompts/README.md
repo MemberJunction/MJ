@@ -768,7 +768,57 @@ GROUP BY OriginalModelID, ModelID
 ORDER BY FailoverCount DESC;
 ```
 
-For more details on the failover implementation, see the [Failover Design Document](./failover-design.md).
+#### Configuration-Aware Failover
+
+The failover system respects `AIConfiguration` boundaries to ensure environment-specific models stay isolated:
+
+**How It Works:**
+- When you specify a `configurationId`, the system builds a candidate list with two priority tiers:
+  1. **Configuration-specific models** (priority 5000+): Models assigned to your configuration
+  2. **NULL configuration models** (priority 2000+): Universal fallback models available to all configurations
+
+**Example Setup:**
+```sql
+-- Production Configuration: Only approved production models
+INSERT INTO AIPromptModel (PromptID, ModelID, ConfigurationID, Priority)
+VALUES
+  (@PromptID, @Claude35SonnetID, @ProductionConfigID, 100),
+  (@PromptID, @GPT4ID, @ProductionConfigID, 90);
+
+-- Development Configuration: Include experimental models
+INSERT INTO AIPromptModel (PromptID, ModelID, ConfigurationID, Priority)
+VALUES
+  (@PromptID, @LlamaExperimentalID, @DevelopmentConfigID, 100);
+
+-- NULL Configuration: Universal fallbacks for all environments
+INSERT INTO AIPromptModel (PromptID, ModelID, ConfigurationID, Priority)
+VALUES
+  (@PromptID, @Claude3HaikuID, NULL, 100),
+  (@PromptID, @GPT35TurboID, NULL, 90);
+```
+
+**Failover Behavior:**
+```typescript
+// Execute with Production configuration
+const result = await runner.ExecutePrompt({
+    prompt: myPrompt,
+    configurationId: productionConfigID,
+    data: { query: 'Analyze this' }
+});
+
+// Failover order:
+// 1. Try Claude 3.5 Sonnet (Production config, priority 5100)
+// 2. Try GPT-4 (Production config, priority 5090)
+// 3. Try Claude 3 Haiku (NULL config fallback, priority 2100)
+// 4. Try GPT-3.5 Turbo (NULL config fallback, priority 2090)
+// ✅ Never crosses to Development config models
+```
+
+**Key Benefits:**
+- **Environment Isolation**: Production models never failover to development/experimental models
+- **Controlled Fallback**: Explicit hierarchy from config-specific to universal fallbacks
+- **Performance**: Candidate list built once and cached, no rebuilding during failover
+- **Consistency**: Same candidate list used for initial selection and all failover attempts
 
 ### Intelligent Caching
 

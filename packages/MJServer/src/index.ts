@@ -40,34 +40,23 @@ LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic mod
 import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
 LoadAgentManagementActions();
 
+import { LoadSchedulingEngine } from '@memberjunction/scheduling-engine';
+LoadSchedulingEngine(); // This also loads drivers
+
+import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
+LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
+
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 import { LoadAIEngine } from '@memberjunction/aiengine';
-import { LoadOpenAILLM } from '@memberjunction/ai-openai';
-import { LoadAnthropicLLM } from '@memberjunction/ai-anthropic';
-import { LoadGroqLLM } from '@memberjunction/ai-groq';
-import { LoadCerebrasLLM } from '@memberjunction/ai-cerebras';
-import { LoadMistralLLM } from '@memberjunction/ai-mistral';
-import { LoadLMStudioLLM } from '@memberjunction/ai-lmstudio';
-import { LoadOpenRouterLLM } from '@memberjunction/ai-openrouter';
-import { LoadOllamaLLM } from '@memberjunction/ai-ollama';
-import { LoadLocalEmbedding } from '@memberjunction/ai-local-embeddings';
-// Load AI LLMs and Base AI Engine
-// These imports are necessary to ensure the LLMs are registered in the MemberJunction AI
-// system. They are not tree-shaken because they are dynamically loaded at runtime.
+import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
+// Load AI Engine and all providers to prevent tree shaking
 LoadAIEngine();
-LoadOpenAILLM();
-LoadAnthropicLLM();
-LoadGroqLLM();
-LoadCerebrasLLM();
-LoadMistralLLM();
-LoadLMStudioLLM();
-LoadOpenRouterLLM();
-LoadOllamaLLM();
-LoadLocalEmbedding();
+LoadAIProviders();
 
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
+import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
@@ -86,9 +75,13 @@ export * from './generic/RunViewResolver.js';
 export * from './resolvers/RunTemplateResolver.js';
 export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
+export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
 export * from './generic/DeleteOptionsInput.js';
+
+export * from './agents/skip-agent.js';
+export * from './agents/skip-sdk.js';
 
 export * from './resolvers/AskSkipResolver.js';
 export * from './resolvers/ColorResolver.js';
@@ -316,6 +309,19 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   // Set up REST endpoints with the configured options and auth middleware
   setupRESTEndpoints(app, restApiConfig, authMiddleware);
 
+  // Initialize and start scheduled jobs service if enabled
+  let scheduledJobsService: ScheduledJobsService | null = null;
+  if (configInfo.scheduledJobs?.enabled) {
+    try {
+      scheduledJobsService = new ScheduledJobsService(configInfo.scheduledJobs);
+      await scheduledJobsService.Initialize();
+      await scheduledJobsService.Start();
+    } catch (error) {
+      console.error('❌ Failed to start scheduled jobs service:', error);
+      // Don't throw - allow server to start even if scheduled jobs fail
+    }
+  }
+
   if (options?.onBeforeServe) {
     await Promise.resolve(options.onBeforeServe());
   }
@@ -323,4 +329,34 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   await new Promise<void>((resolve) => httpServer.listen({ port: graphqlPort }, resolve));
   console.log(`📦 Connected to database: ${dbHost}:${dbPort}/${dbDatabase}`);
   console.log(`🚀 Server ready at http://localhost:${graphqlPort}/`);
+
+  // Set up graceful shutdown handlers
+  const gracefulShutdown = async (signal: string) => {
+    console.log(`\n${signal} received, shutting down gracefully...`);
+
+    // Stop scheduled jobs service
+    if (scheduledJobsService?.IsRunning) {
+      try {
+        await scheduledJobsService.Stop();
+        console.log('✅ Scheduled jobs service stopped');
+      } catch (error) {
+        console.error('❌ Error stopping scheduled jobs service:', error);
+      }
+    }
+
+    // Close server
+    httpServer.close(() => {
+      console.log('✅ HTTP server closed');
+      process.exit(0);
+    });
+
+    // Force close after 10 seconds
+    setTimeout(() => {
+      console.error('⚠️  Forced shutdown after timeout');
+      process.exit(1);
+    }, 10000);
+  };
+
+  process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 };
