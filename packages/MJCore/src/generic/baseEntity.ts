@@ -1159,7 +1159,109 @@ export abstract class BaseEntity<T = unknown> {
         return true;
     }
 
+    /**
+     * Checks if a default value is a SQL function that should be evaluated server-side.
+     * @param defaultValue The default value to check
+     * @returns True if it's a SQL function, false otherwise
+     */
+    private IsDefaultValueSQLFunction(defaultValue: string): boolean {
+        if (!defaultValue) {
+            return false;
+        }
 
+        const normalizedValue = defaultValue.trim().toLowerCase();
+
+        // SQL functions that should be evaluated server-side
+        const sqlFunctions = [
+            'newid()',
+            'newsequentialid()',
+            'getdate()',
+            'getutcdate()',
+            'sysdatetime()',
+            'sysdatetimeoffset()',
+            'current_timestamp',
+            'user_name()',
+            'suser_name()',
+            'system_user'
+        ];
+
+        return sqlFunctions.some(func => normalizedValue.includes(func));
+    }
+
+    /**
+     * Helper method that applies default values for NULL fields that have defaults and don't allow NULL.
+     * This is called before Save() to ensure we don't try to INSERT NULL into NOT NULL columns with defaults.
+     *
+     * The stored procedures are generated without ISNULL wrapping, so the application layer must apply
+     * defaults for NULL values before calling the stored procedure.
+     */
+    private ApplyDefaultValuesForNullFields(): void {
+        for (const field of this.Fields) {
+            // Only apply defaults if:
+            // 1. Field has a default value
+            // 2. Field does NOT allow NULL
+            // 3. Current value IS NULL or undefined
+            // 4. Field is not a special date field (triggers handle those)
+            // 5. Field is not read-only
+            if (field.EntityFieldInfo.HasDefaultValue &&
+                !field.EntityFieldInfo.AllowsNull &&
+                (field.Value === null || field.Value === undefined) &&
+                !field.EntityFieldInfo.IsSpecialDateField &&
+                !field.ReadOnly) {
+
+                const defaultValue = field.EntityFieldInfo.DefaultValue;
+
+                // Check if it's a SQL function that should be evaluated server-side
+                // For those, we can't apply the default here
+                if (this.IsDefaultValueSQLFunction(defaultValue)) {
+                    // Skip SQL functions - let the database handle these
+                    // This includes NEWID(), NEWSEQUENTIALID(), GETDATE(), etc.
+                    continue;
+                }
+
+                // Apply the default value based on the field type
+                if (field.EntityFieldInfo.TSType === EntityFieldTSType.Boolean) {
+                    const trimmedDefault = defaultValue.trim();
+                    field.Value = trimmedDefault === '1' || trimmedDefault.toLowerCase() === 'true';
+                }
+                else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Number) {
+                    const numValue = Number(defaultValue);
+                    if (!isNaN(numValue)) {
+                        field.Value = numValue;
+                    }
+                }
+                else if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date) {
+                    // For dates, try to parse the default value
+                    try {
+                        const dateValue = new Date(defaultValue);
+                        if (!isNaN(dateValue.getTime())) {
+                            field.Value = dateValue;
+                        }
+                    }
+                    catch {
+                        // If parsing fails, skip - let validation catch it
+                    }
+                }
+                else if (field.EntityFieldInfo.TSType === EntityFieldTSType.String) {
+                    // Remove quotes if present (database defaults for strings include quotes)
+                    let cleanValue = defaultValue.trim();
+                    if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
+                        cleanValue = cleanValue.substring(1, cleanValue.length - 1);
+                    }
+                    field.Value = cleanValue;
+                }
+                else {
+                    // For other types (uniqueidentifier, etc.), use the value as-is
+                    // Remove quotes if present
+                    let cleanValue = defaultValue.trim();
+                    if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
+                        cleanValue = cleanValue.substring(1, cleanValue.length - 1);
+                    }
+                    field.Value = cleanValue;
+                }
+            }
+        }
+    }
 
     // Holds the current pending save observable (if any)
     private _pendingSave$: Observable<boolean> | null = null;
@@ -1246,6 +1348,10 @@ export abstract class BaseEntity<T = unknown> {
                         }
                     }
                     if (valResult.Success) {
+                        // Apply defaults for NULL values on non-nullable fields with defaults before saving
+                        // This ensures the stored procedure doesn't try to INSERT NULL into NOT NULL columns
+                        this.ApplyDefaultValuesForNullFields();
+
                         const data = await this.ProviderToUse.Save(this, this.ActiveUser, _options)
                         if (!this.TransactionGroup) {
                             // no transaction group, so we have our results here
