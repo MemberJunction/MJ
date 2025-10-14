@@ -15,6 +15,7 @@
     "@angular/platform-browser": "^18.0.0",
     "@memberjunction/core": "2.100.3",
     "@memberjunction/core-entities": "2.105.0",
+    "@memberjunction/ai-engine-base": "2.105.0",
     "dhtmlx-gantt": "^8.0.10",
     "rxjs": "^7.8.1"
   },
