@@ -43,6 +43,9 @@ LoadAgentManagementActions();
 import { LoadSchedulingEngine } from '@memberjunction/scheduling-engine';
 LoadSchedulingEngine(); // This also loads drivers
 
+import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
+LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
+
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';

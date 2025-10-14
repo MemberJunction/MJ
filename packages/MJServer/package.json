@@ -52,6 +52,7 @@
     "@memberjunction/scheduling-base-types": "2.106.0",
     "@memberjunction/scheduling-engine-base": "2.106.0",
     "@memberjunction/scheduling-engine": "2.106.0",
+    "@memberjunction/scheduling-actions": "2.106.0",
     "@memberjunction/skip-types": "2.106.0",
     "@memberjunction/sqlserver-dataprovider": "2.106.0",
     "@memberjunction/storage": "2.106.0",
