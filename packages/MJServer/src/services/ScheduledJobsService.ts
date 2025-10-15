@@ -71,11 +71,21 @@ export class ScheduledJobsService {
             this.isRunning = true;
 
             // Single consolidated console message
-            const interval = this.engine.ActivePollingInterval;
-            const intervalDisplay = interval >= 60000
-                ? `${Math.round(interval / 60000)} minute(s)`
-                : `${Math.round(interval / 1000)} second(s)`;
-            console.log(`📅 Scheduled Jobs: ${this.engine.ScheduledJobs.length} active job(s), polling every ${intervalDisplay}`);
+            const jobCount = this.engine.ScheduledJobs.length;
+            if (jobCount === 0) {
+                console.log(`📅 Scheduled Jobs: No active jobs, polling suspended (will auto-start when jobs are added)`);
+            } else {
+                const interval = this.engine.ActivePollingInterval;
+                if (interval !== null) {
+                    const intervalDisplay = interval >= 60000
+                        ? `${Math.round(interval / 60000)} minute(s)`
+                        : `${Math.round(interval / 1000)} second(s)`;
+                    console.log(`📅 Scheduled Jobs: ${jobCount} active job(s), polling every ${intervalDisplay}`);
+                } else {
+                    // This shouldn't happen if jobCount > 0, but handle it gracefully
+                    console.log(`📅 Scheduled Jobs: ${jobCount} active job(s), polling interval not set`);
+                }
+            }
         } catch (error) {
             LogError('[ScheduledJobsService] Failed to start polling', undefined, error);
             throw error;

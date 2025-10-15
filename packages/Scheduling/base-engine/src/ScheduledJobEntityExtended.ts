@@ -101,12 +101,12 @@ export class ScheduledJobEntityExtended extends ScheduledJobEntity {
         const result = await super.Save(options);
 
         if (result) {
-            // Update the polling interval in the engine singleton
+            // Notify the scheduling engine about the change
             try {
-                SchedulingEngineBase.Instance.UpdatePollingInterval();
+                await this.notifyEngineOfChange();
             } catch (error) {
                 // Log but don't fail the save operation
-                console.error('Failed to update polling interval after save:', error);
+                console.error('Failed to notify engine after save:', error);
             }
         }
 
@@ -120,16 +120,31 @@ export class ScheduledJobEntityExtended extends ScheduledJobEntity {
         const result = await super.Delete();
 
         if (result) {
-            // Update the polling interval in the engine singleton
+            // Notify the scheduling engine about the change
             try {
-                SchedulingEngineBase.Instance.UpdatePollingInterval();
+                await this.notifyEngineOfChange();
             } catch (error) {
                 // Log but don't fail the delete operation
-                console.error('Failed to update polling interval after delete:', error);
+                console.error('Failed to notify engine after delete:', error);
             }
         }
 
         return result;
+    }
+
+    /**
+     * Notify the scheduling engine about job changes
+     * This method reloads job metadata and restarts polling if needed
+     * @private
+     */
+    private async notifyEngineOfChange(): Promise<void> {
+        const engine = SchedulingEngineBase.Instance;
+
+        // Force reload of job metadata
+        await engine.Config(true, this.ContextCurrentUser);
+
+        // Recalculate polling interval (will set to null if no jobs)
+        engine.UpdatePollingInterval();
     }
 }
 

@@ -75,6 +75,13 @@ export class SchedulingEngine extends SchedulingEngineBase {
                 // Force reload after cleaning locks to ensure we have fresh data
                 await this.Config(true, contextUser);
                 this.hasInitialized = true;
+
+                // Check if there are no jobs after initialization
+                if (this.ScheduledJobs.length === 0) {
+                    console.log(`📅 Scheduled Jobs: No active jobs found, stopping polling`);
+                    this.StopPolling();
+                    return;
+                }
             }
             try {
                 const runs = await this.ExecuteScheduledJobs(contextUser);
@@ -86,7 +93,16 @@ export class SchedulingEngine extends SchedulingEngineBase {
 
                 // Schedule next poll based on current ActivePollingInterval
                 if (this.isPolling) {
-                    this.pollingTimer = setTimeout(poll, this.ActivePollingInterval);
+                    const interval = this.ActivePollingInterval;
+
+                    // If interval is null (no jobs), stop polling
+                    if (interval === null) {
+                        console.log(`📅 Scheduled Jobs: All jobs removed, stopping polling`);
+                        this.StopPolling();
+                        return;
+                    }
+
+                    this.pollingTimer = setTimeout(poll, interval);
                 }
             } catch (error) {
                 this.logError('Error during polling', error);
@@ -115,6 +131,35 @@ export class SchedulingEngine extends SchedulingEngineBase {
             this.pollingTimer = undefined;
         }
         this.log('Stopped scheduled job polling');
+    }
+
+    /**
+     * Check if polling is currently active
+     */
+    public get IsPolling(): boolean {
+        return this.isPolling;
+    }
+
+    /**
+     * Handle job changes (create, update, delete)
+     * Reloads job metadata and restarts polling if needed
+     *
+     * This method is called automatically by ScheduledJobEntityExtended.Save() and Delete()
+     *
+     * @param contextUser - User context for reloading metadata
+     */
+    public async OnJobChanged(contextUser: UserInfo): Promise<void> {
+        // Reload jobs from database
+        await this.Config(true, contextUser);
+
+        // Recalculate polling interval
+        this.UpdatePollingInterval();
+
+        // If polling is stopped and we now have jobs, restart it
+        if (!this.isPolling && this.ScheduledJobs.length > 0) {
+            console.log(`📅 Scheduled Jobs: Jobs detected, starting polling`);
+            this.StartPolling(contextUser);
+        }
     }
 
     /**
