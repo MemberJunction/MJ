@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/scheduling-engine",
-  "version": "2.105.0",
+  "version": "2.106.0",
   "description": "MemberJunction: Scheduling Engine - core engine for executing scheduled jobs with plugin architecture",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
