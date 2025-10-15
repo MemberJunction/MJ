@@ -4,6 +4,9 @@ import * as env from 'env-var';
 import * as mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
+  FileSearchOptions,
+  FileSearchResult,
+  FileSearchResultSet,
   FileStorageBase,
   StorageListResult,
   StorageObjectMetadata
@@ -899,14 +902,207 @@ export class DropboxFileStorage extends FileStorageBase {
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {
       // Remove trailing slash if present
-      const normalizedPath = directoryPath.endsWith('/') 
-        ? directoryPath.substring(0, directoryPath.length - 1) 
+      const normalizedPath = directoryPath.endsWith('/')
+        ? directoryPath.substring(0, directoryPath.length - 1)
         : directoryPath;
-      
+
       const item = await this._getMetadata(normalizedPath);
       return item['.tag'] === 'folder';
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Search files in Dropbox using Dropbox Search API v2.
+   *
+   * Dropbox provides full-text search capabilities across file names and content.
+   * The search API supports natural language queries and can search both filenames
+   * and file content based on the searchContent option.
+   *
+   * @param query - The search query string (supports natural language and quoted phrases)
+   * @param options - Search options for filtering and limiting results
+   * @returns A Promise resolving to search results
+   *
+   * @remarks
+   * - Content search (searchContent: true) searches both filename and file content
+   * - Filename search (searchContent: false, default) searches only filenames
+   * - File type filtering converts extensions to Dropbox file categories
+   * - Date filters use server_modified timestamp
+   * - Path prefix restricts search to a specific folder and its subfolders
+   *
+   * @example
+   * ```typescript
+   * // Simple filename search
+   * const results = await storage.SearchFiles('quarterly report');
+   *
+   * // Search with file type filter
+   * const pdfResults = await storage.SearchFiles('budget', {
+   *   fileTypes: ['pdf'],
+   *   modifiedAfter: new Date('2024-01-01')
+   * });
+   *
+   * // Content search within a specific folder
+   * const contentResults = await storage.SearchFiles('machine learning', {
+   *   searchContent: true,
+   *   pathPrefix: 'documents/research',
+   *   maxResults: 50
+   * });
+   * ```
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    try {
+      const maxResults = options?.maxResults || 100;
+
+      // Build Dropbox search options
+      const searchOptions: any = {
+        query: query,
+        options: {
+          max_results: Math.min(maxResults, 1000), // Dropbox max is 1000
+          path: options?.pathPrefix ? this._normalizePath(options.pathPrefix) : undefined,
+          file_status: 'active' as const, // Exclude deleted files
+          filename_only: !options?.searchContent // Search filename only or filename + content
+        }
+      };
+
+      // Add file extension filter if fileTypes provided
+      if (options?.fileTypes && options.fileTypes.length > 0) {
+        const extensions = this._extractFileExtensions(options.fileTypes);
+        if (extensions.length > 0) {
+          searchOptions.options.file_extensions = extensions;
+        }
+      }
+
+      // Execute search using Dropbox Search API v2
+      const response = await this._client.filesSearchV2(searchOptions);
+
+      const results: FileSearchResult[] = [];
+
+      // Process search results
+      for (const match of response.result.matches || []) {
+        // The metadata field contains the actual file/folder metadata
+        const metadata = (match.metadata as any).metadata;
+
+        // Skip if not a file (could be folder or other type)
+        if (!metadata || metadata['.tag'] !== 'file') {
+          continue;
+        }
+
+        // Apply date filters client-side (Dropbox search doesn't support date filters directly)
+        if (options?.modifiedAfter || options?.modifiedBefore) {
+          const modifiedDate = new Date(metadata.server_modified);
+
+          if (options.modifiedAfter && modifiedDate < options.modifiedAfter) {
+            continue;
+          }
+          if (options.modifiedBefore && modifiedDate > options.modifiedBefore) {
+            continue;
+          }
+        }
+
+        // Extract path information
+        const fullPath = this._extractRelativePath(metadata.path_display || metadata.path_lower);
+        const pathParts = fullPath.split('/');
+        const fileName = pathParts.pop() || metadata.name;
+
+        results.push({
+          path: fullPath,
+          name: fileName,
+          size: metadata.size || 0,
+          contentType: mime.lookup(fileName) || 'application/octet-stream',
+          lastModified: new Date(metadata.server_modified),
+          matchInFilename: this._checkFilenameMatch(fileName, query),
+          customMetadata: {
+            id: metadata.id,
+            rev: metadata.rev
+          },
+          providerData: {
+            dropboxId: metadata.id,
+            pathLower: metadata.path_lower
+          }
+        });
+      }
+
+      // Check if there are more results available
+      const hasMore = response.result.has_more || false;
+
+      return {
+        results,
+        totalMatches: undefined, // Dropbox doesn't provide total count
+        hasMore,
+        nextPageToken: hasMore ? 'continue' : undefined // Dropbox uses continue endpoint for pagination
+      };
+
+    } catch (error) {
+      console.error('Error searching files in Dropbox', { query, options, error });
+      throw new Error(`Dropbox search failed: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Extracts file extensions from fileTypes array.
+   * Converts MIME types to extensions and removes duplicates.
+   *
+   * @private
+   * @param fileTypes - Array of file types (extensions or MIME types)
+   * @returns Array of file extensions without leading dots
+   */
+  private _extractFileExtensions(fileTypes: string[]): string[] {
+    const extensions = new Set<string>();
+
+    for (const fileType of fileTypes) {
+      if (fileType.includes('/')) {
+        // It's a MIME type, convert to extension
+        const ext = mime.extension(fileType);
+        if (ext) {
+          extensions.add(ext);
+        }
+      } else {
+        // It's already an extension, remove leading dot if present
+        extensions.add(fileType.startsWith('.') ? fileType.substring(1) : fileType);
+      }
+    }
+
+    return Array.from(extensions);
+  }
+
+  /**
+   * Extracts the relative path from a Dropbox absolute path.
+   * Removes the root path prefix if configured.
+   *
+   * @private
+   * @param dropboxPath - The absolute Dropbox path
+   * @returns The relative path without root prefix
+   */
+  private _extractRelativePath(dropboxPath: string): string {
+    let relativePath = dropboxPath;
+
+    // Remove root path if present
+    if (this._rootPath && relativePath.startsWith(this._rootPath)) {
+      relativePath = relativePath.substring(this._rootPath.length);
+    }
+
+    // Remove leading slash
+    if (relativePath.startsWith('/')) {
+      relativePath = relativePath.substring(1);
+    }
+
+    return relativePath;
+  }
+
+  /**
+   * Checks if a filename contains the search query.
+   * Performs case-insensitive matching.
+   *
+   * @private
+   * @param filename - The filename to check
+   * @param query - The search query
+   * @returns True if the filename contains the query
+   */
+  private _checkFilenameMatch(filename: string, query: string): boolean {
+    return filename.toLowerCase().includes(query.toLowerCase());
   }
 }

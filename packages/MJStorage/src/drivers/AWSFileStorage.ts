@@ -14,6 +14,8 @@ import * as env from 'env-var';
 import * as mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
+  FileSearchOptions,
+  FileSearchResultSet,
   FileStorageBase,
   StorageListResult,
   StorageObjectMetadata
@@ -744,15 +746,15 @@ export class AWSFileStorage extends FileStorageBase {
     if (!directoryPath.endsWith('/')) {
       directoryPath = `${directoryPath}/`;
     }
-    
+
     const key = this._normalizeKey(directoryPath);
-    
+
     // Method 1: Check if the directory placeholder exists
     const placeholderExists = await this.ObjectExists(directoryPath);
     if (placeholderExists) {
       return true;
     }
-    
+
     // Method 2: Check if any objects exist with this prefix
     const command = new ListObjectsV2Command({
       Bucket: this._bucket,
@@ -768,5 +770,26 @@ export class AWSFileStorage extends FileStorageBase {
       console.error(e);
       return false;
     }
+  }
+
+  /**
+   * Search is not supported by AWS S3.
+   * S3 is an object storage service without built-in search capabilities.
+   *
+   * To search S3 objects, consider:
+   * - Using AWS Athena to query S3 data
+   * - Maintaining a separate search index (Elasticsearch, OpenSearch, etc.)
+   * - Using S3 Select for querying individual objects
+   * - Using S3 Inventory for listing and filtering objects
+   *
+   * @param query - The search query (not used)
+   * @param options - Search options (not used)
+   * @throws UnsupportedOperationError always
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    this.throwUnsupportedOperationError('SearchFiles');
   }
 }

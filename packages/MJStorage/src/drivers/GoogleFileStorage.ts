@@ -5,6 +5,8 @@ import * as mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileStorageBase,
+  FileSearchOptions,
+  FileSearchResultSet,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -672,19 +674,19 @@ export class GoogleFileStorage extends FileStorageBase {
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {
       directoryPath = this._normalizeDirectoryPath(directoryPath);
-      
+
       // Method 1: Check if directory placeholder exists
       const placeholderExists = await this.ObjectExists(directoryPath);
       if (placeholderExists) {
         return true;
       }
-      
+
       // Method 2: Check if any objects with this prefix exist
       const options = {
         prefix: directoryPath,
         maxResults: 1
       };
-      
+
       const [files] = await this._client.bucket(this._bucket).getFiles(options);
       return files.length > 0;
     } catch (e) {
@@ -692,5 +694,26 @@ export class GoogleFileStorage extends FileStorageBase {
       console.error(e);
       return false;
     }
+  }
+
+  /**
+   * Search is not supported by Google Cloud Storage.
+   * GCS is an object storage service without built-in search capabilities.
+   *
+   * To search GCS objects, consider:
+   * - Using BigQuery to query GCS data
+   * - Maintaining a separate search index (Elasticsearch, etc.)
+   * - Using object metadata for filtering with ListObjects
+   * - Using Cloud Data Loss Prevention API for content discovery
+   *
+   * @param query - The search query (not used)
+   * @param options - Search options (not used)
+   * @throws UnsupportedOperationError always
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    this.throwUnsupportedOperationError('SearchFiles');
   }
 }

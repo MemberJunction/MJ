@@ -5,6 +5,9 @@ import * as mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
   FileStorageBase,
+  FileSearchOptions,
+  FileSearchResult,
+  FileSearchResultSet,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -922,11 +925,195 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       const normalizedPath = directoryPath.endsWith('/')
         ? directoryPath.substring(0, directoryPath.length - 1)
         : directoryPath;
-      
+
       const item = await this._getItemByPath(normalizedPath);
       return item.mimeType === 'application/vnd.google-apps.folder';
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Searches for files in Google Drive using the Drive API search capabilities.
+   *
+   * Google Drive search syntax supports:
+   * - Simple terms: "report" matches files containing "report"
+   * - Exact phrases: "quarterly report" matches that exact phrase
+   * - Boolean OR: "budget OR forecast"
+   * - Exclusion: "report -draft" excludes files with "draft"
+   * - Wildcards: Not supported in Drive API
+   *
+   * Content search is always enabled for supported file types (Docs, Sheets, PDFs, etc.)
+   * when searchContent option is true.
+   *
+   * @param query - Search query using Google Drive search syntax
+   * @param options - Search options
+   * @returns Promise resolving to search results
+   *
+   * @example
+   * ```typescript
+   * // Simple name search
+   * const results = await storage.SearchFiles('quarterly report');
+   *
+   * // Search with file type filter
+   * const pdfResults = await storage.SearchFiles('budget', {
+   *   fileTypes: ['pdf'],
+   *   modifiedAfter: new Date('2024-01-01')
+   * });
+   *
+   * // Content search
+   * const contentResults = await storage.SearchFiles('machine learning', {
+   *   searchContent: true,
+   *   pathPrefix: 'documents/research/'
+   * });
+   * ```
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    const maxResults = options?.maxResults || 100;
+
+    // Build the Google Drive query string
+    const queryParts: string[] = [];
+
+    // Add the user's search query (searches name and/or content)
+    if (options?.searchContent) {
+      queryParts.push(`fullText contains '${this._escapeQuery(query)}'`);
+    } else {
+      queryParts.push(`name contains '${this._escapeQuery(query)}'`);
+    }
+
+    // Add file type filter
+    if (options?.fileTypes && options.fileTypes.length > 0) {
+      const mimeTypes = options.fileTypes.map(ft => {
+        // Convert extensions to MIME types if needed
+        return ft.includes('/') ? ft : mime.lookup(ft) || ft;
+      });
+      const mimeQuery = mimeTypes.map(mt => `mimeType='${mt}'`).join(' or ');
+      queryParts.push(`(${mimeQuery})`);
+    }
+
+    // Add date filters
+    if (options?.modifiedAfter) {
+      queryParts.push(`modifiedTime > '${options.modifiedAfter.toISOString()}'`);
+    }
+    if (options?.modifiedBefore) {
+      queryParts.push(`modifiedTime < '${options.modifiedBefore.toISOString()}'`);
+    }
+
+    // Add path prefix filter (parent folder)
+    let parentFolderId = this._rootFolderId;
+    if (options?.pathPrefix) {
+      try {
+        const folder = await this._getItemByPath(options.pathPrefix);
+        parentFolderId = folder.id || undefined;
+      } catch (error) {
+        // If path doesn't exist, return empty results
+        return {
+          results: [],
+          totalMatches: 0,
+          hasMore: false
+        };
+      }
+    }
+    if (parentFolderId) {
+      queryParts.push(`'${parentFolderId}' in parents`);
+    }
+
+    // Exclude trashed files
+    queryParts.push('trashed=false');
+
+    // Add provider-specific options
+    if (options?.providerSpecific) {
+      for (const [key, value] of Object.entries(options.providerSpecific)) {
+        if (typeof value === 'boolean') {
+          queryParts.push(`${key}=${value}`);
+        } else if (typeof value === 'string') {
+          queryParts.push(`${key}='${value}'`);
+        }
+      }
+    }
+
+    const finalQuery = queryParts.join(' and ');
+
+    try {
+      const response = await this._drive.files.list({
+        q: finalQuery,
+        pageSize: maxResults,
+        fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, parents, properties)',
+        orderBy: 'modifiedTime desc'
+      });
+
+      const files = response.data.files || [];
+      const results: FileSearchResult[] = [];
+
+      for (const file of files) {
+        const path = await this._getFilePathFromId(file.id!);
+        const pathParts = path.split('/');
+        const fileName = pathParts.pop() || file.name!;
+        const parentPath = pathParts.join('/');
+
+        results.push({
+          path,
+          name: fileName,
+          size: parseInt(file.size || '0'),
+          contentType: file.mimeType!,
+          lastModified: new Date(file.modifiedTime!),
+          matchInFilename: file.name!.toLowerCase().includes(query.toLowerCase()),
+          customMetadata: file.properties as Record<string, string>,
+          providerData: { driveFileId: file.id }
+        });
+      }
+
+      return {
+        results,
+        totalMatches: undefined, // Drive API doesn't provide total count
+        hasMore: !!response.data.nextPageToken,
+        nextPageToken: response.data.nextPageToken || undefined
+      };
+
+    } catch (error) {
+      console.error('Error searching files in Google Drive', { query, options, error });
+      throw new Error(`Google Drive search failed: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Escapes special characters in search queries for Google Drive.
+   * @private
+   */
+  private _escapeQuery(query: string): string {
+    return query.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+  }
+
+  /**
+   * Gets the full path of a file from its ID by traversing up the parent chain.
+   * @private
+   */
+  private async _getFilePathFromId(fileId: string): Promise<string> {
+    const pathParts: string[] = [];
+    let currentId: string | undefined = fileId;
+
+    while (currentId && currentId !== 'root' && currentId !== this._rootFolderId) {
+      const file = await this._drive.files.get({
+        fileId: currentId,
+        fields: 'id, name, parents'
+      });
+
+      if (file.data.name) {
+        pathParts.unshift(file.data.name);
+      }
+
+      // Move to parent
+      currentId = file.data.parents?.[0];
+
+      // Stop if we've reached root or the configured root folder
+      if (currentId === 'root' || currentId === this._rootFolderId) {
+        break;
+      }
+    }
+
+    return pathParts.join('/');
   }
 }

@@ -5,6 +5,9 @@ import * as env from 'env-var';
 import * as mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
+  FileSearchOptions,
+  FileSearchResult,
+  FileSearchResultSet,
   FileStorageBase,
   StorageListResult,
   StorageObjectMetadata,
@@ -997,19 +1000,333 @@ export class SharePointFileStorage extends FileStorageBase {
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {
       // Remove trailing slash if present
-      const normalizedPath = directoryPath.endsWith('/') ? 
-        directoryPath.substring(0, directoryPath.length - 1) : 
+      const normalizedPath = directoryPath.endsWith('/') ?
+        directoryPath.substring(0, directoryPath.length - 1) :
         directoryPath;
-      
+
       const item = await this._getItemByPath(normalizedPath);
       return !!item.folder;
     } catch (error) {
       if (error.statusCode === 404) {
         return false;
       }
-      
+
       console.error('Error checking if directory exists', { directoryPath, error });
       return false;
     }
+  }
+
+  /**
+   * Search files in SharePoint using Microsoft Graph Search API.
+   *
+   * This method provides powerful search capabilities using KQL (Keyword Query Language),
+   * SharePoint's native query language. The search can target file names, metadata, and
+   * optionally file contents.
+   *
+   * @param query - The search query string. Can be plain text or use KQL syntax for advanced queries.
+   * @param options - Optional search configuration including filters, limits, and content search
+   * @returns A Promise resolving to FileSearchResultSet with matched files and pagination info
+   *
+   * @remarks
+   * **KQL Query Syntax Examples:**
+   * - Simple text: `"quarterly report"` - searches for files containing these terms
+   * - Boolean operators: `"budget AND 2024"`, `"draft OR final"`, `"report NOT internal"`
+   * - Wildcards: `"proj*"` matches "project", "projection", etc.
+   * - Property filters: `"FileType:pdf"`, `"Author:John Smith"`, `"Size>1000000"`
+   * - Date filters: `"Created>=2024-01-01"`, `"LastModifiedTime<2024-12-31"`
+   * - Proximity: `"project NEAR report"` - finds terms near each other
+   * - Exact phrases: `"\"annual budget report\""` - exact phrase match
+   *
+   * **Additional Filtering:**
+   * The method automatically adds KQL filters based on the provided options:
+   * - `fileTypes`: Adds FileType filters (e.g., `FileType:pdf OR FileType:docx`)
+   * - `modifiedAfter`/`modifiedBefore`: Adds LastModifiedTime filters
+   * - `pathPrefix`: Adds Path filter to restrict search to a directory
+   * - `searchContent`: When false, restricts search to filename only
+   *
+   * @example
+   * ```typescript
+   * // Simple text search in filenames
+   * const results = await storage.SearchFiles('quarterly report', {
+   *   maxResults: 20
+   * });
+   *
+   * // Search for PDFs only
+   * const pdfResults = await storage.SearchFiles('budget', {
+   *   fileTypes: ['pdf'],
+   *   maxResults: 50
+   * });
+   *
+   * // Search with date range
+   * const recentResults = await storage.SearchFiles('meeting notes', {
+   *   modifiedAfter: new Date('2024-01-01'),
+   *   modifiedBefore: new Date('2024-12-31'),
+   *   searchContent: true
+   * });
+   *
+   * // Search within specific directory
+   * const folderResults = await storage.SearchFiles('presentation', {
+   *   pathPrefix: 'documents/reports',
+   *   fileTypes: ['pptx', 'pdf']
+   * });
+   *
+   * // Advanced KQL query
+   * const advancedResults = await storage.SearchFiles(
+   *   'FileType:xlsx AND Created>=2024-01-01 AND Author:"John Smith"',
+   *   { maxResults: 100 }
+   * );
+   * ```
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    try {
+      const maxResults = options?.maxResults || 100;
+
+      // Build KQL query from options
+      const kqlQuery = this.buildKQLQuery(query, options);
+
+      // Prepare the search request payload
+      const searchRequest = {
+        requests: [
+          {
+            entityTypes: ['driveItem'],
+            query: {
+              queryString: kqlQuery
+            },
+            from: 0,
+            size: maxResults,
+            fields: [
+              'name',
+              'path',
+              'size',
+              'lastModifiedDateTime',
+              'fileSystemInfo',
+              'webUrl',
+              'id',
+              'contentType'
+            ]
+          }
+        ]
+      };
+
+      // Execute the search
+      const response = await this._client.api('/search/query')
+        .post(searchRequest);
+
+      // Transform results
+      return this.transformSearchResults(response, maxResults);
+    } catch (error) {
+      console.error('Error searching files in SharePoint', { query, options, error });
+
+      // Return empty result set on error
+      return {
+        results: [],
+        hasMore: false,
+        totalMatches: 0
+      };
+    }
+  }
+
+  /**
+   * Builds a KQL (Keyword Query Language) query string from the base query and search options.
+   *
+   * This helper method constructs a properly formatted KQL query by combining the user's
+   * search query with filters derived from FileSearchOptions. It handles file type filters,
+   * date range filters, path restrictions, and content search options.
+   *
+   * @param baseQuery - The user's search query (plain text or KQL)
+   * @param options - Optional search options to convert into KQL filters
+   * @returns A complete KQL query string
+   * @private
+   */
+  private buildKQLQuery(baseQuery: string, options?: FileSearchOptions): string {
+    const queryParts: string[] = [];
+
+    // Add base query if provided
+    if (baseQuery && baseQuery.trim()) {
+      queryParts.push(`(${baseQuery})`);
+    }
+
+    // Restrict to this specific drive
+    queryParts.push(`(Path:"${this._siteId}/${this._driveId}")`);
+
+    // Add path prefix filter if specified
+    if (options?.pathPrefix) {
+      const normalizedPrefix = options.pathPrefix.startsWith('/')
+        ? options.pathPrefix.substring(1)
+        : options.pathPrefix;
+      queryParts.push(`(Path:"${this._siteId}/${this._driveId}/${normalizedPrefix}*")`);
+    }
+
+    // Add file type filters if specified
+    if (options?.fileTypes && options.fileTypes.length > 0) {
+      const fileTypeFilters = options.fileTypes.map(fileType => {
+        // Handle both extensions (pdf) and MIME types (application/pdf)
+        if (fileType.includes('/')) {
+          // It's a MIME type
+          return `ContentType:"${fileType}"`;
+        } else {
+          // It's a file extension
+          const extension = fileType.startsWith('.') ? fileType.substring(1) : fileType;
+          return `FileType:${extension}`;
+        }
+      }).join(' OR ');
+
+      queryParts.push(`(${fileTypeFilters})`);
+    }
+
+    // Add date filters if specified
+    if (options?.modifiedAfter) {
+      const dateString = options.modifiedAfter.toISOString().split('T')[0];
+      queryParts.push(`(LastModifiedTime>=${dateString})`);
+    }
+
+    if (options?.modifiedBefore) {
+      const dateString = options.modifiedBefore.toISOString().split('T')[0];
+      queryParts.push(`(LastModifiedTime<=${dateString})`);
+    }
+
+    // Restrict to filename search if content search is disabled
+    if (options?.searchContent === false && baseQuery && baseQuery.trim()) {
+      // Remove the base query and add it as a filename-only search
+      queryParts.shift(); // Remove the base query we added earlier
+      queryParts.unshift(`(filename:${baseQuery})`);
+    }
+
+    // Combine all parts with AND
+    return queryParts.join(' AND ');
+  }
+
+  /**
+   * Transforms Microsoft Graph Search API response into FileSearchResultSet format.
+   *
+   * This helper method processes the raw search response from the Graph API,
+   * extracting relevant file information and converting it to the standard
+   * FileSearchResult format. It handles pagination info and calculates relevance scores.
+   *
+   * @param response - The raw response from Microsoft Graph Search API
+   * @param maxResults - The maximum number of results requested
+   * @returns A FileSearchResultSet with transformed results
+   * @private
+   */
+  private transformSearchResults(response: any, maxResults: number): FileSearchResultSet {
+    const results: FileSearchResult[] = [];
+    let totalMatches = 0;
+    let hasMore = false;
+
+    // Navigate the response structure
+    if (response.value && response.value.length > 0) {
+      const searchResponse = response.value[0];
+
+      if (searchResponse.hitsContainers && searchResponse.hitsContainers.length > 0) {
+        const hitsContainer = searchResponse.hitsContainers[0];
+        totalMatches = hitsContainer.total || 0;
+        hasMore = hitsContainer.moreResultsAvailable || false;
+
+        if (hitsContainer.hits && hitsContainer.hits.length > 0) {
+          for (const hit of hitsContainer.hits) {
+            const resource = hit.resource;
+
+            // Skip if not a file (e.g., folders)
+            if (!resource || resource.folder) {
+              continue;
+            }
+
+            // Extract file information
+            const result: FileSearchResult = {
+              path: this.extractPathFromResource(resource),
+              name: resource.name || '',
+              size: resource.size || 0,
+              contentType: resource.file?.mimeType || mime.lookup(resource.name) || 'application/octet-stream',
+              lastModified: resource.lastModifiedDateTime
+                ? new Date(resource.lastModifiedDateTime)
+                : new Date(),
+              relevance: hit.rank ? (hit.rank / 100.0) : undefined,
+              excerpt: hit.summary || undefined,
+              matchInFilename: this.determineMatchLocation(hit),
+              providerData: {
+                id: resource.id,
+                webUrl: resource.webUrl,
+                driveId: this._driveId,
+                siteId: this._siteId
+              }
+            };
+
+            results.push(result);
+          }
+        }
+      }
+    }
+
+    return {
+      results,
+      totalMatches,
+      hasMore
+    };
+  }
+
+  /**
+   * Extracts the file path from a SharePoint resource object.
+   *
+   * This helper method processes the path information from a Graph API resource,
+   * removing the drive and site prefixes to return just the file path relative
+   * to the configured root folder.
+   *
+   * @param resource - The resource object from Graph API search results
+   * @returns The relative file path
+   * @private
+   */
+  private extractPathFromResource(resource: any): string {
+    // Try to get path from parentReference
+    if (resource.parentReference?.path) {
+      let path = resource.parentReference.path;
+
+      // Remove the drive/site prefix
+      const pathParts = path.split(':');
+      if (pathParts.length > 1) {
+        path = pathParts[1];
+      }
+
+      // Remove leading slash
+      path = path.startsWith('/') ? path.substring(1) : path;
+
+      // Remove root folder prefix if configured
+      if (this._rootFolderId && path.startsWith(this._rootFolderId)) {
+        path = path.substring(this._rootFolderId.length);
+        path = path.startsWith('/') ? path.substring(1) : path;
+      }
+
+      // Combine with filename
+      return path ? `${path}/${resource.name}` : resource.name;
+    }
+
+    // Fallback to just the filename
+    return resource.name || '';
+  }
+
+  /**
+   * Determines whether the search match was in the filename or content.
+   *
+   * This helper method analyzes the hit metadata to determine if the search
+   * term was found in the filename versus the file content.
+   *
+   * @param hit - The search hit object from Graph API
+   * @returns True if match was in filename, false if in content, undefined if unknown
+   * @private
+   */
+  private determineMatchLocation(hit: any): boolean | undefined {
+    // Check if summary exists (indicates content match)
+    if (hit.summary && hit.summary.length > 0) {
+      return false; // Match in content
+    }
+
+    // If no summary but we have a hit, likely a filename match
+    if (hit.resource?.name) {
+      return true; // Match in filename
+    }
+
+    return undefined;
   }
 }
