@@ -251,6 +251,20 @@
             "lastModified": "2025-10-15T15:57:33.808Z",
             "checksum": "785958ebddc3a99febe00ffb3fb79a86cae5672e43529e0ce0757d1fe77ff328"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Find Best Agent",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A71AFFCE-52DB-4A17-B6EF-93D63A696A22"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T18:19:26.034Z",
+            "checksum": "013a61aa9218828673d1bd2907e4c57adfc2aad354a0be2812cac4a5007ff758"
+          }
         }
       ]
     },
