@@ -485,14 +485,15 @@ export class SQLCodeGenBase {
             // Check if force regeneration is enabled for relevant SQL types
             const isForceRegeneration = configInfo.forceRegeneration?.enabled && (
                 (description.toLowerCase().includes('base view') && configInfo.forceRegeneration.baseViews) ||
+                (description.toLowerCase().includes('root id function') && configInfo.forceRegeneration.baseViews) || // TVFs are part of base view infrastructure
                 (description.toLowerCase().includes('spcreate') && configInfo.forceRegeneration.spCreate) ||
                 (description.toLowerCase().includes('spupdate') && configInfo.forceRegeneration.spUpdate) ||
                 (description.toLowerCase().includes('spdelete') && configInfo.forceRegeneration.spDelete) ||
                 (description.toLowerCase().includes('index') && configInfo.forceRegeneration.indexes) ||
                 (description.toLowerCase().includes('full text search') && configInfo.forceRegeneration.fullTextSearch) ||
-                (configInfo.forceRegeneration.allStoredProcedures && 
-                 (description.toLowerCase().includes('spcreate') || 
-                  description.toLowerCase().includes('spupdate') || 
+                (configInfo.forceRegeneration.allStoredProcedures &&
+                 (description.toLowerCase().includes('spcreate') ||
+                  description.toLowerCase().includes('spupdate') ||
                   description.toLowerCase().includes('spdelete')))
             );
             
@@ -561,13 +562,34 @@ export class SQLCodeGenBase {
                 sRet += s + '\nGO\n';
             }
 
-            // BASE VIEW
+            // BASE VIEW AND RELATED TVFs
             // Only generate if BaseViewGenerated is true (respects custom views where it's false)
             // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
             if (!options.onlyPermissions &&
                 options.entity.BaseViewGenerated &&
                 !options.entity.VirtualEntity) {
-                // generate the base view
+
+                // ROOT ID FUNCTIONS (TVFs)
+                // Generate inline Table Value Functions for recursive foreign keys
+                // These must be created BEFORE the view that references them
+                const recursiveFKs = this.detectRecursiveForeignKeys(options.entity);
+                if (recursiveFKs.length > 0) {
+                    for (const field of recursiveFKs) {
+                        const functionName = `fn${options.entity.BaseTable}${field.Name}_GetRootID`;
+                        const s = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
+                                  this.generateRootIDFunction(options.entity, field);
+                        const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
+                        if (options.writeFiles) {
+                            this.logSQLForNewOrModifiedEntity(options.entity, s, `Root ID Function SQL for ${options.entity.Name}.${field.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
+                            fs.writeFileSync(filePath, s);
+                            files.push(filePath);
+                        }
+                        // Add function SQL to output BEFORE the view
+                        sRet += s + '\nGO\n';
+                    }
+                }
+
+                // Generate the base view (which may reference the TVFs created above)
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
                 if (options.writeFiles) {
@@ -1018,74 +1040,130 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
     }
 
     /**
-     * Generates the WITH clause containing recursive CTEs for root ID calculation
-     * Each recursive FK gets its own CTE that traverses the hierarchy to find the root
+     * Generates an inline Table Value Function for calculating root ID for a recursive FK field
+     * The function takes both the record ID and parent ID for optimization
+     * Returns SQL to create the function including DROP IF EXISTS
      */
-    protected generateRecursiveCTEs(entity: EntityInfo, recursiveFKs: EntityFieldInfo[]): string {
+    protected generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
         const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
         const schemaName = entity.SchemaName;
         const tableName = entity.BaseTable;
-        const classNameFirstChar = entity.ClassName.charAt(0).toLowerCase();
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetRootID`;
 
-        const ctes = recursiveFKs.map(field => {
-            const fieldName = field.Name;
-            const rootFieldName = `Root${fieldName}`;
-            const cteName = `CTE_${rootFieldName}`;
+        return `------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
 
-            return `    ${cteName} AS (
-        -- Anchor: rows with no parent (root nodes)
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RecordID ${primaryKeyType},
+    @ParentID ${primaryKeyType}
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_RootParent AS (
+        -- Anchor: Start from @ParentID if not null, otherwise start from @RecordID
         SELECT
             [${primaryKey}],
-            [${primaryKey}] AS [${rootFieldName}]
+            [${fieldName}],
+            [${primaryKey}] AS [RootParentID],
+            0 AS [Depth]
         FROM
             [${schemaName}].[${tableName}]
         WHERE
-            [${fieldName}] IS NULL
+            [${primaryKey}] = COALESCE(@ParentID, @RecordID)
 
         UNION ALL
 
-        -- Recursive: traverse up the hierarchy
+        -- Recursive: Keep going up the hierarchy until ${fieldName} is NULL
+        -- Includes depth counter to prevent infinite loops from circular references
         SELECT
-            child.[${primaryKey}],
-            parent.[${rootFieldName}]
+            c.[${primaryKey}],
+            c.[${fieldName}],
+            c.[${primaryKey}] AS [RootParentID],
+            p.[Depth] + 1 AS [Depth]
         FROM
-            [${schemaName}].[${tableName}] child
+            [${schemaName}].[${tableName}] c
         INNER JOIN
-            ${cteName} parent ON child.[${fieldName}] = parent.[${primaryKey}]
-    )`;
-        }).join(',\n');
-
-        return `WITH\n${ctes}\n`;
+            CTE_RootParent p ON c.[${primaryKey}] = p.[${fieldName}]
+        WHERE
+            p.[Depth] < 100  -- Prevent infinite loops, max 100 levels
+    )
+    SELECT TOP 1
+        [RootParentID] AS RootID
+    FROM
+        CTE_RootParent
+    WHERE
+        [${fieldName}] IS NULL
+    ORDER BY
+        [RootParentID]
+);
+GO
+`;
     }
 
     /**
-     * Generates the SELECT clause additions for root fields
-     * Example: , cte_root.[RootParentTaskID]
+     * Generates all inline Table Value Functions for an entity's recursive foreign keys
+     * Returns empty string if no recursive FKs exist
+     */
+    protected generateAllRootIDFunctions(entity: EntityInfo, recursiveFKs: EntityFieldInfo[]): string {
+        if (recursiveFKs.length === 0) {
+            return '';
+        }
+
+        return recursiveFKs
+            .map(field => this.generateRootIDFunction(entity, field))
+            .join('\n');
+    }
+
+
+    /**
+     * Generates the SELECT clause additions for root fields from TVFs
+     * Example: , root_ParentID.RootID AS [RootParentID]
      */
     protected generateRootFieldSelects(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
         return recursiveFKs.map(field => {
-            const rootFieldName = `Root${field.Name}`;
-            const cteName = `CTE_${rootFieldName}`;
-            return `,\n    ${cteName}.[${rootFieldName}]`;
+            const alias = `root_${field.Name}`;
+            const columnName = `Root${field.Name}`;
+            return `,\n    ${alias}.RootID AS [${columnName}]`;
         }).join('');
     }
 
     /**
-     * Generates LEFT OUTER JOINs to the recursive CTEs
+     * Generates OUTER APPLY joins to inline Table Value Functions for root ID calculation
+     * Each recursive FK gets an OUTER APPLY that calls its corresponding function
      */
-    protected generateRecursiveCTEJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
         if (recursiveFKs.length === 0) {
             return '';
         }
 
         const primaryKey = entity.FirstPrimaryKey.Name;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+
         const joins = recursiveFKs.map(field => {
-            const rootFieldName = `Root${field.Name}`;
-            const cteName = `CTE_${rootFieldName}`;
-            return `LEFT OUTER JOIN\n    ${cteName}\n  ON\n    [${classNameFirstChar}].[${primaryKey}] = ${cteName}.[${primaryKey}]`;
+            const functionName = `fn${tableName}${field.Name}_GetRootID`;
+            const alias = `root_${field.Name}`;
+            return `OUTER APPLY\n    [${schemaName}].[${functionName}]([${classNameFirstChar}].[${primaryKey}], [${classNameFirstChar}].[${field.Name}]) AS ${alias}`;
         }).join('\n');
 
         return '\n' + joins;
+    }
+
+    /**
+     * @deprecated Use generateRootIDJoins instead - kept for backward compatibility during migration
+     * Generates LEFT OUTER JOINs to the recursive CTEs
+     */
+    protected generateRecursiveCTEJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        return this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
@@ -1098,10 +1176,10 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
     ${classNameFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
 ` : '';
 
-        // Detect recursive foreign keys and generate CTEs
+        // Detect recursive foreign keys and generate TVF joins and root field selects
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
-        const cteClause = recursiveFKs.length > 0 ? this.generateRecursiveCTEs(entity, recursiveFKs) : '';
         const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
+        const rootJoins = recursiveFKs.length > 0 ? this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity) : '';
 
         return `
 ------------------------------------------------------------
@@ -1116,10 +1194,10 @@ GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
-${cteClause}SELECT
+SELECT
     ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${this.generateRecursiveCTEJoins(recursiveFKs, classNameFirstChar, entity)}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
 ${whereClause}GO${permissions}
     `
     }
