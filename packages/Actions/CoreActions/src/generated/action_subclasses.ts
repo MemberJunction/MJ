@@ -11,114 +11,54 @@ import { Metadata, RunView, RunQuery } from "@memberjunction/core";
 
             
 /**
- * Get AI Model Cost
+ * Execute Scheduled Job Now
  * Generated Class
- * User Prompt: Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters
+ * User Prompt: null
  */
-@RegisterClass(BaseAction, "Get AI Model Cost")
-export class Get_AI_Model_Cost_Action extends BaseAction {
-    /*
-		This child action retrieves a single AI Model Cost record from the database by its ID.
-		
-		- It expects a single input parameter: 'ID' (the primary key of the AI Model Cost record).
-		- It validates that the ID is provided, and if missing, returns a 'ValidationError'.
-		- It then maps the simple child interface (just 'ID') into the parameters expected by the parent 'Get Record' action (specifying both the primary key and the entity name).
-		- The parent action (Get Record) is invoked using its specific ID for reliability.
-		- If the parent action fails, the code returns a 'ParentActionFailed' result code and passes along the error message.
-		- If the parent action reports success but does not return a record (likely meaning not found), it returns a 'RecordNotFound' result code.
-		- If a valid record is found, it adds the result as an output parameter named 'ModelCostRecord' and returns success.
-		- All errors are handled gracefully, with clear and informative error messages.
-		
-	*/
+@RegisterClass(BaseAction, "Execute Scheduled Job Now")
+export class Execute_Scheduled_Job_Now_Action extends BaseAction {
+    
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        // 1. Extract and validate input parameters
-		const id = params.Params.find(p => p.Name.trim().toLowerCase() === 'id')?.Value;
-		
-		// Validate required parameter
-		if (!id) {
-		  return {
-		    Success: false,
-		    ResultCode: 'ValidationError',
-		    Message: 'The parameter "ID" is required to get an AI Model Cost record.'
-		  };
-		}
-		
-		// 2. Pre-process: Map child params to parent Get Record format
-		const mappedParams: ActionParam[] = [
-		  {
-		    Name: 'PrimaryKey',
-		    Type: 'Input' as 'Input' | 'Output' | 'Both',
-		    Value: { ID: id } // AI Model Cost entity uses single PK called ID
-		  },
-		  {
-		    Name: 'EntityName',
-		    Type: 'Input' as 'Input' | 'Output' | 'Both',
-		    Value: 'MJ: AI Model Costs'
-		  }
-		];
-		
-		try {
-		  // 3. Invoke parent action (Get Record)
-		  const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '49e30665-1a90-45ca-9129-c33959a51b4f');
-		  const parentResult = await ActionEngineServer.Instance.RunAction({
-		    Action: a,
-		    Params: mappedParams,
-		    ContextUser: params.ContextUser,
-		    Filters: []
-		  });
-		
-		  // 4. Check parent result
-		  if (!parentResult.Success) {
-		    return {
-		      Success: false,
-		      ResultCode: 'ParentActionFailed',
-		      Message: 'Failed to retrieve AI Model Cost record: ' + (parentResult.Message || 'Unknown error from parent action')
-		    };
-		  }
-		
-		  const modelCostRecord = parentResult.Params.find(p => p.Name === 'Record')?.Value;
-		
-		  if (!modelCostRecord) {
-		    return {
-		      Success: false,
-		      ResultCode: 'RecordNotFound',
-		      Message: 'No AI Model Cost record found with ID: ' + id
-		    };
-		  }
-		
-		  // 5. Push output parameter for downstream or workflow use
-		  params.Params.push({
-		    Name: 'ModelCostRecord',
-		    Type: 'Output' as 'Input' | 'Output' | 'Both',
-		    Value: modelCostRecord
-		  });
-		
-		  // 6. Return success
-		  return {
-		    Success: true,
-		    ResultCode: 'Success',
-		    Message: 'AI Model Cost record retrieved successfully.'
-		  };
-		
-		} catch (error: any) {
-		  // General error handler
-		  return {
-		    Success: false,
-		    ResultCode: 'Failed',
-		    Message: 'Unhandled exception while retrieving AI Model Cost record: ' + (error?.message || error?.toString() || 'Unknown error')
-		  };
-		}
+        throw new Error("Action not yet implemented")
     }
 }        
             
             
 /**
- * Get Scheduled Job Statistics
+ * Delete Scheduled Job
  * Generated Class
  * User Prompt: null
  */
-@RegisterClass(BaseAction, "Get Scheduled Job Statistics")
-export class Get_Scheduled_Job_Statistics_Action extends BaseAction {
+@RegisterClass(BaseAction, "Delete Scheduled Job")
+export class Delete_Scheduled_Job_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Query Scheduled Jobs
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Query Scheduled Jobs")
+export class Query_Scheduled_Jobs_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Create Scheduled Job
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Create Scheduled Job")
+export class Create_Scheduled_Job_Action extends BaseAction {
     
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         throw new Error("Action not yet implemented")
@@ -141,12 +81,12 @@ export class Update_Scheduled_Job_Action extends BaseAction {
             
             
 /**
- * Execute Scheduled Job Now
+ * Get Scheduled Job Statistics
  * Generated Class
  * User Prompt: null
  */
-@RegisterClass(BaseAction, "Execute Scheduled Job Now")
-export class Execute_Scheduled_Job_Now_Action extends BaseAction {
+@RegisterClass(BaseAction, "Get Scheduled Job Statistics")
+export class Get_Scheduled_Job_Statistics_Action extends BaseAction {
     
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         throw new Error("Action not yet implemented")
@@ -276,43 +216,103 @@ export class Create_Conversation_Record_Action extends BaseAction {
             
             
 /**
- * Create Scheduled Job
+ * Get AI Model Cost
  * Generated Class
- * User Prompt: null
+ * User Prompt: Get an AI Model Cost record from the database using parameters from this action and maps to the parent Get Record action and its format for parameters
  */
-@RegisterClass(BaseAction, "Create Scheduled Job")
-export class Create_Scheduled_Job_Action extends BaseAction {
-    
+@RegisterClass(BaseAction, "Get AI Model Cost")
+export class Get_AI_Model_Cost_Action extends BaseAction {
+    /*
+		This child action retrieves a single AI Model Cost record from the database by its ID.
+		
+		- It expects a single input parameter: 'ID' (the primary key of the AI Model Cost record).
+		- It validates that the ID is provided, and if missing, returns a 'ValidationError'.
+		- It then maps the simple child interface (just 'ID') into the parameters expected by the parent 'Get Record' action (specifying both the primary key and the entity name).
+		- The parent action (Get Record) is invoked using its specific ID for reliability.
+		- If the parent action fails, the code returns a 'ParentActionFailed' result code and passes along the error message.
+		- If the parent action reports success but does not return a record (likely meaning not found), it returns a 'RecordNotFound' result code.
+		- If a valid record is found, it adds the result as an output parameter named 'ModelCostRecord' and returns success.
+		- All errors are handled gracefully, with clear and informative error messages.
+		
+	*/
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Delete Scheduled Job
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Delete Scheduled Job")
-export class Delete_Scheduled_Job_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Query Scheduled Jobs
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Query Scheduled Jobs")
-export class Query_Scheduled_Jobs_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
+        // 1. Extract and validate input parameters
+		const id = params.Params.find(p => p.Name.trim().toLowerCase() === 'id')?.Value;
+		
+		// Validate required parameter
+		if (!id) {
+		  return {
+		    Success: false,
+		    ResultCode: 'ValidationError',
+		    Message: 'The parameter "ID" is required to get an AI Model Cost record.'
+		  };
+		}
+		
+		// 2. Pre-process: Map child params to parent Get Record format
+		const mappedParams: ActionParam[] = [
+		  {
+		    Name: 'PrimaryKey',
+		    Type: 'Input' as 'Input' | 'Output' | 'Both',
+		    Value: { ID: id } // AI Model Cost entity uses single PK called ID
+		  },
+		  {
+		    Name: 'EntityName',
+		    Type: 'Input' as 'Input' | 'Output' | 'Both',
+		    Value: 'MJ: AI Model Costs'
+		  }
+		];
+		
+		try {
+		  // 3. Invoke parent action (Get Record)
+		  const a = ActionEngineServer.Instance.Actions.find(a => a.ID.trim().toLowerCase() === '49e30665-1a90-45ca-9129-c33959a51b4f');
+		  const parentResult = await ActionEngineServer.Instance.RunAction({
+		    Action: a,
+		    Params: mappedParams,
+		    ContextUser: params.ContextUser,
+		    Filters: []
+		  });
+		
+		  // 4. Check parent result
+		  if (!parentResult.Success) {
+		    return {
+		      Success: false,
+		      ResultCode: 'ParentActionFailed',
+		      Message: 'Failed to retrieve AI Model Cost record: ' + (parentResult.Message || 'Unknown error from parent action')
+		    };
+		  }
+		
+		  const modelCostRecord = parentResult.Params.find(p => p.Name === 'Record')?.Value;
+		
+		  if (!modelCostRecord) {
+		    return {
+		      Success: false,
+		      ResultCode: 'RecordNotFound',
+		      Message: 'No AI Model Cost record found with ID: ' + id
+		    };
+		  }
+		
+		  // 5. Push output parameter for downstream or workflow use
+		  params.Params.push({
+		    Name: 'ModelCostRecord',
+		    Type: 'Output' as 'Input' | 'Output' | 'Both',
+		    Value: modelCostRecord
+		  });
+		
+		  // 6. Return success
+		  return {
+		    Success: true,
+		    ResultCode: 'Success',
+		    Message: 'AI Model Cost record retrieved successfully.'
+		  };
+		
+		} catch (error: any) {
+		  // General error handler
+		  return {
+		    Success: false,
+		    ResultCode: 'Failed',
+		    Message: 'Unhandled exception while retrieving AI Model Cost record: ' + (error?.message || error?.toString() || 'Unknown error')
+		  };
+		}
     }
 }        
             

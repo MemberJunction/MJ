@@ -8166,10 +8166,10 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
-    RootParentID: z.number().nullable().describe(`
+    RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
-        * * SQL Data Type: int`),
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
@@ -8440,14 +8440,14 @@ each time the agent processes a prompt step.`),
         * * Field Name: OverrideVendor
         * * Display Name: Override Vendor
         * * SQL Data Type: nvarchar(50)`),
-    RootParentRunID: z.number().nullable().describe(`
+    RootParentRunID: z.string().nullable().describe(`
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run ID
-        * * SQL Data Type: int`),
-    RootLastRunID: z.number().nullable().describe(`
+        * * SQL Data Type: uniqueidentifier`),
+    RootLastRunID: z.string().nullable().describe(`
         * * Field Name: RootLastRunID
         * * Display Name: Root Last Run ID
-        * * SQL Data Type: int`),
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -9759,14 +9759,14 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: ChildPrompt
         * * Display Name: Child Prompt
         * * SQL Data Type: nvarchar(255)`),
-    RootParentID: z.number().nullable().describe(`
+    RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
-        * * SQL Data Type: int`),
-    RootRerunFromPromptRunID: z.number().nullable().describe(`
+        * * SQL Data Type: uniqueidentifier`),
+    RootRerunFromPromptRunID: z.string().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
         * * Display Name: Root Rerun From Prompt Run ID
-        * * SQL Data Type: int`),
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
@@ -36778,9 +36778,9 @@ detailed information about what validation rules failed.
     /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
-    * * SQL Data Type: int
+    * * SQL Data Type: uniqueidentifier
     */
-    get RootParentID(): number | null {
+    get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
 }
@@ -37453,18 +37453,18 @@ each time the agent processes a prompt step.
     /**
     * * Field Name: RootParentRunID
     * * Display Name: Root Parent Run ID
-    * * SQL Data Type: int
+    * * SQL Data Type: uniqueidentifier
     */
-    get RootParentRunID(): number | null {
+    get RootParentRunID(): string | null {
         return this.Get('RootParentRunID');
     }
 
     /**
     * * Field Name: RootLastRunID
     * * Display Name: Root Last Run ID
-    * * SQL Data Type: int
+    * * SQL Data Type: uniqueidentifier
     */
-    get RootLastRunID(): number | null {
+    get RootLastRunID(): string | null {
         return this.Get('RootLastRunID');
     }
 }
@@ -41105,18 +41105,18 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
-    * * SQL Data Type: int
+    * * SQL Data Type: uniqueidentifier
     */
-    get RootParentID(): number | null {
+    get RootParentID(): string | null {
         return this.Get('RootParentID');
     }
 
     /**
     * * Field Name: RootRerunFromPromptRunID
     * * Display Name: Root Rerun From Prompt Run ID
-    * * SQL Data Type: int
+    * * SQL Data Type: uniqueidentifier
     */
-    get RootRerunFromPromptRunID(): number | null {
+    get RootRerunFromPromptRunID(): string | null {
         return this.Get('RootRerunFromPromptRunID');
     }
 }
