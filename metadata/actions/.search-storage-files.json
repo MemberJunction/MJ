@@ -20,6 +20,13 @@
             "IsArray": false,
             "Description": "Search query text (required). Natural language query to search for in file names or content.",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CA4C906A-D1EE-4F38-AC7A-97A4AD278716"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.067Z",
+            "checksum": "182b6f8323641ed0116275caa5df1eeef3421d698b640bddb97d29c7a76b39fc"
           }
         },
         {
@@ -31,6 +38,13 @@
             "IsArray": false,
             "Description": "Name of the storage provider to search (required). Example: 'Google Drive - Marketing', 'SharePoint - Finance'. Must match a File Storage Provider record.",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "237BAE28-EB2D-4F63-801E-94DF46A16764"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.078Z",
+            "checksum": "44fb4d7d223bd10fcce9c7220cc82d70f38f29e6101df89dbc7a1ef212965472"
           }
         },
         {
@@ -43,6 +57,13 @@
             "IsArray": false,
             "Description": "Maximum number of results to return. Default: 100. Some providers have lower limits (e.g., Box: 200, Dropbox: 1000).",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7CE707F1-CCDD-4B03-BED3-9FD4A83005C7"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.089Z",
+            "checksum": "9b075f89c7429b6251fbee8c2c3907f0bc767695019b359d49defdbfc53d6424"
           }
         },
         {
@@ -55,6 +76,13 @@
             "IsArray": false,
             "Description": "Whether to search file contents in addition to names. Default: false (filename only). Requires provider with content indexing (Google Drive, SharePoint, Dropbox).",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "296F5D6E-E10F-4B15-A2EE-5EB953CB234F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.101Z",
+            "checksum": "aa42d6060cbe9b653d43a036a3eb73f7f05e172b837ea4f9082a316e2250e7f2"
           }
         },
         {
@@ -66,6 +94,13 @@
             "IsArray": false,
             "Description": "Comma-separated list of file types to search. Can be file extensions (pdf, docx) or MIME types (application/pdf). Example: 'pdf,xlsx,docx'.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2FFB13A5-A243-40BB-8B0E-5C1F648C2F00"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.111Z",
+            "checksum": "3d9386b951b1acd7a51402c7c7caea467f6ee01fad567748d05b5c92cdacf7b4"
           }
         },
         {
@@ -77,6 +112,13 @@
             "IsArray": false,
             "Description": "Restrict search to files within this directory path. Example: 'documents/finance' or 'projects/2024'.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FE6E9A36-9AE7-46FB-B3D2-FA8B67A3C10A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.121Z",
+            "checksum": "b6b6b5325344575adb2c268e7d7289275a44334c0762ff8b7d6b3dd778263f2c"
           }
         },
         {
@@ -88,6 +130,13 @@
             "IsArray": false,
             "Description": "Only return files modified after this date. Use ISO 8601 format (e.g., '2024-01-01' or '2024-01-01T00:00:00Z').",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F5A2FA2F-5E48-4ADE-85E5-45484B210C14"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.130Z",
+            "checksum": "5e5874e8a81a33486cd5fc58c6a70e996368263d428a9d496213b06b0868d619"
           }
         },
         {
@@ -99,6 +148,13 @@
             "IsArray": false,
             "Description": "Only return files modified before this date. Use ISO 8601 format (e.g., '2024-12-31' or '2024-12-31T23:59:59Z').",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C1D811A5-4DFF-492B-9991-930A01B99D65"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.139Z",
+            "checksum": "e2eb5fef257168da5443111cd936f16cc696cccc0d396dad09c01bd6ccb47fdb"
           }
         },
         {
@@ -106,10 +162,17 @@
             "ActionID": "@parent:ID",
             "Name": "SearchResults",
             "Type": "Output",
-            "ValueType": "Array",
+            "ValueType": "Other",
             "IsArray": true,
             "Description": "Array of search results. Each result contains: Path, Name, Size, ContentType, LastModified, Relevance, Excerpt, MatchInFilename, CustomMetadata, ProviderData.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0FD763F7-F293-4FC6-A92F-BC3978FFBFDD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.150Z",
+            "checksum": "8cbf52b417b7ad7ec53d3d3bdf321e4ed9a7ddb00110b7d36864ec982aff4e0c"
           }
         },
         {
@@ -121,6 +184,13 @@
             "IsArray": false,
             "Description": "Number of results returned in this response.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7ADD948F-3D83-4243-8043-5D69165F8699"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.158Z",
+            "checksum": "bbf75882d027e62de11d68766836dbe90157e9372d23c62d86c68c73ccf85a3b"
           }
         },
         {
@@ -132,6 +202,13 @@
             "IsArray": false,
             "Description": "Total number of matching files (if available from provider). May be undefined if provider doesn't return total count.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4EB3E92A-653A-4549-A9DC-E6A404B2F43F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.192Z",
+            "checksum": "580889baeb5ae2d7b6eb799950e2317f72bfd7e664786e65be89ad6e6fa0106c"
           }
         },
         {
@@ -143,6 +220,13 @@
             "IsArray": false,
             "Description": "Boolean indicating whether more results are available beyond MaxResults limit.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "05214469-468D-49D6-AD75-95A507385081"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.201Z",
+            "checksum": "4b3f08a1ac599cfc2a95b3a274debca2bdb5897910d7f8d01d2cd9ee2c46a0f0"
           }
         },
         {
@@ -154,6 +238,13 @@
             "IsArray": false,
             "Description": "Token for fetching the next page of results (if HasMore is true and provider supports pagination).",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "325819A6-6843-4615-96EE-E87287311471"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.210Z",
+            "checksum": "88415ae42e130fea6ea8701821fce15a978cb346bff34be164aaa634ade6bd76"
           }
         }
       ],
@@ -163,57 +254,113 @@
             "ActionID": "@parent:ID",
             "ResultCode": "SUCCESS",
             "Description": "Search completed successfully. Results contain matching files."
+          },
+          "primaryKey": {
+            "ID": "D24F5E9F-0121-45B1-B075-EDAD4230D5AD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.219Z",
+            "checksum": "d75c1bde00be62d3a565bc50d4224f7f315460698ee205f1648da30d3f69b92e"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "MISSING_QUERY",
-            "IsError": true,
+            "IsSuccess": false,
             "Description": "Query parameter is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "E283B7BA-F178-4DAE-AB9D-AFA96053775A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.229Z",
+            "checksum": "fd95f9b802343aa2b0b6e2c453361a1303a372717a6ac881d964d35f323575e6"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "MISSING_PROVIDER",
-            "IsError": true,
+            "IsSuccess": false,
             "Description": "StorageProvider parameter is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "53576DDF-D238-47D3-8559-752F4DB1ECB5"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.241Z",
+            "checksum": "2eb27450535cc112c671789ca20f118b70cc54dd13f9a68ae43aae5c4770cbaa"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "PROVIDER_NOT_FOUND",
-            "IsError": true,
+            "IsSuccess": false,
             "Description": "The specified storage provider was not found in File Storage Providers. Verify the provider name matches exactly."
+          },
+          "primaryKey": {
+            "ID": "79809434-04D9-4086-92B9-A0D7D18C0064"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.248Z",
+            "checksum": "41ec1bacdc95698c890c9b2b58eacf9e30188ba83390913093237b1e9065292a"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "SEARCH_NOT_SUPPORTED",
-            "IsError": true,
+            "IsSuccess": false,
             "Description": "The storage provider does not support native file search. Supported providers: Google Drive, SharePoint, Dropbox, Box. Consider using List Objects with filtering for other providers."
+          },
+          "primaryKey": {
+            "ID": "40BDAAA3-92DA-4A18-A709-05F92F093EAD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.257Z",
+            "checksum": "9bcb21ecbd1a08ec5f1a25e37ac10475176039aa5b4fdeafa68c6240d6df6729"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "INVALID_DATE_FORMAT",
-            "IsError": true,
+            "IsSuccess": false,
             "Description": "ModifiedAfter or ModifiedBefore parameter has invalid date format. Use ISO 8601 format (e.g., '2024-01-01')."
+          },
+          "primaryKey": {
+            "ID": "33A9DA49-01E8-49EB-9DB4-D4ED2293BA22"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.267Z",
+            "checksum": "65f1cd5917e042a8819dc385039f152387a16b59b1052330769524d8cf6573b2"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
             "ResultCode": "SEARCH_FAILED",
-            "IsError": true,
+            "IsSuccess": false,
             "Description": "Search operation failed. Check error message for specific provider error details."
+          },
+          "primaryKey": {
+            "ID": "F5D157EF-6E1D-4846-B9B9-A630AB0DDE2E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:14.275Z",
+            "checksum": "349da3531dc3dd85e49c0ad34d499c2898f5a975e625acf3e43a7fdc0d9dff34"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "B5E3083E-D6B3-42C8-A6AA-25B8E603DF69"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T16:30:14.035Z",
+      "checksum": "24b8a8d5042ee8824e90d923285fd516281b27e886fcbf548177cc59467f8e8a"
     }
   }
 ]
