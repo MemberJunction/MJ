@@ -2,9 +2,10 @@
   <textarea
     #messageTextarea
     class="message-input"
+    [class.intent-checking]="isProcessing"
     [(ngModel)]="messageText"
     [placeholder]="placeholder"
-    [disabled]="disabled || isSending"
+    [disabled]="disabled || isProcessing"
     (keydown)="onKeyDown($event)"
     (input)="onInput($event)"
     rows="3">

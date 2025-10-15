@@ -9,6 +9,23 @@
       "IconClass": "fa-solid fa-database"
     },
     "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Database Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C9ECAB8-139C-4452-8EF3-896D2E1834CE"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T22:33:12.065Z",
+            "checksum": "d5a50f5823a63b71f75c6f7f3e9070dfc92bb010c6ab8428d5b5570fd60d67eb"
+          }
+        }
+      ],
       "AI Agent Actions": [
         {
           "fields": {
@@ -58,6 +75,23 @@
       "IconClass": "fa-solid fa-folder-open"
     },
     "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=File Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CDC20F26-DE77-42D1-A30F-A3B34EBA8106"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T22:33:12.075Z",
+            "checksum": "824b9cf2907c06be91b2937035cf6d889b4ed568f50a0233147d394900893b9a"
+          }
+        }
+      ],
       "AI Agent Actions": [
         {
           "fields": {
@@ -107,6 +141,23 @@
       "IconClass": "fa-solid fa-globe"
     },
     "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Web Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A43CFA03-C714-4BEF-80CE-C0D120EF6EB8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T22:33:12.083Z",
+            "checksum": "926d82c06919a79d182e63ed7de90edc87458169339ef544fa28823d58986e28"
+          }
+        }
+      ],
       "AI Agent Actions": [
         {
           "fields": {
@@ -166,6 +217,7 @@
       "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research), and synthesizes findings into detailed reports. Uses iterative methodology with source validation and contradiction detection.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-magnifying-glass-chart"
@@ -237,8 +289,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-15T20:50:25.380Z",
-      "checksum": "9dee14290d0a9c248fc90faa81fefe6813f4a522437711669ae1c6a4e894d499"
+      "lastModified": "2025-10-15T22:18:05.365Z",
+      "checksum": "d5c7b0cb08060c496e28d9416ab4a7518dda8d3f678da504aa6f0f0839cebc3a"
     }
   }
 ]

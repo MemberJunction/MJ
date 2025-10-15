@@ -110,6 +110,7 @@ You have access to three specialized sub-agents. Invoke them by calling the appr
 
 Your output should be a JSON object with this structure:
 
+### During Research (taskComplete: false)
 ```json
 {
   "taskComplete": false,
@@ -147,9 +148,44 @@ Your output should be a JSON object with this structure:
       "resolution": "Explanation of likely cause"
     }
   ],
-  "nextSteps": "What to do in next iteration (or 'synthesize final report' if complete)"
+  "nextSteps": "What to do in next iteration"
 }
 ```
+
+### Final Report (taskComplete: true)
+
+When research is complete, include the `report` object with these **required** fields:
+
+```json
+{
+  "taskComplete": true,
+  "reasoning": "Research complete - all questions answered with sufficient evidence",
+  "metadata": {
+    "researchGoal": "Original user request",
+    "currentIteration": 3,
+    "status": "complete"
+  },
+  "sources": [...],
+  "findings": [...],
+  "contradictions": [...],
+  "report": {
+    "name": "Concise Report Title (50-100 chars)",
+    "description": "One-sentence executive summary of key findings (100-200 chars)",
+    "markdown": "# Full Report Title\n\n## Executive Summary\n\n[Concise overview of findings]\n\n## Key Findings\n\n### Finding 1\n[Details with citations]\n\n### Finding 2\n[Details with citations]\n\n## Sources\n\n1. [Source 1](url) - Description\n2. [Source 2](url) - Description\n\n## Contradictions & Limitations\n\n[Any contradictory information or research limitations]\n\n## Confidence Assessment\n\nOverall confidence: [High/Medium/Low]\n[Explanation of confidence level]"
+  }
+}
+```
+
+**Important Report Requirements**:
+- `report.name` - Clear, descriptive title that captures the research topic
+- `report.description` - Executive summary suitable for previews and lists
+- `report.markdown` - Complete formatted report with:
+  - Executive Summary section
+  - Key Findings organized by topic
+  - All sources cited with proper markdown links
+  - Contradictions section (if any found)
+  - Confidence assessment
+  - Professional formatting with headers, lists, emphasis
 
 ## Important Notes
 
