@@ -154,6 +154,7 @@
 - Entity record lookups
 - Basic CRUD operations
 - Entity searches
+- Scheduled job management (query, create, update, execute, monitor jobs)
 
 ### When to Stay Silent (taskComplete: true, no message)
 - Multi-party conversations not directed at you
