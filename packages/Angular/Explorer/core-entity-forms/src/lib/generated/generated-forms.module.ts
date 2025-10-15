@@ -175,6 +175,9 @@ import { QueryParameterFormComponent, LoadQueryParameterFormComponent } from "./
 import { RecordLinkFormComponent, LoadRecordLinkFormComponent } from "./Entities/RecordLink/recordlink.form.component";
 import { ReportUserStateFormComponent, LoadReportUserStateFormComponent } from "./Entities/ReportUserState/reportuserstate.form.component";
 import { ReportVersionFormComponent, LoadReportVersionFormComponent } from "./Entities/ReportVersion/reportversion.form.component";
+import { ScheduledJobRunFormComponent, LoadScheduledJobRunFormComponent } from "./Entities/ScheduledJobRun/scheduledjobrun.form.component";
+import { ScheduledJobTypeFormComponent, LoadScheduledJobTypeFormComponent } from "./Entities/ScheduledJobType/scheduledjobtype.form.component";
+import { ScheduledJobFormComponent, LoadScheduledJobFormComponent } from "./Entities/ScheduledJob/scheduledjob.form.component";
 import { TaskDependencyFormComponent, LoadTaskDependencyFormComponent } from "./Entities/TaskDependency/taskdependency.form.component";
 import { TaskTypeFormComponent, LoadTaskTypeFormComponent } from "./Entities/TaskType/tasktype.form.component";
 import { TaskFormComponent, LoadTaskFormComponent } from "./Entities/Task/task.form.component";
@@ -391,6 +394,9 @@ import { QueryParameterDetailsComponent, LoadQueryParameterDetailsComponent } fr
 import { RecordLinkDetailsComponent, LoadRecordLinkDetailsComponent } from "./Entities/RecordLink/sections/details.component"
 import { ReportUserStateDetailsComponent, LoadReportUserStateDetailsComponent } from "./Entities/ReportUserState/sections/details.component"
 import { ReportVersionDetailsComponent, LoadReportVersionDetailsComponent } from "./Entities/ReportVersion/sections/details.component"
+import { ScheduledJobRunDetailsComponent, LoadScheduledJobRunDetailsComponent } from "./Entities/ScheduledJobRun/sections/details.component"
+import { ScheduledJobTypeDetailsComponent, LoadScheduledJobTypeDetailsComponent } from "./Entities/ScheduledJobType/sections/details.component"
+import { ScheduledJobDetailsComponent, LoadScheduledJobDetailsComponent } from "./Entities/ScheduledJob/sections/details.component"
 import { TaskDependencyDetailsComponent, LoadTaskDependencyDetailsComponent } from "./Entities/TaskDependency/sections/details.component"
 import { TaskTypeDetailsComponent, LoadTaskTypeDetailsComponent } from "./Entities/TaskType/sections/details.component"
 import { TaskDetailsComponent, LoadTaskDetailsComponent } from "./Entities/Task/sections/details.component"
@@ -787,6 +793,9 @@ declarations: [
     RecordLinkFormComponent,
     ReportUserStateFormComponent,
     ReportVersionFormComponent,
+    ScheduledJobRunFormComponent,
+    ScheduledJobTypeFormComponent,
+    ScheduledJobFormComponent,
     TaskDependencyFormComponent,
     TaskTypeFormComponent,
     TaskFormComponent,
@@ -794,10 +803,7 @@ declarations: [
     OutputFormatTypeFormComponent,
     OutputTriggerTypeFormComponent,
     QueryFormComponent,
-    QueryCategoryFormComponent,
-    QueryEntityFormComponent,
-    QueryFieldFormComponent,
-    QueryPermissionFormComponent],
+    QueryCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -824,6 +830,9 @@ export class GeneratedForms_SubModule_7 { }
 
 @NgModule({
 declarations: [
+    QueryEntityFormComponent,
+    QueryFieldFormComponent,
+    QueryPermissionFormComponent,
     QueueTaskFormComponent,
     QueueTypeFormComponent,
     QueueFormComponent,
@@ -840,10 +849,7 @@ declarations: [
     ReportFormComponent,
     ResourceLinkFormComponent,
     ResourcePermissionFormComponent,
-    ResourceTypeFormComponent,
-    RoleFormComponent,
-    RowLevelSecurityFilterFormComponent,
-    ScheduledActionParamFormComponent],
+    ResourceTypeFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -870,6 +876,9 @@ export class GeneratedForms_SubModule_8 { }
 
 @NgModule({
 declarations: [
+    RoleFormComponent,
+    RowLevelSecurityFilterFormComponent,
+    ScheduledActionParamFormComponent,
     ScheduledActionFormComponent,
     SchemaInfoFormComponent,
     SkillFormComponent,
@@ -886,10 +895,7 @@ declarations: [
     UserNotificationFormComponent,
     UserRecordLogFormComponent,
     UserRoleFormComponent,
-    UserViewCategoryFormComponent,
-    UserViewRunDetailFormComponent,
-    UserViewRunFormComponent,
-    UserViewFormComponent],
+    UserViewCategoryFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -916,6 +922,9 @@ export class GeneratedForms_SubModule_9 { }
 
 @NgModule({
 declarations: [
+    UserViewRunDetailFormComponent,
+    UserViewRunFormComponent,
+    UserViewFormComponent,
     UserFormComponent,
     VectorDatabaseFormComponent,
     VectorIndexFormComponent,
@@ -932,10 +941,7 @@ declarations: [
     ActionExecutionLogDetailsComponent,
     ActionFilterDetailsComponent,
     ActionLibraryDetailsComponent,
-    ActionParamDetailsComponent,
-    ActionResultCodeDetailsComponent,
-    ActionDetailsComponent,
-    ActionTopComponent],
+    ActionParamDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -962,6 +968,9 @@ export class GeneratedForms_SubModule_10 { }
 
 @NgModule({
 declarations: [
+    ActionResultCodeDetailsComponent,
+    ActionDetailsComponent,
+    ActionTopComponent,
     ActionCodeComponent,
     AIActionDetailsComponent,
     AIAgentActionDetailsComponent,
@@ -978,10 +987,7 @@ declarations: [
     AIPromptTypeDetailsComponent,
     AIPromptDetailsComponent,
     AIResultCacheDetailsComponent,
-    ApplicationEntityDetailsComponent,
-    ApplicationSettingDetailsComponent,
-    ApplicationDetailsComponent,
-    AuditLogTypeDetailsComponent],
+    ApplicationEntityDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1007,6 +1013,9 @@ export class GeneratedForms_SubModule_11 { }
 
 @NgModule({
 declarations: [
+    ApplicationSettingDetailsComponent,
+    ApplicationDetailsComponent,
+    AuditLogTypeDetailsComponent,
     AuditLogDetailsComponent,
     AuthorizationRoleDetailsComponent,
     AuthorizationDetailsComponent,
@@ -1023,10 +1032,7 @@ declarations: [
     CompanyIntegrationDetailsComponent,
     ContentFileTypeDetailsComponent,
     ContentItemAttributeDetailsComponent,
-    ContentItemTagDetailsComponent,
-    ContentItemDetailsComponent,
-    ContentProcessRunDetailsComponent,
-    ContentSourceParamDetailsComponent],
+    ContentItemTagDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1052,6 +1058,9 @@ export class GeneratedForms_SubModule_12 { }
 
 @NgModule({
 declarations: [
+    ContentItemDetailsComponent,
+    ContentProcessRunDetailsComponent,
+    ContentSourceParamDetailsComponent,
     ContentSourceTypeParamDetailsComponent,
     ContentSourceTypeDetailsComponent,
     ContentSourceDetailsComponent,
@@ -1068,10 +1077,7 @@ declarations: [
     DuplicateRunDetailMatchDetailsComponent,
     DuplicateRunDetailDetailsComponent,
     DuplicateRunDetailsComponent,
-    EmployeeCompanyIntegrationDetailsComponent,
-    EmployeeRoleDetailsComponent,
-    EmployeeSkillDetailsComponent,
-    EmployeeDetailsComponent],
+    EmployeeCompanyIntegrationDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1097,6 +1103,9 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
+    EmployeeRoleDetailsComponent,
+    EmployeeSkillDetailsComponent,
+    EmployeeDetailsComponent,
     EntityDetailsComponent,
     EntityTopComponent,
     EntityAuditComponent,
@@ -1113,10 +1122,7 @@ declarations: [
     EntityCommunicationMessageTypeDetailsComponent,
     EntityDocumentRunDetailsComponent,
     EntityDocumentSettingDetailsComponent,
-    EntityDocumentTypeDetailsComponent,
-    EntityDocumentDetailsComponent,
-    EntityFieldValueDetailsComponent,
-    EntityFieldDetailsComponent],
+    EntityDocumentTypeDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1142,6 +1148,9 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
+    EntityDocumentDetailsComponent,
+    EntityFieldValueDetailsComponent,
+    EntityFieldDetailsComponent,
     EntityPermissionDetailsComponent,
     EntityRecordDocumentDetailsComponent,
     EntityRelationshipDisplayComponentDetailsComponent,
@@ -1158,10 +1167,7 @@ declarations: [
     IntegrationURLFormatDetailsComponent,
     IntegrationDetailsComponent,
     LibraryDetailsComponent,
-    LibraryItemDetailsComponent,
-    ListCategoryDetailsComponent,
-    ListDetailDetailsComponent,
-    ListDetailsComponent],
+    LibraryItemDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1187,6 +1193,9 @@ export class GeneratedForms_SubModule_15 { }
 
 @NgModule({
 declarations: [
+    ListCategoryDetailsComponent,
+    ListDetailDetailsComponent,
+    ListDetailsComponent,
     AccessControlRuleDetailsComponent,
     AIAgentArtifactTypeDetailsComponent,
     AIAgentPermissionDetailsComponent,
@@ -1203,10 +1212,7 @@ declarations: [
     AIModelPriceTypeDetailsComponent,
     AIModelPriceUnitTypeDetailsComponent,
     AIModelVendorDetailsComponent,
-    AIPromptModelDetailsComponent,
-    AIPromptRunDetailsComponent,
-    AIVendorTypeDefinitionDetailsComponent,
-    AIVendorTypeDetailsComponent],
+    AIPromptModelDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1232,6 +1238,9 @@ export class GeneratedForms_SubModule_16 { }
 
 @NgModule({
 declarations: [
+    AIPromptRunDetailsComponent,
+    AIVendorTypeDefinitionDetailsComponent,
+    AIVendorTypeDetailsComponent,
     AIVendorDetailsComponent,
     ArtifactTypeDetailsComponent,
     ArtifactVersionAttributeDetailsComponent,
@@ -1248,10 +1257,7 @@ declarations: [
     ConversationArtifactVersionDetailsComponent,
     ConversationArtifactDetailsComponent,
     ConversationDetailArtifactDetailsComponent,
-    DashboardUserPreferenceDetailsComponent,
-    DashboardUserStateDetailsComponent,
-    EnvironmentDetailsComponent,
-    ProjectDetailsComponent],
+    DashboardUserPreferenceDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1277,11 +1283,17 @@ export class GeneratedForms_SubModule_17 { }
 
 @NgModule({
 declarations: [
+    DashboardUserStateDetailsComponent,
+    EnvironmentDetailsComponent,
+    ProjectDetailsComponent,
     PublicLinkDetailsComponent,
     QueryParameterDetailsComponent,
     RecordLinkDetailsComponent,
     ReportUserStateDetailsComponent,
     ReportVersionDetailsComponent,
+    ScheduledJobRunDetailsComponent,
+    ScheduledJobTypeDetailsComponent,
+    ScheduledJobDetailsComponent,
     TaskDependencyDetailsComponent,
     TaskTypeDetailsComponent,
     TaskDetailsComponent,
@@ -1290,13 +1302,7 @@ declarations: [
     OutputTriggerTypeDetailsComponent,
     QueryDetailsComponent,
     QueryCategoryDetailsComponent,
-    QueryEntityDetailsComponent,
-    QueryFieldDetailsComponent,
-    QueryPermissionDetailsComponent,
-    QueueTaskDetailsComponent,
-    QueueTypeDetailsComponent,
-    QueueDetailsComponent,
-    RecommendationItemDetailsComponent],
+    QueryEntityDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1322,6 +1328,12 @@ export class GeneratedForms_SubModule_18 { }
 
 @NgModule({
 declarations: [
+    QueryFieldDetailsComponent,
+    QueryPermissionDetailsComponent,
+    QueueTaskDetailsComponent,
+    QueueTypeDetailsComponent,
+    QueueDetailsComponent,
+    RecommendationItemDetailsComponent,
     RecommendationProviderDetailsComponent,
     RecommendationRunDetailsComponent,
     RecommendationDetailsComponent,
@@ -1335,13 +1347,7 @@ declarations: [
     ResourceLinkDetailsComponent,
     ResourcePermissionDetailsComponent,
     ResourceTypeDetailsComponent,
-    RoleDetailsComponent,
-    RowLevelSecurityFilterDetailsComponent,
-    ScheduledActionParamDetailsComponent,
-    ScheduledActionDetailsComponent,
-    SchemaInfoDetailsComponent,
-    SkillDetailsComponent,
-    TaggedItemDetailsComponent],
+    RoleDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1367,6 +1373,12 @@ export class GeneratedForms_SubModule_19 { }
 
 @NgModule({
 declarations: [
+    RowLevelSecurityFilterDetailsComponent,
+    ScheduledActionParamDetailsComponent,
+    ScheduledActionDetailsComponent,
+    SchemaInfoDetailsComponent,
+    SkillDetailsComponent,
+    TaggedItemDetailsComponent,
     TagDetailsComponent,
     TemplateCategoryDetailsComponent,
     TemplateContentTypeDetailsComponent,
@@ -1380,13 +1392,7 @@ declarations: [
     UserRecordLogDetailsComponent,
     UserRoleDetailsComponent,
     UserViewCategoryDetailsComponent,
-    UserViewRunDetailDetailsComponent,
-    UserViewRunDetailsComponent,
-    UserViewDetailsComponent,
-    UserDetailsComponent,
-    VectorDatabaseDetailsComponent,
-    VectorIndexDetailsComponent,
-    VersionInstallationDetailsComponent],
+    UserViewRunDetailDetailsComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -1412,6 +1418,12 @@ export class GeneratedForms_SubModule_20 { }
 
 @NgModule({
 declarations: [
+    UserViewRunDetailsComponent,
+    UserViewDetailsComponent,
+    UserDetailsComponent,
+    VectorDatabaseDetailsComponent,
+    VectorIndexDetailsComponent,
+    VersionInstallationDetailsComponent,
     WorkflowEngineDetailsComponent,
     WorkflowRunDetailsComponent,
     WorkflowDetailsComponent,
@@ -1625,6 +1637,9 @@ export function LoadCoreGeneratedForms() {
     LoadRecordLinkFormComponent();
     LoadReportUserStateFormComponent();
     LoadReportVersionFormComponent();
+    LoadScheduledJobRunFormComponent();
+    LoadScheduledJobTypeFormComponent();
+    LoadScheduledJobFormComponent();
     LoadTaskDependencyFormComponent();
     LoadTaskTypeFormComponent();
     LoadTaskFormComponent();
@@ -1841,6 +1856,9 @@ export function LoadCoreGeneratedForms() {
     LoadRecordLinkDetailsComponent();
     LoadReportUserStateDetailsComponent();
     LoadReportVersionDetailsComponent();
+    LoadScheduledJobRunDetailsComponent();
+    LoadScheduledJobTypeDetailsComponent();
+    LoadScheduledJobDetailsComponent();
     LoadTaskDependencyDetailsComponent();
     LoadTaskTypeDetailsComponent();
     LoadTaskDetailsComponent();

@@ -17,6 +17,7 @@ import { DateInputsModule } from '@progress/kendo-angular-dateinputs';
 // MemberJunction modules
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
+import { ArtifactsModule } from '@memberjunction/ng-artifacts';
 
 // Markdown module
 import { MarkdownModule } from 'ngx-markdown';
@@ -32,10 +33,6 @@ import { ConversationSidebarComponent } from './components/sidebar/conversation-
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
 import { ThreadPanelComponent } from './components/thread/thread-panel.component';
-import { ArtifactVersionHistoryComponent } from './components/artifact/artifact-version-history.component';
-import { ArtifactUploadModalComponent } from './components/artifact/artifact-upload-modal.component';
-import { InlineArtifactComponent } from './components/artifact/inline-artifact.component';
-import { ArtifactViewerPanelComponent } from './components/artifact/artifact-viewer-panel.component';
 import { CollectionTreeComponent } from './components/collection/collection-tree.component';
 import { CollectionViewComponent } from './components/collection/collection-view.component';
 import { CollectionArtifactCardComponent } from './components/collection/collection-artifact-card.component';
@@ -44,10 +41,6 @@ import { CollectionFormModalComponent } from './components/collection/collection
 import { CollectionsFullViewComponent } from './components/collection/collections-full-view.component';
 import { ProjectSelectorComponent } from './components/project/project-selector.component';
 import { ProjectFormModalComponent } from './components/project/project-form-modal.component';
-import { TaskListComponent } from './components/task/task-list.component';
-import { TaskItemComponent } from './components/task/task-item.component';
-import { TaskFormModalComponent } from './components/task/task-form-modal.component';
-import { TaskTimelineComponent } from './components/task/task-timeline.component';
 import { TasksFullViewComponent } from './components/task/tasks-full-view.component';
 import { TasksDropdownComponent } from './components/tasks/tasks-dropdown.component';
 import { TaskWidgetComponent } from './components/tasks/task-widget.component';
@@ -66,7 +59,7 @@ import { InputDialogComponent } from './components/dialogs/input-dialog.componen
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
 
-// Export all components
+// Export all components (excluding standalone components)
 const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
@@ -78,10 +71,6 @@ const COMPONENTS = [
   ConversationListComponent,
   ConversationChatAreaComponent,
   ThreadPanelComponent,
-  ArtifactVersionHistoryComponent,
-  ArtifactUploadModalComponent,
-  InlineArtifactComponent,
-  ArtifactViewerPanelComponent,
   CollectionTreeComponent,
   CollectionViewComponent,
   CollectionArtifactCardComponent,
@@ -90,11 +79,7 @@ const COMPONENTS = [
   CollectionsFullViewComponent,
   ProjectSelectorComponent,
   ProjectFormModalComponent,
-  TaskListComponent,
-  TaskItemComponent,
-  TaskFormModalComponent,
-  TaskTimelineComponent,
-  TasksFullViewComponent,
+  // TasksFullViewComponent - now standalone, imported below
   TasksDropdownComponent,
   TaskWidgetComponent,
   AgentProcessPanelComponent,
@@ -131,11 +116,16 @@ const COMPONENTS = [
     DateInputsModule,
     ContainerDirectivesModule,
     CodeEditorModule,
-    MarkdownModule.forRoot()
+    ArtifactsModule,
+    MarkdownModule.forRoot(),
+    // Standalone components
+    TasksFullViewComponent
   ],
   exports: [
     ...COMPONENTS,
-    SearchShortcutDirective
+    SearchShortcutDirective,
+    // Standalone components
+    TasksFullViewComponent
   ]
 })
 export class ConversationsModule { }

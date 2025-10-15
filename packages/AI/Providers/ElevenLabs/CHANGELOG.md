@@ -1,5 +1,20 @@
 # @memberjunction/ai-elevenlabs
 
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.106.0
+- @memberjunction/global@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [9b67e0c]
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Patch Changes

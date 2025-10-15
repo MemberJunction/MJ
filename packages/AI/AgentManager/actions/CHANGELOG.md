@@ -1,5 +1,29 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@2.106.0
+- @memberjunction/actions-base@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/global@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/actions-base@2.105.0
+  - @memberjunction/ai-agent-manager@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
 ## 2.104.0
 
 ### Patch Changes

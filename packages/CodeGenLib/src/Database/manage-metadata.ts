@@ -452,7 +452,11 @@ export class ManageMetadataBase {
    protected async checkDropSQLObject(pool: sql.ConnectionPool, proceed: boolean, type: 'procedure' | 'view' | 'function', schemaName: string, name: string) {
       try {
          if (proceed && schemaName && name && schemaName.trim().length > 0 && name.trim().length > 0) {
-            const sqlDelete = `DROP ${type} IF EXISTS [${schemaName}].[${name}]`;
+            // Use IF OBJECT_ID pattern for Flyway compatibility
+            // Object type codes: P = Stored Procedure, V = View, FN = Scalar Function, IF/TF = Table-Valued Function
+            const objectTypeCode = type === 'procedure' ? 'P' : type === 'view' ? 'V' : 'FN';
+            const upperType = type.toUpperCase();
+            const sqlDelete = `IF OBJECT_ID('[${schemaName}].[${name}]', '${objectTypeCode}') IS NOT NULL\n    DROP ${upperType} [${schemaName}].[${name}]`;
             await this.LogSQLAndExecute(pool, sqlDelete, `SQL text to remove ${type} ${schemaName}.${name}`);
 
             // next up, we need to clean up the cache of saved DB objects that may exist for this entity in the appropriate sub-directory.
@@ -1302,8 +1306,10 @@ NumberedRows AS (
                      // we only do this part if we are not skiping the database update as this code will sync values from the CHECK
                      // with the EntityFieldValues in the database.
 
-                     // 1st, flip the order of parsedValues because they come out in reverse order from SQL Server
-                     parsedValues.reverse();
+                     // Sort values alphabetically to ensure consistent sequences across all databases
+                     // This guarantees the same value always gets the same sequence number regardless of
+                     // how SQL Server returns CHECK constraint values (which can vary)
+                     parsedValues.sort();
 
                      // we have parsed values from the check constraint, so sync them with the entity field values
                      await this.syncEntityFieldValues(pool, r.EntityFieldID, parsedValues, allEntityFieldValues);
@@ -1426,13 +1432,23 @@ NumberedRows AS (
                return returnResult;
             }
             await AIEngine.Instance.Config(false, currentUser); // make sure metadata loaded
-            const model = AIEngine.Instance.Models.find(m => m.APINameOrName.trim().toLowerCase() === ag.AIModel.trim().toLowerCase() && 
-                                                             m.Vendor?.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase());
+            const model = AIEngine.Instance.Models.find(m => {
+                const modelMatch = m.APINameOrName.trim().toLowerCase() === ag.AIModel.trim().toLowerCase();
+                if (!modelMatch) return false;
+
+                // Check if model has a vendor matching the specified vendor
+                const hasVendor = AIEngine.Instance.ModelVendors.some(mv =>
+                    mv.ModelID === m.ID &&
+                    mv.Vendor.trim().toLowerCase() === ag.AIVendor.trim().toLowerCase() &&
+                    mv.Status === 'Active'
+                );
+                return hasVendor;
+            });
             if (!model)
                throw new Error(`   >>> Error generating validator function from check constraint. Unable to find AI Model with name ${ag.AIModel} and vendor ${ag.AIVendor}.`);
 
             const prompt = ag.getPrompt('CheckConstraintParser');
-            const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}`).join('\n');
+            const entityFieldListInfo = allEntityFields.filter(item => item.Entity.trim().toLowerCase() === data.EntityName.trim().toLowerCase()).map(item => `   * ${item.Name} - ${item.Type}${item.AllowsNull ? ' (nullable)' : ' (not null)'}`).join('\n');
             const existingMethodNameBlock = generatedValidationFunctionName ? `Existing Method Name: ${generatedValidationFunctionName}\n Please reuse this SAME method name for the new generation` : '';
             const markedUpSysPrompt = ag.fillTemplate(prompt.systemPrompt, {
                ENTITY_FIELD_LIST: entityFieldListInfo,
@@ -1505,12 +1521,15 @@ NumberedRows AS (
             let numAdded = 0;
             for (const v of possibleValues) {
                if (!existingValues.find((ev: { Value: string; }) => ev.Value === v)) {
-                  // add the value to the database
+                  // Generate a UUID for this new EntityFieldValue record
+                  const newId = uuidv4();
+
+                  // add the value to the database with explicit ID
                   const sSQLInsert = `INSERT INTO [${mj_core_schema()}].EntityFieldValue
-                                       (EntityFieldID, Sequence, Value, Code)
+                                       (ID, EntityFieldID, Sequence, Value, Code)
                                     VALUES
-                                       ('${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
-                  await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field values`);
+                                       ('${newId}', '${entityFieldID}', ${1 + possibleValues.indexOf(v)}, '${v}', '${v}')`;
+                  await this.LogSQLAndExecute(ds, sSQLInsert, `SQL text to insert entity field value with ID ${newId}`);
                   numAdded++;
                }
             }
@@ -1544,9 +1563,31 @@ NumberedRows AS (
       // This regex checks for the overall structure including field name and 'OR' sequences
       // an example of a valid constraint definition would be: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName]='Value3')
       // like: ([AutoRunIntervalUnits]='Years' OR [AutoRunIntervalUnits]='Months' OR [AutoRunIntervalUnits]='Weeks' OR [AutoRunIntervalUnits]='Days' OR [AutoRunIntervalUnits]='Hours' OR [AutoRunIntervalUnits]='Minutes')
+      // Also handles constraints with optional NULL: ([FieldName]='Value1' OR [FieldName]='Value2' OR [FieldName] IS NULL)
+      // Also handles nested NULL pattern: ([FieldName] IS NULL OR ([FieldName]='Value1' OR [FieldName]='Value2'))
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
-      const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");      
-      const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)$`);
+      const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
+
+      // Check for nested pattern: ([Field] IS NULL OR ([Field]='Value1' OR ...))
+      const nestedNullRegex = new RegExp(`^\\(\\[${fieldName}\\] IS NULL OR \\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+\\)\\)$`);
+      if (nestedNullRegex.test(processedConstraint)) {
+         // Extract values from nested pattern - same extraction logic works
+         const valueRegex = new RegExp(`\\[${fieldName}\\]='([^']+)\'`, 'g');
+         let match;
+         const possibleValues: string[] = [];
+         while ((match = valueRegex.exec(processedConstraint)) !== null) {
+            if (match.index === valueRegex.lastIndex) {
+               valueRegex.lastIndex++;
+            }
+            if (match[1]) {
+               possibleValues.push(match[1]);
+            }
+         }
+         return possibleValues.length > 0 ? possibleValues : null;
+      }
+
+      // Check for standard pattern with optional trailing IS NULL
+      const structureRegex = new RegExp(`^\\(\\[${fieldName}\\]='[^']+'(?: OR \\[${fieldName}\\]='[^']+?')+(?: OR \\[${fieldName}\\] IS NULL)?\\)$`);
       if (!structureRegex.test(processedConstraint)) {
          // decided to NOT log these warnings anymore becuase they make it appear to the user that there is a problem but there is NOT, this is normal behvario for all othe types of
          // check constraints that are not simple OR conditions

@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo } from '@memberjunction/core';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -562,8 +562,10 @@ export class SQLCodeGenBase {
             }
 
             // BASE VIEW
-            if (!options.onlyPermissions && 
-                (options.entity.BaseViewGenerated || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.baseViews)) && 
+            // Only generate if BaseViewGenerated is true (respects custom views where it's false)
+            // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
+            if (!options.onlyPermissions &&
+                options.entity.BaseViewGenerated &&
                 !options.entity.VirtualEntity) {
                 // generate the base view
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
@@ -595,9 +597,9 @@ export class SQLCodeGenBase {
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Create);
-                if (!options.onlyPermissions && 
-                    (options.entity.spCreateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spCreate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spCreateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spCreateGenerated=true
+                if (!options.onlyPermissions && options.entity.spCreateGenerated) {
                     // generate the create SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
                     if (options.writeFiles) {
@@ -631,9 +633,9 @@ export class SQLCodeGenBase {
             // UPDATE SP
             if (options.entity.AllowUpdateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Update);
-                if (!options.onlyPermissions && 
-                    (options.entity.spUpdateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spUpdate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spUpdateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spUpdateGenerated=true
+                if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
                     // generate the update SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
                     if (options.writeFiles) {
@@ -667,9 +669,11 @@ export class SQLCodeGenBase {
             // DELETE SP
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
-                if (!options.onlyPermissions && 
-                    (options.entity.spDeleteGenerated || // Generate if marked as generated (not custom)
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
+                // Only generate if spDeleteGenerated is true (respects custom SPs where it's false)
+                // OR if this entity has cascade delete dependencies that require regeneration
+                // forceRegeneration only forces regeneration of SPs where spDeleteGenerated=true
+                if (!options.onlyPermissions &&
+                    (options.entity.spDeleteGenerated ||
                      this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID))) {
                     // generate the delete SP
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
@@ -1106,7 +1110,8 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map(pk => pk.Name).join(', ')}
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${entity.SchemaName}].[${viewName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${viewName}]', 'V') IS NOT NULL
+    DROP VIEW [${entity.SchemaName}].[${viewName}];
 GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
@@ -1330,7 +1335,8 @@ ${whereClause}GO${permissions}
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1365,7 +1371,8 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${entity.SchemaName}].trgUpdate${entity.ClassName}
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
 GO
 CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
@@ -1405,7 +1412,8 @@ GO`;
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1435,7 +1443,58 @@ ${updatedAtTrigger}
         `
     }
 
-    private __specialUUIDValue = '00000000-0000-0000-0000-000000000000';
+    /**
+     * Formats a default value for use in SQL, handling special cases like SQL functions
+     * @param defaultValue The default value from the database metadata
+     * @param needsQuotes Whether the field type typically needs quotes
+     * @returns Properly formatted default value for SQL
+     */
+    protected formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
+        if (!defaultValue || defaultValue.trim().length === 0) {
+            return 'NULL';
+        }
+
+        let trimmedValue = defaultValue.trim();
+        const lowerValue = trimmedValue.toLowerCase();
+
+        // SQL functions that should not be quoted
+        const sqlFunctions = [
+            'newid()',
+            'newsequentialid()',
+            'getdate()',
+            'getutcdate()',
+            'sysdatetime()',
+            'sysdatetimeoffset()',
+            'current_timestamp',
+            'user_name()',
+            'suser_name()',
+            'system_user'
+        ];
+
+        // Check if this is a SQL function
+        for (const func of sqlFunctions) {
+            if (lowerValue.includes(func)) {
+                // Remove outer parentheses if they exist (e.g., "(getutcdate())" -> "getutcdate()")
+                if (trimmedValue.startsWith('(') && trimmedValue.endsWith(')')) {
+                    trimmedValue = trimmedValue.substring(1, trimmedValue.length - 1);
+                }
+                return trimmedValue;
+            }
+        }
+
+        // If the value already has quotes, remove them first
+        let cleanValue = trimmedValue;
+        if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
+            cleanValue = cleanValue.substring(1, cleanValue.length - 1);
+        }
+
+        // Add quotes if needed
+        if (needsQuotes) {
+            return `'${cleanValue}'`;
+        }
+
+        return cleanValue;
+    }
 
     protected createEntityFieldsParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
         let sOutput: string = '', isFirst: boolean = true;
@@ -1460,6 +1519,11 @@ ${updatedAtTrigger}
                     // This allows callers to omit the PK and let the DB/sproc handle it
                     defaultParamValue = ' = NULL';
                 }
+                else if (!isUpdate && ef.HasDefaultValue && !ef.AllowsNull) {
+                    // For non-nullable fields with database defaults, make the parameter optional
+                    // This allows callers to pass NULL and let the database default be used
+                    defaultParamValue = ' = NULL';
+                }
                 sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;
             }
         }
@@ -1471,13 +1535,12 @@ ${updatedAtTrigger}
         let sOutput: string = '', isFirst: boolean = true;
         for (let i: number = 0; i < entityFields.length; ++i) {
             const ef: EntityFieldInfo = entityFields[i];
-            const quotes: string = ef.NeedsQuotes ? "'" : "";
             // we only want fields that are (a) not primary keys, or if a pkey, not an auto-increment pkey and (b) not virtual fields and (c) updateable fields and (d) not auto-increment fields if they're not pkeys)
             // ALSO: if excludePrimaryKey is true, skip all primary key fields
             if ( (excludePrimaryKey && ef.IsPrimaryKey) || (ef.IsPrimaryKey && autoGeneratedPrimaryKey) || ef.IsVirtual || !ef.AllowUpdateAPI || ef.AutoIncrement) {
                 continue; // skip this field
             }
-            
+
             if (!isFirst)
                 sOutput += ',\n                '
             else
@@ -1489,35 +1552,35 @@ ${updatedAtTrigger}
                 else
                     sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
             }
-            else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue) {
-                // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
-                // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
-                // When the uniqueidentifier default value is set to NEWID() or NEWSEQUENTIALID(), we need to ensure that the value is not wrapped in quotes, so we check for that
-                // otherwise we use the value passed in
-                // next check to make sure ef.DefaultValue does not contain quotes around the value if it is a string type, if it does, we need to remove them
-                let defValue = ef.DefaultValue;
-                if (ef.TSType === EntityFieldTSType.String) {
-                    if (defValue.startsWith("'") && defValue.endsWith("'")) {
-                        defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
-                    }
-                }
-
-                const defValueLowered = defValue.toLowerCase().trim();
-
-                //If the default value is NEWID or NEWSEQUENTIALID, we will use the default value as is, without quotes.
-                //Otherwise, wrap the default value with the quotes variable value.
-                if (!defValueLowered.includes('newid()') && !defValueLowered.includes('newsequentialid()')) {
-                    defValue = `${quotes}${defValue}${quotes}`;
-                }
-
-                sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${defValue} ELSE @${ef.CodeName} END`;
+            else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue && !ef.AllowsNull) {
+                // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column with a default value and does NOT allow NULL
+                // We need to handle both NULL and the special value '00000000-0000-0000-0000-000000000000' for backward compatibility
+                // Existing code uses the special value to indicate "use the default", so we preserve that behavior
+                const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+                sOutput += `CASE @${ef.CodeName} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(@${ef.CodeName}, ${formattedDefault}) END`;
             }
             else {
                 let sVal: string = '';
-                if (!prefix || prefix.length === 0)
+                if (!prefix || prefix.length === 0) {
+                    // Column name side
                     sVal = '[' + ef.Name + ']'; // always put field names in brackets so that if reserved words are being used for field names in a table like "USER" and so on, they still work
-                else
+                }
+                else {
+                    // Value/parameter side
                     sVal = prefix + ef.CodeName;
+
+                    // If this field has a default value and doesn't allow NULL, wrap with ISNULL
+                    // For UniqueIdentifier fields, also handle the special value '00000000-0000-0000-0000-000000000000' for backward compatibility
+                    if (ef.HasDefaultValue && !ef.AllowsNull) {
+                        const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+                        if (ef.IsUniqueIdentifier) {
+                            // Handle both NULL and the special UUID value for backward compatibility with existing code
+                            sVal = `CASE ${sVal} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(${sVal}, ${formattedDefault}) END`;
+                        } else {
+                            sVal = `ISNULL(${sVal}, ${formattedDefault})`;
+                        }
+                    }
+                }
 
                 sOutput += sVal;
             }
@@ -1593,7 +1656,8 @@ ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't updat
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]

@@ -46,15 +46,15 @@
           }
         </div>
 
-        <!-- Inline Artifact Component -->
+        <!-- Artifact Message Card -->
         @if (hasArtifact && artifact && artifactVersion) {
-          <mj-inline-artifact
+          <mj-artifact-message-card
             [artifactId]="artifact.ID"
             [artifact]="artifact"
             [artifactVersion]="artifactVersion"
             [currentUser]="currentUser"
             (actionPerformed)="onArtifactActionPerformed($event)">
-          </mj-inline-artifact>
+          </mj-artifact-message-card>
         }
       }
 
