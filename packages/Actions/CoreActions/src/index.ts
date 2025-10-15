@@ -41,6 +41,8 @@ export * from './custom/data/json-transform.action';
 export * from './custom/data/xml-parser.action';
 export * from './custom/data/aggregate-data.action';
 export * from './custom/data/data-mapper.action';
+export * from './custom/data/explore-database-schema.action';
+export * from './custom/data/execute-research-query.action';
 
 // File Operation Actions
 export * from './custom/files/pdf-generator.action';
@@ -111,6 +113,8 @@ import { LoadJSONTransformAction } from './custom/data/json-transform.action';
 import { LoadXMLParserAction } from './custom/data/xml-parser.action';
 import { LoadAggregateDataAction } from './custom/data/aggregate-data.action';
 import { LoadDataMapperAction } from './custom/data/data-mapper.action';
+import { LoadExploreDatabaseSchemaAction } from './custom/data/explore-database-schema.action';
+import { LoadExecuteResearchQueryAction } from './custom/data/execute-research-query.action';
 import { LoadPDFGeneratorAction } from './custom/files/pdf-generator.action';
 import { LoadPDFExtractorAction } from './custom/files/pdf-extractor.action';
 import { LoadExcelReaderAction } from './custom/files/excel-reader.action';
@@ -128,6 +132,8 @@ import { LoadMoveObjectAction } from './custom/files/move-object.action';
 import { LoadDeleteObjectAction } from './custom/files/delete-object.action';
 import { LoadCreateDirectoryAction } from './custom/files/create-directory.action';
 import { LoadDeleteDirectoryAction } from './custom/files/delete-directory.action';
+import { LoadSearchStorageFilesAction } from './custom/files/search-storage-files.action';
+import { LoadListStorageProvidersAction } from './custom/files/list-storage-providers.action';
 import { LoadHTTPRequestAction } from './custom/integration/http-request.action';
 import { LoadGraphQLQueryAction } from './custom/integration/graphql-query.action';
 import { LoadOAuthFlowAction } from './custom/integration/oauth-flow.action';
@@ -183,6 +189,8 @@ export function LoadAllCoreActions() {
     LoadXMLParserAction();
     LoadAggregateDataAction();
     LoadDataMapperAction();
+    LoadExploreDatabaseSchemaAction();
+    LoadExecuteResearchQueryAction();
     LoadPDFGeneratorAction();
     LoadPDFExtractorAction();
     LoadExcelReaderAction();
@@ -200,6 +208,8 @@ export function LoadAllCoreActions() {
     LoadDeleteObjectAction();
     LoadCreateDirectoryAction();
     LoadDeleteDirectoryAction();
+    LoadSearchStorageFilesAction();
+    LoadListStorageProvidersAction();
     LoadHTTPRequestAction();
     LoadGraphQLQueryAction();
     LoadOAuthFlowAction();

@@ -1,0 +1,292 @@
+[
+  {
+    "fields": {
+      "Name": "Explore Database Schema",
+      "Description": "Retrieves comprehensive database schema information using MemberJunction's rich metadata layer. Provides business context, field descriptions, semantic relationships, virtual entities, API settings, and much more beyond raw database schema. Essential for understanding the data model for research purposes.",
+      "DriverClass": "Explore Database Schema",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-database",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityPattern",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter entities by name pattern (e.g., 'Customer%', '%Order%', '*Invoice*'). Supports SQL-style % wildcards and * wildcards. If not provided, returns all entities up to MaxEntities limit.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "560BE5A6-E8DC-4BA8-A58D-405539022A96"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:12.931Z",
+            "checksum": "a93e1d4bf2f828ea064f36cbaaa1da57d413c0a2b4b41dbad80d3b03b83b2318"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SchemaFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by schema name(s). Comma-separated list (e.g., 'dbo', 'dbo,__mj'). If not provided, returns entities from all schemas.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2EC3F250-C1E6-42D9-AE05-D57AB1AE122B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:12.942Z",
+            "checksum": "cd805254f231073b77ed95a05d5513ebae6d4dd2bfe6dcadd0c2d699745e48fd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeFields",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include detailed field information for each entity with metadata (types, descriptions, related entities, value lists, API settings). Default: true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3CF75DE7-C1A2-4935-B3DE-7DECEC35A100"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:12.953Z",
+            "checksum": "4b8ee4421b33e9ac6ba53990b8ca959edd16dedb8266fed24d97ee42762e3b61"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeRelationships",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include relationship information showing how entities connect (foreign keys with semantic meaning, display preferences). Default: true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E3A2A674-17E1-4F89-AF7C-D58F322D6E70"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:12.963Z",
+            "checksum": "80214374c1010e500d9282ee848ec3310986af99489c25d07d1693068a3afd2d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludePermissions",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include API permission information (role-based CRUD permissions). Default: false to reduce output size.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "12BFE983-3CF0-4A9E-9E96-37200B96BF75"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:12.976Z",
+            "checksum": "2182c969bef5b930a68cca0f5175c4e857d0e3fcdc76969a1a7a95b93142b895"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeVirtualEntities",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include virtual entities that exist logically but are not backed by physical database tables. Default: true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E89F0308-D4AE-4A0F-8E09-B776DEF7BA74"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:12.987Z",
+            "checksum": "c837bf94b8fcde613efb6719d4bf7fdff15d15ad13335c7f37e1f305bf10d88f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxEntities",
+            "DefaultValue": "100",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of entities to return. Default: 100. Prevents overwhelming output for large databases.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ED65CAFB-65A5-451B-A38B-F2D444AB344B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:12.997Z",
+            "checksum": "34e640e405b776636f2797a0d5cc1bd0f7f86c791f87ec691043d30672e774a4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ScopeFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter entities by scope (Users, Admins, AI, All). If not provided, returns entities from all scopes. Based on entity ScopeDefault metadata.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F44D9191-C224-4C06-B88B-93E3CC5B14EB"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.006Z",
+            "checksum": "aa7a7f2d430769b8f2a0a9a801c59b11def9ba6ae9033c6f0fd6279ee1d79edf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Entities",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of entity objects with full MemberJunction metadata. Each contains: Name, DisplayName, Description, BaseTable, BaseView, SchemaName, IsVirtual, APISettings (CRUD permissions), AuditSettings (tracking config), SearchSettings (full-text), Fields (if IncludeFields=true with types/descriptions/related entities/value lists), Relationships (if IncludeRelationships=true with semantic info), Permissions (if IncludePermissions=true with role-based access).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D5F8B230-C1A8-4F17-8F1A-5E447615144A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.017Z",
+            "checksum": "cb37ef53cc2923ad07fcc506f5decbf90a81e88c260577e3b6d5111bc7c50a3a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Schemas",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of schema objects grouped by SchemaName. Each contains: SchemaName, EntityCount, VirtualEntityCount, PhysicalEntityCount, Entities (array of entities in that schema).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "56C3E443-75E7-4F02-B162-9BD004C19974"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.027Z",
+            "checksum": "d4073e68d73c6bcc296d397ac5d8f8e28979d58860b28051b0de2675451f5fe9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntitySummary",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Summary statistics object containing: TotalEntities, PhysicalEntities, VirtualEntities, TotalFields, TotalRelationships, SchemaList (array), EntitiesWithAPI, EntitiesWithFullTextSearch, EntitiesWithAudit.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "07AED406-B26A-4F5F-9D8E-E7FFA4FA8D17"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.054Z",
+            "checksum": "9fdabda24435557ca1142abc30055eee7c31b1fcd92757d56a1227553ce8817a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExecutionTimeMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Execution time in milliseconds for metadata retrieval and formatting.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "445026AA-BC33-4385-BB19-1D16B92CD5A6"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.064Z",
+            "checksum": "f9cfc491c3dc773da9f16f8a9ecaf6c652f9fa0c7311fa3898f0ca93e5bcfd09"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Schema exploration completed successfully using MemberJunction metadata. Results contain rich entity information with business context."
+          },
+          "primaryKey": {
+            "ID": "6BDDEB28-B951-4651-80E9-34DA7D5275E3"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.074Z",
+            "checksum": "362cdcff0295a314f4053c94bf809b64f918c9da983060487d667127158318d0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_ENTITIES_FOUND",
+            "IsSuccess": false,
+            "Description": "No entities match the specified filter criteria. Adjust EntityPattern, SchemaFilter, or other filter parameters."
+          },
+          "primaryKey": {
+            "ID": "1E914E9C-01C1-498B-9E20-1A42A32F882F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.083Z",
+            "checksum": "96e7116cc3083cf238501ffd44e5d1542d8edaa71f77aa03725a748d31461ce9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXPLORATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Schema exploration failed due to an unexpected error. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "C67D0DC7-F09E-40DC-8EEA-8F0B0FA20793"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.092Z",
+            "checksum": "0f5758aaa4d6a4efbf4060fc55b24c07e8c207cacfc22e8e90f18833f60405a0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F76FFCE2-EA50-4E61-AB4A-2464AFB734D0"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T16:30:12.894Z",
+      "checksum": "d517e817c093652c225aa6c391a379dd8e884898251f10e9803d24978bc36005"
+    }
+  }
+]

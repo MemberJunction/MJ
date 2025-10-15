@@ -21,7 +21,7 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
     private _scheduledJobTypes: ScheduledJobTypeEntity[] = [];
     private _scheduledJobs: ScheduledJobEntity[] = [];
     private _scheduledJobRuns: ScheduledJobRunEntity[] = [];
-    private _activePollingInterval: number = 60000; // Default 1 minute
+    private _activePollingInterval: number | null = 60000; // Default 1 minute, null when no jobs
 
     /**
      * Configure the engine by loading metadata
@@ -126,8 +126,9 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
 
     /**
      * Get the current active polling interval in milliseconds
+     * Returns null if no jobs are active (polling should be stopped)
      */
-    public get ActivePollingInterval(): number {
+    public get ActivePollingInterval(): number | null {
         return this._activePollingInterval;
     }
 
@@ -137,8 +138,8 @@ export class SchedulingEngineBase extends BaseEngine<SchedulingEngineBase> {
      */
     public UpdatePollingInterval(): void {
         if (this._scheduledJobs.length === 0) {
-            // No active jobs, use default interval
-            this._activePollingInterval = 60000; // 1 minute
+            // No active jobs, stop polling
+            this._activePollingInterval = null;
             return;
         }
 

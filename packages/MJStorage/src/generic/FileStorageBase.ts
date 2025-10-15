@@ -52,14 +52,153 @@ export type StorageListResult = {
 };
 
 /**
+ * Options for configuring a file search operation.
+ * These options allow for flexible, provider-agnostic search capabilities
+ * while still leveraging native provider search features where available.
+ */
+export type FileSearchOptions = {
+  /**
+   * Maximum number of results to return.
+   * Defaults to 100 if not specified.
+   */
+  maxResults?: number;
+
+  /**
+   * File types to include in search results.
+   * Examples: ['pdf', 'docx', 'xlsx'], ['image/*'], ['text/plain']
+   * Can use MIME types or file extensions.
+   */
+  fileTypes?: string[];
+
+  /**
+   * Only return files modified after this date.
+   */
+  modifiedAfter?: Date;
+
+  /**
+   * Only return files modified before this date.
+   */
+  modifiedBefore?: Date;
+
+  /**
+   * Restrict search to files within this path prefix.
+   * Example: 'documents/reports/' would only search within that directory.
+   */
+  pathPrefix?: string;
+
+  /**
+   * Whether to search file contents in addition to names and metadata.
+   * Not all providers support content search.
+   * Defaults to false.
+   */
+  searchContent?: boolean;
+
+  /**
+   * Additional provider-specific search parameters.
+   * This allows providers to expose advanced features not covered by common options.
+   * Example: { 'trashed': false } for Google Drive, { 'scope': 'personal' } for SharePoint
+   */
+  providerSpecific?: Record<string, any>;
+};
+
+/**
+ * Represents a single search result from a file storage provider.
+ * Combines file metadata with search-specific information like relevance and excerpts.
+ */
+export type FileSearchResult = {
+  /**
+   * Full path to the file including directory and filename.
+   */
+  path: string;
+
+  /**
+   * Filename without the directory path.
+   */
+  name: string;
+
+  /**
+   * File size in bytes.
+   */
+  size: number;
+
+  /**
+   * MIME type of the file.
+   */
+  contentType: string;
+
+  /**
+   * When the file was last modified.
+   */
+  lastModified: Date;
+
+  /**
+   * Relevance score from the search provider (0.0 to 1.0).
+   * Higher scores indicate better matches.
+   * May be undefined if provider doesn't return relevance scores.
+   */
+  relevance?: number;
+
+  /**
+   * Text excerpt showing the search term in context (for content searches).
+   * May contain HTML highlighting tags from the provider.
+   * Undefined if content search was not performed or no match in content.
+   */
+  excerpt?: string;
+
+  /**
+   * Whether the match was found in the filename (true) or content (false).
+   * Undefined if this information is not available from the provider.
+   */
+  matchInFilename?: boolean;
+
+  /**
+   * Custom metadata associated with the file.
+   */
+  customMetadata?: Record<string, string>;
+
+  /**
+   * Provider-specific additional data.
+   * Example: Google Drive file ID, SharePoint list item ID, etc.
+   */
+  providerData?: Record<string, any>;
+};
+
+/**
+ * The complete result set from a search operation.
+ */
+export type FileSearchResultSet = {
+  /**
+   * Array of matching files.
+   */
+  results: FileSearchResult[];
+
+  /**
+   * Total number of matches found (may be greater than results.length if limited by maxResults).
+   * Undefined if provider doesn't return total count.
+   */
+  totalMatches?: number;
+
+  /**
+   * Whether there are more results available beyond maxResults.
+   */
+  hasMore: boolean;
+
+  /**
+   * Token or cursor for fetching the next page of results.
+   * Undefined if hasMore is false or provider doesn't support pagination.
+   */
+  nextPageToken?: string;
+};
+
+/**
  * Error thrown when a storage provider does not support a particular operation.
- * This custom error provides clear information about which operation was attempted 
+ * This custom error provides clear information about which operation was attempted
  * and which provider doesn't support it.
  */
 export class UnsupportedOperationError extends Error {
   /**
    * Creates a new UnsupportedOperationError instance.
-   * 
+   *
    * @param methodName - The name of the method that is not supported
    * @param providerName - The name of the storage provider that doesn't support the method
    */
@@ -487,14 +626,14 @@ export abstract class FileStorageBase {
 
   /**
    * Optional initialization method for storage providers that require async setup.
-   * 
+   *
    * This method can be overridden by subclasses that need to perform async initialization
    * after construction, such as setting up access tokens, establishing connections,
    * or verifying permissions.
-   * 
+   *
    * The default implementation does nothing and resolves immediately. Storage provider
    * implementations should override this method if they need to perform async setup.
-   * 
+   *
    * @example
    * ```typescript
    * // In a specific provider implementation:
@@ -503,16 +642,128 @@ export abstract class FileStorageBase {
    *   await this.refreshAccessToken();
    *   await this.verifyBucketAccess();
    * }
-   * 
+   *
    * // Usage:
    * const storage = new MyStorageProvider();
    * await storage.initialize();
    * // Now the provider is ready to use
    * ```
-   * 
+   *
    * @returns A Promise that resolves when initialization is complete.
    */
   public async initialize(): Promise<void> {
     // Default implementation does nothing
   }
+
+  /**
+   * Checks whether this storage provider is properly configured and ready to use.
+   *
+   * This abstract getter must be implemented by each provider to verify that all
+   * required configuration parameters (API keys, credentials, endpoints, etc.) are
+   * present and valid. This allows the system to determine which providers are
+   * actually available before attempting to use them.
+   *
+   * **Implementation Guidelines:**
+   * - Check for presence of all required configuration values
+   * - Do NOT make network calls or expensive operations
+   * - Return true only if the provider can be used immediately
+   * - Return false if any required configuration is missing or invalid
+   *
+   * **Examples by Provider:**
+   * - Google Drive: Check for clientID, clientSecret, and refreshToken
+   * - AWS S3: Check for accessKeyId, secretAccessKey, and bucketName
+   * - SharePoint: Check for tenantId, clientId, clientSecret, siteUrl
+   * - Azure Blob: Check for connectionString or account credentials
+   *
+   * @example
+   * ```typescript
+   * // In Google Drive provider:
+   * public get IsConfigured(): boolean {
+   *   return !!(this._clientID && this._clientSecret && this._refreshToken);
+   * }
+   *
+   * // In AWS S3 provider:
+   * public get IsConfigured(): boolean {
+   *   return !!(this._accessKeyId && this._secretAccessKey && this._bucketName);
+   * }
+   *
+   * // Usage:
+   * const storage = new GoogleDriveFileStorage();
+   * if (storage.IsConfigured) {
+   *   // Safe to use this provider
+   *   await storage.SearchFiles('query');
+   * } else {
+   *   console.log('Provider not configured, skipping');
+   * }
+   * ```
+   *
+   * @returns true if the provider is fully configured and ready to use, false otherwise
+   */
+  public abstract get IsConfigured(): boolean;
+
+  /**
+   * Searches for files across the storage system using the provider's native search capabilities.
+   *
+   * This method leverages each provider's built-in search APIs to find files matching
+   * the specified query. The search can include filenames, file content, and metadata
+   * depending on the provider's capabilities and the options specified.
+   *
+   * **Provider Support:**
+   * - **Google Drive**: Full support via Drive API search with content indexing
+   * - **SharePoint**: Full support via Microsoft Graph Search API
+   * - **Dropbox**: Full support via search_v2 API with content search
+   * - **Box**: Full support via Box Search API
+   * - **AWS S3**: Not supported - throws UnsupportedOperationError
+   * - **Azure Blob**: Not supported - throws UnsupportedOperationError
+   * - **Google Cloud Storage**: Not supported - throws UnsupportedOperationError
+   *
+   * **Query Syntax:**
+   * The query parameter accepts natural language search terms. Advanced query syntax
+   * (like boolean operators, exact phrases, wildcards) varies by provider:
+   * - Google Drive supports: "exact phrase", OR, -, wildcards
+   * - SharePoint supports: KQL (Keyword Query Language)
+   * - Dropbox supports: exact phrases in quotes
+   * - Box supports: boolean AND/OR/NOT operators
+   *
+   * Implementations should document their specific query syntax support.
+   *
+   * @example
+   * ```typescript
+   * // Simple filename search
+   * const results = await storage.SearchFiles('quarterly report');
+   * for (const file of results.results) {
+   *   console.log(`Found: ${file.path} (${file.size} bytes)`);
+   * }
+   *
+   * // Search with filters
+   * const pdfResults = await storage.SearchFiles('budget', {
+   *   fileTypes: ['pdf'],
+   *   modifiedAfter: new Date('2024-01-01'),
+   *   pathPrefix: 'documents/finance/',
+   *   maxResults: 50
+   * });
+   *
+   * // Content search (if supported)
+   * const contentResults = await storage.SearchFiles('machine learning algorithm', {
+   *   searchContent: true,
+   *   fileTypes: ['docx', 'pdf', 'txt']
+   * });
+   *
+   * // Check if there are more results
+   * if (contentResults.hasMore) {
+   *   console.log(`Found ${contentResults.totalMatches} total matches`);
+   *   console.log(`Use nextPageToken to fetch more results`);
+   * }
+   * ```
+   *
+   * @param query - The search query string. Can be a simple term, phrase, or provider-specific
+   *                advanced query syntax.
+   * @param options - Optional search configuration parameters.
+   * @returns A Promise that resolves to a FileSearchResultSet containing matching files.
+   * @throws UnsupportedOperationError if the provider doesn't support search operations.
+   */
+  public abstract SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet>;
 }
