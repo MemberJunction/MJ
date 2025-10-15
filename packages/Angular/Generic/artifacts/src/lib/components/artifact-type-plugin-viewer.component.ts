@@ -136,9 +136,10 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
         return;
       }
 
-      const driverClass = artifactType.DriverClass;
+      // Resolve DriverClass by traversing parent hierarchy if needed
+      const driverClass = await this.resolveDriverClass(artifactType);
       if (!driverClass) {
-        this.error = `No DriverClass configured for artifact type "${this.artifactTypeName}"`;
+        this.error = `No DriverClass found in artifact type hierarchy for "${this.artifactTypeName}" and no valid JSON content for fallback`;
         this.isLoading = false;
         return;
       }
@@ -212,6 +213,78 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       return null;
     } catch (err) {
       console.error('Error loading artifact type:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Resolves the DriverClass for an artifact type by traversing up the parent hierarchy.
+   * Falls back to JSON viewer if content is valid JSON and no DriverClass is found.
+   *
+   * @param artifactType The artifact type to resolve the DriverClass for
+   * @returns The DriverClass string, or null if none found and no JSON fallback available
+   */
+  private async resolveDriverClass(artifactType: ArtifactTypeEntity): Promise<string | null> {
+    // Check if current artifact type has a DriverClass
+    if (artifactType.DriverClass) {
+      console.log(`✅ Found DriverClass '${artifactType.DriverClass}' on artifact type '${artifactType.Name}'`);
+      return artifactType.DriverClass;
+    }
+
+    // No DriverClass on current type - check if it has a parent
+    if (artifactType.ParentID) {
+      console.log(`🔍 No DriverClass on '${artifactType.Name}', checking parent...`);
+      const parentType = await this.getArtifactTypeById(artifactType.ParentID);
+
+      if (parentType) {
+        // Recursively check parent
+        return await this.resolveDriverClass(parentType);
+      } else {
+        console.warn(`⚠️ Parent artifact type '${artifactType.ParentID}' not found`);
+      }
+    }
+
+    // Reached root with no DriverClass - check for JSON fallback
+    console.log(`📄 No DriverClass found in hierarchy for '${artifactType.Name}', checking JSON fallback...`);
+    return this.checkJsonFallback();
+  }
+
+  /**
+   * Loads an artifact type by ID
+   */
+  private async getArtifactTypeById(id: string): Promise<ArtifactTypeEntity | null> {
+    try {
+      const md = new Metadata();
+      const artifactType = await md.GetEntityObject<ArtifactTypeEntity>('MJ: Artifact Types');
+      const loaded = await artifactType.Load(id);
+
+      if (loaded) {
+        return artifactType;
+      }
+
+      return null;
+    } catch (err) {
+      console.error('Error loading artifact type by ID:', err);
+      return null;
+    }
+  }
+
+  /**
+   * Checks if the artifact content is valid JSON and returns the JSON viewer plugin if so
+   */
+  private checkJsonFallback(): string | null {
+    if (!this.artifactVersion || !this.artifactVersion.Content) {
+      console.log('❌ No content available for JSON fallback');
+      return null;
+    }
+
+    try {
+      // Try to parse the content as JSON
+      JSON.parse(this.artifactVersion.Content);
+      console.log('✅ Content is valid JSON, using JsonArtifactViewerPlugin as fallback');
+      return 'JsonArtifactViewerPlugin';
+    } catch {
+      console.log('❌ Content is not valid JSON, no fallback available');
       return null;
     }
   }

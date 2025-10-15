@@ -291,6 +291,97 @@ export class ConversationAgentService {
   }
 
   /**
+   * Check if user's latest message should continue with the previous agent or route through Sage.
+   * Uses fast inference (<500ms) to determine intent and avoid unnecessary Sage overhead.
+   *
+   * @param agentId The ID of the previous agent
+   * @param latestMessage The user's new message
+   * @param conversationHistory Recent conversation history for context (last 10 messages)
+   * @returns 'YES' if message continues with agent, 'NO' for context shift, 'UNSURE' when unclear
+   */
+  async checkAgentContinuityIntent(
+    agentId: string,
+    latestMessage: string,
+    conversationHistory: ConversationDetailEntity[]
+  ): Promise<'YES' | 'NO' | 'UNSURE'> {
+    if (!this._aiClient) {
+      console.warn('AI Client not initialized, defaulting to UNSURE for intent check');
+      return 'UNSURE';
+    }
+
+    try {
+      // Load the Check Sage Intent prompt
+      await AIEngineBase.Instance.Config(false);
+      const prompt = AIEngineBase.Instance.Prompts.find(p => p.Name === 'Check Sage Intent');
+      if (!prompt) {
+        console.warn('⚠️ Check Sage Intent prompt not found, defaulting to UNSURE');
+        return 'UNSURE';
+      }
+
+      // Get agent details
+      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+      if (!agent) {
+        console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
+        return 'UNSURE';
+      }
+
+      // Build compact conversation history (last 10 messages)
+      const recentHistory = conversationHistory.slice(-10);
+      const compactHistory = recentHistory.map((msg, idx) => {
+        const role = msg.Role === 'User' ? 'User' : agent.Name || 'Agent';
+        const content = msg.Message || '';
+        return `${idx + 1}. ${role}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}`;
+      }).join('\n');
+
+      // Build user message with context
+      const userMessage = `**Previous Agent**: ${agent.Name} - ${agent.Description || 'No description'}
+
+**Conversation History** (last ${recentHistory.length} messages):
+${compactHistory}
+
+**Latest User Message**: "${latestMessage}"`;
+
+      console.log('🔍 Checking agent continuity intent...', {
+        agentName: agent.Name,
+        messagePreview: latestMessage.substring(0, 50)
+      });
+
+      // Run the prompt
+      const result = await this._aiClient.RunAIPrompt({
+        promptId: prompt.ID,
+        messages: [{ role: 'user', content: userMessage }]
+      });
+
+      if (result && result.success && (result.parsedResult || result.output)) {
+        const parsed = result.parsedResult ||
+          (result.output ? JSON.parse(result.output) : null);
+
+        if (parsed && parsed.continuesWith) {
+          const decision = parsed.continuesWith.toUpperCase();
+          const reasoning = parsed.reasoning || 'No reasoning provided';
+
+          console.log(`✅ Intent check result: ${decision}`, {
+            reasoning,
+            latency: result.executionTimeMs || 'unknown'
+          });
+
+          // Validate the response
+          if (decision === 'YES' || decision === 'NO' || decision === 'UNSURE') {
+            return decision as 'YES' | 'NO' | 'UNSURE';
+          }
+        }
+      }
+
+      console.warn('⚠️ Intent check failed or returned invalid format, defaulting to UNSURE');
+      return 'UNSURE';
+    } catch (error) {
+      console.error('❌ Error checking agent continuity intent:', error);
+      // On error, default to UNSURE (safer to let Sage evaluate)
+      return 'UNSURE';
+    }
+  }
+
+  /**
    * Clear the session for a conversation (useful when starting a new topic)
    */
   clearSession(conversationId: string): void {

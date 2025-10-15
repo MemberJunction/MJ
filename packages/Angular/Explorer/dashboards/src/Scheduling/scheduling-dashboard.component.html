@@ -1,0 +1,50 @@
+<div class="scheduling-dashboard">
+  <div class="dashboard-content">
+    @if (activeTab === 'monitoring' && hasVisited('monitoring')) {
+      <app-scheduling-monitoring
+        [initialState]="monitoringState"
+        (stateChange)="onMonitoringStateChange($event)">
+      </app-scheduling-monitoring>
+    }
+
+    @if (activeTab === 'jobs' && hasVisited('jobs')) {
+      <app-scheduling-jobs
+        [initialState]="jobsState"
+        (stateChange)="onJobsStateChange($event)">
+      </app-scheduling-jobs>
+    }
+
+    @if (activeTab === 'history' && hasVisited('history')) {
+      <app-scheduling-history
+        [initialState]="historyState"
+        (stateChange)="onHistoryStateChange($event)">
+      </app-scheduling-history>
+    }
+
+    @if (activeTab === 'types' && hasVisited('types')) {
+      <app-scheduling-types
+        [initialState]="typesState"
+        (stateChange)="onTypesStateChange($event)">
+      </app-scheduling-types>
+    }
+
+    @if (activeTab === 'health' && hasVisited('health')) {
+      <app-scheduling-health
+        [initialState]="healthState"
+        (stateChange)="onHealthStateChange($event)">
+      </app-scheduling-health>
+    }
+  </div>
+
+  <div class="scheduling-dashboard-nav">
+    @for (navItem of navigationConfig; track $index) {
+      <div
+        class="nav-item"
+        [class.active]="navItem.selected"
+        (click)="onTabChange(navigationItems[$index])">
+        <i [class]="navItem.icon"></i>
+        <span>{{ navItem.text }}</span>
+      </div>
+    }
+  </div>
+</div>
