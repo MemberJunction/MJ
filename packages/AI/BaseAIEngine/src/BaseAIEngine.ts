@@ -268,13 +268,49 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     /**
      * Returns the sub-agents for a given agent ID, optionally filtering by status.
+     * Includes both child agents (ParentID relationship) and related agents (AgentRelationships).
+     *
      * @param agentID - The ID of the parent agent to get sub-agents for
      * @param status - Optional status to filter sub-agents by (e.g., 'Active', 'Inactive'). If not provided, all sub-agents are returned.
-     * @returns AIAgentEntityExtended[] - Array of sub-agent entities matching the criteria.
+     * @param relationshipStatus - Optional status to filter agent relationships by. Defaults to 'Active' if not provided.
+     * @returns AIAgentEntityExtended[] - Array of sub-agent entities matching the criteria (deduplicated by ID).
      * @memberof
      */
-    public GetSubAgents(agentID: string, status?: AIAgentEntityExtended['Status']): AIAgentEntityExtended[] {
-        return this._agents.filter(a => a.ParentID === agentID && (!status || a.Status === status));
+    public GetSubAgents(
+        agentID: string,
+        status?: AIAgentEntityExtended['Status'],
+        relationshipStatus?: AIAgentRelationshipEntity['Status']
+    ): AIAgentEntityExtended[] {
+        // Get child agents (ParentID relationship)
+        const childAgents = this._agents.filter(a =>
+            a.ParentID === agentID &&
+            (!status || a.Status === status)
+        );
+
+        // Get related agents (AgentRelationships)
+        const relStatus = relationshipStatus ?? 'Active'; // Default to Active for relationships
+        const activeRelationships = this._agentRelationships.filter(ar =>
+            ar.AgentID === agentID &&
+            ar.Status === relStatus
+        );
+
+        // Get the actual agent entities for related agents
+        const relatedAgents = activeRelationships
+            .map(ar => this._agents.find(a => a.ID === ar.SubAgentID))
+            .filter(a => a != null && (!status || a.Status === status));
+
+        // Combine and deduplicate by ID
+        const uniqueAgentIDs = new Set<string>();
+        const allSubAgents: AIAgentEntityExtended[] = [];
+
+        for (const agent of [...childAgents, ...relatedAgents]) {
+            if (!uniqueAgentIDs.has(agent.ID)) {
+                uniqueAgentIDs.add(agent.ID);
+                allSubAgents.push(agent);
+            }
+        }
+
+        return allSubAgents;
     }
 
     public get AgentTypes(): AIAgentTypeEntity[] {

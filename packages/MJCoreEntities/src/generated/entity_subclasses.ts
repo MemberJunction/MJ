@@ -8002,6 +8002,11 @@ export const AIAgentRelationshipSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SubAgentOutputMapping: z.string().nullable().describe(`
+        * * Field Name: SubAgentOutputMapping
+        * * Display Name: Sub Agent Output Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8161,10 +8166,10 @@ detailed information about what validation rules failed.`),
         * * Display Name: Comments
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Human-readable notes and comments about this agent run step`),
-    RootParentID: z.string().nullable().describe(`
+    RootParentID: z.number().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: int`),
 });
 
 export type AIAgentRunStepEntityType = z.infer<typeof AIAgentRunStepSchema>;
@@ -8435,14 +8440,14 @@ each time the agent processes a prompt step.`),
         * * Field Name: OverrideVendor
         * * Display Name: Override Vendor
         * * SQL Data Type: nvarchar(50)`),
-    RootParentRunID: z.string().nullable().describe(`
+    RootParentRunID: z.number().nullable().describe(`
         * * Field Name: RootParentRunID
         * * Display Name: Root Parent Run ID
-        * * SQL Data Type: uniqueidentifier`),
-    RootLastRunID: z.string().nullable().describe(`
+        * * SQL Data Type: int`),
+    RootLastRunID: z.number().nullable().describe(`
         * * Field Name: RootLastRunID
         * * Display Name: Root Last Run ID
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: int`),
 });
 
 export type AIAgentRunEntityType = z.infer<typeof AIAgentRunSchema>;
@@ -9754,14 +9759,14 @@ export const AIPromptRunSchema = z.object({
         * * Field Name: ChildPrompt
         * * Display Name: Child Prompt
         * * SQL Data Type: nvarchar(255)`),
-    RootParentID: z.string().nullable().describe(`
+    RootParentID: z.number().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
-        * * SQL Data Type: uniqueidentifier`),
-    RootRerunFromPromptRunID: z.string().nullable().describe(`
+        * * SQL Data Type: int`),
+    RootRerunFromPromptRunID: z.number().nullable().describe(`
         * * Field Name: RootRerunFromPromptRunID
         * * Display Name: Root Rerun From Prompt Run ID
-        * * SQL Data Type: uniqueidentifier`),
+        * * SQL Data Type: int`),
 });
 
 export type AIPromptRunEntityType = z.infer<typeof AIPromptRunSchema>;
@@ -36368,6 +36373,19 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     }
 
     /**
+    * * Field Name: SubAgentOutputMapping
+    * * Display Name: Sub Agent Output Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.
+    */
+    get SubAgentOutputMapping(): string | null {
+        return this.Get('SubAgentOutputMapping');
+    }
+    set SubAgentOutputMapping(value: string | null) {
+        this.Set('SubAgentOutputMapping', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -36760,9 +36778,9 @@ detailed information about what validation rules failed.
     /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: int
     */
-    get RootParentID(): string | null {
+    get RootParentID(): number | null {
         return this.Get('RootParentID');
     }
 }
@@ -37435,18 +37453,18 @@ each time the agent processes a prompt step.
     /**
     * * Field Name: RootParentRunID
     * * Display Name: Root Parent Run ID
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: int
     */
-    get RootParentRunID(): string | null {
+    get RootParentRunID(): number | null {
         return this.Get('RootParentRunID');
     }
 
     /**
     * * Field Name: RootLastRunID
     * * Display Name: Root Last Run ID
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: int
     */
-    get RootLastRunID(): string | null {
+    get RootLastRunID(): number | null {
         return this.Get('RootLastRunID');
     }
 }
@@ -41087,18 +41105,18 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     /**
     * * Field Name: RootParentID
     * * Display Name: Root Parent ID
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: int
     */
-    get RootParentID(): string | null {
+    get RootParentID(): number | null {
         return this.Get('RootParentID');
     }
 
     /**
     * * Field Name: RootRerunFromPromptRunID
     * * Display Name: Root Rerun From Prompt Run ID
-    * * SQL Data Type: uniqueidentifier
+    * * SQL Data Type: int
     */
-    get RootRerunFromPromptRunID(): string | null {
+    get RootRerunFromPromptRunID(): number | null {
         return this.Get('RootRerunFromPromptRunID');
     }
 }

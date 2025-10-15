@@ -1749,13 +1749,11 @@ each time the agent processes a prompt step.`})
     @MaxLength(100)
     OverrideVendor?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    RootParentRunID?: string;
+    @Field(() => Int, {nullable: true}) 
+    RootParentRunID?: number;
         
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    RootLastRunID?: string;
+    @Field(() => Int, {nullable: true}) 
+    RootLastRunID?: number;
         
     @Field(() => [MJAIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: MJAIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
@@ -43130,6 +43128,9 @@ export class MJAIAgentRelationship_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`}) 
+    SubAgentOutputMapping?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -43156,6 +43157,9 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SubAgentOutputMapping: string | null;
 }
     
 
@@ -43175,6 +43179,9 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SubAgentOutputMapping?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -46437,13 +46444,11 @@ export class MJAIPromptRun_ {
     @MaxLength(510)
     ChildPrompt?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    RootParentID?: string;
+    @Field(() => Int, {nullable: true}) 
+    RootParentID?: number;
         
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    RootRerunFromPromptRunID?: string;
+    @Field(() => Int, {nullable: true}) 
+    RootRerunFromPromptRunID?: number;
         
     @Field(() => [MJAIPromptRun_])
     MJ_AIPromptRuns_ParentIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -47151,9 +47156,8 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
     Comments?: string;
         
-    @Field({nullable: true}) 
-    @MaxLength(16)
-    RootParentID?: string;
+    @Field(() => Int, {nullable: true}) 
+    RootParentID?: number;
         
     @Field(() => [MJAIAgentRunStep_])
     MJ_AIAgentRunSteps_ParentIDArray: MJAIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
