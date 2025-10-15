@@ -228,7 +228,15 @@ export class SharePointFileStorage extends FileStorageBase {
       authProvider: authProvider
     });
   }
-  
+
+  /**
+   * Checks if SharePoint provider is properly configured.
+   * Returns true if all required Microsoft Graph credentials are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._siteId && this._driveId && this._client);
+  }
+
   /**
    * Gets the SharePoint item ID for a folder at the specified path
    * 

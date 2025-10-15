@@ -87,6 +87,14 @@ export class GoogleFileStorage extends FileStorageBase {
   }
 
   /**
+   * Checks if Google Cloud Storage provider is properly configured.
+   * Returns true if service account credentials and bucket name are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._client && this._bucket);
+  }
+
+  /**
    * Normalizes directory paths to ensure they end with a slash.
    * 
    * This is a helper method used internally to ensure consistency in

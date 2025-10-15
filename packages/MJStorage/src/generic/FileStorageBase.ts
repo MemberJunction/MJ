@@ -656,6 +656,52 @@ export abstract class FileStorageBase {
   }
 
   /**
+   * Checks whether this storage provider is properly configured and ready to use.
+   *
+   * This abstract getter must be implemented by each provider to verify that all
+   * required configuration parameters (API keys, credentials, endpoints, etc.) are
+   * present and valid. This allows the system to determine which providers are
+   * actually available before attempting to use them.
+   *
+   * **Implementation Guidelines:**
+   * - Check for presence of all required configuration values
+   * - Do NOT make network calls or expensive operations
+   * - Return true only if the provider can be used immediately
+   * - Return false if any required configuration is missing or invalid
+   *
+   * **Examples by Provider:**
+   * - Google Drive: Check for clientID, clientSecret, and refreshToken
+   * - AWS S3: Check for accessKeyId, secretAccessKey, and bucketName
+   * - SharePoint: Check for tenantId, clientId, clientSecret, siteUrl
+   * - Azure Blob: Check for connectionString or account credentials
+   *
+   * @example
+   * ```typescript
+   * // In Google Drive provider:
+   * public get IsConfigured(): boolean {
+   *   return !!(this._clientID && this._clientSecret && this._refreshToken);
+   * }
+   *
+   * // In AWS S3 provider:
+   * public get IsConfigured(): boolean {
+   *   return !!(this._accessKeyId && this._secretAccessKey && this._bucketName);
+   * }
+   *
+   * // Usage:
+   * const storage = new GoogleDriveFileStorage();
+   * if (storage.IsConfigured) {
+   *   // Safe to use this provider
+   *   await storage.SearchFiles('query');
+   * } else {
+   *   console.log('Provider not configured, skipping');
+   * }
+   * ```
+   *
+   * @returns true if the provider is fully configured and ready to use, false otherwise
+   */
+  public abstract get IsConfigured(): boolean;
+
+  /**
    * Searches for files across the storage system using the provider's native search capabilities.
    *
    * This method leverages each provider's built-in search APIs to find files matching

@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "Name": "List Storage Providers",
+      "Description": "Retrieves a list of active file storage providers configured in the system. Returns provider names, descriptions, and search support status. Useful for agents to discover available storage before searching or accessing files.",
+      "DriverClass": "List Storage Providers",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchSupportedOnly",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, returns only storage providers that support native file search (Google Drive, SharePoint, Dropbox, Box). If false, returns all active providers. Default: false.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Providers",
+            "Type": "Output",
+            "ValueType": "Array",
+            "IsArray": true,
+            "Description": "Array of storage provider objects. Each object contains: Name, Description, ServerDriverKey, SupportsSearch (boolean), IsConfigured (boolean), ConfigurationError (optional string).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfiguredCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of providers that are actually configured and available in the running environment.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of active storage providers returned.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchSupportedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of providers that support native file search.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Storage providers retrieved successfully. Results contain list of active providers."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "IsError": true,
+            "Description": "Failed to query File Storage Providers entity. Check database connection and entity permissions."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LIST_FAILED",
+            "IsError": true,
+            "Description": "Failed to list storage providers. Check error message for specific details."
+          }
+        }
+      ]
+    }
+  }
+]

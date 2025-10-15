@@ -22,3 +22,4 @@ export { DeleteObjectAction } from './delete-object.action';
 export { CreateDirectoryAction } from './create-directory.action';
 export { DeleteDirectoryAction } from './delete-directory.action';
 export { SearchStorageFilesAction } from './search-storage-files.action';
+export { ListStorageProvidersAction } from './list-storage-providers.action';

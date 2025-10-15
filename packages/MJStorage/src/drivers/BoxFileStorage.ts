@@ -154,6 +154,14 @@ export class BoxFileStorage extends FileStorageBase {
   }
 
   /**
+   * Checks if Box provider is properly configured.
+   * Returns true if client credentials are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._clientId && this._clientSecret && this._accessToken);
+  }
+
+  /**
    * Initializes the Box storage driver
    *
    * This method must be called after creating a BoxFileStorage instance.

@@ -50,12 +50,17 @@ import { getProviderConfig } from '../config';
 export class GoogleDriveFileStorage extends FileStorageBase {
   /** The name of this storage provider, used in error messages */
   protected readonly providerName = 'Google Drive';
-  
+
   /** The Google Drive API client */
   private _drive: drive_v3.Drive;
-  
+
   /** Optional root folder ID to restrict operations to a specific folder */
   private _rootFolderId?: string;
+
+  /** OAuth2 credentials for configuration checking */
+  private _clientID?: string;
+  private _clientSecret?: string;
+  private _refreshToken?: string;
 
   /**
    * Creates a new instance of GoogleDriveFileStorage.
@@ -73,9 +78,9 @@ export class GoogleDriveFileStorage extends FileStorageBase {
     // Get credentials from config or environment
     const keyFile = config?.keyFile || env.get('STORAGE_GDRIVE_KEY_FILE').asString();
     const credentials = config?.credentialsJSON || env.get('STORAGE_GDRIVE_CREDENTIALS_JSON').asJsonObject();
-    const clientID = config?.clientID || env.get('STORAGE_GDRIVE_CLIENT_ID').asString();
-    const clientSecret = config?.clientSecret || env.get('STORAGE_GDRIVE_CLIENT_SECRET').asString();
-    const refreshToken = config?.refreshToken || env.get('STORAGE_GDRIVE_REFRESH_TOKEN').asString();
+    this._clientID = config?.clientID || env.get('STORAGE_GDRIVE_CLIENT_ID').asString();
+    this._clientSecret = config?.clientSecret || env.get('STORAGE_GDRIVE_CLIENT_SECRET').asString();
+    this._refreshToken = config?.refreshToken || env.get('STORAGE_GDRIVE_REFRESH_TOKEN').asString();
     const redirectURI = config?.redirectURI || env.get('STORAGE_GDRIVE_REDIRECT_URI').asString();
 
     // Initialize the Google Drive client - support THREE auth methods
@@ -96,10 +101,10 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         ['https://www.googleapis.com/auth/drive']
       );
       this._drive = google.drive({ version: 'v3', auth });
-    } else if (clientID && clientSecret && refreshToken) {
+    } else if (this._clientID && this._clientSecret && this._refreshToken) {
       // Method 3: Using OAuth2 with refresh token
-      const auth = new google.auth.OAuth2(clientID, clientSecret, redirectURI);
-      auth.setCredentials({ refresh_token: refreshToken });
+      const auth = new google.auth.OAuth2(this._clientID, this._clientSecret, redirectURI);
+      auth.setCredentials({ refresh_token: this._refreshToken });
       this._drive = google.drive({ version: 'v3', auth });
     } else {
       throw new Error('Google Drive storage requires either STORAGE_GDRIVE_KEY_FILE, STORAGE_GDRIVE_CREDENTIALS_JSON, or OAuth2 credentials (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN) to be set');
@@ -107,6 +112,14 @@ export class GoogleDriveFileStorage extends FileStorageBase {
 
     // Optionally set a root folder ID to restrict operations
     this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString();
+  }
+
+  /**
+   * Checks if Google Drive provider is properly configured.
+   * Returns true if all required OAuth credentials are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._clientID && this._clientSecret && this._refreshToken);
   }
 
   /**

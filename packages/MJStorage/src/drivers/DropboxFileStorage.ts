@@ -63,7 +63,12 @@ export class DropboxFileStorage extends FileStorageBase {
    * Dropbox API client instance
    */
   private _client: Dropbox;
-  
+
+  /**
+   * Access token for Dropbox authentication
+   */
+  private _accessToken: string | undefined;
+
   /**
    * Root path within Dropbox to use as the storage root
    */
@@ -91,6 +96,7 @@ export class DropboxFileStorage extends FileStorageBase {
 
     if (accessToken) {
       // Use access token directly
+      this._accessToken = accessToken;
       this._client = new Dropbox({ accessToken });
     } else if (refreshToken && appKey && appSecret) {
       // Use refresh token with app credentials
@@ -111,7 +117,15 @@ export class DropboxFileStorage extends FileStorageBase {
       this._rootPath = '/' + this._rootPath;
     }
   }
-  
+
+  /**
+   * Checks if Dropbox provider is properly configured.
+   * Returns true if access token is present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._accessToken);
+  }
+
   /**
    * Normalizes a path to be compatible with Dropbox API
    * 

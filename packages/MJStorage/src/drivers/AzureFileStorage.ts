@@ -101,11 +101,19 @@ export class AzureFileStorage extends FileStorageBase {
   }
 
   /**
+   * Checks if Azure Blob provider is properly configured.
+   * Returns true if account name and container name are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._accountName && this._container);
+  }
+
+  /**
    * Creates a BlobClient for the specified object.
-   * 
+   *
    * This is a helper method used internally to get a BlobClient instance
    * for a specific blob (file) in the container.
-   * 
+   *
    * @param objectName - The name of the blob for which to create a client
    * @returns A BlobClient instance for the specified blob
    * @private
