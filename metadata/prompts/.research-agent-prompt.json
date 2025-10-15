@@ -1,0 +1,47 @@
+[
+  {
+    "fields": {
+      "Name": "Research Agent - Main Prompt",
+      "Description": "Main prompt for Research Agent that conducts comprehensive, iterative research by gathering information from multiple sources, comparing and validating data, and synthesizing findings into detailed reports.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:research-agent-main.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: Agents"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude Sonnet 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 1
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 4.1",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 2
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude Sonnet 3.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 3
+          }
+        }
+      ]
+    }
+  }
+]

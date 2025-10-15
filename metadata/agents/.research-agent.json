@@ -1,0 +1,34 @@
+[
+  {
+    "fields": {
+      "Name": "Research Agent",
+      "Description": "Comprehensive research agent capable of gathering information from multiple sources, comparing and validating data, and synthesizing findings into detailed reports. Uses iterative methodology to ensure thorough research with source validation and contradiction detection.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-magnifying-glass-chart"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Research Agent - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Google Custom Search",
+            "Status": "Active"
+          }
+        }
+      ]
+    }
+  }
+]
