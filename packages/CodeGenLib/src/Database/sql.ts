@@ -34,9 +34,9 @@ export class SQLUtilityBase {
  * @param schema 
  * @param objectName 
  */
-public getDBObjectFileName(type: 'view' | 'sp' | 'full_text_search_function' | 'index', 
-                                    schema: string, 
-                                    objectName: string, 
+public getDBObjectFileName(type: 'view' | 'sp' | 'function' | 'full_text_search_function' | 'index',
+                                    schema: string,
+                                    objectName: string,
                                     isPermissions: boolean,
                                     isGenerated: boolean): string {
    let extraText: string = '';
