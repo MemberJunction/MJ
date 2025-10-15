@@ -1,0 +1,280 @@
+[
+  {
+    "fields": {
+      "Name": "Google Custom Search",
+      "Description": "Performs web search using Google's Custom Search JSON API with advanced filtering and structured results. Provides high-quality search results with support for site filtering, date restrictions, file type filtering, and more.",
+      "DriverClass": "Google Custom Search",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-brands fa-google",
+      "CategoryID": "@lookup:Action Categories.Name=Web"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query text (required). The terms to search for.",
+            "IsRequired": true
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "10",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return (1-10). Default: 10.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartIndex",
+            "DefaultValue": "1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Index of the first result to return (1-91). Google limits access to first 100 results. Default: 1.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SafeSearch",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Safe search filtering level: 'off', 'medium', or 'high'. Accepts aliases: none/disabled (off), moderate (medium), strict/active (high).",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SiteSearch",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts search to pages from a specific site or domain (e.g., 'github.com' or 'wikipedia.org').",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SiteSearchFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Controls whether SiteSearch includes ('i' or 'include') or excludes ('e' or 'exclude') the specified site. Requires SiteSearch parameter.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LanguageRestriction",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts search to documents in a particular language. Use 2-letter code (e.g., 'en', 'es', 'fr') or 'lang_xx' format.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExactTerms",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Phrase that must appear exactly in the search results (equivalent to putting terms in quotes).",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeTerms",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Terms to exclude from search results (equivalent to using minus operator).",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DateRestrict",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts results to documents published within a timeframe. Format: 'd[number]' (days), 'w[number]' (weeks), 'm[number]' (months), 'y[number]' (years). Example: 'm6' for last 6 months.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of search to perform. Currently supports 'image' or 'images' for image search only.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts results to files of a particular type (e.g., 'pdf', 'doc', 'xls', 'ppt').",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Region",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geolocation of end user (2-letter country code, e.g., 'us', 'uk', 'de'). Boosts results from specified region.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultsDetails",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete search result object including metadata, items, and search information.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Items",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of search result items with title, link, snippet, and metadata.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of items returned in this response.",
+            "IsRequired": false
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalResults",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Estimated total number of results available (may be approximate).",
+            "IsRequired": false
+          } 
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search completed successfully and returned results."
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsSuccess": false,
+            "Description": "Query parameter is required but was not provided."
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Google Custom Search API key not found in configuration. Set google.customSearch.apiKey in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_API_KEY environment variable."
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_SEARCH_ENGINE",
+            "IsSuccess": false,
+            "Description": "Google Custom Search engine identifier (CX) not found in configuration. Set google.customSearch.cx in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_CX environment variable."
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_RESPONSE",
+            "IsSuccess": false,
+            "Description": "Google Custom Search API returned an empty response."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "IsSuccess": false,
+            "Description": "Google Custom Search quota exceeded or invalid credentials. Free tier allows 100 queries/day. Check your Google Cloud Console for quota limits."
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BAD_REQUEST",
+            "IsSuccess": false,
+            "Description": "Google Custom Search request was malformed. Check parameter formats (e.g., dateRestrict must be 'd[number]', 'w[number]', 'm[number]', or 'y[number]')."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Google Custom Search API returned an error. Check the error message for details."
+          } 
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to perform Google Custom Search due to an unexpected error."
+          } 
+        }
+      ]
+    } 
+  }
+]
