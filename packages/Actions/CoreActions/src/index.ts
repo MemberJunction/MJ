@@ -127,6 +127,7 @@ import { LoadMoveObjectAction } from './custom/files/move-object.action';
 import { LoadDeleteObjectAction } from './custom/files/delete-object.action';
 import { LoadCreateDirectoryAction } from './custom/files/create-directory.action';
 import { LoadDeleteDirectoryAction } from './custom/files/delete-directory.action';
+import { LoadSearchStorageFilesAction } from './custom/files/search-storage-files.action';
 import { LoadHTTPRequestAction } from './custom/integration/http-request.action';
 import { LoadGraphQLQueryAction } from './custom/integration/graphql-query.action';
 import { LoadOAuthFlowAction } from './custom/integration/oauth-flow.action';
@@ -198,6 +199,7 @@ export function LoadAllCoreActions() {
     LoadDeleteObjectAction();
     LoadCreateDirectoryAction();
     LoadDeleteDirectoryAction();
+    LoadSearchStorageFilesAction();
     LoadHTTPRequestAction();
     LoadGraphQLQueryAction();
     LoadOAuthFlowAction();

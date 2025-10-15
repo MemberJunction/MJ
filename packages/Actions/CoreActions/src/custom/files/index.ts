@@ -21,3 +21,4 @@ export { MoveObjectAction } from './move-object.action';
 export { DeleteObjectAction } from './delete-object.action';
 export { CreateDirectoryAction } from './create-directory.action';
 export { DeleteDirectoryAction } from './delete-directory.action';
+export { SearchStorageFilesAction } from './search-storage-files.action';

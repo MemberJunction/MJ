@@ -1,0 +1,219 @@
+[
+  {
+    "fields": {
+      "Name": "Search Storage Files",
+      "Description": "Searches for files across configured storage providers using native search APIs. Supports Google Drive, SharePoint, Dropbox, and Box with content search, file type filtering, date ranges, and path restrictions.",
+      "DriverClass": "Search Storage Files",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-magnifying-glass",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query text (required). Natural language query to search for in file names or content.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider to search (required). Example: 'Google Drive - Marketing', 'SharePoint - Finance'. Must match a File Storage Provider record.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "100",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return. Default: 100. Some providers have lower limits (e.g., Box: 200, Dropbox: 1000).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchContent",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to search file contents in addition to names. Default: false (filename only). Requires provider with content indexing (Google Drive, SharePoint, Dropbox).",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileTypes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated list of file types to search. Can be file extensions (pdf, docx) or MIME types (application/pdf). Example: 'pdf,xlsx,docx'.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PathPrefix",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restrict search to files within this directory path. Example: 'documents/finance' or 'projects/2024'.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModifiedAfter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only return files modified after this date. Use ISO 8601 format (e.g., '2024-01-01' or '2024-01-01T00:00:00Z').",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ModifiedBefore",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only return files modified before this date. Use ISO 8601 format (e.g., '2024-12-31' or '2024-12-31T23:59:59Z').",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResults",
+            "Type": "Output",
+            "ValueType": "Array",
+            "IsArray": true,
+            "Description": "Array of search results. Each result contains: Path, Name, Size, ContentType, LastModified, Relevance, Excerpt, MatchInFilename, CustomMetadata, ProviderData.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of results returned in this response.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalMatches",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of matching files (if available from provider). May be undefined if provider doesn't return total count.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating whether more results are available beyond MaxResults limit.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextPageToken",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Token for fetching the next page of results (if HasMore is true and provider supports pagination).",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Search completed successfully. Results contain matching files."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsError": true,
+            "Description": "Query parameter is required but was not provided."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsError": true,
+            "Description": "StorageProvider parameter is required but was not provided."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsError": true,
+            "Description": "The specified storage provider was not found in File Storage Providers. Verify the provider name matches exactly."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_NOT_SUPPORTED",
+            "IsError": true,
+            "Description": "The storage provider does not support native file search. Supported providers: Google Drive, SharePoint, Dropbox, Box. Consider using List Objects with filtering for other providers."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_DATE_FORMAT",
+            "IsError": true,
+            "Description": "ModifiedAfter or ModifiedBefore parameter has invalid date format. Use ISO 8601 format (e.g., '2024-01-01')."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsError": true,
+            "Description": "Search operation failed. Check error message for specific provider error details."
+          }
+        }
+      ]
+    }
+  }
+]
