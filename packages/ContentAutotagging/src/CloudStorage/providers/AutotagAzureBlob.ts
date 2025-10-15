@@ -71,7 +71,7 @@ export class AutotagAzureBlob extends CloudStorageBase {
                             continue;
                         }
                         
-                        const blobPath = path.join(this.containerName, blob.name);
+                        const blobPath = `${this.containerName}/${blob.name}`;
                         
                         // Check if blob already exists as ContentItem
                         const existingContentItemId = await this.getExistingContentItemIdForBlob(blobPath, contentSource.ID, contextUser);
@@ -392,9 +392,24 @@ export class AutotagAzureBlob extends CloudStorageBase {
      * Download blob content to a Buffer
      */
     private async downloadBlobToBuffer(blobName: string): Promise<Buffer> {
-        const blockBlobClient = this.containerClient.getBlockBlobClient(blobName);
-        const downloadBlockBlobResponse = await blockBlobClient.download();
-        return await this.streamToBuffer(downloadBlockBlobResponse.readableStreamBody);
+        console.log(`📥 downloadBlobToBuffer called with blobName: "${blobName}"`);
+        
+        // Azure blob names always use forward slashes, regardless of OS
+        let normalizedBlobName = blobName.replace(/\\/g, '/');
+        
+        // Remove container name prefix if it exists (blob names should not include container)
+        const containerPrefix = `${this.containerName}/`;
+        if (normalizedBlobName.startsWith(containerPrefix)) {
+            normalizedBlobName = normalizedBlobName.substring(containerPrefix.length);
+            console.log(`🔧 Removed container prefix, corrected blob name: "${normalizedBlobName}"`);
+        }
+        
+        console.log(`🎯 Final blob name for Azure SDK: "${normalizedBlobName}"`);
+        const blobClient = this.containerClient.getBlobClient(normalizedBlobName);
+        console.log(`🌐 Full blob URL: ${blobClient.url}`);
+        
+        const downloadBlobResponse = await blobClient.download();
+        return await this.streamToBuffer(downloadBlobResponse.readableStreamBody);
     }
 
     /**

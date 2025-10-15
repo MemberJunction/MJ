@@ -2,17 +2,18 @@
   "name": "test-vectorization",
   "version": "1.0.0",
   "description": "A test package to prove scaling vectorization",
-  "main": "dist/index.js",
-  "type": "module",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  
   "scripts": {
-    "start": "node -r dotenv/config dist/index.js",
-    "autotag": "node -r dotenv/config dist/autotag.js",
-    "retag": "node -r dotenv/config dist/simple-retag.js",
-    "retag:working": "node -r dotenv/config dist/working-retag.js",
+    "start": "node -r dotenv/config dist/src/index.js",
+    "autotag": "node -r dotenv/config dist/src/autotag.js",
+    "retag": "node -r dotenv/config dist/src/simple-retag.js",
+    "retag:working": "node -r dotenv/config dist/src/working-retag.js",
     "build": "tsc",
     "build:simple": "tsc src/working-retag.ts --outDir dist --target ES2022 --module ES2022 --moduleResolution node --esModuleInterop --allowSyntheticDefaultImports --skipLibCheck  --resolveJsonModule",
     "dev": "tsc --watch",
-    "debug": "node --inspect-brk -r dotenv/config dist/autotag.js",
+    "debug": "node --inspect-brk -r dotenv/config dist/src/autotag.js",
     "debug:retag": "node --inspect-brk -r dotenv/config dist/simple-retag.js"
   },
   "dependencies": {

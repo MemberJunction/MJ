@@ -7,7 +7,8 @@ import { LoadGeneratedEntities } from 'mj_generatedentities';
 import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
-import { pool } from './db.js';
+import { pool } from './db';
+import { IDListManager } from './IDListManager';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -56,11 +57,16 @@ async function main(): Promise<void> {
         const autotagger = new AutotagAzureBlob(connectionString, containerName);
 
         // Option 1: Full discovery and processing pipeline
-        await fullPipelineExample(autotagger, systemUser);
+        // await fullPipelineExample(autotagger, systemUser);
         
-        // // Option 2: Direct re-tagging of specific items
-        // const filter = `ID='363EA74E-234B-495F-9623-DB3DAEC282BE'`
-        // await retagItemsByFilter(autotagger, systemUser, filter, true);
+        // // Option 2: Direct re-tagging of specific items using ID list from file
+        const idList = await IDListManager.getIDsForSQLFilter();
+        const filter = idList ? `ID IN (${idList})` : '';
+        if (filter) {
+            await retagItemsByFilter(autotagger, systemUser, filter, true);
+        } else {
+            console.log('No IDs found in retag-ids.txt file');
+        }
 
         console.log('✅ All processing completed successfully!');
         

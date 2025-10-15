@@ -43,7 +43,7 @@
       "request": "launch",
       "name": "Autotag",
       "envFile": "${workspaceFolder}/test-vectorization/.env",
-      "program": "${workspaceFolder}/test-vectorization/dist/autotag.js",
+      "program": "${workspaceFolder}/test-vectorization/dist/src/autotag.js",
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
     },
     {
@@ -51,7 +51,7 @@
       "request": "launch",
       "name": "Re-Tag",
       "envFile": "${workspaceFolder}/test-vectorization/.env",
-      "program": "${workspaceFolder}/test-vectorization/dist/working-retag.js",
+      "program": "${workspaceFolder}/test-vectorization/dist/src/working-retag.js",
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**"]
     },
     {
