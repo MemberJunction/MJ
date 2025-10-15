@@ -43,5 +43,20 @@
       "lastModified": "2025-08-18T21:56:26.537Z",
       "checksum": "fb12a97eaf03ad1052f8311b50b4f4bce698862de22d28675a8820828d1a4a2c"
     }
+  },
+  {
+    "fields": {
+      "Name": "Conversations",
+      "ParentID": "@lookup:Query Categories.Name=MJ",
+      "Description": "Conversation-related queries for loading messages, artifacts, and conversation analytics.",
+      "UserID": "@lookup:Users.Name=System"
+    },
+    "primaryKey": {
+      "ID": "5FB6FAFF-8904-490D-9BEE-CA1FF906BD44"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T02:11:39.795Z",
+      "checksum": "f4610116ca2df7b6b8455d2832a2b429e49df5f208135e8112ab0e4585c34c7c"
+    }
   }
 ]
