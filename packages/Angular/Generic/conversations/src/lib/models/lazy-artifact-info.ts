@@ -28,7 +28,12 @@ export class LazyArtifactInfo {
   private _isLoading = false;
   private _loadPromise: Promise<void> | null = null;
 
-  constructor(queryResult: any, private currentUser: UserInfo) {
+  constructor(
+    queryResult: any,
+    private currentUser: UserInfo,
+    preloadedArtifact?: ArtifactEntity,
+    preloadedVersion?: ArtifactVersionEntity
+  ) {
     // Populate display data from query result
     // These fields come from GetConversationArtifactsMap query
     this.conversationDetailId = queryResult.ConversationDetailID;
@@ -39,6 +44,14 @@ export class LazyArtifactInfo {
     this.artifactName = queryResult.ArtifactName;
     this.artifactType = queryResult.ArtifactType;
     this.artifactDescription = queryResult.ArtifactDescription || '';
+
+    // If entities were pre-loaded via batch query, use them immediately
+    if (preloadedArtifact) {
+      this._artifact = preloadedArtifact;
+    }
+    if (preloadedVersion) {
+      this._version = preloadedVersion;
+    }
   }
 
   /**

@@ -73,6 +73,7 @@ export * from './custom/workflow/delay.action';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
+export * from './custom/ai/summarize-content.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -145,6 +146,7 @@ import { LoadParallelExecuteAction } from './custom/workflow/parallel-execute.ac
 import { LoadRetryAction } from './custom/workflow/retry.action';
 import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
+import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action';
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
@@ -220,6 +222,7 @@ export function LoadAllCoreActions() {
     LoadRetryAction();
     LoadDelayAction();
     LoadExecuteAIPromptAction();
+    LoadSummarizeContentAction();
     LoadCheckUserPermissionAction();
     LoadCreateUserAction();
     LoadCreateEmployeeAction();

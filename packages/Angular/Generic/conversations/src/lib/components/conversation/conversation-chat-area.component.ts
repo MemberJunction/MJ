@@ -219,12 +219,49 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         }
       }
 
-      // Build artifact map using lazy-loading pattern
+      // Build artifact map using batch-loading pattern for better performance
       this.artifactsByDetailId.clear();
       if (artifactMapResult.Success && artifactMapResult.Results && artifactMapResult.Results.length > 0) {
-        // Group by ConversationDetailID (supports multiple artifacts per detail)
+        // PERFORMANCE: Batch load all artifacts and versions upfront to avoid N+1 queries
+        // Collect all unique artifact and version IDs
+        const artifactIds = new Set<string>();
+        const versionIds = new Set<string>();
+
         for (const row of artifactMapResult.Results) {
-          const lazyInfo = new LazyArtifactInfo(row, this.currentUser);
+          artifactIds.add(row.ArtifactID);
+          versionIds.add(row.ArtifactVersionID);
+        }
+
+        console.log(`📦 Batch loading ${artifactIds.size} artifacts and ${versionIds.size} versions...`);
+
+        // Batch load ALL artifacts and versions with 2 queries instead of N queries
+        const [artifactsResult, versionsResult] = await Promise.all([
+          rv.RunView<ArtifactEntity>({
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: `ID IN ('${Array.from(artifactIds).join("','")}')`,
+            ResultType: 'entity_object'
+          }, this.currentUser),
+          rv.RunView<ArtifactVersionEntity>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
+            ResultType: 'entity_object'
+          }, this.currentUser)
+        ]);
+
+        // Create lookup maps for O(1) access
+        const artifactMap = new Map(artifactsResult.Results?.map(a => [a.ID, a]) || []);
+        const versionMap = new Map(versionsResult.Results?.map(v => [v.ID, v]) || []);
+
+        console.log(`📦 Batch loaded ${artifactMap.size} artifacts and ${versionMap.size} versions`);
+
+        // Group by ConversationDetailID with pre-loaded entities
+        for (const row of artifactMapResult.Results) {
+          const lazyInfo = new LazyArtifactInfo(
+            row,
+            this.currentUser,
+            artifactMap.get(row.ArtifactID),      // Pre-loaded artifact
+            versionMap.get(row.ArtifactVersionID)  // Pre-loaded version
+          );
           const existing = this.artifactsByDetailId.get(row.ConversationDetailID) || [];
           existing.push(lazyInfo);
           this.artifactsByDetailId.set(row.ConversationDetailID, existing);
@@ -233,7 +270,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         // Create new Map reference to trigger Angular change detection
         this.artifactsByDetailId = new Map(this.artifactsByDetailId);
 
-        console.log(`📦 Loaded ${this.artifactsByDetailId.size} artifact mappings for conversation ${conversationId} (lazy-loading enabled)`);
+        console.log(`📦 Loaded ${this.artifactsByDetailId.size} artifact mappings for conversation ${conversationId} (batch-loaded, no lazy loading needed)`);
       }
 
       // Update artifact count for header display (unique artifacts, not versions)
