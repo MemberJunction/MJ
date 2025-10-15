@@ -1,12 +1,12 @@
 import { DestroyRef, Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -133,7 +133,7 @@ export class ConversationAgentService {
 
       // Build conversation messages for the agent
       // Note: conversationHistory already includes the current message
-      const conversationMessages = this.buildAgentMessages(conversationHistory);
+      const conversationMessages = await this.buildAgentMessages(conversationHistory);
 
       // Prepare parameters using the correct ExecuteAgentParams type
       const availAgents = AIEngineBase.Instance.Agents.filter(a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active');
@@ -173,19 +173,86 @@ export class ConversationAgentService {
   /**
    * Build the message array for the agent from conversation history
    * Note: conversationHistory already includes the current message, so we don't add it separately
+   * IMPORTANT: This method loads artifacts for each message and appends them to the content
    */
-  private buildAgentMessages(
+  private async buildAgentMessages(
     history: ConversationDetailEntity[]
-  ): ChatMessage[] {
+  ): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
 
     // Add historical messages (limit to recent context, e.g., last 20 messages)
     // History already includes the current message from the caller
     const recentHistory = history.slice(-20);
+
+    // Get IDs of all messages in history
+    const messageIds = recentHistory.map(msg => msg.ID).filter(id => id); // Filter out any undefined IDs
+
+    // Create lookup map for artifacts by conversation detail ID
+    const artifactsByDetailId = new Map<string, string[]>(); // DetailID -> array of artifact JSON strings
+
+    if (messageIds.length > 0) {
+      try {
+        // Batch load all artifact junctions for these messages (OUTPUT only)
+        const rv = new RunView();
+        const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
+          ResultType: 'entity_object'
+        });
+
+        if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
+          // Collect unique version IDs
+          const versionIds = new Set<string>();
+          for (const junction of junctionResult.Results) {
+            versionIds.add(junction.ArtifactVersionID);
+          }
+
+          // Batch load all artifact versions
+          const versionResult = await rv.RunView<ArtifactVersionEntity>({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
+            ResultType: 'entity_object'
+          });
+
+          if (versionResult.Success && versionResult.Results) {
+            // Create lookup map for O(1) access
+            const versionMap = new Map(versionResult.Results.map(v => [v.ID, v]));
+
+            // Group artifacts by conversation detail ID
+            for (const junction of junctionResult.Results) {
+              const version = versionMap.get(junction.ArtifactVersionID);
+              if (version && version.Content) {
+                const existing = artifactsByDetailId.get(junction.ConversationDetailID) || [];
+                existing.push(version.Content);
+                artifactsByDetailId.set(junction.ConversationDetailID, existing);
+              }
+            }
+
+            console.log(`📦 Loaded ${artifactsByDetailId.size} artifact groups for ${messageIds.length} messages in conversation context`);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading artifacts for conversation context:', error);
+        // Continue without artifacts rather than failing
+      }
+    }
+
+    // Build messages with artifacts appended
     for (const msg of recentHistory) {
+      let content = msg.Message || '';
+
+      // Check if this message has artifacts
+      const artifacts = artifactsByDetailId.get(msg.ID);
+      if (artifacts && artifacts.length > 0) {
+        // Append artifacts to message content in the expected format
+        for (const artifactJson of artifacts) {
+          content += `\n\n# Artifact\n${artifactJson}\n`;
+        }
+      }
+
       messages.push({
         role: this.mapRoleToAgentRole(msg.Role) as 'system' | 'user' | 'assistant',
-        content: msg.Message || ''
+        content: content
       });
     }
 
@@ -262,7 +329,7 @@ export class ConversationAgentService {
 
       // Build conversation messages for the sub-agent
       // Note: conversationHistory already includes the current message
-      const conversationMessages = this.buildAgentMessages(conversationHistory);
+      const conversationMessages = await this.buildAgentMessages(conversationHistory);
 
       // Prepare parameters with optional payload and progress callback
       const params: ExecuteAgentParams = {

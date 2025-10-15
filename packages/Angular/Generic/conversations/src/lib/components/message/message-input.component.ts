@@ -601,9 +601,26 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     conversationDetail: ConversationDetailEntity,
     agentName: string
   ): AgentExecutionProgressCallback {
+    // Use closure to capture the agent run ID from the first progress message
+    // This allows us to filter out progress messages from other concurrent agents
+    let capturedAgentRunId: string | null = null;
+
     return async (progress) => {
       // Extract agentRunId from progress metadata
       const progressAgentRunId = progress.metadata?.agentRunId as string | undefined;
+
+      // Capture the agent run ID from the first progress message
+      if (!capturedAgentRunId && progressAgentRunId) {
+        capturedAgentRunId = progressAgentRunId;
+        console.log(`[${agentName}] 📌 Captured agent run ID: ${capturedAgentRunId} for conversation detail: ${conversationDetail.ID}`);
+      }
+
+      // Filter out progress messages from other concurrent agents
+      // This prevents cross-contamination when multiple agents run in parallel
+      if (capturedAgentRunId && progressAgentRunId && progressAgentRunId !== capturedAgentRunId) {
+        console.log(`[${agentName}] 🚫 Ignoring progress from different agent run (expected: ${capturedAgentRunId}, got: ${progressAgentRunId})`);
+        return;
+      }
 
       // Format progress message with visual indicator
       const progressText = progress.message;
