@@ -72,19 +72,19 @@ export class GoogleCustomSearchAction extends BaseAction {
         }
 
         const apiConfig = getApiIntegrationsConfig();
-        const apiKey = apiConfig.googleCustomSearchApiKey;
-        const cx = apiConfig.googleCustomSearchCx;
+        const apiKey = apiConfig.google?.customSearch?.apiKey;
+        const cx = apiConfig.google?.customSearch?.cx;
 
         if (!apiKey) {
             return this.createErrorResult(
-                "Google Custom Search API key not found. Set googleCustomSearchApiKey in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_API_KEY environment variable",
+                "Google Custom Search API key not found. Set google.customSearch.apiKey in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_API_KEY environment variable",
                 "MISSING_API_KEY"
             );
         }
 
         if (!cx) {
             return this.createErrorResult(
-                "Google Custom Search engine identifier (CX) not found. Set googleCustomSearchCx in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_CX environment variable",
+                "Google Custom Search engine identifier (CX) not found. Set google.customSearch.cx in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_CX environment variable",
                 "MISSING_SEARCH_ENGINE"
             );
         }

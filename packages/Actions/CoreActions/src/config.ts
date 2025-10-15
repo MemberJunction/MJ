@@ -24,17 +24,27 @@ const apiIntegrationsSchema = z.object({
   gammaApiKey: z.string().optional(),
 
   /**
-   * Google Custom Search API key for web search
-   * Used by: Google Custom Search action
-   * Get your API key from: https://developers.google.com/custom-search/v1/overview
+   * Google services configuration (nested structure)
+   * Follows MJStorage pattern for better organization and scalability
    */
-  googleCustomSearchApiKey: z.string().optional(),
-
-  /**
-   * Google Custom Search engine identifier (CX) for web search
-   * Used by: Google Custom Search action
-   */
-  googleCustomSearchCx: z.string().optional(),
+  google: z.object({
+    /**
+     * Google Custom Search configuration
+     * Used by: Google Custom Search action
+     * Get your API key from: https://developers.google.com/custom-search/v1/overview
+     * Get your CX from: https://programmablesearchengine.google.com/
+     */
+    customSearch: z.object({
+      /**
+       * Google Custom Search API key
+       */
+      apiKey: z.string().optional(),
+      /**
+       * Google Custom Search engine identifier (CX)
+       */
+      cx: z.string().optional(),
+    }).optional(),
+  }).optional(),
 });
 
 /**
@@ -74,8 +84,16 @@ export function getCoreActionsConfig(): CoreActionsConfig {
       apiIntegrations: {
         perplexityApiKey: result.config?.perplexityApiKey || process.env.PERPLEXITY_API_KEY,
         gammaApiKey: result.config?.gammaApiKey || process.env.GAMMA_API_KEY,
-        googleCustomSearchApiKey: result.config?.googleCustomSearchApiKey || process.env.GOOGLE_CUSTOM_SEARCH_API_KEY,
-        googleCustomSearchCx: result.config?.googleCustomSearchCx || process.env.GOOGLE_CUSTOM_SEARCH_CX,
+        google: {
+          customSearch: {
+            apiKey: result.config?.google?.customSearch?.apiKey ||
+                    result.config?.googleCustomSearchApiKey ||  // Backwards compatibility
+                    process.env.GOOGLE_CUSTOM_SEARCH_API_KEY,
+            cx: result.config?.google?.customSearch?.cx ||
+                result.config?.googleCustomSearchCx ||  // Backwards compatibility
+                process.env.GOOGLE_CUSTOM_SEARCH_CX,
+          },
+        },
       },
     };
 
