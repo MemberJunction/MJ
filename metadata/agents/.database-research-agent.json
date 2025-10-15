@@ -1,0 +1,19 @@
+[
+  {
+    "fields": {
+      "Name": "Database Research Agent",
+      "Description": "Specialized sub-agent for conducting database research. Explores schema structure, formulates optimized SQL queries, executes research queries with security validation, and synthesizes findings from database analysis. Works as a component of the main Research Agent.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-database"
+    },
+    "primaryKey": {
+      "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T16:30:20.127Z",
+      "checksum": "7d735f43ae1206b0ca224480e1574e0290aa987a515aee269fd95a5b3b2b0b3f"
+    }
+  }
+]

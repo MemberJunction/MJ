@@ -34,6 +34,7 @@ This library is a key component of the MemberJunction platform, providing seamle
   - Get detailed file metadata
   - Check file/directory existence
   - Direct upload/download via Buffer
+  - **Search files** using native provider search APIs
 - **Extensible**: Easy to add new storage providers by extending `FileStorageBase`
 
 ## Installation
@@ -197,6 +198,74 @@ async function directProviderExample() {
 }
 ```
 
+### Searching Files
+
+Providers with native search capabilities support the `SearchFiles` method for finding files by name, content, and metadata:
+
+```typescript
+import { FileStorageBase, FileSearchOptions, UnsupportedOperationError } from '@memberjunction/storage';
+import { MJGlobal } from '@memberjunction/global';
+
+async function searchExample() {
+  const storage = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
+    FileStorageBase,
+    'Google Drive Storage'
+  );
+
+  try {
+    // Simple search for files matching a query
+    const results = await storage.SearchFiles('quarterly report');
+
+    console.log(`Found ${results.results.length} files`);
+    for (const file of results.results) {
+      console.log(`  ${file.path} (${file.size} bytes)`);
+      if (file.excerpt) {
+        console.log(`    Excerpt: ${file.excerpt}`);
+      }
+    }
+
+    // Advanced search with filters
+    const pdfResults = await storage.SearchFiles('budget 2024', {
+      fileTypes: ['pdf', 'docx'],
+      modifiedAfter: new Date('2024-01-01'),
+      pathPrefix: 'documents/finance/',
+      maxResults: 50
+    });
+
+    // Content search (searches inside files)
+    const contentResults = await storage.SearchFiles('machine learning', {
+      searchContent: true,
+      fileTypes: ['pdf', 'docx', 'txt']
+    });
+
+    // Check for more results
+    if (contentResults.hasMore) {
+      console.log(`Total matches: ${contentResults.totalMatches}`);
+      console.log(`Next page token: ${contentResults.nextPageToken}`);
+    }
+
+  } catch (error) {
+    if (error instanceof UnsupportedOperationError) {
+      console.log('This provider does not support file search');
+      // Fall back to ListObjects or other approaches
+    } else {
+      throw error;
+    }
+  }
+}
+```
+
+**Provider Search Support:**
+- ✅ **Google Drive**: Full support with content search
+- ✅ **SharePoint**: Full support via Microsoft Graph Search
+- ✅ **Dropbox**: Full support with content search
+- ✅ **Box**: Full support with metadata search
+- ❌ **AWS S3**: Not supported (throws UnsupportedOperationError)
+- ❌ **Azure Blob**: Not supported (throws UnsupportedOperationError)
+- ❌ **Google Cloud Storage**: Not supported (throws UnsupportedOperationError)
+
+For providers without native search, consider using `ListObjects` with client-side filtering or implementing an external search index.
+
 ## API Reference
 
 ### Core Types
@@ -233,6 +302,45 @@ type StorageListResult = {
 };
 ```
 
+#### `FileSearchOptions`
+```typescript
+type FileSearchOptions = {
+  maxResults?: number;              // Maximum results (default: 100)
+  fileTypes?: string[];             // Filter by MIME types or extensions
+  modifiedAfter?: Date;             // Only files modified after this date
+  modifiedBefore?: Date;            // Only files modified before this date
+  pathPrefix?: string;              // Search within specific directory
+  searchContent?: boolean;          // Search file contents (default: false)
+  providerSpecific?: Record<string, any>; // Provider-specific options
+};
+```
+
+#### `FileSearchResult`
+```typescript
+type FileSearchResult = {
+  path: string;                     // Full path to file
+  name: string;                     // Filename only
+  size: number;                     // Size in bytes
+  contentType: string;              // MIME type
+  lastModified: Date;               // Last modification date
+  relevance?: number;               // Relevance score (0.0-1.0)
+  excerpt?: string;                 // Text excerpt with match context
+  matchInFilename?: boolean;        // Whether match is in filename
+  customMetadata?: Record<string, string>; // Custom metadata
+  providerData?: Record<string, any>;      // Provider-specific data
+};
+```
+
+#### `FileSearchResultSet`
+```typescript
+type FileSearchResultSet = {
+  results: FileSearchResult[];      // Array of matching files
+  totalMatches?: number;            // Total matches (if available)
+  hasMore: boolean;                 // More results available?
+  nextPageToken?: string;           // Token for next page
+};
+```
+
 ### FileStorageBase Methods
 
 All storage providers implement these methods:
@@ -250,6 +358,7 @@ All storage providers implement these methods:
 - `CopyObject(sourceObjectName: string, destinationObjectName: string): Promise<boolean>`
 - `ObjectExists(objectName: string): Promise<boolean>`
 - `DirectoryExists(directoryPath: string): Promise<boolean>`
+- `SearchFiles(query: string, options?: FileSearchOptions): Promise<FileSearchResultSet>` (throws `UnsupportedOperationError` for providers without native search)
 - `initialize(): Promise<void>` (optional, for async initialization)
 
 ### Utility Functions

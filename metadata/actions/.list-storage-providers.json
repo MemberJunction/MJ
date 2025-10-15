@@ -1,0 +1,162 @@
+[
+  {
+    "fields": {
+      "Name": "List Storage Providers",
+      "Description": "Retrieves a list of active file storage providers configured in the system. Returns provider names, descriptions, and search support status. Useful for agents to discover available storage before searching or accessing files.",
+      "DriverClass": "List Storage Providers",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchSupportedOnly",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, returns only storage providers that support native file search (Google Drive, SharePoint, Dropbox, Box). If false, returns all active providers. Default: false.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2AFCFD73-5484-4B2A-B649-E4C9EFD6F133"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.717Z",
+            "checksum": "a07f65299f0b25dd7bd6e8b6b61cdebce07a85568260a2e944d2d00b09669891"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Providers",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of storage provider objects. Each object contains: Name, Description, ServerDriverKey, SupportsSearch (boolean), IsConfigured (boolean), ConfigurationError (optional string).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A5BEE2AD-6DF8-4750-AAC9-0BB172A10887"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.725Z",
+            "checksum": "8069e4221b0b0cf7767eeebaed642b4721fd59d8484637524560e7407ed74182"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfiguredCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of providers that are actually configured and available in the running environment.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A231D084-FE6C-4A5D-8015-E25E46DCF0C0"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.735Z",
+            "checksum": "e4909c0d72c94b867a76dc1886157d6812dbc9f16e9516f9a45d707a4e0feef5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of active storage providers returned.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F7E4364B-8868-464A-AE3C-D8568FDC6834"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.744Z",
+            "checksum": "b1440ca6e5cd8f0d92d3a6ee3bc69028d6695cd0ffcdf200395d80bde98acfac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchSupportedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of providers that support native file search.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1066DCBF-F32E-4A4F-8DB8-931CA4910E6A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.753Z",
+            "checksum": "77cf7126c8ee036fa0cf7cd5a6cb9f11e72639f139c75e0ec8a343da4db9355b"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Storage providers retrieved successfully. Results contain list of active providers."
+          },
+          "primaryKey": {
+            "ID": "80F6263A-0ABA-4CB2-8F12-1B209CAA469E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.761Z",
+            "checksum": "8bb962c38e6ca75c032dbfacec3e4c74a9060c74b8e938386d3e7525ac684223"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to query File Storage Providers entity. Check database connection and entity permissions."
+          },
+          "primaryKey": {
+            "ID": "A379A15B-FB92-4123-BED8-174429732D3C"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.768Z",
+            "checksum": "0bf2a9c4b2a61c333eb30e8f000a8ac7e6e1fbf6394054d4b6a1834cfcdfed88"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "LIST_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to list storage providers. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "49770702-5440-485E-9468-9CD3AF4A61F3"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T16:30:13.776Z",
+            "checksum": "747322c83dcee057494af65a9e9733417a985550e9ee15320a839b02690017c2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D6A74F70-AFB5-49BF-8F82-307CB08AB9EB"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T16:30:13.690Z",
+      "checksum": "15f8c80bfb2db87c955a72ab33448e0d7d4895339130f872b655f235c530fd22"
+    }
+  }
+]
