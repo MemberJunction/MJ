@@ -13,16 +13,23 @@
       "MaxRetries": 2,
       "PromptRole": "System",
       "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: Agents"
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Claude Sonnet 4.5",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "Priority": 1
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "CF39BC21-D526-4869-8431-D9545EF357B9"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T12:33:08.992Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
           }
         },
         {
@@ -30,18 +37,39 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=GPT 4.1",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
-            "Priority": 2
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "5C06F71D-5821-43F3-8267-41078754ABFF"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T12:33:09.003Z",
+            "checksum": "6b6154f0c49d785c4e5b90e56012aa3cd00ff1a13d77a526dd3f5945ac7e29fd"
           }
         },
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Claude Sonnet 3.5",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "A80D1E13-3ADA-4B24-BDE7-9F88A35420E8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T12:33:09.015Z",
+            "checksum": "2f484cacbf7dd09c5d5d85128757626fbdd971275c06c75142f6f69e5709c25b"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "7F538775-F3D8-4210-8872-02C706BF3188"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T12:33:08.969Z",
+      "checksum": "198480d66cb1dab691e545e273e7dba36713d706ee016c42ca3e65f73d98b2e0"
     }
   }
 ]
