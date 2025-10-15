@@ -11,7 +11,7 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **NEVER ask to commit** - wait for the user to request it
 - **ONLY commit what is staged** - never modify or add to staged changes
 - **NEVER commit work-in-progress** that isn't staged by the user
-
+ 
 ### 2. NO `any` TYPES - EVER
 - **NEVER use `any` types in TypeScript code**
 - **ALWAYS ask the user** if you think you need to use `any`
