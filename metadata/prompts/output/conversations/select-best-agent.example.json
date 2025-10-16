@@ -1,9 +1,0 @@
-{
-  "selectedAgentId": "12345678-1234-1234-1234-123456789012",
-  "selectedAgentName": "Research Agent",
-  "confidence": 0.92,
-  "reasoning": "Research Agent is purpose-built for this task with web search capabilities and comprehensive analysis skills. The task explicitly requires research and summarization, which directly aligns with this agent's core competencies. The high similarity score (0.85) confirms the semantic match.",
-  "alternativeAgentId": "87654321-4321-4321-4321-210987654321",
-  "alternativeAgentName": "Data Analyst Agent",
-  "alternativeReasoning": "Could analyze and summarize findings, though less specialized for web research"
-}
