@@ -30,6 +30,34 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Entity List",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A0438D04-00C5-4E62-9B65-C25AFA42EA1A"
+          },
+          "sync": {
+            "lastModified": "2025-10-16T18:09:08.647Z",
+            "checksum": "2bafc38f01aae6b9daadf13cb25ea478260803a41872efcb6db8a5f62bcf81af"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Entity Details",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E7BC67D1-22F6-47AC-9A3E-8EEA172BB349"
+          },
+          "sync": {
+            "lastModified": "2025-10-16T18:09:08.663Z",
+            "checksum": "9b6206432e7862cdd3a449f23b70bad8575beac4319b1259b68fe1145257ab50"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Explore Database Schema",
             "Status": "Active"
           },
@@ -214,13 +242,17 @@
   {
     "fields": {
       "Name": "Research Agent",
-      "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research), and synthesizes findings into detailed reports. Uses iterative methodology with source validation and contradiction detection.",
+      "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research, Report Writer), and coordinates the research workflow. Uses iterative methodology with source validation and contradiction detection. Delegates final synthesis and report generation to the Report Writer sub-agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
-      "IconClass": "fa-solid fa-magnifying-glass-chart"
+      "IconClass": "fa-solid fa-magnifying-glass-chart",
+      "PayloadSelfWritePaths": "[\"metadata\", \"plan\", \"sources\", \"findings\", \"comparisons\", \"contradictions\", \"iterations\", \"webResearch\", \"databaseResearch\", \"fileResearch\"]",
+      "FinalPayloadValidation": "{\"required\": [\"report\", \"synthesis\"], \"properties\": {\"report\": {\"required\": [\"name\", \"description\", \"markdown\"]}, \"synthesis\": {\"required\": [\"executiveSummary\", \"findings\", \"confidenceAssessment\", \"keyTakeaways\"]}}}",
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -245,42 +277,45 @@
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
-            "Status": "Active"
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"webResearch\"}"
           },
           "primaryKey": {
             "ID": "EC2EE264-31B8-42CE-AE9A-9177ACFC2947"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.578Z",
-            "checksum": "11fff3ace1b1d86aac807304b00e2ec209b8f0370729b26424a66506a195f6de"
+            "lastModified": "2025-10-16T18:09:08.895Z",
+            "checksum": "9061a17d1bf90529ab5c074a9a0be92f50cbefd34889e9fc6fed4a4db52b231d"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
-            "Status": "Active"
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"databaseResearch\"}"
           },
           "primaryKey": {
             "ID": "8DB9A71A-FD38-43A3-BE9C-759F4332ADD8"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.587Z",
-            "checksum": "a974c6c30bd28c43c059f3473ae1c0cfac69db01e4f227cedae34277a5074cd1"
+            "lastModified": "2025-10-16T18:09:08.910Z",
+            "checksum": "30932c0357d3291ccaa3c6f1b736f1a53c95970b9d0b0324c7a2ecddaf1c8171"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=File Research Agent",
-            "Status": "Active"
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}"
           },
           "primaryKey": {
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:37.597Z",
-            "checksum": "9343555774291c901466c9a1b3926d6635fd064760a4a62a49acd175029944d7"
+            "lastModified": "2025-10-16T18:09:08.921Z",
+            "checksum": "2d502a95198e79af3525e5b23ccadb85ed0b00a3445e1fd95c7898caf2d0d622"
           }
         }
       ]
@@ -289,8 +324,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-15T23:02:37.280Z",
-      "checksum": "d5c7b0cb08060c496e28d9416ab4a7518dda8d3f678da504aa6f0f0839cebc3a"
+      "lastModified": "2025-10-16T18:09:08.477Z",
+      "checksum": "3b0e6c07fb726b22ae334d7fef1b7d4ccb1a1ae1eba4fce8b5900d6e438fdffb"
     }
   }
 ]

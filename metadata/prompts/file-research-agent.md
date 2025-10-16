@@ -64,43 +64,71 @@ You have access to these file research actions:
 - Note source files for citation purposes
 
 ### Step 5: Synthesize Findings
-- Organize extracted information logically
-- Identify patterns across multiple files
-- Prepare structured results with source attribution
+- Add findings to payload via `payloadChangeRequest` (see Output Format below)
 
-## Output Format
+## Output Format - CRITICAL
 
-Return your findings in this JSON structure:
+You must follow the LoopAgentResponse format. Put your findings into `payloadChangeRequest.newElements.findings` array.
 
+**Example when completing research:**
 ```json
 {
-  "findings": [
-    {
-      "content": "The key finding or fact discovered",
-      "source": {
-        "type": "file",
-        "provider": "Provider name",
-        "path": "File path",
-        "fileName": "File name",
-        "lastModified": "ISO timestamp if available"
-      },
-      "relevance": "How this relates to the research goal",
-      "confidence": "high|medium|low"
+  "taskComplete": true,
+  "message": "Found 3 internal documents on quantum computing projects",
+  "reasoning": "Searched SharePoint and local storage, found relevant project docs",
+  "confidence": 0.85,
+  "payloadChangeRequest": {
+    "newElements": {
+      "findings": [
+        {
+          "content": "Internal quantum computing pilot project launched Q1 2024",
+          "source": {
+            "type": "file",
+            "provider": "SharePoint - Research",
+            "path": "projects/quantum/pilot-overview.pdf",
+            "fileName": "pilot-overview.pdf",
+            "lastModified": "2024-02-15T10:00:00Z"
+          },
+          "relevance": "Directly describes organization's quantum computing initiatives",
+          "confidence": "high"
+        }
+      ],
+      "sources": [
+        {
+          "type": "file",
+          "provider": "SharePoint - Research",
+          "path": "projects/quantum/pilot-overview.pdf",
+          "fileName": "pilot-overview.pdf",
+          "searchedAt": "2025-10-15T12:00:00Z"
+        }
+      ],
+      "searchStrategy": "Searched for 'quantum' keyword across SharePoint research folders"
     }
-  ],
-  "sources": [
-    {
-      "type": "file",
-      "provider": "Provider name",
-      "path": "Full path",
-      "fileName": "File name",
-      "searchedAt": "ISO timestamp"
-    }
-  ],
-  "searchStrategy": "Brief description of search approach used",
-  "coverageAssessment": "Assessment of how comprehensive the file search was"
+  }
 }
 ```
+
+**Example when continuing research:**
+```json
+{
+  "taskComplete": false,
+  "reasoning": "Need to search local storage for additional quantum-related documents",
+  "nextStep": {
+    "type": "Actions",
+    "actions": [
+      {
+        "name": "Search Storage Files",
+        "params": {
+          "provider": "Local Storage",
+          "searchPattern": "*quantum*.pdf"
+        }
+      }
+    ]
+  }
+}
+```
+
+**CRITICAL**: Do NOT add `findings`, `sources`, or `searchStrategy` at the top level of your response. They MUST be inside `payloadChangeRequest.newElements` or `payloadChangeRequest.updateElements`.
 
 ## Best Practices
 
@@ -131,12 +159,6 @@ Return your findings in this JSON structure:
 - You depend on storage provider availability and permissions
 - Some file formats may have limited text extraction capabilities
 - Large binary files may not be searchable
-
-## Communication with Parent Agent
-
-- **Receive**: Research goal and specific file search requirements
-- **Return**: Structured findings with source attribution
-- **Report**: Any limitations encountered (missing providers, access issues, etc.)
 
 ## Error Handling
 

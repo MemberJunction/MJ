@@ -114,6 +114,8 @@ import { LoadXMLParserAction } from './custom/data/xml-parser.action';
 import { LoadAggregateDataAction } from './custom/data/aggregate-data.action';
 import { LoadDataMapperAction } from './custom/data/data-mapper.action';
 import { LoadExploreDatabaseSchemaAction } from './custom/data/explore-database-schema.action';
+import { LoadGetEntityListAction } from './custom/data/get-entity-list.action';
+import { LoadGetEntityDetailsAction } from './custom/data/get-entity-details.action';
 import { LoadExecuteResearchQueryAction } from './custom/data/execute-research-query.action';
 import { LoadPDFGeneratorAction } from './custom/files/pdf-generator.action';
 import { LoadPDFExtractorAction } from './custom/files/pdf-extractor.action';
@@ -190,6 +192,8 @@ export function LoadAllCoreActions() {
     LoadAggregateDataAction();
     LoadDataMapperAction();
     LoadExploreDatabaseSchemaAction();
+    LoadGetEntityListAction();
+    LoadGetEntityDetailsAction();
     LoadExecuteResearchQueryAction();
     LoadPDFGeneratorAction();
     LoadPDFExtractorAction();

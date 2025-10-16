@@ -9,7 +9,7 @@ import { DataCacheService } from '../../services/data-cache.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, BaseAgentSuggestedResponse } from '@memberjunction/ai-core-plus';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
@@ -351,6 +351,48 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Send a message with custom text WITHOUT modifying the visible messageText input
+   * Used for suggested responses - sends message silently without affecting user's current input
+   */
+  public async sendMessageWithText(text: string): Promise<void> {
+    if (!text || !text.trim()) {
+      return;
+    }
+
+    if (this.isSending) {
+      return;
+    }
+
+    this.isSending = true;
+    try {
+      const detail = await this.dataCache.createConversationDetail(this.currentUser);
+      detail.ConversationID = this.conversationId;
+      detail.Message = text.trim();
+      detail.Role = 'User';
+
+      if (this.parentMessageId) {
+        detail.ParentID = this.parentMessageId;
+      }
+
+      const saved = await detail.Save();
+
+      if (saved) {
+        this.messageSent.emit(detail);
+
+        const mentionResult = this.parseMentionsFromMessage(detail.Message);
+        const isFirstMessage = this.conversationHistory.length === 0;
+        await this.routeMessage(detail, mentionResult, isFirstMessage);
+      } else {
+        this.handleSendFailure(detail);
+      }
+    } catch (error) {
+      this.handleSendError(error);
+    } finally {
+      this.isSending = false;
+    }
+  }
+
+  /**
    * Creates and configures a new conversation detail message
    */
   private async createMessageDetail(): Promise<ConversationDetailEntity> {
@@ -390,10 +432,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       this.mentionAutocomplete.getAvailableAgents(),
       this.mentionAutocomplete.getAvailableUsers()
     );
-
-    console.log('[MentionInput] Parsing message for routing:', message);
-    console.log('[MentionInput] Found mentions:', mentionResult);
-    console.log('[MentionInput] Agent mention:', mentionResult.agentMention);
 
     return mentionResult;
   }
@@ -757,7 +795,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         hasPayload: !!result.payload,
         hasMessage: !!result.agentRun.Message,
         payloadKeys: result.payload ? Object.keys(result.payload) : [],
-        payload: result.payload // Full payload for debugging
+        payload: result.payload, // Full payload for debugging,
+        suggestedResponses: result.suggestedResponses
       });
 
       // Stage 2: Check for task graph (multi-step orchestration)
@@ -784,11 +823,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         this.markMessageComplete(conversationManagerMessage);
 
         // Normal chat response
-        conversationManagerMessage.Message = result.agentRun.Message;
-        conversationManagerMessage.Status = 'Complete';
-
-        await conversationManagerMessage.Save();
-        this.messageSent.emit(conversationManagerMessage);
+        // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
+        await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.suggestedResponses );
 
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
         if (result.payload && Object.keys(result.payload).length > 0) {
@@ -821,7 +857,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
           conversationManagerMessage.HiddenToUser = false;
 
           // use update helper to ensure that if there is a race condition with more streaming updates we don't allow that to override this final message
-          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete');
+          await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.suggestedResponses);
 
           this.messageSent.emit(conversationManagerMessage);
 
@@ -1051,7 +1087,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error') {
+  protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', suggestedResponses?: BaseAgentSuggestedResponse[]): Promise<void> {
     if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
       return; // Do not update completed or errored messages
     }
@@ -1066,7 +1102,12 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     while (attempts < maxAttempts && !done) {
       convoDetail.Message = message;
       convoDetail.Status = status;
+      if (suggestedResponses !== undefined) {
+        convoDetail.SuggestedResponses = JSON.stringify(suggestedResponses);  
+      }
+
       await convoDetail.Save();
+
       if (convoDetail.Message === message && convoDetail.Status === status) {
         done = true;
         this.messageSent.emit(convoDetail);

@@ -136,6 +136,7 @@ export class RunAIAgentResolver extends ResolverBase {
         const sanitized: any = {
             success: result.success,
             payload: result.payload,
+            suggestedResponses: result.suggestedResponses,
             errorMessage: result.agentRun?.ErrorMessage,
             finalStep: result.agentRun?.FinalStep,
             cancelled: result.agentRun?.Status === 'Cancelled',

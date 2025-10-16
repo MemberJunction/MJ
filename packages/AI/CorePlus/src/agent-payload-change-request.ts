@@ -216,3 +216,33 @@ export type AgentPayloadChangeRequest<P = any> = {
      */
     reasoning?: string;
 }
+
+
+/**
+ * Used for enumerating a list of possible responses to show a user
+ */
+export type BaseAgentSuggestedResponse = {
+    /**
+     * Text of the response to show the user in the UI. This is **required** unless allowInput is true and you want to show a blank input box.
+     */
+    text?: string;
+
+    /**
+     * If set to true, this option will show default text from the text property but allow the user to edit it. With this option set to true you
+     * can also leave the text property blank and just allow the user to enter their own text.
+     */
+    allowInput?: boolean;
+
+    /**
+     * Optional, CSS class to apply to the response icon, for example a font-awesome class
+     * to visually indicate the type of response (info, warning, error, success, other).
+     */
+    iconClass?: string;
+
+    /**
+     * Optional, a value associated with the response that will be sent back to the the next request along with
+     * the text. This can be used to represent a choice or selection made by the user with a more structured
+     * value.
+     */
+    value?: string;
+}
