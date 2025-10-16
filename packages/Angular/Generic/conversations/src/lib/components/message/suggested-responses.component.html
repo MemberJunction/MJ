@@ -6,6 +6,7 @@
 
   <div class="suggested-responses-buttons">
     <!-- Regular button responses (allowInput: false) -->
+     <span (click)="onResponseClick(regularResponses[0])">hi</span>
     <button
       *ngFor="let response of regularResponses"
       class="suggested-response-btn"

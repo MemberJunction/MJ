@@ -46,12 +46,25 @@ export class SuggestedResponsesComponent {
     return this.isLastMessage && this.isConversationOwner && this.suggestedResponses.length > 0;
   }
 
+
+  public test() {
+    alert("hi")
+  }
   /**
    * Handle regular button click
    */
   public onResponseClick(response: SuggestedResponse): void {
+    console.log('🔘 SuggestedResponsesComponent.onResponseClick:', {
+      text: response.text,
+      disabled: this.disabled,
+      willEmit: !this.disabled
+    });
+
     if (!this.disabled) {
       this.responseSelected.emit({ text: response.text });
+      console.log('✅ Event emitted from SuggestedResponsesComponent');
+    } else {
+      console.warn('⚠️ Click ignored - component is disabled');
     }
   }
 
