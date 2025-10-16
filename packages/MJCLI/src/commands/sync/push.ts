@@ -129,7 +129,13 @@ export default class Push extends Command {
             spinner.succeed(message);
           },
           onError: (message) => {
-            this.error(message);
+            // For rollback messages, just log them - don't throw
+            if (message.includes('Rolling back database') || message.includes('rolled back successfully')) {
+              spinner.fail(message);
+            } else {
+              // For actual errors, throw to stop execution
+              this.error(message);
+            }
           },
           onWarn: (message) => {
             // Check if this is a user-friendly warning that doesn't need a stack trace
@@ -223,19 +229,12 @@ export default class Push extends Command {
     } catch (error) {
       spinner.fail('Push failed');
 
-      // Error handling - individual operations may have partially succeeded
+      // Show concise error message without duplicate stack traces
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this.log(chalk.red(`\n❌ Error: ${errorMessage}\n`));
 
-      // Enhanced error logging
-      this.log('\n=== Push Error Details ===');
-      this.log(`Error type: ${error?.constructor?.name || 'Unknown'}`);
-      this.log(`Error message: ${error instanceof Error ? error.message : String(error)}`);
-
-      if (error instanceof Error && error.stack) {
-        this.log(`\nStack trace:`);
-        this.log(error.stack);
-      }
-
-      this.error(error as Error);
+      // Exit with error code but don't show stack trace again (already logged by handlers)
+      this.exit(1);
     } finally {
       // Reset singletons
       resetSyncEngine();
