@@ -1749,11 +1749,13 @@ each time the agent processes a prompt step.`})
     @MaxLength(100)
     OverrideVendor?: string;
         
-    @Field(() => Int, {nullable: true}) 
-    RootParentRunID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentRunID?: string;
         
-    @Field(() => Int, {nullable: true}) 
-    RootLastRunID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootLastRunID?: string;
         
     @Field(() => [MJAIAgentRunStep_])
     MJ_AIAgentRunSteps_AgentRunIDArray: MJAIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
@@ -46444,11 +46446,13 @@ export class MJAIPromptRun_ {
     @MaxLength(510)
     ChildPrompt?: string;
         
-    @Field(() => Int, {nullable: true}) 
-    RootParentID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
-    @Field(() => Int, {nullable: true}) 
-    RootRerunFromPromptRunID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootRerunFromPromptRunID?: string;
         
     @Field(() => [MJAIPromptRun_])
     MJ_AIPromptRuns_ParentIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -47156,8 +47160,9 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `Human-readable notes and comments about this agent run step`}) 
     Comments?: string;
         
-    @Field(() => Int, {nullable: true}) 
-    RootParentID?: number;
+    @Field({nullable: true}) 
+    @MaxLength(16)
+    RootParentID?: string;
         
     @Field(() => [MJAIAgentRunStep_])
     MJ_AIAgentRunSteps_ParentIDArray: MJAIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
