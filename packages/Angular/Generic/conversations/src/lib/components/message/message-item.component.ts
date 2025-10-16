@@ -14,6 +14,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
+import { SuggestedResponse } from '../../models/conversation-state.model';
 
 /**
  * Component for displaying a single message in a conversation
@@ -46,6 +47,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -596,6 +598,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       entityName: 'AI Agents',
       compositeKey
     });
+  }
+
+  /**
+   * Parse and return suggested responses from message data
+   * Uses strongly-typed SuggestedResponses property from ConversationDetailEntity
+   */
+  public get suggestedResponses(): SuggestedResponse[] {
+    try {
+      const rawData = this.message.SuggestedResponses;
+      if (!rawData) return [];
+
+      // Parse JSON string to array of SuggestedResponse objects
+      const responses = JSON.parse(rawData);
+
+      return Array.isArray(responses) ? responses : [];
+    } catch (error) {
+      console.error('Failed to parse suggested responses:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if current user is the conversation owner
+   */
+  public get isConversationOwner(): boolean {
+    return this.conversation?.UserID === this.currentUser.ID;
+  }
+
+  /**
+   * Handle suggested response selection
+   */
+  public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
+    this.suggestedResponseSelected.emit(event);
   }
 
 }

@@ -100,14 +100,11 @@ export class ExploreDatabaseSchemaAction extends BaseAction {
 
             const executionTimeMs = Date.now() - startTime;
 
-            // Build result message
-            let message = `Found ${formattedEntities.length} entity(ies) across ${schemas.length} schema(s)`;
-            if (includeFields) {
-                message += `, ${summary.TotalFields} total fields`;
-            }
-            if (includeRelationships) {
-                message += `, ${summary.TotalRelationships} relationships`;
-            }
+            // Build detailed result message with entity information
+            const message = this.buildDetailedMessage(formattedEntities, schemas, summary, {
+                includeFields,
+                includeRelationships
+            });
 
             return {
                 Success: true,
@@ -384,6 +381,120 @@ export class ExploreDatabaseSchemaAction extends BaseAction {
         return Object.values(schemaMap).sort((a, b) =>
             a.SchemaName.localeCompare(b.SchemaName)
         );
+    }
+
+    /**
+     * Build detailed message with entity information for agent consumption
+     */
+    private buildDetailedMessage(
+        formattedEntities: Record<string, any>[],
+        schemas: Record<string, any>[],
+        summary: Record<string, any>,
+        options: {
+            includeFields: boolean;
+            includeRelationships: boolean;
+        }
+    ): string {
+        const lines: string[] = [];
+
+        // Summary header
+        lines.push(`# Database Schema Exploration Results`);
+        lines.push(`\nFound ${formattedEntities.length} entity(ies) across ${schemas.length} schema(s)`);
+
+        if (options.includeFields) {
+            lines.push(`Total Fields: ${summary.TotalFields}`);
+        }
+        if (options.includeRelationships) {
+            lines.push(`Total Relationships: ${summary.TotalRelationships}`);
+        }
+
+        lines.push(`\n---\n`);
+
+        // Entity details grouped by schema
+        for (const schema of schemas) {
+            lines.push(`\n## Schema: ${schema.SchemaName}`);
+            lines.push(`Entities: ${schema.EntityCount} (${schema.PhysicalEntityCount} physical, ${schema.VirtualEntityCount} virtual)\n`);
+
+            for (const entity of schema.Entities) {
+                lines.push(`\n### ${entity.DisplayName} (${entity.Name})`);
+
+                if (entity.Description) {
+                    lines.push(`**Description:** ${entity.Description}`);
+                }
+
+                lines.push(`**Base Table:** ${entity.BaseTable || 'N/A'}`);
+                lines.push(`**Base View:** ${entity.BaseView || 'N/A'}`);
+                lines.push(`**Virtual:** ${entity.IsVirtual ? 'Yes' : 'No'}`);
+                lines.push(`**Schema:** ${entity.SchemaName}`);
+
+                // API Settings (condensed)
+                const apiFlags: string[] = [];
+                if (entity.APISettings.IncludeInAPI) apiFlags.push('IncludeInAPI');
+                if (entity.APISettings.AllowCreateAPI) apiFlags.push('Create');
+                if (entity.APISettings.AllowUpdateAPI) apiFlags.push('Update');
+                if (entity.APISettings.AllowDeleteAPI) apiFlags.push('Delete');
+                if (entity.APISettings.AllowUserSearchAPI) apiFlags.push('Search');
+                if (apiFlags.length > 0) {
+                    lines.push(`**API Support:** ${apiFlags.join(', ')}`);
+                }
+
+                // Fields
+                if (options.includeFields && entity.Fields && entity.Fields.length > 0) {
+                    lines.push(`\n#### Fields (${entity.Fields.length})`);
+
+                    for (const field of entity.Fields) {
+                        const fieldLine: string[] = [];
+                        fieldLine.push(`- **${field.DisplayName || field.Name}** (${field.Name})`);
+                        fieldLine.push(`Type: ${field.Type}`);
+
+                        if (field.Length) fieldLine.push(`Length: ${field.Length}`);
+                        if (field.IsPrimaryKey) fieldLine.push('PRIMARY KEY');
+                        if (field.IsUnique) fieldLine.push('UNIQUE');
+                        if (!field.AllowsNull) fieldLine.push('NOT NULL');
+                        if (field.DefaultValue) fieldLine.push(`Default: ${field.DefaultValue}`);
+
+                        // Related entity info
+                        if (field.RelatedEntity) {
+                            fieldLine.push(`→ Related to: ${field.RelatedEntity}.${field.RelatedEntityFieldName || 'ID'}`);
+                        }
+
+                        // Value list
+                        if (field.EntityFieldValues && field.EntityFieldValues.length > 0) {
+                            const values = field.EntityFieldValues.map((v: any) => v.Value).join(', ');
+                            fieldLine.push(`Values: [${values}]`);
+                        }
+
+                        lines.push(`  ${fieldLine.join(' | ')}`);
+
+                        if (field.Description) {
+                            lines.push(`    *${field.Description}*`);
+                        }
+                    }
+                }
+
+                // Relationships
+                if (options.includeRelationships && entity.Relationships && entity.Relationships.length > 0) {
+                    lines.push(`\n#### Relationships (${entity.Relationships.length})`);
+
+                    for (const rel of entity.Relationships) {
+                        const relLine: string[] = [];
+                        relLine.push(`- **${rel.DisplayName || rel.RelatedEntity}**`);
+                        relLine.push(`Type: ${rel.Type}`);
+                        relLine.push(`Entity: ${rel.RelatedEntity}`);
+                        relLine.push(`Join: ${entity.Name}.${rel.EntityKeyField} → ${rel.RelatedEntity}.${rel.RelatedEntityJoinField}`);
+
+                        if (rel.BundleInAPI) relLine.push('BundleInAPI');
+                        if (rel.DisplayInForm) relLine.push(`Display: ${rel.DisplayLocation}`);
+
+                        lines.push(`  ${relLine.join(' | ')}`);
+                    }
+                }
+
+                lines.push(''); // Blank line between entities
+            }
+        }
+
+        return lines.join('\n');
     }
 
     /**

@@ -23501,6 +23501,9 @@ export class MJConversationDetail_ {
     @MaxLength(40)
     Status: string;
         
+    @Field({nullable: true, description: `JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).`}) 
+    SuggestedResponses?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Conversation?: string;
@@ -23599,6 +23602,9 @@ export class CreateMJConversationDetailInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SuggestedResponses: string | null;
 }
     
 
@@ -23663,6 +23669,9 @@ export class UpdateMJConversationDetailInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SuggestedResponses?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

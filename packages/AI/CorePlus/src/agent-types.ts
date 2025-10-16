@@ -14,7 +14,7 @@ import { AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } f
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
-import { AgentPayloadChangeRequest } from './agent-payload-change-request';
+import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 
 
@@ -133,6 +133,11 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     actions?: AgentAction[];
     /** Message to send to user when step is 'chat' */
     message?: string;
+    /**
+     * Optional, when step is 'chat' or 'success', a list of suggested responses
+     * to show the user for quick selection in a UI.
+     */
+    suggestedResponses?: BaseAgentSuggestedResponse[];
     /** Optional, reasoning information from the agent */
     reasoning?: string;
     /** Optional confidence level in the decision (0.0 to 1.0) */
@@ -168,6 +173,11 @@ export type ExecuteAgentResult<P = any> = {
      * If not specified, falls back to the agent's default artifact type configuration.
      */
     payloadArtifactTypeID?: string;
+    /**
+     * Optional suggested responses to show the user for quick selection in a UI.
+     * Populated when the agent's final step is 'Chat' or 'Success' and includes suggested responses.
+     */
+    suggestedResponses?: BaseAgentSuggestedResponse[];
 }
 
 /**
