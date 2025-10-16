@@ -39,6 +39,7 @@ import { CollectionViewComponent } from './components/collection/collection-view
 import { CollectionArtifactCardComponent } from './components/collection/collection-artifact-card.component';
 import { LibraryFullViewComponent } from './components/library/library-full-view.component';
 import { CollectionFormModalComponent } from './components/collection/collection-form-modal.component';
+import { ArtifactCreateModalComponent } from './components/collection/artifact-create-modal.component';
 import { CollectionsFullViewComponent } from './components/collection/collections-full-view.component';
 import { ProjectSelectorComponent } from './components/project/project-selector.component';
 import { ProjectFormModalComponent } from './components/project/project-form-modal.component';
@@ -78,6 +79,7 @@ const COMPONENTS = [
   CollectionArtifactCardComponent,
   LibraryFullViewComponent,
   CollectionFormModalComponent,
+  ArtifactCreateModalComponent,
   CollectionsFullViewComponent,
   ProjectSelectorComponent,
   ProjectFormModalComponent,

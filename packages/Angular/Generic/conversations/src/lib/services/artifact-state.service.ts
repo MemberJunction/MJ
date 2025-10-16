@@ -209,7 +209,7 @@ export class ArtifactStateService {
    */
   async createArtifact(data: Partial<ArtifactEntity>, currentUser: UserInfo): Promise<ArtifactEntity> {
     const md = new Metadata();
-    const artifact = await md.GetEntityObject<ArtifactEntity>('Artifacts', currentUser);
+    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', currentUser);
 
     Object.assign(artifact, data);
 
@@ -231,7 +231,7 @@ export class ArtifactStateService {
    */
   async updateArtifact(id: string, updates: Partial<ArtifactEntity>, currentUser: UserInfo): Promise<boolean> {
     const md = new Metadata();
-    const artifact = await md.GetEntityObject<ArtifactEntity>('Artifacts', currentUser);
+    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', currentUser);
 
     const loaded = await artifact.Load(id);
     if (!loaded) {
@@ -257,7 +257,7 @@ export class ArtifactStateService {
    */
   async deleteArtifact(id: string, currentUser: UserInfo): Promise<boolean> {
     const md = new Metadata();
-    const artifact = await md.GetEntityObject<ArtifactEntity>('Artifacts', currentUser);
+    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', currentUser);
 
     const loaded = await artifact.Load(id);
     if (!loaded) {
@@ -313,12 +313,19 @@ export class ArtifactStateService {
       currentUser
     );
 
-    if (result.Success && result.Results && result.Results.length > 0) {
-      const collectionArtifact = result.Results[0];
-      const deleted = await collectionArtifact.Delete();
-      if (!deleted) {
-        throw new Error('Failed to remove artifact from collection');
-      }
+    if (!result.Success) {
+      throw new Error(result.ErrorMessage || 'Failed to find collection artifact');
+    }
+
+    if (!result.Results || result.Results.length === 0) {
+      throw new Error('Collection artifact link not found');
+    }
+
+    const collectionArtifact = result.Results[0];
+    const deleted = await collectionArtifact.Delete();
+    if (!deleted) {
+      const errorMsg = collectionArtifact.LatestResult?.Message || 'Failed to remove artifact from collection';
+      throw new Error(errorMsg);
     }
   }
 }

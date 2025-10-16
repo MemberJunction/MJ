@@ -102,11 +102,11 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
           </div>
 
           <!-- Artifacts in current collection -->
-          <div class="section" *ngIf="filteredArtifacts.length > 0">
+          <div class="section" *ngIf="filteredArtifacts.length > 0 || currentCollectionId">
             <div class="section-header">
               <h3>Artifacts</h3>
               <span class="section-count">{{ filteredArtifacts.length }}</span>
-              <button class="btn-secondary btn-sm" (click)="addArtifact()" *ngIf="currentCollectionId">
+              <button class="btn-primary btn-sm" (click)="addArtifact()" *ngIf="currentCollectionId">
                 <i class="fas fa-plus"></i>
                 Add Artifact
               </button>
@@ -146,6 +146,16 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
       (saved)="onCollectionSaved($event)"
       (cancelled)="onFormCancelled()">
     </mj-collection-form-modal>
+
+    <!-- Artifact Create Modal -->
+    <mj-artifact-create-modal
+      [isOpen]="isArtifactModalOpen"
+      [collectionId]="currentCollectionId || ''"
+      [environmentId]="environmentId"
+      [currentUser]="currentUser"
+      (saved)="onArtifactSaved($event)"
+      (cancelled)="onArtifactModalCancelled()">
+    </mj-artifact-create-modal>
   `,
   styles: [`
     .collections-view {
@@ -527,6 +537,7 @@ export class CollectionsFullViewComponent implements OnInit {
 
   public isFormModalOpen: boolean = false;
   public editingCollection?: CollectionEntity;
+  public isArtifactModalOpen: boolean = false;
 
   constructor(
     private dialogService: DialogService,
@@ -702,8 +713,16 @@ export class CollectionsFullViewComponent implements OnInit {
   }
 
   async addArtifact(): Promise<void> {
-    // Will be implemented with artifact upload modal
-    await this.dialogService.alert('Coming Soon', 'Artifact upload functionality will be available soon.');
+    this.isArtifactModalOpen = true;
+  }
+
+  async onArtifactSaved(artifact: ArtifactEntity): Promise<void> {
+    this.isArtifactModalOpen = false;
+    await this.loadArtifacts();
+  }
+
+  onArtifactModalCancelled(): void {
+    this.isArtifactModalOpen = false;
   }
 
   async removeArtifact(artifact: ArtifactEntity): Promise<void> {
