@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Execute Research Query",
-      "Description": "Executes a read-only SQL SELECT query for research purposes with comprehensive security validation. Validates SQL syntax, ensures SELECT-only operations, prevents SQL injection, and logs all queries for audit trail.",
+      "Description": "Executes a read-only SQL SELECT query for research purposes with security validation. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail. SQL syntax validation is performed by SQL Server during execution.",
       "DriverClass": "Execute Research Query",
       "Type": "Custom",
       "Status": "Active",
@@ -65,25 +65,6 @@
           "sync": {
             "lastModified": "2025-10-15T16:30:12.682Z",
             "checksum": "089cb8b882d723859d4d5b301bf90c19c1ffa4ea5bbe5d0138f121ef063e1591"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "IncludeExecutionPlan",
-            "DefaultValue": "false",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Whether to include query execution plan for performance analysis. Default: false.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "0139B28F-101C-4FFB-930A-A083DD19C142"
-          },
-          "sync": {
-            "lastModified": "2025-10-15T16:30:12.692Z",
-            "checksum": "073c07a6faacdcaec18b0890fe12bfd8e5329e9b2beb22fe1464ee57fc0fc7fe"
           }
         },
         {
@@ -193,24 +174,6 @@
           "sync": {
             "lastModified": "2025-10-15T16:30:12.751Z",
             "checksum": "25debe740d0b4a4b5ae1d888e7710e5bf41b078074c3c9fc43215c301019c9bf"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExecutionPlan",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": false,
-            "Description": "Query execution plan (if IncludeExecutionPlan=true). Contains performance metrics and optimization suggestions.",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "610B8242-4C04-481C-8006-A455B6C982E6"
-          },
-          "sync": {
-            "lastModified": "2025-10-15T16:30:12.781Z",
-            "checksum": "b023259ec3b3e494b92eeea2f95dd4b89e0b51aff4ef2bc2f69862e9960afee5"
           }
         },
         {
@@ -374,8 +337,8 @@
       "ID": "4B92BDED-4AD6-497A-B16E-BAE85BAB7563"
     },
     "sync": {
-      "lastModified": "2025-10-15T16:30:12.626Z",
-      "checksum": "587068c57b84eb2d732f361f0616c9cc474fa7876e2f73bfdbb9a3bcec71b27a"
+      "lastModified": "2025-10-16T00:48:08.981Z",
+      "checksum": "8c3e4354b9ff50a02a0842a54fc99a8e1197e6205fb3a6350d7abfc6c465e2d8"
     }
   }
 ]

@@ -2,16 +2,14 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
-import { BaseEntity, LogError } from "@memberjunction/core";
+import { BaseEntity } from "@memberjunction/core";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
-import { Parser } from 'node-sql-parser';
 
 /**
  * Action that executes read-only SQL SELECT queries for research purposes with
- * comprehensive security validation.
+ * security validation.
  *
  * Security Features:
- * - SQL syntax validation using node-sql-parser
  * - SELECT-only enforcement (rejects INSERT, UPDATE, DELETE, DROP, etc.)
  * - Dangerous operation detection (EXEC, xp_, sp_, dynamic SQL, etc.)
  * - Query timeout protection
@@ -20,9 +18,11 @@ import { Parser } from 'node-sql-parser';
  *
  * Performance Features:
  * - Configurable row limits to prevent overwhelming results
- * - Optional execution plan for performance analysis
  * - Execution time tracking
  * - Validation warnings for potentially slow queries
+ *
+ * Note: SQL syntax validation is handled by SQL Server during execution.
+ * This provides more accurate error messages than a JavaScript parser.
  *
  * @example
  * ```typescript
@@ -31,11 +31,11 @@ import { Parser } from 'node-sql-parser';
  *   ActionName: 'Execute Research Query',
  *   Params: [{
  *     Name: 'Query',
- *     Value: 'SELECT TOP 100 * FROM Customers WHERE Country = @Country'
+ *     Value: 'SELECT TOP 100 * FROM Customers WHERE Country = ''USA'''
  *   }]
  * });
  *
- * // Query with timeout and execution plan
+ * // Query with timeout
  * await runAction({
  *   ActionName: 'Execute Research Query',
  *   Params: [{
@@ -44,17 +44,12 @@ import { Parser } from 'node-sql-parser';
  *   }, {
  *     Name: 'Timeout',
  *     Value: 60
- *   }, {
- *     Name: 'IncludeExecutionPlan',
- *     Value: true
  *   }]
  * });
  * ```
  */
 @RegisterClass(BaseAction, "Execute Research Query")
 export class ExecuteResearchQueryAction extends BaseAction {
-
-    private readonly parser = new Parser();
 
     /**
      * List of dangerous SQL keywords and patterns that should be blocked
@@ -101,7 +96,6 @@ export class ExecuteResearchQueryAction extends BaseAction {
 
             const maxRows = this.getNumericParam(params, "maxrows", 1000);
             const timeout = this.getNumericParam(params, "timeout", 30);
-            const includeExecutionPlan = this.getBooleanParam(params, "includeexecutionplan", false);
             const resultFormat = this.getStringParam(params, "resultformat") || 'json';
 
             // Validate query security
@@ -114,47 +108,16 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 } as ActionResultSimple;
             }
 
-            // Parse and validate SQL syntax
-            const syntaxValidation = this.validateQuerySyntax(query);
-            if (!syntaxValidation.isValid) {
-                return {
-                    Success: false,
-                    ResultCode: "INVALID_SQL_SYNTAX",
-                    Message: syntaxValidation.message!
-                } as ActionResultSimple;
-            }
-
             // Ensure query returns limited results
             const limitedQuery = this.ensureRowLimit(query, maxRows);
 
             const dataProvider = BaseEntity.Provider as SQLServerDataProvider;
 
-            let executionPlanData: any = undefined;
-
             try {
-                // Get execution plan if requested
-                if (includeExecutionPlan) {
-                    const planQuery = `SET SHOWPLAN_XML ON;\n${limitedQuery}\nSET SHOWPLAN_XML OFF;`;
-                    try {
-                        const planResult = await dataProvider.ExecuteSQL(planQuery, null, {
-                            description: 'Execute Research Query - Get Execution Plan',
-                            ignoreLogging: false
-                        }, params.ContextUser);
-
-                        if (planResult.recordset && planResult.recordset.length > 0) {
-                            executionPlanData = planResult.recordset[0];
-                        }
-                    } catch (planError) {
-                        // Execution plan is optional, log error but continue
-                        LogError(`Failed to retrieve execution plan: ${planError}`);
-                    }
-                }
-
                 // Execute the query with timeout
-                // Note: SQL Server timeout is in seconds for request.timeout
                 const queryStartTime = Date.now();
 
-                const result = await Promise.race([
+                const results = await Promise.race([
                     dataProvider.ExecuteSQL(limitedQuery, null, {
                         description: 'Execute Research Query',
                         ignoreLogging: false,
@@ -166,11 +129,10 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 ]) as any;
 
                 const executionTimeMs = Date.now() - queryStartTime;
-                const results = result.recordset || [];
 
                 // Get column metadata
-                const columns = result.recordset && result.recordset.columns
-                    ? Object.entries(result.recordset.columns).map(([name, col]: [string, any]) => ({
+                const columns = results && results.columns
+                    ? Object.entries(results.columns).map(([name, col]: [string, any]) => ({
                         ColumnName: name,
                         DataType: col.type?.name || 'unknown',
                         IsNullable: col.nullable !== false
@@ -192,17 +154,26 @@ export class ExecuteResearchQueryAction extends BaseAction {
 
                 const totalExecutionTime = Date.now() - startTime;
 
+                // Build detailed message with actual results
+                const message = this.buildDetailedMessage(
+                    results,
+                    columns,
+                    executionTimeMs,
+                    totalExecutionTime,
+                    wasTruncated,
+                    warnings
+                );
+
                 return {
                     Success: true,
                     ResultCode: "SUCCESS",
-                    Message: `Query executed successfully, returned ${results.length} row(s) in ${executionTimeMs}ms`,
+                    Message: message,
                     Results: formattedResults,
                     Columns: columns,
                     RowCount: results.length,
                     ExecutionTimeMs: executionTimeMs,
                     TotalTimeMs: totalExecutionTime,
                     WasTruncated: wasTruncated,
-                    ExecutionPlan: executionPlanData,
                     ValidationWarnings: warnings,
                     Query: limitedQuery
                 } as ActionResultSimple;
@@ -275,23 +246,6 @@ export class ExecuteResearchQueryAction extends BaseAction {
         }
 
         return { isValid: true };
-    }
-
-    /**
-     * Validates SQL syntax using node-sql-parser
-     */
-    private validateQuerySyntax(query: string): { isValid: boolean; message?: string } {
-        try {
-            // Parse the query to validate syntax
-            // node-sql-parser will throw if syntax is invalid
-            this.parser.astify(query, { database: 'mssql' });
-            return { isValid: true };
-        } catch (parseError: any) {
-            return {
-                isValid: false,
-                message: `SQL syntax error: ${parseError.message || String(parseError)}`
-            };
-        }
     }
 
     /**
@@ -431,20 +385,65 @@ export class ExecuteResearchQueryAction extends BaseAction {
     }
 
     /**
-     * Helper to get boolean parameter value
+     * Build detailed message with query results for agent consumption
      */
-    private getBooleanParam(params: RunActionParams, paramName: string, defaultValue: boolean): boolean {
-        const param = params.Params.find(p =>
-            p.Name.toLowerCase() === paramName.toLowerCase() &&
-            p.Type === 'Input'
-        );
-        if (param?.Value != null) {
-            const val = String(param.Value).toLowerCase();
-            if (val === 'true' || val === '1' || val === 'yes') return true;
-            if (val === 'false' || val === '0' || val === 'no') return false;
+    private buildDetailedMessage(
+        results: any[],
+        columns: Array<{ ColumnName: string; DataType: string; IsNullable: boolean }>,
+        executionTimeMs: number,
+        totalTimeMs: number,
+        wasTruncated: boolean,
+        warnings: string[]
+    ): string {
+        const lines: string[] = [];
+
+        // Header
+        lines.push(`# Query Results`);
+        lines.push(`\n**Rows Returned:** ${results.length.toLocaleString()}`);
+        lines.push(`**Execution Time:** ${executionTimeMs}ms`);
+        lines.push(`**Total Time:** ${totalTimeMs}ms`);
+
+        if (wasTruncated) {
+            lines.push(`**Note:** Results were truncated to maximum row limit`);
         }
-        return defaultValue;
+
+        lines.push(`\n---\n`);
+
+        // Columns
+        if (columns.length > 0) {
+            lines.push(`## Columns (${columns.length})\n`);
+            for (const col of columns) {
+                const nullable = col.IsNullable ? 'NULL' : 'NOT NULL';
+                lines.push(`- **${col.ColumnName}** \`${col.DataType}\` [${nullable}]`);
+            }
+            lines.push('');
+        }
+
+        // Warnings
+        if (warnings.length > 0) {
+            lines.push(`## Warnings\n`);
+            for (const warning of warnings) {
+                lines.push(`⚠️ ${warning}`);
+            }
+            lines.push('');
+        }
+
+        // Results Data
+        if (results.length > 0) {
+            lines.push(`## Data (${results.length} row${results.length !== 1 ? 's' : ''})\n`);
+            lines.push('```json');
+            lines.push(JSON.stringify(results, null, 2));
+            lines.push('```');
+        } else {
+            lines.push(`## Data\n*No rows returned*`);
+        }
+
+        lines.push(`\n---`);
+        lines.push(`\n**The full result set is available in the Results output parameter for further processing.**`);
+
+        return lines.join('\n');
     }
+
 }
 
 /**
