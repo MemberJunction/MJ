@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@memberjunction/core": "2.107.0"
+    "@memberjunction/core": "2.100.3"
   },
   "sideEffects": false
 }
