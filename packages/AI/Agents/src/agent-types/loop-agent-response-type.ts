@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse } from "@memberjunction/ai-core-plus";
 
 /**
  * Response structure for Loop Agent Type
@@ -13,6 +13,12 @@ export interface LoopAgentResponse<P = any> {
      * Plain text message (<100 words). Required for 'Chat' type, omit for others
      */
     message?: string;
+
+    /**
+     * Optional, when nextStep.type is 'Chat' or 'Success', this is a list of suggested responses
+     * to show the user for quick selection in a UI.
+     */
+    suggestedResponses?: Array<BaseAgentSuggestedResponse>;
 
     /**
      * Payload changes. Omit if no changes needed
