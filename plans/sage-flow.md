@@ -1,1121 +1,723 @@
-# Sage Agent & Conversation Flow - Current System Documentation
+# Sage and Conversation System - Detailed Flow Analysis
 
 ## Overview
 
-This document describes the current implementation of Sage (formerly "Conversation Manager Agent") and how the conversation flow works in MemberJunction. This is based on a thorough code review conducted on 2025-10-15.
-
-## Table of Contents
-
-1. [System Architecture](#system-architecture)
-2. [Key Components](#key-components)
-3. [Message Flow Scenarios](#message-flow-scenarios)
-4. [Task Graph vs Single Agent Execution](#task-graph-vs-single-agent-execution)
-5. [Action Execution](#action-execution)
-6. [Important Files](#important-files)
-7. [Recent Changes (PR #1470)](#recent-changes-pr-1470)
+This document provides a comprehensive analysis of how Sage (the Conversation Manager Agent) and conversations work together, including multi-turn workflows, taskComplete handling, and conversation history management.
 
 ---
 
-## System Architecture
+## 1. WHEN IS SAGE INVOKED? (Routing Logic)
 
-### High-Level Flow
+### Flow in `message-input.component.ts` - `routeMessage()` method (lines 405-425)
+
+Every user message follows this **three-tier priority routing system**:
 
 ```
 User Message
     ↓
-MessageInputComponent (routing logic)
-    ↓
-├─→ Direct @mention? → invokeAgentDirectly()
-├─→ Previous agent? → checkContinuityIntent()
-│       ↓
-│   YES → continueWithAgent()
-│   NO/UNSURE → processMessageThroughAgent() (Sage)
+├─ Priority 1: @mention present?
+│   └─→ handleDirectMention() - BYPASS SAGE, invoke agent directly
 │
-└─→ No context → processMessageThroughAgent() (Sage)
-        ↓
-    ConversationAgentService.processMessage()
-        ↓
-    GraphQLAIClient.RunAIAgent() → Server
-        ↓
-    AgentRunner.RunAgent() → BaseAgent.Execute()
-        ↓
-    Sage Evaluates & Returns Decision:
-        ├─→ Chat (direct response)
-        ├─→ Actions (execute Sage actions)
-        ├─→ invokeAgent (single-step delegation)
-        └─→ taskGraph (multi-step workflow)
+├─ Priority 2: Previous agent with continuity?
+│   └─→ checkContinuityIntent()
+│       ├─ YES → handleAgentContinuity() - Continue with previous agent, BYPASS SAGE
+│       ├─ NO  → handleNoAgentContext() → processMessageThroughAgent() → INVOKE SAGE
+│       └─ UNSURE → handleNoAgentContext() → processMessageThroughAgent() → INVOKE SAGE
+│
+└─ Priority 3: No context at all
+    └─→ handleNoAgentContext() → processMessageThroughAgent() → INVOKE SAGE
 ```
 
----
+### Code Example: Routing Decision
 
-## Key Components
-
-### 1. Sage Agent Configuration
-
-**Location**: `/metadata/agents/.sage-agent.json`
-
-**Key Properties**:
-- **Name**: Sage
-- **Type**: Loop (TypeID: `@lookup:MJ: AI Agent Types.Name=Loop`)
-- **ExecutionOrder**: 0 (always first)
-- **ExposeAsAction**: true
-- **Description**: "Ambient agent in MJ that is always present in all conversations to help the user navigate functionality in MJ, handle basic requests, and bring in other agents to delegate work to"
-
-**Available Actions** (as of PR #1470):
-1. Get Record
-2. Create Record
-3. Update Record
-4. Delete Record
-5. Web Search
-6. Calculate Expression
-7. Text Analyzer
-8. Web Page Content
-9. URL Metadata Extractor
-10. Get Weather
-11. **Query Scheduled Jobs** (NEW)
-12. **Create Scheduled Job** (NEW)
-13. **Update Scheduled Job** (NEW)
-14. **Delete Scheduled Job** (NEW)
-15. **Execute Scheduled Job Now** (NEW)
-16. **Get Scheduled Job Statistics** (NEW)
-17. **Find Best Agent** (NEW - local embedding based agent search)
-
-**Prompt**: Links to `AI Prompts.Name=Sage - System Prompt`
-
----
-
-### 2. Sage System Prompt
-
-**Location**: `/metadata/prompts/templates/conversations/conversation-manager-agent.template.md`
-
-**Role**: Ambient, always-present AI assistant in MemberJunction conversations
-
-**Core Responsibilities**:
-
-1. **Conversation Awareness**
-   - Monitor all messages
-   - Understand when directly addressed vs observing
-   - Track conversation flow
-   - Maintain awareness of active agents
-
-2. **Smart Engagement**
-   - **Respond when**:
-     - Directly addressed
-     - Asked direct questions
-     - User needs help/guidance
-     - Conversation needs clarification
-     - No other agent is better suited
-   - **Observe silently when**:
-     - Multi-party conversations
-     - Another agent already engaged
-     - Productive discussions ongoing
-     - Off-topic social chat
-
-3. **Navigation & Assistance**
-   - Help users discover MJ features
-   - Guide to appropriate functionality
-   - Explain entity relationships
-
-4. **Agent Orchestration**
-   - ALL agent invocations use task graph format
-   - Can invoke single-step or multi-step workflows
-   - Available agents passed as `ALL_AVAILABLE_AGENTS` variable
-
-**Decision Framework**:
-
-```
-1. Use Agents First
-   ↓ If available agent matches user request
-   ↓ Return invokeAgent payload
-
-2. When to Execute Actions (type: 'Actions')
-   - Simple data queries
-   - Permission checks
-   - Entity lookups
-   - Basic CRUD operations
-   - Scheduled job management
-
-3. When to Respond Directly (type: 'Chat')
-   - Simple informational questions
-   - Navigation guidance
-   - Quick clarifications
-   - Follow-up questions
-
-4. When to Stay Silent (taskComplete: true, no message)
-   - Multi-party conversations
-   - Other agents handling requests
-   - Social chatter
-   - Topics outside scope
-```
-
-**Task Graph Format**:
-
-Sage can return a task graph for multi-step workflows:
-
-```json
-{
-  "newElements": {
-    "taskGraph": {
-      "workflowName": "Research and Analyze AI Market",
-      "reasoning": "This request requires research followed by analysis",
-      "tasks": [
-        {
-          "tempId": "task1",
-          "name": "Research Data",
-          "description": "Query database",
-          "agentName": "Research Agent",
-          "dependsOn": [],
-          "inputPayload": { "query": "..." }
-        },
-        {
-          "tempId": "task2",
-          "name": "Analyze Results",
-          "description": "Analyze the research data",
-          "agentName": "Analysis Agent",
-          "dependsOn": ["task1"],
-          "inputPayload": {
-            "data": "@task1.output"
-          }
-        }
-      ]
-    }
+```typescript
+// message-input.component.ts, lines 405-425
+private async routeMessage(
+  messageDetail: ConversationDetailEntity,
+  mentionResult: MentionParseResult,
+  isFirstMessage: boolean
+): Promise<void> {
+  // Priority 1: Direct @mention
+  if (mentionResult.agentMention) {
+    await this.handleDirectMention(messageDetail, mentionResult.agentMention, isFirstMessage);
+    return;
   }
-}
-```
 
----
-
-### 3. Message Input Component
-
-**Location**: `/packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts`
-
-**Core Responsibility**: Handle user input and route messages to appropriate agents
-
-**Routing Logic** (`routeMessage()` method):
-
-```typescript
-Priority 1: Direct @mention
-  ├─→ handleDirectMention()
-  └─→ invokeAgentDirectly()
-
-Priority 2: Previous Agent with Intent Check
-  ├─→ findLastNonSageAgentId()
-  ├─→ checkContinuityIntent() [Fast LLM check: YES/NO/UNSURE]
-  │     ├─→ YES: continueWithAgent()
-  │     └─→ NO/UNSURE: processMessageThroughAgent() [Sage]
-
-Priority 3: No Context
-  └─→ processMessageThroughAgent() [Sage]
-```
-
-**Intent Check**:
-- Uses `Check Sage Intent` prompt
-- Fast inference (<500ms)
-- Returns: `YES`, `NO`, or `UNSURE`
-- If YES: bypasses Sage, continues with previous agent
-- If NO/UNSURE: routes through Sage for evaluation
-
-**Message Processing Flow** (`processMessageThroughAgent()`):
-
-```typescript
-1. Create AI message for Sage (Status: In-Progress)
-2. Call ConversationAgentService.processMessage()
-3. Sage evaluates and returns result
-4. Check result type:
-   ├─→ taskGraph? → handleTaskGraphExecution()
-   ├─→ invokeAgent? → handleSubAgentInvocation()
-   ├─→ Chat? → Display message + create artifact if payload exists
-   └─→ Silent? → handleSilentObservation()
-```
-
-**Task Graph Execution** (`handleTaskGraphExecution()`):
-
-```typescript
-Single Task (taskGraph.tasks.length === 1):
-  ├─→ Use direct agent execution pattern
-  ├─→ Update CM message with delegation text
-  └─→ Call handleSingleTaskExecution()
-
-Multi-Step Workflow (taskGraph.tasks.length > 1):
-  ├─→ Create ConversationDetail for task execution updates
-  ├─→ Register for PubSub progress updates
-  ├─→ Call ExecuteTaskGraph mutation (server-side)
-  └─→ Handle real-time progress via PubSub
-```
-
-**Sub-Agent Invocation** (`handleSubAgentInvocation()`):
-
-```typescript
-1. Create AI response message (Status: In-Progress)
-2. Add to active tasks
-3. Call ConversationAgentService.invokeSubAgent()
-4. Update message with result
-5. Create artifact from payload if exists
-6. Auto-retry once if fails
-```
-
-**Silent Observation** (`handleSilentObservation()`):
-
-```typescript
-When Sage stays silent:
-  ├─→ Find last non-Sage AI message
-  ├─→ Load OUTPUT artifact from that message
-  ├─→ Continue with that agent, passing payload for continuity
-  └─→ Create new version of artifact if agent returns payload
-```
-
----
-
-### 4. Conversation Agent Service
-
-**Location**: `/packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts`
-
-**Key Methods**:
-
-#### `processMessage()`
-
-Processes user message through Sage:
-
-```typescript
-Parameters:
-  - conversationId: string
-  - message: ConversationDetailEntity
-  - conversationHistory: ConversationDetailEntity[]
-  - conversationDetailId: string (links to agent run)
-  - onProgress?: AgentExecutionProgressCallback
-
-Flow:
-  1. Build conversation messages from history
-  2. Prepare ExecuteAgentParams with:
-     - agent: Sage
-     - conversationMessages: history
-     - conversationDetailId: for linking
-     - data: {
-         ALL_AVAILABLE_AGENTS: [...], // Non-Sage, non-parent, Active agents
-         conversationId,
-         latestMessageId
-       }
-  3. Call GraphQLAIClient.RunAIAgent()
-  4. Return ExecuteAgentResult
-```
-
-#### `invokeSubAgent()`
-
-Invokes a specialist agent:
-
-```typescript
-Parameters:
-  - agentName: string
-  - conversationId: string
-  - message: ConversationDetailEntity
-  - conversationHistory: ConversationDetailEntity[]
-  - reasoning: string (why this agent)
-  - conversationDetailId: string
-  - payload?: any (previous OUTPUT artifact for continuity)
-  - onProgress?: AgentExecutionProgressCallback
-
-Flow:
-  1. Find agent by name in AIEngineBase.Instance.Agents
-  2. Build conversation messages
-  3. Prepare ExecuteAgentParams with:
-     - agent: found agent
-     - conversationMessages: history
-     - conversationDetailId: for linking
-     - data: { conversationId, latestMessageId, invocationReason }
-     - payload: if provided (for iterative refinement)
-  4. Call GraphQLAIClient.RunAIAgent()
-  5. Return ExecuteAgentResult
-```
-
-#### `checkAgentContinuityIntent()`
-
-Fast intent check to determine if message continues with previous agent:
-
-```typescript
-Parameters:
-  - agentId: string (previous agent)
-  - latestMessage: string
-  - conversationHistory: ConversationDetailEntity[]
-
-Flow:
-  1. Load "Check Sage Intent" prompt
-  2. Build compact context (last 10 messages)
-  3. Call GraphQLAIClient.RunAIPrompt()
-  4. Parse result: YES/NO/UNSURE
-  5. Return decision
-
-Purpose:
-  - Avoid Sage overhead when user clearly continuing with agent
-  - Fast check (<500ms)
-  - Returns UNSURE on error (safer to let Sage evaluate)
-```
-
----
-
-### 5. Task Orchestration System
-
-#### TaskResolver (GraphQL Mutation)
-
-**Location**: `/packages/MJServer/src/resolvers/TaskResolver.ts`
-
-**Mutation**: `ExecuteTaskGraph`
-
-```graphql
-mutation ExecuteTaskGraph(
-  $taskGraphJson: String!
-  $conversationDetailId: String!
-  $environmentId: String!
-  $sessionId: String!
-) {
-  ExecuteTaskGraph(
-    taskGraphJson: $taskGraphJson
-    conversationDetailId: $conversationDetailId
-    environmentId: $environmentId
-    sessionId: $sessionId
-  ) {
-    success
-    errorMessage
-    results {
-      taskId
-      success
-      output
-      error
-    }
+  // Priority 2: Check for previous agent with intent check
+  const lastAgentId = this.findLastNonSageAgentId();
+  if (lastAgentId) {
+    await this.handleAgentContinuity(messageDetail, lastAgentId, mentionResult, isFirstMessage);
+    return;
   }
+
+  // Priority 3: No context - use Sage
+  await this.handleNoAgentContext(messageDetail, mentionResult, isFirstMessage);
 }
 ```
 
-**Flow**:
-1. Parse task graph JSON
-2. Validate (must have workflowName and tasks)
-3. Create TaskOrchestrator with PubSub
-4. Create tasks from graph (parent + children with dependencies)
-5. Execute tasks for parent
-6. Return results
-
-#### TaskOrchestrator
-
-**Location**: `/packages/MJServer/src/services/TaskOrchestrator.ts`
-
-**Key Methods**:
-
-##### `createTasksFromGraph()`
-
-Creates parent and child tasks with dependencies:
+### Finding Previous Agent (Line 492-503)
 
 ```typescript
-Flow:
-  1. Ensure task type exists ("AI Agent Execution")
-  2. Create parent workflow task (links to conversationDetailId)
-  3. Deduplicate tasks by tempId
-  4. For each task:
-     - Create child task entity
-     - Find agent by name
-     - Store inputPayload in description metadata
-     - Link to parent via ParentID
-     - Link to conversation via ConversationDetailID
-  5. Create task dependencies using TaskDependency entities
-  6. Return parentTaskId and taskIdMap
-```
+private findLastNonSageAgentId(): string | null {
+  const lastAIMessage = this.conversationHistory
+    .slice()
+    .reverse()
+    .find(msg =>
+      msg.Role === 'AI' &&
+      msg.AgentID &&
+      msg.AgentID !== this.converationManagerAgent?.ID  // Filter OUT Sage
+    );
 
-##### `executeTasksForParent()`
-
-Executes all tasks respecting dependencies:
-
-```typescript
-Flow:
-  1. Load parent task
-  2. Publish workflow start
-  3. While has more tasks:
-     - Find eligible tasks (pending, no incomplete dependencies)
-     - For each eligible task:
-       - Publish task start
-       - executeTask()
-       - Publish task complete/failed
-       - Update parent progress
-  4. Mark parent complete
-  5. Publish workflow complete
-```
-
-##### `executeTask()`
-
-Executes a single task:
-
-```typescript
-Flow:
-  1. Update status to In Progress
-  2. Load agent entity
-  3. Build conversation messages:
-     - Base: task description
-     - Add dependent task outputs as markdown
-     - Add inputPayload as JSON
-  4. Create progress callback (publishes via PubSub)
-  5. Run AgentRunner.RunAgent()
-  6. If success:
-     - Extract output (message or payload)
-     - Update task status to Complete
-     - Create artifact from output
-  7. If failed:
-     - Update task status to Failed
-```
-
-**Progress Updates via PubSub**:
-
-```typescript
-Task Progress:
-  type: "TaskProgress"
-  data: { taskName, message, percentComplete }
-
-Agent Progress (nested):
-  type: "AgentProgress"
-  data: { taskName, agentStep, agentMessage }
-```
-
-These are published to `PUSH_STATUS_UPDATES_TOPIC` and filtered by sessionId.
-
----
-
-### 6. GraphQLAIClient
-
-**Location**: `/packages/GraphQLDataProvider/src/graphQLAIClient.ts`
-
-**Key Methods**:
-
-#### `RunAIAgent()`
-
-Executes an agent via GraphQL:
-
-```typescript
-Parameters: ExecuteAgentParams
-  - agent: AIAgentEntityExtended
-  - conversationMessages: ChatMessage[]
-  - data?: any
-  - payload?: any
-  - conversationDetailId?: string
-  - onProgress?: AgentExecutionProgressCallback
-
-Flow:
-  1. Subscribe to PubSub if onProgress provided
-     - Filter for resolver="RunAIAgentResolver"
-     - Filter for type="ExecutionProgress"
-     - Forward to onProgress callback with agentRunId
-  2. Build RunAIAgent mutation
-  3. Execute via GraphQLDataProvider
-  4. Process result (parse JSON)
-  5. Unsubscribe from PubSub
-  6. Return ExecuteAgentResult
-```
-
-**PubSub Message Format**:
-
-```json
-{
-  "resolver": "RunAIAgentResolver",
-  "type": "ExecutionProgress",
-  "status": "ok",
-  "data": {
-    "agentRunId": "...",
-    "progress": {
-      "step": "...",
-      "message": "...",
-      "percentage": 50,
-      "metadata": { ... }
-    }
-  }
+  return lastAIMessage?.AgentID || null;
 }
 ```
 
-#### `RunAIPrompt()`
-
-Executes a prompt via GraphQL:
-
-```typescript
-Parameters: RunAIPromptParams
-  - promptId: string
-  - messages?: ChatMessage[]
-  - data?: any
-  - temperature?, topP?, etc.
-
-Flow:
-  1. Build RunAIPrompt mutation
-  2. Execute via GraphQLDataProvider
-  3. Process result (parse JSON results)
-  4. Return RunAIPromptResult
-```
+**Key Point:** Sage messages are identified by `AgentID === this.converationManagerAgent?.ID` and are EXCLUDED from continuity checks.
 
 ---
 
-### 7. AgentRunner
+## 2. WHAT TRIGGERS TASK GRAPH EXECUTION?
 
-**Location**: `/packages/AI/Agents/src/AgentRunner.ts`
+### Detection Point: `processMessageThroughAgent()` (Lines 683-884)
 
-**Purpose**: Thin wrapper that instantiates and executes agents
-
-**Flow**:
-```typescript
-1. Ensure AIEngine configured
-2. Find agent type by TypeID
-3. Get driver class (agent.DriverClass || agentType.DriverClass)
-4. Use ClassFactory to instantiate BaseAgent subclass
-5. Call agentInstance.Execute(params)
-6. Return ExecuteAgentResult
-```
-
-This ensures the correct agent class is used (e.g., `LoopAgent`, `SimpleAgent`, etc.) based on the agent type's DriverClass.
-
----
-
-## Message Flow Scenarios
-
-### Scenario 1: User sends first message in conversation
-
-```
-User: "What is the weather in New York?"
-  ↓
-MessageInputComponent.onSend()
-  ↓
-createMessageDetail() → Save to DB
-  ↓
-routeMessage() checks:
-  - No @mention → FALSE
-  - No previous agent → FALSE
-  - No context → TRUE
-  ↓
-processMessageThroughAgent()
-  ↓
-Create ConversationDetail for Sage (Status: In-Progress)
-  ↓
-ConversationAgentService.processMessage()
-  ├─→ Build conversation messages (just user message)
-  ├─→ Pass ALL_AVAILABLE_AGENTS
-  └─→ GraphQLAIClient.RunAIAgent()
-      ↓
-  Server: AgentRunner → Sage.Execute()
-      ↓
-  Sage evaluates:
-    - Has "Get Weather" action
-    - User asking about weather
-    - Decision: Execute Action
-      ↓
-  Returns: FinalStep="Actions", payload={ action: "Get Weather", ... }
-      ↓
-Back to processMessageThroughAgent():
-  - Check payload.taskGraph? NO
-  - Check payload.invokeAgent? NO
-  - Check FinalStep="Chat"? NO
-  - Check FinalStep="Actions"? YES
-  ↓
-Sage executes Get Weather action internally
-  ↓
-Returns result with message
-  ↓
-Update Sage's ConversationDetail:
-  - Message: "The weather in New York is 72°F and sunny."
-  - Status: Complete
-  ↓
-User sees response
-```
-
-### Scenario 2: User directly mentions an agent
-
-```
-User: "@Marketing Agent create a blog post about AI"
-  ↓
-MessageInputComponent.onSend()
-  ↓
-parseMentionsFromMessage()
-  ↓
-routeMessage() checks:
-  - Has @mention "Marketing Agent" → TRUE
-  ↓
-handleDirectMention()
-  ↓
-invokeAgentDirectly()
-  ├─→ Create AI response message (Status: In-Progress)
-  ├─→ Add to active tasks
-  └─→ ConversationAgentService.invokeSubAgent()
-      ↓
-  GraphQLAIClient.RunAIAgent() for Marketing Agent
-      ↓
-  Agent runs, returns result
-      ↓
-Back to invokeAgentDirectly():
-  - Update AI message with result
-  - Create artifact from payload
-  - Mark complete
-  ↓
-User sees Marketing Agent's response
-
-NOTE: Sage is completely bypassed
-```
-
-### Scenario 3: User continues conversation with previous agent
-
-```
-Previous: Marketing Agent created blog post
-User: "Make it shorter"
-  ↓
-MessageInputComponent.onSend()
-  ↓
-routeMessage() checks:
-  - No @mention → FALSE
-  - Previous agent exists (Marketing Agent) → TRUE
-  ↓
-handleAgentContinuity()
-  ↓
-checkContinuityIntent()
-  ├─→ Load "Check Sage Intent" prompt
-  ├─→ Build context: agent info + last 10 messages + new message
-  ├─→ Call GraphQLAIClient.RunAIPrompt()
-  └─→ Result: "YES" (user is clearly asking agent to modify its work)
-  ↓
-continueWithAgent()
-  ├─→ Load last OUTPUT artifact from Marketing Agent
-  ├─→ Parse as payload
-  ├─→ Create AI response message (Status: In-Progress)
-  └─→ ConversationAgentService.invokeSubAgent()
-      - agentName: "Marketing Agent"
-      - payload: { previousBlogPost: "..." }
-      ↓
-  Marketing Agent runs with previous payload
-      ↓
-  Returns modified blog post
-      ↓
-Back to continueWithAgent():
-  - Update AI message
-  - Create NEW VERSION of artifact (not new artifact)
-  - Mark complete
-  ↓
-User sees updated blog post
-
-NOTE: Sage is bypassed due to intent check
-```
-
-### Scenario 4: User message requires context switch
-
-```
-Previous: Marketing Agent created blog post
-User: "What's the weather?"
-  ↓
-MessageInputComponent.onSend()
-  ↓
-routeMessage() checks:
-  - No @mention → FALSE
-  - Previous agent exists (Marketing Agent) → TRUE
-  ↓
-handleAgentContinuity()
-  ↓
-checkContinuityIntent()
-  ├─→ Build context
-  ├─→ Call GraphQLAIClient.RunAIPrompt()
-  └─→ Result: "NO" (clear context shift)
-  ↓
-processMessageThroughAgent() [Sage evaluates]
-  ↓
-Sage decides:
-  - User wants weather info
-  - Has Get Weather action
-  - Decision: Execute Action
-  ↓
-Returns weather info directly
-  ↓
-User sees Sage's response
-
-NOTE: Sage intervenes due to context shift detection
-```
-
-### Scenario 5: Multi-step workflow via task graph
-
-```
-User: "Research AI companies and create a marketing strategy"
-  ↓
-MessageInputComponent.onSend()
-  ↓
-routeMessage() → processMessageThroughAgent()
-  ↓
-Sage evaluates:
-  - Complex request requiring multiple agents
-  - Decision: Create task graph
-  ↓
-Returns: payload.taskGraph = {
-  workflowName: "AI Market Research & Strategy",
-  tasks: [
-    { tempId: "task1", agentName: "Research Agent", ... },
-    { tempId: "task2", agentName: "Marketing Agent", dependsOn: ["task1"], ... }
-  ]
-}
-  ↓
-handleTaskGraphExecution()
-  ↓
-Update Sage's message: "📋 Setting up multi-step workflow..."
-  ↓
-Create new ConversationDetail for task execution
-  ↓
-Register for PubSub updates
-  ↓
-Call ExecuteTaskGraph mutation
-  ↓
-Server: TaskResolver → TaskOrchestrator
-  ├─→ Create parent task
-  ├─→ Create child tasks with dependencies
-  ├─→ Execute task1 (Research Agent)
-  │     ├─→ PubSub: "Task Progress: Research Agent - Starting (0%)"
-  │     ├─→ PubSub: "Agent Progress: Searching database..."
-  │     ├─→ Agent completes, creates artifact
-  │     └─→ PubSub: "Task Progress: Research Agent - Complete (100%)"
-  ├─→ Execute task2 (Marketing Agent)
-  │     ├─→ Receives task1 output as input
-  │     ├─→ PubSub: "Task Progress: Marketing Agent - Starting (50%)"
-  │     ├─→ Agent creates marketing strategy
-  │     └─→ PubSub: "Task Progress: Marketing Agent - Complete (100%)"
-  └─→ Mark parent complete
-  ↓
-Back to handleTaskGraphExecution():
-  - Receives success result
-  - Updates execution message: "✅ Workflow completed"
-  - Unregisters from PubSub
-  ↓
-User sees:
-  1. Sage's delegation message
-  2. Task execution message with real-time progress
-  3. Artifacts from both agents
-```
-
-### Scenario 6: Sage decides to stay silent
-
-```
-Context: Multiple users chatting socially
-User A: "How was your weekend?"
-User B: "Great, went hiking!"
-  ↓
-MessageInputComponent.onSend() [for User B's message]
-  ↓
-processMessageThroughAgent()
-  ↓
-Sage evaluates:
-  - Social conversation
-  - Not addressed to Sage
-  - No help needed
-  - Decision: Observe silently
-  ↓
-Returns: FinalStep="Silent", message=null or empty
-  ↓
-handleSilentObservation()
-  ├─→ Update Sage's ConversationDetail:
-  │     - HiddenToUser: true
-  │     - Status: Complete
-  ├─→ Check if last non-Sage agent exists
-  └─→ NO → Just mark user message complete
-  ↓
-User sees: No AI response (silent observation)
-
-NOTE: Sage creates a hidden ConversationDetail record but doesn't display anything
-```
-
----
-
-## Task Graph vs Single Agent Execution
-
-### Single Agent Execution Pattern
-
-**Used When**:
-- Direct @mention
-- Intent check returns YES
-- Sage returns `invokeAgent` payload
-- Task graph with single task
-
-**Characteristics**:
-- Direct invocation via `invokeSubAgent()`
-- Real-time progress via onProgress callback
-- PubSub updates from agent execution
-- Single ConversationDetail message
-- Single artifact created
-
-**Benefits**:
-- Lower latency
-- Real-time progress updates
-- Better PubSub support
-- Simpler execution model
-
-### Task Graph Pattern
-
-**Used When**:
-- Sage returns `taskGraph` payload
-- Multiple tasks with dependencies
-
-**Characteristics**:
-- Server-side orchestration
-- Tasks created in database
-- Dependencies tracked
-- Sequential/parallel execution
-- Real-time progress via PubSub (different format)
-- Multiple artifacts (one per task)
-
-**Benefits**:
-- Handles complex workflows
-- Dependency management
-- Resumable (tasks persist in DB)
-- Scalable for long-running operations
-
-### Decision Flow in Message Input
+When Sage completes execution (line 721), the result is checked for a `payload.taskGraph` property:
 
 ```typescript
+// Lines 764-771
 if (result.payload?.taskGraph) {
-  if (taskGraph.tasks.length === 1) {
-    // Use single agent pattern for better UX
-    handleSingleTaskExecution()
-  } else {
-    // Use task graph pattern for orchestration
-    handleTaskGraphExecution()
+  console.log('📋 Task graph detected, starting task orchestration');
+  await this.handleTaskGraphExecution(userMessage, result, this.conversationId, conversationManagerMessage);
+}
+```
+
+### Exact Condition
+
+**The check is simple:**
+```typescript
+if (result.payload?.taskGraph)
+```
+
+This means:
+- The `payload` object (returned from Sage execution) must have a `taskGraph` property
+- The `taskGraph` contains: `{ workflowName, reasoning, tasks: [...] }`
+
+### Execution Flow Chart
+
+```
+Sage Execution Completes
+    ↓
+Check result.payload
+    ├─ Has taskGraph? → handleTaskGraphExecution()
+    │                     ├─ Single task? → handleSingleTaskExecution()
+    │                     └─ Multiple tasks? → ExecuteTaskGraph mutation
+    │
+    ├─ Has invokeAgent? → handleSubAgentInvocation()
+    │
+    ├─ FinalStep === 'Chat'? → Display message directly
+    │
+    └─ Silent observation? → handleSilentObservation()
+```
+
+---
+
+## 3. CONVERSATION HISTORY BUILDING & PASSING TO SAGE
+
+### Entry Point: `onSend()` → `handleSuccessfulSend()` → `routeMessage()` → `processMessageThroughAgent()` (Line 683)
+
+### Key Property: `conversationHistory` Input (Line 32)
+
+```typescript
+// message-input.component.ts, line 32
+@Input() conversationHistory: ConversationDetailEntity[] = []; // For agent context
+```
+
+This array is **passed from the parent component** and contains all messages in the conversation up to and including the current message.
+
+### Building Agent Messages: `buildAgentMessages()` (Lines 195-277 in conversation-agent.service.ts)
+
+**Step 1: Get Recent History (Line 202)**
+```typescript
+const recentHistory = history.slice(-20); // Last 20 messages maximum
+```
+
+**Step 2: Load All Artifacts (Lines 210-255)**
+```typescript
+// Batch load artifact junctions for all messages in history
+const artifactsByDetailId = new Map<string, string[]>(); // DetailID -> artifacts
+
+// For each message with artifacts, load artifact versions
+// Artifacts are APPENDED to message content
+```
+
+**Step 3: Build Chat Messages (Lines 258-274)**
+```typescript
+for (const msg of recentHistory) {
+  let content = msg.Message || '';
+
+  // If message has artifacts, append them
+  const artifacts = artifactsByDetailId.get(msg.ID);
+  if (artifacts && artifacts.length > 0) {
+    for (const artifactJson of artifacts) {
+      content += `\n\n# Artifact\n${artifactJson}\n`;
+    }
   }
+
+  messages.push({
+    role: this.mapRoleToAgentRole(msg.Role), // 'user' | 'assistant'
+    content: content
+  });
+}
+
+return messages;
+```
+
+### Passing to Sage: `processMessage()` (Lines 105-188)
+
+```typescript
+async processMessage(
+  conversationId: string,
+  message: ConversationDetailEntity,  // Current user message
+  conversationHistory: ConversationDetailEntity[],  // ALL messages including current
+  conversationDetailId: string,
+  onProgress?: AgentExecutionProgressCallback
+): Promise<ExecuteAgentResult | null> {
+  // Line 136: Build agent messages from history
+  const conversationMessages = await this.buildAgentMessages(conversationHistory);
+
+  // Line 157-173: Create execution params for Sage
+  const params: ExecuteAgentParams = {
+    agent: agent,  // Sage agent
+    conversationMessages: conversationMessages,  // ← PASSED HERE
+    conversationDetailId: conversationDetailId,
+    data: {
+      ALL_AVAILABLE_AGENTS: availAgents,  // List of agents Sage can delegate to
+      conversationId: conversationId,
+      latestMessageId: message.ID
+    },
+    onProgress: onProgress
+  };
+
+  // Line 176: Run the agent
+  const result = await this._aiClient.RunAIAgent(params);
+  return result;
 }
 ```
 
 ---
 
-## Action Execution
+## 4. MULTI-TURN WORKFLOW EXAMPLE
 
-### How Sage Executes Actions
-
-When Sage decides to execute an action (e.g., Get Weather, Create Record), it does so **internally** during agent execution on the server side.
-
-**Flow**:
+### Scenario: User → Sage Planning → Approval Loop → Execution
 
 ```
-Sage.Execute() on server
-  ↓
-Sage evaluates → Decision: Execute Action
-  ↓
-Sage calls action via ActionEngine
-  ↓
-Action executes and returns result
-  ↓
-Sage includes result in response message
-  ↓
-Returns ExecuteAgentResult with:
-  - FinalStep: "Actions" or "Chat"
-  - Message: Text response with action result
-  - Payload: May include structured data
+Step 1: User sends message
+┌─────────────────────────────────────────────┐
+│ User: "Research AI and write a report"      │
+└─────────────────────────────────────────────┘
+         ↓
+    conversationHistory = [
+      { ID: 'user-1', Role: 'User', Message: "Research AI and write a report" }
+    ]
+
+Step 2: Sage processes message
+┌──────────────────────────────────────────────────────────────────┐
+│ ConversationAgentService.processMessage() called with:           │
+│ - conversationId: 'conv-123'                                     │
+│ - message: { ID: 'user-1', Message: "Research AI..." }           │
+│ - conversationHistory: [user-1]                                  │
+│                                                                  │
+│ buildAgentMessages() converts to:                                │
+│ [                                                                │
+│   { role: 'user', content: "Research AI and write a report" }    │
+│ ]                                                                │
+│                                                                  │
+│ Sage receives this and decides to ask for approval               │
+│ Returns: {                                                       │
+│   success: true,                                                 │
+│   agentRun: { FinalStep: 'Chat', Message: "Here's my plan..." }  │
+│   payload: { taskGraph: null } // No task graph yet              │
+│ }                                                                │
+└──────────────────────────────────────────────────────────────────┘
+         ↓
+    Sage Message displayed to user (FinalStep: 'Chat')
+    conversationHistory now = [user-1, sage-response-1]
+
+Step 3: User sends approval
+┌────────────────────────────────────────────────────────────────────┐
+│ User: "yes, proceed with that plan"                                │
+└────────────────────────────────────────────────────────────────────┘
+         ↓
+    conversationHistory = [
+      { ID: 'user-1', Message: "Research AI and write a report" },
+      { ID: 'sage-1', Role: 'AI', AgentID: sage-id, Message: "Here's my plan..." },
+      { ID: 'user-2', Message: "yes, proceed with that plan" }
+    ]
+
+Step 4: Message routes to Sage again (Priority 2: No previous specialist agent)
+┌──────────────────────────────────────────────────────────────────────────┐
+│ ConversationAgentService.processMessage() called with:                   │
+│ - conversationId: 'conv-123'                                             │
+│ - message: { ID: 'user-2', Message: "yes, proceed..." }                  │
+│ - conversationHistory: [user-1, sage-1, user-2] ← 3 MESSAGES             │
+│                                                                          │
+│ buildAgentMessages() converts to:                                        │
+│ [                                                                        │
+│   { role: 'user', content: "Research AI and write a report" },           │
+│   { role: 'assistant', content: "Here's my plan..." },                   │
+│   { role: 'user', content: "yes, proceed with that plan" }               │
+│ ]                                                                        │
+│                                                                          │
+│ Sage NOW sees the approval and creates the task graph                    │
+│ Returns: {                                                               │
+│   success: true,                                                         │
+│   agentRun: { FinalStep: 'Success' },                                    │
+│   payload: {                                                             │
+│     taskGraph: {                                                         │
+│       workflowName: "AI Research and Report Writing",                    │
+│       tasks: [                                                           │
+│         { tempId: '1', name: "Research AI", agentName: "ResearchAgent" },│
+│         { tempId: '2', name: "Write Report", agentName: "WriterAgent" }  │
+│       ]                                                                  │
+│     }                                                                    │
+│   }                                                                      │
+│ }                                                                        │
+└──────────────────────────────────────────────────────────────────────────┘
+         ↓
+    Task graph detected! (line 764)
+    handleTaskGraphExecution() called
 ```
 
-**Example**:
+### Key Insight
 
-```
-User: "What's the weather in New York?"
-  ↓
-Sage decides to use "Get Weather" action
-  ↓
-Sage calls: ActionEngine.executeAction("Get Weather", { location: "New York" })
-  ↓
-Action returns: { temperature: 72, condition: "Sunny" }
-  ↓
-Sage formats response: "The weather in New York is 72°F and sunny."
-  ↓
-Returns to client
-```
-
-**Important**: The client doesn't explicitly call actions - Sage handles this internally based on its available actions and the user's request.
+**Sage receives ALL previous messages**, including its own previous responses and the user's follow-up. This allows Sage to:
+1. Understand context from earlier in the conversation
+2. Make decisions based on user feedback/approval
+3. Access artifacts from previous agent runs
+4. Maintain conversation continuity
 
 ---
 
-## Important Files
+## 5. TASKCOMPLETE = FALSE vs TRUE (Loop Agent Behavior)
 
-### Configuration & Metadata
+### Loop Agent Type Response Structure (loop-agent-response-type.ts, lines 6-73)
 
-| File | Purpose |
-|------|---------|
-| `/metadata/agents/.sage-agent.json` | Sage agent configuration, actions, prompts |
-| `/metadata/prompts/templates/conversations/conversation-manager-agent.template.md` | Sage system prompt template |
-| `/metadata/prompts/.prompts.json` | Prompt configurations (Name Conversation, Check Sage Intent) |
-
-### UI Components (Angular)
-
-| File | Purpose |
-|------|---------|
-| `/packages/Angular/Generic/conversations/src/lib/components/message/message-input.component.ts` | User input, routing logic, agent invocation |
-| `/packages/Angular/Generic/conversations/src/lib/components/conversation/conversation-chat-area.component.ts` | Main chat UI, message display, artifact handling |
-| `/packages/Angular/Generic/conversations/src/lib/components/message/message-list.component.ts` | Message rendering |
-| `/packages/Angular/Generic/conversations/src/lib/services/conversation-agent.service.ts` | Sage & agent interaction service |
-| `/packages/Angular/Generic/conversations/src/lib/services/active-tasks.service.ts` | Track in-memory running tasks |
-| `/packages/Angular/Generic/conversations/src/lib/services/data-cache.service.ts` | Conversation data caching |
-
-### Server Components
-
-| File | Purpose |
-|------|---------|
-| `/packages/MJServer/src/resolvers/TaskResolver.ts` | ExecuteTaskGraph GraphQL mutation |
-| `/packages/MJServer/src/services/TaskOrchestrator.ts` | Multi-step task orchestration engine |
-| `/packages/GraphQLDataProvider/src/graphQLAIClient.ts` | Client for RunAIAgent/RunAIPrompt mutations |
-| `/packages/AI/Agents/src/AgentRunner.ts` | Agent instantiation and execution wrapper |
-
-### Core AI Components
-
-| File | Purpose |
-|------|---------|
-| `/packages/AI/Agents/src/base-agent.ts` | Base class for all agents |
-| `/packages/AI/Agents/src/loop-agent.ts` | Loop agent implementation (Sage uses this) |
-| `/packages/AIEngine/src/ai-engine.ts` | AI engine singleton, agent/prompt registry |
-
----
-
-## Recent Changes (PR #1470)
-
-**Note**: Unable to fetch PR details via WebFetch, but based on code analysis, recent changes include:
-
-### 1. Scheduled Job Actions (New)
-
-Added 6 new actions to Sage for managing scheduled jobs:
-- Query Scheduled Jobs
-- Create Scheduled Job
-- Update Scheduled Job
-- Delete Scheduled Job
-- Execute Scheduled Job Now
-- Get Scheduled Job Statistics
-
-**Location**: `.sage-agent.json` lines 174-254
-
-**Impact**: Sage can now manage scheduled jobs directly without delegating to other agents.
-
-### 2. Find Best Agent Action (New)
-
-Added local embedding-based agent search:
-- Action: "Find Best Agent"
-- Uses local embedding models for semantic similarity
-
-**Location**: `.sage-agent.json` lines 258-268
-
-**Impact**: Sage can use semantic search to find the best agent for a task, improving agent selection accuracy.
-
-### 3. Agent Local Embedding Work
-
-Added embedding generation support:
-
-**New Methods** in GraphQLAIClient:
 ```typescript
-EmbedText(params: EmbedTextParams): Promise<EmbedTextResult>
+interface LoopAgentResponse {
+  // CRITICAL: Controls loop continuation
+  taskComplete?: boolean;
+  
+  // Message to show user (required for 'Chat' type)
+  message?: string;
+  
+  // Payload modifications
+  payloadChangeRequest?: AgentPayloadChangeRequest;
+  
+  // Next action (required when taskComplete=false)
+  nextStep?: {
+    type: 'Actions' | 'Sub-Agent' | 'Chat';
+    // ... action/sub-agent details
+  };
+}
 ```
 
-**Parameters**:
-- `textToEmbed`: string | string[]
-- `modelSize`: 'small' | 'medium'
+### Determination of Next Step (loop-agent-type.ts, lines 74-176)
 
-**Returns**:
-- `embeddings`: number[] | number[][]
-- `modelName`: string
-- `vectorDimensions`: number
+```typescript
+public async DetermineNextStep(
+  promptResult: AIPromptRunResult | null,
+  params: ExecuteAgentParams,
+  payload: any,
+  agentTypeState: any
+): Promise<BaseAgentNextStep> {
+  const response = this.parseJSONResponse<LoopAgentResponse>(promptResult);
 
-**Location**: `graphQLAIClient.ts` lines 585-645
+  // Line 100-111: CHECK TASK COMPLETION
+  if (response.taskComplete) {
+    // ✅ TERMINATE: taskComplete = true
+    return this.createSuccessStep({
+      message: response.message,
+      reasoning: response.reasoning,
+      confidence: response.confidence,
+      payloadChangeRequest: response.payloadChangeRequest
+    });
+  }
 
-**Impact**: Enables local embedding generation for similarity calculations, powering the "Find Best Agent" action.
+  // If taskComplete is false, nextStep is REQUIRED
+  if (!response.nextStep) {
+    return this.createRetryStep('Task not complete but no next step provided');
+  }
+
+  // Lines 124-170: Handle different next step types
+  switch (response.nextStep.type) {
+    case 'Sub-Agent':
+      // Agent delegates to sub-agent
+      return {
+        step: 'Sub-Agent',
+        subAgent: { name, message, terminateAfter },
+        terminate: false  // ← Continue loop
+      };
+    case 'Actions':
+      // Agent executes actions
+      return {
+        step: 'Actions',
+        actions: [...],
+        terminate: false  // ← Continue loop
+      };
+    case 'Chat':
+      // Agent needs user input
+      return {
+        step: 'Chat',
+        message: response.message,
+        terminate: true  // ← Exit loop, wait for user
+      };
+  }
+}
+```
+
+### Execution Loop in BaseAgent (base-agent.ts, lines 507-552)
+
+```typescript
+protected async executeAgentInternal<P = any>(
+  params: ExecuteAgentParams,
+  config: AgentConfiguration
+): Promise<{finalStep: BaseAgentNextStep<P>, stepCount: number}> {
+  let continueExecution = true;
+  let currentNextStep: BaseAgentNextStep<P> | null = null;
+  let stepCount = 0;
+
+  while (continueExecution) {
+    // Execute current step
+    const nextStep = await this.executeNextStep<P>(params, config, currentNextStep);
+    stepCount++;
+
+    // Line 527: CHECK TERMINATE FLAG
+    if (nextStep.terminate) {
+      continueExecution = false;
+      // ✅ LOOP EXITS - return finalStep
+      return { finalStep: nextStep, stepCount };
+    } else {
+      // taskComplete = false, continue loop
+      currentNextStep = nextStep;
+      // Carry forward payload
+      if (!currentNextStep.newPayload && currentNextStep.previousPayload) {
+        currentNextStep.newPayload = currentNextStep.previousPayload;
+      }
+    }
+  }
+
+  return { finalStep: currentNextStep, stepCount };
+}
+```
+
+### State Machine Diagram
+
+```
+Agent Execution Loop
+┌─────────────────────────────┐
+│  Execute Prompt (Step N)    │
+└──────────────┬──────────────┘
+               ↓
+    ┌──────────────────────────┐
+    │ Parse Agent Response     │
+    │ Check taskComplete value │
+    └──────────────┬───────────┘
+                   ↓
+        ┌──────────────────────────┐
+        │ taskComplete = ?          │
+        └──────────────┬───────────┘
+                       ↙   ↘
+                  YES ↙     ↘ NO
+                    ↙         ↘
+           ┌──────────┐    ┌─────────────────────┐
+           │ Terminate│    │ nextStep type?      │
+           │ Loop ✅  │    │                     │
+           └──────────┘    ├─ 'Sub-Agent'?      │
+                           │   → Execute (loop)  │
+                           ├─ 'Actions'?        │
+                           │   → Execute (loop)  │
+                           └─ 'Chat'?           │
+                               → Show user, exit │
+```
+
+### Timeline: taskComplete FALSE → TRUE
+
+```
+Iteration 1:
+  Prompt executed
+  taskComplete = false
+  nextStep.type = 'Sub-Agent'
+  → Execute sub-agent
+  → Loop continues ✅
+
+Iteration 2:
+  Prompt executed again with sub-agent results in payload
+  taskComplete = false
+  nextStep.type = 'Actions'
+  → Execute actions
+  → Loop continues ✅
+
+Iteration 3:
+  Prompt executed again with action results in payload
+  taskComplete = true
+  → Return success with final payload
+  → Loop exits ✅
+```
 
 ---
 
-## Key Architectural Decisions
+## 6. WHEN SAGE TERMINATES WITH CHAT RESPONSE
 
-### 1. Intent Check Before Sage
+### Condition: FinalStep === 'Chat'
 
-**Why**: Reduce latency when user is clearly continuing with an agent
-- **Before**: Every message routed through Sage (adds ~2-3 seconds)
-- **After**: Fast intent check (<500ms) for continuity
-- **Result**: Better UX for iterative conversations
+In the LoopAgentType, a 'Chat' response signals Sage wants user interaction:
 
-### 2. Task Graph for Single Tasks
+```typescript
+// loop-agent-type.ts, lines 155-164
+case 'Chat':
+  if (!response.message) {
+    retVal.step = 'Retry';
+    retVal.errorMessage = 'Chat type specified but no user message provided';
+  }
+  else {
+    retVal.step = 'Chat';
+    retVal.message = response.message;
+    retVal.terminate = true;  // ← Force loop termination
+  }
+  break;
+```
 
-**Why**: Maintain consistent UX and leverage existing patterns
-- Single-task graphs use direct agent execution
-- Multi-task graphs use server-side orchestration
-- **Result**: Best of both worlds (speed + capability)
+### Processing in message-input.component.ts (Lines 782-811)
 
-### 3. Artifact Versioning
+```typescript
+// Stage 4: Direct chat response from Sage
+else if (result.agentRun.FinalStep === 'Chat' && result.agentRun.Message) {
+  // Mark message as completing BEFORE setting final content
+  this.markMessageComplete(conversationManagerMessage);
 
-**Why**: Track iterative refinements
-- When continuing with same agent, create new version
-- When switching agents, create new artifact
-- **Result**: Clear history of iterations
+  // Normal chat response
+  conversationManagerMessage.Message = result.agentRun.Message;
+  conversationManagerMessage.Status = 'Complete';
 
-### 4. PubSub Progress Updates
+  await conversationManagerMessage.Save();
+  this.messageSent.emit(conversationManagerMessage);
 
-**Why**: Real-time feedback for long-running operations
-- Agent progress updates
-- Task progress updates
-- **Result**: User sees what's happening in real-time
+  // Handle artifacts if any
+  if (result.payload && Object.keys(result.payload).length > 0) {
+    await this.createArtifactFromPayload(
+      result.payload, 
+      conversationManagerMessage, 
+      result.agentRun.AgentID
+    );
+    this.messageSent.emit(conversationManagerMessage);
+  }
 
-### 5. Silent Observation
+  // Mark user message as complete
+  userMessage.Status = 'Complete';
+  await userMessage.Save();
+  this.messageSent.emit(userMessage);
 
-**Why**: Sage doesn't interrupt natural conversations
-- Sage can observe without responding
-- Hidden ConversationDetail created for tracking
-- **Result**: Less intrusive AI presence
+  // Cleanup
+  if (taskId) {
+    this.activeTasks.remove(taskId);
+  }
+  this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
+}
+```
 
----
+### What Happens Next?
 
-## Future Enhancement Opportunities
+After Sage returns 'Chat' response:
 
-### 1. Improve Intent Check
-- Current: Single prompt check
-- Opportunity: Use conversation context embedding similarity
-- Benefit: More accurate continuity detection
+1. **Sage message displayed to user** with the text
+2. **User can send next message** (new ConversationDetailEntity created)
+3. **Next user message is routed again** through the routing system:
+   - If @mention → Direct invocation
+   - If previous specialist agent exists → Continuity check
+   - Otherwise → Back to Sage
 
-### 2. Parallel Task Execution
-- Current: Sequential execution even when no dependencies
-- Opportunity: Execute independent tasks in parallel
-- Benefit: Faster multi-step workflows
+### Example Conversation Flow
 
-### 3. Smart Agent Selection
-- Current: Sage manually selects agent
-- Opportunity: Use "Find Best Agent" action more proactively
-- Benefit: Better agent matching
-
-### 4. Context Window Management
-- Current: Last 20 messages
-- Opportunity: Intelligent context summarization
-- Benefit: Better long conversation handling
-
-### 5. Artifact Diffing
-- Current: Full artifact versions stored
-- Opportunity: Store diffs between versions
-- Benefit: Smaller storage, clearer changes
-
----
-
-## Glossary
-
-| Term | Definition |
-|------|------------|
-| **Sage** | The ambient AI agent in MJ conversations (formerly "Conversation Manager Agent") |
-| **Loop Agent** | Agent type that can iterate and make decisions about next steps |
-| **Task Graph** | Multi-step workflow definition with dependencies |
-| **Intent Check** | Fast LLM check to determine if user is continuing with previous agent |
-| **Sub-Agent** | Specialist agent invoked by Sage |
-| **Artifact** | Structured output created by agents (stored as JSON) |
-| **ConversationDetail** | Database record representing a single message in a conversation |
-| **ExecuteAgentResult** | Return type from agent execution (includes agentRun, message, payload) |
-| **PubSub** | Real-time message bus for progress updates |
-
----
-
-## Conclusion
-
-The current Sage + conversation flow system is sophisticated and well-architected:
-
-✅ **Strengths**:
-- Smart routing logic (intent check, @mentions, context-aware)
-- Flexible execution models (single agent, task graphs, actions)
-- Real-time progress updates
-- Artifact versioning for iterative work
-- Silent observation for natural conversations
-
-🔧 **Opportunities**:
-- Further optimize intent checking
-- Parallel task execution
-- Smarter agent selection using embeddings
-- Better context management
-
-This architecture provides a solid foundation for building more advanced agent orchestration and conversation management capabilities.
+```
+[Sage → User] "I can research AI or write a report. Which would you like first?"
+                               ↓
+[User → Sage] "research first"
+                               ↓
+      [Routing Logic]
+      - No @mention
+      - No specialist agent yet (only Sage)
+      - Route to Sage again ✅
+                               ↓
+[Sage → User] Creates taskGraph with research task
+                               ↓
+      Task execution begins
+```
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-10-15
-**Author**: Code Analysis
-**Status**: Current Implementation
+## 7. MULTI-TURN CONVERSATION WITH PAYLOADCHANGEREQUEST
+
+### Key: Sage can update payload mid-conversation without taskComplete=true
+
+```typescript
+// loop-agent-response-type.ts, lines 18-20
+interface LoopAgentResponse {
+  taskComplete?: boolean;
+  
+  // Can exist independently of taskComplete!
+  payloadChangeRequest?: AgentPayloadChangeRequest;
+}
+```
+
+### Scenario: Sage Building Payload Over Multiple Turns
+
+```
+Turn 1:
+┌──────────────────────────────────────────────────────────────┐
+│ Sage Response:                                               │
+│ {                                                            │
+│   taskComplete: false,                                       │
+│   message: "I found research data. Need approval?",          │
+│   nextStep: { type: 'Chat' },                                │
+│   payloadChangeRequest: {                                    │
+│     newElements: [{key: 'researchData', value: {...}}]       │
+│   }                                                          │
+│ }                                                            │
+└──────────────────────────────────────────────────────────────┘
+    ↓
+  Payload updated: { researchData: {...} }
+  Message displayed to user
+  Loop EXITS (Chat → terminate: true)
+  Payload PERSISTED for next turn
+
+Turn 2:
+┌──────────────────────────────────────────────────────────────┐
+│ User: "yes, proceed"                                         │
+│                                                              │
+│ Sage receives:                                               │
+│ - conversationHistory: [user-1, sage-1, user-2]              │
+│ - Existing payload: { researchData: {...} } ← Carried forward│
+│                                                              │
+│ Sage Response:                                               │
+│ {                                                            │
+│   taskComplete: true,                                        │
+│   message: "Task complete!",                                 │
+│   payloadChangeRequest: {                                    │
+│     newElements: [{key: 'finalReport', value: '...'}]        │
+│   }                                                          │
+│ }                                                            │
+└──────────────────────────────────────────────────────────────┘
+    ↓
+  Payload updated: { researchData: {...}, finalReport: '...' }
+  Task completes with full payload
+```
+
+---
+
+## 8. COMPLETE MESSAGE FLOW DIAGRAM
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ User Types Message & Presses Enter                                          │
+└──────────────────────────┬──────────────────────────────────────────────────┘
+                           ↓
+        ┌─────────────────────────────────────────┐
+        │ onSend() - Create user message           │
+        │ Save to database                         │
+        │ Emit messageSent event                   │
+        └──────────────────┬──────────────────────┘
+                           ↓
+        ┌─────────────────────────────────────────┐
+        │ handleSuccessfulSend()                   │
+        │ Parse @mentions                         │
+        │ Check if first message                  │
+        └──────────────────┬──────────────────────┘
+                           ↓
+        ┌─────────────────────────────────────────┐
+        │ routeMessage()                           │
+        │ Priority 1: @mention? → invokeDirectly()│
+        │ Priority 2: Prev agent? → checkIntent()│
+        │ Priority 3: → processMessageThroughAgent()
+        └──────────────────┬──────────────────────┘
+                           ↓
+        ┌──────────────────────────────────────────────────┐
+        │ processMessageThroughAgent()                      │
+        │ 1. Create AI message (Sage status)                │
+        │ 2. Save to database                              │
+        │ 3. Call ConversationAgentService.processMessage() │
+        └──────────────────┬───────────────────────────────┘
+                           ↓
+        ┌────────────────────────────────────────────────────┐
+        │ ConversationAgentService.processMessage()          │
+        │ 1. buildAgentMessages(conversationHistory)         │
+        │    - Limit to last 20 messages                     │
+        │    - Load artifacts for each message               │
+        │    - Convert to ChatMessage[]                      │
+        │ 2. Filter agents by permission                     │
+        │ 3. Call GraphQLAIClient.RunAIAgent(Sage)           │
+        └──────────────────┬─────────────────────────────────┘
+                           ↓
+        ┌────────────────────────────────────────────────────────┐
+        │ BaseAgent.Execute() [Sage]                              │
+        │ Execution Loop (executeAgentInternal):                 │
+        │                                                        │
+        │ while (continueExecution) {                            │
+        │   ├─ Step 1: Execute prompt                            │
+        │   ├─ Step 2: Parse response → LoopAgentResponse        │
+        │   ├─ Step 3: Check taskComplete                        │
+        │   │   ├─ If true: Set terminate=true, exit loop        │
+        │   │   └─ If false: Check nextStep.type                 │
+        │   ├─ Step 4: Execute next step                         │
+        │   │   ├─ Sub-Agent: Delegate                           │
+        │   │   ├─ Actions: Execute                              │
+        │   │   └─ Chat: Set terminate=true                      │
+        │   └─ Step 5: Return to message-input                   │
+        │ }                                                       │
+        └──────────────────┬─────────────────────────────────────┘
+                           ↓
+        ┌─────────────────────────────────────────────────┐
+        │ Back in message-input.component.ts              │
+        │ result = { success, agentRun, payload }         │
+        │                                                  │
+        │ Check result.payload:                            │
+        │ ├─ Has taskGraph? → handleTaskGraphExecution()  │
+        │ ├─ Has invokeAgent? → handleSubAgentInvocation()│
+        │ ├─ FinalStep='Chat'? → Display message ✅       │
+        │ └─ Silent? → handleSilentObservation()          │
+        └──────────────────┬──────────────────────────────┘
+                           ↓
+        ┌─────────────────────────────────────────┐
+        │ Update Sage AI message in database       │
+        │ Set status to 'Complete'                 │
+        │ Emit messageSent event                  │
+        │ User sees response                      │
+        └─────────────────────────────────────────┘
+```
+
+---
+
+## 9. CODE REFERENCES SUMMARY
+
+| Question | File | Lines | Method |
+|----------|------|-------|--------|
+| When is Sage invoked? | message-input.component.ts | 405-425 | `routeMessage()` |
+| Task graph detection | message-input.component.ts | 764-771 | `processMessageThroughAgent()` |
+| Conversation history passed | conversation-agent.service.ts | 105-188 | `processMessage()` |
+| History building | conversation-agent.service.ts | 195-277 | `buildAgentMessages()` |
+| taskComplete handling | base-agent.ts | 507-552 | `executeAgentInternal()` |
+| LoopAgent determination | loop-agent-type.ts | 74-176 | `DetermineNextStep()` |
+| Chat response handling | message-input.component.ts | 782-811 | `processMessageThroughAgent()` |
+| Continuity check | conversation-agent.service.ts | 386-466 | `checkAgentContinuityIntent()` |
+
+---
+
+## 10. CRITICAL INSIGHTS
+
+1. **Sage is always an option** - If no @mention and no clear continuity, message goes to Sage
+2. **Conversation history is COMPLETE** - Sage sees ALL messages (up to last 20), including previous Sage responses
+3. **taskComplete controls loop** - When true, agent execution terminates; when false, continues
+4. **Chat response exits immediately** - FinalStep='Chat' sets terminate=true, returning control to user
+5. **Payload persists across turns** - Changes via `payloadChangeRequest` are carried forward to next iteration
+6. **Multi-turn workflows possible** - User can respond to Sage's chat messages, creating approval loops
+7. **Artifacts are included in context** - Previous artifacts loaded and appended to message content for LLM context
+8. **Single task is optimized** - Single-task graphs use direct agent execution instead of task orchestration
+
