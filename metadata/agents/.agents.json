@@ -313,7 +313,7 @@
   {
     "fields": {
       "Name": "Marketing Agent",
-      "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials.",
+      "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials. Good at writing blog post.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 1,
@@ -887,8 +887,8 @@
       "ID": "4A7B4F1D-C536-409F-9206-F36FDEE64EDF"
     },
     "sync": {
-      "lastModified": "2025-10-14T04:02:48.476Z",
-      "checksum": "107d501e056c33d36627c4b775cc4574d2dcf0c0c005c8eab5605d609a85ae80"
+      "lastModified": "2025-10-16T17:53:44.563Z",
+      "checksum": "7b01594b5f6f6d822bf6b675017eb3c1e8be7342b95c601ccd586b29ad19713c"
     }
   }
 ]

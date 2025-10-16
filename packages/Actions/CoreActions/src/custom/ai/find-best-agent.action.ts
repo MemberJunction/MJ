@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { AgentEmbeddingService } from "@memberjunction/ai-agents";
+import { AIAgentPermissionHelper, AIEngineBase } from "@memberjunction/ai-engine-base";
 
 /**
  * Action that finds the best-matching AI agents for a given task using embedding-based semantic search.
@@ -106,6 +107,15 @@ export class FindBestAgentAction extends BaseAction {
                 };
             }
 
+            // Validate contextUser is provided for permission filtering
+            if (!params.ContextUser) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_USER_CONTEXT',
+                    Message: 'User context required for permission filtering'
+                };
+            }
+
             // Ensure embedding service is initialized
             await this.ensureInitialized(params.ContextUser);
 
@@ -117,28 +127,48 @@ export class FindBestAgentAction extends BaseAction {
                 };
             }
 
-            // Find similar agents
+            // Find similar agents - get more results to account for permission filtering
             const matchedAgents = await FindBestAgentAction.embeddingService.findSimilarAgents(
                 taskDescription,
-                maxResults,
+                maxResults * 3, // Get 3x results to account for filtering
                 minimumSimilarityScore
             );
 
-            // Filter out inactive agents if requested
-            const filteredAgents = includeInactive
-                ? matchedAgents
-                : matchedAgents.filter(a => a.status === 'Active');
+            // Filter by user permissions - user must have 'run' permission
+            const accessibleAgents = await AIAgentPermissionHelper.GetAccessibleAgents(
+                params.ContextUser,
+                'run'
+            );
+            const accessibleAgentIds = new Set(accessibleAgents.map(a => a.ID));
+
+            // Filter matched agents by permissions AND status
+            const permissionFilteredAgents = matchedAgents.filter(a => accessibleAgentIds.has(a.agentId));
+            const statusFilteredAgents = includeInactive
+                ? permissionFilteredAgents
+                : permissionFilteredAgents.filter(a => a.status === 'Active');
+
+            // Limit to maxResults after all filtering
+            const filteredAgents = statusFilteredAgents.slice(0, maxResults);
 
             if (filteredAgents.length === 0) {
                 return {
                     Success: false,
                     ResultCode: 'NO_AGENTS_FOUND',
-                    Message: `No agents found matching the criteria (minimum similarity: ${minimumSimilarityScore})`
+                    Message: `No accessible agents found matching the criteria (minimum similarity: ${minimumSimilarityScore}). You may not have permission to run the matching agents.`
                 };
             }
 
-            // Get the best agent (highest similarity score)
-            const bestAgent = filteredAgents[0];
+            // Load AIEngineBase to get agent actions
+            await AIEngineBase.Instance.Config(false, params.ContextUser);
+
+            // Create map of agentId -> action names
+            const agentActionsMap = new Map<string, string[]>();
+            for (const agent of filteredAgents) {
+                const agentActions = AIEngineBase.Instance.AgentActions
+                    .filter(aa => aa.AgentID === agent.agentId && aa.Status === 'Active')
+                    .map(aa => aa.Action);  // Get action name
+                agentActionsMap.set(agent.agentId, agentActions);
+            }
 
             // Add output parameters
             params.Params.push({
@@ -148,32 +178,21 @@ export class FindBestAgentAction extends BaseAction {
             });
 
             params.Params.push({
-                Name: 'BestAgent',
-                Type: 'Output',
-                Value: bestAgent
-            });
-
-            params.Params.push({
                 Name: 'MatchCount',
                 Type: 'Output',
                 Value: filteredAgents.length
             });
 
-            // Build response message
+            // Build response message with full descriptions and actions
             const responseData = {
-                message: `Found ${filteredAgents.length} matching agent(s)`,
+                message: `Found ${filteredAgents.length} accessible agent(s)`,
                 taskDescription: taskDescription,
                 matchCount: filteredAgents.length,
-                bestMatch: {
-                    agentName: bestAgent.agentName,
-                    similarityScore: bestAgent.similarityScore,
-                    description: bestAgent.description
-                },
                 allMatches: filteredAgents.map(a => ({
-                    agentId: a.agentId,
                     agentName: a.agentName,
                     similarityScore: Math.round(a.similarityScore * 100) / 100, // Round to 2 decimal places
-                    description: a.description.substring(0, 100) + (a.description.length > 100 ? '...' : '')
+                    description: a.description,  // Full description, no truncation
+                    actions: agentActionsMap.get(a.agentId) || []
                 }))
             };
 
