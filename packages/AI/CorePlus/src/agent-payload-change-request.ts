@@ -223,9 +223,9 @@ export type AgentPayloadChangeRequest<P = any> = {
  */
 export type BaseAgentSuggestedResponse = {
     /**
-     * Text of the response to show the user in the UI
+     * Text of the response to show the user in the UI. This is **required** unless allowInput is true and you want to show a blank input box.
      */
-    text: string;
+    text?: string;
 
     /**
      * If set to true, this option will show default text from the text property but allow the user to edit it. With this option set to true you
