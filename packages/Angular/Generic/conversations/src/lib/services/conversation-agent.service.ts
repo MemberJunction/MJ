@@ -5,7 +5,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
-import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AIAgentEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -135,8 +135,25 @@ export class ConversationAgentService {
       // Note: conversationHistory already includes the current message
       const conversationMessages = await this.buildAgentMessages(conversationHistory);
 
+      // Get current user for permission filtering
+      const currentUser = Metadata.Provider.CurrentUser;
+      if (!currentUser) {
+        console.warn('⚠️ No current user available for permission filtering, using unfiltered agents');
+      }
+
+      // Filter agents by status and hierarchy first
+      const candidateAgents = AIEngineBase.Instance.Agents.filter(
+        a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active'
+      );
+
+      // Filter by user permissions if user context available
+      const availAgents = currentUser
+        ? await this.filterAgentsByPermissions(candidateAgents, currentUser)
+        : candidateAgents;
+
+      console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
+
       // Prepare parameters using the correct ExecuteAgentParams type
-      const availAgents = AIEngineBase.Instance.Agents.filter(a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active');
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
@@ -453,5 +470,38 @@ ${compactHistory}
    */
   clearSession(conversationId: string): void {
     this._sessionIds.delete(conversationId);
+  }
+
+  /**
+   * Filter agents based on user's 'run' permission.
+   * Only returns agents that the user has permission to run.
+   *
+   * @param agents List of candidate agents to filter
+   * @param user User to check permissions for
+   * @returns Filtered list of agents the user can run
+   */
+  private async filterAgentsByPermissions(
+    agents: AIAgentEntityExtended[],
+    user: any
+  ): Promise<AIAgentEntityExtended[]> {
+    const permittedAgents: AIAgentEntityExtended[] = [];
+
+    for (const agent of agents) {
+      try {
+        const hasPermission = await AIAgentPermissionHelper.HasPermission(
+          agent.ID,
+          user,
+          'run'
+        );
+        if (hasPermission) {
+          permittedAgents.push(agent);
+        }
+      } catch (error) {
+        console.error(`Error checking permission for agent ${agent.Name}:`, error);
+        // On error, exclude agent (fail closed)
+      }
+    }
+
+    return permittedAgents;
   }
 }
