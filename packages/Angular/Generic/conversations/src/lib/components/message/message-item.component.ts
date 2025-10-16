@@ -630,9 +630,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Handle suggested response selection
    */
   public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
-    console.log('📤 MessageItemComponent.onSuggestedResponseSelected:', event);
     this.suggestedResponseSelected.emit(event);
-    console.log('✅ Event emitted from MessageItemComponent');
   }
 
 }

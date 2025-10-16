@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, ChangeDetectorRef, OnInit, AfterViewInit } from '@angular/core';
 import { SuggestedResponse } from '../../models/conversation-state.model';
 
 /**
@@ -10,7 +10,7 @@ import { SuggestedResponse } from '../../models/conversation-state.model';
   templateUrl: './suggested-responses.component.html',
   styleUrls: ['./suggested-responses.component.css']
 })
-export class SuggestedResponsesComponent {
+export class SuggestedResponsesComponent implements OnInit, AfterViewInit {
   @Input() suggestedResponses: SuggestedResponse[] = [];
   @Input() disabled: boolean = false;
   @Input() isLastMessage: boolean = false;
@@ -22,7 +22,25 @@ export class SuggestedResponsesComponent {
 
   public customInputValue: string = '';
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+    console.log('🏗️ SuggestedResponsesComponent constructed');
+  }
+
+  ngOnInit() {
+    console.log('🎬 SuggestedResponsesComponent.ngOnInit', {
+      suggestedResponses: this.suggestedResponses,
+      disabled: this.disabled,
+      isLastMessage: this.isLastMessage,
+      isConversationOwner: this.isConversationOwner,
+      isVisible: this.isVisible,
+      regularResponses: this.regularResponses,
+      regularResponsesLength: this.regularResponses.length
+    });
+  }
+
+  ngAfterViewInit() {
+    console.log('👁️ SuggestedResponsesComponent.ngAfterViewInit - component rendered');
+  }
 
   /**
    * Get all regular button responses (not input fields)
@@ -46,25 +64,22 @@ export class SuggestedResponsesComponent {
     return this.isLastMessage && this.isConversationOwner && this.suggestedResponses.length > 0;
   }
 
-
-  public test() {
-    alert("hi")
-  }
   /**
    * Handle regular button click
    */
   public onResponseClick(response: SuggestedResponse): void {
-    console.log('🔘 SuggestedResponsesComponent.onResponseClick:', {
-      text: response.text,
+    console.log('🖱️ BUTTON CLICKED!', {
+      response,
       disabled: this.disabled,
       willEmit: !this.disabled
     });
 
     if (!this.disabled) {
+      console.log('📤 Emitting responseSelected event');
       this.responseSelected.emit({ text: response.text });
-      console.log('✅ Event emitted from SuggestedResponsesComponent');
+      console.log('✅ Event emitted');
     } else {
-      console.warn('⚠️ Click ignored - component is disabled');
+      console.warn('⚠️ Button is disabled, not emitting');
     }
   }
 
@@ -98,5 +113,12 @@ export class SuggestedResponsesComponent {
       event.preventDefault();
       this.onInputSubmit();
     }
+  }
+
+  /**
+   * Track by function for ngFor to help Angular track items
+   */
+  public trackByIndex(index: number): number {
+    return index;
   }
 }

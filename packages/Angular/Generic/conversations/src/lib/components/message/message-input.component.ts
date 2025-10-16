@@ -351,6 +351,48 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   }
 
   /**
+   * Send a message with custom text WITHOUT modifying the visible messageText input
+   * Used for suggested responses - sends message silently without affecting user's current input
+   */
+  public async sendMessageWithText(text: string): Promise<void> {
+    if (!text || !text.trim()) {
+      return;
+    }
+
+    if (this.isSending) {
+      return;
+    }
+
+    this.isSending = true;
+    try {
+      const detail = await this.dataCache.createConversationDetail(this.currentUser);
+      detail.ConversationID = this.conversationId;
+      detail.Message = text.trim();
+      detail.Role = 'User';
+
+      if (this.parentMessageId) {
+        detail.ParentID = this.parentMessageId;
+      }
+
+      const saved = await detail.Save();
+
+      if (saved) {
+        this.messageSent.emit(detail);
+
+        const mentionResult = this.parseMentionsFromMessage(detail.Message);
+        const isFirstMessage = this.conversationHistory.length === 0;
+        await this.routeMessage(detail, mentionResult, isFirstMessage);
+      } else {
+        this.handleSendFailure(detail);
+      }
+    } catch (error) {
+      this.handleSendError(error);
+    } finally {
+      this.isSending = false;
+    }
+  }
+
+  /**
    * Creates and configures a new conversation detail message
    */
   private async createMessageDetail(): Promise<ConversationDetailEntity> {

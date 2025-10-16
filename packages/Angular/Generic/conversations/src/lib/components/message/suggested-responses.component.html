@@ -5,10 +5,13 @@
   </div>
 
   <div class="suggested-responses-buttons">
+    <!-- TEST: Native onclick
+    <button type="button" onclick="alert('Native onclick works!');" style="background: red; color: white;">TEST</button>
+ -->
     <!-- Regular button responses (allowInput: false) -->
-     <span (click)="onResponseClick(regularResponses[0])">hi</span>
     <button
-      *ngFor="let response of regularResponses"
+      *ngFor="let response of regularResponses; trackBy: trackByIndex"
+      type="button"
       class="suggested-response-btn"
       [disabled]="disabled"
       (click)="onResponseClick(response)"

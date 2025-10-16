@@ -638,27 +638,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   /**
    * Handle suggested response selection from user
-   * Sends the selected response as a new user message
+   * Sends the selected response as a new user message WITHOUT modifying the visible input
    */
   async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
-    // Determine final message text - use custom input if provided, otherwise use the suggested text
     const messageText = event.customInput || event.text;
 
-    console.log('🎯 ConversationChatAreaComponent.onSuggestedResponseSelected:', {
-      originalText: event.text,
-      customInput: event.customInput,
-      finalMessage: messageText,
-      hasMessageInput: !!this.messageInputComponent
-    });
-
-    // Set the message text in the input component and trigger send
     if (this.messageInputComponent) {
-      console.log('📝 Setting message text and calling onSend()');
-      this.messageInputComponent.messageText = messageText;
-      await this.messageInputComponent.onSend();
-      console.log('✅ Message sent successfully');
+      await this.messageInputComponent.sendMessageWithText(messageText);
     } else {
-      console.error('❌ MessageInputComponent not available - cannot send suggested response');
+      console.error('MessageInputComponent not available');
     }
   }
 
