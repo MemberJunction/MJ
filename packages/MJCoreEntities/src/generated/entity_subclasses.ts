@@ -3871,6 +3871,11 @@ export const ConversationDetailSchema = z.object({
     *   * Complete
     *   * Error
         * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
+    SuggestedResponses: z.string().nullable().describe(`
+        * * Field Name: SuggestedResponses
+        * * Display Name: Suggested Responses
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -25859,6 +25864,19 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
     set Status(value: 'Complete' | 'Error' | 'In-Progress') {
         this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: SuggestedResponses
+    * * Display Name: Suggested Responses
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).
+    */
+    get SuggestedResponses(): string | null {
+        return this.Get('SuggestedResponses');
+    }
+    set SuggestedResponses(value: string | null) {
+        this.Set('SuggestedResponses', value);
     }
 
     /**
