@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vectors-memory",
-  "version": "2.106.0",
+  "version": "2.107.0",
   "description": "MemberJunction: AI Vectors In-Memory Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

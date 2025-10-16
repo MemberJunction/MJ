@@ -98,10 +98,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.updateDateFilterVisibility();
     }
 
-    // React to artifact map changes (when artifacts are added/updated)
-    if (changes['artifactMap'] && this.messages && this.messageContainerRef) {
-      this.updateMessages(this.messages);
-    }
+    // REMOVED: artifactMap change handling - artifacts are now pre-loaded during
+    // peripheral data load, so no need to re-render when map is populated
+    // The initial messages render will already have all artifact data available
   }
 
   ngAfterViewChecked() {

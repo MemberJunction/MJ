@@ -43130,6 +43130,9 @@ export class MJAIAgentRelationship_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`}) 
+    SubAgentOutputMapping?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -43156,6 +43159,9 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SubAgentOutputMapping: string | null;
 }
     
 
@@ -43175,6 +43181,9 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     Status?: string;
+
+    @Field({ nullable: true })
+    SubAgentOutputMapping?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

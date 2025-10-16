@@ -1,5 +1,13 @@
 # @memberjunction/react-test-harness
 
+## 2.107.0
+
+### Patch Changes
+
+- b4a7797: Update Component Linter rules for RunQuery
+  - @memberjunction/interactive-component-types@2.107.0
+  - @memberjunction/react-runtime@2.107.0
+
 ## 2.106.0
 
 ### Patch Changes

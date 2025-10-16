@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.107.0
+- @memberjunction/aiengine@2.107.0
+- @memberjunction/ai-provider-bundle@2.107.0
+- @memberjunction/actions@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/core-entities-server@2.107.0
+- @memberjunction/global@2.107.0
+- @memberjunction/sqlserver-dataprovider@2.107.0
+
 ## 2.106.0
 
 ### Minor Changes

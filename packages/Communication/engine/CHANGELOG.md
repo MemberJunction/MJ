@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/communication-engine
 
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/global@2.107.0
+- @memberjunction/templates@2.107.0
+
 ## 2.106.0
 
 ### Patch Changes

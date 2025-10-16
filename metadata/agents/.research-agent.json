@@ -1,10 +1,223 @@
 [
   {
     "fields": {
-      "Name": "Research Agent",
-      "Description": "Comprehensive research agent capable of gathering information from multiple sources, comparing and validating data, and synthesizing findings into detailed reports. Uses iterative methodology to ensure thorough research with source validation and contradiction detection.",
+      "Name": "Database Research Agent",
+      "Description": "Specialized sub-agent for conducting database research. Explores schema structure, formulates optimized SQL queries, executes research queries with security validation, and synthesizes findings from database analysis. Works as a component of the main Research Agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-database"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Database Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C9ECAB8-139C-4452-8EF3-896D2E1834CE"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.428Z",
+            "checksum": "d5a50f5823a63b71f75c6f7f3e9070dfc92bb010c6ab8428d5b5570fd60d67eb"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Explore Database Schema",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "644D35FA-3245-4928-A8AD-4E70446054C2"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.445Z",
+            "checksum": "e15778482d8cc67baa2d928d97304a8e703cba0a5fc8475f8e2438ed4fc65e05"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Execute Research Query",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "ED43ED4D-2701-4978-A971-A00106E8757F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.455Z",
+            "checksum": "616a50e782ee92895f6f2982620728edf2559ee9183981058c4d8946f5b18fc8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:37.228Z",
+      "checksum": "7d735f43ae1206b0ca224480e1574e0290aa987a515aee269fd95a5b3b2b0b3f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Research Agent",
+      "Description": "Specialized agent for document and file system research. Expert at file type handling, content extraction strategies, document structure understanding, and cross-document synthesis. Handles storage provider enumeration, file search, and document analysis.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-folder-open"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=File Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CDC20F26-DE77-42D1-A30F-A3B34EBA8106"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.465Z",
+            "checksum": "824b9cf2907c06be91b2937035cf6d889b4ed568f50a0233147d394900893b9a"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=List Storage Providers",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1755B56E-6648-4198-9B70-0DFED107F827"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.474Z",
+            "checksum": "3bbe96df0ef692283ff09753b3d6b646f731257abcdba6959f082be2fe0862af"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Search Storage Files",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5CBAF259-2028-4643-981F-6B740B7C4CB2"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.485Z",
+            "checksum": "50cf04ad8ea727f08056ca68fe58f56412df1315f8726ef227853a78cd257d9c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:37.245Z",
+      "checksum": "52f208ffdaf5e5178ee559c2d1c214a1b8cffdfc48919ab656e14522911ac06e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Web Research Agent",
+      "Description": "Specialized agent for internet and web-based research. Expert at search query formulation, source credibility evaluation, citation extraction, and content summarization. Handles Google search, web page retrieval, and content analysis.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-globe"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Web Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A43CFA03-C714-4BEF-80CE-C0D120EF6EB8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.495Z",
+            "checksum": "926d82c06919a79d182e63ed7de90edc87458169339ef544fa28823d58986e28"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Google Custom Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "206B25BD-3E23-48DF-96D6-651A8459BEDD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.503Z",
+            "checksum": "fcde5d995f0d27d73dc9a26b97ab447c2e838cc334af18c70b6baea61f951032"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Page Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C9C85B26-9375-4915-B50F-0895D64FC2FA"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.513Z",
+            "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Summarize Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6D3D1967-346E-494F-B448-D0B23F88FCD7"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.521Z",
+            "checksum": "e4a517c48df4a1d9a19b7d584214d6d9a7ac2371073b79e72070e9d4cb0e1b75"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:37.257Z",
+      "checksum": "3c1fb400d7f69026ffd5c89783c3019a649dd5e7c2fb855053de54bdc7e221d1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Research Agent",
+      "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research), and synthesizes findings into detailed reports. Uses iterative methodology with source validation and contradiction detection.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-magnifying-glass-chart"
@@ -22,24 +235,52 @@
             "ID": "D66B33D5-9066-4563-BF1B-88F28DFD2BCA"
           },
           "sync": {
-            "lastModified": "2025-10-15T15:03:05.491Z",
+            "lastModified": "2025-10-15T23:02:37.612Z",
             "checksum": "b8078017d3b67732526530140a85c0410f1c395cd9c36a6d4bfe82bb2a6ebd11"
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Relationships": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Google Custom Search",
+            "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
             "Status": "Active"
           },
           "primaryKey": {
-            "ID": "2952612E-C0F2-490E-BC69-896D67A3E37E"
+            "ID": "EC2EE264-31B8-42CE-AE9A-9177ACFC2947"
           },
           "sync": {
-            "lastModified": "2025-10-15T15:03:05.510Z",
-            "checksum": "fcde5d995f0d27d73dc9a26b97ab447c2e838cc334af18c70b6baea61f951032"
+            "lastModified": "2025-10-15T23:02:37.578Z",
+            "checksum": "11fff3ace1b1d86aac807304b00e2ec209b8f0370729b26424a66506a195f6de"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "8DB9A71A-FD38-43A3-BE9C-759F4332ADD8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.587Z",
+            "checksum": "a974c6c30bd28c43c059f3473ae1c0cfac69db01e4f227cedae34277a5074cd1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=File Research Agent",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.597Z",
+            "checksum": "9343555774291c901466c9a1b3926d6635fd064760a4a62a49acd175029944d7"
           }
         }
       ]
@@ -48,8 +289,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-15T15:03:05.436Z",
-      "checksum": "7ebbfa86f0b91290121421cf82e5b4c1922851876acce3b03e46d9174c838749"
+      "lastModified": "2025-10-15T23:02:37.280Z",
+      "checksum": "d5c7b0cb08060c496e28d9416ab4a7518dda8d3f678da504aa6f0f0839cebc3a"
     }
   }
 ]

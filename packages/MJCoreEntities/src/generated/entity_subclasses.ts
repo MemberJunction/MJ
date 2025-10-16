@@ -8002,6 +8002,11 @@ export const AIAgentRelationshipSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SubAgentOutputMapping: z.string().nullable().describe(`
+        * * Field Name: SubAgentOutputMapping
+        * * Display Name: Sub Agent Output Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -36365,6 +36370,19 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SubAgentOutputMapping
+    * * Display Name: Sub Agent Output Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.
+    */
+    get SubAgentOutputMapping(): string | null {
+        return this.Get('SubAgentOutputMapping');
+    }
+    set SubAgentOutputMapping(value: string | null) {
+        this.Set('SubAgentOutputMapping', value);
     }
 
     /**

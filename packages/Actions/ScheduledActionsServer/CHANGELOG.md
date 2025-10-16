@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.107.0
+
+### Minor Changes
+
+- e05a672: migration
+- 0be127f: migration
+
+### Patch Changes
+
+- Updated dependencies [e05a672]
+- Updated dependencies [0be127f]
+  - @memberjunction/scheduled-actions@2.107.0
+  - @memberjunction/actions-content-autotag@2.107.0
+  - @memberjunction/ai@2.107.0
+  - @memberjunction/ai-mistral@2.107.0
+  - @memberjunction/ai-openai@2.107.0
+  - @memberjunction/ai-vectors-pinecone@2.107.0
+  - @memberjunction/ai-vector-sync@2.107.0
+  - @memberjunction/actions@2.107.0
+  - @memberjunction/core@2.107.0
+  - @memberjunction/core-entities@2.107.0
+
 ## 2.106.0
 
 ### Patch Changes

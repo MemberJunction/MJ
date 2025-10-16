@@ -35,8 +35,14 @@
 }
 
 .message-input:disabled {
-  background: #F4F4F4;
-  cursor: not-allowed;
+  background: transparent;
+  cursor: wait;
+}
+
+// Subtle visual feedback when checking intent (no ugly gray background)
+.message-input.intent-checking {
+  opacity: 0.6;
+  transition: opacity 0.2s;
 }
 .input-actions {
   display: flex;
