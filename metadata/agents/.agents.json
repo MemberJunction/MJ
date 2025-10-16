@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Demo Loop Agent",
-      "Description": "Simple Agent Demo! This agent demonstrates the basic functionality of a loop agent, capable of executing multiple actions in paralell with no determined path - the AI determines the pathway.",
+      "Description": "Simple demo agent showcasing loop agent capabilities. Can perform web searches, retrieve stock prices, get weather forecasts, look up census data, and fetch web page content. The AI dynamically determines the pathway and can execute multiple actions in parallel with no predetermined sequence.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -104,8 +104,8 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:43.044Z",
-      "checksum": "86d73c0802321ec23bb20a5f629cf10a8fddf4cb9b9655d6ad349de21579738d"
+      "lastModified": "2025-10-16T01:32:11.964Z",
+      "checksum": "d6ed15dec61f6b857e6a3c15db574c4426a4da0092630a4fb591cba49d338be8"
     }
   },
   {
