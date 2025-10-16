@@ -173,6 +173,11 @@ export type ExecuteAgentResult<P = any> = {
      * If not specified, falls back to the agent's default artifact type configuration.
      */
     payloadArtifactTypeID?: string;
+    /**
+     * Optional suggested responses to show the user for quick selection in a UI.
+     * Populated when the agent's final step is 'Chat' or 'Success' and includes suggested responses.
+     */
+    suggestedResponses?: BaseAgentSuggestedResponse[];
 }
 
 /**

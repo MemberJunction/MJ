@@ -242,13 +242,17 @@
   {
     "fields": {
       "Name": "Research Agent",
-      "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research), and synthesizes findings into detailed reports. Uses iterative methodology with source validation and contradiction detection.",
+      "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research, Report Writer), and coordinates the research workflow. Uses iterative methodology with source validation and contradiction detection. Delegates final synthesis and report generation to the Report Writer sub-agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
-      "IconClass": "fa-solid fa-magnifying-glass-chart"
+      "IconClass": "fa-solid fa-magnifying-glass-chart",
+      "PayloadSelfWritePaths": "[\"metadata\", \"plan\", \"sources\", \"findings\", \"comparisons\", \"contradictions\", \"iterations\", \"webResearch\", \"databaseResearch\", \"fileResearch\"]",
+      "FinalPayloadValidation": "{\"required\": [\"report\", \"synthesis\"], \"properties\": {\"report\": {\"required\": [\"name\", \"description\", \"markdown\"]}, \"synthesis\": {\"required\": [\"executiveSummary\", \"findings\", \"confidenceAssessment\", \"keyTakeaways\"]}}}",
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -320,8 +324,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-15T23:02:37.280Z",
-      "checksum": "d5c7b0cb08060c496e28d9416ab4a7518dda8d3f678da504aa6f0f0839cebc3a"
+      "lastModified": "2025-10-16T14:08:03.034Z",
+      "checksum": "3b0e6c07fb726b22ae334d7fef1b7d4ccb1a1ae1eba4fce8b5900d6e438fdffb"
     }
   }
 ]

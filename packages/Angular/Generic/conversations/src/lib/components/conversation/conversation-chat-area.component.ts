@@ -7,6 +7,7 @@ import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { MessageInputComponent } from '../message/message-input.component';
 import { Subject } from 'rxjs';
 
 @Component({
@@ -23,6 +24,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   @Output() taskClicked = new EventEmitter<TaskEntity>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
+  @ViewChild(MessageInputComponent) private messageInputComponent!: MessageInputComponent;
 
   public messages: ConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
@@ -632,6 +634,29 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     console.log('Message edited:', message.ID);
     // The message entity is already updated in place, so no need to reload
     // Just ensure the UI reflects the changes
+  }
+
+  /**
+   * Handle suggested response selection from user
+   * Sends the selected response as a new user message
+   */
+  async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    // Determine final message text - use custom input if provided, otherwise use the suggested text
+    const messageText = event.customInput || event.text;
+
+    console.log('Suggested response selected:', {
+      originalText: event.text,
+      customInput: event.customInput,
+      finalMessage: messageText
+    });
+
+    // Set the message text in the input component and trigger send
+    if (this.messageInputComponent) {
+      this.messageInputComponent.messageText = messageText;
+      await this.messageInputComponent.onSend();
+    } else {
+      console.error('MessageInputComponent not available - cannot send suggested response');
+    }
   }
 
   onRetryMessage(message: ConversationDetailEntity): void {

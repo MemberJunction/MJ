@@ -3815,7 +3815,7 @@ export class BaseAgent {
         // Chat steps are successful - they indicate a need for user interaction
         await this.finalizeStepEntity(stepEntity, true);
         
-        return { 
+        return {
             step: 'Chat',
             terminate: true,
             message: previousDecision.message || 'Additional information needed from user',
@@ -3824,6 +3824,7 @@ export class BaseAgent {
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
             newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
+            suggestedResponses: previousDecision.suggestedResponses
         };
     }
 
@@ -3931,7 +3932,8 @@ export class BaseAgent {
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
-            agentRun: this._agentRun!
+            agentRun: this._agentRun!,
+            suggestedResponses: finalStep.suggestedResponses
         };
     }
 
