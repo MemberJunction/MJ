@@ -17,6 +17,7 @@ import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended,
 import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
+import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 
 /**
  * Container component for displaying a list of messages
@@ -33,7 +34,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
   @Input() public isProcessing: boolean = false;
-  @Input() public artifactMap: Map<string, Array<{artifact: ArtifactEntity; version: ArtifactVersionEntity}>> = new Map();
+  @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
@@ -97,10 +98,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.updateDateFilterVisibility();
     }
 
-    // React to artifact map changes (when artifacts are added/updated)
-    if (changes['artifactMap'] && this.messages && this.messageContainerRef) {
-      this.updateMessages(this.messages);
-    }
+    // REMOVED: artifactMap change handling - artifacts are now pre-loaded during
+    // peripheral data load, so no need to re-render when map is populated
+    // The initial messages render will already have all artifact data available
   }
 
   ngAfterViewChecked() {
@@ -164,10 +164,29 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.message = message;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
+
+          // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
           const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
-          instance.artifact = firstArtifact?.artifact;
-          instance.artifactVersion = firstArtifact?.version;
+
+          // Trigger lazy load and set properties
+          if (firstArtifact) {
+            // Lazy load in background - don't block UI
+            Promise.all([
+              firstArtifact.getArtifact(),
+              firstArtifact.getVersion()
+            ]).then(([artifact, version]) => {
+              instance.artifact = artifact;
+              instance.artifactVersion = version;
+              this.cdRef.detectChanges();
+            }).catch(err => {
+              console.error('Failed to lazy-load artifact:', err);
+            });
+          } else {
+            instance.artifact = undefined;
+            instance.artifactVersion = undefined;
+          }
+
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
         } else {
@@ -181,10 +200,26 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.currentUser = this.currentUser;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
+
+          // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
           const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
-          instance.artifact = firstArtifact?.artifact;
-          instance.artifactVersion = firstArtifact?.version;
+
+          // Trigger lazy load and set properties
+          if (firstArtifact) {
+            // Lazy load in background - don't block UI
+            Promise.all([
+              firstArtifact.getArtifact(),
+              firstArtifact.getVersion()
+            ]).then(([artifact, version]) => {
+              instance.artifact = artifact;
+              instance.artifactVersion = version;
+              this.cdRef.detectChanges();
+            }).catch(err => {
+              console.error('Failed to lazy-load artifact:', err);
+            });
+          }
+
           // Pass agent run from map (loaded once per conversation)
           const agentRun = this.agentRunMap.get(message.ID) || null;
           console.log(`✨ Creating new message ${message.ID} component with agentRun:`, {

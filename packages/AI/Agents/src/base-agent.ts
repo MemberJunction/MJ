@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage } from '@memberjunction/ai';
@@ -2530,7 +2530,7 @@ export class BaseAgent {
             case 'Retry':
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
-                return await this.executeSubAgentStep<P, P>(params, previousDecision!);
+                return await this.processSubAgentStep<P, P>(params, previousDecision!);
             case 'Actions':
                 return await this.executeActionsStep(params, config, previousDecision);
             case 'Chat':
@@ -2825,11 +2825,12 @@ export class BaseAgent {
 
 
     /**
-     * Executes a sub-agent step and tracks it.
-     * 
+     * Executes a child sub-agent step (ParentID relationship) and tracks it.
+     * Child agents use direct payload inheritance with downstream/upstream paths.
+     *
      * @private
      */
-    private async executeSubAgentStep<SC = any, SR = any>(
+    private async executeChildSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
     ): Promise<BaseAgentNextStep<SR, SC>> {
@@ -3162,6 +3163,379 @@ export class BaseAgent {
                 newPayload: payload
             };
         }
+    }
+
+    /**
+     * Routes sub-agent execution to the appropriate handler based on relationship type.
+     * Child agents (ParentID) use direct payload coupling.
+     * Related agents (AgentRelationships) use message-based coupling with optional output mapping.
+     *
+     * @private
+     */
+    private async processSubAgentStep<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision?: BaseAgentNextStep<SR, SC>,
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
+        const name = subAgentRequest?.name;
+
+        if (!name) {
+            return {
+                step: 'Failed',
+                terminate: false,
+                errorMessage: 'Sub-agent name is required',
+                previousPayload: previousDecision?.newPayload,
+                newPayload: previousDecision?.newPayload
+            };
+        }
+
+        // Find the sub-agent - check both child and related agents
+        const childAgents = AIEngine.Instance.Agents.filter(a =>
+            a.ParentID === params.agent.ID &&
+            a.Status === 'Active'
+        );
+        const childAgent = childAgents.find(a => a.Name.trim().toLowerCase() === name.trim().toLowerCase());
+
+        if (childAgent) {
+            // This is a child agent - use direct payload coupling
+            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision);
+        }
+
+        // Check for related agent
+        const activeRelationships = AIEngine.Instance.AgentRelationships.filter(ar =>
+            ar.AgentID === params.agent.ID &&
+            ar.Status === 'Active'
+        );
+
+        for (const relationship of activeRelationships) {
+            const relatedAgent = AIEngine.Instance.Agents.find(a =>
+                a.ID === relationship.SubAgentID &&
+                a.Status === 'Active'
+            );
+
+            if (relatedAgent && relatedAgent.Name.trim().toLowerCase() === name.trim().toLowerCase()) {
+                // This is a related agent - use message-based coupling
+                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship);
+            }
+        }
+
+        // Sub-agent not found
+        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+            agent: params.agent,
+            category: 'SubAgentExecution'
+        });
+
+        return {
+            step: 'Retry',
+            terminate: false,
+            errorMessage: `Sub-agent '${name}' not found or not active`,
+            previousPayload: previousDecision?.newPayload,
+            newPayload: previousDecision?.newPayload
+        };
+    }
+
+    /**
+     * Executes a related sub-agent step (AgentRelationships) and tracks it.
+     * Related agents use message-based communication with independent payloads.
+     * Optional output mapping can merge sub-agent results back to parent payload.
+     *
+     * @private
+     */
+    private async executeRelatedSubAgentStep<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentEntity: AIAgentEntityExtended,
+        relationship: AIAgentRelationshipEntity
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
+
+        // Check for cancellation before starting
+        if (params.cancellationToken?.aborted) {
+            throw new Error('Cancelled before related sub-agent execution');
+        }
+
+        // Report sub-agent execution progress
+        params.onProgress?.({
+            step: 'subagent_execution',
+            percentage: 60,
+            message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
+            metadata: {
+                agentName: params.agent.Name,
+                subAgentName: subAgentRequest.name,
+                reason: subAgentRequest.message,
+                relationshipType: 'related'
+            }
+        });
+
+        // Add assistant message indicating we're executing a related sub-agent
+        params.conversationMessages.push({
+            role: 'assistant',
+            content: `I'm delegating this task to the "${subAgentRequest.name}" agent.\n\nReason: ${subAgentRequest.message}`
+        });
+
+        // Prepare input data for the step
+        const inputData = {
+            agentName: params.agent.Name,
+            subAgentName: subAgentRequest.name,
+            message: subAgentRequest.message,
+            terminateAfter: subAgentRequest.terminateAfter,
+            conversationMessages: params.conversationMessages,
+            parentAgentHierarchy: this._agentHierarchy,
+            relationshipType: 'related'
+        };
+
+        const stepEntity = await this.createStepEntity(
+            'Sub-Agent',
+            `Execute Related Sub-Agent: ${subAgentRequest.name}`,
+            params.contextUser,
+            subAgentEntity.ID,
+            inputData,
+            undefined,
+            previousDecision.newPayload
+        );
+
+        // Increment execution count for this sub-agent
+        this.incrementExecutionCount(subAgentEntity.ID);
+
+        try {
+            // Related agents don't use payload inheritance - they get the message only
+            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
+
+            // Execute related agent with independent payload (no payload parameter)
+            const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
+                params,
+                subAgentRequest,
+                subAgentEntity,
+                stepEntity,
+                undefined // Related agents start with empty/independent payload
+            );
+
+            let mergedPayload = previousDecision.newPayload; // Start with parent's payload
+            let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
+
+            // Note: SubAgentOutputMapping field will be added by CodeGen after migration runs
+            const relationshipWithMapping = relationship as AIAgentRelationshipEntity & { SubAgentOutputMapping?: string };
+
+            if (subAgentResult.success && relationshipWithMapping.SubAgentOutputMapping) {
+                // Apply output mapping if configured
+                const payloadChange = this.applySubAgentOutputMapping(
+                    subAgentResult.payload as unknown as Record<string, unknown>,
+                    previousDecision.newPayload as unknown as Record<string, unknown>,
+                    relationshipWithMapping.SubAgentOutputMapping
+                );
+
+                if (payloadChange && payloadChange.updateElements) {
+                    // Merge the mapped changes into parent payload
+                    const mergeResult = this._payloadManager.applyAgentChangeRequest<SR>(
+                        previousDecision.newPayload,
+                        payloadChange as AgentPayloadChangeRequest<SR>,
+                        {
+                            validateChanges: true,
+                            logChanges: true,
+                            analyzeChanges: true,
+                            generateDiff: true,
+                            agentName: `${subAgentRequest.name} (related agent mapping)`,
+                            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+                        }
+                    );
+
+                    mergedPayload = mergeResult.result;
+
+                    // Track the mapping operation
+                    currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeResult);
+
+                    if (mergeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                        LogStatus(`Related sub-agent mapping warnings: ${mergeResult.warnings.join('; ')}`);
+                    }
+                }
+            }
+
+            // Check if we should terminate after this sub-agent
+            const shouldTerminate = subAgentRequest.terminateAfter === true;
+
+            // Prepare output data
+            const outputData = {
+                subAgentResult: {
+                    success: subAgentResult.success,
+                    finalStep: subAgentResult.agentRun?.FinalStep,
+                    errorMessage: subAgentResult.agentRun?.ErrorMessage,
+                    stepCount: subAgentResult.agentRun?.Steps?.length || 0,
+                    hasMergedPayload: !!(relationshipWithMapping.SubAgentOutputMapping && mergedPayload !== previousDecision.newPayload)
+                },
+                shouldTerminate: shouldTerminate,
+                nextStep: shouldTerminate ? 'success' : 'retry',
+                ...(currentStepPayloadChangeResult && {
+                    payloadChangeResult: currentStepPayloadChangeResult
+                })
+            };
+
+            // Finalize step entity
+            await this.finalizeStepEntity(
+                stepEntity,
+                subAgentResult.success,
+                subAgentResult.agentRun?.ErrorMessage,
+                outputData
+            );
+
+            // Check if sub-agent returned a Chat step
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return {
+                    step: 'Chat',
+                    terminate: true,
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: previousDecision?.newPayload
+                };
+            }
+
+            // Add sub-agent result to conversation as user message
+            const subAgentSummary = {
+                agentName: params.agent.Name,
+                subAgentName: subAgentRequest.name,
+                success: subAgentResult.success,
+                payload: subAgentResult.payload,
+                errorMessage: subAgentResult.agentRun?.ErrorMessage
+            };
+
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Related sub-agent "${subAgentRequest.name}" completed:\n${JSON.stringify(subAgentSummary, null, 2)}`
+            });
+
+            // Set PayloadAtEnd with the merged payload
+            if (stepEntity) {
+                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+            }
+
+            // Update the agent run's current payload
+            if (this._agentRun) {
+                this._agentRun.FinalPayloadObject = mergedPayload;
+            }
+
+            return {
+                ...subAgentResult,
+                step: subAgentResult.success ? 'Success' : 'Failed',
+                terminate: shouldTerminate,
+                previousPayload: previousDecision?.newPayload,
+                newPayload: mergedPayload
+            };
+        } catch (error) {
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
+            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
+            await this.finalizeStepEntity(stepEntity, false, error.message);
+
+            return {
+                errorMessage: `Related sub-agent execution failed: ${(error as Error).message}`,
+                step: 'Failed',
+                terminate: false,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+    }
+
+    /**
+     * Applies sub-agent output mapping to update the parent payload.
+     * Maps sub-agent result payload paths to parent payload paths.
+     * Mirrors the action output mapping pattern used by Flow agents.
+     *
+     * @private
+     */
+    private applySubAgentOutputMapping<P>(
+        subAgentResult: Record<string, unknown>,
+        _parentPayload: Record<string, unknown>,
+        mappingConfig: string
+    ): AgentPayloadChangeRequest<P> | null {
+        try {
+            const mapping: Record<string, string> = JSON.parse(mappingConfig);
+            const updateObj: Record<string, unknown> = {};
+
+            for (const [subAgentPath, parentPath] of Object.entries(mapping)) {
+                let value: unknown;
+
+                if (subAgentPath === '*') {
+                    // Wildcard - capture entire sub-agent result
+                    value = subAgentResult;
+                } else {
+                    // Extract from sub-agent result using dot notation
+                    value = this.getValueFromPath(subAgentResult, subAgentPath);
+                }
+
+                if (value !== undefined) {
+                    // Parse the parent path and build nested object
+                    const pathParts = parentPath.split('.');
+                    let current = updateObj;
+
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        const part = pathParts[i];
+                        if (!(part in current)) {
+                            current[part] = {};
+                        }
+                        current = current[part] as Record<string, unknown>;
+                    }
+
+                    current[pathParts[pathParts.length - 1]] = value;
+                }
+            }
+
+            if (Object.keys(updateObj).length === 0) {
+                return null;
+            }
+
+            return {
+                updateElements: updateObj as Partial<P>
+            };
+        } catch (error) {
+            LogError(`Failed to parse SubAgentOutputMapping: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Helper method to get a value from a nested object path.
+     * Supports both dot notation (obj.prop) and array indexing (arr[0]).
+     *
+     * @private
+     */
+    private getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+
+        for (const part of parts) {
+            if (!part) continue;
+
+            // Check if this part contains array indexing like "arrayName[0]"
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                // Extract array name and index
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                // Navigate to the array
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    // Access the array element
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
+            } else {
+                // Regular property access
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
+            }
+        }
+
+        return current;
     }
 
     /**

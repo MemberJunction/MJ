@@ -1,0 +1,339 @@
+[
+  {
+    "fields": {
+      "Name": "Summarize Content",
+      "Description": "Creates a concise summary of content with citations to source material. Can work with either a URL (fetch + summarize) or pre-fetched content. Supports configurable summary length, optional citations with quotes and links, focus instructions for domain-specific summarization, and multiple output formats (paragraph, bullets, hybrid).",
+      "DriverClass": "SummarizeContentAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-lines",
+      "CategoryID": "@lookup:Action Categories.Name=Utilities"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "url",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "URL of the web page to fetch and summarize. Required if content not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.613Z",
+            "checksum": "6fb757798c6a319bc534f63633459287f23a92cd0e30ee2a030232798111556f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "content",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pre-fetched HTML/text content to summarize. Required if url not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2C3D4E5-F6A7-4B5C-8D9E-0F1A2B3C4D5E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.624Z",
+            "checksum": "92d83417f80686c65cc70f070553bb6fd0c4b09cc9070fc70bb6e58593581617"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "sourceUrl",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Original URL for citation links. Required when using content parameter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C3D4E5F6-A7B8-4C5D-8E9F-0A1B2C3D4E5F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.633Z",
+            "checksum": "64384d266eb5cdd077445c28e585e2cc2f2e2bf6d530e6730795b3b4b586fde7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "summaryWords",
+            "DefaultValue": "200",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Target word count for summary (approximate, actual may vary by ±20%)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D4E5F6A7-B8C9-4D5E-8F9A-0B1C2D3E4F5A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.643Z",
+            "checksum": "cba38b0d200327bd0ffecbe3f6c567115e8095f674fcac963cbc47c26fa0b87e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "includeCitations",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include relevant quotes with links back to source content",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E5F6A7B8-C9D0-4E5F-8A9B-0C1D2E3F4A5B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.653Z",
+            "checksum": "d536b17ff0c9ae2da171b8fa5d5feac88873a428f8c6808f0a709b846842cc73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "maxCitations",
+            "DefaultValue": "5",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of citations to include (top most relevant)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F6A7B8C9-D0E1-4F5A-8B9C-0D1E2F3A4B5C"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.661Z",
+            "checksum": "48d88e82032e2255834c505e4e3e5e42675e4c350b278c99d55daa85d7f78dce"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "instructions",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Specific focus areas or aspects to emphasize (e.g., \"Focus on pricing and enterprise features\", \"Extract technical architecture details\")",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A7B8C9D0-E1F2-4A5B-8C9D-0E1F2A3B4C5D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.670Z",
+            "checksum": "70051b71da4e0a19bf6e47a337f91bf885518fa7d2d9b62fef35540890543200"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "format",
+            "DefaultValue": "paragraph",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Output format: paragraph (flowing text), bullets (key points), or hybrid (summary + bullet points)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8C9D0E1-F2A3-4B5C-8D9E-0F1A2B3C4D5E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.679Z",
+            "checksum": "a948db0ff7feefc3467b4caa6a04b56a3bcea75938ee742c1d84ec72435ba958"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "summary",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The generated summary text",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9D0E1F2-A3B4-4C5D-8E9F-0A1B2C3D4E5F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.688Z",
+            "checksum": "932c51269d1b51ab863b60059bb8dbb08d2f012094ba85d26d76bc8f4d01467d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "wordCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Actual word count of the summary",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D0E1F2A3-B4C5-4D5E-8F9A-0B1C2D3E4F5A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.696Z",
+            "checksum": "26459e3ece5d17965240fd05d28845e5de8f276d5f0113d15f7bac7aabe068a6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "citations",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of citation objects with text, url, anchorId, context, and relevance",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E1F2A3B4-C5D6-4E5F-8A9B-0C1D2E3F4A5B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.740Z",
+            "checksum": "727c465eaebedb0ce7a8403678fd70db4e669b005143db21c6e1d384d1de548d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "keyPoints",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Array of key bullet points (when format is bullets or hybrid)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F2A3B4C5-D6E7-4F5A-8B9C-0D1E2F3A4B5C"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.750Z",
+            "checksum": "f7aeef25743ba8bef63fe7c8a8ee39b5b4d69a406dcc2b9f22659379d5b41aa2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "metadata",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Metadata object with pageTitle and sourceUrl",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A3B4C5D6-E7F8-4A5B-8C9D-0E1F2A3B4C5D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.758Z",
+            "checksum": "a46aa38a172afa3f1fbc56558161bb7e564990cbfcff57cc602ae7bb359496d9"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Content summarization completed successfully."
+          },
+          "primaryKey": {
+            "ID": "B4C5D6E7-F8A9-4B5C-8D9E-0F1A2B3C4D5E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.765Z",
+            "checksum": "e6e1217d75e5d2927b82a325d12a7446e38b40b6801edf727c1058b012661b25"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_INPUT",
+            "IsSuccess": false,
+            "Description": "Either url or content parameter is required."
+          },
+          "primaryKey": {
+            "ID": "C5D6E7F8-A9B0-4C5D-8E9F-0A1B2C3D4E5F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.774Z",
+            "checksum": "4515ca75781ed23a1cbb378229281592b9187149927746850a6b8c9ad2e8c20c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FETCH_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to fetch content from the provided URL."
+          },
+          "primaryKey": {
+            "ID": "D6E7F8A9-B0C1-4D5E-8F9A-0B1C2D3E4F5A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.786Z",
+            "checksum": "c2976afc9fccf25d2c2dcb95a66f85beed94b079fdcb3fb454771a3f6941360c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUMMARIZATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate summary from the content."
+          },
+          "primaryKey": {
+            "ID": "E7F8A9B0-C1D2-4E5F-8A9B-0C1D2E3F4A5B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.795Z",
+            "checksum": "9f7e2477d3a8b65ab1a6d8aaffed671b088f63dff22b405aedb05bab86a2c6df"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_FORMAT",
+            "IsSuccess": false,
+            "Description": "Invalid format parameter. Must be 'paragraph', 'bullets', or 'hybrid'."
+          },
+          "primaryKey": {
+            "ID": "F8A9B0C1-D2E3-4F5A-8B9C-0D1E2F3A4B5C"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.804Z",
+            "checksum": "be586ebfe2177f863a54b2277a8c117d1abb3df10dca6cd0884d72d7ff3d8f76"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A9B0C1D2-E3F4-4A5B-8C9D-0E1F2A3B4C5D"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:28.554Z",
+      "checksum": "42c7119405748db1d7f6d5dac672ed152ee8a00710e214925a55399d208e77b6"
+    }
+  }
+]

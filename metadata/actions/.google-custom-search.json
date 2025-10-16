@@ -1,0 +1,469 @@
+[
+  {
+    "fields": {
+      "Name": "Google Custom Search",
+      "Description": "Performs web search using Google's Custom Search JSON API with advanced filtering and structured results. Provides high-quality search results with support for site filtering, date restrictions, file type filtering, and more.",
+      "DriverClass": "Google Custom Search",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-brands fa-google",
+      "CategoryID": "@lookup:Action Categories.Name=Web"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Search query text (required). The terms to search for.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "4C14C00E-B333-4DBF-A660-5F4C64C82188"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.906Z",
+            "checksum": "e313999f17a663ef8cdcaeeac6a980c43450931149bfeee27b30e0e052fef7e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "DefaultValue": "10",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of results to return (1-10). Default: 10.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3C72374C-2012-4DAB-BE91-7E33527E4414"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.919Z",
+            "checksum": "ec26fea374c53f7d3e6316e567238bd776f5f7d84c8acf067701b270a12bb1cf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StartIndex",
+            "DefaultValue": "1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Index of the first result to return (1-91). Google limits access to first 100 results. Default: 1.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8C1501F5-5B18-4EC1-9FAD-EF66CEBA7B69"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.930Z",
+            "checksum": "ef6ce9c01891e5eb0207f0144dda16d9df7d1ab17a0b52946c9433cbde07300f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SafeSearch",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Safe search filtering level: 'off', 'medium', or 'high'. Accepts aliases: none/disabled (off), moderate (medium), strict/active (high).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "02C1CD33-05BB-48CA-9A26-E3F9DAE0CE07"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.941Z",
+            "checksum": "452772caabb2bcd12c718c30c043f5cb4d6377c113f6f9a0c8cfa0056b923b64"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SiteSearch",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts search to pages from a specific site or domain (e.g., 'github.com' or 'wikipedia.org').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "552312CB-02E6-4603-B475-0A36D4664369"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.952Z",
+            "checksum": "c210ad151b145386f92e0105dc8854ae72dd7e0076c85073547ccd8f2c9b385b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SiteSearchFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Controls whether SiteSearch includes ('i' or 'include') or excludes ('e' or 'exclude') the specified site. Requires SiteSearch parameter.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9C91CCEF-5011-4723-B643-94A4ECCFDB60"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.963Z",
+            "checksum": "423b53848de2906d513f2b39e248a8550470c3018225e89ed551cb1b9782c789"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LanguageRestriction",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts search to documents in a particular language. Use 2-letter code (e.g., 'en', 'es', 'fr') or 'lang_xx' format.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A68533CF-7924-4216-94BC-8649AD948789"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.973Z",
+            "checksum": "f4221834edfb6926592a80b4fc9f699e75273f5e7bdf7a2fc37ce5a7eb4338da"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExactTerms",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Phrase that must appear exactly in the search results (equivalent to putting terms in quotes).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "62F61224-AFF8-4FEB-81DB-92D9F68EFB2B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.984Z",
+            "checksum": "4b82c9107bb44ffc3b828779ec7da862baa32d917651cf397ee2c54c09b602fc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeTerms",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Terms to exclude from search results (equivalent to using minus operator).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "614ED05F-3470-4C78-9EF1-761D14DA8FDE"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:26.995Z",
+            "checksum": "baaa099fc2a493fbb7d4920999aaad38ea16ba925ea045c99892fa3ce8f5315e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DateRestrict",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts results to documents published within a timeframe. Format: 'd[number]' (days), 'w[number]' (weeks), 'm[number]' (months), 'y[number]' (years). Example: 'm6' for last 6 months.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F244A552-AFF3-42D8-B222-E5ACA87D5380"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.003Z",
+            "checksum": "2cc8fee2128b1499cbf2c2491ccc67e976b2d31e13db99e84637f28187ef1b97"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of search to perform. Currently supports 'image' or 'images' for image search only.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4897A9E7-8877-4547-9B5A-C59492D61F4D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.064Z",
+            "checksum": "6f2f6486720f0c08c4e1f83ca821a9cc70e626dfb83b9f577d7f32232faa300d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restricts results to files of a particular type (e.g., 'pdf', 'doc', 'xls', 'ppt').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "61853248-2A46-4D4F-BC8D-5FA83293A96E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.075Z",
+            "checksum": "21d87294233f9f97850f9ad0d0e8721bcb0566727279e22c923a0fb9ede20b9e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Region",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Geolocation of end user (2-letter country code, e.g., 'us', 'uk', 'de'). Boosts results from specified region.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A6705988-B9EF-498E-8D86-FF17F394E229"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.086Z",
+            "checksum": "a6cb3ef812bc4ab09b55922c5e7d3720052909e85e4145c8552fcf2bf9e97e41"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultsDetails",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Complete search result object including metadata, items, and search information.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0A84C74F-383C-497D-926A-C547DB212C28"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.096Z",
+            "checksum": "ddc949a3fdca0ae8d08bd2073da961d1e65761468764086067f9dbb4ce49391f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Items",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of search result items with title, link, snippet, and metadata.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "25CD0CAD-295B-47BD-9968-C07CE25AE086"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.107Z",
+            "checksum": "90b5d1779438a86c69e66e06a82fef3b0a3033e4784779ba33a55298018df1e3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResultCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of items returned in this response.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6B8E965F-6343-4E3B-A600-EEB67D44014B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.117Z",
+            "checksum": "9139b6f8d794f266b368ae84863c438edaebc47b0e5f4b2eb04dda4c8f8399ec"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalResults",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Estimated total number of results available (may be approximate).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "859D7593-1D1C-40BD-8CFC-7141466A0582"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.130Z",
+            "checksum": "364c270065ccdcef3074697e11a254c286d3d56d5c5b94fd75e8ccc3ba02b51a"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Search completed successfully and returned results."
+          },
+          "primaryKey": {
+            "ID": "04312C6F-27EA-4EAA-A0D0-4632CB7BE24F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.139Z",
+            "checksum": "27537bec2ef231e0cf3ed18c587f2799bc192373b5aa64283cc216bd06e7ba90"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsSuccess": false,
+            "Description": "Query parameter is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "957ABF58-031F-4B80-A7D7-BF55CCE4AE6D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.148Z",
+            "checksum": "fd95f9b802343aa2b0b6e2c453361a1303a372717a6ac881d964d35f323575e6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "IsSuccess": false,
+            "Description": "Google Custom Search API key not found in configuration. Set google.customSearch.apiKey in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_API_KEY environment variable."
+          },
+          "primaryKey": {
+            "ID": "B6775AD1-F5F7-4655-928B-102AA1742BFE"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.157Z",
+            "checksum": "daab2240c0ec5f986ddcb5dd56b1cb098d3211c66af329eac2e77759bdb1b484"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_SEARCH_ENGINE",
+            "IsSuccess": false,
+            "Description": "Google Custom Search engine identifier (CX) not found in configuration. Set google.customSearch.cx in mj.config.cjs or GOOGLE_CUSTOM_SEARCH_CX environment variable."
+          },
+          "primaryKey": {
+            "ID": "7ABF72EC-6B97-4510-BD1A-B9656C0C0D8D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.192Z",
+            "checksum": "c6257a1cd0ba707d009081515e56d16d1322b3366263195ed4f7b10b0fb01e7b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_RESPONSE",
+            "IsSuccess": false,
+            "Description": "Google Custom Search API returned an empty response."
+          },
+          "primaryKey": {
+            "ID": "996EC9FF-27C7-4686-A6A1-853CF7187A46"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.200Z",
+            "checksum": "ddb377313d7ef3a19a80b0d806b33a8895b7d07d99fe12a681e602d52d3ff23b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FORBIDDEN",
+            "IsSuccess": false,
+            "Description": "Google Custom Search quota exceeded or invalid credentials. Free tier allows 100 queries/day. Check your Google Cloud Console for quota limits."
+          },
+          "primaryKey": {
+            "ID": "5C64D531-E537-434C-90FA-CB85115D801D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.207Z",
+            "checksum": "68c1139af9dbf8208fba2da16ee350d85bd4e4c82e34c62422fd1cf992047550"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "BAD_REQUEST",
+            "IsSuccess": false,
+            "Description": "Google Custom Search request was malformed. Check parameter formats (e.g., dateRestrict must be 'd[number]', 'w[number]', 'm[number]', or 'y[number]')."
+          },
+          "primaryKey": {
+            "ID": "02024BB0-6E85-43BE-9ABF-F904012BAF03"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.216Z",
+            "checksum": "1d697ffaebe0c3eb0ba48c4231c2a974b2c039044f61880a8a313f52c241b7f1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "IsSuccess": false,
+            "Description": "Google Custom Search API returned an error. Check the error message for details."
+          },
+          "primaryKey": {
+            "ID": "F2E6B6BB-10A1-4A64-B558-3002E37B7C0F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.224Z",
+            "checksum": "76f976026228bdb4a6a116b3481ff71dadc2f646f34f3cb75ab434b88a993692"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to perform Google Custom Search due to an unexpected error."
+          },
+          "primaryKey": {
+            "ID": "5D2F80A9-F315-43DE-9A1E-29B1E00D1C27"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.230Z",
+            "checksum": "314ec2afaa215f1b56e3da07839502d402c6b039e324b408b8539ef3854ae19d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FC003992-0203-4B23-946C-F9E9A40646AE"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:26.848Z",
+      "checksum": "2e208ce8fd400a87f56ae8a732a2e41b57dfdc7d1f1999687be6a9cf374e7b95"
+    }
+  }
+]

@@ -126,7 +126,6 @@ kendo-license.txt
 metadata/demo-prompt.md
 .mj-ai/
 notes.txt
-plans/
 packages/AI/Providers/LocalEmbeddings/.cache/**
 packages/MJAPI/.cache/** 
 .cache/**

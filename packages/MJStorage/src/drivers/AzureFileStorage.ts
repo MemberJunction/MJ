@@ -17,6 +17,8 @@ import * as env from 'env-var';
 import * as mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
+  FileSearchOptions,
+  FileSearchResultSet,
   FileStorageBase,
   StorageListResult,
   StorageObjectMetadata
@@ -99,11 +101,19 @@ export class AzureFileStorage extends FileStorageBase {
   }
 
   /**
+   * Checks if Azure Blob provider is properly configured.
+   * Returns true if account name and container name are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._accountName && this._container);
+  }
+
+  /**
    * Creates a BlobClient for the specified object.
-   * 
+   *
    * This is a helper method used internally to get a BlobClient instance
    * for a specific blob (file) in the container.
-   * 
+   *
    * @param objectName - The name of the blob for which to create a client
    * @returns A BlobClient instance for the specified blob
    * @private
@@ -737,28 +747,49 @@ export class AzureFileStorage extends FileStorageBase {
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {
       directoryPath = this._normalizeDirectoryPath(directoryPath);
-      
+
       // Method 1: Check if the directory placeholder exists
       const placeholderExists = await this.ObjectExists(directoryPath);
       if (placeholderExists) {
         return true;
       }
-      
+
       // Method 2: Check if any objects exist with this prefix
       const listOptions = {
         prefix: directoryPath,
         maxPageSize: 1
       };
-      
+
       // Get just one blob to check if any exist
       const iterator = this._containerClient.listBlobsFlat(listOptions);
       const response = await iterator.next();
-      
+
       return !response.done;
     } catch (error) {
       console.error('Error checking if directory exists in Azure Blob Storage', { directoryPath });
       console.error(error);
       return false;
     }
+  }
+
+  /**
+   * Search is not supported by Azure Blob Storage.
+   * Blob Storage is an object storage service without built-in search capabilities.
+   *
+   * To search Azure Blob Storage objects, consider:
+   * - Using Azure Cognitive Search to index blob content
+   * - Maintaining a separate search index (Azure Search, Elasticsearch, etc.)
+   * - Using blob metadata and tags for filtering with ListObjects
+   * - Using Azure Data Lake Analytics for complex queries
+   *
+   * @param query - The search query (not used)
+   * @param options - Search options (not used)
+   * @throws UnsupportedOperationError always
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    this.throwUnsupportedOperationError('SearchFiles');
   }
 }

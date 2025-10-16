@@ -6,6 +6,7 @@ import { LoadEntityAdminDashboard } from './EntityAdmin/entity-admin-dashboard.c
 import { LoadAIDashboard } from './AI/ai-dashboard.component';
 import { LoadActionsManagementDashboard } from './Actions';
 import { LoadComponentStudioDashboard } from './ComponentStudio/component-studio-dashboard.component';
+import { LoadSchedulingDashboard } from './Scheduling/scheduling-dashboard.component';
 
 // Base Dashboard
 export * from './generic/base-dashboard';
@@ -15,6 +16,7 @@ export * from './EntityAdmin/entity-admin-dashboard.component';
 export * from './AI/ai-dashboard.component';
 export * from './Actions';
 export * from './ComponentStudio';
+export * from './Scheduling/scheduling-dashboard.component';
 
 export * from './Actions/index';
 
@@ -25,3 +27,4 @@ LoadEntityAdminDashboard(); // call tree shaking function to prevent tree shakin
 LoadAIDashboard(); // call tree shaking function to prevent tree shaking
 LoadActionsManagementDashboard(); // call tree shaking function to prevent tree shaking
 LoadComponentStudioDashboard(); // call tree shaking function to prevent tree shaking
+LoadSchedulingDashboard(); // call tree shaking function to prevent tree shaking

@@ -33,6 +33,7 @@ export * from './custom/web/web-page-content.action';
 export * from './custom/web/url-link-validator.action';
 export * from './custom/web/url-metadata-extractor.action';
 export * from './custom/web/perplexity-search.action';
+export * from './custom/web/google-custom-search.action';
 
 // Data Transformation Actions
 export * from './custom/data/csv-parser.action';
@@ -40,6 +41,8 @@ export * from './custom/data/json-transform.action';
 export * from './custom/data/xml-parser.action';
 export * from './custom/data/aggregate-data.action';
 export * from './custom/data/data-mapper.action';
+export * from './custom/data/explore-database-schema.action';
+export * from './custom/data/execute-research-query.action';
 
 // File Operation Actions
 export * from './custom/files/pdf-generator.action';
@@ -70,6 +73,7 @@ export * from './custom/workflow/delay.action';
 
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
+export * from './custom/ai/summarize-content.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -103,11 +107,14 @@ import { LoadWebPageContentAction } from './custom/web/web-page-content.action';
 import { LoadURLLinkValidatorAction } from './custom/web/url-link-validator.action';
 import { LoadURLMetadataExtractorAction } from './custom/web/url-metadata-extractor.action';
 import { LoadPerplexitySearchAction } from './custom/web/perplexity-search.action';
+import { LoadGoogleCustomSearchAction } from './custom/web/google-custom-search.action';
 import { LoadCSVParserAction } from './custom/data/csv-parser.action';
 import { LoadJSONTransformAction } from './custom/data/json-transform.action';
 import { LoadXMLParserAction } from './custom/data/xml-parser.action';
 import { LoadAggregateDataAction } from './custom/data/aggregate-data.action';
 import { LoadDataMapperAction } from './custom/data/data-mapper.action';
+import { LoadExploreDatabaseSchemaAction } from './custom/data/explore-database-schema.action';
+import { LoadExecuteResearchQueryAction } from './custom/data/execute-research-query.action';
 import { LoadPDFGeneratorAction } from './custom/files/pdf-generator.action';
 import { LoadPDFExtractorAction } from './custom/files/pdf-extractor.action';
 import { LoadExcelReaderAction } from './custom/files/excel-reader.action';
@@ -125,6 +132,8 @@ import { LoadMoveObjectAction } from './custom/files/move-object.action';
 import { LoadDeleteObjectAction } from './custom/files/delete-object.action';
 import { LoadCreateDirectoryAction } from './custom/files/create-directory.action';
 import { LoadDeleteDirectoryAction } from './custom/files/delete-directory.action';
+import { LoadSearchStorageFilesAction } from './custom/files/search-storage-files.action';
+import { LoadListStorageProvidersAction } from './custom/files/list-storage-providers.action';
 import { LoadHTTPRequestAction } from './custom/integration/http-request.action';
 import { LoadGraphQLQueryAction } from './custom/integration/graphql-query.action';
 import { LoadOAuthFlowAction } from './custom/integration/oauth-flow.action';
@@ -137,6 +146,7 @@ import { LoadParallelExecuteAction } from './custom/workflow/parallel-execute.ac
 import { LoadRetryAction } from './custom/workflow/retry.action';
 import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
+import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action';
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
@@ -173,11 +183,14 @@ export function LoadAllCoreActions() {
     LoadURLLinkValidatorAction();
     LoadURLMetadataExtractorAction();
     LoadPerplexitySearchAction();
+    LoadGoogleCustomSearchAction();
     LoadCSVParserAction();
     LoadJSONTransformAction();
     LoadXMLParserAction();
     LoadAggregateDataAction();
     LoadDataMapperAction();
+    LoadExploreDatabaseSchemaAction();
+    LoadExecuteResearchQueryAction();
     LoadPDFGeneratorAction();
     LoadPDFExtractorAction();
     LoadExcelReaderAction();
@@ -195,6 +208,8 @@ export function LoadAllCoreActions() {
     LoadDeleteObjectAction();
     LoadCreateDirectoryAction();
     LoadDeleteDirectoryAction();
+    LoadSearchStorageFilesAction();
+    LoadListStorageProvidersAction();
     LoadHTTPRequestAction();
     LoadGraphQLQueryAction();
     LoadOAuthFlowAction();
@@ -207,6 +222,7 @@ export function LoadAllCoreActions() {
     LoadRetryAction();
     LoadDelayAction();
     LoadExecuteAIPromptAction();
+    LoadSummarizeContentAction();
     LoadCheckUserPermissionAction();
     LoadCreateUserAction();
     LoadCreateEmployeeAction();

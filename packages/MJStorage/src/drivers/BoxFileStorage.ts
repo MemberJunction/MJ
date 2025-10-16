@@ -3,6 +3,9 @@ import * as env from 'env-var';
 import * as mime from 'mime-types';
 import {
   CreatePreAuthUploadUrlPayload,
+  FileSearchOptions,
+  FileSearchResult,
+  FileSearchResultSet,
   FileStorageBase,
   StorageListResult,
   StorageObjectMetadata
@@ -148,6 +151,14 @@ export class BoxFileStorage extends FileStorageBase {
 
     // Root folder ID, optional (defaults to '0' which is root)
     this._rootFolderId = config?.rootFolderID || env.get('STORAGE_BOX_ROOT_FOLDER_ID').default('0').asString();
+  }
+
+  /**
+   * Checks if Box provider is properly configured.
+   * Returns true if client credentials are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._clientId && this._clientSecret && this._accessToken);
   }
 
   /**
@@ -1524,5 +1535,240 @@ export class BoxFileStorage extends FileStorageBase {
       console.error('Error finding folder by path:', error);
       throw error;
     }
+  }
+
+  /**
+   * Search files in Box using Box Search API.
+   *
+   * This method provides full-text search capabilities across file names and content
+   * using Box's native search functionality. It supports filtering by file type,
+   * date ranges, and path prefixes.
+   *
+   * @param query - The search query string. Supports boolean operators (AND, OR, NOT) and exact phrases in quotes
+   * @param options - Optional search options to filter and customize results
+   * @param options.maxResults - Maximum number of results to return (default: 100, max: 200)
+   * @param options.fileTypes - Array of file types to filter by (e.g., ['pdf', 'docx'] or ['application/pdf'])
+   * @param options.modifiedAfter - Only return files modified after this date
+   * @param options.modifiedBefore - Only return files modified before this date
+   * @param options.pathPrefix - Restrict search to files within this path (e.g., 'documents/reports/')
+   * @param options.searchContent - Whether to search file contents (Box searches content by default)
+   * @returns A Promise resolving to a FileSearchResultSet containing matching files
+   *
+   * @remarks
+   * - Box searches both file names and content by default
+   * - The searchContent option is provided for interface compatibility but doesn't restrict Box's behavior
+   * - File types can be specified as extensions or MIME types
+   * - Date filters use Box's created_at_range parameter
+   * - Path prefix is implemented by filtering results to ancestor folder IDs
+   * - Results are sorted by relevance when available
+   *
+   * @example
+   * ```typescript
+   * // Search for PDF files containing "quarterly report"
+   * const results = await storage.SearchFiles('quarterly report', {
+   *   fileTypes: ['pdf'],
+   *   pathPrefix: 'documents/reports',
+   *   modifiedAfter: new Date('2023-01-01'),
+   *   maxResults: 50
+   * });
+   *
+   * console.log(`Found ${results.results.length} matching files`);
+   * for (const file of results.results) {
+   *   console.log(`- ${file.path} (${file.size} bytes, score: ${file.relevance})`);
+   *   if (file.excerpt) {
+   *     console.log(`  Excerpt: ${file.excerpt}`);
+   *   }
+   * }
+   * ```
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    try {
+      // Default options
+      const maxResults = Math.min(options?.maxResults || 100, 200); // Box API limit is 200
+
+      // Build search parameters
+      const searchParams: any = {
+        query,
+        limit: maxResults,
+        fields: ['id', 'name', 'type', 'size', 'content_type', 'modified_at', 'created_at', 'etag', 'path_collection', 'parent'],
+        type: 'file' // Only search for files, not folders
+      };
+
+      // Build file extensions filter from fileTypes option
+      if (options?.fileTypes && options.fileTypes.length > 0) {
+        const extensions = this._buildFileExtensionsFilter(options.fileTypes);
+        if (extensions.length > 0) {
+          searchParams.fileExtensions = extensions;
+        }
+      }
+
+      // Build date range filter (Box uses updatedAtRange for date filtering)
+      if (options?.modifiedAfter || options?.modifiedBefore) {
+        const dateRanges: string[] = [];
+
+        if (options.modifiedAfter) {
+          dateRanges.push(options.modifiedAfter.toISOString());
+        } else {
+          // Box requires both start and end dates, use epoch if not specified
+          dateRanges.push(new Date(0).toISOString());
+        }
+
+        if (options.modifiedBefore) {
+          dateRanges.push(options.modifiedBefore.toISOString());
+        }
+        // If modifiedBefore is not specified, Box uses current date
+
+        searchParams.updatedAtRange = dateRanges;
+      }
+
+      // Handle pathPrefix by converting to ancestor folder ID
+      if (options?.pathPrefix) {
+        try {
+          const folderId = await this._getIdFromPath(options.pathPrefix);
+          if (folderId) {
+            searchParams.ancestorFolderIds = [folderId];
+          }
+        } catch (error) {
+          console.warn(`Could not resolve pathPrefix "${options.pathPrefix}", searching all folders`);
+        }
+      }
+
+      // Perform the search using Box SDK
+      const searchResults = await this._client.search.searchForContent(searchParams);
+
+      // Transform Box search results to FileSearchResult format
+      const results: FileSearchResult[] = [];
+
+      // Type guard to check if result is SearchResults (not SearchResultsWithSharedLinks)
+      const isSearchResults = (result: any): result is { entries?: readonly any[] } => {
+        return 'entries' in result;
+      };
+
+      if (isSearchResults(searchResults) && searchResults.entries) {
+        for (const item of searchResults.entries) {
+          // Skip folders and web links, only include files
+          if (!item || item.type !== 'file') {
+            continue;
+          }
+
+          // Type assertion for file item
+          const fileItem = item as any;
+
+          // Reconstruct the full path from pathCollection
+          const path = this._reconstructPath(fileItem);
+
+          results.push({
+            path,
+            name: fileItem.name || '',
+            size: fileItem.size || 0,
+            contentType: mime.lookup(fileItem.name || '') || 'application/octet-stream',
+            lastModified: new Date(fileItem.modifiedAt || fileItem.createdAt || Date.now()),
+            // Box search doesn't provide relevance scores in the standard API
+            relevance: undefined,
+            // Box search doesn't provide excerpts in the standard API
+            excerpt: undefined,
+            // Cannot determine if match was in filename vs content from Box API
+            matchInFilename: undefined,
+            customMetadata: {
+              id: fileItem.id || '',
+              etag: fileItem.etag || ''
+            },
+            providerData: {
+              boxItemId: fileItem.id,
+              boxItemType: fileItem.type
+            }
+          });
+        }
+      }
+
+      // Determine if there are more results
+      const totalMatches = isSearchResults(searchResults) ? searchResults.totalCount : undefined;
+      const hasMore = totalMatches ? totalMatches > results.length : false;
+
+      return {
+        results,
+        totalMatches,
+        hasMore,
+        // Box SDK v10 search doesn't provide pagination tokens in the standard response
+        nextPageToken: undefined
+      };
+    } catch (error) {
+      console.error('Error searching files in Box', { query, options, error });
+      // Return empty result set on error rather than throwing
+      return {
+        results: [],
+        totalMatches: 0,
+        hasMore: false
+      };
+    }
+  }
+
+  /**
+   * Builds a list of file extensions from file type specifications
+   *
+   * This helper method converts generic file type specifications (extensions or MIME types)
+   * into Box API fileExtensions parameter values.
+   *
+   * @private
+   * @param fileTypes - Array of file extensions (e.g., 'pdf', 'docx') or MIME types
+   * @returns Array of file extension strings (without dots)
+   */
+  private _buildFileExtensionsFilter(fileTypes: string[]): string[] {
+    const extensions: string[] = [];
+
+    for (const fileType of fileTypes) {
+      // If it looks like a MIME type (contains '/'), look up extensions
+      if (fileType.includes('/')) {
+        const extension = mime.extension(fileType);
+        if (extension) {
+          extensions.push(extension);
+        }
+      } else {
+        // Otherwise treat as extension directly (remove leading dot if present)
+        const cleanExt = fileType.startsWith('.') ? fileType.substring(1) : fileType;
+        extensions.push(cleanExt);
+      }
+    }
+
+    return extensions;
+  }
+
+  /**
+   * Reconstructs the full path to a Box item from its pathCollection
+   *
+   * This helper method builds the complete path by traversing the parent
+   * folder hierarchy stored in the item's pathCollection.
+   *
+   * @private
+   * @param item - The Box item with pathCollection data
+   * @returns The full path string (e.g., 'documents/reports/file.pdf')
+   */
+  private _reconstructPath(item: any): string {
+    const pathParts: string[] = [];
+
+    // Add parent folder names from pathCollection
+    if (item.pathCollection?.entries) {
+      for (const entry of item.pathCollection.entries) {
+        // Skip the root folder (id '0' or 'All Files')
+        if (entry.id !== '0' && entry.name !== 'All Files') {
+          pathParts.push(entry.name);
+        }
+      }
+    }
+
+    // Add the parent folder if available
+    if (item.parent?.name && item.parent.name !== 'All Files') {
+      pathParts.push(item.parent.name);
+    }
+
+    // Add the item name itself
+    if (item.name) {
+      pathParts.push(item.name);
+    }
+
+    return pathParts.join('/');
   }
 }

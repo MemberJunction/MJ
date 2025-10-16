@@ -2,9 +2,10 @@
   <textarea
     #messageTextarea
     class="message-input"
+    [class.intent-checking]="isProcessing"
     [(ngModel)]="messageText"
     [placeholder]="placeholder"
-    [disabled]="disabled || isSending"
+    [disabled]="disabled || isProcessing"
     (keydown)="onKeyDown($event)"
     (input)="onInput($event)"
     rows="3">
@@ -23,7 +24,7 @@
   <div class="input-actions">
     <div class="processing-indicator" *ngIf="isProcessing">
       <i class="fas fa-circle-notch fa-spin"></i>
-      <span>AI is responding...</span>
+      <span>{{ processingMessage }}</span>
     </div>
     <button
       class="btn-attach"

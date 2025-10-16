@@ -1,0 +1,1026 @@
+[
+  {
+    "fields": {
+      "Name": "Query Scheduled Jobs",
+      "Description": "Query scheduled jobs based on filter criteria including Status, JobTypeID, IsActive flag, and creation date ranges",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "DriverClass": "__QueryScheduledJobs",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-search"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Job status filter (Active, Disabled)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7A38F803-FE38-46C5-AB01-6C1AC028C4CB"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.537Z",
+            "checksum": "b29be7d276afccc1723412f51a7e838a64e166a4d2e0ce8afae3b15c2584abbd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JobTypeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by job type ID",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F778D5D1-368B-45A2-92B8-E313282B158D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.547Z",
+            "checksum": "65d9460d1b3e515fd691b2eb377908ebdabf97f175c6d412fa37937fbc71a26b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsActive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by active flag (true/false)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AD123333-048F-459E-8242-EB1D766CBD63"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.559Z",
+            "checksum": "20b0079e66bf75037c404420c5535a7302d1226ab828b1a9e26ce86194cb04ad"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedAfter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter jobs created after this date",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "53FFE770-5F49-4F78-A0D1-A4AF3868B342"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.568Z",
+            "checksum": "8bc8479fc20d8c54b23b3fec1ed282e932962f7557a04c54e7f7edc3d6175544"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CreatedBefore",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter jobs created before this date",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3CA40DE1-777F-42DA-A83E-F42A3B0461D8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.579Z",
+            "checksum": "0588d217124c22046080b37e261df923a347ffa0744b4c02cfc04ce2faf2f93d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "100",
+            "Description": "Limit number of results (default: 100)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2D37888F-B1BD-4AF0-A551-F5D93D7AACF8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.589Z",
+            "checksum": "6778c5ece3b6f61ee22ee9f422f8fe77af7da9ae3e9cd58d66564dd2545d8be0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Jobs",
+            "Type": "Output",
+            "ValueType": "BaseEntity Sub-Class",
+            "IsArray": true,
+            "Description": "Array of ScheduledJobEntity records matching the filter criteria",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "795C7DF1-E970-47F5-BB50-FA2364D78528"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.599Z",
+            "checksum": "ef25a2a3eba069487bdfeb77b53bea9241b896c0cc949d5366877e6e64737a4b"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Query executed successfully"
+          },
+          "primaryKey": {
+            "ID": "326E234F-2F25-4FB8-88BE-7A3368981BF7"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.608Z",
+            "checksum": "3ac49e37038541c3fedf7a54a10ca32af5390b1ff04b8c8fd4ba9a88db236a0d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Invalid parameter values provided"
+          },
+          "primaryKey": {
+            "ID": "69C23C7D-B516-4768-82A3-4753F5D4C2FA"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.616Z",
+            "checksum": "11ed6e0b357ce91ecfb54d339218906f70e6daf157d45a11bdc794b4e7fa9160"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Query failed due to an error"
+          },
+          "primaryKey": {
+            "ID": "362EE656-E18C-4A09-8E4B-7F9DCFDE6DC4"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.623Z",
+            "checksum": "ef5f9b58e21ccea19be1f698c27db6fa99bb19f55c8884d151bf1fe23fcde58a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "55D321D5-6BF3-4EFB-921F-E33376DFB2AF"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:27.421Z",
+      "checksum": "ae1a171a96e7cdd06033eec6632847823137c8268fe32c944df24ac7620367a4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Scheduled Job",
+      "Description": "Create a new scheduled job with the specified configuration including name, job type, cron expression, and optional parameters",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "DriverClass": "__CreateScheduledJob",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-plus"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Job name",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "11A0174A-0312-49AF-B601-53EE962A5AD1"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.689Z",
+            "checksum": "8fadb908d7a93bcf2ff7e60e0d6157def11a0913e149fcc06eb05593a8dd737f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JobTypeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the job type (e.g., Agent or Action)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9B7DBC6E-2EE4-42C1-B9D6-3D0EB09A1507"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.699Z",
+            "checksum": "a9efc940d03b15714c7d10a4b4088c1f3e4195a8359aa89eec6f22c5583a5733"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CronExpression",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Cron schedule expression (e.g., '0 0 * * *' for daily at midnight)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DB61EBBA-047B-4501-8431-B793DC0D2BAE"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.708Z",
+            "checksum": "740ce37df16cd6a21eabb39d2e862577affa431acac8640b9f1d40563d3c66b8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsActive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "true",
+            "Description": "Whether job is active (default: true)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F2906A0D-CAA6-4511-9A2B-015923320E01"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.719Z",
+            "checksum": "459780990fe9ea1420d1098eb5bbac93834899eeccac115075be258f5f8bcb92"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "Active",
+            "Description": "Job status (Active, Disabled)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F089351D-20FC-4B7A-AD4D-65C38C2EFBA5"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.731Z",
+            "checksum": "06ddb137b9bc70a4a5fa8ee3469165fec660c5750be45d5c004d83b7f26c0c44"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntervalMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Polling interval in minutes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "571B644F-8C97-46D9-8DB4-0945AF52646B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.742Z",
+            "checksum": "ab1e78ffe551f391e28dedd8144bc3c729c98586a3aa3266fdd7859a3dae3b2d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntervalDays",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Polling interval in days",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "851819DB-7B8E-41AE-B761-42C1636D4201"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.753Z",
+            "checksum": "80b0fc5d1768032a208697d9df9a7aab11c14270db7944b0f9c7134967b17660"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Job description",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "59695C37-E73B-45FB-944F-0C67919296C4"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.763Z",
+            "checksum": "700880c391edbe05bc925855c72b8e18b321fbb7add84bd60f65ebdbb8e4e1c6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JobID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created scheduled job",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A8FEA515-805D-4E96-816D-87DDB0881CCB"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.773Z",
+            "checksum": "4f716f0bef9b8128f73fc54a08dcbe9e9b4615461afa3101c152405a3f5d591e"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Job created successfully"
+          },
+          "primaryKey": {
+            "ID": "C4C9309C-BE6E-486D-9DAE-58BB88218039"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.781Z",
+            "checksum": "8a35486b79a5f0225f765511e105d0d1e63726384e1acc18aa548acd0cc40bad"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Invalid parameter values or cron expression"
+          },
+          "primaryKey": {
+            "ID": "2663CDC0-826A-4AAB-A066-ABDFCDEA0B50"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.841Z",
+            "checksum": "88255063ab794ea419081dc8c1ee1bca359ad94e740a2eaa86cf1778b4ebb2f4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to create job"
+          },
+          "primaryKey": {
+            "ID": "EF7CEE6D-2272-4B4F-A3D1-509534260BBD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.851Z",
+            "checksum": "ef9bffda19dacd035b974f751015e307d930246769fbd030336a1e9e9f0f0567"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B26806D3-2951-480A-984A-C304CFD353AC"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:27.433Z",
+      "checksum": "294f7c8970fa3febf7f4dcd332c50a45eb91e96375c98b748500cbba28d1019c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Update Scheduled Job",
+      "Description": "Update an existing scheduled job. Only provided fields will be updated; omitted fields remain unchanged",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "DriverClass": "__UpdateScheduledJob",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-edit"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JobID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the job to update",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C2AAA87E-EC37-419E-8551-C9DFD451C2B5"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.862Z",
+            "checksum": "bcb8d369d27361bad21a3f8527ce686c84da2236710e9c9ed79de7cbdde9f149"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New job name",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "62AA866B-507F-4455-93BE-CD1DE0FB8F82"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.872Z",
+            "checksum": "b3084368530904f88cb62385847c666a18eb1bd224ab04fbe48ba96cbbb5fa27"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CronExpression",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New cron expression",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3D71C775-364E-4D17-B8FC-334E5FFE6A56"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.883Z",
+            "checksum": "fd96b1facb9fb7171f2ea8ece6a23da129235f1235215e66233d8b85d769b120"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsActive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New active flag",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "52C96DF8-3506-4EBF-A3DB-AEBF5E2BB938"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.894Z",
+            "checksum": "1dbaa16c4cab1edda1ce0e4f29ee53537991bce50833468b3aaf47e8aa00649d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New status (Active, Disabled)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "706E9ABE-5C40-41BE-B727-3201B42A135A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.906Z",
+            "checksum": "0a8191d7bc8f78c76b20321d8156857dc2b69aea801237f79736d8596c3eefc6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntervalMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New interval in minutes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CEE8C8E1-698D-43B0-BE4B-01E6C1A02352"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.916Z",
+            "checksum": "d722c4621dfd0b1583791849d8898b969c981a273399e325523f91efe966d50e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IntervalDays",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New interval in days",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "24FFF86D-0996-47EB-9797-5E39011C0EB0"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.924Z",
+            "checksum": "95b3c6065783b9a2b3e01559430422daa64019a1f0ed47c0411476bbece949b8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New description",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6824A6C7-3D9D-46D3-A14F-EEA7494DFCB6"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.932Z",
+            "checksum": "e95543a9ffe691c0e51d6d0ebce3c1fa94787b5701ff88ec1a908a848ebe031b"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Job updated successfully"
+          },
+          "primaryKey": {
+            "ID": "19335EB0-54FC-402B-A444-93E40378E234"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.985Z",
+            "checksum": "2fe251949173b3fdad9bf01cf3dbe01dca9e78ba5019ceb797363996cf21192e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Invalid parameter values"
+          },
+          "primaryKey": {
+            "ID": "7ECD9FF0-E3D3-4B35-8C87-477D4E78870A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:27.994Z",
+            "checksum": "5f4619519106dd02582f5e38c82a6878ad87ec2449642b867b74a7b1c9e165f3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Job not found"
+          },
+          "primaryKey": {
+            "ID": "6C8B4E78-102A-4E30-87F4-7318423700D6"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.003Z",
+            "checksum": "7348244f619f0fc4655baf61fac4db5f7571a5b5df1ae897857f66673e0ec22e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_CHANGES",
+            "IsSuccess": true,
+            "Description": "No fields were modified"
+          },
+          "primaryKey": {
+            "ID": "908E8AF5-377F-4BBC-BCFC-876A15C93267"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.013Z",
+            "checksum": "a3c85bceb8b1d3e99ef24002803e37fd34ffdcb26d83e2da735bebe8f977c088"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to update job"
+          },
+          "primaryKey": {
+            "ID": "82D04393-A988-4AE4-8077-FEE623A29E86"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.023Z",
+            "checksum": "a2531fee803e21d7d1ee6c3a62a23fa730397ec89cbcabf73486087f4018d13e"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E825C4C3-91F3-4716-A9CA-796210A4D783"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:27.447Z",
+      "checksum": "c8346888ec09261868d344c9a51c88844433576c1accd0d3012f3198bd6a4349"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delete Scheduled Job",
+      "Description": "Delete an existing scheduled job from the system. Will fail if the job has related records that prevent deletion",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "DriverClass": "__DeleteScheduledJob",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-calendar-times"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JobID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the job to delete",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "BCCB2446-F144-4FED-91BB-76FFA3D12652"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.033Z",
+            "checksum": "b41018388137d0dac3d0b1c310c410c06974362e03bb33db79597a07e39bb887"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Job deleted successfully"
+          },
+          "primaryKey": {
+            "ID": "EE6367D0-BDB8-41B5-936C-44BC0C279C57"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.042Z",
+            "checksum": "3df756d1bced984ae0086b78d493985333f08e9cf5fb8cd67e413a631fb96cfe"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "JobID parameter is required"
+          },
+          "primaryKey": {
+            "ID": "269C7DEC-5850-484C-B4F2-97DFC8D7AD73"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.053Z",
+            "checksum": "c46e33cc54c450872d1457b78e147632c926310ed6bb3eb5054803d459855051"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Job not found"
+          },
+          "primaryKey": {
+            "ID": "42E2A34E-BD25-40E1-916B-962D4BB9570A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.063Z",
+            "checksum": "7348244f619f0fc4655baf61fac4db5f7571a5b5df1ae897857f66673e0ec22e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "REFERENCE_CONSTRAINT",
+            "IsSuccess": false,
+            "Description": "Cannot delete job due to related records"
+          },
+          "primaryKey": {
+            "ID": "B78EC136-ED7F-47FD-83FF-0C574C730FBC"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.072Z",
+            "checksum": "73677e4beaa5fcd3e274aad43fcb0eeb2e9aaf3036935a5d2d049c4efdcdf033"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to delete job"
+          },
+          "primaryKey": {
+            "ID": "A3DD9AD2-E18A-43AD-8778-3D139568E0EB"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.126Z",
+            "checksum": "d0b61ad6986273d1c089c332ac0c8d33abc6680e76d3b3475e9cdb8a16d6a749"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "61D57D8B-805C-4DA4-ACE1-D1254B2ABA39"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:27.457Z",
+      "checksum": "c0e52411e81020a19b2214632ce7bbfced02bcbc8ebf8c5bf314afbb0c83e643"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Execute Scheduled Job Now",
+      "Description": "Trigger immediate execution of a scheduled job, bypassing its normal schedule. Creates a job run record for the scheduling engine to pick up",
+      "CategoryID": "@lookup:Action Categories.Name=System&ParentID=null",
+      "DriverClass": "__ExecuteScheduledJobNow",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-play-circle"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JobID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the job to execute",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "AEB06908-1B54-469E-A83B-675AB534A314"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.136Z",
+            "checksum": "3c8d98b37f189ef0d10175b3e12f26ed8d29eba5adfd0e615fded9295bbaeb08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created job run",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "2E945B72-92B6-468A-BF55-293658169D0E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.146Z",
+            "checksum": "002923612f662784da8fe705705becf6eab647c2b31543dab181041f8956f88a"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Job execution queued successfully"
+          },
+          "primaryKey": {
+            "ID": "AE8EABE0-D3F9-4F2D-85BB-AC7014F49D6D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.154Z",
+            "checksum": "dca72a3b9e32cd99385e796558b33b5f374852d6a8845064273d6e7da0e680d2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "VALIDATION_ERROR",
+            "IsSuccess": false,
+            "Description": "Invalid parameters or inactive job"
+          },
+          "primaryKey": {
+            "ID": "B7B7F6E9-6995-4B64-94B7-52D4F672F536"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.161Z",
+            "checksum": "ff9ebfd02d7b16688cdac15d7677dd7f6a4b0c1741e6ff79adfc588d7f47710a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Job not found"
+          },
+          "primaryKey": {
+            "ID": "46F667D9-6C08-4603-B387-FE3CCE80A368"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.169Z",
+            "checksum": "7348244f619f0fc4655baf61fac4db5f7571a5b5df1ae897857f66673e0ec22e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to queue job execution"
+          },
+          "primaryKey": {
+            "ID": "7C52A905-D8FC-4700-98C8-99FF7E344876"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.176Z",
+            "checksum": "c639469f087f7d276171facaa08fc0e7ba077878a222b48731ed97f732977156"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8C985369-A876-43D3-9A56-848E7AC28CFA"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:27.467Z",
+      "checksum": "6b8b390b1592d52e6c84d38aa3a2bdd2a40cc4e04e3112204cc71a61362b70b9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Scheduled Job Statistics",
+      "Description": "Retrieve execution statistics for scheduled jobs including total runs, success/failure counts, success rate, and average duration",
+      "CategoryID": "@lookup:Action Categories.Name=Data&Parent=System",
+      "DriverClass": "__GetScheduledJobStatistics",
+      "Type": "Custom",
+      "CodeApprovalStatus": "Approved",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-chart-bar"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "JobID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of specific job to get stats for (if omitted, gets stats for all jobs)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2D4DFAC7-580F-41D1-93DC-F6DA64099460"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.184Z",
+            "checksum": "d9eb7366c247b7250537b3cdb02eab7c2a5dbacab196d18b6b06e128f6400f88"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DaysBack",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "DefaultValue": "30",
+            "Description": "Number of days to include in statistics (default: 30)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2F1C300F-DDFF-4295-BD62-AFD1671FC251"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.192Z",
+            "checksum": "7a1dce56e768544353a2c08f2eb65d9d6f6444242a5d8c9a8e89361d2cf387ce"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Statistics",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of job statistics objects containing JobID, JobName, TotalRuns, SuccessfulRuns, FailedRuns, SuccessRate, AverageDurationSeconds, LastRunAt, LastRunStatus",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9E267AE2-50B9-4252-B4D7-E28DC30312CB"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.202Z",
+            "checksum": "93666cd43d83a7c76e3f242a576c38e866aabd6bffba6759775dace01fe6b210"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Statistics retrieved successfully"
+          },
+          "primaryKey": {
+            "ID": "2779245E-FD60-46B7-81CD-D81CA3FFE81D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.221Z",
+            "checksum": "f40ccfaa7be714eb2888745dbdd065ce3499041829372ff91b8f7dc368e1b589"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to retrieve statistics"
+          },
+          "primaryKey": {
+            "ID": "25712C72-CFE7-41B5-974A-A48FCE37B2A9"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:28.228Z",
+            "checksum": "f54f22e0c23a907075b55bb5c6cb6545f89efd3658291198c63e8130f2fb43dc"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7C842E03-7CAF-425A-9934-5DABF6967BF8"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:27.477Z",
+      "checksum": "97317295c68195206e2fccd984f67d608c35589bfcc4b51ae7c83a3ddc2fec4f"
+    }
+  }
+]

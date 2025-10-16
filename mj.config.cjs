@@ -294,6 +294,13 @@ const mjServerConfig = {
     autoCleanupEmptyFiles: true,
     sessionTimeout: 3600000 // 1 hour in ms, auto-close sessions after this
   },
+  scheduledJobs: {
+    enabled: true, // Set to true to enable scheduled jobs execution
+    systemUserEmail: 'not.set@nowhere.com', // User context for executing jobs
+    maxConcurrentJobs: 5, // Maximum number of jobs that can run simultaneously
+    defaultLockTimeout: 600000, // 10 minutes in ms - default timeout for job locks
+    staleLockCleanupInterval: 300000 // 5 minutes in ms - interval for checking stale locks
+  },
   /**
    * Authentication Provider Configuration
    * This replaces the legacy individual provider fields (webClientID, tenantID, auth0Domain, etc.)
