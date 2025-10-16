@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/scheduled-actions
 
+## 2.107.0
+
+### Minor Changes
+
+- e05a672: migration
+- 0be127f: migration
+
+### Patch Changes
+
+- Updated dependencies [0dd1d04]
+- Updated dependencies [af67760]
+  - @memberjunction/core-actions@2.107.0
+  - @memberjunction/actions@2.107.0
+  - @memberjunction/core@2.107.0
+  - @memberjunction/core-entities@2.107.0
+  - @memberjunction/core-entities-server@2.107.0
+  - @memberjunction/global@2.107.0
+  - @memberjunction/sqlserver-dataprovider@2.107.0
+
 ## 2.106.0
 
 ### Patch Changes

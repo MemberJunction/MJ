@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/storage
 
+## 2.107.0
+
+### Minor Changes
+
+- 0dd1d04: migration
+
+### Patch Changes
+
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/global@2.107.0
+
 ## 2.106.0
 
 ### Patch Changes
