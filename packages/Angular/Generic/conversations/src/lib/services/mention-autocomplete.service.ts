@@ -39,7 +39,7 @@ export class MentionAutocompleteService {
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
       this.agentsCache = AIEngineBase.Instance.Agents.filter(
-        a => !a.ParentID && a.Status === 'Active'
+        a => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent'
       );
 
       console.log('[MentionAutocomplete] Initialized with agents:', this.agentsCache.map(a => a.Name));

@@ -58,6 +58,9 @@ interface GoogleSearchResponse {
  *   }, {
  *     Name: 'SiteSearch',
  *     Value: 'europa.eu'
+ *   }, {
+ *     Name: 'Verbosity',
+ *     Value: 'minimal'  // 'minimal' | 'standard' (default) | 'detailed'
  *   }]
  * });
  * ```
@@ -111,6 +114,7 @@ export class GoogleCustomSearchAction extends BaseAction {
         const searchType = this.normalizeSearchType(this.getStringParam(params, "searchtype"));
         const fileType = this.getStringParam(params, "filetype");
         const region = this.getStringParam(params, "region") || this.getStringParam(params, "gl");
+        const verbosity = this.normalizeVerbosity(this.getStringParam(params, "verbosity"));
 
         const requestParams: Record<string, string | number> = {
             key: apiKey,
@@ -165,20 +169,15 @@ export class GoogleCustomSearchAction extends BaseAction {
             }
 
             const data = response.data;
-            const items = (data.items || []).map(item => this.transformItem(item));
+            const items = (data.items || []).map(item => this.transformItemByVerbosity(item, verbosity));
             const totalResults = Number(data.searchInformation?.totalResults || "0");
 
-            const resultData = {
+            const resultData = this.buildResultData(data, items, verbosity, {
                 query,
                 maxResults,
                 startIndex,
-                totalResults,
-                searchTime: data.searchInformation?.searchTime,
-                items,
-                searchInformation: data.searchInformation,
-                queries: data.queries,
-                context: data.context
-            };
+                totalResults
+            });
 
             this.addOutputParam(params, "SearchResultsDetails", resultData);
             this.addOutputParam(params, "Items", items);
@@ -222,11 +221,32 @@ export class GoogleCustomSearchAction extends BaseAction {
         }
     }
 
-    private transformItem(item: GoogleSearchItem) {
+    private transformItemByVerbosity(item: GoogleSearchItem, verbosity: 'minimal' | 'standard' | 'detailed') {
         const pagemap = item.pagemap as Record<string, unknown> | undefined;
         const cseImage = this.extractFirstString(pagemap, "cse_image", "src");
         const cseThumbnail = this.extractFirstString(pagemap, "cse_thumbnail", "src");
 
+        // Minimal: Just the essentials for AI agents needing quick results
+        if (verbosity === 'minimal') {
+            return {
+                title: item.title,
+                link: item.link,
+                snippet: item.snippet
+            };
+        }
+
+        // Standard: Balanced result set with most commonly needed fields
+        if (verbosity === 'standard') {
+            return {
+                title: item.title,
+                link: item.link,
+                snippet: item.snippet,
+                image: cseImage,
+                thumbnail: cseThumbnail
+            };
+        }
+
+        // Detailed: Everything including metadata and pagemap
         return {
             title: item.title,
             link: item.link,
@@ -239,6 +259,41 @@ export class GoogleCustomSearchAction extends BaseAction {
             image: cseImage,
             thumbnail: cseThumbnail,
             pagemap
+        };
+    }
+
+    private buildResultData(
+        data: GoogleSearchResponse,
+        items: unknown[],
+        verbosity: 'minimal' | 'standard' | 'detailed',
+        metadata: { query: string; maxResults: number; startIndex: number; totalResults: number }
+    ) {
+        const baseResult = {
+            query: metadata.query,
+            maxResults: metadata.maxResults,
+            startIndex: metadata.startIndex,
+            totalResults: metadata.totalResults,
+            items
+        };
+
+        if (verbosity === 'minimal') {
+            return baseResult;
+        }
+
+        if (verbosity === 'standard') {
+            return {
+                ...baseResult,
+                searchTime: data.searchInformation?.searchTime
+            };
+        }
+
+        // Detailed: Include everything
+        return {
+            ...baseResult,
+            searchTime: data.searchInformation?.searchTime,
+            searchInformation: data.searchInformation,
+            queries: data.queries,
+            context: data.context
         };
     }
 
@@ -330,6 +385,32 @@ export class GoogleCustomSearchAction extends BaseAction {
         }
 
         return undefined;
+    }
+
+    private normalizeVerbosity(value?: string): 'minimal' | 'standard' | 'detailed' {
+        if (!value) {
+            return 'standard'; // Default
+        }
+
+        const normalized = value.trim().toLowerCase();
+        switch (normalized) {
+            case 'minimal':
+            case 'min':
+            case 'basic':
+            case 'simple':
+                return 'minimal';
+            case 'detailed':
+            case 'detail':
+            case 'full':
+            case 'complete':
+            case 'verbose':
+                return 'detailed';
+            case 'standard':
+            case 'normal':
+            case 'default':
+            default:
+                return 'standard';
+        }
     }
 
     private clamp(value: number, min: number, max: number): number {

@@ -2963,6 +2963,10 @@ if this limit is exceeded.`})
     @MaxLength(16)
     OwnerUserID: string;
         
+    @Field({description: `Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`}) 
+    @MaxLength(40)
+    InvocationMode: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -3158,6 +3162,9 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     OwnerUserID?: string;
+
+    @Field({ nullable: true })
+    InvocationMode?: string;
 }
     
 
@@ -3276,6 +3283,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     OwnerUserID?: string;
+
+    @Field({ nullable: true })
+    InvocationMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4871,11 +4881,11 @@ export class MJEnvironment_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
-    @Field(() => [MJCollection_])
-    MJ_Collections_EnvironmentIDArray: MJCollection_[]; // Link to MJ_Collections
-    
     @Field(() => [MJProject_])
     MJ_Projects_EnvironmentIDArray: MJProject_[]; // Link to MJ_Projects
+    
+    @Field(() => [MJCollection_])
+    MJ_Collections_EnvironmentIDArray: MJCollection_[]; // Link to MJ_Collections
     
     @Field(() => [MJArtifact_])
     MJ_Artifacts_EnvironmentIDArray: MJArtifact_[]; // Link to MJ_Artifacts
@@ -4998,17 +5008,6 @@ export class MJEnvironmentResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJCollection_])
-    async MJ_Collections_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Collections', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCollections] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJProject_])
     async MJ_Projects_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Projects', userPayload);
@@ -5017,6 +5016,17 @@ export class MJEnvironmentResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwProjects] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Projects', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Projects', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJCollection_])
+    async MJ_Collections_EnvironmentIDArray(@Root() mjenvironment_: MJEnvironment_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Collections', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwCollections] WHERE [EnvironmentID]='${mjenvironment_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Collections', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Collections', rows);
         return result;
     }
         
@@ -5139,6 +5149,24 @@ export class MJAIAgentAction_ {
     @Field(() => Int, {nullable: true, description: `Maximum number of times this action can be executed per agent run`}) 
     MaxExecutionsPerRun?: number;
         
+    @Field(() => Int, {nullable: true, description: `Number of conversation turns before action results expire from conversation context. NULL = never expire (default). 0 = expire immediately after next turn.`}) 
+    ResultExpirationTurns?: number;
+        
+    @Field({description: `How to handle expired action results: None (no expiration, default), Remove (delete message entirely), Compact (reduce size via CompactMode while preserving key information).`}) 
+    @MaxLength(40)
+    ResultExpirationMode: string;
+        
+    @Field({nullable: true, description: `How to compact results when ResultExpirationMode=Compact: FirstNChars (truncate to CompactLength characters, fast and free), AISummary (use LLM to intelligently summarize with CompactPromptID or Action.DefaultCompactPromptID).`}) 
+    @MaxLength(40)
+    CompactMode?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Number of characters to keep when CompactMode=FirstNChars. Required when CompactMode is FirstNChars, ignored otherwise.`}) 
+    CompactLength?: number;
+        
+    @Field({nullable: true, description: `Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action.DefaultCompactPromptID -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).`}) 
+    @MaxLength(16)
+    CompactPromptID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -5146,6 +5174,10 @@ export class MJAIAgentAction_ {
     @Field({nullable: true}) 
     @MaxLength(850)
     Action?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    CompactPrompt?: string;
         
 }
 
@@ -5171,6 +5203,21 @@ export class CreateMJAIAgentActionInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionsPerRun: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ResultExpirationTurns: number | null;
+
+    @Field({ nullable: true })
+    ResultExpirationMode?: string;
+
+    @Field({ nullable: true })
+    CompactMode: string | null;
+
+    @Field(() => Int, { nullable: true })
+    CompactLength: number | null;
+
+    @Field({ nullable: true })
+    CompactPromptID: string | null;
 }
     
 
@@ -5196,6 +5243,21 @@ export class UpdateMJAIAgentActionInput {
 
     @Field(() => Int, { nullable: true })
     MaxExecutionsPerRun?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    ResultExpirationTurns?: number | null;
+
+    @Field({ nullable: true })
+    ResultExpirationMode?: string;
+
+    @Field({ nullable: true })
+    CompactMode?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    CompactLength?: number | null;
+
+    @Field({ nullable: true })
+    CompactPromptID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -6436,6 +6498,9 @@ export class MJAIPrompt_ {
     @Field(() => [MJAIAgentType_])
     MJ_AIAgentTypes_SystemPromptIDArray: MJAIAgentType_[]; // Link to MJ_AIAgentTypes
     
+    @Field(() => [MJAIAgentAction_])
+    AIAgentActions_CompactPromptIDArray: MJAIAgentAction_[]; // Link to AIAgentActions
+    
     @Field(() => [MJAIConfiguration_])
     MJ_AIConfigurations_DefaultPromptForContextSummarizationIDArray: MJAIConfiguration_[]; // Link to MJ_AIConfigurations
     
@@ -6456,6 +6521,9 @@ export class MJAIPrompt_ {
     
     @Field(() => [MJAIAgent_])
     AIAgents_ContextCompressionPromptIDArray: MJAIAgent_[]; // Link to AIAgents
+    
+    @Field(() => [MJAction_])
+    Actions_DefaultCompactPromptIDArray: MJAction_[]; // Link to Actions
     
 }
 
@@ -6860,6 +6928,17 @@ export class MJAIPromptResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJAIAgentAction_])
+    async AIAgentActions_CompactPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('AI Agent Actions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentActions] WHERE [CompactPromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agent Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('AI Agent Actions', rows);
+        return result;
+    }
+        
     @FieldResolver(() => [MJAIConfiguration_])
     async MJ_AIConfigurations_DefaultPromptForContextSummarizationIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Configurations', userPayload);
@@ -6934,6 +7013,17 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgents] WHERE [ContextCompressionPromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'AI Agents', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('AI Agents', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAction_])
+    async Actions_DefaultCompactPromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('Actions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwActions] WHERE [DefaultCompactPromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'Actions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('Actions', rows);
         return result;
     }
         
@@ -31667,6 +31757,10 @@ export class MJAction_ {
     @MaxLength(200)
     IconClass?: string;
         
+    @Field({nullable: true, description: `Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`}) 
+    @MaxLength(16)
+    DefaultCompactPromptID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Category?: string;
@@ -31678,6 +31772,10 @@ export class MJAction_ {
     @Field({nullable: true}) 
     @MaxLength(850)
     Parent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(510)
+    DefaultCompactPrompt?: string;
         
     @Field({nullable: true}) 
     @MaxLength(16)
@@ -31782,6 +31880,9 @@ export class CreateMJActionInput {
 
     @Field({ nullable: true })
     IconClass: string | null;
+
+    @Field({ nullable: true })
+    DefaultCompactPromptID: string | null;
 }
     
 
@@ -31849,6 +31950,9 @@ export class UpdateMJActionInput {
 
     @Field({ nullable: true })
     IconClass?: string | null;
+
+    @Field({ nullable: true })
+    DefaultCompactPromptID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -43142,6 +43246,12 @@ export class MJAIAgentRelationship_ {
     @Field({nullable: true, description: `JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`}) 
     SubAgentOutputMapping?: string;
         
+    @Field({nullable: true, description: `JSON mapping of parent payload paths to sub-agent initial payload paths. Enables structural data transfer from parent to related sub-agent. Format: {"parentPath": "subAgentPath", "parent.nested": "subAgent.field"}. Example: {"searchQuery": "query", "maxResults": "limit"}. If null, sub-agent starts with empty payload (default behavior).`}) 
+    SubAgentInputMapping?: string;
+        
+    @Field({nullable: true, description: `JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`}) 
+    SubAgentContextPaths?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -43171,6 +43281,12 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     SubAgentOutputMapping: string | null;
+
+    @Field({ nullable: true })
+    SubAgentInputMapping: string | null;
+
+    @Field({ nullable: true })
+    SubAgentContextPaths: string | null;
 }
     
 
@@ -43193,6 +43309,12 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     SubAgentOutputMapping?: string | null;
+
+    @Field({ nullable: true })
+    SubAgentInputMapping?: string | null;
+
+    @Field({ nullable: true })
+    SubAgentContextPaths?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
