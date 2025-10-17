@@ -8073,6 +8073,16 @@ export const AIAgentRelationshipSchema = z.object({
         * * Display Name: Sub Agent Output Mapping
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`),
+    SubAgentInputMapping: z.string().nullable().describe(`
+        * * Field Name: SubAgentInputMapping
+        * * Display Name: Sub Agent Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON mapping of parent payload paths to sub-agent initial payload paths. Enables structural data transfer from parent to related sub-agent. Format: {"parentPath": "subAgentPath", "parent.nested": "subAgent.field"}. Example: {"searchQuery": "query", "maxResults": "limit"}. If null, sub-agent starts with empty payload (default behavior).`),
+    SubAgentContextPaths: z.string().nullable().describe(`
+        * * Field Name: SubAgentContextPaths
+        * * Display Name: Sub Agent Context Paths
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -36589,6 +36599,32 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     }
     set SubAgentOutputMapping(value: string | null) {
         this.Set('SubAgentOutputMapping', value);
+    }
+
+    /**
+    * * Field Name: SubAgentInputMapping
+    * * Display Name: Sub Agent Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON mapping of parent payload paths to sub-agent initial payload paths. Enables structural data transfer from parent to related sub-agent. Format: {"parentPath": "subAgentPath", "parent.nested": "subAgent.field"}. Example: {"searchQuery": "query", "maxResults": "limit"}. If null, sub-agent starts with empty payload (default behavior).
+    */
+    get SubAgentInputMapping(): string | null {
+        return this.Get('SubAgentInputMapping');
+    }
+    set SubAgentInputMapping(value: string | null) {
+        this.Set('SubAgentInputMapping', value);
+    }
+
+    /**
+    * * Field Name: SubAgentContextPaths
+    * * Display Name: Sub Agent Context Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).
+    */
+    get SubAgentContextPaths(): string | null {
+        return this.Get('SubAgentContextPaths');
+    }
+    set SubAgentContextPaths(value: string | null) {
+        this.Set('SubAgentContextPaths', value);
     }
 
     /**

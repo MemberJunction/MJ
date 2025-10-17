@@ -43246,6 +43246,12 @@ export class MJAIAgentRelationship_ {
     @Field({nullable: true, description: `JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`}) 
     SubAgentOutputMapping?: string;
         
+    @Field({nullable: true, description: `JSON mapping of parent payload paths to sub-agent initial payload paths. Enables structural data transfer from parent to related sub-agent. Format: {"parentPath": "subAgentPath", "parent.nested": "subAgent.field"}. Example: {"searchQuery": "query", "maxResults": "limit"}. If null, sub-agent starts with empty payload (default behavior).`}) 
+    SubAgentInputMapping?: string;
+        
+    @Field({nullable: true, description: `JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`}) 
+    SubAgentContextPaths?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -43275,6 +43281,12 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     SubAgentOutputMapping: string | null;
+
+    @Field({ nullable: true })
+    SubAgentInputMapping: string | null;
+
+    @Field({ nullable: true })
+    SubAgentContextPaths: string | null;
 }
     
 
@@ -43297,6 +43309,12 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     SubAgentOutputMapping?: string | null;
+
+    @Field({ nullable: true })
+    SubAgentInputMapping?: string | null;
+
+    @Field({ nullable: true })
+    SubAgentContextPaths?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
