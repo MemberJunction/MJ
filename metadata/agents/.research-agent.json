@@ -204,20 +204,6 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Web Page Content",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "C9C85B26-9375-4915-B50F-0895D64FC2FA"
-          },
-          "sync": {
-            "lastModified": "2025-10-15T23:02:37.513Z",
-            "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Summarize Content",
             "Status": "Active"
           },
@@ -359,7 +345,7 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-17T01:33:06.648Z",
+            "lastModified": "2025-10-17T01:56:22.184Z",
             "checksum": "2d502a95198e79af3525e5b23ccadb85ed0b00a3445e1fd95c7898caf2d0d622"
           }
         },
@@ -374,7 +360,7 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-17T01:33:06.692Z",
+            "lastModified": "2025-10-17T01:56:22.235Z",
             "checksum": "35482459eacb3efe9151743d4fbd35c54b103f09fec3bae8ecc1913dbd6094b3"
           }
         }
