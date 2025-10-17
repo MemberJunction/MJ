@@ -5,7 +5,7 @@
       "Description": "System prompt for the File Research Agent sub-agent. Guides the agent in exploring file systems, searching documents, and extracting relevant research information from files.",
       "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
       "PromptRole": "System",
-      "TemplateText": "@file:file-research-agent.md",
+      "TemplateText": "@file:templates/research-agent/file-research-agent.md",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "Status": "Active",
       "PromptPosition": "First"

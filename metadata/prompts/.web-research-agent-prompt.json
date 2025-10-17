@@ -5,7 +5,7 @@
       "Description": "System prompt for the Web Research Agent sub-agent. Guides the agent in formulating search queries, evaluating web sources, and extracting relevant research information from the internet.",
       "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
       "PromptRole": "System",
-      "TemplateText": "@file:web-research-agent.md",
+      "TemplateText": "@file:templates/research-agent/web-research-agent.md",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "Status": "Active",
       "PromptPosition": "First"

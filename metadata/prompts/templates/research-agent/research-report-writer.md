@@ -41,7 +41,7 @@ Create a structured analysis in `payloadChangeRequest.newElements.synthesis`:
 
 ```json
 {
-  "executiveSummary": "Comprehensive 2-3 paragraph summary of key findings, insights, and implications. Go beyond mere summarization - provide your analytical perspective.",
+  "executiveSummary": "Use Markdown to great a gorgeously formatted write up of key findings, insights, and implications. Go beyond mere summarization - provide your analytical perspective. Target approximately 500 words. Use tables and ASCII diagrams that fit well in Markdown viewers",
 
   "findings": [
     {

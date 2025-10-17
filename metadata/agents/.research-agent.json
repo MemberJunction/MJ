@@ -272,6 +272,37 @@
           }
         }
       ],
+      "MJ: AI Agents": [
+        {
+          "fields": {
+            "Name": "Research Report Writer",
+            "Description": "Expert report writer and analyst that synthesizes research findings into comprehensive, insightful reports. Analyzes patterns across data sources, draws well-reasoned conclusions, and presents findings with appropriate confidence levels and citations. Uses high-effort models for deep analytical thinking.",
+            "ParentID": "@parent:ID",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExposeAsAction": false,
+            "IconClass": "fa-solid fa-file-pen",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "synthesis"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Research Report Writer Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                }
+              }
+            ] 
+          }
+        }          
+      ],
       "MJ: AI Agent Relationships": [
         {
           "fields": {
@@ -307,6 +338,21 @@
           "fields": {
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=File Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}"
+          },
+          "primaryKey": {
+            "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
+          },
+          "sync": {
+            "lastModified": "2025-10-16T18:09:08.921Z",
+            "checksum": "2d502a95198e79af3525e5b23ccadb85ed0b00a3445e1fd95c7898caf2d0d622"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Research Report Writer",
             "Status": "Active",
             "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}"
           },

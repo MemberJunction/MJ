@@ -4,7 +4,7 @@
       "Name": "Research Agent - Main Prompt",
       "Description": "Main prompt for Research Agent that conducts comprehensive, iterative research by gathering information from multiple sources, comparing and validating data, and synthesizing findings into detailed reports.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:research-agent-main.md",
+      "TemplateText": "@file:templates/research-agent/research-agent-main.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",

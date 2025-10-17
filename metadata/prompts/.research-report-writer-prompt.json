@@ -1,0 +1,51 @@
+[
+  {
+    "fields": {
+      "Name": "Research Report Writer Prompt",
+      "Description": "Expert report writing and synthesis prompt for analyzing research findings and generating comprehensive reports with well-reasoned conclusions, confidence assessments, and proper citations.",
+      "TemplateID": "@lookup:Templates.Name=templates/research-agent/research-report-writer.md",
+      "EffortLevel": 100,
+      "CategoryID": "@lookup:AI Prompt Categories.Name=Research",
+      "TypeID": "@lookup:AI Prompt Types.Name=System",
+      "Status": "Active",
+      "SupportsResponseTemplates": false,
+      "SupportsStreaming": false
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=o4-mini",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 3
+          } 
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 1
+          } 
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 2
+          } 
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+            "Priority": 4
+          } 
+        }
+      ]
+    }
+  }
+]
