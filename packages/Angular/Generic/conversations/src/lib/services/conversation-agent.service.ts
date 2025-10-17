@@ -80,16 +80,6 @@ export class ConversationAgentService {
     }
   }
 
-  /**
-   * Get or create a session ID for a conversation
-   */
-  private getSessionId(conversationId: string): string {
-    if (!this._sessionIds.has(conversationId)) {
-      // Create a new session ID for this conversation
-      this._sessionIds.set(conversationId, `conv-${conversationId}-${Date.now()}`);
-    }
-    return this._sessionIds.get(conversationId)!;
-  }
 
   /**
    * Process a message through the ambient Sage Agent.
