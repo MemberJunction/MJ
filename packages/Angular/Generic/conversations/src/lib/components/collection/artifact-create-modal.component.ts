@@ -1,7 +1,8 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactTypeEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactTypeEntity, ArtifactVersionEntity, CollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
+import { CollectionPermissionService } from '../../services/collection-permission.service';
 
 /**
  * Modal for creating new artifacts and adding them to collections
@@ -174,7 +175,10 @@ export class ArtifactCreateModalComponent implements OnChanges {
   public isSaving: boolean = false;
   public errorMessage: string = '';
 
-  constructor(private toastService: ToastService) {}
+  constructor(
+    private toastService: ToastService,
+    private permissionService: CollectionPermissionService
+  ) {}
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['isOpen'] && this.isOpen) {
@@ -229,7 +233,25 @@ export class ArtifactCreateModalComponent implements OnChanges {
     this.errorMessage = '';
 
     try {
+      // Validate permission to add artifacts to collection
       const md = new Metadata();
+      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      await collection.Load(this.collectionId);
+
+      // Check if user has Edit permission on collection
+      if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
+        const permission = await this.permissionService.checkPermission(
+          this.collectionId,
+          this.currentUser.ID,
+          this.currentUser
+        );
+
+        if (!permission?.canEdit) {
+          this.errorMessage = 'You do not have Edit permission to add artifacts to this collection.';
+          this.isSaving = false;
+          return;
+        }
+      }
 
       // Step 1: Create the artifact
       const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);

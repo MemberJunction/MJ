@@ -169,6 +169,39 @@ export class CollectionFormModalComponent implements OnChanges {
     this.errorMessage = '';
 
     try {
+      // Validate permissions before saving
+      if (this.collection) {
+        // Editing existing collection - need Edit permission
+        if (this.collection.OwnerID && this.collection.OwnerID !== this.currentUser.ID) {
+          const permission = await this.permissionService.checkPermission(
+            this.collection.ID,
+            this.currentUser.ID,
+            this.currentUser
+          );
+
+          if (!permission?.canEdit) {
+            this.errorMessage = 'You do not have Edit permission for this collection.';
+            this.isSaving = false;
+            return;
+          }
+        }
+      } else if (this.parentCollection) {
+        // Creating child collection - need Edit permission on parent
+        if (this.parentCollection.OwnerID && this.parentCollection.OwnerID !== this.currentUser.ID) {
+          const permission = await this.permissionService.checkPermission(
+            this.parentCollection.ID,
+            this.currentUser.ID,
+            this.currentUser
+          );
+
+          if (!permission?.canEdit) {
+            this.errorMessage = 'You do not have Edit permission for the parent collection.';
+            this.isSaving = false;
+            return;
+          }
+        }
+      }
+
       const md = new Metadata();
       const collection = this.collection ||
         await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
@@ -177,12 +210,18 @@ export class CollectionFormModalComponent implements OnChanges {
       collection.Description = this.formData.description.trim() || null;
       collection.EnvironmentID = this.environmentId;
 
-      // Set owner if creating new collection
+      // Set owner and parent relationship if creating new collection
       if (!this.collection) {
-        collection.OwnerID = this.currentUser.ID;
-      }
-
-      if (this.parentCollection) {
+        if (this.parentCollection) {
+          // Child collection inherits parent's owner to maintain permission hierarchy
+          collection.ParentID = this.parentCollection.ID;
+          collection.OwnerID = this.parentCollection.OwnerID || this.currentUser.ID;
+        } else {
+          // Root collection - current user becomes owner
+          collection.OwnerID = this.currentUser.ID;
+        }
+      } else if (this.parentCollection) {
+        // Updating existing collection's parent
         collection.ParentID = this.parentCollection.ID;
       }
 
@@ -190,18 +229,18 @@ export class CollectionFormModalComponent implements OnChanges {
       if (saved) {
         // If creating new collection, set up permissions
         if (!this.collection) {
-          // Create owner permission record
-          await this.permissionService.createOwnerPermission(
-            collection.ID,
-            this.currentUser.ID,
-            this.currentUser
-          );
-
-          // Copy parent permissions if this is a child collection
           if (this.parentCollection) {
+            // Child collection - copy all permissions from parent (including owner)
             await this.permissionService.copyParentPermissions(
               this.parentCollection.ID,
               collection.ID,
+              this.currentUser
+            );
+          } else {
+            // Root collection - create owner permission for current user
+            await this.permissionService.createOwnerPermission(
+              collection.ID,
+              this.currentUser.ID,
               this.currentUser
             );
           }

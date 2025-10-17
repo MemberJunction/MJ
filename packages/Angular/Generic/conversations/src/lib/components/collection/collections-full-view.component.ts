@@ -39,7 +39,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
                  class="collection-search-input">
         </div>
         <div class="collections-actions">
-          <button class="btn-primary" (click)="createCollection()" title="New Collection">
+          <button class="btn-primary" (click)="createCollection()" *ngIf="canEditCurrent()" title="New Collection">
             <i class="fas fa-folder-plus"></i>
             New Collection
           </button>
@@ -131,7 +131,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
                   </div>
                 </div>
                 <div class="card-actions" (click)="$event.stopPropagation()">
-                  <button class="card-action-btn" (click)="removeArtifact(artifact)" title="Remove from collection" *ngIf="canEditCurrent()">
+                  <button class="card-action-btn" (click)="removeArtifact(artifact)" title="Remove from collection" *ngIf="canDeleteCurrent()">
                     <i class="fas fa-times"></i>
                   </button>
                 </div>
@@ -607,7 +607,8 @@ export class CollectionsFullViewComponent implements OnInit {
     try {
       await Promise.all([
         this.loadCollections(),
-        this.loadArtifacts()
+        this.loadArtifacts(),
+        this.loadCurrentCollectionPermission()
       ]);
     } finally {
       this.isLoading = false;
@@ -665,6 +666,22 @@ export class CollectionsFullViewComponent implements OnInit {
       if (permission) {
         this.userPermissions.set(collection.ID, permission);
       }
+    }
+  }
+
+  private async loadCurrentCollectionPermission(): Promise<void> {
+    if (!this.currentCollectionId || !this.currentCollection) {
+      return;
+    }
+
+    const permission = await this.permissionService.checkPermission(
+      this.currentCollectionId,
+      this.currentUser.ID,
+      this.currentUser
+    );
+
+    if (permission) {
+      this.userPermissions.set(this.currentCollectionId, permission);
     }
   }
 
@@ -742,18 +759,31 @@ export class CollectionsFullViewComponent implements OnInit {
     this.loadData();
   }
 
-  createCollection(): void {
+  async createCollection(): Promise<void> {
+    // Validate user can edit current collection (or at root level)
+    if (this.currentCollection) {
+      const canEdit = await this.validatePermission(this.currentCollection, 'edit');
+      if (!canEdit) return;
+    }
+
     this.editingCollection = undefined;
     this.isFormModalOpen = true;
   }
 
-  editCollection(collection: CollectionEntity): void {
+  async editCollection(collection: CollectionEntity): Promise<void> {
+    const canEdit = await this.validatePermission(collection, 'edit');
+    if (!canEdit) return;
+
     this.editingCollection = collection;
     this.isFormModalOpen = true;
   }
 
   async deleteCollection(collection: CollectionEntity): Promise<void> {
     console.log('deleteCollection called for:', collection.Name, collection.ID);
+
+    // Validate user has delete permission
+    const canDelete = await this.validatePermission(collection, 'delete');
+    if (!canDelete) return;
 
     const confirmed = await this.dialogService.confirm({
       title: 'Delete Collection',
@@ -832,6 +862,8 @@ export class CollectionsFullViewComponent implements OnInit {
     this.isFormModalOpen = false;
     this.editingCollection = undefined;
     await this.loadCollections();
+    // Reload current collection permission (it was cleared by loadUserPermissions)
+    await this.loadCurrentCollectionPermission();
   }
 
   onFormCancelled(): void {
@@ -840,6 +872,12 @@ export class CollectionsFullViewComponent implements OnInit {
   }
 
   async addArtifact(): Promise<void> {
+    // Validate user can edit current collection
+    if (this.currentCollection) {
+      const canEdit = await this.validatePermission(this.currentCollection, 'edit');
+      if (!canEdit) return;
+    }
+
     this.isArtifactModalOpen = true;
   }
 
@@ -854,6 +892,12 @@ export class CollectionsFullViewComponent implements OnInit {
 
   async removeArtifact(artifact: ArtifactEntity): Promise<void> {
     if (!this.currentCollectionId) return;
+
+    // Validate user has delete permission on current collection
+    if (this.currentCollection) {
+      const canDelete = await this.validatePermission(this.currentCollection, 'delete');
+      if (!canDelete) return;
+    }
 
     const confirmed = await this.dialogService.confirm({
       title: 'Remove Artifact',
@@ -881,7 +925,42 @@ export class CollectionsFullViewComponent implements OnInit {
     this.artifactState.openArtifact(artifact.ID);
   }
 
-  // Permission checking methods
+  // Permission validation and checking methods
+  private async validatePermission(
+    collection: CollectionEntity | null,
+    requiredPermission: 'edit' | 'delete' | 'share'
+  ): Promise<boolean> {
+    // Owner has all permissions (including backwards compatibility for null OwnerID)
+    if (!collection?.OwnerID || collection.OwnerID === this.currentUser.ID) {
+      return true;
+    }
+
+    const permission = this.userPermissions.get(collection.ID);
+    if (!permission) {
+      await this.dialogService.alert(
+        'Permission Denied',
+        'You do not have permission to perform this action.'
+      );
+      return false;
+    }
+
+    const hasPermission =
+      (requiredPermission === 'edit' && permission.canEdit) ||
+      (requiredPermission === 'delete' && permission.canDelete) ||
+      (requiredPermission === 'share' && permission.canShare);
+
+    if (!hasPermission) {
+      const permissionName = requiredPermission.charAt(0).toUpperCase() + requiredPermission.slice(1);
+      await this.dialogService.alert(
+        'Permission Denied',
+        `You do not have ${permissionName} permission for this collection.`
+      );
+      return false;
+    }
+
+    return true;
+  }
+
   canEdit(collection: CollectionEntity): boolean {
     // Backwards compatibility: treat null OwnerID as owned by current user
     if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
@@ -917,13 +996,25 @@ export class CollectionsFullViewComponent implements OnInit {
     return this.canEdit(this.currentCollection);
   }
 
+  canDeleteCurrent(): boolean {
+    // At root level, no delete needed
+    if (!this.currentCollectionId || !this.currentCollection) {
+      return false;
+    }
+    return this.canDelete(this.currentCollection);
+  }
+
   isShared(collection: CollectionEntity): boolean {
     // Collection is shared if user is not the owner and OwnerID is set
     return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
   }
 
   // Sharing methods
-  shareCollection(collection: CollectionEntity): void {
+  async shareCollection(collection: CollectionEntity): Promise<void> {
+    // Validate user has share permission
+    const canShare = await this.validatePermission(collection, 'share');
+    if (!canShare) return;
+
     this.sharingCollection = collection;
     this.isShareModalOpen = true;
   }

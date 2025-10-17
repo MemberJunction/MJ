@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
-import { CollectionPermission } from '../../services/collection-permission.service';
+import { CollectionPermission, CollectionPermissionService } from '../../services/collection-permission.service';
 
 interface TreeNode {
   collection: CollectionEntity;
@@ -180,6 +180,8 @@ export class CollectionTreeComponent implements OnInit {
   public draggedNode: TreeNode | null = null;
   public dragOverNodeId: string | null = null;
 
+  constructor(private permissionService: CollectionPermissionService) {}
+
   ngOnInit() {
     this.loadCollections();
   }
@@ -229,6 +231,26 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   async onCreateCollection(parentId: string | null): Promise<void> {
+    // Validate permission if creating child collection
+    if (parentId) {
+      const parentCollection = this.collections.find(c => c.ID === parentId);
+      if (parentCollection) {
+        // Check if user has Edit permission on parent
+        if (parentCollection.OwnerID && parentCollection.OwnerID !== this.currentUser.ID) {
+          const permission = await this.permissionService.checkPermission(
+            parentId,
+            this.currentUser.ID,
+            this.currentUser
+          );
+
+          if (!permission?.canEdit) {
+            alert('You do not have Edit permission to create a sub-collection.');
+            return;
+          }
+        }
+      }
+    }
+
     const name = prompt('Enter collection name:');
     if (!name) return;
 
@@ -238,7 +260,16 @@ export class CollectionTreeComponent implements OnInit {
 
       collection.Name = name;
       collection.EnvironmentID = this.environmentId;
-      if (parentId) collection.ParentID = parentId;
+
+      if (parentId) {
+        // Child collection - inherit parent's owner and set parent
+        const parentCollection = this.collections.find(c => c.ID === parentId);
+        collection.ParentID = parentId;
+        collection.OwnerID = parentCollection?.OwnerID || this.currentUser.ID;
+      } else {
+        // Root collection - current user becomes owner
+        collection.OwnerID = this.currentUser.ID;
+      }
 
       const saved = await collection.Save();
       if (saved) {
@@ -252,6 +283,20 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   async onDeleteCollection(collection: CollectionEntity): Promise<void> {
+    // Validate Delete permission
+    if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
+      const permission = await this.permissionService.checkPermission(
+        collection.ID,
+        this.currentUser.ID,
+        this.currentUser
+      );
+
+      if (!permission?.canDelete) {
+        alert('You do not have Delete permission for this collection.');
+        return;
+      }
+    }
+
     if (!confirm(`Delete collection "${collection.Name}"?`)) return;
 
     try {
