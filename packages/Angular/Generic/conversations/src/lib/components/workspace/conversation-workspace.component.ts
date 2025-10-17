@@ -237,21 +237,6 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         }
       }
     }
-
-    // Detect artifact selection changes (when on collections tab)
-    if (this.activeTab === 'collections') {
-      const currentArtifactId = this.activeArtifactId;
-      if (currentArtifactId !== this.previousArtifactId) {
-        this.previousArtifactId = currentArtifactId;
-        if (currentArtifactId) {
-          this.navigationChanged.emit({
-            tab: 'collections',
-            artifactId: currentArtifactId
-            // TODO: Add collectionId when collections are integrated with state service
-          });
-        }
-      }
-    }
   }
 
   ngOnDestroy() {
