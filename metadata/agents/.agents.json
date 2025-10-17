@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Demo Loop Agent",
-      "Description": "Simple Agent Demo! This agent demonstrates the basic functionality of a loop agent, capable of executing multiple actions in paralell with no determined path - the AI determines the pathway.",
+      "Description": "Simple demo agent showcasing loop agent capabilities. Can perform web searches, retrieve stock prices, get weather forecasts, look up census data, and fetch web page content. The AI dynamically determines the pathway and can execute multiple actions in parallel with no predetermined sequence.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
@@ -104,8 +104,8 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:43.044Z",
-      "checksum": "86d73c0802321ec23bb20a5f629cf10a8fddf4cb9b9655d6ad349de21579738d"
+      "lastModified": "2025-10-17T01:10:52.554Z",
+      "checksum": "d6ed15dec61f6b857e6a3c15db574c4426a4da0092630a4fb591cba49d338be8"
     }
   },
   {
@@ -313,7 +313,7 @@
   {
     "fields": {
       "Name": "Marketing Agent",
-      "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials.",
+      "Description": "Strategic orchestrator for marketing content creation workflows, managing sub-agents to deliver high-quality marketing materials. Good at writing blog post.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 1,
@@ -887,8 +887,8 @@
       "ID": "4A7B4F1D-C536-409F-9206-F36FDEE64EDF"
     },
     "sync": {
-      "lastModified": "2025-10-14T04:02:48.476Z",
-      "checksum": "107d501e056c33d36627c4b775cc4574d2dcf0c0c005c8eab5605d609a85ae80"
+      "lastModified": "2025-10-17T01:10:52.585Z",
+      "checksum": "7b01594b5f6f6d822bf6b675017eb3c1e8be7342b95c601ccd586b29ad19713c"
     }
   }
 ]

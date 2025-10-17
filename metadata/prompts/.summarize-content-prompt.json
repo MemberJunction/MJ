@@ -1,0 +1,77 @@
+[
+  {
+    "fields": {
+      "Name": "Summarize Content",
+      "Description": "Creates a concise summary of content with optional citations to source material. Analyzes and synthesizes information while maintaining accuracy and providing proper attribution.",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/system/summarize-content.template.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "RetryDelayMS": 1000,
+      "RetryStrategy": "Fixed",
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "3F24E731-1F10-4B6F-807A-D9DE35A66E4F"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T12:42:11.166Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "FAC5A246-F9F5-4D8D-BE57-6919157F6896"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T12:42:11.181Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 3
+          },
+          "primaryKey": {
+            "ID": "DF985890-616E-42BE-8E2E-CA162C3BF988"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T12:42:11.193Z",
+            "checksum": "2f484cacbf7dd09c5d5d85128757626fbdd971275c06c75142f6f69e5709c25b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "761F5B60-6D81-467A-8745-1472615EA2F5"
+    },
+    "sync": {
+      "lastModified": "2025-10-17T12:42:11.128Z",
+      "checksum": "f691eff1b6200a57cc37779998d1e690e05ee76844e616a437bed9f49feca14d"
+    }
+  }
+]

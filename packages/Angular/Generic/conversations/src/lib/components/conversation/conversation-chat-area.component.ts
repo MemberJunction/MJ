@@ -7,6 +7,7 @@ import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { MessageInputComponent } from '../message/message-input.component';
 import { Subject } from 'rxjs';
 
 @Component({
@@ -23,6 +24,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   @Output() taskClicked = new EventEmitter<TaskEntity>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
+  @ViewChild(MessageInputComponent) private messageInputComponent!: MessageInputComponent;
 
   public messages: ConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
@@ -632,6 +634,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     console.log('Message edited:', message.ID);
     // The message entity is already updated in place, so no need to reload
     // Just ensure the UI reflects the changes
+  }
+
+  /**
+   * Handle suggested response selection from user
+   * Sends the selected response as a new user message WITHOUT modifying the visible input
+   */
+  async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
+    const messageText = event.customInput || event.text;
+
+    if (this.messageInputComponent) {
+      await this.messageInputComponent.sendMessageWithText(messageText);
+    } else {
+      console.error('MessageInputComponent not available');
+    }
   }
 
   onRetryMessage(message: ConversationDetailEntity): void {
