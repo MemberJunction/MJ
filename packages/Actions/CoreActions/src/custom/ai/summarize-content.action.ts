@@ -71,7 +71,7 @@ interface SummaryOutput {
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Summarize Content")
+@RegisterClass(BaseAction, "SummarizeContentAction")
 export class SummarizeContentAction extends BaseAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
