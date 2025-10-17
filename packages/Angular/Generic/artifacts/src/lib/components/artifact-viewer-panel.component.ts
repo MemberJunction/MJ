@@ -19,6 +19,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Output() closed = new EventEmitter<void>();
+  @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -32,12 +33,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public error: string | null = null;
   public jsonContent = '';
   public showVersionDropdown = false;
-  public showLibraryDialog = false;
-  public collections: CollectionEntity[] = [];
-  public selectedCollectionId: string | null = null;
-  public newCollectionName = '';
-  public isCreatingCollection = false;
-  public isSavingToLibrary = false;
   public artifactCollections: CollectionArtifactEntity[] = [];
   public primaryCollection: CollectionEntity | null = null;
 
@@ -401,169 +396,87 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       return;
     }
 
-    // If not in a collection, show the save dialog
-    try {
-      // Load user's collections
-      const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
-        EntityName: 'MJ: Collections',
-        ExtraFilter: `EnvironmentID='${this.environmentId}'`,
-        OrderBy: 'Name',
-        ResultType: 'entity_object'
-      }, this.currentUser);
-
-      if (result.Success) {
-        this.collections = result.Results || [];
-        this.showLibraryDialog = true;
-      } else {
-        console.error('Failed to load collections:', result.ErrorMessage);
-        MJNotificationService.Instance.CreateSimpleNotification(
-          'Failed to load collections. Please try again.',
-          'error'
-        );
-      }
-    } catch (err) {
-      console.error('Error loading collections:', err);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Error loading collections. Please try again.',
-        'error'
-      );
-    }
+    // Emit event for parent to handle showing collection picker
+    this.saveToCollectionRequested.emit({
+      artifactId: this.artifactId,
+      excludedCollectionIds: this.excludedCollectionIds
+    });
   }
 
-  async createNewCollection(): Promise<void> {
-    if (!this.newCollectionName.trim()) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Please enter a collection name',
-        'warning',
-        2000
-      );
-      return;
+  get excludedCollectionIds(): string[] {
+    // Return IDs of collections that already contain this artifact
+    return this.artifactCollections.map(ca => ca.CollectionID);
+  }
+
+  /**
+   * Called by parent component after user selects collections in the picker.
+   * Saves the artifact to the selected collections.
+   */
+  async saveToCollections(collectionIds: string[]): Promise<boolean> {
+    if (!this.artifactId || collectionIds.length === 0) {
+      return false;
     }
 
     try {
-      this.isCreatingCollection = true;
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      let successCount = 0;
 
-      collection.EnvironmentID = this.environmentId;
-      collection.Name = this.newCollectionName.trim();
-      collection.Description = 'Created from conversation';
+      // Save artifact to each selected collection
+      for (const collectionId of collectionIds) {
+        // Double check it doesn't already exist
+        const rv = new RunView();
+        const existingResult = await rv.RunView<CollectionArtifactEntity>({
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${this.artifactId}'`,
+          ResultType: 'entity_object'
+        }, this.currentUser);
 
-      const saved = await collection.Save();
+        if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
+          console.log(`Artifact already in collection ${collectionId}, skipping`);
+          continue;
+        }
 
-      if (saved) {
-        this.collections.push(collection);
-        this.selectedCollectionId = collection.ID;
-        this.newCollectionName = '';
-        console.log('✅ Created new collection:', collection.Name);
+        // Create junction record
+        const collectionArtifact = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+        collectionArtifact.CollectionID = collectionId;
+        collectionArtifact.ArtifactID = this.artifactId;
+        collectionArtifact.Sequence = 0;
+
+        const saved = await collectionArtifact.Save();
+        if (saved) {
+          successCount++;
+        } else {
+          console.error(`Failed to save artifact to collection ${collectionId}`);
+        }
+      }
+
+      if (successCount > 0) {
+        console.log(`✅ Saved artifact to ${successCount} collection(s)`);
         MJNotificationService.Instance.CreateSimpleNotification(
-          `Collection "${collection.Name}" created successfully!`,
+          `Artifact saved to ${successCount} collection(s) successfully!`,
           'success',
           3000
         );
-      } else {
-        MJNotificationService.Instance.CreateSimpleNotification(
-          'Failed to create collection. Please try again.',
-          'error'
-        );
-      }
-    } catch (err) {
-      console.error('Error creating collection:', err);
-      LogError(err);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Error creating collection. Please try again.',
-        'error'
-      );
-    } finally {
-      this.isCreatingCollection = false;
-    }
-  }
-
-  async saveToSelectedCollection(): Promise<void> {
-    if (!this.selectedCollectionId) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Please select a collection',
-        'warning',
-        2000
-      );
-      return;
-    }
-
-    if (!this.artifactId) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'No artifact to save',
-        'error'
-      );
-      return;
-    }
-
-    try {
-      this.isSavingToLibrary = true;
-
-      // Check if artifact already exists in this collection
-      const rv = new RunView();
-      const existingResult = await rv.RunView<CollectionArtifactEntity>({
-        EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${this.selectedCollectionId}' AND ArtifactID='${this.artifactId}'`,
-        ResultType: 'entity_object'
-      }, this.currentUser);
-
-      if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
-        MJNotificationService.Instance.CreateSimpleNotification(
-          'This artifact is already in the selected collection',
-          'info',
-          3000
-        );
-        this.showLibraryDialog = false;
-        return;
-      }
-
-      // Create junction record
-      const md = new Metadata();
-      const collectionArtifact = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
-
-      collectionArtifact.CollectionID = this.selectedCollectionId;
-      collectionArtifact.ArtifactID = this.artifactId;
-      collectionArtifact.Sequence = 0; // Could calculate max sequence + 1 if needed
-
-      const saved = await collectionArtifact.Save();
-
-      if (saved) {
-        const collectionName = this.collections.find(c => c.ID === this.selectedCollectionId)?.Name || 'collection';
-        console.log(`✅ Saved artifact to ${collectionName}`);
-        MJNotificationService.Instance.CreateSimpleNotification(
-          `Artifact saved to ${collectionName} successfully!`,
-          'success',
-          3000
-        );
-        this.showLibraryDialog = false;
-        this.selectedCollectionId = null;
 
         // Reload collection associations to update the bookmark icon state
         await this.loadCollectionAssociations();
+        return true;
       } else {
         MJNotificationService.Instance.CreateSimpleNotification(
-          'Failed to save artifact to collection. Please try again.',
+          'Failed to save artifact to any collections',
           'error'
         );
+        return false;
       }
     } catch (err) {
-      console.error('Error saving to collection:', err);
+      console.error('Error saving to collections:', err);
       LogError(err);
       MJNotificationService.Instance.CreateSimpleNotification(
-        'Error saving artifact to collection. Please try again.',
+        'Error saving artifact to collections. Please try again.',
         'error'
       );
-    } finally {
-      this.isSavingToLibrary = false;
+      return false;
     }
-  }
-
-  cancelLibraryDialog(): void {
-    this.showLibraryDialog = false;
-    this.selectedCollectionId = null;
-    this.newCollectionName = '';
   }
 
   onClose(): void {

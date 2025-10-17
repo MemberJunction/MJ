@@ -69,6 +69,39 @@ export class CollectionPermissionService {
     }
 
     /**
+     * Check permissions for multiple collections at once (efficient bulk loading)
+     */
+    async checkBulkPermissions(
+        collectionIds: string[],
+        userId: string,
+        currentUser: UserInfo
+    ): Promise<Map<string, CollectionPermission>> {
+        const resultMap = new Map<string, CollectionPermission>();
+
+        if (collectionIds.length === 0) {
+            return resultMap;
+        }
+
+        // Build filter for all collection IDs
+        const collectionFilter = collectionIds.map(id => `CollectionID='${id}'`).join(' OR ');
+        const rv = new RunView();
+        const result = await rv.RunView<CollectionPermissionEntity>({
+            EntityName: 'MJ: Collection Permissions',
+            ExtraFilter: `(${collectionFilter}) AND UserID='${userId}'`,
+            ResultType: 'entity_object'
+        }, currentUser);
+
+        if (result.Success && result.Results) {
+            for (const entity of result.Results) {
+                const permission = this.mapToPermission(entity);
+                resultMap.set(entity.CollectionID, permission);
+            }
+        }
+
+        return resultMap;
+    }
+
+    /**
      * Grant permission to a user
      */
     async grantPermission(

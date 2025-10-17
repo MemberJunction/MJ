@@ -8,6 +8,7 @@ import { ConversationAgentService } from '../../services/conversation-agent.serv
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
+import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
 import { Subject } from 'rxjs';
 
 @Component({
@@ -25,6 +26,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChild(MessageInputComponent) private messageInputComponent!: MessageInputComponent;
+  @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
 
   public messages: ConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
@@ -45,6 +47,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
   public expandedArtifactId: string | null = null; // Track which artifact card is expanded in modal
+  public showCollectionPicker: boolean = false;
+  public collectionPickerArtifactId: string | null = null;
+  public collectionPickerExcludedIds: string[] = [];
 
   // Artifact mapping: ConversationDetailID -> Array of LazyArtifactInfo
   // Uses lazy-loading pattern: display data loaded immediately, full entities on-demand
@@ -702,6 +707,32 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   onCloseArtifactPanel(): void {
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
+  }
+
+  onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
+    this.collectionPickerArtifactId = event.artifactId;
+    this.collectionPickerExcludedIds = event.excludedCollectionIds;
+    this.showCollectionPicker = true;
+  }
+
+  async onCollectionPickerSaved(collectionIds: string[]): Promise<void> {
+    if (!this.collectionPickerArtifactId || !this.artifactViewerComponent) {
+      return;
+    }
+
+    // Call the artifact viewer's save method
+    const success = await this.artifactViewerComponent.saveToCollections(collectionIds);
+    if (success) {
+      this.showCollectionPicker = false;
+      this.collectionPickerArtifactId = null;
+      this.collectionPickerExcludedIds = [];
+    }
+  }
+
+  onCollectionPickerCancelled(): void {
+    this.showCollectionPicker = false;
+    this.collectionPickerArtifactId = null;
+    this.collectionPickerExcludedIds = [];
   }
 
   /**
