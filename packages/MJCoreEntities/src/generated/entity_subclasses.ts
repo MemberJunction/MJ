@@ -1298,6 +1298,17 @@ if this limit is exceeded.`),
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
         * * Description: The user who owns and created this AI agent. Automatically set to the current user if not specified. Owner has full permissions (view, run, edit, delete) regardless of ACL entries.`),
+    InvocationMode: z.union([z.literal('Any'), z.literal('Sub-Agent'), z.literal('Top-Level')]).describe(`
+        * * Field Name: InvocationMode
+        * * Display Name: Invocation Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Sub-Agent
+    *   * Any
+    *   * Top-Level
+        * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -19072,6 +19083,25 @@ if this limit is exceeded.
     }
     set OwnerUserID(value: string) {
         this.Set('OwnerUserID', value);
+    }
+
+    /**
+    * * Field Name: InvocationMode
+    * * Display Name: Invocation Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Sub-Agent
+    *   * Any
+    *   * Top-Level
+    * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.
+    */
+    get InvocationMode(): 'Any' | 'Sub-Agent' | 'Top-Level' {
+        return this.Get('InvocationMode');
+    }
+    set InvocationMode(value: 'Any' | 'Sub-Agent' | 'Top-Level') {
+        this.Set('InvocationMode', value);
     }
 
     /**

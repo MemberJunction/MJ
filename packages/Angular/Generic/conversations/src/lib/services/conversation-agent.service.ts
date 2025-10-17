@@ -143,7 +143,10 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active'
+        a => a.ID !== agent.ID && 
+             !a.ParentID && 
+             a.Status === 'Active' && 
+             a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
       );
 
       // Filter by user permissions if user context available
