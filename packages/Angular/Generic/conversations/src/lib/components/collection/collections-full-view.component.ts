@@ -54,29 +54,23 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
           <p>Loading collections...</p>
         </div>
 
-        <div *ngIf="!isLoading && collections.length === 0 && artifacts.length === 0 && !searchQuery" class="empty-state">
-          <i class="fas fa-folder-open"></i>
-          <h3>No collections yet</h3>
-          <p>Create your first collection to organize artifacts</p>
-          <button class="btn-primary" (click)="createCollection()">
-            <i class="fas fa-folder-plus"></i>
-            Create Collection
-          </button>
-        </div>
-
         <div *ngIf="!isLoading && collections.length === 0 && artifacts.length === 0 && searchQuery" class="empty-state">
           <i class="fas fa-search"></i>
           <p>No collections or artifacts found</p>
         </div>
 
-        <div *ngIf="!isLoading && (filteredCollections.length > 0 || filteredArtifacts.length > 0)" class="content-grid">
+        <div *ngIf="!isLoading && !searchQuery" class="content-grid">
           <!-- Sub-collections -->
-          <div class="section" *ngIf="filteredCollections.length > 0">
+          <div class="section">
             <div class="section-header">
               <h3>Collections</h3>
               <span class="section-count">{{ filteredCollections.length }}</span>
+              <button class="btn-primary btn-sm" (click)="createCollection()">
+                <i class="fas fa-plus"></i>
+                New Collection
+              </button>
             </div>
-            <div class="collection-grid">
+            <div class="collection-grid" *ngIf="filteredCollections.length > 0">
               <div *ngFor="let collection of filteredCollections"
                    class="collection-card"
                    (click)="openCollection(collection)">
@@ -102,16 +96,16 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
           </div>
 
           <!-- Artifacts in current collection -->
-          <div class="section" *ngIf="filteredArtifacts.length > 0 || currentCollectionId">
+          <div class="section" *ngIf="currentCollectionId">
             <div class="section-header">
               <h3>Artifacts</h3>
               <span class="section-count">{{ filteredArtifacts.length }}</span>
-              <button class="btn-primary btn-sm" (click)="addArtifact()" *ngIf="currentCollectionId">
+              <button class="btn-primary btn-sm" (click)="addArtifact()">
                 <i class="fas fa-plus"></i>
                 Add Artifact
               </button>
             </div>
-            <div class="artifact-grid">
+            <div class="artifact-grid" *ngIf="filteredArtifacts.length > 0">
               <div *ngFor="let artifact of filteredArtifacts"
                    class="artifact-card"
                    (click)="viewArtifact(artifact)">
@@ -675,7 +669,7 @@ export class CollectionsFullViewComponent implements OnInit {
 
     const confirmed = await this.dialogService.confirm({
       title: 'Delete Collection',
-      message: `Are you sure you want to delete "${collection.Name}"? This action cannot be undone.`,
+      message: `Are you sure you want to delete "${collection.Name}"? This will also delete all child collections and remove all artifacts. This action cannot be undone.`,
       okText: 'Delete',
       cancelText: 'Cancel',
       dangerous: true
@@ -685,19 +679,61 @@ export class CollectionsFullViewComponent implements OnInit {
 
     if (confirmed) {
       try {
-        console.log('Attempting to delete collection...');
-        const deleted = await collection.Delete();
-        console.log('Delete result:', deleted);
-
-        if (deleted) {
-          await this.loadCollections();
-        } else {
-          await this.dialogService.alert('Error', 'Failed to delete collection.');
-        }
+        console.log('Attempting to delete collection and all children...');
+        await this.deleteCollectionRecursive(collection.ID);
+        await this.loadCollections();
       } catch (error) {
         console.error('Error deleting collection:', error);
         await this.dialogService.alert('Error', `An error occurred while deleting the collection: ${error}`);
       }
+    }
+  }
+
+  private async deleteCollectionRecursive(collectionId: string): Promise<void> {
+    const rv = new RunView();
+
+    // Step 1: Find and delete all child collections recursively
+    const childrenResult = await rv.RunView<CollectionEntity>(
+      {
+        EntityName: 'MJ: Collections',
+        ExtraFilter: `ParentID='${collectionId}'`,
+        MaxRows: 1000,
+        ResultType: 'entity_object'
+      },
+      this.currentUser
+    );
+
+    if (childrenResult.Success && childrenResult.Results) {
+      for (const child of childrenResult.Results) {
+        await this.deleteCollectionRecursive(child.ID);
+      }
+    }
+
+    // Step 2: Delete all artifact links for this collection
+    const artifactsResult = await rv.RunView<any>(
+      {
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `CollectionID='${collectionId}'`,
+        MaxRows: 1000,
+        ResultType: 'entity_object'
+      },
+      this.currentUser
+    );
+
+    if (artifactsResult.Success && artifactsResult.Results) {
+      for (const ca of artifactsResult.Results) {
+        await ca.Delete();
+      }
+    }
+
+    // Step 3: Delete the collection itself
+    const md = new Metadata();
+    const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+    await collection.Load(collectionId);
+    const deleted = await collection.Delete();
+
+    if (!deleted) {
+      throw new Error(`Failed to delete collection: ${collection.LatestResult?.Message || 'Unknown error'}`);
     }
   }
 
