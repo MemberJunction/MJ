@@ -6,6 +6,7 @@
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExposeAsAction": false,
+      "InvocationMode": "Sub-Agent",
       "IconClass": "fa-solid fa-database"
     },
     "relatedEntities": {
@@ -89,8 +90,8 @@
       "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
     },
     "sync": {
-      "lastModified": "2025-10-15T23:02:37.228Z",
-      "checksum": "7d735f43ae1206b0ca224480e1574e0290aa987a515aee269fd95a5b3b2b0b3f"
+      "lastModified": "2025-10-17T20:54:55.460Z",
+      "checksum": "ca28c0f63a2e190ad5768c6221361a90d772902bf8a7a51143641d2d8eb35ac3"
     }
   },
   {
@@ -99,6 +100,7 @@
       "Description": "Specialized agent for document and file system research. Expert at file type handling, content extraction strategies, document structure understanding, and cross-document synthesis. Handles storage provider enumeration, file search, and document analysis.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "InvocationMode": "Sub-Agent",
       "ExposeAsAction": false,
       "IconClass": "fa-solid fa-folder-open"
     },
@@ -155,8 +157,8 @@
       "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
     },
     "sync": {
-      "lastModified": "2025-10-15T23:02:37.245Z",
-      "checksum": "52f208ffdaf5e5178ee559c2d1c214a1b8cffdfc48919ab656e14522911ac06e"
+      "lastModified": "2025-10-17T20:54:55.480Z",
+      "checksum": "b85f4b19e1dd0c150051a419a69d43714ca9b271c3a39cf36b9f90f544922416"
     }
   },
   {
@@ -165,6 +167,7 @@
       "Description": "Specialized agent for internet and web-based research. Expert at search query formulation, source credibility evaluation, citation extraction, and content summarization. Handles Google search, web page retrieval, and content analysis.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "InvocationMode": "Sub-Agent",
       "ExposeAsAction": false,
       "IconClass": "fa-solid fa-globe"
     },
@@ -221,8 +224,8 @@
       "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
     },
     "sync": {
-      "lastModified": "2025-10-15T23:02:37.257Z",
-      "checksum": "3c1fb400d7f69026ffd5c89783c3019a649dd5e7c2fb855053de54bdc7e221d1"
+      "lastModified": "2025-10-17T20:54:55.495Z",
+      "checksum": "a571e86ffaa61ef239fa82a30700d4871ea006ced120c2b37b70432283dfe72d"
     }
   },
   {
@@ -310,14 +313,17 @@
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
             "Status": "Active",
-            "SubAgentOutputMapping": "{\"*\": \"webResearch\"}"
+            "SubAgentOutputMapping": "{\"*\": \"webResearch\"}",
+            "SubAgentContextPaths": [
+              "*"
+            ]
           },
           "primaryKey": {
             "ID": "EC2EE264-31B8-42CE-AE9A-9177ACFC2947"
           },
           "sync": {
-            "lastModified": "2025-10-16T22:41:51.235Z",
-            "checksum": "9061a17d1bf90529ab5c074a9a0be92f50cbefd34889e9fc6fed4a4db52b231d"
+            "lastModified": "2025-10-17T20:46:39.202Z",
+            "checksum": "174ae5edf5013f1cbab0fa834134f58d7f3b470d7ef1842257409c62fd479a55"
           }
         },
         {
@@ -325,14 +331,17 @@
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
             "Status": "Active",
-            "SubAgentOutputMapping": "{\"*\": \"databaseResearch\"}"
+            "SubAgentOutputMapping": "{\"*\": \"databaseResearch\"}",
+            "SubAgentContextPaths": [
+              "*"
+            ]
           },
           "primaryKey": {
             "ID": "8DB9A71A-FD38-43A3-BE9C-759F4332ADD8"
           },
           "sync": {
-            "lastModified": "2025-10-16T22:41:51.245Z",
-            "checksum": "30932c0357d3291ccaa3c6f1b736f1a53c95970b9d0b0324c7a2ecddaf1c8171"
+            "lastModified": "2025-10-17T20:46:39.213Z",
+            "checksum": "91dc174c9236c52b7a264e180df4e2cc4855247fccdc433f691dff6cd56b321f"
           }
         },
         {
@@ -340,14 +349,17 @@
             "AgentID": "@parent:ID",
             "SubAgentID": "@lookup:AI Agents.Name=File Research Agent",
             "Status": "Active",
-            "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}"
+            "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}",
+            "SubAgentContextPaths": [
+              "*"
+            ]
           },
           "primaryKey": {
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-17T18:33:54.615Z",
-            "checksum": "2d502a95198e79af3525e5b23ccadb85ed0b00a3445e1fd95c7898caf2d0d622"
+            "lastModified": "2025-10-17T20:46:39.223Z",
+            "checksum": "81dbee9db56f4de70b4a546401709691b6d115cc5202f9ade0c3ff9f9aeaebe0"
           }
         }
       ]

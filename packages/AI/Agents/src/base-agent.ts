@@ -1944,25 +1944,32 @@ export class BaseAgent {
      */
     protected async ExecuteSubAgent<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
-        subAgentRequest: AgentSubAgentRequest<SC>, 
+        subAgentRequest: AgentSubAgentRequest<SC>,
         subAgent: AIAgentEntityExtended,
         stepEntity: AIAgentRunStepEntityExtended,
-        payload?: SR
+        payload?: SR,
+        contextMessage?: ChatMessage
     ): Promise<ExecuteAgentResult<SR>> {
         try {
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
-            
+
             // Create a new AgentRunner instance
             const runner = new AgentRunner();
-            
-            // Prepare messages for sub-agent, adding the context message
-            const subAgentMessages: ChatMessage[] = [
-                // don't include the full conversation of the parent, just the subAgentRequest - we previously did this: ...params.conversationMessages,
-                {
-                    role: 'user',
-                    content: subAgentRequest.message
-                }
-            ];
+
+            // Prepare messages for sub-agent
+            // For related sub-agents, may include parent context message before the task message
+            const subAgentMessages: ChatMessage[] = [];
+
+            // Add context message first if provided (related sub-agents with SubAgentContextPaths)
+            if (contextMessage) {
+                subAgentMessages.push(contextMessage);
+            }
+
+            // Add the task message
+            subAgentMessages.push({
+                role: 'user',
+                content: subAgentRequest.message
+            });
             
             // Set parent run ID in the sub-agent's execution
             // This would need to be passed through the AgentRunner in a real implementation
@@ -2959,12 +2966,14 @@ export class BaseAgent {
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
             // Execute sub-agent with scoped payload
+            // Child sub-agents don't use context messages (they inherit payload directly)
             const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                scopedPayload as SR
+                scopedPayload as SR,
+                undefined // No context message for child sub-agents
             );
             
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
@@ -3320,16 +3329,54 @@ export class BaseAgent {
         this.incrementExecutionCount(subAgentEntity.ID);
 
         try {
-            // Related agents don't use payload inheritance - they get the message only
+            // Related agents can receive parent data in two ways:
+            // 1. SubAgentInputMapping: Maps parent payload → sub-agent payload (structural data)
+            // 2. SubAgentContextPaths: Parent payload → sub-agent conversation context (LLM awareness)
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
-            // Execute related agent with independent payload (no payload parameter)
+            // Prepare initial payload via input mapping (if configured)
+            let initialSubAgentPayload: SR | undefined = undefined;
+            if (relationship.SubAgentInputMapping) {
+                const mapped = this.applySubAgentInputMapping(
+                    previousDecision.newPayload as unknown as Record<string, unknown>,
+                    relationship.SubAgentInputMapping
+                );
+                if (mapped && Object.keys(mapped).length > 0) {
+                    initialSubAgentPayload = mapped as SR;
+
+                    if (params.verbose === true || IsVerboseLoggingEnabled()) {
+                        LogStatus(`Related sub-agent '${subAgentRequest.name}' receiving mapped payload: ${JSON.stringify(Object.keys(mapped))}`);
+                    }
+                }
+            }
+
+            // Prepare context message with parent payload data (if configured)
+            let contextPaths: string[] = [];
+            if (relationship.SubAgentContextPaths) {
+                try {
+                    contextPaths = JSON.parse(relationship.SubAgentContextPaths);
+                } catch (parseError) {
+                    LogError(`Failed to parse SubAgentContextPaths for sub-agent ${subAgentRequest.name}: ${parseError.message}`);
+                }
+            }
+
+            const contextMessage = this.prepareRelatedSubAgentContextMessage(
+                previousDecision.newPayload as unknown as Record<string, unknown>,
+                contextPaths
+            );
+
+            if (contextMessage && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                LogStatus(`Related sub-agent '${subAgentRequest.name}' receiving context from paths: ${contextPaths.join(', ')}`);
+            }
+
+            // Execute related agent with prepared payload and context
             const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                undefined // Related agents start with empty/independent payload
+                initialSubAgentPayload, // Mapped payload from parent (or undefined if no mapping)
+                contextMessage // Context message with parent payload data (or undefined if no context paths)
             );
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
@@ -3508,6 +3555,117 @@ export class BaseAgent {
             LogError(`Failed to parse SubAgentOutputMapping: ${error.message}`);
             return null;
         }
+    }
+
+    /**
+     * Applies sub-agent input mapping to prepare initial payload for related sub-agent.
+     * Maps parent payload paths to sub-agent initial payload paths.
+     * Enables structural data transfer from parent to related sub-agent.
+     *
+     * @param parentPayload - Parent agent's current payload
+     * @param mappingConfig - JSON mapping configuration string
+     * @returns Mapped payload object for sub-agent initialization, or null if mapping fails or produces empty result
+     * @private
+     */
+    private applySubAgentInputMapping(
+        parentPayload: Record<string, unknown>,
+        mappingConfig: string
+    ): Record<string, unknown> | null {
+        try {
+            const mapping: Record<string, string> = JSON.parse(mappingConfig);
+            const subAgentPayload: Record<string, unknown> = {};
+
+            for (const [parentPath, subAgentPath] of Object.entries(mapping)) {
+                let value: unknown;
+
+                if (parentPath === '*') {
+                    // Wildcard - send entire parent payload to sub-agent
+                    value = parentPayload;
+                } else {
+                    // Extract from parent payload using dot notation
+                    value = this.getValueFromPath(parentPayload, parentPath);
+                }
+
+                if (value !== undefined) {
+                    // Parse the sub-agent path and build nested object
+                    const pathParts = subAgentPath.split('.');
+                    let current = subAgentPayload;
+
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        const part = pathParts[i];
+                        if (!(part in current)) {
+                            current[part] = {};
+                        }
+                        current = current[part] as Record<string, unknown>;
+                    }
+
+                    current[pathParts[pathParts.length - 1]] = value;
+                }
+            }
+
+            if (Object.keys(subAgentPayload).length === 0) {
+                return null;
+            }
+
+            return subAgentPayload;
+        } catch (error) {
+            LogError(`Failed to parse SubAgentInputMapping: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Prepares a context message containing parent payload data for related sub-agent.
+     * Extracts specified paths from parent payload and formats them as a user message
+     * to provide LLM context to the sub-agent.
+     *
+     * @param parentPayload - Parent agent's current payload
+     * @param contextPaths - Array of paths to extract, or ["*"] for entire payload
+     * @returns ChatMessage with formatted context, or null if no paths specified or no data found
+     * @private
+     */
+    private prepareRelatedSubAgentContextMessage(
+        parentPayload: Record<string, unknown>,
+        contextPaths: string[]
+    ): ChatMessage | null {
+        if (!contextPaths || contextPaths.length === 0) {
+            return null;
+        }
+
+        // Check for wildcard - send entire payload
+        if (contextPaths.includes('*')) {
+            return {
+                role: 'user',
+                content: `Parent Agent Context:\n\n${JSON.stringify(parentPayload, null, 2)}`
+            };
+        }
+
+        // Extract specific paths
+        const contextData: Record<string, unknown> = {};
+
+        for (const path of contextPaths) {
+            const value = this.getValueFromPath(parentPayload, path);
+            if (value !== undefined) {
+                contextData[path] = value;
+            }
+        }
+
+        if (Object.keys(contextData).length === 0) {
+            return null;
+        }
+
+        // Format as readable context
+        const contextLines = Object.entries(contextData).map(([key, value]) => {
+            const valueStr = typeof value === 'object'
+                ? JSON.stringify(value, null, 2)
+                : String(value);
+            return `${key}:\n${valueStr}`;
+        });
+
+        return {
+            role: 'user',
+            content: `Parent Agent Context:\n\n${contextLines.join('\n\n')}`
+        };
     }
 
     /**
