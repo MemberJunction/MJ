@@ -126,15 +126,11 @@ export class WebPageContentAction extends BaseAction {
                 };
             }
 
-            // Fetch the resource
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; MemberJunction/2.0; +https://memberjunction.org)',
-                    'Accept': '*/*',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate'
-                },
-                redirect: 'follow'
+            // Fetch the resource with browser-like headers
+            const response = await this.fetchWithRetry(url, {
+                headers: this.getBrowserHeaders(parsedUrl.hostname),
+                redirect: 'follow',
+                signal: AbortSignal.timeout(30000) // 30 second timeout
             });
 
             if (!response.ok) {
@@ -704,6 +700,109 @@ export class WebPageContentAction extends BaseAction {
             return content;
         }
         return content.substring(0, maxLength) + '...';
+    }
+
+    /**
+     * Returns browser-like headers to avoid bot detection
+     */
+    private getBrowserHeaders(hostname: string): Record<string, string> {
+        return {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
+            'Connection': 'keep-alive',
+            'DNT': '1',
+            'Referer': `https://${hostname}/`
+        };
+    }
+
+    /**
+     * Fetches URL with retry logic for transient failures
+     */
+    private async fetchWithRetry(
+        url: string,
+        options: RequestInit,
+        maxRetries: number = 3
+    ): Promise<Response> {
+        let lastError: Error | undefined;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch(url, options);
+
+                // Retry on specific status codes that might be transient
+                if (attempt < maxRetries && this.shouldRetry(response.status)) {
+                    await this.delay(this.getRetryDelay(attempt));
+                    continue;
+                }
+
+                return response;
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+
+                // Don't retry on timeout or abort errors on the last attempt
+                if (attempt === maxRetries) {
+                    throw lastError;
+                }
+
+                // Check if error is retryable (network errors, timeouts)
+                if (this.isRetryableError(lastError)) {
+                    await this.delay(this.getRetryDelay(attempt));
+                    continue;
+                }
+
+                // Non-retryable error, throw immediately
+                throw lastError;
+            }
+        }
+
+        throw lastError || new Error('Failed to fetch URL after retries');
+    }
+
+    /**
+     * Determines if HTTP status code warrants a retry
+     */
+    private shouldRetry(status: number): boolean {
+        // Retry on rate limiting, server errors, and gateway issues
+        return status === 429 || status === 502 || status === 503 || status === 504;
+    }
+
+    /**
+     * Determines if an error is retryable
+     */
+    private isRetryableError(error: Error): boolean {
+        const message = error.message.toLowerCase();
+        return (
+            message.includes('timeout') ||
+            message.includes('network') ||
+            message.includes('econnrefused') ||
+            message.includes('econnreset') ||
+            message.includes('etimedout') ||
+            message.includes('fetch failed')
+        );
+    }
+
+    /**
+     * Calculates exponential backoff delay for retries
+     */
+    private getRetryDelay(attempt: number): number {
+        // Exponential backoff: 1s, 2s, 4s
+        return Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+    }
+
+    /**
+     * Delays execution for specified milliseconds
+     */
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
 
