@@ -272,7 +272,8 @@
               "*"
             ],
             "PayloadUpstreamPaths": [
-              "synthesis"
+              "synthesis.*",
+              "report.*"
             ]
           },
           "relatedEntities": {
@@ -298,8 +299,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2025-10-17T01:10:53.644Z",
-            "checksum": "644e7f83b440091d000e2718b34a241374251414cab7f4b7db4d8aedc86102fc"
+            "lastModified": "2025-10-17T18:33:54.665Z",
+            "checksum": "cba582ba92721c8e36c67ad435e313c2c962a6eec64913eed34dab9ed814158f"
           }
         }
       ],
@@ -345,23 +346,8 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-17T13:55:27.074Z",
+            "lastModified": "2025-10-17T18:33:54.615Z",
             "checksum": "2d502a95198e79af3525e5b23ccadb85ed0b00a3445e1fd95c7898caf2d0d622"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "SubAgentID": "@lookup:AI Agents.Name=Research Report Writer",
-            "Status": "Active",
-            "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}"
-          },
-          "primaryKey": {
-            "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
-          },
-          "sync": {
-            "lastModified": "2025-10-17T13:55:27.096Z",
-            "checksum": "35482459eacb3efe9151743d4fbd35c54b103f09fec3bae8ecc1913dbd6094b3"
           }
         }
       ]

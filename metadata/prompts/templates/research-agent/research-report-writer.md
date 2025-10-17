@@ -159,6 +159,7 @@ When sources conflict:
 - Provide enough context for each source
 - Note reliability and key contributions
 - Enable readers to trace back to original information
+- **CRITICAL** - if sources have numeric references within them - order your sources the same way so they align logically for the reader.
 
 ## Confidence Calibration Guide
 

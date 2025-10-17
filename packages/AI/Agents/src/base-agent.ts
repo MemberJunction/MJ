@@ -24,14 +24,18 @@ import {
     AIPromptParams,
     AIPromptRunResult,
     ChildPromptParam,
-    ExecuteAgentParams, 
+    ExecuteAgentParams,
     AgentContextData,
     AgentConfiguration,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
     AgentAction,
     AgentSubAgentRequest,
-    BaseAgentNextStep
+    BaseAgentNextStep,
+    MessageLifecycleCallback,
+    MessageLifecycleEvent,
+    AgentChatMessage,
+    AgentChatMessageMetadata
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -141,6 +145,12 @@ export class BaseAgent {
      * @private
      */
     private _executionCounts: Map<string, number> = new Map();
+
+    /**
+     * Callback for message lifecycle events (expiration, compaction, removal, expansion).
+     * @private
+     */
+    private _messageLifecycleCallback: MessageLifecycleCallback | undefined;
 
     /**
      * Counter for validation-induced retries (when validation changes a step to Retry).
@@ -395,6 +405,9 @@ export class BaseAgent {
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
 
+            // Store message lifecycle callback if provided
+            this._messageLifecycleCallback = params.onMessageLifecycle;
+
             // Initialize engines
             await this.initializeEngines(params.contextUser);
 
@@ -517,6 +530,9 @@ export class BaseAgent {
             if (params.cancellationToken?.aborted) {
                 throw new Error('Cancelled during execution');
             }
+
+            // Prune and compact expired messages before executing the next step
+            await this.pruneAndCompactExpiredMessages(params, stepCount);
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
@@ -2528,6 +2544,12 @@ export class BaseAgent {
         // Execute based on the previous decision using standard logic
         switch (previousDecision.step) {
             case 'Retry':
+                // Check if this is a message expansion request
+                if (previousDecision.messageIndex !== undefined) {
+                    // Handle message expansion before retrying
+                    const currentStepCount = this._agentRun?.Steps?.length || 0;
+                    this.executeExpandMessageStep(previousDecision, params, currentStepCount);
+                }
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
                 return await this.processSubAgentStep<P, P>(params, previousDecision!);
@@ -3366,6 +3388,11 @@ export class BaseAgent {
                 })
             };
 
+            // Set PayloadAtEnd with the merged payload
+            if (stepEntity) {
+                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+            }
+
             // Finalize step entity
             await this.finalizeStepEntity(
                 stepEntity,
@@ -3398,11 +3425,6 @@ export class BaseAgent {
                 role: 'user',
                 content: `Related sub-agent "${subAgentRequest.name}" completed:\n${JSON.stringify(subAgentSummary, null, 2)}`
             });
-
-            // Set PayloadAtEnd with the merged payload
-            if (stepEntity) {
-                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
-            }
 
             // Update the agent run's current payload
             if (this._agentRun) {
@@ -4052,6 +4074,414 @@ export class BaseAgent {
         }
         
         return violations;
+    }
+
+    /**
+     * Prunes and compacts expired messages in the conversation based on configured expiration rules.
+     * Processes messages in three phases: identification, compaction, and removal.
+     *
+     * @param params - Agent execution parameters containing conversation messages
+     * @param currentTurn - Current turn number in the agent execution
+     * @protected
+     */
+    protected async pruneAndCompactExpiredMessages(
+        params: ExecuteAgentParams,
+        currentTurn: number
+    ): Promise<void> {
+        const messagesToCompact: Array<{
+            index: number;
+            message: AgentChatMessage;
+            metadata: {
+                compactMode: 'First N Chars' | 'AI Summary';
+                compactLength: number;
+                compactPromptId: string;
+                originalLength: number;
+            };
+        }> = [];
+        const messagesToRemove: number[] = [];
+
+        // Phase 1: Identify expired messages
+        for (let i = 0; i < params.conversationMessages.length; i++) {
+            const msg = params.conversationMessages[i] as AgentChatMessage;
+
+            // Skip messages without expiration metadata
+            if (!msg.metadata?.expirationTurns && msg.metadata?.expirationTurns !== 0) {
+                continue;
+            }
+
+            // Skip if expiration mode is None
+            if (msg.metadata.expirationMode === 'None') {
+                continue;
+            }
+
+            // Calculate age in turns
+            const turnAdded = msg.metadata.turnAdded || 0;
+            const turnsAlive = currentTurn - turnAdded;
+
+            // Check if expired
+            if (turnsAlive > msg.metadata.expirationTurns) {
+                msg.metadata.isExpired = true;
+
+                if (msg.metadata.expirationMode === 'Remove') {
+                    messagesToRemove.push(i);
+
+                    this.emitMessageLifecycleEvent({
+                        type: 'message-expired',
+                        turn: currentTurn,
+                        messageIndex: i,
+                        message: msg,
+                        reason: `Expired after ${turnsAlive} turns (limit: ${msg.metadata.expirationTurns})`
+                    });
+                } else if (msg.metadata.expirationMode === 'Compact') {
+                    // Ensure we have compact config
+                    if (msg.metadata.compactMode) {
+                        messagesToCompact.push({
+                            index: i,
+                            message: msg,
+                            metadata: {
+                                compactMode: msg.metadata.compactMode,
+                                compactLength: msg.metadata.compactLength || 500,
+                                compactPromptId: msg.metadata.compactPromptId || '',
+                                originalLength: typeof msg.content === 'string'
+                                    ? msg.content.length
+                                    : JSON.stringify(msg.content).length
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        // Phase 2: Compact messages (may involve async LLM calls)
+        const preserveOriginal = params.messageExpirationOverride?.preserveOriginalContent !== false;
+
+        for (const item of messagesToCompact) {
+            const originalContent = item.message.content;
+            const compacted = await this.compactMessage(
+                item.message,
+                item.metadata,
+                params
+            );
+
+            // Calculate token savings
+            const originalTokens = this.estimateTokens(originalContent);
+            const compactedTokens = this.estimateTokens(compacted);
+            const tokensSaved = originalTokens - compactedTokens;
+
+            // Update message in place
+            params.conversationMessages[item.index] = {
+                ...item.message,
+                content: compacted,
+                metadata: {
+                    ...item.message.metadata,
+                    wasCompacted: true,
+                    originalContent: preserveOriginal ? originalContent : undefined,
+                    originalLength: item.metadata.originalLength,
+                    tokensSaved,
+                    canExpand: preserveOriginal
+                }
+            };
+
+            this.emitMessageLifecycleEvent({
+                type: 'message-compacted',
+                turn: currentTurn,
+                messageIndex: item.index,
+                message: params.conversationMessages[item.index] as AgentChatMessage,
+                reason: `Compacted using ${item.metadata.compactMode} (saved ${tokensSaved} tokens)`,
+                tokensSaved
+            });
+        }
+
+        // Phase 3: Remove expired messages (reverse order to preserve indices)
+        for (let i = messagesToRemove.length - 1; i >= 0; i--) {
+            const index = messagesToRemove[i];
+            const removed = params.conversationMessages.splice(index, 1)[0];
+
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentTurn,
+                messageIndex: index,
+                message: removed as AgentChatMessage,
+                reason: 'Removed due to expiration'
+            });
+        }
+
+        // Log summary if verbose
+        if (params.verbose && (messagesToCompact.length > 0 || messagesToRemove.length > 0)) {
+            const totalSaved = messagesToCompact.reduce((sum, item) => {
+                const msg = params.conversationMessages[item.index] as AgentChatMessage;
+                return sum + (msg.metadata?.tokensSaved || 0);
+            }, 0);
+
+            console.log(`[Turn ${currentTurn}] Message pruning: ` +
+                `${messagesToCompact.length} compacted (saved ~${totalSaved} tokens), ` +
+                `${messagesToRemove.length} removed`);
+        }
+    }
+
+    /**
+     * Creates an AIAgentRunStep for message compaction operations.
+     * Records the compaction attempt with context about the message being compacted.
+     *
+     * @param prompt - The AI prompt used for compaction
+     * @param message - The message being compacted
+     * @param params - Agent execution parameters
+     * @returns The created run step entity
+     * @protected
+     */
+    protected async createCompactionStep(
+        prompt: AIPromptEntityExtended,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<AIAgentRunStepEntityExtended> {
+        if (!this._agentRun) {
+            throw new Error('Cannot create compaction step: agent run not initialized');
+        }
+
+        const md = new Metadata();
+        const step = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+            'MJ: AI Agent Run Steps',
+            params.contextUser
+        );
+
+        step.NewRecord();
+        step.AgentRunID = this._agentRun.ID;
+        step.StepType = 'Prompt';
+        step.Status = 'Running';
+        step.InputData = JSON.stringify({
+            stepName: 'Message Compaction',
+            description: `Compacting message using AI Summary (${message.metadata?.messageType || 'unknown'} from turn ${message.metadata?.turnAdded || 0})`,
+            messageType: message.metadata?.messageType,
+            turnAdded: message.metadata?.turnAdded,
+            originalLength: message.metadata?.originalLength ||
+                (typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length),
+            compactMode: 'AI Summary',
+            promptId: prompt.ID,
+            promptName: prompt.Name
+        });
+
+        await step.Save();
+        return step;
+    }
+
+    /**
+     * Updates the compaction step with execution results and token usage.
+     *
+     * @param step - The run step to update
+     * @param result - The prompt execution result
+     * @param message - The message that was compacted
+     * @param params - Agent execution parameters
+     * @protected
+     */
+    protected async updateCompactionStep(
+        step: AIAgentRunStepEntityExtended,
+        result: AIPromptRunResult<{ summary: string }>,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        step.Status = result.success ? 'Completed' : 'Failed';
+        const promptTokens = result.promptTokens || 0;
+        const completionTokens = result.completionTokens || 0;
+        step.OutputData = JSON.stringify({
+            success: result.success,
+            summaryLength: result.result?.summary?.length || 0,
+            tokensSaved: message.metadata?.tokensSaved || 0,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            cost: result.cost
+        });
+
+        if (!result.success) {
+            step.ErrorMessage = result.errorMessage || 'AI Summary compaction failed';
+        }
+
+        await step.Save();
+    }
+
+    /**
+     * Compacts a message using configured compaction mode.
+     *
+     * @param message - The message to compact
+     * @param metadata - Compaction configuration
+     * @param params - Agent execution parameters for context
+     * @returns Compacted content string
+     * @protected
+     */
+    protected async compactMessage(
+        message: AgentChatMessage,
+        metadata: {
+            compactMode: 'First N Chars' | 'AI Summary';
+            compactLength: number;
+            compactPromptId: string;
+            originalLength: number;
+        },
+        params: ExecuteAgentParams
+    ): Promise<string> {
+        const originalContent = typeof message.content === 'string'
+            ? message.content
+            : JSON.stringify(message.content);
+
+        switch (metadata.compactMode) {
+            case 'First N Chars': {
+                const length = metadata.compactLength;
+
+                if (originalContent.length <= length) {
+                    return originalContent; // Already short enough
+                }
+
+                const truncated = originalContent.substring(0, length);
+                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters. Agent can request expansion if needed.]`;
+            }
+
+            case 'AI Summary': {
+                try {
+                    // Get prompt for summarization with lookup hierarchy:
+                    // 1. Runtime override (metadata.compactPromptId from messageExpirationOverride)
+                    // 2. AIAgentAction.CompactPromptID
+                    // 3. Action.DefaultCompactPromptID
+                    // 4. System default compact prompt
+                    const promptId = metadata.compactPromptId || this.getSystemDefaultCompactPromptId();
+                    const prompt = AIEngine.Instance.Prompts.find(p => p.ID === promptId);
+
+                    if (!prompt) {
+                        // Fallback to First N Chars if prompt not found
+                        console.warn(`Compact prompt ${promptId} not found, falling back to First N Chars`);
+                        return this.compactMessage(message,
+                            { ...metadata, compactMode: 'First N Chars' },
+                            params
+                        );
+                    }
+
+                    // Create tracking step for this compaction
+                    const step = await this.createCompactionStep(prompt, message, params);
+
+                    // Execute summarization prompt
+                    const promptParams = new AIPromptParams();
+                    promptParams.prompt = prompt;
+                    promptParams.data = {
+                        originalContent,
+                        originalLength: metadata.originalLength,
+                        targetLength: metadata.compactLength || 500,
+                        messageType: message.metadata?.messageType || 'unknown',
+                        turnAdded: message.metadata?.turnAdded || 0
+                    };
+                    promptParams.contextUser = params.contextUser;
+
+                    const runner = new AIPromptRunner();
+                    const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);
+
+                    // Update step with result
+                    await this.updateCompactionStep(step, result, message, params);
+
+                    if (!result.success || !result.result?.summary) {
+                        // Fallback to First N Chars on failure
+                        console.warn('AI summary failed, falling back to First N Chars');
+                        return this.compactMessage(message,
+                            { ...metadata, compactMode: 'First N Chars' },
+                            params
+                        );
+                    }
+
+                    return `[AI Summary of ${metadata.originalLength} chars. Agent can request full expansion if needed.]\n\n${result.result.summary}`;
+
+                } catch (error) {
+                    console.error('Error during AI summary:', error);
+                    // Fallback to First N Chars
+                    return this.compactMessage(message,
+                        { ...metadata, compactMode: 'First N Chars' },
+                        params
+                    );
+                }
+            }
+
+            default:
+                return originalContent;
+        }
+    }
+
+    /**
+     * Returns the system default prompt ID for message compaction.
+     * Looks up the "Compact Agent Message" prompt by name.
+     * @protected
+     */
+    protected getSystemDefaultCompactPromptId(): string {
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Compact Agent Message');
+        if (!prompt) {
+            console.warn('System default compact prompt not found. Ensure "Compact Agent Message" prompt exists.');
+            return '';
+        }
+        return prompt.ID;
+    }
+
+    /**
+     * Estimates token count from content (rough approximation).
+     * Uses 4 chars per token heuristic (conservative estimate).
+     * @protected
+     */
+    protected estimateTokens(content: ChatMessage['content']): number {
+        const text = typeof content === 'string'
+            ? content
+            : JSON.stringify(content);
+        return Math.ceil(text.length / 4);
+    }
+
+    /**
+     * Emits message lifecycle event if callback is registered.
+     * @protected
+     */
+    protected emitMessageLifecycleEvent(event: MessageLifecycleEvent): void {
+        if (this._messageLifecycleCallback) {
+            this._messageLifecycleCallback(event);
+        }
+    }
+
+    /**
+     * Expands a previously compacted message to its original content.
+     *
+     * @param request - The expand message request
+     * @param params - Agent execution parameters
+     * @param currentTurn - Current turn number
+     * @protected
+     */
+    protected executeExpandMessageStep(
+        request: BaseAgentNextStep,
+        params: ExecuteAgentParams,
+        currentTurn: number
+    ): void {
+        const messageIndex = request.messageIndex;
+        const reason = request.expandReason;
+
+        if (messageIndex === undefined || messageIndex < 0 || messageIndex >= params.conversationMessages.length) {
+            console.warn(`Cannot expand message: index ${messageIndex} out of bounds`);
+            return;
+        }
+
+        const message = params.conversationMessages[messageIndex] as AgentChatMessage;
+
+        if (!message.metadata?.canExpand || !message.metadata?.originalContent) {
+            console.warn(`Cannot expand message at index ${messageIndex}: not expandable or no original content`);
+            return;
+        }
+
+        // Restore original content
+        message.content = message.metadata.originalContent;
+        message.metadata.wasCompacted = false;
+        message.metadata.canExpand = false;
+        delete message.metadata.originalContent;
+
+        // Emit lifecycle event
+        this.emitMessageLifecycleEvent({
+            type: 'message-expanded',
+            turn: currentTurn,
+            messageIndex,
+            message,
+            reason: reason || 'Agent requested expansion'
+        });
+
+        if (params.verbose) {
+            console.log(`[Turn ${currentTurn}] Expanded message at index ${messageIndex}`);
+        }
     }
 }
 

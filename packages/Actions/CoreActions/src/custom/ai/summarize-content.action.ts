@@ -175,13 +175,13 @@ export class SummarizeContentAction extends BaseAction {
         params: RunActionParams
     ): Promise<{ success: boolean; content?: string; error?: string }> {
         try {
-            // Load the Get Web Page Content action
+            // Load the Web Page Content action
             await ActionEngineBase.Instance.Config(false, params.ContextUser);
-            const action = ActionEngineBase.Instance.Actions.find(a => a.Name === 'Get Web Page Content');
+            const action = ActionEngineBase.Instance.Actions.find(a => a.Name === 'Web Page Content');
             if (!action) {
                 return {
                     success: false,
-                    error: "Action 'Get Web Page Content' not found"
+                    error: "Action 'Web Page Content' not found"
                 };
             }
 

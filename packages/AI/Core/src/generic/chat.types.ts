@@ -39,8 +39,11 @@ export type ChatMessageContent = string | ChatMessageContentBlock[];
 
 /**
  * Defines the shape of an individual chat message.
+ *
+ * @template M - Optional metadata type. Use this to attach typed metadata to messages
+ * without coupling the core ChatMessage type to specific implementations.
  */
-export type ChatMessage = {
+export type ChatMessage<M = any> = {
     /**
      * Role of the message in the conversation.
      */
@@ -49,6 +52,12 @@ export type ChatMessage = {
      * Content of the message, can be any string or an array of content blocks.
      */
     content: ChatMessageContent;
+    /**
+     * Optional metadata for the message. The type can be specified via the generic parameter.
+     * This allows different consumers to attach their own typed metadata without modifying
+     * the core ChatMessage type.
+     */
+    metadata?: M;
 }
 
 /**
