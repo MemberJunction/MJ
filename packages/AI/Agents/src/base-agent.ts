@@ -3313,15 +3313,12 @@ export class BaseAgent {
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
 
-            // Note: SubAgentOutputMapping field will be added by CodeGen after migration runs
-            const relationshipWithMapping = relationship as AIAgentRelationshipEntity & { SubAgentOutputMapping?: string };
-
-            if (subAgentResult.success && relationshipWithMapping.SubAgentOutputMapping) {
+            if (subAgentResult.success && relationship.SubAgentOutputMapping) {
                 // Apply output mapping if configured
                 const payloadChange = this.applySubAgentOutputMapping(
                     subAgentResult.payload as unknown as Record<string, unknown>,
                     previousDecision.newPayload as unknown as Record<string, unknown>,
-                    relationshipWithMapping.SubAgentOutputMapping
+                    relationship.SubAgentOutputMapping
                 );
 
                 if (payloadChange && payloadChange.updateElements) {
@@ -3360,7 +3357,7 @@ export class BaseAgent {
                     finalStep: subAgentResult.agentRun?.FinalStep,
                     errorMessage: subAgentResult.agentRun?.ErrorMessage,
                     stepCount: subAgentResult.agentRun?.Steps?.length || 0,
-                    hasMergedPayload: !!(relationshipWithMapping.SubAgentOutputMapping && mergedPayload !== previousDecision.newPayload)
+                    hasMergedPayload: !!(relationship.SubAgentOutputMapping && mergedPayload !== previousDecision.newPayload)
                 },
                 shouldTerminate: shouldTerminate,
                 nextStep: shouldTerminate ? 'success' : 'retry',

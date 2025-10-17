@@ -3,13 +3,11 @@
     "fields": {
       "Name": "Research Report Writer Prompt",
       "Description": "Expert report writing and synthesis prompt for analyzing research findings and generating comprehensive reports with well-reasoned conclusions, confidence assessments, and proper citations.",
-      "TemplateID": "@lookup:Templates.Name=templates/research-agent/research-report-writer.md",
+      "TemplateText": "@file:templates/research-agent/research-report-writer.md",
       "EffortLevel": 100,
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Research",
-      "TypeID": "@lookup:AI Prompt Types.Name=System",
-      "Status": "Active",
-      "SupportsResponseTemplates": false,
-      "SupportsStreaming": false
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "Status": "Active"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [
@@ -19,7 +17,14 @@
             "ModelID": "@lookup:AI Models.Name=o4-mini",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 3
-          } 
+          },
+          "primaryKey": {
+            "ID": "54AC32BB-3FE2-42D4-90C7-12E27BDB0496"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T01:10:51.513Z",
+            "checksum": "b28237708b126487d13db5c1b6489a575625e3232b22d14338628c997d39bfc1"
+          }
         },
         {
           "fields": {
@@ -27,7 +32,14 @@
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 1
-          } 
+          },
+          "primaryKey": {
+            "ID": "8A47DC4A-102E-4A48-A138-60C0D17FD237"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T01:10:51.526Z",
+            "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
+          }
         },
         {
           "fields": {
@@ -35,7 +47,14 @@
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 2
-          } 
+          },
+          "primaryKey": {
+            "ID": "F558B38B-2880-4D64-B207-87E0F1C0423F"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T01:10:51.540Z",
+            "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
+          }
         },
         {
           "fields": {
@@ -43,9 +62,23 @@
             "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
             "Priority": 4
-          } 
+          },
+          "primaryKey": {
+            "ID": "AA48A0DD-5F77-4600-9127-8764A28E0C5C"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T01:10:51.550Z",
+            "checksum": "656cd92c7fcf46d5ea557f4a5923ff999bbd0aa36e19f984c0408b8f90ff14c8"
+          }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "114726B5-D18E-48E3-B32B-9203BEF52DA3"
+    },
+    "sync": {
+      "lastModified": "2025-10-17T01:10:51.436Z",
+      "checksum": "c33d509bc7ab64db4aacb5d9d544ffdccf1a8d471c4ae80eab8242ed6933b3ac"
     }
   }
 ]

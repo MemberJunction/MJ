@@ -250,7 +250,7 @@
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-magnifying-glass-chart",
       "PayloadSelfWritePaths": "[\"metadata\", \"plan\", \"sources\", \"findings\", \"comparisons\", \"contradictions\", \"iterations\", \"webResearch\", \"databaseResearch\", \"fileResearch\"]",
-      "FinalPayloadValidation": "{\"required\": [\"report\", \"synthesis\"], \"properties\": {\"report\": {\"required\": [\"name\", \"description\", \"markdown\"]}, \"synthesis\": {\"required\": [\"executiveSummary\", \"findings\", \"confidenceAssessment\", \"keyTakeaways\"]}}}",
+      "FinalPayloadValidation": "@file:validation/research-agent-validation.json",
       "FinalPayloadValidationMode": "Retry",
       "FinalPayloadValidationMaxRetries": 3
     },
@@ -272,7 +272,7 @@
           }
         }
       ],
-      "MJ: AI Agents": [
+      "AI Agents": [
         {
           "fields": {
             "Name": "Research Report Writer",
@@ -297,11 +297,25 @@
                   "PromptID": "@lookup:AI Prompts.Name=Research Report Writer Prompt",
                   "ExecutionOrder": 0,
                   "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A11D2711-6A5B-4FF9-B5B3-F2F506F1EEF2"
+                },
+                "sync": {
+                  "lastModified": "2025-10-17T01:10:53.717Z",
+                  "checksum": "d5c6f0be6e3ba0fb29f9f04846202041491cd08e8475d1b41989dc68c0ae06c8"
                 }
               }
-            ] 
+            ]
+          },
+          "primaryKey": {
+            "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T01:10:53.644Z",
+            "checksum": "644e7f83b440091d000e2718b34a241374251414cab7f4b7db4d8aedc86102fc"
           }
-        }          
+        }
       ],
       "MJ: AI Agent Relationships": [
         {
@@ -345,7 +359,7 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-16T22:41:51.253Z",
+            "lastModified": "2025-10-17T01:33:06.648Z",
             "checksum": "2d502a95198e79af3525e5b23ccadb85ed0b00a3445e1fd95c7898caf2d0d622"
           }
         },
@@ -360,8 +374,8 @@
             "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
           },
           "sync": {
-            "lastModified": "2025-10-16T18:09:08.921Z",
-            "checksum": "2d502a95198e79af3525e5b23ccadb85ed0b00a3445e1fd95c7898caf2d0d622"
+            "lastModified": "2025-10-17T01:33:06.692Z",
+            "checksum": "35482459eacb3efe9151743d4fbd35c54b103f09fec3bae8ecc1913dbd6094b3"
           }
         }
       ]
@@ -370,8 +384,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-16T22:41:50.900Z",
-      "checksum": "3b0e6c07fb726b22ae334d7fef1b7d4ccb1a1ae1eba4fce8b5900d6e438fdffb"
+      "lastModified": "2025-10-17T01:33:06.550Z",
+      "checksum": "7c0449fbda912a3c7b9e27611e37f6f306b3416e435803f51b48e0f3c5f8455d"
     }
   }
 ]
