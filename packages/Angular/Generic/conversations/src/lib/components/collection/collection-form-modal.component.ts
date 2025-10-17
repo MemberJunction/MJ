@@ -3,6 +3,7 @@ import { UserInfo, Metadata } from '@memberjunction/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
+import { CollectionPermissionService } from '../../services/collection-permission.service';
 
 /**
  * Modal for creating and editing collections
@@ -141,7 +142,10 @@ export class CollectionFormModalComponent implements OnChanges {
   public isSaving: boolean = false;
   public errorMessage: string = '';
 
-  constructor(private toastService: ToastService) {}
+  constructor(
+    private toastService: ToastService,
+    private permissionService: CollectionPermissionService
+  ) {}
 
   ngOnChanges(changes: SimpleChanges) {
     if (changes['collection'] || changes['isOpen']) {
@@ -173,12 +177,36 @@ export class CollectionFormModalComponent implements OnChanges {
       collection.Description = this.formData.description.trim() || null;
       collection.EnvironmentID = this.environmentId;
 
+      // Set owner if creating new collection
+      if (!this.collection) {
+        collection.OwnerID = this.currentUser.ID;
+      }
+
       if (this.parentCollection) {
         collection.ParentID = this.parentCollection.ID;
       }
 
       const saved = await collection.Save();
       if (saved) {
+        // If creating new collection, set up permissions
+        if (!this.collection) {
+          // Create owner permission record
+          await this.permissionService.createOwnerPermission(
+            collection.ID,
+            this.currentUser.ID,
+            this.currentUser
+          );
+
+          // Copy parent permissions if this is a child collection
+          if (this.parentCollection) {
+            await this.permissionService.copyParentPermissions(
+              this.parentCollection.ID,
+              collection.ID,
+              this.currentUser
+            );
+          }
+        }
+
         this.toastService.success(
           this.collection ? 'Collection updated successfully' : 'Collection created successfully'
         );

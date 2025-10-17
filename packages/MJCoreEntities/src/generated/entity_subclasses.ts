@@ -10216,6 +10216,81 @@ export const CollectionArtifactSchema = z.object({
 export type CollectionArtifactEntityType = z.infer<typeof CollectionArtifactSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Collection Permissions
+ */
+export const CollectionPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CollectionID: z.string().describe(`
+        * * Field Name: CollectionID
+        * * Display Name: Collection ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Always 1 - users must have read permission to access a shared collection`),
+    CanShare: z.boolean().describe(`
+        * * Field Name: CanShare
+        * * Display Name: Can Share
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can share this collection with others (but cannot grant more permissions than they have)`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can add/remove artifacts to/from this collection`),
+    CanDelete: z.boolean().describe(`
+        * * Field Name: CanDelete
+        * * Display Name: Can Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can delete the collection, child collections, and artifacts`),
+    SharedByUserID: z.string().nullable().describe(`
+        * * Field Name: SharedByUserID
+        * * Display Name: Shared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who shared this collection (NULL if shared by owner)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Collection: z.string().describe(`
+        * * Field Name: Collection
+        * * Display Name: Collection
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    SharedByUser: z.string().nullable().describe(`
+        * * Field Name: SharedByUser
+        * * Display Name: Shared By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type CollectionPermissionEntityType = z.infer<typeof CollectionPermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Collections
  */
 export const CollectionSchema = z.object({
@@ -10270,6 +10345,12 @@ export const CollectionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OwnerID: z.string().nullable().describe(`
+        * * Field Name: OwnerID
+        * * Display Name: Owner ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who owns this collection and has full permissions`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -10278,6 +10359,10 @@ export const CollectionSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    Owner: z.string().nullable().describe(`
+        * * Field Name: Owner
+        * * Display Name: Owner
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -42307,6 +42392,194 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
 
 
 /**
+ * MJ: Collection Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CollectionPermission
+ * * Base View: vwCollectionPermissions
+ * * @description Manages sharing permissions for collections, allowing granular access control
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Collection Permissions')
+export class CollectionPermissionEntity extends BaseEntity<CollectionPermissionEntityType> {
+    /**
+    * Loads the MJ: Collection Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Collection Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CollectionPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CollectionID
+    * * Display Name: Collection ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+    */
+    get CollectionID(): string {
+        return this.Get('CollectionID');
+    }
+    set CollectionID(value: string) {
+        this.Set('CollectionID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Always 1 - users must have read permission to access a shared collection
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanShare
+    * * Display Name: Can Share
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can share this collection with others (but cannot grant more permissions than they have)
+    */
+    get CanShare(): boolean {
+        return this.Get('CanShare');
+    }
+    set CanShare(value: boolean) {
+        this.Set('CanShare', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can add/remove artifacts to/from this collection
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can delete the collection, child collections, and artifacts
+    */
+    get CanDelete(): boolean {
+        return this.Get('CanDelete');
+    }
+    set CanDelete(value: boolean) {
+        this.Set('CanDelete', value);
+    }
+
+    /**
+    * * Field Name: SharedByUserID
+    * * Display Name: Shared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who shared this collection (NULL if shared by owner)
+    */
+    get SharedByUserID(): string | null {
+        return this.Get('SharedByUserID');
+    }
+    set SharedByUserID(value: string | null) {
+        this.Set('SharedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Collection
+    * * Display Name: Collection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Collection(): string {
+        return this.Get('Collection');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: SharedByUser
+    * * Display Name: Shared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SharedByUser(): string | null {
+        return this.Get('SharedByUser');
+    }
+}
+
+
+/**
  * MJ: Collections - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Collection
@@ -42462,6 +42735,20 @@ export class CollectionEntity extends BaseEntity<CollectionEntityType> {
     }
 
     /**
+    * * Field Name: OwnerID
+    * * Display Name: Owner ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who owns this collection and has full permissions
+    */
+    get OwnerID(): string | null {
+        return this.Get('OwnerID');
+    }
+    set OwnerID(value: string | null) {
+        this.Set('OwnerID', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -42477,6 +42764,15 @@ export class CollectionEntity extends BaseEntity<CollectionEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: Owner
+    * * Display Name: Owner
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Owner(): string | null {
+        return this.Get('Owner');
     }
 
     /**

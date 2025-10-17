@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
+import { CollectionPermission } from '../../services/collection-permission.service';
 
 interface TreeNode {
   collection: CollectionEntity;
@@ -20,9 +21,11 @@ interface DragData {
     <div class="collection-tree">
       <div class="tree-header">
         <h3>Collections</h3>
-        <button class="btn-new" (click)="onCreateCollection(null)" title="New Collection">
-          <i class="fas fa-plus"></i>
-        </button>
+        @if (canCreateAtRoot()) {
+          <button class="btn-new" (click)="onCreateCollection(null)" title="New Collection">
+            <i class="fas fa-plus"></i>
+          </button>
+        }
       </div>
 
       <div
@@ -55,12 +58,16 @@ interface DragData {
               <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
               <span class="collection-name">{{ node.collection.Name }}</span>
               <div class="node-actions" (click)="$event.stopPropagation()">
-                <button class="node-action-btn" (click)="onCreateCollection(node.collection.ID)" title="Add sub-collection">
-                  <i class="fas fa-plus"></i>
-                </button>
-                <button class="node-action-btn" (click)="onDeleteCollection(node.collection)" title="Delete">
-                  <i class="fas fa-trash"></i>
-                </button>
+                @if (canEdit(node.collection)) {
+                  <button class="node-action-btn" (click)="onCreateCollection(node.collection.ID)" title="Add sub-collection">
+                    <i class="fas fa-plus"></i>
+                  </button>
+                }
+                @if (canDelete(node.collection)) {
+                  <button class="node-action-btn" (click)="onDeleteCollection(node.collection)" title="Delete">
+                    <i class="fas fa-trash"></i>
+                  </button>
+                }
               </div>
             </div>
 
@@ -99,12 +106,16 @@ interface DragData {
           <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
           <span class="collection-name">{{ node.collection.Name }}</span>
           <div class="node-actions" (click)="$event.stopPropagation()">
-            <button class="node-action-btn" (click)="onCreateCollection(node.collection.ID)" title="Add sub-collection">
-              <i class="fas fa-plus"></i>
-            </button>
-            <button class="node-action-btn" (click)="onDeleteCollection(node.collection)" title="Delete">
-              <i class="fas fa-trash"></i>
-            </button>
+            @if (canEdit(node.collection)) {
+              <button class="node-action-btn" (click)="onCreateCollection(node.collection.ID)" title="Add sub-collection">
+                <i class="fas fa-plus"></i>
+              </button>
+            }
+            @if (canDelete(node.collection)) {
+              <button class="node-action-btn" (click)="onDeleteCollection(node.collection)" title="Delete">
+                <i class="fas fa-trash"></i>
+              </button>
+            }
           </div>
         </div>
 
@@ -158,6 +169,7 @@ export class CollectionTreeComponent implements OnInit {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Input() selectedCollectionId: string | null = null;
+  @Input() userPermissions: Map<string, CollectionPermission> = new Map();
 
   @Output() collectionSelected = new EventEmitter<CollectionEntity>();
   @Output() collectionCreated = new EventEmitter<CollectionEntity>();
@@ -393,5 +405,33 @@ export class CollectionTreeComponent implements OnInit {
     }
 
     return false;
+  }
+
+  // Permission checking methods
+  canEdit(collection: CollectionEntity): boolean {
+    // Backwards compatibility: treat null OwnerID as owned by current user
+    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
+      return true;
+    }
+
+    // Check permission record
+    const permission = this.userPermissions.get(collection.ID);
+    return permission?.canEdit || false;
+  }
+
+  canDelete(collection: CollectionEntity): boolean {
+    // Backwards compatibility: treat null OwnerID as owned by current user
+    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) {
+      return true;
+    }
+
+    // Check permission record
+    const permission = this.userPermissions.get(collection.ID);
+    return permission?.canDelete || false;
+  }
+
+  canCreateAtRoot(): boolean {
+    // Anyone can create at root level
+    return true;
   }
 }

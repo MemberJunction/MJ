@@ -3,6 +3,7 @@ import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { CollectionEntity, ArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
+import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
 
 /**
  * Full-panel Collections view component
@@ -65,7 +66,7 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
             <div class="section-header">
               <h3>Collections</h3>
               <span class="section-count">{{ filteredCollections.length }}</span>
-              <button class="btn-primary btn-sm" (click)="createCollection()">
+              <button class="btn-primary btn-sm" (click)="createCollection()" *ngIf="canEditCurrent()">
                 <i class="fas fa-plus"></i>
                 New Collection
               </button>
@@ -76,18 +77,29 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
                    (click)="openCollection(collection)">
                 <div class="card-icon">
                   <i class="fas fa-folder"></i>
+                  <!-- Shared indicator -->
+                  <div class="shared-badge" *ngIf="isShared(collection)" title="Shared with you">
+                    <i class="fas fa-users"></i>
+                  </div>
                 </div>
                 <div class="card-content">
                   <div class="card-name">{{ collection.Name }}</div>
+                  <div class="card-owner" *ngIf="isShared(collection) && collection.Owner">
+                    <i class="fas fa-user"></i>
+                    <span>{{ collection.Owner }}</span>
+                  </div>
                   <div class="card-description" *ngIf="collection.Description">
                     {{ collection.Description }}
                   </div>
                 </div>
                 <div class="card-actions" (click)="$event.stopPropagation()">
-                  <button class="card-action-btn" (click)="editCollection(collection)" title="Edit">
+                  <button class="card-action-btn" *ngIf="canShare(collection)" (click)="shareCollection(collection)" title="Share">
+                    <i class="fas fa-share-alt"></i>
+                  </button>
+                  <button class="card-action-btn" *ngIf="canEdit(collection)" (click)="editCollection(collection)" title="Edit">
                     <i class="fas fa-edit"></i>
                   </button>
-                  <button class="card-action-btn danger" (click)="deleteCollection(collection)" title="Delete">
+                  <button class="card-action-btn danger" *ngIf="canDelete(collection)" (click)="deleteCollection(collection)" title="Delete">
                     <i class="fas fa-trash"></i>
                   </button>
                 </div>
@@ -100,7 +112,7 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
             <div class="section-header">
               <h3>Artifacts</h3>
               <span class="section-count">{{ filteredArtifacts.length }}</span>
-              <button class="btn-primary btn-sm" (click)="addArtifact()">
+              <button class="btn-primary btn-sm" (click)="addArtifact()" *ngIf="canEditCurrent()">
                 <i class="fas fa-plus"></i>
                 Add Artifact
               </button>
@@ -119,7 +131,7 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
                   </div>
                 </div>
                 <div class="card-actions" (click)="$event.stopPropagation()">
-                  <button class="card-action-btn" (click)="removeArtifact(artifact)" title="Remove from collection" *ngIf="currentCollectionId">
+                  <button class="card-action-btn" (click)="removeArtifact(artifact)" title="Remove from collection" *ngIf="canEditCurrent()">
                     <i class="fas fa-times"></i>
                   </button>
                 </div>
@@ -150,6 +162,16 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
       (saved)="onArtifactSaved($event)"
       (cancelled)="onArtifactModalCancelled()">
     </mj-artifact-create-modal>
+
+    <!-- Share Modal -->
+    <mj-collection-share-modal
+      [isOpen]="isShareModalOpen"
+      [collection]="sharingCollection"
+      [currentUser]="currentUser"
+      [currentUserPermissions]="sharingCollection ? userPermissions.get(sharingCollection.ID) || null : null"
+      (saved)="onPermissionsChanged()"
+      (cancelled)="onShareModalCancelled()">
+    </mj-collection-share-modal>
   `,
   styles: [`
     .collections-view {
@@ -422,11 +444,31 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
       background: #EFF6FF;
       border-radius: 8px;
       flex-shrink: 0;
+      position: relative;
     }
 
     .card-icon i {
       font-size: 20px;
       color: #1e40af;
+    }
+
+    .shared-badge {
+      position: absolute;
+      top: -4px;
+      right: -4px;
+      width: 18px;
+      height: 18px;
+      background: #10B981;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid white;
+    }
+
+    .shared-badge i {
+      font-size: 9px;
+      color: white;
     }
 
     .artifact-icon {
@@ -450,6 +492,19 @@ import { ArtifactStateService } from '../../services/artifact-state.service';
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+    }
+
+    .card-owner {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: #6B7280;
+    }
+
+    .card-owner i {
+      font-size: 10px;
     }
 
     .card-description {
@@ -533,9 +588,14 @@ export class CollectionsFullViewComponent implements OnInit {
   public editingCollection?: CollectionEntity;
   public isArtifactModalOpen: boolean = false;
 
+  public userPermissions: Map<string, CollectionPermission> = new Map();
+  public isShareModalOpen: boolean = false;
+  public sharingCollection: CollectionEntity | null = null;
+
   constructor(
     private dialogService: DialogService,
-    private artifactState: ArtifactStateService
+    private artifactState: ArtifactStateService,
+    private permissionService: CollectionPermissionService
   ) {}
 
   ngOnInit() {
@@ -557,8 +617,19 @@ export class CollectionsFullViewComponent implements OnInit {
   private async loadCollections(): Promise<void> {
     try {
       const rv = new RunView();
-      const filter = `EnvironmentID='${this.environmentId}'` +
-                     (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
+
+      // Load collections where user is owner OR has permissions
+      const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
+      const permissionSubquery = `ID IN (
+        SELECT CollectionID
+        FROM [__mj].[vwCollectionPermissions]
+        WHERE UserID='${this.currentUser.ID}'
+      )`;
+
+      const baseFilter = `EnvironmentID='${this.environmentId}'` +
+                         (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
+
+      const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
 
       const result = await rv.RunView<CollectionEntity>(
         {
@@ -573,10 +644,27 @@ export class CollectionsFullViewComponent implements OnInit {
 
       if (result.Success) {
         this.collections = result.Results || [];
+        await this.loadUserPermissions();
         this.applySearch();
       }
     } catch (error) {
       console.error('Failed to load collections:', error);
+    }
+  }
+
+  private async loadUserPermissions(): Promise<void> {
+    this.userPermissions.clear();
+
+    for (const collection of this.collections) {
+      const permission = await this.permissionService.checkPermission(
+        collection.ID,
+        this.currentUser.ID,
+        this.currentUser
+      );
+
+      if (permission) {
+        this.userPermissions.set(collection.ID, permission);
+      }
     }
   }
 
@@ -709,7 +797,10 @@ export class CollectionsFullViewComponent implements OnInit {
       }
     }
 
-    // Step 2: Delete all artifact links for this collection
+    // Step 2: Delete all permissions for this collection
+    await this.permissionService.deleteAllPermissions(collectionId, this.currentUser);
+
+    // Step 3: Delete all artifact links for this collection
     const artifactsResult = await rv.RunView<any>(
       {
         EntityName: 'MJ: Collection Artifacts',
@@ -726,7 +817,7 @@ export class CollectionsFullViewComponent implements OnInit {
       }
     }
 
-    // Step 3: Delete the collection itself
+    // Step 4: Delete the collection itself
     const md = new Metadata();
     const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
     await collection.Load(collectionId);
@@ -788,5 +879,62 @@ export class CollectionsFullViewComponent implements OnInit {
 
   viewArtifact(artifact: ArtifactEntity): void {
     this.artifactState.openArtifact(artifact.ID);
+  }
+
+  // Permission checking methods
+  canEdit(collection: CollectionEntity): boolean {
+    // Backwards compatibility: treat null OwnerID as owned by current user
+    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+
+    // Check permission record
+    const permission = this.userPermissions.get(collection.ID);
+    return permission?.canEdit || false;
+  }
+
+  canDelete(collection: CollectionEntity): boolean {
+    // Backwards compatibility: treat null OwnerID as owned by current user
+    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+
+    // Check permission record
+    const permission = this.userPermissions.get(collection.ID);
+    return permission?.canDelete || false;
+  }
+
+  canShare(collection: CollectionEntity): boolean {
+    // Backwards compatibility: treat null OwnerID as owned by current user
+    if (!collection.OwnerID || collection.OwnerID === this.currentUser.ID) return true;
+
+    // Check permission record
+    const permission = this.userPermissions.get(collection.ID);
+    return permission?.canShare || false;
+  }
+
+  canEditCurrent(): boolean {
+    // At root level, anyone can create
+    if (!this.currentCollectionId || !this.currentCollection) {
+      return true;
+    }
+    return this.canEdit(this.currentCollection);
+  }
+
+  isShared(collection: CollectionEntity): boolean {
+    // Collection is shared if user is not the owner and OwnerID is set
+    return collection.OwnerID != null && collection.OwnerID !== this.currentUser.ID;
+  }
+
+  // Sharing methods
+  shareCollection(collection: CollectionEntity): void {
+    this.sharingCollection = collection;
+    this.isShareModalOpen = true;
+  }
+
+  async onPermissionsChanged(): Promise<void> {
+    // Reload collections and permissions after sharing changes
+    await this.loadCollections();
+  }
+
+  onShareModalCancelled(): void {
+    this.isShareModalOpen = false;
+    this.sharingCollection = null;
   }
 }

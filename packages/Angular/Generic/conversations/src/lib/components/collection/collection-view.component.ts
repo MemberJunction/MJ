@@ -40,7 +40,7 @@ type SortBy = 'name' | 'date' | 'type';
             placeholder="Sort by...">
           </kendo-dropdownlist>
 
-          <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact">
+          <button class="btn-add" (click)="onAddArtifact()" title="Add Artifact" *ngIf="canEdit">
             <i class="fas fa-plus"></i> Add
           </button>
         </div>
@@ -50,7 +50,7 @@ type SortBy = 'name' | 'date' | 'type';
         <div *ngIf="artifacts.length === 0" class="empty-state">
           <i class="fas fa-folder-open"></i>
           <p>This collection is empty</p>
-          <button class="btn-add-primary" (click)="onAddArtifact()">
+          <button class="btn-add-primary" (click)="onAddArtifact()" *ngIf="canEdit">
             <i class="fas fa-plus"></i> Add Artifact
           </button>
         </div>
@@ -113,6 +113,7 @@ export class CollectionViewComponent implements OnInit, OnChanges {
   @Input() collection!: CollectionEntity;
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
+  @Input() canEdit: boolean = true;
 
   public artifacts: ArtifactEntity[] = [];
   public viewMode: ViewMode = 'grid';
