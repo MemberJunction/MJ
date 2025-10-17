@@ -619,6 +619,12 @@ export const ActionSchema = z.object({
         * * Display Name: Icon Class
         * * SQL Data Type: nvarchar(100)
         * * Description: Font Awesome icon class (e.g., fa-cog, fa-play, fa-search) for visual representation of the action.`),
+    DefaultCompactPromptID: z.string().nullable().describe(`
+        * * Field Name: DefaultCompactPromptID
+        * * Display Name: Default Compact Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -631,6 +637,10 @@ export const ActionSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(425)`),
+    DefaultCompactPrompt: z.string().nullable().describe(`
+        * * Field Name: DefaultCompactPrompt
+        * * Display Name: Default Compact Prompt
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -742,6 +752,42 @@ export const AIAgentActionSchema = z.object({
         * * Display Name: Max Executions Per Run
         * * SQL Data Type: int
         * * Description: Maximum number of times this action can be executed per agent run`),
+    ResultExpirationTurns: z.number().nullable().describe(`
+        * * Field Name: ResultExpirationTurns
+        * * Display Name: Result Expiration Turns
+        * * SQL Data Type: int
+        * * Description: Number of conversation turns before action results expire from conversation context. NULL = never expire (default). 0 = expire immediately after next turn.`),
+    ResultExpirationMode: z.union([z.literal('Compact'), z.literal('None'), z.literal('Remove')]).describe(`
+        * * Field Name: ResultExpirationMode
+        * * Display Name: Result Expiration Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Remove
+    *   * None
+    *   * Compact
+        * * Description: How to handle expired action results: None (no expiration, default), Remove (delete message entirely), Compact (reduce size via CompactMode while preserving key information).`),
+    CompactMode: z.union([z.literal('AI Summary'), z.literal('First N Chars')]).nullable().describe(`
+        * * Field Name: CompactMode
+        * * Display Name: Compact Mode
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI Summary
+    *   * First N Chars
+        * * Description: How to compact results when ResultExpirationMode=Compact: FirstNChars (truncate to CompactLength characters, fast and free), AISummary (use LLM to intelligently summarize with CompactPromptID or Action.DefaultCompactPromptID).`),
+    CompactLength: z.number().nullable().describe(`
+        * * Field Name: CompactLength
+        * * Display Name: Compact Length
+        * * SQL Data Type: int
+        * * Description: Number of characters to keep when CompactMode=FirstNChars. Required when CompactMode is FirstNChars, ignored otherwise.`),
+    CompactPromptID: z.string().nullable().describe(`
+        * * Field Name: CompactPromptID
+        * * Display Name: Compact Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action.DefaultCompactPromptID -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -750,6 +796,10 @@ export const AIAgentActionSchema = z.object({
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
+    CompactPrompt: z.string().nullable().describe(`
+        * * Field Name: CompactPrompt
+        * * Display Name: Compact Prompt
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIAgentActionEntityType = z.infer<typeof AIAgentActionSchema>;
@@ -17258,6 +17308,20 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     }
 
     /**
+    * * Field Name: DefaultCompactPromptID
+    * * Display Name: Default Compact Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.
+    */
+    get DefaultCompactPromptID(): string | null {
+        return this.Get('DefaultCompactPromptID');
+    }
+    set DefaultCompactPromptID(value: string | null) {
+        this.Set('DefaultCompactPromptID', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
@@ -17282,6 +17346,15 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: DefaultCompactPrompt
+    * * Display Name: Default Compact Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultCompactPrompt(): string | null {
+        return this.Get('DefaultCompactPrompt');
     }
 
     /**
@@ -17626,6 +17699,82 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     }
 
     /**
+    * * Field Name: ResultExpirationTurns
+    * * Display Name: Result Expiration Turns
+    * * SQL Data Type: int
+    * * Description: Number of conversation turns before action results expire from conversation context. NULL = never expire (default). 0 = expire immediately after next turn.
+    */
+    get ResultExpirationTurns(): number | null {
+        return this.Get('ResultExpirationTurns');
+    }
+    set ResultExpirationTurns(value: number | null) {
+        this.Set('ResultExpirationTurns', value);
+    }
+
+    /**
+    * * Field Name: ResultExpirationMode
+    * * Display Name: Result Expiration Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Remove
+    *   * None
+    *   * Compact
+    * * Description: How to handle expired action results: None (no expiration, default), Remove (delete message entirely), Compact (reduce size via CompactMode while preserving key information).
+    */
+    get ResultExpirationMode(): 'Compact' | 'None' | 'Remove' {
+        return this.Get('ResultExpirationMode');
+    }
+    set ResultExpirationMode(value: 'Compact' | 'None' | 'Remove') {
+        this.Set('ResultExpirationMode', value);
+    }
+
+    /**
+    * * Field Name: CompactMode
+    * * Display Name: Compact Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI Summary
+    *   * First N Chars
+    * * Description: How to compact results when ResultExpirationMode=Compact: FirstNChars (truncate to CompactLength characters, fast and free), AISummary (use LLM to intelligently summarize with CompactPromptID or Action.DefaultCompactPromptID).
+    */
+    get CompactMode(): 'AI Summary' | 'First N Chars' | null {
+        return this.Get('CompactMode');
+    }
+    set CompactMode(value: 'AI Summary' | 'First N Chars' | null) {
+        this.Set('CompactMode', value);
+    }
+
+    /**
+    * * Field Name: CompactLength
+    * * Display Name: Compact Length
+    * * SQL Data Type: int
+    * * Description: Number of characters to keep when CompactMode=FirstNChars. Required when CompactMode is FirstNChars, ignored otherwise.
+    */
+    get CompactLength(): number | null {
+        return this.Get('CompactLength');
+    }
+    set CompactLength(value: number | null) {
+        this.Set('CompactLength', value);
+    }
+
+    /**
+    * * Field Name: CompactPromptID
+    * * Display Name: Compact Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action.DefaultCompactPromptID -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).
+    */
+    get CompactPromptID(): string | null {
+        return this.Get('CompactPromptID');
+    }
+    set CompactPromptID(value: string | null) {
+        this.Set('CompactPromptID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -17641,6 +17790,15 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     */
     get Action(): string | null {
         return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: CompactPrompt
+    * * Display Name: Compact Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompactPrompt(): string | null {
+        return this.Get('CompactPrompt');
     }
 }
 
