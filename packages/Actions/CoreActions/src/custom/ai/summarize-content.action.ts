@@ -1,7 +1,11 @@
-import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, ActionParam, ActionEngineBase } from "@memberjunction/actions-base";
 import { BaseAction, ActionEngineServer } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import { LogError, Metadata } from "@memberjunction/core";
+import { LogError, RunView } from "@memberjunction/core";
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
+import type { AIPromptEntityExtended } from '@memberjunction/core-entities';
 
 interface SummaryCitation {
     text: string;           // Exact quote from content
@@ -171,15 +175,32 @@ export class SummarizeContentAction extends BaseAction {
         params: RunActionParams
     ): Promise<{ success: boolean; content?: string; error?: string }> {
         try {
-            // Create params for the web page content action
+            // Load the Get Web Page Content action
+            await ActionEngineBase.Instance.Config(false, params.ContextUser);
+            const action = ActionEngineBase.Instance.Actions.find(a => a.Name === 'Get Web Page Content');
+            if (!action) {
+                return {
+                    success: false,
+                    error: "Action 'Get Web Page Content' not found"
+                };
+            }
+
+            // Build action params
             const actionParams: ActionParam[] = [{
                 Name: "url",
                 Type: "Input",
                 Value: url
             }];
 
-            // Execute the Get Web Page Content action
-            const result = await this.executeAction("Get Web Page Content", actionParams, params.ContextUser);
+            const runParams = new RunActionParams();
+            runParams.Action = action;
+            runParams.Params = actionParams;
+            runParams.ContextUser = params.ContextUser;
+            runParams.SkipActionLog = true;
+
+            // Execute the action
+            const engine = new ActionEngineServer();
+            const result = await engine.RunAction(runParams);
 
             if (!result.Success) {
                 return {
@@ -203,7 +224,7 @@ export class SummarizeContentAction extends BaseAction {
     }
 
     /**
-     * Generate summary using LLM via the Execute AI Prompt action
+     * Generate summary using AI Prompts package directly
      */
     private async generateSummary(
         content: string,
@@ -216,108 +237,50 @@ export class SummarizeContentAction extends BaseAction {
             format: string;
         },
         params: RunActionParams
-    ): Promise<{ success: boolean; data?: any; error?: string }> {
+    ): Promise<{ success: boolean; data?: SummaryOutput; error?: string }> {
         try {
-            // Build structured output schema
-            const structuredOutput = {
-                type: "object",
-                properties: {
-                    summary: {
-                        type: "string",
-                        description: `Main summary in ${options.format} format, approximately ${options.summaryWords} words`
-                    },
-                    wordCount: {
-                        type: "number",
-                        description: "Actual word count of summary"
-                    },
-                    ...(options.includeCitations && {
-                        citations: {
-                            type: "array",
-                            description: `Up to ${options.maxCitations} most relevant quotes with source links`,
-                            items: {
-                                type: "object",
-                                properties: {
-                                    text: { type: "string", description: "Exact quote from content" },
-                                    url: { type: "string", description: "URL with anchor if available" },
-                                    anchorId: { type: "string", description: "HTML anchor ID if found" },
-                                    context: { type: "string", description: "Brief context around quote" },
-                                    relevance: { type: "string", description: "Why this quote is important" }
-                                },
-                                required: ["text", "url", "relevance"]
-                            }
-                        }
-                    }),
-                    ...(options.format === "bullets" || options.format === "hybrid" ? {
-                        keyPoints: {
-                            type: "array",
-                            description: "Key bullet points from content",
-                            items: { type: "string" }
-                        }
-                    } : {}),
-                    metadata: {
-                        type: "object",
-                        properties: {
-                            pageTitle: { type: "string" },
-                            sourceUrl: { type: "string" }
-                        }
-                    }
-                },
-                required: ["summary", "wordCount", "metadata"]
-            };
+            // Ensure AIEngine is initialized
+            await AIEngine.Instance.Config(false, params.ContextUser);
 
-            // Build the prompt data
-            const promptData = {
+            // Get the summarization prompt from AIEngine
+            const prompt = this.getPromptByNameAndCategory('Summarize Content', 'MJ: System');
+            if (!prompt) {
+                return {
+                    success: false,
+                    error: "Prompt 'Summarize Content' not found. Ensure metadata has been synced."
+                };
+            }
+
+            // Build prompt parameters with data context
+            const promptParams = new AIPromptParams();
+            promptParams.prompt = prompt;
+            promptParams.data = {
                 content,
                 sourceUrl,
                 summaryWords: options.summaryWords,
                 includeCitations: options.includeCitations,
                 maxCitations: options.maxCitations,
                 instructions: options.instructions,
-                format: options.format,
-                structuredOutput: JSON.stringify(structuredOutput)
+                format: options.format
             };
+            promptParams.contextUser = params.ContextUser;
+            promptParams.cleanValidationSyntax = true;
+            promptParams.attemptJSONRepair = true;
 
-            // Execute AI Prompt action with the "Summarize Content" prompt
-            const actionParams: ActionParam[] = [{
-                Name: "promptName",
-                Type: "Input",
-                Value: "Summarize Content"
-            }, {
-                Name: "data",
-                Type: "Input",
-                Value: JSON.stringify(promptData)
-            }, {
-                Name: "responseFormat",
-                Type: "Input",
-                Value: "json_object"
-            }];
+            // Execute the prompt
+            const runner = new AIPromptRunner();
+            const result = await runner.ExecutePrompt<SummaryOutput>(promptParams);
 
-            const result = await this.executeAction("Execute AI Prompt", actionParams, params.ContextUser);
-
-            if (!result.Success) {
+            if (!result.success) {
                 return {
                     success: false,
-                    error: result.Message || "Failed to execute AI prompt"
-                };
-            }
-
-            // Parse the result
-            let parsedResult: any;
-            try {
-                // The Execute AI Prompt action should return parsed JSON in Message
-                parsedResult = typeof result.Message === "string"
-                    ? JSON.parse(result.Message)
-                    : result.Message;
-            } catch (parseError) {
-                return {
-                    success: false,
-                    error: `Failed to parse AI response: ${parseError}`
+                    error: result.errorMessage || "Prompt execution failed"
                 };
             }
 
             return {
                 success: true,
-                data: parsedResult
+                data: result.result
             };
 
         } catch (error) {
@@ -329,50 +292,13 @@ export class SummarizeContentAction extends BaseAction {
     }
 
     /**
-     * Execute another action by name
+     * Get prompt by name and category from AIEngine
      */
-    private async executeAction(
-        actionName: string,
-        params: ActionParam[],
-        contextUser: any
-    ): Promise<ActionResultSimple> {
-        // Load the action entity using RunView
-        const { RunView } = await import("@memberjunction/core");
-        const rv = new RunView();
-        const result = await rv.RunView({
-            EntityName: 'Actions',
-            ExtraFilter: `Name='${actionName.replace(/'/g, "''")}'`,
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (!result.Success || !result.Results || result.Results.length === 0) {
-            return {
-                Success: false,
-                ResultCode: "ACTION_NOT_FOUND",
-                Message: `Action "${actionName}" not found`
-            };
-        }
-
-        const action = result.Results[0];
-
-        // Build RunActionParams
-        const runParams = new RunActionParams();
-        runParams.Action = action;
-        runParams.Params = params;
-        runParams.ContextUser = contextUser;
-        runParams.SkipActionLog = true; // Don't log sub-action executions
-
-        // Execute the action
-        const engine = new ActionEngineServer();
-        const actionResult = await engine.RunAction(runParams);
-
-        return {
-            Success: actionResult.Success,
-            ResultCode: actionResult.Success ? "SUCCESS" : "ERROR",
-            Message: actionResult.Message,
-            Params: actionResult.Params
-        };
+    private getPromptByNameAndCategory(name: string, category: string): AIPromptEntityExtended | undefined {
+        return AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === name.trim().toLowerCase() && 
+                                                   p.Category?.trim().toLowerCase() === category?.trim().toLowerCase());
     }
+
 
     // Helper methods (consistent with other actions)
     private getStringParam(params: RunActionParams, paramName: string, defaultValue?: string): string | undefined {
