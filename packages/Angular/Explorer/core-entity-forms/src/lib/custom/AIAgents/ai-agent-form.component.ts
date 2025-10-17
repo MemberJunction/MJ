@@ -1,6 +1,6 @@
 import { Component, ViewContainerRef, ElementRef, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { Router, ActivatedRoute } from '@angular/router';
-import { ActionEntity, AIAgentActionEntity, AIAgentEntityExtended, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
+import { ActionEntity, AIAgentActionEntity, AIAgentEntityExtended, AIAgentLearningCycleEntity, AIAgentNoteEntity, AIAgentPromptEntity, AIAgentRunEntityExtended, AIPromptEntityExtended, AIAgentTypeEntity, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { RegisterClass, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
 import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
@@ -17,6 +17,20 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
 import { AgentPermissionsDialogComponent } from './agent-permissions-dialog.component';
+
+/**
+ * Type for sub-agent filter options
+ */
+export type SubAgentFilterType = 'all' | 'child' | 'related';
+
+/**
+ * Interface for unified sub-agent display
+ */
+export interface UnifiedSubAgent {
+    agent: AIAgentEntityExtended;
+    type: 'child' | 'related';
+    relationship?: AIAgentRelationshipEntity;  // Only for related sub-agents
+}
 
 
 
@@ -122,9 +136,24 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     
     
     // === Related Entity Counts ===
-    /** Number of sub-agents under this agent */
+    /** Number of sub-agents under this agent (for backward compatibility) */
     public get subAgentCount(): number {
-        return this.subAgents.length;
+        return this.allSubAgents.length;
+    }
+
+    /** Number of child sub-agents (ParentID-based) */
+    public get childSubAgentCount(): number {
+        return this.allSubAgents.filter(s => s.type === 'child').length;
+    }
+
+    /** Number of related sub-agents (Relationship-based) */
+    public get relatedSubAgentCount(): number {
+        return this.allSubAgents.filter(s => s.type === 'related').length;
+    }
+
+    /** Total number of sub-agents across both types */
+    public get totalSubAgentCount(): number {
+        return this.allSubAgents.length;
     }
 
     /** Number of prompts associated with this agent */
@@ -146,15 +175,33 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     public get noteCount(): number {
         return this.agentNotes.length;
     }
-    
+
     /** Number of execution history records */
     public get executionHistoryCount(): number {
         return this.recentExecutions.length;
     }
 
     // === Related Entity Data for Display ===
-    /** Array of sub-agent entities for card display */
+    /** Array of sub-agent entities for card display (DEPRECATED - use allSubAgents) */
     public subAgents: AIAgentEntityExtended[] = [];
+
+    /** Unified sub-agent data (both child and related) */
+    private allSubAgents: UnifiedSubAgent[] = [];
+
+    /** Current filter for sub-agents display */
+    public subAgentFilter: SubAgentFilterType = 'all';
+
+    /** Filtered sub-agents based on current filter */
+    public get filteredSubAgents(): UnifiedSubAgent[] {
+        switch (this.subAgentFilter) {
+            case 'child':
+                return this.allSubAgents.filter(s => s.type === 'child');
+            case 'related':
+                return this.allSubAgents.filter(s => s.type === 'related');
+            default:
+                return this.allSubAgents;
+        }
+    }
     
     /** Array of agent prompt entities for card display */
     public agentPrompts: AIPromptEntityExtended[] = [];
@@ -536,10 +583,53 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
         }
         
         try {
-            // pull stuff that doesn't change from AI Engine as it is pretty static and engine is smart
-            // enough to refresh cache if something changes (via this process, exernal process changes require an update for now)
-            this.subAgents = AIEngineBase.Instance.Agents.filter(a => a.ParentID === this.record.ID) 
-            
+            // Clear unified sub-agents array
+            this.allSubAgents = [];
+
+            // Load child sub-agents (ParentID-based)
+            const childAgents = AIEngineBase.Instance.Agents.filter(a => a.ParentID === this.record.ID);
+            for (const agent of childAgents) {
+                this.allSubAgents.push({
+                    agent,
+                    type: 'child'
+                });
+            }
+
+            // Also populate the deprecated subAgents array for backward compatibility
+            this.subAgents = [...childAgents];
+
+            // Load related sub-agents (Relationship-based)
+            const rv = new RunView();
+            const relationshipsResult = await rv.RunView<AIAgentRelationshipEntity>({
+                EntityName: 'MJ: AI Agent Relationships',
+                ExtraFilter: `AgentID='${this.record.ID}' AND Status='Active'`,
+                ResultType: 'entity_object'
+            });
+
+            if (relationshipsResult.Success && relationshipsResult.Results) {
+                for (const relationship of relationshipsResult.Results) {
+                    const agent = AIEngineBase.Instance.Agents.find(
+                        a => a.ID === relationship.SubAgentID
+                    );
+
+                    if (agent) {
+                        this.allSubAgents.push({
+                            agent,
+                            type: 'related',
+                            relationship
+                        });
+                    }
+                }
+            }
+
+            // Sort: child agents first, then by name
+            this.allSubAgents.sort((a, b) => {
+                if (a.type !== b.type) {
+                    return a.type === 'child' ? -1 : 1;
+                }
+                return (a.agent.Name || '').localeCompare(b.agent.Name || '');
+            });
+
             this.agentPrompts = AIEngineBase.Instance.Prompts.filter(p => {
                 const filteredAgentPrompts = AIEngineBase.Instance.AgentPrompts.filter(ap => ap.AgentID === this.record.ID);
                 return filteredAgentPrompts.some(ap => ap.PromptID === p.ID);
@@ -549,9 +639,6 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 const filteredAgentActions = AIEngineBase.Instance.AgentActions.filter(aa => aa.AgentID === this.record.ID);
                 return filteredAgentActions.some(aa => aa.ActionID === a.ID);
             });
-            
-
-            const rv = new RunView();
             
             // Execute all queries in a single batch for better performance
             const results = await rv.RunViews([
@@ -1881,6 +1968,153 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
     }
 
     /**
+     * Sets the sub-agent filter to show all, child, or related sub-agents
+     */
+    public setSubAgentFilter(filter: SubAgentFilterType): void {
+        this.subAgentFilter = filter;
+    }
+
+    /**
+     * Gets the badge color for a sub-agent based on its type
+     */
+    public getSubAgentBadgeColor(item: UnifiedSubAgent): string {
+        return item.type === 'child' ? '#2196F3' : '#9C27B0';
+    }
+
+    /**
+     * Gets the badge icon for a sub-agent based on its type
+     */
+    public getSubAgentBadgeIcon(item: UnifiedSubAgent): string {
+        return item.type === 'child' ? 'fa-solid fa-link' : 'fa-solid fa-share-nodes';
+    }
+
+    /**
+     * Gets the badge text for a sub-agent based on its type
+     */
+    public getSubAgentBadgeText(item: UnifiedSubAgent): string {
+        return item.type === 'child' ? 'CHILD' : 'RELATED';
+    }
+
+    /**
+     * Gets the payload information string for display
+     */
+    public getSubAgentPayloadInfo(item: UnifiedSubAgent): string {
+        if (item.type === 'child') {
+            return 'Shared Payload';
+        } else if (item.relationship?.SubAgentOutputMapping) {
+            try {
+                const mapping = JSON.parse(item.relationship.SubAgentOutputMapping);
+                const entries = Object.entries(mapping);
+                if (entries.length === 1 && entries[0][0] === '*') {
+                    return `Mapped: * → ${entries[0][1]}`;
+                }
+                return `Mapped: ${entries.length} path${entries.length === 1 ? '' : 's'}`;
+            } catch {
+                return 'Mapped Payload';
+            }
+        }
+        return 'No Mapping';
+    }
+
+    /**
+     * Opens a dialog to configure the output mapping for a related sub-agent
+     */
+    public async configureOutputMapping(item: UnifiedSubAgent, event: Event): Promise<void> {
+        event.stopPropagation();
+        if (item.type !== 'related' || !item.relationship) return;
+
+        // TODO: Implement JSON editor dialog for SubAgentOutputMapping
+        MJNotificationService.Instance.CreateSimpleNotification(
+            'Output mapping configuration coming soon',
+            'info',
+            3000
+        );
+    }
+
+    /**
+     * Unlinks a related sub-agent (removes the relationship)
+     */
+    public async unlinkRelatedSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
+        event.stopPropagation();
+        if (item.type !== 'related' || !item.relationship) return;
+
+        const confirmDialog = this.dialogService.open({
+            title: 'Unlink Related Sub-Agent',
+            content: `Are you sure you want to unlink "${item.agent.Name}"? This will remove the relationship but keep the agent itself.`,
+            actions: [
+                { text: 'Cancel' },
+                { text: 'Unlink', themeColor: 'error' }
+            ],
+            width: 450,
+            height: 200
+        });
+
+        try {
+            const result = await firstValueFrom(confirmDialog.result);
+            if (result && (result as any).text === 'Unlink') {
+                try {
+                    const success = await item.relationship.Delete();
+                    if (success) {
+                        // Remove from unified list
+                        const index = this.allSubAgents.findIndex(s =>
+                            s.type === 'related' && s.relationship?.ID === item.relationship!.ID
+                        );
+                        if (index >= 0) {
+                            this.allSubAgents.splice(index, 1);
+                        }
+
+                        this.cdr.markForCheck();
+
+                        MJNotificationService.Instance.CreateSimpleNotification(
+                            `Unlinked "${item.agent.Name}" successfully`,
+                            'success',
+                            3000
+                        );
+                    } else {
+                        throw new Error('Delete operation failed');
+                    }
+                } catch (error) {
+                    console.error('Error unlinking related sub-agent:', error);
+                    MJNotificationService.Instance.CreateSimpleNotification(
+                        'Failed to unlink sub-agent',
+                        'error',
+                        3000
+                    );
+                }
+            }
+        } catch (dialogError) {
+            console.error('Error with dialog:', dialogError);
+        }
+    }
+
+    /**
+     * Removes a child sub-agent (updated to work with UnifiedSubAgent)
+     */
+    public async removeChildSubAgent(item: UnifiedSubAgent, event: Event): Promise<void> {
+        // Delegate to existing removeSubAgent method
+        await this.removeSubAgent(item.agent, event);
+    }
+
+    /**
+     * Creates a new child sub-agent (renamed from createSubAgent for clarity)
+     */
+    public async createChildSubAgent(): Promise<void> {
+        await this.createSubAgent();
+    }
+
+    /**
+     * Opens dialog to link an existing agent as a related sub-agent
+     */
+    public async linkRelatedSubAgent(): Promise<void> {
+        // TODO: Implement dialog to select existing agents and create relationship
+        MJNotificationService.Instance.CreateSimpleNotification(
+            'Link related sub-agent dialog coming soon',
+            'info',
+            3000
+        );
+    }
+
+    /**
      * Removes an action from the agent (deferred until save)
      */
     public async removeAction(action: ActionEntity, event: Event) {
@@ -2340,6 +2574,15 @@ export class AIAgentFormComponentExtended extends AIAgentFormComponent implement
                 5000
             );
             return false;
+        }
+    }
+
+    /**
+     * Navigates to the parent agent when the "Child of..." badge is clicked
+     */
+    public navigateToParentAgent(): void {
+        if (this.record.ParentID) {
+            this.navigateToEntity('AI Agents', this.record.ParentID);
         }
     }
 
