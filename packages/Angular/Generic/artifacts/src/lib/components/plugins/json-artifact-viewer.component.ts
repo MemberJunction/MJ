@@ -305,7 +305,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           body {
             max-width: none !important;
             width: 100% !important;
-            margin: 20px !important;
+            margin: 20px 10px 5px 20px !important; /* top right bottom left */
             padding: 0 !important;
             box-sizing: border-box !important;
           }
