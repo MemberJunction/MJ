@@ -96,25 +96,29 @@ export class GetEntityDetailsAction extends BaseAction {
             }));
 
             // Get sample data and total count using RunView
-            const rv = new RunView();
-            const result = await rv.RunView({
-                EntityName: entity.Name,
-                MaxRows: sampleRowCount,
-                ResultType: 'simple'
-            }, params.ContextUser);
+            let sampleData: any[] = [];
+            let totalRowCount = undefined;
+            if (sampleRowCount && sampleRowCount > 0) {
+                const rv = new RunView();
+                const result = await rv.RunView({
+                    EntityName: entity.Name,
+                    MaxRows: sampleRowCount,
+                    ResultType: 'simple'
+                }, params.ContextUser);
 
-            if (!result.Success) {
-                return {
-                    Success: false,
-                    ResultCode: "SAMPLE_DATA_FAILED",
-                    Message: `Failed to retrieve sample data: ${result.ErrorMessage}`
-                } as ActionResultSimple;
+                if (!result.Success) {
+                    return {
+                        Success: false,
+                        ResultCode: "SAMPLE_DATA_FAILED",
+                        Message: `Failed to retrieve sample data: ${result.ErrorMessage}`
+                    } as ActionResultSimple;
+                }
+
+                // Ensure we only return the requested number of rows
+                const allResults = result.Results || [];
+                sampleData = allResults.slice(0, sampleRowCount);
+                totalRowCount = result.TotalRowCount || 0;
             }
-
-            // Ensure we only return the requested number of rows
-            const allResults = result.Results || [];
-            const sampleData = allResults.slice(0, sampleRowCount);
-            const totalRowCount = result.TotalRowCount || 0;
 
             // Build primary key info
             const primaryKeyFields = fields.filter(f => f.IsPrimaryKey).map(f => f.Name);

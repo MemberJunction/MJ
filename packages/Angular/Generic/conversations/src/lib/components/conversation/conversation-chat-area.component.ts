@@ -6,6 +6,7 @@ import { DataCacheService } from '../../services/data-cache.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
+import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
@@ -80,10 +81,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private mentionAutocompleteService: MentionAutocompleteService
   ) {}
 
-  ngOnInit() {
+  async ngOnInit() {
+    // Initialize mention service BEFORE loading messages
+    // This ensures agents are loaded and available for @mention parsing in existing messages
+    await this.mentionAutocompleteService.initialize(this.currentUser);
+
     // Load saved artifact pane width
     this.loadArtifactPaneWidth();
 
@@ -385,10 +391,16 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    */
   private async addAgentRunToMap(conversationDetailId: string, agentRunId: string): Promise<void> {
     try {
-      const md = new Metadata();
-      const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
-      if (await agentRun.Load(agentRunId)) {
-        this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+      if (!this.agentRunsByDetailId.has(conversationDetailId)) {
+        const md = new Metadata();
+        const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
+        if (await agentRun.Load(agentRunId)) {
+          this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+        }
+      }
+      else {
+        // nothing to do, temp console log to catch how many of these where we were wasting time
+        console.log(`⏭️ Agent run for detail ${conversationDetailId} already in map, skipping load`);
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);

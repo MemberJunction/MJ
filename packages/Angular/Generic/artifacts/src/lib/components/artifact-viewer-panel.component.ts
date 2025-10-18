@@ -227,6 +227,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
         this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
 
+        // Clean up double-escaped characters in HTML (from LLM generation)
+        if (this.displayHtml) {
+          this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
+        }
+
         // Default to display tab if we have a plugin or extracted display content
         // Otherwise default to JSON tab for JSON types, or Details tab as last resort
         if (this.hasDisplayTab) {
@@ -323,6 +328,27 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     return value;
   }
 
+  /**
+   * Clean up double-escaped characters that appear in LLM-generated HTML
+   * Removes literal "\\n" and "\\t" which cause rendering issues
+   */
+  private cleanEscapedCharacters(html: string): string {
+    // Remove escaped newlines (\\n becomes nothing)
+    // HTML doesn't need whitespace for formatting, and these cause display issues
+    let cleaned = html.replace(/\\n/g, '');
+
+    // Remove escaped tabs
+    cleaned = cleaned.replace(/\\t/g, '');
+
+    // Remove double-escaped tabs
+    cleaned = cleaned.replace(/\\\\t/g, '');
+
+    // Remove double-escaped newlines
+    cleaned = cleaned.replace(/\\\\n/g, '');
+
+    return cleaned;
+  }
+
   private async loadCollectionAssociations(): Promise<void> {
     if (!this.artifactId) return;
 
@@ -365,7 +391,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   onCopyDisplayContent(): void {
-    const content = this.displayMarkdown || this.displayHtml;
+    const content = this.displayHtml || this.displayMarkdown;
     if (content) {
       navigator.clipboard.writeText(content).then(() => {
         console.log('✅ Copied display content to clipboard');

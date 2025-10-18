@@ -55,6 +55,8 @@
     "mammoth": "^1.8.0",
     "turndown": "^7.2.0",
     "jsdom": "^24.1.0",
-    "node-sql-parser": "^5.3.5"
+    "node-sql-parser": "^5.3.5",
+    "vega": "^5.28.0",
+    "vega-lite": "^5.20.1"
   }
 }

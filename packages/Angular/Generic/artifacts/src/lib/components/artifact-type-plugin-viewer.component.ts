@@ -46,6 +46,11 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
       flex-direction: column;
     }
 
+    .artifact-type-plugin-viewer ::ng-deep > * {
+      flex: 1;
+      min-height: 0;
+    }
+
     .loading-state,
     .error-state {
       display: flex;

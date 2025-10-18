@@ -100,6 +100,9 @@
               } @else if (displayMarkdown || displayHtml) {
                 <!-- Fallback to extracted markdown/HTML attributes -->
                 <div class="display-toolbar">
+                  <button class="btn-icon" title="Print" (click)="onPrintDisplayContent()">
+                    <i class="fas fa-print"></i> Print
+                  </button>
                   <button class="btn-icon" title="Copy Content" (click)="onCopyDisplayContent()">
                     <i class="fas fa-copy"></i> Copy
                   </button>
