@@ -100,7 +100,12 @@ export class CreateSVGChartAction extends BaseAction {
                     };
                 }
 
-                const data = JSON.parse(dataParam);
+                let data;
+                if (typeof dataParam !== 'string') {
+                    data = dataParam;
+                } else {
+                    data = JSON.parse(dataParam);
+                }
 
                 if (!Array.isArray(data)) {
                     return {
@@ -250,7 +255,12 @@ export class CreateSVGChartAction extends BaseAction {
      */
     private getParamValue(params: RunActionParams, paramName: string): string | null {
         const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
-        return param?.Value?.trim() || null;
+        if (param?.Value && typeof param.Value === 'string') {
+            return param?.Value?.trim() || null;
+        }
+        else {
+            return param?.Value || null;
+        }
     }
 }
 

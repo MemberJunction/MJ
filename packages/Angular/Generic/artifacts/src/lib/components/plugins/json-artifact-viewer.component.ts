@@ -303,9 +303,11 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         const widthOverride = iframeDoc.createElement('style');
         widthOverride.textContent = `
           body {
-            max-width: 100% !important;
-            width: 100%;
-            box-sizing: border-box;
+            max-width: none !important;
+            width: 100% !important;
+            margin: 20px !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
           }
         `;
         iframeDoc.head.appendChild(widthOverride);
@@ -334,7 +336,17 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
         // Set iframe height to match content (with a bit of padding)
         iframe.style.height = `${contentHeight + 20}px`;
-        console.log('📦 Iframe resized to:', contentHeight + 20, 'px');
+
+        // Force body to use full available width dynamically
+        if (iframeDoc.body) {
+          iframeDoc.body.style.width = 'calc(100% - 40px)'; // Account for 20px margin on each side
+          iframeDoc.body.style.maxWidth = 'none';
+          iframeDoc.body.style.margin = '20px';
+          iframeDoc.body.style.padding = '0';
+          iframeDoc.body.style.boxSizing = 'border-box';
+        }
+
+        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px');
       }
     }
   }

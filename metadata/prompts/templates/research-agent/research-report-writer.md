@@ -227,31 +227,45 @@ When generating HTML reports, use this template structure. **CRITICAL**: All CSS
 
     /* ===== HEADER SECTION ===== */
     .report-header {
-      background: linear-gradient(135deg, var(--primary-color), var(--accent-color));
-      color: white;
-      padding: 30px;
-      border-radius: 8px;
+      background: #f8f9fa;
+      border: 1px solid var(--border-color);
+      border-left: 4px solid var(--accent-color);
+      padding: 20px 25px;
+      border-radius: 4px;
       margin-bottom: 30px;
     }
 
     .report-header h1 {
-      color: white;
+      color: var(--primary-color);
       border-bottom: none;
       margin-bottom: 0.3em;
+      font-size: 2em;
+    }
+
+    .report-header > p {
+      color: #666;
+      margin: 0.5em 0 1em 0;
     }
 
     .report-meta {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 15px;
-      margin-top: 20px;
-      font-size: 0.9em;
+      gap: 12px;
+      margin-top: 15px;
+      font-size: 0.85em;
     }
 
     .report-meta-item {
-      background: rgba(255, 255, 255, 0.15);
-      padding: 10px;
+      background: white;
+      border: 1px solid var(--border-color);
+      padding: 8px 12px;
       border-radius: 4px;
+    }
+
+    .report-meta-item strong {
+      color: var(--accent-color);
+      display: block;
+      margin-bottom: 3px;
     }
 
     /* ===== EXECUTIVE SUMMARY ===== */
@@ -500,7 +514,7 @@ When generating HTML reports, use this template structure. **CRITICAL**: All CSS
     }
 
     .stat-card {
-      background: linear-gradient(135deg, var(--accent-color), #5dade2);
+      background: var(--accent-color);
       color: white;
       padding: 20px;
       border-radius: 8px;
