@@ -1,5 +1,5 @@
-import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRole, 
-         ParallelChatCompletionsCallbacks, GetAIAPIKey, 
+import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRole,
+         ParallelChatCompletionsCallbacks, GetAIAPIKey,
          EmbedTextResult,
          EmbedTextParams,
          BaseEmbeddings} from "@memberjunction/ai";
@@ -10,6 +10,9 @@ import { BaseEntity, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIModelEntityExtended } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
+import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
+import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
+import { AgentEmbeddingMetadata, AgentMatchResult } from "./types/AgentMatchResult";
 
 
 /**
@@ -37,11 +40,22 @@ export class EntityAIActionParams extends AIActionParams {
  * @description ONLY USE ON SERVER-SIDE. For metadata only, use the AIEngineBase class which can be used anywhere.
  */
 export class AIEngine extends AIEngineBase {
-    public readonly EmbeddingModelTypeName: string = 'Embeddings';  
+    public readonly EmbeddingModelTypeName: string = 'Embeddings';
     public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
+
+    // Vector service for agent embeddings - initialized during AdditionalLoading
+    private _agentVectorService: SimpleVectorService<AgentEmbeddingMetadata> | null = null;
 
     public static get Instance(): AIEngine {
         return super.getInstance<AIEngine>();
+    }
+
+    /**
+     * Get the agent vector service for semantic search.
+     * Initialized during AdditionalLoading - will be null before AIEngine.Config() completes.
+     */
+    public get AgentVectorService(): SimpleVectorService<AgentEmbeddingMetadata> | null {
+        return this._agentVectorService;
     }
 
     /**
@@ -134,7 +148,85 @@ export class AIEngine extends AIEngineBase {
             throw e;
         }
     }
-    
+
+    /**
+     * Override AdditionalLoading to compute agent embeddings.
+     * Called automatically during AIEngine initialization after base loading completes.
+     * @param contextUser - User context for any additional operations
+     */
+    protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
+        // Call parent first (sets up prompt-category associations, agent relationships, etc.)
+        await super.AdditionalLoading(contextUser);
+
+        // Compute agent embeddings using agents already loaded by base class
+        await this.loadAgentEmbeddings();
+    }
+
+    /**
+     * Load embeddings for all agents.
+     * Uses agents already loaded by AIEngineBase - no database round trip needed.
+     * @private
+     */
+    private async loadAgentEmbeddings(): Promise<void> {
+        const startTime = Date.now();
+        console.log('AIEngine: Loading agent embeddings...');
+
+        try {
+            // Use agents already loaded by base class
+            const agents = this.Agents;  // Already filtered, cached, ready!
+
+            if (!agents || agents.length === 0) {
+                console.log('AIEngine: No agents found to generate embeddings for');
+                return;
+            }
+
+            // Generate embeddings using static utility method
+            const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
+                agents,
+                (text) => this.EmbedTextLocal(text)  // Pass our own embed method
+            );
+
+            // Load into vector service
+            this._agentVectorService = new SimpleVectorService();
+            this._agentVectorService.LoadVectors(entries);
+
+            const duration = Date.now() - startTime;
+            console.log(`AIEngine: Loaded embeddings for ${entries.length} agents in ${duration}ms`);
+
+        } catch (error) {
+            console.error(`Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            // Don't throw - allow AIEngine to continue loading even if embeddings fail
+        }
+    }
+
+    /**
+     * Find agents similar to a task description using semantic search.
+     * Convenience method that uses the cached agent vector service.
+     *
+     * @param taskDescription - The task description to match against agent capabilities
+     * @param topK - Maximum number of results to return (default: 5)
+     * @param minSimilarity - Minimum similarity score 0-1 (default: 0.5)
+     * @returns Array of matching agents sorted by similarity score (highest first)
+     * @throws Error if agent embeddings not loaded or task description empty
+     */
+    public async FindSimilarAgents(
+        taskDescription: string,
+        topK: number = 5,
+        minSimilarity: number = 0.5
+    ): Promise<AgentMatchResult[]> {
+        if (!this._agentVectorService) {
+            throw new Error('Agent embeddings not loaded. Ensure AIEngine.Config() has completed.');
+        }
+
+        return AgentEmbeddingService.FindSimilarAgents(
+            this._agentVectorService,
+            taskDescription,
+            (text) => this.EmbedTextLocal(text),
+            topK,
+            minSimilarity
+        );
+    }
+
     /**
      * Executes multiple parallel chat completions with the same model but potentially different parameters.
      * This is useful for:

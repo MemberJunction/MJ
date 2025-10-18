@@ -369,8 +369,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     if (this.artifactsByDetailId.has(event.message.ID) && !this.showArtifactPanel) {
       const artifactList = this.artifactsByDetailId.get(event.message.ID);
       if (artifactList && artifactList.length > 0) {
-        // Show the first (or most recent) artifact - uses display data, no lazy load needed
-        this.selectedArtifactId = artifactList[0].artifactId;
+        // Show the LAST (most recent) artifact - uses display data, no lazy load needed
+        this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
         this.showArtifactPanel = true;
       }
     }
@@ -745,12 +745,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   /**
    * Get artifact info for a conversation detail
-   * Returns the first artifact if multiple exist (for backward compatibility with message display)
+   * Returns the LAST (most recent) artifact if multiple exist
    * Returns LazyArtifactInfo - caller can trigger lazy load if full entities needed
    */
   public getArtifactInfo(conversationDetailId: string): LazyArtifactInfo | undefined {
     const artifactList = this.artifactsByDetailId.get(conversationDetailId);
-    return artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+    return artifactList && artifactList.length > 0
+      ? artifactList[artifactList.length - 1]
+      : undefined;
   }
 
   /**
