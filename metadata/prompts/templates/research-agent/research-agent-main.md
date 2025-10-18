@@ -76,7 +76,10 @@ You have access to four specialized sub-agents. Invoke them by calling the appro
 - Initialize empty arrays: `sources`, `findings`, `iterations`
 
 ### 2. Delegate to Sub-Agents
-- Invoke appropriate sub-agents with specific tasks
+- If the user specifies a particular type of research that is clearly focused on web, database, or files, **only** use those sub-agents
+  **Example** - "Research accounts and their spending with me from my database" - in this example the user is clearly asking for database research so you should **not** fire off the web or files research sub-agents.
+- If the user is non-specific use your judgment to invoke 1 or more of the sub-agents to do the sourcing of research material from database, web or files. 
+- You do **not** need to use all sub-agents for research, just use the ones most relevant based on the user request
 - Provide clear, focused instructions to each sub-agent
 - Sub-agents will return their findings in `payloadChangeRequest.newElements.findings`
 - Their findings will be automatically mapped to your payload (e.g., `databaseResearch`, `webResearch`, `fileResearch`)

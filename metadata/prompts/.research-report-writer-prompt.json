@@ -31,14 +31,14 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 1
+            "Priority": 2
           },
           "primaryKey": {
             "ID": "8A47DC4A-102E-4A48-A138-60C0D17FD237"
           },
           "sync": {
-            "lastModified": "2025-10-17T01:10:51.526Z",
-            "checksum": "3f179cbb203fbeb111743ece229bbb966425aa66be5293a2a48c1d42862e401c"
+            "lastModified": "2025-10-18T16:02:55.438Z",
+            "checksum": "ce3ae6748e6df3420c2e873a6efe68288d48f248d7730d0a58d2ce8cfbb83e8d"
           }
         },
         {
@@ -46,14 +46,14 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 2
+            "Priority": 1
           },
           "primaryKey": {
             "ID": "F558B38B-2880-4D64-B207-87E0F1C0423F"
           },
           "sync": {
-            "lastModified": "2025-10-17T01:10:51.540Z",
-            "checksum": "a845900c49adc2436207ac11472ff070f02653564ee49b755ecfc33d6a8cff1b"
+            "lastModified": "2025-10-18T16:02:55.451Z",
+            "checksum": "4a13cb0fd494ca5dc122856efc227b0a828ff927db12c23516166c6bd01d7ba7"
           }
         },
         {
