@@ -80,16 +80,6 @@ export class ConversationAgentService {
     }
   }
 
-  /**
-   * Get or create a session ID for a conversation
-   */
-  private getSessionId(conversationId: string): string {
-    if (!this._sessionIds.has(conversationId)) {
-      // Create a new session ID for this conversation
-      this._sessionIds.set(conversationId, `conv-${conversationId}-${Date.now()}`);
-    }
-    return this._sessionIds.get(conversationId)!;
-  }
 
   /**
    * Process a message through the ambient Sage Agent.
@@ -143,7 +133,10 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active'
+        a => a.ID !== agent.ID && 
+             !a.ParentID && 
+             a.Status === 'Active' && 
+             a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
       );
 
       // Filter by user permissions if user context available
