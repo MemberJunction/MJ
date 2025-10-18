@@ -385,10 +385,16 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    */
   private async addAgentRunToMap(conversationDetailId: string, agentRunId: string): Promise<void> {
     try {
-      const md = new Metadata();
-      const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
-      if (await agentRun.Load(agentRunId)) {
-        this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+      if (!this.agentRunsByDetailId.has(conversationDetailId)) {
+        const md = new Metadata();
+        const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
+        if (await agentRun.Load(agentRunId)) {
+          this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+        }
+      }
+      else {
+        // nothing to do, temp console log to catch how many of these where we were wasting time
+        console.log(`⏭️ Agent run for detail ${conversationDetailId} already in map, skipping load`);
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);

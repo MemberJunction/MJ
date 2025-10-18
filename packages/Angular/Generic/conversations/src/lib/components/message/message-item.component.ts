@@ -6,7 +6,9 @@ import {
   ChangeDetectorRef,
   OnDestroy,
   AfterViewInit,
-  OnInit
+  OnInit,
+  OnChanges,
+  SimpleChanges
 } from '@angular/core';
 import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
@@ -29,7 +31,7 @@ import { SuggestedResponse } from '../../models/conversation-state.model';
     '../../styles/custom-agent-icons.css'
   ]
 })
-export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
+export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges {
   @Input() public message!: ConversationDetailEntity;
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
@@ -61,6 +63,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public detailTasks: TaskEntity[] = [];
   private tasksLoaded: boolean = false;
 
+  // Memoization for mention parsing to prevent repeated parsing on change detection
+  private _cachedDisplayMessage: string = '';
+  private _cachedMessageText: string = '';
+
   constructor(
     private cdRef: ChangeDetectorRef,
     private mentionParser: MentionParserService,
@@ -71,6 +77,22 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   async ngOnInit() {
     // No longer need to load artifacts per message - they are preloaded in chat area
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    // When agentRun input changes, restart the elapsed time updater if needed
+    if (changes['agentRun']) {
+      // If agent run becomes active, ensure interval is running
+      if (this.isAgentRunActive && this._elapsedTimeInterval === null) {
+        this.startElapsedTimeUpdater();
+      }
+      // If agent run completes, we can keep the interval running (it will stop naturally)
+      // or optionally stop it here for efficiency
+      else if (!this.isAgentRunActive && !this.isTemporaryMessage && this._elapsedTimeInterval !== null) {
+        clearInterval(this._elapsedTimeInterval);
+        this._elapsedTimeInterval = null;
+      }
+    }
   }
 
   ngAfterViewInit() {
@@ -87,18 +109,25 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Starts the elapsed time updater interval for temporary messages
+   * Starts the elapsed time updater interval for temporary messages and active agent runs
    */
   private startElapsedTimeUpdater(): void {
-    if (this.isTemporaryMessage) {
+    if (this.isTemporaryMessage || this.isAgentRunActive) {
+      // Initial update
       Promise.resolve().then(() => {
-        this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
+        if (this.isTemporaryMessage) {
+          this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
+        }
         this.cdRef.detectChanges();
       });
 
+      // Start interval if not already running
       if (this._elapsedTimeInterval === null) {
         this._elapsedTimeInterval = setInterval(() => {
-          this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
+          if (this.isTemporaryMessage) {
+            this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
+          }
+          // Trigger change detection to update agentRunDuration getter for active runs
           Promise.resolve().then(() => {
             this.cdRef.detectChanges();
           });
@@ -178,8 +207,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
 
+    // Use cached result if message text hasn't changed
+    if (this._cachedMessageText === text && this._cachedDisplayMessage) {
+      return this._cachedDisplayMessage;
+    }
+
     // Transform @mentions to HTML pills
-    return this.transformMentionsToHTML(text);
+    const transformed = this.transformMentionsToHTML(text);
+
+    // Cache the result
+    this._cachedMessageText = text;
+    this._cachedDisplayMessage = transformed;
+
+    return transformed;
   }
 
   /**
@@ -224,6 +264,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get isTemporaryMessage(): boolean {
     return this.isAIMessage && (!this.message.ID || this.message.ID.length === 0);
+  }
+
+  public get isAgentRunActive(): boolean {
+    if (!this.agentRun) {
+      return false;
+    }
+    const status = this.agentRun.Status?.toLowerCase();
+    return status === 'in-progress' || status === 'running';
   }
 
   public get messageStatus(): 'Complete' | 'In-Progress' | 'Error' {
@@ -365,6 +413,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this.isEditing = false;
         this.editedText = '';
         this.originalText = '';
+        // Invalidate display message cache since message changed
+        this._cachedMessageText = '';
+        this._cachedDisplayMessage = '';
         this.messageEdited.emit(this.message);
         this.cdRef.detectChanges();
       } else {
@@ -505,16 +556,29 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Get formatted duration for the agent run
-   * Calculate from created to updated timestamp
+   * For active runs: Calculate from created to NOW (live updates)
+   * For completed runs: Calculate from created to updated timestamp (static)
    */
   public get agentRunDuration(): string | null {
-    if (!this.agentRun || !this.agentRun.__mj_CreatedAt || !this.agentRun.__mj_UpdatedAt) {
+    if (!this.agentRun || !this.agentRun.__mj_CreatedAt) {
       return null;
     }
 
     const createdAt = new Date(this.agentRun.__mj_CreatedAt);
-    const updatedAt = new Date(this.agentRun.__mj_UpdatedAt);
-    const diffMs = updatedAt.getTime() - createdAt.getTime();
+    let endTime: Date;
+
+    // If agent run is still active, use current time for live updates
+    if (this.isAgentRunActive) {
+      endTime = new Date(); // Uses current UTC time
+    } else {
+      // For completed runs, use the final updated timestamp
+      if (!this.agentRun.__mj_UpdatedAt) {
+        return null;
+      }
+      endTime = new Date(this.agentRun.__mj_UpdatedAt);
+    }
+
+    const diffMs = endTime.getTime() - createdAt.getTime();
 
     if (diffMs <= 0) {
       return null;

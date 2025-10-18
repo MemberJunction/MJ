@@ -79,24 +79,18 @@ export class MentionParserService {
     const cleanName = name.replace(/[.,;!?]+$/, '').trim();
     const lowerName = cleanName.toLowerCase();
 
-    console.log('[MentionParser] Finding agent for:', name, '-> cleaned:', cleanName);
-    console.log('[MentionParser] Available agents:', agents.map(a => a.Name));
-
     // Try exact match first
     let agent = agents.find(a => (a.Name?.toLowerCase() || '') === lowerName);
     if (agent) {
-      console.log('[MentionParser] Found exact match:', agent.Name);
       return agent;
     }
 
     // Try starts with match
     agent = agents.find(a => (a.Name?.toLowerCase() || '').startsWith(lowerName));
     if (agent) {
-      console.log('[MentionParser] Found starts-with match:', agent.Name);
       return agent;
     }
 
-    console.log('[MentionParser] No agent found for:', cleanName);
     return null;
 
     // Note: Removed "contains" match to avoid ambiguous matches

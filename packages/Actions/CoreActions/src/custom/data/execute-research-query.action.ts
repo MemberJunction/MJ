@@ -162,17 +162,22 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 // Perform analysis if requested
                 let analysis: string | undefined;
                 if (analysisRequest && (returnType === 'analysis only' || returnType === 'data and analysis')) {
-                    const analysisResult = await this.analyzeQueryData(
-                        results,
-                        columns,
-                        analysisRequest,
-                        params
-                    );
-
-                    if (analysisResult.success) {
-                        analysis = analysisResult.analysis;
+                    if (results.length === 0) {
+                        // Don't call LLM for empty results - generate immediate response
+                        analysis = 'Query returned no results. No data available to analyze.';
                     } else {
-                        LogError(`Failed to analyze query data: ${analysisResult.error}`);
+                        const analysisResult = await this.analyzeQueryData(
+                            results,
+                            columns,
+                            analysisRequest,
+                            params
+                        );
+
+                        if (analysisResult.success) {
+                            analysis = analysisResult.analysis;
+                        } else {
+                            LogError(`Failed to analyze query data: ${analysisResult.error}`);
+                        }
                     }
                 }
 

@@ -53,6 +53,8 @@ Params: SchemaFilter="dbo"
 Action: Get Entity Details
 Params: EntityName="AI Models"
 ```
+**CRITICAL**
+Use the **exact** entity name from the `Get Entity List` action for example if an entity has a name of `MJ: AI Agent Relationships` do not just pass in `AI Agent Relationships`, you must pass in the **exact** entity name.
 
 ### 3. Execute Research Query
 **When to use**: After you know the exact field names
@@ -93,15 +95,15 @@ Params:
 - ❌ **NEVER** pull large result sets when analysis is sufficient
 - Whenever possible, use GROUP BY and various aggregation functions to get the insights you need. Only pull raw data when mandatory for your needs.
 
-#### Using AnalysisRequest (STRONGLY PREFERRED)
-- ✅ **Use `AnalysisRequest` + `ReturnType="analysis only"`** whenever possible
+#### Using AnalysisRequest (PREFERRED)
+- ✅ **Use `AnalysisRequest` + `ReturnType="analysis only"`** if possible and it makes sense
 - ✅ This returns ONLY the analysis, not the raw data (massive context savings)
 - ✅ Examples of good analysis requests:
-  - "Summarize the top 5 items by revenue"
-  - "Count records by category and identify the most common"
+  - "Analyze the top 5 items by revenue"
+  - "Find common patterns in Fields X and Y in the results"
   - "Identify any anomalies or outliers in the data"
-  - "Calculate average, min, max for the numeric columns"
-- ❌ Only use `ReturnType="data only"` when you truly need the raw data
+- Don't ask for analysis with things you can do in **SQL** for example SUM, MIN, MAX, AVG, etc.
+- When necessary, it is okay to return `data only` if you truly need the raw data in context. 
 
 #### Get Entity Details Usage
 - ✅ **Query 3-5 entities at a time**, review results, then get more if needed
