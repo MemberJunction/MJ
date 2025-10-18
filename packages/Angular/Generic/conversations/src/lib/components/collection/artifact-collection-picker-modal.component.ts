@@ -13,6 +13,7 @@ interface CollectionNode {
   collection: CollectionEntity;
   selected: boolean;
   hasChildren: boolean;
+  alreadyContainsArtifact: boolean;
 }
 
 /**
@@ -87,15 +88,23 @@ interface CollectionNode {
             </div>
           } @else {
             @for (node of displayedCollections; track node.collection.ID) {
-              <div class="collection-item" (click)="toggleSelection(node)">
+              <div class="collection-item"
+                   [class.already-added]="node.alreadyContainsArtifact"
+                   (click)="toggleSelection(node)">
                 <div class="collection-checkbox">
                   <input
                     type="checkbox"
                     [checked]="node.selected"
+                    [disabled]="node.alreadyContainsArtifact"
                     (click)="$event.stopPropagation(); toggleSelection(node)">
                 </div>
                 <i class="fas fa-folder collection-icon" [style.color]="node.collection.Color || '#0076B6'"></i>
                 <span class="collection-name">{{ node.collection.Name }}</span>
+                @if (node.alreadyContainsArtifact) {
+                  <span class="already-added-badge">
+                    <i class="fas fa-check-circle"></i> Already added
+                  </span>
+                }
                 @if (node.hasChildren) {
                   <button
                     class="drill-down-btn"
@@ -275,6 +284,16 @@ interface CollectionNode {
       border-bottom: none;
     }
 
+    .collection-item.already-added {
+      background: #F9FAFB;
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .collection-item.already-added:hover {
+      background: #F9FAFB;
+    }
+
     .collection-checkbox {
       display: flex;
       align-items: center;
@@ -295,6 +314,25 @@ interface CollectionNode {
       flex: 1;
       font-size: 14px;
       color: #1F2937;
+    }
+
+    .already-added-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      background: #DBEAFE;
+      border: 1px solid #93C5FD;
+      border-radius: 12px;
+      color: #1E40AF;
+      font-size: 12px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .already-added-badge i {
+      font-size: 12px;
+      color: #2563EB;
     }
 
     .drill-down-btn {
@@ -533,11 +571,9 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       // Load user permissions for all collections
       await this.loadUserPermissions();
 
-      // Filter to collections with Edit permission and not excluded
+      // Filter to collections with Edit permission
+      // Include collections that already contain the artifact (will be shown as disabled)
       const editableCollections = this.allCollections.filter(c => {
-        if (this.excludeCollectionIds.includes(c.ID)) {
-          return false;
-        }
         return this.canEdit(c);
       });
 
@@ -586,10 +622,12 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   private createNode(collection: CollectionEntity, allEditableCollections: CollectionEntity[]): CollectionNode {
     const hasChildren = allEditableCollections.some(c => c.ParentID === collection.ID);
+    const alreadyContainsArtifact = this.excludeCollectionIds.includes(collection.ID);
     return {
       collection,
       selected: this.selectedCollections.some(sc => sc.ID === collection.ID),
-      hasChildren
+      hasChildren,
+      alreadyContainsArtifact
     };
   }
 
@@ -605,6 +643,11 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   }
 
   toggleSelection(node: CollectionNode): void {
+    // Don't allow selection of collections that already contain the artifact
+    if (node.alreadyContainsArtifact) {
+      return;
+    }
+
     const index = this.selectedCollections.findIndex(c => c.ID === node.collection.ID);
     if (index >= 0) {
       this.selectedCollections.splice(index, 1);
@@ -618,9 +661,6 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   drillIntoCollection(collection: CollectionEntity): void {
     // Add current location to navigation path
     const editableCollections = this.allCollections.filter(c => {
-      if (this.excludeCollectionIds.includes(c.ID)) {
-        return false;
-      }
       return this.canEdit(c);
     });
 
@@ -643,9 +683,6 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     this.currentParentCollection = undefined;
 
     const editableCollections = this.allCollections.filter(c => {
-      if (this.excludeCollectionIds.includes(c.ID)) {
-        return false;
-      }
       return this.canEdit(c);
     });
 
@@ -664,9 +701,6 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       this.currentParentCollection = collection;
 
       const editableCollections = this.allCollections.filter(c => {
-        if (this.excludeCollectionIds.includes(c.ID)) {
-          return false;
-        }
         return this.canEdit(c);
       });
 
@@ -680,17 +714,11 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       // Reset to current navigation context
       if (this.currentParentId) {
         const editableCollections = this.allCollections.filter(c => {
-          if (this.excludeCollectionIds.includes(c.ID)) {
-            return false;
-          }
           return this.canEdit(c);
         });
         this.displayChildCollections(this.currentParentId, editableCollections);
       } else {
         const editableCollections = this.allCollections.filter(c => {
-          if (this.excludeCollectionIds.includes(c.ID)) {
-            return false;
-          }
           return this.canEdit(c);
         });
         this.displayRootCollections(editableCollections);
@@ -701,9 +729,6 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     // Search across all editable collections
     const query = this.searchQuery.toLowerCase();
     const editableCollections = this.allCollections.filter(c => {
-      if (this.excludeCollectionIds.includes(c.ID)) {
-        return false;
-      }
       return this.canEdit(c) && c.Name.toLowerCase().includes(query);
     });
 

@@ -161,15 +161,6 @@
   color: #6B7280;
 }
 
-.save-to-collection-btn.in-collection {
-  color: #F59E0B;
-}
-
-.save-to-collection-btn.in-collection:hover {
-  background: #FEF3C7;
-  color: #D97706;
-}
-
 .save-to-collection-btn i {
   font-size: 14px;
 }

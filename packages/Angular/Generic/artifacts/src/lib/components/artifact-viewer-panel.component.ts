@@ -394,20 +394,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   async onSaveToLibrary(): Promise<void> {
-    // If already in a collection, navigate to that collection
-    if (this.isInCollection && this.primaryCollection) {
-      // TODO: Implement navigation to collection view
-      // For now, just log - will need ConversationStateService or similar to navigate
-      console.log('Navigate to collection:', this.primaryCollection.Name, this.primaryCollection.ID);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        `This artifact is saved in collection: ${this.primaryCollection.Name}`,
-        'info',
-        3000
-      );
-      return;
-    }
-
-    // Emit event for parent to handle showing collection picker
+    // Always show the collection picker modal
+    // Artifacts can be saved to multiple collections
     this.saveToCollectionRequested.emit({
       artifactId: this.artifactId,
       excludedCollectionIds: this.excludedCollectionIds
