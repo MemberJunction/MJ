@@ -28,7 +28,8 @@
     <div class="workspace-main" *ngIf="activeTab === 'collections'">
       <mj-collections-full-view
         [environmentId]="environmentId"
-        [currentUser]="currentUser">
+        [currentUser]="currentUser"
+        (collectionNavigated)="onCollectionNavigated($event)">
       </mj-collections-full-view>
     </div>
 
@@ -64,7 +65,10 @@
           [environmentId]="environmentId"
           [versionNumber]="activeVersionNumber ?? undefined"
           [showSaveToCollection]="activeTab !== 'collections'"
-          (closed)="closeArtifactPanel()">
+          [viewContext]="activeTab === 'collections' ? 'collection' : 'conversation'"
+          [contextCollectionId]="collectionState.activeCollectionId ?? undefined"
+          (closed)="closeArtifactPanel()"
+          (navigateToLink)="onArtifactLinkNavigation($event)">
         </mj-artifact-viewer-panel>
       </div>
     }

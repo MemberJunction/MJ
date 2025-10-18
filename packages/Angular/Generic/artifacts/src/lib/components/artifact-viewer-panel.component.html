@@ -78,6 +78,11 @@
           <button class="tab-btn" [class.active]="activeTab === 'details'" (click)="setActiveTab('details')">
             <i class="fas fa-info-circle"></i> Details
           </button>
+          @if (hasLinksTab) {
+            <button class="tab-btn" [class.active]="activeTab === 'links'" (click)="setActiveTab('links')">
+              <i class="fas fa-link"></i> Links
+            </button>
+          }
         </div>
 
         <!-- Tab Content -->
@@ -180,6 +185,45 @@
                       </div>
                     }
                   </div>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Links Tab -->
+          @if (activeTab === 'links') {
+            <div class="links-container">
+              @if (linksToShow.length > 0) {
+                <div class="links-section">
+                  @for (link of linksToShow; track link.id) {
+                    <div class="link-item">
+                      <div class="link-icon">
+                        @if (link.type === 'conversation') {
+                          <i class="fas fa-comments"></i>
+                        } @else {
+                          <i class="fas fa-folder"></i>
+                        }
+                      </div>
+                      <div class="link-content">
+                        <div class="link-name">{{ link.name }}</div>
+                        <div class="link-type">{{ link.type === 'conversation' ? 'Conversation' : 'Collection' }}</div>
+                      </div>
+                      <div class="link-actions">
+                        <button
+                          class="link-action-btn"
+                          [disabled]="!link.hasAccess"
+                          [title]="link.hasAccess ? 'Open' : 'No access'"
+                          (click)="onNavigateToLink(link)">
+                          <i class="fas fa-arrow-right"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-state">
+                  <i class="fas fa-link"></i>
+                  <p>No links available</p>
                 </div>
               }
             </div>

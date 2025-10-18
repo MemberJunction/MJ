@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -18,8 +18,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() versionNumber?: number; // Version to display
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
+  @Input() viewContext: 'conversation' | 'collection' | null = null; // Where artifact is being viewed
+  @Input() contextCollectionId?: string; // If viewing in collection, which collection
   @Output() closed = new EventEmitter<void>();
   @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
+  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -37,11 +40,16 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public primaryCollection: CollectionEntity | null = null;
 
   // Tabbed interface
-  public activeTab: 'display' | 'json' | 'details' = 'display';
+  public activeTab: 'display' | 'json' | 'details' | 'links' = 'display';
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public versionAttributes: ArtifactVersionAttributeEntity[] = [];
   private artifactTypeDriverClass: string | null = null;
+
+  // Links tab data
+  public originConversation: ConversationEntity | null = null;
+  public allCollections: CollectionEntity[] = [];
+  public hasAccessToOriginConversation: boolean = false;
 
   // Cache plugin state to avoid losing it when switching tabs
   private cachedPluginShouldShowRaw: boolean = false;
@@ -161,6 +169,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
         // Load collection associations
         await this.loadCollectionAssociations();
+
+        // Load links data
+        await this.loadLinksData();
 
         console.log(`📦 Loaded ${this.allVersions.length} versions for artifact ${this.artifactId}, showing v${this.selectedVersionNumber}`);
       } else {
@@ -292,7 +303,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     });
   }
 
-  setActiveTab(tab: 'display' | 'json' | 'details'): void {
+  setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {
     this.activeTab = tab;
   }
 
@@ -477,6 +488,157 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       );
       return false;
     }
+  }
+
+  /**
+   * Load links data: origin conversation and all collections containing this artifact
+   */
+  private async loadLinksData(): Promise<void> {
+    if (!this.artifactId) return;
+
+    try {
+      const md = new Metadata();
+      const rv = new RunView();
+
+      // Load all collections containing this artifact
+      const collArtifactsResult = await rv.RunView<CollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (collArtifactsResult.Success && collArtifactsResult.Results) {
+        // Get unique collection IDs
+        const collectionIds = [...new Set(collArtifactsResult.Results.map(ca => ca.CollectionID))];
+
+        if (collectionIds.length > 0) {
+          const collectionsFilter = collectionIds.map(id => `ID='${id}'`).join(' OR ');
+          const collectionsResult = await rv.RunView<CollectionEntity>({
+            EntityName: 'MJ: Collections',
+            ExtraFilter: collectionsFilter,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          if (collectionsResult.Success && collectionsResult.Results) {
+            this.allCollections = collectionsResult.Results;
+          }
+        }
+      }
+
+      // Load origin conversation (if artifact came from conversation)
+      // Artifacts are linked to conversations via ConversationDetailArtifact -> ConversationDetail -> Conversation
+      // Get all version IDs for this artifact
+      const versionIds = this.allVersions.map(v => v.ID);
+
+      if (versionIds.length > 0) {
+        const versionFilter = versionIds.map(id => `ArtifactVersionID='${id}'`).join(' OR ');
+        const convDetailArtifactsResult = await rv.RunView<ConversationDetailArtifactEntity>({
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: versionFilter,
+          MaxRows: 1,
+          ResultType: 'entity_object'
+        }, this.currentUser);
+
+        if (convDetailArtifactsResult.Success && convDetailArtifactsResult.Results && convDetailArtifactsResult.Results.length > 0) {
+          const conversationDetailId = convDetailArtifactsResult.Results[0].ConversationDetailID;
+
+          // Load the conversation detail to get the conversation ID
+          const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+          const detailLoaded = await conversationDetail.Load(conversationDetailId);
+
+          if (detailLoaded && conversationDetail.ConversationID) {
+            const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', this.currentUser);
+            const loaded = await conversation.Load(conversationDetail.ConversationID);
+
+            if (loaded) {
+              this.originConversation = conversation;
+
+              // Check if user has access (is owner or participant)
+              const userIsOwner = conversation.UserID === this.currentUser.ID;
+
+              // Check if user is a participant
+              const participantResult = await rv.RunView({
+                EntityName: 'Conversation Details',
+                ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.currentUser.ID}'`,
+                MaxRows: 1,
+                ResultType: 'simple'
+              }, this.currentUser);
+
+              const userIsParticipant = participantResult.Success &&
+                                         participantResult.Results &&
+                                         participantResult.Results.length > 0;
+
+              this.hasAccessToOriginConversation = userIsOwner || userIsParticipant;
+            }
+          }
+        }
+      }
+
+      console.log(`🔗 Loaded links: ${this.allCollections.length} collections, origin conversation: ${this.originConversation?.Name || 'none'}`);
+    } catch (error) {
+      console.error('Error loading links data:', error);
+    }
+  }
+
+  get hasLinksTab(): boolean {
+    // Show links tab if:
+    // 1. Viewing in collection and there's an origin conversation OR other collections
+    // 2. Viewing in conversation and there are any collections
+
+    if (this.viewContext === 'collection') {
+      // Show if there's an origin conversation, or more than 1 collection (current + others)
+      return !!this.originConversation || this.allCollections.length > 1;
+    } else if (this.viewContext === 'conversation') {
+      // Show if there are any collections
+      return this.allCollections.length > 0;
+    }
+
+    return false;
+  }
+
+  get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
+    const links: Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> = [];
+
+    // Add origin conversation if viewing in collection
+    if (this.viewContext === 'collection' && this.originConversation) {
+      links.push({
+        type: 'conversation',
+        id: this.originConversation.ID,
+        name: this.originConversation.Name || 'Untitled Conversation',
+        hasAccess: this.hasAccessToOriginConversation
+      });
+    }
+
+    // Add all collections (excluding current context if applicable)
+    for (const collection of this.allCollections) {
+      if (this.viewContext === 'collection' && collection.ID === this.contextCollectionId) {
+        // Skip current collection
+        continue;
+      }
+
+      links.push({
+        type: 'collection',
+        id: collection.ID,
+        name: collection.Name,
+        hasAccess: true // User can see it, so they have access
+      });
+    }
+
+    return links;
+  }
+
+  /**
+   * Navigate to a linked conversation or collection
+   */
+  onNavigateToLink(link: {type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}): void {
+    if (!link.hasAccess) {
+      return;
+    }
+
+    this.navigateToLink.emit({
+      type: link.type,
+      id: link.id
+    });
   }
 
   onClose(): void {

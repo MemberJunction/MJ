@@ -48,6 +48,8 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     conversations: [],
     messages: [],
     artifacts: [],
+    collections: [],
+    tasks: [],
     total: 0
   };
   public recentSearches: string[] = [];
@@ -232,7 +234,9 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     return [
       ...this.results.conversations,
       ...this.results.messages,
-      ...this.results.artifacts
+      ...this.results.artifacts,
+      ...this.results.collections,
+      ...this.results.tasks
     ];
   }
 
@@ -256,6 +260,10 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
         return 'fa-comment';
       case 'artifact':
         return 'fa-file-alt';
+      case 'collection':
+        return 'fa-folder';
+      case 'task':
+        return 'fa-tasks';
       default:
         return 'fa-circle';
     }
@@ -274,6 +282,10 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
         return 'Messages';
       case 'artifacts':
         return 'Artifacts';
+      case 'collections':
+        return 'Collections';
+      case 'tasks':
+        return 'Tasks';
       default:
         return 'All';
     }

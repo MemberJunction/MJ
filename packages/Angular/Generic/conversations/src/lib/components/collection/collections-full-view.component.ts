@@ -1,9 +1,11 @@
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { CollectionEntity, ArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
+import { CollectionStateService } from '../../services/collection-state.service';
 import { CollectionPermissionService, CollectionPermission } from '../../services/collection-permission.service';
+import { Subject, takeUntil } from 'rxjs';
 
 /**
  * Full-panel Collections view component
@@ -30,14 +32,6 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
             </ng-container>
           </span>
         </div>
-        <div class="collections-search">
-          <i class="fas fa-search"></i>
-          <input type="text"
-                 [(ngModel)]="searchQuery"
-                 (ngModelChange)="onSearchChange($event)"
-                 placeholder="Search collections and artifacts..."
-                 class="collection-search-input">
-        </div>
         <div class="collections-actions">
           <button class="btn-primary" (click)="createCollection()" *ngIf="canEditCurrent()" title="New Collection">
             <i class="fas fa-folder-plus"></i>
@@ -55,12 +49,7 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
           <p>Loading collections...</p>
         </div>
 
-        <div *ngIf="!isLoading && collections.length === 0 && artifacts.length === 0 && searchQuery" class="empty-state">
-          <i class="fas fa-search"></i>
-          <p>No collections or artifacts found</p>
-        </div>
-
-        <div *ngIf="!isLoading && !searchQuery" class="content-grid">
+        <div *ngIf="!isLoading" class="content-grid">
           <!-- Sub-collections -->
           <div class="section">
             <div class="section-header">
@@ -236,35 +225,6 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
     .breadcrumb-separator {
       color: #D1D5DB;
       font-size: 10px;
-    }
-
-    .collections-search {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      background: #F9FAFB;
-      border: 1px solid #E5E7EB;
-      border-radius: 6px;
-      padding: 8px 12px;
-      min-width: 300px;
-    }
-
-    .collections-search i {
-      color: #9CA3AF;
-      font-size: 14px;
-    }
-
-    .collection-search-input {
-      border: none;
-      background: transparent;
-      outline: none;
-      font-size: 14px;
-      flex: 1;
-      color: #111827;
-    }
-
-    .collection-search-input::placeholder {
-      color: #9CA3AF;
     }
 
     .collections-actions {
@@ -570,15 +530,18 @@ import { CollectionPermissionService, CollectionPermission } from '../../service
     }
   `]
 })
-export class CollectionsFullViewComponent implements OnInit {
+export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
+  @Output() collectionNavigated = new EventEmitter<{
+    collectionId: string | null;
+    artifactId?: string | null;
+  }>();
 
   public collections: CollectionEntity[] = [];
   public artifacts: ArtifactEntity[] = [];
   public filteredCollections: CollectionEntity[] = [];
   public filteredArtifacts: ArtifactEntity[] = [];
-  public searchQuery: string = '';
   public isLoading: boolean = false;
   public breadcrumbs: Array<{ id: string; name: string }> = [];
   public currentCollectionId: string | null = null;
@@ -592,14 +555,52 @@ export class CollectionsFullViewComponent implements OnInit {
   public isShareModalOpen: boolean = false;
   public sharingCollection: CollectionEntity | null = null;
 
+  private destroy$ = new Subject<void>();
+  private isNavigatingProgrammatically = false;
+
   constructor(
     private dialogService: DialogService,
     private artifactState: ArtifactStateService,
+    private collectionState: CollectionStateService,
     private permissionService: CollectionPermissionService
   ) {}
 
   ngOnInit() {
     this.loadData();
+
+    // Subscribe to collection state changes for deep linking
+    this.subscribeToCollectionState();
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  /**
+   * Subscribe to collection state changes for deep linking support
+   */
+  private subscribeToCollectionState(): void {
+    // Watch for external navigation requests (e.g., from search or URL)
+    this.collectionState.activeCollectionId$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(collectionId => {
+        // Ignore state changes that we triggered ourselves
+        if (this.isNavigatingProgrammatically) {
+          return;
+        }
+
+        // Only navigate if the state is different from our current state
+        if (collectionId !== this.currentCollectionId) {
+          if (collectionId) {
+            console.log('📁 Collection state changed, navigating to:', collectionId);
+            this.navigateToCollectionById(collectionId);
+          } else {
+            console.log('📁 Collection state cleared, navigating to root');
+            this.navigateToRoot();
+          }
+        }
+      });
   }
 
   async loadData(): Promise<void> {
@@ -646,7 +647,7 @@ export class CollectionsFullViewComponent implements OnInit {
       if (result.Success) {
         this.collections = result.Results || [];
         await this.loadUserPermissions();
-        this.applySearch();
+        this.filteredCollections = [...this.collections];
       }
     } catch (error) {
       console.error('Failed to load collections:', error);
@@ -697,62 +698,153 @@ export class CollectionsFullViewComponent implements OnInit {
         this.currentCollectionId,
         this.currentUser
       );
-      this.applySearch();
+      this.filteredArtifacts = [...this.artifacts];
     } catch (error) {
       console.error('Failed to load artifacts:', error);
     }
   }
 
-  onSearchChange(query: string): void {
-    this.applySearch();
-  }
+  async openCollection(collection: CollectionEntity): Promise<void> {
+    this.isNavigatingProgrammatically = true;
+    try {
+      this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
+      this.currentCollectionId = collection.ID;
+      this.currentCollection = collection;
+      await this.loadData();
 
-  private applySearch(): void {
-    if (!this.searchQuery.trim()) {
-      this.filteredCollections = [...this.collections];
-      this.filteredArtifacts = [...this.artifacts];
-    } else {
-      const query = this.searchQuery.toLowerCase();
-      this.filteredCollections = this.collections.filter(c =>
-        c.Name.toLowerCase().includes(query) ||
-        (c.Description && c.Description.toLowerCase().includes(query))
-      );
-      this.filteredArtifacts = this.artifacts.filter(a =>
-        a.Name.toLowerCase().includes(query)
-      );
+      // Update state service
+      this.collectionState.setActiveCollection(collection.ID);
+
+      // Emit navigation event
+      this.collectionNavigated.emit({
+        collectionId: collection.ID,
+        artifactId: null
+      });
+    } finally {
+      this.isNavigatingProgrammatically = false;
     }
   }
 
-  async openCollection(collection: CollectionEntity): Promise<void> {
-    this.breadcrumbs.push({ id: collection.ID, name: collection.Name });
-    this.currentCollectionId = collection.ID;
-    this.currentCollection = collection;
-    this.searchQuery = '';
-    await this.loadData();
-  }
-
   async navigateTo(crumb: { id: string; name: string }): Promise<void> {
-    const index = this.breadcrumbs.findIndex(b => b.id === crumb.id);
-    if (index !== -1) {
-      this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
-      this.currentCollectionId = crumb.id;
+    this.isNavigatingProgrammatically = true;
+    try {
+      const index = this.breadcrumbs.findIndex(b => b.id === crumb.id);
+      if (index !== -1) {
+        this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
+        this.currentCollectionId = crumb.id;
 
-      // Load the collection entity
-      const md = new Metadata();
-      this.currentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
-      await this.currentCollection.Load(crumb.id);
+        // Load the collection entity
+        const md = new Metadata();
+        this.currentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        await this.currentCollection.Load(crumb.id);
 
-      this.searchQuery = '';
-      await this.loadData();
+        await this.loadData();
+
+        // Update state service
+        this.collectionState.setActiveCollection(crumb.id);
+
+        // Emit navigation event
+        this.collectionNavigated.emit({
+          collectionId: crumb.id,
+          artifactId: null
+        });
+      }
+    } finally {
+      this.isNavigatingProgrammatically = false;
     }
   }
 
   async navigateToRoot(): Promise<void> {
-    this.breadcrumbs = [];
-    this.currentCollectionId = null;
-    this.currentCollection = null;
-    this.searchQuery = '';
-    await this.loadData();
+    this.isNavigatingProgrammatically = true;
+    try {
+      this.breadcrumbs = [];
+      this.currentCollectionId = null;
+      this.currentCollection = null;
+      await this.loadData();
+
+      // Update state service
+      this.collectionState.setActiveCollection(null);
+
+      // Emit navigation event
+      this.collectionNavigated.emit({
+        collectionId: null,
+        artifactId: null
+      });
+    } finally {
+      this.isNavigatingProgrammatically = false;
+    }
+  }
+
+  /**
+   * Navigate to a collection by ID, building the breadcrumb trail
+   * Used for deep linking from search results or URL parameters
+   */
+  async navigateToCollectionById(collectionId: string): Promise<void> {
+    this.isNavigatingProgrammatically = true;
+    try {
+      console.log('📁 Navigating to collection by ID:', collectionId);
+
+      // Load the target collection
+      const md = new Metadata();
+      const targetCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      await targetCollection.Load(collectionId);
+
+      if (!targetCollection || !targetCollection.ID) {
+        console.error('❌ Failed to load collection:', collectionId);
+        return;
+      }
+
+      // Build breadcrumb trail by traversing parent hierarchy
+      // Note: breadcrumbs includes ALL collections in the path including the current one
+      const trail: Array<{ id: string; name: string }> = [];
+      let currentId: string | null = targetCollection.ParentID;
+
+      while (currentId) {
+        const parentCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+        await parentCollection.Load(currentId);
+
+        if (parentCollection && parentCollection.ID) {
+          // Add to front of trail (we're working backwards)
+          trail.unshift({
+            id: parentCollection.ID,
+            name: parentCollection.Name
+          });
+          currentId = parentCollection.ParentID;
+        } else {
+          break;
+        }
+      }
+
+      // Add the target collection to the trail (breadcrumbs includes current collection)
+      trail.push({
+        id: targetCollection.ID,
+        name: targetCollection.Name
+      });
+
+      // Update component state
+      this.breadcrumbs = trail;
+      this.currentCollectionId = targetCollection.ID;
+      this.currentCollection = targetCollection;
+
+      // Load collections and artifacts for this collection
+      await this.loadData();
+
+      // Update state service
+      this.collectionState.setActiveCollection(targetCollection.ID);
+
+      // Emit navigation event
+      // NOTE: We don't emit artifactId here because this is for deep linking/programmatic navigation
+      // Artifact state is managed separately by the artifact state service
+      this.collectionNavigated.emit({
+        collectionId: targetCollection.ID
+      });
+
+      console.log('✅ Successfully navigated to collection with breadcrumb trail:', trail);
+    } catch (error) {
+      console.error('❌ Error navigating to collection:', error);
+    } finally {
+      this.isNavigatingProgrammatically = false;
+    }
   }
 
   refresh(): void {
@@ -923,6 +1015,12 @@ export class CollectionsFullViewComponent implements OnInit {
 
   viewArtifact(artifact: ArtifactEntity): void {
     this.artifactState.openArtifact(artifact.ID);
+
+    // Emit navigation event with both collection and artifact
+    this.collectionNavigated.emit({
+      collectionId: this.currentCollectionId,
+      artifactId: artifact.ID
+    });
   }
 
   // Permission validation and checking methods
