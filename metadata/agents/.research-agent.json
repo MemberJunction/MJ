@@ -5,6 +5,7 @@
       "Description": "Specialized sub-agent for conducting database research. Explores schema structure, formulates optimized SQL queries, executes research queries with security validation, and synthesizes findings from database analysis. Works as a component of the main Research Agent.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "ModelSelectionMode": "Agent",
       "ExposeAsAction": false,
       "InvocationMode": "Sub-Agent",
       "IconClass": "fa-solid fa-database"
@@ -90,8 +91,8 @@
       "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
     },
     "sync": {
-      "lastModified": "2025-10-17T20:54:55.460Z",
-      "checksum": "ca28c0f63a2e190ad5768c6221361a90d772902bf8a7a51143641d2d8eb35ac3"
+      "lastModified": "2025-10-18T13:29:52.063Z",
+      "checksum": "5775beb8bd6ce1d1e1315f51709b7b830d363869d6ad2e3b6d6b89e94b661fdc"
     }
   },
   {
@@ -100,6 +101,7 @@
       "Description": "Specialized agent for document and file system research. Expert at file type handling, content extraction strategies, document structure understanding, and cross-document synthesis. Handles storage provider enumeration, file search, and document analysis.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "ModelSelectionMode": "Agent",
       "InvocationMode": "Sub-Agent",
       "ExposeAsAction": false,
       "IconClass": "fa-solid fa-folder-open"
@@ -157,8 +159,8 @@
       "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
     },
     "sync": {
-      "lastModified": "2025-10-17T20:54:55.480Z",
-      "checksum": "b85f4b19e1dd0c150051a419a69d43714ca9b271c3a39cf36b9f90f544922416"
+      "lastModified": "2025-10-18T13:29:52.085Z",
+      "checksum": "e66912ce58a77610ecba15779b417c06b53ca5c02f09ec2cce4cf3fae347da07"
     }
   },
   {
@@ -167,6 +169,7 @@
       "Description": "Specialized agent for internet and web-based research. Expert at search query formulation, source credibility evaluation, citation extraction, and content summarization. Handles Google search, web page retrieval, and content analysis.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
+      "ModelSelectionMode": "Agent",
       "InvocationMode": "Sub-Agent",
       "ExposeAsAction": false,
       "IconClass": "fa-solid fa-globe"
@@ -224,8 +227,8 @@
       "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
     },
     "sync": {
-      "lastModified": "2025-10-17T20:54:55.495Z",
-      "checksum": "a571e86ffaa61ef239fa82a30700d4871ea006ced120c2b37b70432283dfe72d"
+      "lastModified": "2025-10-18T13:29:52.102Z",
+      "checksum": "5b6fd951f559117d1513a8c93eaafd7a48a77073276d2b641847f86aa7d86e00"
     }
   },
   {
@@ -236,6 +239,7 @@
       "Status": "Active",
       "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
       "ExecutionOrder": 0,
+      "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-magnifying-glass-chart",
       "PayloadSelfWritePaths": "[\"metadata\", \"plan\", \"sources\", \"findings\", \"comparisons\", \"contradictions\", \"iterations\", \"webResearch\", \"databaseResearch\", \"fileResearch\"]",
@@ -269,6 +273,7 @@
             "ParentID": "@parent:ID",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
+            "ModelSelectionMode": "Agent",
             "ExposeAsAction": false,
             "IconClass": "fa-solid fa-file-pen",
             "PayloadDownstreamPaths": [
@@ -318,8 +323,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2025-10-17T18:33:54.665Z",
-            "checksum": "cba582ba92721c8e36c67ad435e313c2c962a6eec64913eed34dab9ed814158f"
+            "lastModified": "2025-10-18T13:29:52.422Z",
+            "checksum": "0872f26fd4a8b01dac784940babe04f1ed1b30ad1c2efb5ddfa87fd7e1c2867a"
           }
         }
       ],
@@ -384,8 +389,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-17T01:33:06.550Z",
-      "checksum": "7c0449fbda912a3c7b9e27611e37f6f306b3416e435803f51b48e0f3c5f8455d"
+      "lastModified": "2025-10-18T13:29:52.253Z",
+      "checksum": "4d615e637a1aa4d38cc0d69c44abcc4992c4d404ce1c8436fceefc93fce06661"
     }
   }
 ]
