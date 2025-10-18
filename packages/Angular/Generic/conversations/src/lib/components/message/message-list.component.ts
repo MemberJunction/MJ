@@ -172,14 +172,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
-          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          // Use LAST artifact (most recent) instead of first for display
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
 
           // Trigger lazy load and set properties
-          if (firstArtifact) {
+          if (lastArtifact) {
             // Lazy load in background - don't block UI
             Promise.all([
-              firstArtifact.getArtifact(),
-              firstArtifact.getVersion()
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
@@ -208,14 +211,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
-          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          // Use LAST artifact (most recent) instead of first for display
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
 
           // Trigger lazy load and set properties
-          if (firstArtifact) {
+          if (lastArtifact) {
             // Lazy load in background - don't block UI
             Promise.all([
-              firstArtifact.getArtifact(),
-              firstArtifact.getVersion()
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
