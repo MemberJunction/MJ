@@ -337,16 +337,22 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Set iframe height to match content (with a bit of padding)
         iframe.style.height = `${contentHeight + 20}px`;
 
-        // Force body to use full available width dynamically
+        // Get the iframe's actual width (excluding borders)
+        const iframeWidth = iframe.clientWidth;
+
+        // Force body to use full iframe width with consistent margins
         if (iframeDoc.body) {
-          iframeDoc.body.style.width = 'calc(100% - 40px)'; // Account for 20px margin on each side
+          const marginSize = 20; // 20px margins on each side
+          const bodyWidth = iframeWidth - (marginSize * 2);
+
+          iframeDoc.body.style.width = `${bodyWidth}px`;
           iframeDoc.body.style.maxWidth = 'none';
-          iframeDoc.body.style.margin = '20px';
+          iframeDoc.body.style.margin = `${marginSize}px`;
           iframeDoc.body.style.padding = '0';
           iframeDoc.body.style.boxSizing = 'border-box';
         }
 
-        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px');
+        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px, Width:', iframeWidth, 'px');
       }
     }
   }
