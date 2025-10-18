@@ -1,8 +1,8 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { AgentEmbeddingService } from "@memberjunction/ai-agents";
-import { AIAgentPermissionHelper, AIEngineBase } from "@memberjunction/ai-engine-base";
+import { AIEngine } from "@memberjunction/aiengine";
+import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
 
 /**
  * Action that finds the best-matching AI agents for a given task using embedding-based semantic search.
@@ -30,37 +30,7 @@ import { AIAgentPermissionHelper, AIEngineBase } from "@memberjunction/ai-engine
  */
 @RegisterClass(BaseAction, "Find Best Agent")
 export class FindBestAgentAction extends BaseAction {
-
-    private static embeddingService: AgentEmbeddingService | null = null;
-    private static initializationPromise: Promise<void> | null = null;
-
-    /**
-     * Ensures the embedding service is initialized.
-     * Uses a singleton pattern to avoid multiple initializations.
-     */
-    private async ensureInitialized(contextUser?: any): Promise<void> {
-        // If already initialized, return immediately
-        if (FindBestAgentAction.embeddingService?.isInitialized) {
-            return;
-        }
-
-        // If initialization is in progress, wait for it
-        if (FindBestAgentAction.initializationPromise) {
-            return FindBestAgentAction.initializationPromise;
-        }
-
-        // Start initialization
-        FindBestAgentAction.initializationPromise = (async () => {
-            try {
-                FindBestAgentAction.embeddingService = new AgentEmbeddingService();
-                await FindBestAgentAction.embeddingService.initialize(contextUser, false);
-            } finally {
-                FindBestAgentAction.initializationPromise = null;
-            }
-        })();
-
-        return FindBestAgentAction.initializationPromise;
-    }
+    // Singleton initialization removed - AIEngine handles embedding lifecycle
 
     /**
      * Executes the Find Best Agent action.
@@ -116,19 +86,11 @@ export class FindBestAgentAction extends BaseAction {
                 };
             }
 
-            // Ensure embedding service is initialized
-            await this.ensureInitialized(params.ContextUser);
+            // Ensure AIEngine is loaded (embeddings computed during initialization)
+            await AIEngine.Instance.Config(false, params.ContextUser);
 
-            if (!FindBestAgentAction.embeddingService) {
-                return {
-                    Success: false,
-                    ResultCode: 'INITIALIZATION_ERROR',
-                    Message: 'Failed to initialize agent embedding service'
-                };
-            }
-
-            // Find similar agents - get more results to account for permission filtering
-            const matchedAgents = await FindBestAgentAction.embeddingService.findSimilarAgents(
+            // Find similar agents using AIEngine's built-in method - no database round trip!
+            const matchedAgents = await AIEngine.Instance.FindSimilarAgents(
                 taskDescription,
                 maxResults * 3, // Get 3x results to account for filtering
                 minimumSimilarityScore
@@ -141,14 +103,22 @@ export class FindBestAgentAction extends BaseAction {
             );
             const accessibleAgentIds = new Set(accessibleAgents.map(a => a.ID));
 
-            // Filter matched agents by permissions AND status
-            const permissionFilteredAgents = matchedAgents.filter(a => accessibleAgentIds.has(a.agentId));
-            const statusFilteredAgents = includeInactive
-                ? permissionFilteredAgents
-                : permissionFilteredAgents.filter(a => a.status === 'Active');
+            // Filter matched agents by permissions
+            let permissionFilteredAgents = matchedAgents.filter(a => accessibleAgentIds.has(a.agentId));
+
+            // Filter by status if not including inactive
+            if (!includeInactive) {
+                permissionFilteredAgents = permissionFilteredAgents.filter(a => a.status === 'Active');
+            }
+
+            // Filter by invocation mode - exclude Sub-Agent agents (only show Any or Top-Level)
+            // Sub-Agents are meant to be called by other agents, not discovered by users/tools
+            const invocationFilteredAgents = permissionFilteredAgents.filter(a =>
+                a.invocationMode !== 'Sub-Agent'
+            );
 
             // Limit to maxResults after all filtering
-            const filteredAgents = statusFilteredAgents.slice(0, maxResults);
+            const filteredAgents = invocationFilteredAgents.slice(0, maxResults);
 
             if (filteredAgents.length === 0) {
                 return {
@@ -158,13 +128,11 @@ export class FindBestAgentAction extends BaseAction {
                 };
             }
 
-            // Load AIEngineBase to get agent actions
-            await AIEngineBase.Instance.Config(false, params.ContextUser);
-
+            // AIEngine already loaded above - use it to get agent actions
             // Create map of agentId -> action names
             const agentActionsMap = new Map<string, string[]>();
             for (const agent of filteredAgents) {
-                const agentActions = AIEngineBase.Instance.AgentActions
+                const agentActions = AIEngine.Instance.AgentActions
                     .filter(aa => aa.AgentID === agent.agentId && aa.Status === 'Active')
                     .map(aa => aa.Action);  // Get action name
                 agentActionsMap.set(agent.agentId, agentActions);
