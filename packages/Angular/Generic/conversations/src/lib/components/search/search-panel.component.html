@@ -9,7 +9,7 @@
           #searchInput
           type="text"
           class="search-input"
-          placeholder="Search conversations, messages, and artifacts..."
+          placeholder="Search conversations, messages, artifacts, collections, and tasks..."
           [(ngModel)]="searchQuery"
           (input)="onSearchInput()"
           autocomplete="off"
@@ -73,6 +73,24 @@
         >
           <i class="fa-solid fa-file-alt"></i>
           Artifacts
+        </button>
+        <button
+          type="button"
+          class="filter-button"
+          [class.active]="activeFilter === 'collections'"
+          (click)="setFilter('collections')"
+        >
+          <i class="fa-solid fa-folder"></i>
+          Collections
+        </button>
+        <button
+          type="button"
+          class="filter-button"
+          [class.active]="activeFilter === 'tasks'"
+          (click)="setFilter('tasks')"
+        >
+          <i class="fa-solid fa-tasks"></i>
+          Tasks
         </button>
       </div>
 
@@ -145,7 +163,7 @@
         <!-- Empty State -->
         <div class="empty-state">
           <i class="fa-solid fa-search empty-icon"></i>
-          <p>Search across all your conversations, messages, and artifacts</p>
+          <p>Search across all your conversations, messages, artifacts, collections, and tasks</p>
           <div class="search-tips">
             <h4>Tips:</h4>
             <ul>
@@ -272,6 +290,74 @@
                         {{ result.conversationName }}
                       </div>
                     }
+                    <div class="result-preview" [innerHTML]="highlightMatch(result.preview, searchQuery)"></div>
+                    @if (result.matchedText) {
+                      <div class="result-match" [innerHTML]="highlightMatch(result.matchedText, searchQuery)"></div>
+                    }
+                  </div>
+                  <div class="result-meta">
+                    <span class="result-date">{{ formatDate(result.createdAt) }}</span>
+                  </div>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Collections Results -->
+        @if (results.collections.length > 0) {
+          <div class="results-group">
+            <h3 class="results-group-title">
+              <i class="fa-solid fa-folder"></i>
+              Collections ({{ results.collections.length }})
+            </h3>
+            <div class="results-list">
+              @for (result of results.collections; track result.id) {
+                <button
+                  type="button"
+                  class="result-item"
+                  [class.selected]="isResultSelected(result)"
+                  (click)="selectResult(result)"
+                >
+                  <div class="result-icon">
+                    <i class="fa-solid" [class]="getResultIcon(result.type)"></i>
+                  </div>
+                  <div class="result-content">
+                    <div class="result-title" [innerHTML]="highlightMatch(result.title, searchQuery)"></div>
+                    <div class="result-preview" [innerHTML]="highlightMatch(result.preview, searchQuery)"></div>
+                    @if (result.matchedText) {
+                      <div class="result-match" [innerHTML]="highlightMatch(result.matchedText, searchQuery)"></div>
+                    }
+                  </div>
+                  <div class="result-meta">
+                    <span class="result-date">{{ formatDate(result.createdAt) }}</span>
+                  </div>
+                </button>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Tasks Results -->
+        @if (results.tasks.length > 0) {
+          <div class="results-group">
+            <h3 class="results-group-title">
+              <i class="fa-solid fa-tasks"></i>
+              Tasks ({{ results.tasks.length }})
+            </h3>
+            <div class="results-list">
+              @for (result of results.tasks; track result.id) {
+                <button
+                  type="button"
+                  class="result-item"
+                  [class.selected]="isResultSelected(result)"
+                  (click)="selectResult(result)"
+                >
+                  <div class="result-icon">
+                    <i class="fa-solid" [class]="getResultIcon(result.type)"></i>
+                  </div>
+                  <div class="result-content">
+                    <div class="result-title" [innerHTML]="highlightMatch(result.title, searchQuery)"></div>
                     <div class="result-preview" [innerHTML]="highlightMatch(result.preview, searchQuery)"></div>
                     @if (result.matchedText) {
                       <div class="result-match" [innerHTML]="highlightMatch(result.matchedText, searchQuery)"></div>

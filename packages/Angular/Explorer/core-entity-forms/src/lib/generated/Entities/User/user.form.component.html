@@ -640,6 +640,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Collection Permissions" [Visible]="record.IsSaved"> 
+                        MJ: Collection Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','SharedByUserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collection Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: AI Agent Runs" [Visible]="record.IsSaved"> 
                         MJ: AI Agent Runs
                     </mj-tab>
@@ -661,6 +674,32 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Permissions','UserID')"  
                             [NewRecordValues]="NewRecordValues('MJ: AI Agent Permissions')"
                             [AllowLoad]="IsCurrentTab('MJ: AI Agent Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Collection Permissions" [Visible]="record.IsSaved"> 
+                        MJ: Collection Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collection Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Collections" [Visible]="record.IsSaved"> 
+                        MJ: Collections
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collections','OwnerID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collections')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collections')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

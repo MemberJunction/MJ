@@ -1,18 +1,18 @@
 import { Component, Input } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
-import { CollectionEntity } from '@memberjunction/core-entities';
+import { CollectionPermissionEntity } from '@memberjunction/core-entities';
 
-@RegisterClass(BaseFormSectionComponent, 'MJ: Collections.details') // Tell MemberJunction about this class 
+@RegisterClass(BaseFormSectionComponent, 'MJ: Collection Permissions.details') // Tell MemberJunction about this class 
 @Component({
-    selector: 'gen-collection-form-details',
+    selector: 'gen-collectionpermission-form-details',
     styleUrls: ['../../../../../shared/form-styles.css'],
     template: `<div *ngIf="this.record">
     <div class="record-form">
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="EnvironmentID"
+            FieldName="CollectionID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -21,7 +21,7 @@ import { CollectionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ParentID"
+            FieldName="UserID"
             Type="textbox"
             [EditMode]="EditMode"
             LinkType="Record"
@@ -30,37 +30,39 @@ import { CollectionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Name"
-            Type="textarea"
+            FieldName="CanRead"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="CanShare"
+            Type="checkbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Icon"
+            FieldName="CanEdit"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="CanDelete"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SharedByUserID"
             Type="textbox"
             [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Color"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Sequence"
-            Type="numerictextbox"
-            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
@@ -79,37 +81,21 @@ import { CollectionEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="OwnerID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="Environment"
+            FieldName="Collection"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Parent"
+            FieldName="User"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Owner"
-            Type="textbox"
-            [EditMode]="EditMode"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
-            FieldName="RootParentID"
+            FieldName="SharedByUser"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
@@ -118,12 +104,12 @@ import { CollectionEntity } from '@memberjunction/core-entities';
 </div>
     `
 })
-export class CollectionDetailsComponent extends BaseFormSectionComponent {
-    @Input() override record!: CollectionEntity;
+export class CollectionPermissionDetailsComponent extends BaseFormSectionComponent {
+    @Input() override record!: CollectionPermissionEntity;
     @Input() override EditMode: boolean = false;
 }
 
-export function LoadCollectionDetailsComponent() {
+export function LoadCollectionPermissionDetailsComponent() {
     // does nothing, but called in order to prevent tree-shaking from eliminating this component from the build
 }
       
