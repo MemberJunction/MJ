@@ -110,7 +110,8 @@
             [environmentId]="environmentId"
             [versionNumber]="selectedVersionNumber"
             [refreshTrigger]="artifactViewerRefresh$"
-            (closed)="onCloseArtifactPanel()">
+            (closed)="onCloseArtifactPanel()"
+            (saveToCollectionRequested)="onSaveToCollectionRequested($event)">
         </mj-artifact-viewer-panel>
         </div>
     }
@@ -230,4 +231,16 @@
         </div>
     </div>
     </div>
+}
+
+<!-- Collection Picker Modal -->
+@if (showCollectionPicker) {
+  <mj-artifact-collection-picker-modal
+    [isOpen]="showCollectionPicker"
+    [environmentId]="environmentId"
+    [currentUser]="currentUser"
+    [excludeCollectionIds]="collectionPickerExcludedIds"
+    (saved)="onCollectionPickerSaved($event)"
+    (cancelled)="onCollectionPickerCancelled()">
+  </mj-artifact-collection-picker-modal>
 }

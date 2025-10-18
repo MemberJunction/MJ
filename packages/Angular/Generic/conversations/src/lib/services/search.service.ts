@@ -4,19 +4,23 @@ import { debounceTime, distinctUntilChanged, switchMap, map } from 'rxjs/operato
 import {
   ConversationEntity,
   ConversationDetailEntity,
-  ConversationArtifactEntity
+  ConversationArtifactEntity,
+  CollectionEntity,
+  CollectionArtifactEntity,
+  TaskEntity,
+  ArtifactEntity
 } from '@memberjunction/core-entities';
-import { RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, Metadata } from '@memberjunction/core';
 
 /**
  * Types of searchable content
  */
-export type SearchResultType = 'conversation' | 'message' | 'artifact';
+export type SearchResultType = 'conversation' | 'message' | 'artifact' | 'collection' | 'task';
 
 /**
  * Filter options for search
  */
-export type SearchFilter = 'all' | 'conversations' | 'messages' | 'artifacts';
+export type SearchFilter = 'all' | 'conversations' | 'messages' | 'artifacts' | 'collections' | 'tasks';
 
 /**
  * Unified search result
@@ -30,6 +34,8 @@ export interface SearchResult {
   conversationId?: string;
   conversationName?: string;
   artifactType?: string;
+  collectionId?: string;
+  collectionName?: string;
   createdAt: Date;
   relevanceScore: number;
 }
@@ -41,6 +47,8 @@ export interface GroupedSearchResults {
   conversations: SearchResult[];
   messages: SearchResult[];
   artifacts: SearchResult[];
+  collections: SearchResult[];
+  tasks: SearchResult[];
   total: number;
 }
 
@@ -68,6 +76,8 @@ export class SearchService {
     conversations: [],
     messages: [],
     artifacts: [],
+    collections: [],
+    tasks: [],
     total: 0
   });
 
@@ -114,6 +124,8 @@ export class SearchService {
         conversations: [],
         messages: [],
         artifacts: [],
+        collections: [],
+        tasks: [],
         total: 0
       };
       this._searchResults$.next(emptyResults);
@@ -128,7 +140,7 @@ export class SearchService {
       const dateRange = this._dateRange$.value;
 
       // Search based on active filter
-      const [conversations, messages, artifacts] = await Promise.all([
+      const [conversations, messages, artifacts, collections, tasks] = await Promise.all([
         filter === 'all' || filter === 'conversations'
           ? this.searchConversations(query, environmentId, currentUser, dateRange)
           : Promise.resolve([]),
@@ -137,6 +149,12 @@ export class SearchService {
           : Promise.resolve([]),
         filter === 'all' || filter === 'artifacts'
           ? this.searchArtifacts(query, environmentId, currentUser, dateRange)
+          : Promise.resolve([]),
+        filter === 'all' || filter === 'collections'
+          ? this.searchCollections(query, environmentId, currentUser, dateRange)
+          : Promise.resolve([]),
+        filter === 'all' || filter === 'tasks'
+          ? this.searchTasks(query, environmentId, currentUser, dateRange)
           : Promise.resolve([])
       ]);
 
@@ -144,7 +162,9 @@ export class SearchService {
         conversations,
         messages,
         artifacts,
-        total: conversations.length + messages.length + artifacts.length
+        collections,
+        tasks,
+        total: conversations.length + messages.length + artifacts.length + collections.length + tasks.length
       };
 
       this._searchResults$.next(results);
@@ -239,7 +259,8 @@ export class SearchService {
   }
 
   /**
-   * Search artifacts by name and content
+   * Search artifacts by name and description
+   * Includes artifacts from both conversations and collections
    */
   private async searchArtifacts(
     query: string,
@@ -250,8 +271,8 @@ export class SearchService {
     const rv = new RunView();
     const lowerQuery = query.toLowerCase();
 
-    // Get artifacts in conversations from this environment
-    let filter = `ConversationID IN (SELECT ID FROM vwConversations WHERE EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0))`;
+    // Search artifacts directly by name and description
+    let filter = `EnvironmentID='${environmentId}'`;
     filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
 
     if (dateRange.start) {
@@ -261,9 +282,9 @@ export class SearchService {
       filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
     }
 
-    const result = await rv.RunView<ConversationArtifactEntity>(
+    const result = await rv.RunView<ArtifactEntity>(
       {
-        EntityName: 'MJ: Conversation Artifacts',
+        EntityName: 'MJ: Artifacts',
         ExtraFilter: filter,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 100,
@@ -277,7 +298,148 @@ export class SearchService {
       return [];
     }
 
-    return result.Results.map(artifact => this.mapArtifactToSearchResult(artifact, query));
+    const searchResults: SearchResult[] = [];
+
+    // For each artifact, check if it's in a collection for context
+    for (const artifact of result.Results) {
+      // Check for collection associations
+      const collResult = await rv.RunView<CollectionArtifactEntity>(
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `ArtifactID='${artifact.ID}'`,
+          MaxRows: 1,
+          ResultType: 'entity_object'
+        },
+        currentUser
+      );
+
+      if (collResult.Success && collResult.Results && collResult.Results.length > 0) {
+        const collArtifact = collResult.Results[0];
+        searchResults.push(
+          this.mapArtifactToSearchResult(
+            artifact,
+            query,
+            collArtifact.CollectionID,
+            collArtifact.Collection
+          )
+        );
+      } else {
+        // No collection association
+        searchResults.push(this.mapArtifactToSearchResult(artifact, query));
+      }
+    }
+
+    return searchResults;
+  }
+
+  /**
+   * Search collections by name and description
+   * Includes both owned collections and shared collections user has access to
+   */
+  private async searchCollections(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo,
+    dateRange: DateRange
+  ): Promise<SearchResult[]> {
+    const rv = new RunView();
+    const lowerQuery = query.toLowerCase();
+
+    const ownerFilter = `OwnerID='${currentUser.ID}'`;
+    const permissionSubquery = `ID IN (
+      SELECT CollectionID
+      FROM [__mj].[vwCollectionPermissions]
+      WHERE UserID='${currentUser.ID}'
+    )`;
+
+    let filter = `EnvironmentID='${environmentId}'`;
+    filter += ` AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
+    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+
+    if (dateRange.start) {
+      filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
+    }
+    if (dateRange.end) {
+      filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
+    }
+
+    const result = await rv.RunView<CollectionEntity>(
+      {
+        EntityName: 'MJ: Collections',
+        ExtraFilter: filter,
+        OrderBy: '__mj_UpdatedAt DESC',
+        MaxRows: 100,
+        ResultType: 'entity_object'
+      },
+      currentUser
+    );
+
+    if (!result.Success || !result.Results) {
+      console.error('Failed to search collections:', result.ErrorMessage);
+      return [];
+    }
+
+    return result.Results.map(coll => this.mapCollectionToSearchResult(coll, query));
+  }
+
+  /**
+   * Search tasks by name, description, and notes
+   * Only includes tasks in conversations user has access to
+   */
+  private async searchTasks(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo,
+    dateRange: DateRange
+  ): Promise<SearchResult[]> {
+    const rv = new RunView();
+    const lowerQuery = query.toLowerCase();
+
+    // Build filter using same logic as TasksFullViewComponent
+    const md = new Metadata();
+    const cd = md.EntityByName('Conversation Details');
+    const c = md.EntityByName('Conversations');
+
+    if (!cd || !c) {
+      console.warn('⚠️ Missing metadata for Conversations or Conversation Details');
+      return [];
+    }
+
+    let filter = `ParentID IS NULL AND (UserID = '${currentUser.ID}' OR ConversationDetailID IN (
+      SELECT ID FROM [${cd.SchemaName}].[${cd.BaseView}]
+      WHERE
+      UserID ='${currentUser.ID}' OR
+      ConversationID IN (
+        SELECT ID FROM [${c.SchemaName}].[${c.BaseView}] WHERE UserID='${currentUser.ID}'
+      )
+    ))`;
+
+    filter += ` AND (LOWER(Name) LIKE '%${this.escapeSQL(lowerQuery)}%' OR LOWER(Description) LIKE '%${this.escapeSQL(lowerQuery)}%')`;
+
+    if (dateRange.start) {
+      filter += ` AND __mj_CreatedAt >= '${dateRange.start.toISOString()}'`;
+    }
+    if (dateRange.end) {
+      filter += ` AND __mj_CreatedAt <= '${dateRange.end.toISOString()}'`;
+    }
+
+    const result = await rv.RunView<TaskEntity>(
+      {
+        EntityName: 'MJ: Tasks',
+        ExtraFilter: filter,
+        OrderBy: '__mj_UpdatedAt DESC',
+        MaxRows: 100,
+        ResultType: 'entity_object'
+      },
+      currentUser
+    );
+
+    if (!result.Success || !result.Results) {
+      console.error('Failed to search tasks:', result.ErrorMessage);
+      return [];
+    }
+
+    return result.Results.map(task => this.mapTaskToSearchResult(task, query));
   }
 
   /**
@@ -335,7 +497,12 @@ export class SearchService {
   /**
    * Map artifact entity to search result
    */
-  private mapArtifactToSearchResult(artifact: ConversationArtifactEntity, query: string): SearchResult {
+  private mapArtifactToSearchResult(
+    artifact: ArtifactEntity,
+    query: string,
+    collectionId?: string,
+    collectionName?: string
+  ): SearchResult {
     const name = artifact.Name || 'Untitled Artifact';
     const description = artifact.Description || '';
     const lowerQuery = query.toLowerCase();
@@ -355,10 +522,68 @@ export class SearchService {
       title: name,
       preview: description || 'No description',
       matchedText,
-      conversationId: artifact.ConversationID,
-      conversationName: artifact.Conversation || undefined,
-      artifactType: artifact.ArtifactType || undefined,
+      collectionId,
+      collectionName,
+      artifactType: artifact.Type || undefined,
       createdAt: artifact.__mj_CreatedAt,
+      relevanceScore: score
+    };
+  }
+
+  /**
+   * Map collection entity to search result
+   */
+  private mapCollectionToSearchResult(collection: CollectionEntity, query: string): SearchResult {
+    const lowerQuery = query.toLowerCase();
+    const name = collection.Name || 'Untitled Collection';
+    const description = collection.Description || '';
+
+    let score = 0;
+    if (name.toLowerCase().includes(lowerQuery)) score += 10;
+    if (description.toLowerCase().includes(lowerQuery)) score += 5;
+
+    const matchedText = this.extractMatchContext(
+      name.toLowerCase().includes(lowerQuery) ? name : description,
+      query
+    );
+
+    return {
+      id: collection.ID,
+      type: 'collection',
+      title: name,
+      preview: description || 'No description',
+      matchedText,
+      collectionId: collection.ID,
+      collectionName: name,
+      createdAt: collection.__mj_CreatedAt,
+      relevanceScore: score
+    };
+  }
+
+  /**
+   * Map task entity to search result
+   */
+  private mapTaskToSearchResult(task: TaskEntity, query: string): SearchResult {
+    const lowerQuery = query.toLowerCase();
+    const name = task.Name || 'Untitled Task';
+    const description = task.Description || '';
+
+    let score = 0;
+    if (name.toLowerCase().includes(lowerQuery)) score += 10;
+    if (description.toLowerCase().includes(lowerQuery)) score += 5;
+
+    const matchedText = this.extractMatchContext(
+      name.toLowerCase().includes(lowerQuery) ? name : description,
+      query
+    );
+
+    return {
+      id: task.ID,
+      type: 'task',
+      title: name,
+      preview: description || 'No description',
+      matchedText,
+      createdAt: task.__mj_CreatedAt,
       relevanceScore: score
     };
   }
@@ -428,6 +653,8 @@ export class SearchService {
       conversations: [],
       messages: [],
       artifacts: [],
+      collections: [],
+      tasks: [],
       total: 0
     });
   }

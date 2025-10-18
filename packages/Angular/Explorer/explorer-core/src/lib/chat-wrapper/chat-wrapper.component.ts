@@ -125,6 +125,8 @@ export class ChatWrapperComponent implements OnInit {
     this.activeTaskId = event.taskId;
 
     // Build query params based on active tab
+    // IMPORTANT: Only include params relevant to the current tab
+    // This prevents parameter accumulation across different contexts
     const queryParams: any = {
       tab: event.tab
     };
@@ -132,6 +134,7 @@ export class ChatWrapperComponent implements OnInit {
     if (event.tab === 'conversations' && event.conversationId) {
       queryParams.activeConversationId = event.conversationId;
     } else if (event.tab === 'collections') {
+      // Only add collection/artifact IDs if they exist
       if (event.collectionId) {
         queryParams.activeCollectionId = event.collectionId;
       }
@@ -143,10 +146,11 @@ export class ChatWrapperComponent implements OnInit {
     }
 
     // Update URL without reloading the page
+    // NOTE: We don't use 'merge' here because we want to REPLACE query params entirely
+    // This ensures switching tabs clears irrelevant parameters from previous contexts
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: queryParams,
-      queryParamsHandling: 'merge', // Preserve other query params
       replaceUrl: false // Add to browser history for back/forward navigation
     });
   }

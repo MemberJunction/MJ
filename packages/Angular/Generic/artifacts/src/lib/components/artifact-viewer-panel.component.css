@@ -161,15 +161,6 @@
   color: #6B7280;
 }
 
-.save-to-collection-btn.in-collection {
-  color: #F59E0B;
-}
-
-.save-to-collection-btn.in-collection:hover {
-  background: #FEF3C7;
-  color: #D97706;
-}
-
 .save-to-collection-btn i {
   font-size: 14px;
 }
@@ -640,4 +631,118 @@
   border-radius: 4px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Links Tab */
+.links-container {
+  padding: 20px;
+}
+
+.links-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.link-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  transition: all 0.15s;
+}
+
+.link-item:hover {
+  border-color: #1e40af;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.link-icon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.link-icon i {
+  font-size: 18px;
+  color: #1e40af;
+}
+
+.link-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.link-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link-type {
+  font-size: 12px;
+  color: #6B7280;
+  margin-top: 2px;
+}
+
+.link-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.link-action-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid #D1D5DB;
+  border-radius: 6px;
+  color: #1e40af;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.link-action-btn:hover:not(:disabled) {
+  background: #EFF6FF;
+  border-color: #1e40af;
+}
+
+.link-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  color: #9CA3AF;
+}
+
+.links-container .empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: #9CA3AF;
+  text-align: center;
+}
+
+.links-container .empty-state i {
+  font-size: 48px;
+  margin-bottom: 16px;
+  opacity: 0.3;
+}
+
+.links-container .empty-state p {
+  margin: 0;
+  font-size: 14px;
 }

@@ -4,7 +4,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { RouterModule } from '@angular/router';
 
 // Kendo UI modules
-import { DialogModule } from '@progress/kendo-angular-dialog';
+import { DialogModule, WindowModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
 import { InputsModule } from '@progress/kendo-angular-inputs';
 import { LayoutModule } from '@progress/kendo-angular-layout';
@@ -39,6 +39,7 @@ import { CollectionViewComponent } from './components/collection/collection-view
 import { CollectionArtifactCardComponent } from './components/collection/collection-artifact-card.component';
 import { LibraryFullViewComponent } from './components/library/library-full-view.component';
 import { CollectionFormModalComponent } from './components/collection/collection-form-modal.component';
+import { ArtifactCreateModalComponent } from './components/collection/artifact-create-modal.component';
 import { CollectionsFullViewComponent } from './components/collection/collections-full-view.component';
 import { ProjectSelectorComponent } from './components/project/project-selector.component';
 import { ProjectFormModalComponent } from './components/project/project-form-modal.component';
@@ -56,6 +57,9 @@ import { NotificationBadgeComponent } from './components/notification/notificati
 import { ActivityIndicatorComponent } from './components/notification/activity-indicator.component';
 import { ToastComponent } from './components/toast/toast.component';
 import { InputDialogComponent } from './components/dialogs/input-dialog.component';
+import { CollectionShareModalComponent } from './components/collection/collection-share-modal.component';
+import { UserPickerComponent } from './components/shared/user-picker.component';
+import { ArtifactCollectionPickerModalComponent } from './components/collection/artifact-collection-picker-modal.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -78,6 +82,7 @@ const COMPONENTS = [
   CollectionArtifactCardComponent,
   LibraryFullViewComponent,
   CollectionFormModalComponent,
+  ArtifactCreateModalComponent,
   CollectionsFullViewComponent,
   ProjectSelectorComponent,
   ProjectFormModalComponent,
@@ -108,6 +113,7 @@ const COMPONENTS = [
     ReactiveFormsModule,
     RouterModule,
     DialogModule,
+    WindowModule,
     ButtonsModule,
     InputsModule,
     LayoutModule,
@@ -121,7 +127,10 @@ const COMPONENTS = [
     ArtifactsModule,
     MarkdownModule.forRoot(),
     // Standalone components
-    TasksFullViewComponent
+    TasksFullViewComponent,
+    CollectionShareModalComponent,
+    UserPickerComponent,
+    ArtifactCollectionPickerModalComponent
   ],
   exports: [
     ...COMPONENTS,

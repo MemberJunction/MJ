@@ -34,10 +34,9 @@
       </div>
       @if (showSaveToCollection) {
         <button class="save-to-collection-btn"
-                [class.in-collection]="isInCollection"
                 (click)="onSaveToLibrary()"
-                [title]="isInCollection ? 'View in Collection' : 'Save to Collection'">
-          <i [ngClass]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
+                title="Save to Collection">
+          <i class="far fa-bookmark"></i>
         </button>
       }
       <button class="close-btn" (click)="onClose()" title="Close">
@@ -78,6 +77,11 @@
           <button class="tab-btn" [class.active]="activeTab === 'details'" (click)="setActiveTab('details')">
             <i class="fas fa-info-circle"></i> Details
           </button>
+          @if (hasLinksTab) {
+            <button class="tab-btn" [class.active]="activeTab === 'links'" (click)="setActiveTab('links')">
+              <i class="fas fa-link"></i> Links
+            </button>
+          }
         </div>
 
         <!-- Tab Content -->
@@ -184,78 +188,48 @@
               }
             </div>
           }
+
+          <!-- Links Tab -->
+          @if (activeTab === 'links') {
+            <div class="links-container">
+              @if (linksToShow.length > 0) {
+                <div class="links-section">
+                  @for (link of linksToShow; track link.id) {
+                    <div class="link-item">
+                      <div class="link-icon">
+                        @if (link.type === 'conversation') {
+                          <i class="fas fa-comments"></i>
+                        } @else {
+                          <i class="fas fa-folder"></i>
+                        }
+                      </div>
+                      <div class="link-content">
+                        <div class="link-name">{{ link.name }}</div>
+                        <div class="link-type">{{ link.type === 'conversation' ? 'Conversation' : 'Collection' }}</div>
+                      </div>
+                      <div class="link-actions">
+                        <button
+                          class="link-action-btn"
+                          [disabled]="!link.hasAccess"
+                          [title]="link.hasAccess ? 'Open' : 'No access'"
+                          (click)="onNavigateToLink(link)">
+                          <i class="fas fa-arrow-right"></i>
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              } @else {
+                <div class="empty-state">
+                  <i class="fas fa-link"></i>
+                  <p>No links available</p>
+                </div>
+              }
+            </div>
+          }
         </div>
       </div>
     }
   </div>
 </div>
 
-<!-- Save to Collection Dialog -->
-@if (showLibraryDialog) {
-  <div class="modal-overlay" (click)="cancelLibraryDialog()">
-    <div class="modal-content library-modal" (click)="$event.stopPropagation()">
-      <div class="modal-header">
-        <h3>
-          <i class="fas fa-bookmark"></i>
-          Save to Collection
-        </h3>
-        <button class="close-btn" (click)="cancelLibraryDialog()">
-          <i class="fas fa-times"></i>
-        </button>
-      </div>
-      <div class="modal-body">
-        <div class="form-section">
-          <label>Select Collection</label>
-          <select [(ngModel)]="selectedCollectionId" class="form-select">
-            <option [ngValue]="null">-- Choose a collection --</option>
-            @for (collection of collections; track collection.ID) {
-              <option [ngValue]="collection.ID">{{ collection.Name }}</option>
-            }
-          </select>
-        </div>
-
-        <div class="divider">
-          <span>OR</span>
-        </div>
-
-        <div class="form-section">
-          <label>Create New Collection</label>
-          <div class="create-collection-row">
-            <input
-              type="text"
-              [(ngModel)]="newCollectionName"
-              placeholder="Enter collection name"
-              class="form-input"
-              (keyup.enter)="createNewCollection()">
-            <button
-              class="btn btn-secondary"
-              (click)="createNewCollection()"
-              [disabled]="isCreatingCollection || !newCollectionName.trim()">
-              @if (isCreatingCollection) {
-                <i class="fas fa-spinner fa-spin"></i>
-              } @else {
-                <i class="fas fa-plus"></i>
-              }
-              Create
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-secondary" (click)="cancelLibraryDialog()">
-          Cancel
-        </button>
-        <button
-          class="btn btn-primary"
-          (click)="saveToSelectedCollection()"
-          [disabled]="!selectedCollectionId || isSavingToLibrary">
-          @if (isSavingToLibrary) {
-            <i class="fas fa-spinner fa-spin"></i> Saving...
-          } @else {
-            <i class="fas fa-save"></i> Save to Collection
-          }
-        </button>
-      </div>
-    </div>
-  </div>
-}
