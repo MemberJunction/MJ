@@ -296,6 +296,22 @@
                   "checksum": "d5c6f0be6e3ba0fb29f9f04846202041491cd08e8475d1b41989dc68c0ae06c8"
                 }
               }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Chart",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B6A569EC-ECF0-4E98-80A3-6C1D30DC0F37"
+                },
+                "sync": {
+                  "lastModified": "2025-10-18T03:14:39.029Z",
+                  "checksum": "b29c665b6e6389ba72c6c555cd6dd2be21273d586f50e12644a4df76e7a76648"
+                }
+              }
             ]
           },
           "primaryKey": {
