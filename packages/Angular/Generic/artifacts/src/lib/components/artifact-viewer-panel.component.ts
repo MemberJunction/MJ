@@ -401,6 +401,51 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
   }
 
+  onPrintDisplayContent(): void {
+    // Try to delegate to the plugin viewer's print method
+    if (this.pluginViewer?.pluginInstance) {
+      const plugin = this.pluginViewer.pluginInstance as any;
+      if (typeof plugin.printHtml === 'function') {
+        plugin.printHtml();
+        return;
+      }
+    }
+
+    // Fallback: create a temporary print window with displayHtml or displayMarkdown
+    const content = this.displayHtml || this.displayMarkdown;
+    if (content) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        if (this.displayHtml) {
+          printWindow.document.write(content);
+        } else if (this.displayMarkdown) {
+          // Wrap markdown in basic HTML for printing
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Print</title>
+              <style>
+                body { font-family: sans-serif; padding: 20px; }
+                pre { background: #f5f5f5; padding: 10px; border-radius: 4px; }
+              </style>
+            </head>
+            <body>
+              <pre>${content}</pre>
+            </body>
+            </html>
+          `);
+        }
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+      }
+    }
+  }
+
   toggleVersionDropdown(): void {
     if (this.allVersions.length > 1) {
       this.showVersionDropdown = !this.showVersionDropdown;

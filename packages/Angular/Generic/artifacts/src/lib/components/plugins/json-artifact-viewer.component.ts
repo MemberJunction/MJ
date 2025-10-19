@@ -37,7 +37,7 @@ import { marked } from 'marked';
           <iframe
             #htmlFrame
             [src]="htmlBlobUrl"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
             class="html-iframe"
             (load)="onIframeLoad()">
           </iframe>
