@@ -211,6 +211,11 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
         this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
 
+        // Clean up double-escaped characters in HTML (from LLM generation)
+        if (this.displayHtml) {
+          this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
+        }
+
         // Create blob URL for HTML to avoid srcdoc sanitization issues
         if (this.displayHtml) {
           const blob = new Blob([this.displayHtml], { type: 'text/html' });
@@ -388,5 +393,26 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  /**
+   * Clean up double-escaped characters that appear in LLM-generated HTML
+   * Removes literal "\\n" and "\\t" which cause rendering issues
+   */
+  private cleanEscapedCharacters(html: string): string {
+    // Remove escaped newlines (\\n becomes nothing)
+    // HTML doesn't need whitespace for formatting, and these cause display issues
+    let cleaned = html.replace(/\\n/g, '');
+
+    // Remove escaped tabs
+    cleaned = cleaned.replace(/\\t/g, '');
+
+    // Remove double-escaped tabs
+    cleaned = cleaned.replace(/\\\\t/g, '');
+
+    // Remove double-escaped newlines
+    cleaned = cleaned.replace(/\\\\n/g, '');
+
+    return cleaned;
   }
 }
