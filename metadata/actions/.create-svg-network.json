@@ -21,6 +21,13 @@
             "IsArray": false,
             "Description": "Type of network: 'force' (force-directed graph), 'tree' (decision tree), or 'radial' (radial layout). Default: 'force'.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D25C2270-3B0A-4AA8-B52B-F8B495632A3B"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.154Z",
+            "checksum": "2156eed452863304e8137b52cb23be29bcfbf474915c5fbba3b05bf07398b27d"
           }
         },
         {
@@ -32,6 +39,13 @@
             "IsArray": false,
             "Description": "JSON array or object of nodes. For force/radial: array of {id, label, group, size}. For tree: nested object with {id, label, value, children}. Required.",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D4AC1F71-DD62-4D46-94FF-899B62388B55"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.163Z",
+            "checksum": "a70ff6a6d4e4695ba935e7aac273590a6c76735b885d38b283560e47a33aeb28"
           }
         },
         {
@@ -43,6 +57,13 @@
             "IsArray": true,
             "Description": "JSON array of edges: [{source, target, weight, directed}, ...]. Required for force and radial networks. Not used for trees.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BD0C06F3-0AAD-403D-BECB-BDE10BADAA3F"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.173Z",
+            "checksum": "af4d50e264c33ed9762231d4064287c9a2d4c5469f94aaea2a508872591d4e47"
           }
         },
         {
@@ -54,6 +75,13 @@
             "IsArray": false,
             "Description": "Physics parameters for force-directed layouts (optional): {charge: -300, linkDistance: 100, iterations: 300}. Adjusts node repulsion, link length, and simulation convergence.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "15D8CE3A-2CE6-4C86-A491-01D2A762E0F0"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.182Z",
+            "checksum": "b215504b50fa8f64a1cc14aa5ed050f080efdea2feed998f120f8a4319bdbe6b"
           }
         },
         {
@@ -66,6 +94,13 @@
             "IsArray": false,
             "Description": "Show node labels. Default: true.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "62A7AB60-2E2A-4FF3-AC0D-30491658AF52"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.191Z",
+            "checksum": "a1dbab9426b8c7a580ac4b73e51e2f9203f0c83d7ce12dedcdb02ac74b800094"
           }
         },
         {
@@ -78,6 +113,13 @@
             "IsArray": false,
             "Description": "Show group legend for force/radial networks. Default: false.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "98C2018A-AF21-4EA0-B796-CE39B22DB52B"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.200Z",
+            "checksum": "ff1805ba52af32660c4f20b12395e7b1652c22c2ee3ea136ff9766ce8101615b"
           }
         },
         {
@@ -90,6 +132,13 @@
             "IsArray": false,
             "Description": "Shape for tree nodes: 'rect', 'circle', or 'pill'. Default: 'rect'.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "05D0925F-FEC2-4D4B-8445-2EDE3F44A329"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.210Z",
+            "checksum": "c864d79935d5f80dd24a7ad0c6fe1ebea78e67f6a794acdef93e9f4bc44f5a1b"
           }
         },
         {
@@ -102,6 +151,13 @@
             "IsArray": false,
             "Description": "Network width in pixels. Default: 800.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "86324F0E-1222-4D53-8C7F-1A7E50D834F1"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.219Z",
+            "checksum": "b08ac4777f1e202e417550f42cc839339fe6274a8bb6d9ef49f48ccdf4f0dbcd"
           }
         },
         {
@@ -114,6 +170,13 @@
             "IsArray": false,
             "Description": "Network height in pixels. Default: 600.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CBB46282-2043-4FBE-8BD1-6279FAC988CF"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.230Z",
+            "checksum": "bbd527bf01e0fc29b27bc4ad881ab1597c606288dfc7c7ce88edef21f0808964"
           }
         },
         {
@@ -125,6 +188,13 @@
             "IsArray": false,
             "Description": "Network title (optional). Displayed at the top.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8FD300AA-AE68-4B47-9CAD-BE755BF84827"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.237Z",
+            "checksum": "dabea81a149a6980fcc8d478834852884e191ff9a2cb061d7764a0265e97afe7"
           }
         },
         {
@@ -137,6 +207,13 @@
             "IsArray": false,
             "Description": "Color palette: 'mjDefault', 'gray', 'pastel', or 'highContrast'. Default: 'mjDefault'.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5E3CC160-EDAF-4CE0-8CD8-983BA80CC4FF"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.261Z",
+            "checksum": "bf8052abe7b8b8da369abee23ea22d6c33337212ae172bacbdcd071194400ca3"
           }
         },
         {
@@ -148,6 +225,13 @@
             "IsArray": false,
             "Description": "Random seed for deterministic layouts (optional). Use same seed for reproducible networks.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ACD31E0D-CBF9-4C21-B680-F26DB33189DC"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.270Z",
+            "checksum": "e36a930296e2062975cd9ccc4fadd1cf81ab62b1f7e668cf8629b371958ce3cc"
           }
         },
         {
@@ -159,6 +243,13 @@
             "IsArray": false,
             "Description": "Generated SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "725CDA71-C356-4672-926C-DF431E9013E4"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.278Z",
+            "checksum": "754788aedce1a97f89fd0926253b3a2e933fcc737baeb922527ef759531f2446"
           }
         }
       ],
@@ -169,6 +260,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Network generated successfully. SVG markup returned in Message field."
+          },
+          "primaryKey": {
+            "ID": "A2C90F4E-253B-4A28-8161-75DCE5E5E9E4"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.286Z",
+            "checksum": "704da6e39afb6fd413cfeb378c4273f141ac81fe04cfd4bb0a79474964ff31ce"
           }
         },
         {
@@ -177,6 +275,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Required parameter Nodes is missing."
+          },
+          "primaryKey": {
+            "ID": "04711852-1C03-41D5-9960-C33126F7F126"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.293Z",
+            "checksum": "005320e0e9b37d1d058a1929f66559fb3ace39d31e2897e4a78c743989609e91"
           }
         },
         {
@@ -185,6 +290,13 @@
             "ResultCode": "INVALID_NETWORK_TYPE",
             "IsSuccess": false,
             "Description": "NetworkType must be 'force', 'tree', or 'radial'."
+          },
+          "primaryKey": {
+            "ID": "8460173C-3137-4619-AD44-EF58602BDE49"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.301Z",
+            "checksum": "83f89000c7f5c604fd6eeb373e0921fdc6b8e1bd997599f5200f220e5f8b9f4c"
           }
         },
         {
@@ -193,9 +305,23 @@
             "ResultCode": "NETWORK_GENERATION_FAILED",
             "IsSuccess": false,
             "Description": "Failed to generate network due to invalid configuration or data. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "E1481DB0-706D-46C8-989B-1C73154EED5F"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.308Z",
+            "checksum": "c9560da5a4771ffd52f447e1a7d9118858bc09ffd819977d58826be9b442116e"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "6D0BD2B6-CE93-4D6E-BCA4-55972C2C1F93"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T17:24:30.127Z",
+      "checksum": "df622600ef43feb6957ed92c060585126df6099f8f3f1616ccb79add419e649c"
     }
   }
 ]

@@ -309,7 +309,16 @@
                   "SubAgentID": "@lookup:AI Agents.Name=Infographic Agent",
                   "Status": "Active",
                   "SubAgentOutputMapping": "{\"*\": \"visualizations\"}",
-                  "SubAgentContextPaths": ["*"]
+                  "SubAgentContextPaths": [
+                    "*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "75E27303-EA65-4EC6-A104-DF63359BCA61"
+                },
+                "sync": {
+                  "lastModified": "2025-10-19T17:24:37.534Z",
+                  "checksum": "6f01c3651388e68e96bed9d2805bcef0c5eb86061c8714b8a3df9c3fd2687177"
                 }
               }
             ]

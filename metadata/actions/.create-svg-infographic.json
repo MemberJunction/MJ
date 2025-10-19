@@ -20,6 +20,13 @@
             "IsArray": false,
             "Description": "JSON specification of the infographic. Format: {title, subtitle, footer, columns, width, palette, panels: [{svg, title, colSpan}]}. Required.",
             "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "D1FA8406-36F2-4903-A738-C6F3667262AF"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.067Z",
+            "checksum": "dd6ececc50eecae179a1643f13ab28de0dbbb888c10afff5abd06cb3f14e227b"
           }
         },
         {
@@ -31,6 +38,13 @@
             "IsArray": false,
             "Description": "Generated infographic SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
             "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DFBE00EE-0C7F-4692-9125-DAAF37976497"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.076Z",
+            "checksum": "b9b0346a680e71c981f0e6764d64b83e127890f18dd11a2d91d2029bbe67ec1d"
           }
         }
       ],
@@ -41,6 +55,13 @@
             "ResultCode": "SUCCESS",
             "IsSuccess": true,
             "Description": "Infographic generated successfully. SVG markup returned in Message field."
+          },
+          "primaryKey": {
+            "ID": "86D54690-C935-4EC3-BBE2-71D4588DE21F"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.086Z",
+            "checksum": "ced71752e8d8db0e683f4d2cba7330303e907b454686f84413c1782b3033ca08"
           }
         },
         {
@@ -49,6 +70,13 @@
             "ResultCode": "MISSING_PARAMETERS",
             "IsSuccess": false,
             "Description": "Required parameter Spec is missing."
+          },
+          "primaryKey": {
+            "ID": "207E1F0C-5F6A-4232-AFE6-41F78D0535C9"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.094Z",
+            "checksum": "212f71bbbd559ecd36699819586b34121f0564751ab4dd4dd1b2cca7bcd2c742"
           }
         },
         {
@@ -57,6 +85,13 @@
             "ResultCode": "MISSING_PANELS",
             "IsSuccess": false,
             "Description": "Spec must contain at least one panel."
+          },
+          "primaryKey": {
+            "ID": "AACF5FCD-BF31-4A61-928D-C8ED91234B48"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.103Z",
+            "checksum": "329c7c6a5e2164baee353c2fdb232852080869993f1b9b31268184dc429ee49a"
           }
         },
         {
@@ -65,9 +100,23 @@
             "ResultCode": "INFOGRAPHIC_GENERATION_FAILED",
             "IsSuccess": false,
             "Description": "Failed to generate infographic due to invalid configuration or panel data. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "A6419DC9-78A7-4646-A533-671080821F9F"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.110Z",
+            "checksum": "4f74e408acbeb19af504eda5c46da836022e92da4e28649a57f23615413cf8da"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "5C7557FC-493E-4CAC-A759-5FC69CB75D67"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T17:24:30.046Z",
+      "checksum": "aee3b15889e7e39f3dd8ec9ea522106e9e58a61222e98840ba80ff172eb115f1"
     }
   }
 ]
