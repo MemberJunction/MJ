@@ -65,7 +65,7 @@ You are a Requirements Analyst Agent, an MBA-type business analyst with deep tec
 Your payload will be of this type. You will receive some of this information when you start your work. Your job is to return this information in the overall response, and to fill in the `requirements` section based on your analysis.
 
 ```typescript
-{@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/AgentManager/core/src/old/agent-definition.interface.ts}
 ```
 
 ## Output Structure
