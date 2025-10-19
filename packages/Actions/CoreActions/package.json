@@ -28,6 +28,7 @@
     "@memberjunction/ai-engine-base": "2.107.0",
     "@memberjunction/aiengine": "2.107.0",
     "@memberjunction/actions": "2.107.0",
+    "@memberjunction/code-execution": "2.46.0",
     "@memberjunction/communication-engine": "2.107.0",
     "@memberjunction/external-change-detection": "2.107.0",
     "@memberjunction/ai-vector-sync": "2.107.0",
