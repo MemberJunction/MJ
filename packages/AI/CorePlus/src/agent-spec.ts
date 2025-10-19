@@ -4,7 +4,7 @@
  * the AgentSpec class which provides methods to manipulate and synchronize this spec with
  * the underlying agent metadata in the database.
  */
-export interface AgentRawSpec {
+export interface AgentSpec {
     ID: string;
     Name: string;
     Description?: string;

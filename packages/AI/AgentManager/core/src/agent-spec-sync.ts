@@ -10,15 +10,15 @@ import {
     AIAgentRelationshipEntity
 } from '@memberjunction/core-entities';
 import {
-    AgentRawSpec,
+    AgentSpec,
     AgentActionSpec,
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
 
 /**
- * AgentSpec provides a high-level interface for working with AI Agent metadata in MemberJunction.
+ * AgentSpecSync provides a high-level interface for working with AI Agent metadata in MemberJunction.
  *
- * This class serves as a bi-directional bridge between the simple, serializable {@link AgentRawSpec}
+ * This class serves as a bi-directional bridge between the simple, serializable {@link AgentSpec}
  * format and the complex MemberJunction database metadata across three core entities:
  * - {@link AIAgentEntity} - Core agent configuration
  * - {@link AIAgentActionEntity} - Agent-action relationships
@@ -37,14 +37,14 @@ import {
  *
  * ### Load an existing agent
  * ```typescript
- * const spec = await AgentSpec.LoadFromDatabase('agent-uuid', contextUser);
+ * const spec = await AgentSpecSync.LoadFromDatabase('agent-uuid', contextUser);
  * console.log('Agent Name:', spec.spec.Name);
  * console.log('Actions:', spec.spec.Actions?.length);
  * ```
  *
  * ### Create a new agent
  * ```typescript
- * const newAgent = new AgentSpec({
+ * const newAgent = new AgentSpecSync({
  *     Name: 'My New Agent',
  *     Description: 'Does amazing things',
  *     IconClass: 'fa-robot',
@@ -56,7 +56,7 @@ import {
  *
  * ### Modify and save
  * ```typescript
- * const spec = await AgentSpec.LoadFromDatabase('agent-uuid', contextUser);
+ * const spec = await AgentSpecSync.LoadFromDatabase('agent-uuid', contextUser);
  * spec.spec.Description = 'Updated description';
  * spec.spec.MaxCostPerRun = 10.00;
  * spec.markDirty();
@@ -65,11 +65,11 @@ import {
  *
  * @module @memberjunction/ai-agent-manager
  */
-export class AgentSpec {
+export class AgentSpecSync {
     /**
      * The raw specification data structure containing all agent configuration
      */
-    public spec: AgentRawSpec;
+    public spec: AgentSpec;
 
     /**
      * Tracks whether this spec has been loaded from the database
@@ -90,7 +90,7 @@ export class AgentSpec {
     private _contextUser?: UserInfo;
 
     /**
-     * Create a new AgentSpec instance.
+     * Create a new AgentSpecSync instance.
      *
      * Note: This constructor is typically not called directly. Instead, use the static factory methods:
      * - {@link LoadFromDatabase} - Load existing agent from database
@@ -100,7 +100,7 @@ export class AgentSpec {
      * @param spec - Optional initial spec data (for creating new agents or working with existing data)
      * @param contextUser - Optional context user (required for server-side operations)
      */
-    constructor(spec?: Partial<AgentRawSpec>, contextUser?: UserInfo) {
+    constructor(spec?: Partial<AgentSpec>, contextUser?: UserInfo) {
         if (spec) {
             this.spec = this.initializeSpec(spec);
             this._isDirty = true;
@@ -129,13 +129,13 @@ export class AgentSpec {
      * @param agentId - The unique ID of the agent to load
      * @param contextUser - Optional context user (required for server-side operations)
      * @param includeSubAgents - Whether to recursively load all sub-agents (default: true)
-     * @returns Promise resolving to AgentSpec instance with loaded data
+     * @returns Promise resolving to AgentSpecSync instance with loaded data
      * @throws {Error} If agent with specified ID is not found
      *
      * @example
      * ```typescript
      * // Load agent with all sub-agents
-     * const spec = await AgentSpec.LoadFromDatabase(
+     * const spec = await AgentSpecSync.LoadFromDatabase(
      *     'agent-uuid-here',
      *     contextUser,
      *     true
@@ -146,8 +146,8 @@ export class AgentSpec {
         agentId: string,
         contextUser?: UserInfo,
         includeSubAgents: boolean = true
-    ): Promise<AgentSpec> {
-        const instance = new AgentSpec(undefined, contextUser);
+    ): Promise<AgentSpecSync> {
+        const instance = new AgentSpecSync(undefined, contextUser);
         await instance.loadFromEntities(agentId, includeSubAgents);
         return instance;
     }
@@ -162,19 +162,19 @@ export class AgentSpec {
      * @param agentName - The name of the agent to load
      * @param contextUser - Optional context user (required for server-side operations)
      * @param includeSubAgents - Whether to recursively load sub-agents (default: true)
-     * @returns Promise resolving to AgentSpec instance with loaded data
+     * @returns Promise resolving to AgentSpecSync instance with loaded data
      * @throws {Error} If agent is not found or multiple agents have the same name
      *
      * @example
      * ```typescript
-     * const spec = await AgentSpec.LoadByName('My Agent', contextUser);
+     * const spec = await AgentSpecSync.LoadByName('My Agent', contextUser);
      * ```
      */
     static async LoadByName(
         agentName: string,
         contextUser?: UserInfo,
         includeSubAgents: boolean = true
-    ): Promise<AgentSpec> {
+    ): Promise<AgentSpecSync> {
         // Find agent by name
         const rv = new RunView();
         const result = await rv.RunView<AIAgentEntity>({
@@ -196,22 +196,22 @@ export class AgentSpec {
         }
 
         const agent = result.Results[0];
-        return AgentSpec.LoadFromDatabase(agent.ID, contextUser, includeSubAgents);
+        return AgentSpecSync.LoadFromDatabase(agent.ID, contextUser, includeSubAgents);
     }
 
     /**
      * Create a new agent spec from a raw specification.
      *
-     * This creates an in-memory AgentSpec instance from raw data. The agent is not
+     * This creates an in-memory AgentSpecSync instance from raw data. The agent is not
      * saved to the database until {@link SaveToDatabase} is called.
      *
-     * @param rawSpec - The raw spec data conforming to {@link AgentRawSpec} interface
+     * @param rawSpec - The raw spec data conforming to {@link AgentSpec} interface
      * @param contextUser - Optional context user (required when saving server-side)
-     * @returns New AgentSpec instance (not yet saved to database)
+     * @returns New AgentSpecSync instance (not yet saved to database)
      *
      * @example
      * ```typescript
-     * const rawSpec: AgentRawSpec = {
+     * const rawSpec: AgentSpec = {
      *     ID: '',
      *     Name: 'New Agent',
      *     Description: 'Agent description',
@@ -219,12 +219,12 @@ export class AgentSpec {
      *     Actions: [],
      *     SubAgents: []
      * };
-     * const spec = AgentSpec.FromRawSpec(rawSpec, contextUser);
+     * const spec = AgentSpecSync.FromRawSpec(rawSpec, contextUser);
      * await spec.SaveToDatabase();
      * ```
      */
-    static FromRawSpec(rawSpec: AgentRawSpec, contextUser?: UserInfo): AgentSpec {
-        return new AgentSpec(rawSpec, contextUser);
+    static FromRawSpec(rawSpec: AgentSpec, contextUser?: UserInfo): AgentSpecSync {
+        return new AgentSpecSync(rawSpec, contextUser);
     }
 
     // ===== LOADING METHODS =====
@@ -308,7 +308,7 @@ export class AgentSpec {
     }
 
     /**
-     * Map database entities to AgentRawSpec format.
+     * Map database entities to AgentSpec format.
      *
      * Transforms the normalized database entities into a single denormalized specification
      * object that's easy to work with in code. Handles JSON parsing for all structured fields.
@@ -318,16 +318,16 @@ export class AgentSpec {
      * @param actions - Array of agent action entities
      * @param childAgents - Array of child agent entities (ParentID-based)
      * @param relatedAgents - Array of related agent relationship entities
-     * @returns Fully populated AgentRawSpec object
+     * @returns Fully populated AgentSpec object
      */
     private mapEntitiesToRawSpec(
         agent: AIAgentEntity,
         actions: AIAgentActionEntity[],
         childAgents: AIAgentEntity[],
         relatedAgents: AIAgentRelationshipEntity[]
-    ): AgentRawSpec {
+    ): AgentSpec {
         // Map all agent fields to spec
-        const spec: AgentRawSpec = {
+        const spec: AgentSpec = {
             ID: agent.ID,
             Name: agent.Name || '',
             Description: agent.Description || undefined,
@@ -452,7 +452,7 @@ export class AgentSpec {
      *
      * @example
      * ```typescript
-     * const spec = new AgentSpec({
+     * const spec = new AgentSpecSync({
      *     Name: 'New Agent',
      *     InvocationMode: 'Any'
      * }, contextUser);
@@ -642,11 +642,11 @@ export class AgentSpec {
             return;
         }
 
-        for (const subAgentSpec of this.spec.SubAgents) {
-            if (subAgentSpec.Type === 'child') {
-                await this.saveChildSubAgent(agentId, subAgentSpec);
+        for (const SubAgentSpec of this.spec.SubAgents) {
+            if (SubAgentSpec.Type === 'child') {
+                await this.saveChildSubAgent(agentId, SubAgentSpec);
             } else {
-                await this.saveRelatedSubAgent(agentId, subAgentSpec);
+                await this.saveRelatedSubAgent(agentId, SubAgentSpec);
             }
         }
     }
@@ -660,11 +660,11 @@ export class AgentSpec {
      *
      * @private
      * @param parentId - The parent agent ID
-     * @param subAgentSpec - The sub-agent specification
+     * @param SubAgentSpec - The sub-agent specification
      * @throws {Error} If child agent doesn't exist or save fails
      */
-    private async saveChildSubAgent(parentId: string, subAgentSpec: SubAgentSpec): Promise<void> {
-        if (!subAgentSpec.SubAgentID) {
+    private async saveChildSubAgent(parentId: string, SubAgentSpec: SubAgentSpec): Promise<void> {
+        if (!SubAgentSpec.SubAgentID) {
             throw new Error('Child sub-agent must have a SubAgentID');
         }
 
@@ -676,9 +676,9 @@ export class AgentSpec {
             this._contextUser
         );
 
-        const loaded = await childEntity.Load(subAgentSpec.SubAgentID);
+        const loaded = await childEntity.Load(SubAgentSpec.SubAgentID);
         if (!loaded) {
-            throw new Error(`Child agent ${subAgentSpec.SubAgentID} not found`);
+            throw new Error(`Child agent ${SubAgentSpec.SubAgentID} not found`);
         }
 
         // Update parent ID if needed
@@ -686,7 +686,7 @@ export class AgentSpec {
             childEntity.ParentID = parentId;
             const saved = await childEntity.Save();
             if (!saved) {
-                throw new Error(`Failed to update ParentID for child agent ${subAgentSpec.SubAgentID}`);
+                throw new Error(`Failed to update ParentID for child agent ${SubAgentSpec.SubAgentID}`);
             }
         }
     }
@@ -699,10 +699,10 @@ export class AgentSpec {
      *
      * @private
      * @param agentId - The parent agent ID
-     * @param subAgentSpec - The sub-agent specification
+     * @param SubAgentSpec - The sub-agent specification
      * @throws {Error} If relationship save fails
      */
-    private async saveRelatedSubAgent(agentId: string, subAgentSpec: SubAgentSpec): Promise<void> {
+    private async saveRelatedSubAgent(agentId: string, SubAgentSpec: SubAgentSpec): Promise<void> {
         const md = new Metadata();
         const relationshipEntity = await md.GetEntityObject<AIAgentRelationshipEntity>(
             'MJ: AI Agent Relationships',
@@ -710,41 +710,41 @@ export class AgentSpec {
         );
 
         // Load existing if ID provided
-        if (subAgentSpec.AgentRelationshipID) {
-            await relationshipEntity.Load(subAgentSpec.AgentRelationshipID);
+        if (SubAgentSpec.AgentRelationshipID) {
+            await relationshipEntity.Load(SubAgentSpec.AgentRelationshipID);
         }
 
         // Map fields
         relationshipEntity.AgentID = agentId;
-        relationshipEntity.SubAgentID = subAgentSpec.SubAgentID;
+        relationshipEntity.SubAgentID = SubAgentSpec.SubAgentID;
         relationshipEntity.Status = 'Active';
 
         // Serialize mapping fields
-        if (subAgentSpec.SubAgentInputMapping) {
-            relationshipEntity.SubAgentInputMapping = JSON.stringify(subAgentSpec.SubAgentInputMapping);
+        if (SubAgentSpec.SubAgentInputMapping) {
+            relationshipEntity.SubAgentInputMapping = JSON.stringify(SubAgentSpec.SubAgentInputMapping);
         } else {
             relationshipEntity.SubAgentInputMapping = null;
         }
 
-        if (subAgentSpec.SubAgentOutputMapping) {
-            relationshipEntity.SubAgentOutputMapping = JSON.stringify(subAgentSpec.SubAgentOutputMapping);
+        if (SubAgentSpec.SubAgentOutputMapping) {
+            relationshipEntity.SubAgentOutputMapping = JSON.stringify(SubAgentSpec.SubAgentOutputMapping);
         } else {
             relationshipEntity.SubAgentOutputMapping = null;
         }
 
-        if (subAgentSpec.SubAgentContextPaths) {
-            relationshipEntity.SubAgentContextPaths = JSON.stringify(subAgentSpec.SubAgentContextPaths);
+        if (SubAgentSpec.SubAgentContextPaths) {
+            relationshipEntity.SubAgentContextPaths = JSON.stringify(SubAgentSpec.SubAgentContextPaths);
         } else {
             relationshipEntity.SubAgentContextPaths = null;
         }
 
         const saved = await relationshipEntity.Save();
         if (!saved) {
-            throw new Error(`Failed to save relationship for sub-agent ${subAgentSpec.SubAgentID}`);
+            throw new Error(`Failed to save relationship for sub-agent ${SubAgentSpec.SubAgentID}`);
         }
 
         // Update spec with saved ID
-        subAgentSpec.AgentRelationshipID = relationshipEntity.ID;
+        SubAgentSpec.AgentRelationshipID = relationshipEntity.ID;
     }
 
     // ===== UTILITY METHODS =====
@@ -773,13 +773,13 @@ export class AgentSpec {
      * Initialize a spec with defaults for any missing required fields.
      *
      * Takes a partial spec and fills in defaults for any missing fields to ensure
-     * a valid AgentRawSpec structure.
+     * a valid AgentSpec structure.
      *
      * @private
      * @param partial - Partial agent specification
-     * @returns Complete AgentRawSpec with defaults
+     * @returns Complete AgentSpec with defaults
      */
-    private initializeSpec(partial: Partial<AgentRawSpec>): AgentRawSpec {
+    private initializeSpec(partial: Partial<AgentSpec>): AgentSpec {
         return {
             ID: partial.ID || '',
             Name: partial.Name || '',
@@ -826,12 +826,12 @@ export class AgentSpec {
      *
      * @example
      * ```typescript
-     * const spec = await AgentSpec.LoadFromDatabase('agent-uuid', contextUser);
+     * const spec = await AgentSpecSync.LoadFromDatabase('agent-uuid', contextUser);
      * const json = spec.toJSON();
      * res.json(json); // Send as API response
      * ```
      */
-    public toJSON(): AgentRawSpec {
+    public toJSON(): AgentSpec {
         return { ...this.spec };
     }
 
@@ -862,7 +862,7 @@ export class AgentSpec {
      *
      * @example
      * ```typescript
-     * const spec = await AgentSpec.LoadFromDatabase('agent-uuid', contextUser);
+     * const spec = await AgentSpecSync.LoadFromDatabase('agent-uuid', contextUser);
      * spec.spec.Description = 'New description';
      * spec.markDirty();
      * await spec.SaveToDatabase();

@@ -7,4 +7,4 @@
 // Export all interfaces
 export * from './old/agent-definition.interface';
 
-export * from './agent-spec';
+export * from './agent-spec-sync';
