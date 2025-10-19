@@ -36,6 +36,12 @@ export interface AgentMatchResult {
      * Agent status (optional)
      */
     status?: string;
+
+    /**
+     * Agent invocation mode - controls how agent can be called (optional)
+     * Values: 'Any', 'Top-Level', 'Sub-Agent'
+     */
+    invocationMode?: string;
 }
 
 /**
@@ -48,4 +54,9 @@ export interface AgentEmbeddingMetadata {
     systemPrompt?: string;
     typeName?: string;
     status?: string;
+    /**
+     * Agent invocation mode - controls how agent can be called
+     * Values: 'Any', 'Top-Level', 'Sub-Agent'
+     */
+    invocationMode?: string;
 }

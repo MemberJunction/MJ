@@ -1062,6 +1062,17 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       await taskExecutionMessage.Save();
       this.messageSent.emit(taskExecutionMessage);
 
+      // Trigger artifact reload for this message
+      // Artifacts were created on server during task execution and linked to this message
+      // This event triggers the parent component to reload artifacts from the database
+      this.artifactCreated.emit({
+        artifactId: '', // Placeholder - reload will fetch actual artifacts from DB
+        versionId: '',
+        versionNumber: 1,
+        conversationDetailId: taskExecutionMessage.ID,
+        name: ''
+      });
+
       // Unregister from real-time updates (task complete)
       this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
 
@@ -1077,6 +1088,15 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       taskExecutionMessage.Error = String(error);
       await taskExecutionMessage.Save();
       this.messageSent.emit(taskExecutionMessage);
+
+      // Trigger artifact reload even on error - partial artifacts may have been created
+      this.artifactCreated.emit({
+        artifactId: '',
+        versionId: '',
+        versionNumber: 1,
+        conversationDetailId: taskExecutionMessage.ID,
+        name: ''
+      });
 
       // Unregister from real-time updates (task failed)
       this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
