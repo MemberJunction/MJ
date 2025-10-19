@@ -5,4 +5,6 @@
  */
 
 // Export all interfaces
-export * from './interfaces/agent-definition.interface';
+export * from './old/agent-definition.interface';
+
+export * from './agent-spec';
