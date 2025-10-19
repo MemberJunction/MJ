@@ -1,0 +1,73 @@
+[
+  {
+    "fields": {
+      "Name": "Create SVG Infographic",
+      "Description": "Composes multiple SVG visualizations into a single infographic with grid layout, header, and footer. Takes panels from other SVG actions (charts, diagrams, networks, word clouds) and arranges them professionally. Designed for AI agents to create comprehensive visual reports.",
+      "DriverClass": "__CreateSVGInfographic",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-table-cells",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Spec",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "JSON specification of the infographic. Format: {title, subtitle, footer, columns, width, palette, panels: [{svg, title, colSpan}]}. Required.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Generated infographic SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Infographic generated successfully. SVG markup returned in Message field."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Required parameter Spec is missing."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PANELS",
+            "IsSuccess": false,
+            "Description": "Spec must contain at least one panel."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INFOGRAPHIC_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate infographic due to invalid configuration or panel data. Check error message for specific details."
+          }
+        }
+      ]
+    }
+  }
+]

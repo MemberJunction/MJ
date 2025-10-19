@@ -1,0 +1,201 @@
+[
+  {
+    "fields": {
+      "Name": "Create SVG Network",
+      "Description": "Generates SVG network graphs including force-directed layouts, decision trees, and radial networks. Uses d3-force for physics simulations and d3-hierarchy for tree structures. Designed for AI agents and workflows to create publication-quality network visualizations from structured data.",
+      "DriverClass": "__CreateSVGNetwork",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-network-wired",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NetworkType",
+            "DefaultValue": "force",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of network: 'force' (force-directed graph), 'tree' (decision tree), or 'radial' (radial layout). Default: 'force'.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Nodes",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "JSON array or object of nodes. For force/radial: array of {id, label, group, size}. For tree: nested object with {id, label, value, children}. Required.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Edges",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "JSON array of edges: [{source, target, weight, directed}, ...]. Required for force and radial networks. Not used for trees.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Physics",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Physics parameters for force-directed layouts (optional): {charge: -300, linkDistance: 100, iterations: 300}. Adjusts node repulsion, link length, and simulation convergence.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ShowLabels",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Show node labels. Default: true.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ShowLegend",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Show group legend for force/radial networks. Default: false.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NodeShape",
+            "DefaultValue": "rect",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Shape for tree nodes: 'rect', 'circle', or 'pill'. Default: 'rect'.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Width",
+            "DefaultValue": "800",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Network width in pixels. Default: 800.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Height",
+            "DefaultValue": "600",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Network height in pixels. Default: 600.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Network title (optional). Displayed at the top.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Palette",
+            "DefaultValue": "mjDefault",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Color palette: 'mjDefault', 'gray', 'pastel', or 'highContrast'. Default: 'mjDefault'.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Seed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Random seed for deterministic layouts (optional). Use same seed for reproducible networks.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Generated SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Network generated successfully. SVG markup returned in Message field."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Required parameter Nodes is missing."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_NETWORK_TYPE",
+            "IsSuccess": false,
+            "Description": "NetworkType must be 'force', 'tree', or 'radial'."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NETWORK_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate network due to invalid configuration or data. Check error message for specific details."
+          }
+        }
+      ]
+    }
+  }
+]

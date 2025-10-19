@@ -302,19 +302,14 @@
                 }
               }
             ],
-            "AI Agent Actions": [
+            "MJ: AI Agent Relationships": [
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Create SVG Chart",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "B6A569EC-ECF0-4E98-80A3-6C1D30DC0F37"
-                },
-                "sync": {
-                  "lastModified": "2025-10-18T03:14:39.029Z",
-                  "checksum": "b29c665b6e6389ba72c6c555cd6dd2be21273d586f50e12644a4df76e7a76648"
+                  "SubAgentID": "@lookup:AI Agents.Name=Infographic Agent",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": "{\"*\": \"visualizations\"}",
+                  "SubAgentContextPaths": ["*"]
                 }
               }
             ]

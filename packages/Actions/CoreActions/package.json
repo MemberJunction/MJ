@@ -57,6 +57,17 @@
     "jsdom": "^24.1.0",
     "node-sql-parser": "^5.3.5",
     "vega": "^5.28.0",
-    "vega-lite": "^5.20.1"
+    "vega-lite": "^5.20.1",
+    "@dagrejs/dagre": "^1.1.4",
+    "d3-cloud": "^1.2.7",
+    "d3-force": "^3.0.0",
+    "d3-hierarchy": "^3.1.2",
+    "d3-scale": "^4.0.2",
+    "d3-shape": "^3.2.0",
+    "@types/d3-cloud": "^1.2.9",
+    "@types/d3-force": "^3.0.10",
+    "@types/d3-hierarchy": "^3.1.7",
+    "@types/d3-scale": "^4.0.8",
+    "@types/d3-shape": "^3.1.6"
   }
 }
