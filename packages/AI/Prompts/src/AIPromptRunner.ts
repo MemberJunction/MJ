@@ -555,7 +555,7 @@ export class AIPromptRunner {
     const usage = chatResult.data?.usage;
     
     return {
-      success: true,
+      success: chatResult.success,
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
       result: parsedResult?.result ? parsedResult.result as T : parsedResult as T,
       chatResult,

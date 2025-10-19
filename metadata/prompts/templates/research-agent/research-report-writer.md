@@ -185,9 +185,9 @@ If your research includes **any quantitative data**, you should create **at leas
 
 **How to Embed SVG in HTML Reports:**
 
-1. **Call the SVG action** (e.g., "Create SVG Chart") - it returns the SVG as a string
-2. **Copy the SVG string directly** into your HTML - no modifications needed
-3. **Don't wrap in placeholders** - just paste the actual SVG markup
+1. **Call the SVG action** (e.g., "Create SVG Chart", "Create SVG Diagram", "Create SVG Network") - it returns the SVG as a string
+2. **Wrap the SVG in a scrollable container** - this ensures large diagrams/charts are fully accessible
+3. **Don't use template literal placeholders** - just paste the actual SVG markup
 
 **Example workflow:**
 ```typescript
@@ -199,7 +199,7 @@ const chartResult = await executeAction("Create SVG Chart", {
 });
 
 // Step 2: The action returns the SVG string in chartResult.Message
-// Step 3: Embed it DIRECTLY in your HTML report - like this:
+// Step 3: Wrap it in a scrollable div and embed in your HTML report:
 
 const htmlReport = `
 <!DOCTYPE html>
@@ -207,17 +207,57 @@ const htmlReport = `
 <body>
   <h1>My Report</h1>
   <div class="chart-container">
-    ${chartResult.Message}  <!-- The actual SVG markup goes here -->
+    <h2>Chart Title</h2>
+    <div class="svg-scroll-wrapper">
+      ${chartResult.Message}  <!-- The actual <svg>...</svg> markup goes here -->
+    </div>
   </div>
 </body>
 </html>
 `;
 ```
 
-**What this means for you:**
-- When you call "Create SVG Chart" or other SVG actions, they return the complete `<svg>...</svg>` element
-- You can directly embed this into your HTML string where you want the visualization to appear
-- The SVG is already complete - no need for placeholders or template variables
+**CRITICAL: Always Wrap SVGs for Scrolling**
+
+Large diagrams (especially network graphs, org charts, and infographics) may exceed viewport size. **Always wrap SVGs in a scrollable container:**
+
+```html
+<div class="svg-scroll-wrapper">
+  <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2000">
+    <!-- SVG content -->
+  </svg>
+</div>
+```
+
+**Add this CSS to your `<style>` section:**
+```css
+.svg-scroll-wrapper {
+  overflow: auto;           /* Enable scrolling when SVG is too large */
+  max-height: 800px;        /* Limit height to prevent excessive page length */
+  border: 1px solid #ddd;   /* Optional: visual boundary */
+  border-radius: 4px;
+  background: white;
+  padding: 10px;
+  margin: 20px 0;
+}
+
+.svg-scroll-wrapper svg {
+  display: block;           /* Remove extra spacing below SVG */
+  max-width: 100%;          /* Scale down if narrower than container */
+  height: auto;             /* Maintain aspect ratio */
+}
+```
+
+**What this achieves:**
+- ✅ Small SVGs display normally without scrollbars
+- ✅ Large SVGs (like network diagrams) show scrollbars and are fully accessible
+- ✅ Page layout stays clean - no mega-tall pages
+- ✅ User can scroll to see all details
+
+**When you call "Create SVG Chart", "Create SVG Diagram", "Create SVG Network", or "Create SVG Infographic":**
+- They return the complete `<svg>...</svg>` element
+- You embed this into your HTML wrapped in `.svg-scroll-wrapper`
+- The viewer will scroll when needed
 
 - **Distributions**: Use pie or bar charts (e.g., market share, category breakdown)
 - **Trends**: Use line or area charts (e.g., growth over time, historical patterns)

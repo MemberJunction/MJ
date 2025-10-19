@@ -147,9 +147,13 @@ export class DataCacheService {
    * @returns Array of ConversationDetailEntity objects
    */
   async loadConversationDetails(conversationId: string, currentUser: UserInfo): Promise<ConversationDetailEntity[]> {
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] 💾 DataCacheService.loadConversationDetails - Loading messages for conversation ${conversationId}`);
+
     const md = new Metadata();
     const rv = new (await import('@memberjunction/core')).RunView();
 
+    console.log(`[${timestamp}] 💾 DataCacheService - Executing RunView for Conversation Details`);
     const result = await rv.RunView<ConversationDetailEntity>(
       {
         EntityName: 'Conversation Details',
@@ -162,6 +166,7 @@ export class DataCacheService {
 
     if (result.Success) {
       const details = result.Results || [];
+      console.log(`[${timestamp}] 💾 DataCacheService - Loaded ${details.length} message(s) for conversation ${conversationId}`);
 
       // Add all to cache (avoid duplicates by checking ID)
       for (const detail of details) {
@@ -178,6 +183,7 @@ export class DataCacheService {
       return details;
     }
 
+    console.log(`[${timestamp}] 💾 DataCacheService - Failed to load messages for conversation ${conversationId}`);
     return [];
   }
 

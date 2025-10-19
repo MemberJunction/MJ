@@ -186,16 +186,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * multiple change detection cycles that might occur during async operations.
    */
   private async loadPeripheralData(conversationId: string): Promise<void> {
+    const timestamp = new Date().toISOString();
+    const stackTrace = new Error().stack?.split('\n').slice(2, 5).join('\n    ');
+
     // Skip if we've already loaded peripheral data for this conversation
-    console.log(` Last Loaded Conversation ID: ${this.lastLoadedConversationId}, Current Conversation ID: ${conversationId}`);
+    console.log(`[${timestamp}] 🔍 loadPeripheralData called - Last: ${this.lastLoadedConversationId}, Current: ${conversationId}`);
+    console.log(`   Called from:\n    ${stackTrace}`);
+
     if (this.lastLoadedConversationId === conversationId) {
-      console.log(`⏭️ Skipping peripheral data load - already loaded for conversation ${conversationId}`);
+      console.log(`[${timestamp}] ⏭️ Skipping peripheral data load - already loaded for conversation ${conversationId}`);
       return;
     }
 
     // Mark this conversation as loaded to prevent duplicate loads from starting at same time or similar time
     this.lastLoadedConversationId = conversationId;
-    console.log(`📊 Loading peripheral data for conversation ${conversationId}`);
+    console.log(`[${timestamp}] 📊 Loading peripheral data for conversation ${conversationId} - EXECUTING DB QUERIES`);
 
     try {
       const rv = new RunView();
