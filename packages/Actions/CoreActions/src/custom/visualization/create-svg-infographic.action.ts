@@ -99,7 +99,7 @@ export class CreateSVGInfographicAction extends BaseAction {
                 };
             }
 
-            const spec: InfographicSpec = JSON.parse(specParam);
+            const spec: InfographicSpec = this.parseJSON<InfographicSpec>(specParam, 'Spec');
 
             if (!spec.panels || spec.panels.length === 0) {
                 return {
@@ -363,11 +363,37 @@ export class CreateSVGInfographicAction extends BaseAction {
 
         // Import all children from the temp SVG
         for (const child of Array.from(tempSVG.children)) {
-            const importedNode = doc.importNode(child, true);
+            const importedNode = doc.importNode(child as Node, true);
             group.appendChild(importedNode);
         }
 
         return group;
+    }
+
+    /**
+     * Helper to safely parse JSON that might already be an object
+     */
+    private parseJSON<T>(value: any, paramName: string): T {
+        // If it's already an object/array, return it
+        if (typeof value === 'object' && value !== null) {
+            return value as T;
+        }
+
+        // If it's a string, parse it
+        if (typeof value === 'string') {
+            try {
+                return JSON.parse(value) as T;
+            } catch (error) {
+                throw new Error(
+                    `Parameter '${paramName}' contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        }
+
+        // For other types, error
+        throw new Error(
+            `Parameter '${paramName}' must be a JSON string or object. Received ${typeof value}.`
+        );
     }
 
     /**

@@ -78,7 +78,7 @@ export class CreateSVGChartAction extends BaseAction {
 
             if (specParam) {
                 // Use the provided spec directly
-                vlSpec = JSON.parse(specParam);
+                vlSpec = this.parseJSON<VegaLiteSpec>(specParam, 'VegaLiteSpec');
             } else {
                 // Build spec from individual parameters
                 const chartType = this.getParamValue(params, 'ChartType');
@@ -100,12 +100,7 @@ export class CreateSVGChartAction extends BaseAction {
                     };
                 }
 
-                let data;
-                if (typeof dataParam !== 'string') {
-                    data = dataParam;
-                } else {
-                    data = JSON.parse(dataParam);
-                }
+                const data = this.parseJSON<any[]>(dataParam, 'Data');
 
                 if (!Array.isArray(data)) {
                     return {
@@ -248,6 +243,32 @@ export class CreateSVGChartAction extends BaseAction {
 
         // Default to nominal for categorical data
         return 'nominal';
+    }
+
+    /**
+     * Helper to safely parse JSON that might already be an object
+     */
+    private parseJSON<T>(value: any, paramName: string): T {
+        // If it's already an object/array, return it
+        if (typeof value === 'object' && value !== null) {
+            return value as T;
+        }
+
+        // If it's a string, parse it
+        if (typeof value === 'string') {
+            try {
+                return JSON.parse(value) as T;
+            } catch (error) {
+                throw new Error(
+                    `Parameter '${paramName}' contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        }
+
+        // For other types, error
+        throw new Error(
+            `Parameter '${paramName}' must be a JSON string or object. Received ${typeof value}.`
+        );
     }
 
     /**

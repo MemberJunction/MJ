@@ -15,16 +15,16 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Claude 4 Sonnet",
+            "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "Priority": 10
+            "Priority": 1
           },
           "primaryKey": {
             "ID": "FFE8F664-8CAA-44EA-A5D5-3909148AF361"
           },
           "sync": {
-            "lastModified": "2025-10-19T17:24:35.090Z",
-            "checksum": "375f7db5505eddfa526b10fc57ed019f16023946fad482c974fb9e030c24ae1e"
+            "lastModified": "2025-10-19T20:20:06.600Z",
+            "checksum": "c839e7a8438b7b515a761e8c6e8753b0ccd7156ac144b11a46c63f4aa85176f7"
           }
         },
         {

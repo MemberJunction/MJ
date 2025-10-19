@@ -4,7 +4,7 @@
       "Name": "Research Report Writer Prompt",
       "Description": "Expert report writing and synthesis prompt for analyzing research findings and generating comprehensive reports with well-reasoned conclusions, confidence assessments, and proper citations.",
       "TemplateText": "@file:templates/research-agent/research-report-writer.md",
-      "EffortLevel": 100,
+      "EffortLevel": 50,
       "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "Status": "Active"
@@ -92,8 +92,8 @@
       "ID": "114726B5-D18E-48E3-B32B-9203BEF52DA3"
     },
     "sync": {
-      "lastModified": "2025-10-19T19:30:22.081Z",
-      "checksum": "99681b1e74c632330e58a1baee718c268095d86efb1ff93ee33c1d9e0373d0d9"
+      "lastModified": "2025-10-19T20:48:11.165Z",
+      "checksum": "343f74ecd884c03aaffb3ac6af8ee549a2bbe65d794618f5305dd78082667612"
     }
   }
 ]

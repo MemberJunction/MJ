@@ -85,7 +85,16 @@ export class CreateSVGNetworkAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<SVGActionResult> {
         try {
-            const networkType = this.getParamValue(params, 'NetworkType')?.toLowerCase() || 'force';
+            const networkTypeParam = this.getParamValue(params, 'NetworkType');
+            if (!networkTypeParam) {
+                return {
+                    Success: false,
+                    Message: 'NetworkType parameter is required. Must be "force", "tree", or "radial"',
+                    ResultCode: 'MISSING_PARAMETERS',
+                };
+            }
+
+            const networkType = this.ensureString(networkTypeParam, 'NetworkType').toLowerCase();
 
             if (!['force', 'tree', 'radial'].includes(networkType)) {
                 return {
@@ -96,13 +105,15 @@ export class CreateSVGNetworkAction extends BaseAction {
             }
 
             // Parse common parameters
-            const width = parseInt(this.getParamValue(params, 'Width') || '800');
-            const height = parseInt(this.getParamValue(params, 'Height') || '600');
-            const title = this.getParamValue(params, 'Title') || '';
-            const paletteName = this.getParamValue(params, 'Palette') || 'mjDefault';
-            const seed = parseInt(this.getParamValue(params, 'Seed') || String(Date.now()));
-            const showLabels = this.getParamValue(params, 'ShowLabels')?.toLowerCase() !== 'false';
-            const showLegend = this.getParamValue(params, 'ShowLegend')?.toLowerCase() === 'true';
+            const width = parseInt(this.ensureString(this.getParamValue(params, 'Width') || '800', 'Width'));
+            const height = parseInt(this.ensureString(this.getParamValue(params, 'Height') || '600', 'Height'));
+            const title = this.ensureString(this.getParamValue(params, 'Title') || '', 'Title');
+            const paletteName = this.ensureString(this.getParamValue(params, 'Palette') || 'mjDefault', 'Palette');
+            const seed = parseInt(this.ensureString(this.getParamValue(params, 'Seed') || String(Date.now()), 'Seed'));
+            const showLabelsParam = this.getParamValue(params, 'ShowLabels');
+            const showLabels = showLabelsParam ? this.ensureString(showLabelsParam, 'ShowLabels').toLowerCase() !== 'false' : true;
+            const showLegendParam = this.getParamValue(params, 'ShowLegend');
+            const showLegend = showLegendParam ? this.ensureString(showLegendParam, 'ShowLegend').toLowerCase() === 'true' : false;
 
             // Create branding configuration
             const branding: Branding = {
@@ -177,12 +188,12 @@ export class CreateSVGNetworkAction extends BaseAction {
             throw new Error('Nodes parameter is required for force networks');
         }
 
-        const nodes: GraphNode[] = JSON.parse(nodesParam);
-        const edges: GraphEdge[] = edgesParam ? JSON.parse(edgesParam) : [];
+        const nodes: GraphNode[] = this.parseJSON<GraphNode[]>(nodesParam, 'Nodes');
+        const edges: GraphEdge[] = edgesParam ? this.parseJSON<GraphEdge[]>(edgesParam, 'Edges') : [];
 
         // Parse physics parameters
         const physicsParam = this.getParamValue(params, 'Physics');
-        const physics: PhysicsParams = physicsParam ? JSON.parse(physicsParam) : {};
+        const physics: PhysicsParams = physicsParam ? this.parseJSON<PhysicsParams>(physicsParam, 'Physics') : {};
         const charge = physics.charge || -300;
         const linkDistance = physics.linkDistance || 100;
         const iterations = physics.iterations || 300;
@@ -340,8 +351,9 @@ export class CreateSVGNetworkAction extends BaseAction {
             throw new Error('Nodes parameter is required for decision trees');
         }
 
-        const rootNode: DecisionNode = JSON.parse(nodesParam);
-        const nodeShape = (this.getParamValue(params, 'NodeShape') || 'rect') as NodeShape;
+        const rootNode: DecisionNode = this.parseJSON<DecisionNode>(nodesParam, 'Nodes');
+        const nodeShapeParam = this.getParamValue(params, 'NodeShape');
+        const nodeShape = (nodeShapeParam ? this.ensureString(nodeShapeParam, 'NodeShape') : 'rect') as NodeShape;
 
         // Create hierarchy
         const hierarchy = d3Hierarchy.hierarchy(rootNode);
@@ -494,8 +506,8 @@ export class CreateSVGNetworkAction extends BaseAction {
             throw new Error('Nodes parameter is required for radial networks');
         }
 
-        const nodes: GraphNode[] = JSON.parse(nodesParam);
-        const edges: GraphEdge[] = edgesParam ? JSON.parse(edgesParam) : [];
+        const nodes: GraphNode[] = this.parseJSON<GraphNode[]>(nodesParam, 'Nodes');
+        const edges: GraphEdge[] = edgesParam ? this.parseJSON<GraphEdge[]>(edgesParam, 'Edges') : [];
 
         // Identify central node (first node or node with most connections)
         const degreeMap = new Map<string, number>();
@@ -690,6 +702,56 @@ export class CreateSVGNetworkAction extends BaseAction {
         text.setAttribute('font-weight', 'bold');
         text.textContent = title;
         svg.appendChild(text);
+    }
+
+    /**
+     * Helper to safely parse JSON that might already be an object
+     */
+    private parseJSON<T>(value: any, paramName: string): T {
+        // If it's already an object/array, return it
+        if (typeof value === 'object' && value !== null) {
+            return value as T;
+        }
+
+        // If it's a string, parse it
+        if (typeof value === 'string') {
+            try {
+                return JSON.parse(value) as T;
+            } catch (error) {
+                throw new Error(
+                    `Parameter '${paramName}' contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        }
+
+        // For other types, error
+        throw new Error(
+            `Parameter '${paramName}' must be a JSON string or object. Received ${typeof value}.`
+        );
+    }
+
+    /**
+     * Helper to ensure a parameter value is a string, with type conversion and validation
+     */
+    private ensureString(value: any, paramName: string): string {
+        if (value == null) {
+            return '';
+        }
+
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        // Convert numbers and booleans to strings
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+
+        // For objects/arrays, reject with descriptive error
+        throw new Error(
+            `Parameter '${paramName}' must be a string, number, or boolean. ` +
+            `Received ${typeof value}. If providing JSON data, ensure it's passed as a string.`
+        );
     }
 
     /**

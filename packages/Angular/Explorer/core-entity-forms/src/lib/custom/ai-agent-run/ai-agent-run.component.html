@@ -5,7 +5,9 @@
       <div class="header-content">
         <div class="header-left">
           <div class="icon-wrapper">
-            <i class="fas fa-robot"></i>
+            <img *ngIf="agent && agent.LogoURL" [src]="agent.LogoURL" [alt]="agent.Name || 'Agent'" class="agent-logo" />
+            <i *ngIf="agent && !agent.LogoURL && agent.IconClass" class="fas" [ngClass]="agent.IconClass"></i>
+            <i *ngIf="!agent || (!agent.LogoURL && !agent.IconClass)" class="fas fa-robot"></i>
           </div>
           <div class="header-info">
             <h2>AI Agent Run</h2>

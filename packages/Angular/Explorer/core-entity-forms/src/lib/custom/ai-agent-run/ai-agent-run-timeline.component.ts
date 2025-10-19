@@ -4,6 +4,7 @@ import { takeUntil, map, shareReplay, switchMap, filter } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 export interface TimelineItem {
   id: string;
@@ -15,6 +16,7 @@ export interface TimelineItem {
   endTime?: Date;
   duration?: string;
   icon: string;
+  logoUrl?: string;
   color: string;
   data: any;
   children?: TimelineItem[];
@@ -184,7 +186,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   private createTimelineItemFromStep(step: AIAgentRunStepEntity, level: number, promptRuns?: AIPromptRunEntity[]): TimelineItem {
     let subtitle = `Type: ${step.StepType}`;
-    
+
     // For prompt steps, try to find the associated prompt run to get model/vendor info
     if (step.StepType === 'Prompt' && step.TargetLogID && promptRuns) {
       const promptRun = promptRuns.find(pr => pr.ID === step.TargetLogID);
@@ -192,7 +194,10 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
         subtitle = `Model: ${promptRun.Model || 'Unknown'} | Vendor: ${promptRun.Vendor || 'Unknown'}`;
       }
     }
-    
+
+    // Get icon and logoUrl based on step type
+    const iconInfo = this.getStepIconInfo(step);
+
     return {
       id: step.ID,
       type: 'step',
@@ -202,7 +207,8 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       startTime: step.StartedAt,
       endTime: step.CompletedAt || undefined,
       duration: this.calculateDuration(step.StartedAt, step.CompletedAt),
-      icon: this.getStepIcon(step.StepType),
+      icon: iconInfo.icon,
+      logoUrl: iconInfo.logoUrl,
       color: this.getStatusColor(step.Status),
       data: step,
       children: [],
@@ -211,14 +217,40 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     };
   }
   
-  
+
+  private getStepIconInfo(step: AIAgentRunStepEntity): { icon: string; logoUrl?: string } {
+    // For sub-agents, try to get agent-specific icon/logo
+    if (step.StepType === 'Sub-Agent' && step.TargetID) {
+      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === step.TargetID);
+      if (agent) {
+        // Prefer LogoURL - if present, use it with robot as fallback icon (icon won't be shown when logoUrl exists)
+        if (agent.LogoURL) {
+          return { icon: 'fa-robot', logoUrl: agent.LogoURL };
+        }
+        // Next preference: IconClass from agent metadata
+        else if (agent.IconClass) {
+          return { icon: agent.IconClass };
+        }
+        // Agent exists but has no custom icon or logo - use default robot icon
+        else {
+          return { icon: 'fa-robot' };
+        }
+      }
+    }
+
+    // Default icons for each step type (includes fa-robot for sub-agents without agent metadata)
+    const icon = this.getStepIcon(step.StepType);
+    return { icon };
+  }
+
   private getStepIcon(stepType: string): string {
     const iconMap: Record<string, string> = {
-      'Prompt': 'fa-microchip',
+      'Prompt': 'fa-brain',
       'Tool': 'fa-tools',
       'Sub-Agent': 'fa-robot',
       'Decision': 'fa-code-branch',
-      'Actions': 'fa-cog'
+      'Actions': 'fa-wrench',
+      'Validation': 'fa-square-check'
     };
     return iconMap[stepType] || 'fa-circle';
   }

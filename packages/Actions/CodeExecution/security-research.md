@@ -166,3 +166,61 @@ Sources & References:
 	•	Andrew Healey, “Sandboxing JavaScript Code” – experiences with Deno vs vm2 ￼ ￼
 	•	SonarSource security blog on sandbox escapes (QuickJS vs vm2) ￼ ￼
 	•	Deno Subhosting blog (isolate-based multi-tenant architecture) ￼
+
+
+
+
+Running AI‑Generated JavaScript Securely: isolated‑vm vs Alternatives
+
+TL;DR
+For most apps that need to execute untrusted or AI‑generated JavaScript securely without a ton of infrastructure, use [isolated‑vm]. It runs code inside V8 isolates (no Node APIs by default), supports timeouts and memory limits, and is widely deployed. Pair it with a separate worker process for defense‑in‑depth. Consider Deno (secure‑by‑default permissions) if you’re comfortable running a separate process/runtime; consider containers only if you need maximum OS‑level isolation and can tolerate higher complexity and cost.  ￼
+
+⸻
+
+What isolated‑vm is (and why it’s strong)
+	•	Engine‑level isolation. isolated‑vm exposes V8 Isolates in Node.js. Code runs in a separate JS engine instance with its own heap and built‑ins, and no access to Node APIs or your app unless you explicitly bridge it. This design sharply limits the attack surface compared to in‑context sandboxes.  ￼
+	•	Used in production. The project lists adopters (e.g., Screeps, Fly.io, Algolia, Tripadvisor) that run user‑supplied code at scale—evidence it’s viable beyond demos.  ￼
+	•	Security posture & caveats. The README stresses: running untrusted code is hard; don’t leak isolated‑vm objects (e.g., Reference, ExternalCopy) into the sandbox, or attackers may pivot back into your process. Keep Node/V8 patched. Prefer separate processes for isolates when reliability matters.  ￼
+	•	Resource controls. You can set a memory limit per isolate and attach timeouts when evaluating or running scripts/modules (context.eval(…, { timeout }), script.run(…, { timeout })).  ￼
+	•	Maintenance status & resilience. The project is in maintenance mode; the author recommends a future multi‑process architecture because V8 isn’t resilient to OOM and provides an onCatastrophicError hook as a “band‑aid.” This is why running isolates in separate worker processes is prudent.  ￼
+
+Important: Do not accept untrusted V8 cached bytecode (cachedData) from users; a past vuln (CVE‑2022‑39266) allowed sandbox escape when untrusted cached data was consumed. The docs now warn explicitly against this.  ￼
+
+⸻
+
+How secure is it in practice?
+	•	Stronger by design than “in‑context” sandboxes. Because isolates start with zero Node capabilities, sandbox escapes are far harder than with libraries that run code inside the same Node context. The Backstage team switched from vm2 to isolated‑vm for exactly this reason.  ￼
+	•	Your usage matters. Most real‑world risks come from bridges you build (e.g., helper functions you expose). Keep them minimal, stateless, and rigorously validate/limit inputs/outputs. The README explicitly warns that leaking isolated‑vm internals is a process‑takeover risk.  ￼
+	•	Defense‑in‑depth recommended. Use process isolation (e.g., a pool of worker processes) so a catastrophic V8 failure can’t take down your main service.  ￼
+
+⸻
+
+Comparisons (security, simplicity, performance)
+
+Node’s built‑in vm
+	•	Not a security mechanism. The official docs: “Do not use it to run untrusted code.” Full stop.  ￼
+
+vm2 (deprecated)
+	•	Multiple critical escapes (2022–2023), project discontinued by maintainers due to unaddressable security issues; maintainers point users to isolated‑vm.  ￼
+	•	Given the track record and maintenance state, avoid for untrusted code.  ￼
+
+Deno (separate runtime / process)
+	•	Secure by default. Deno programs have no FS, network, or env access unless you grant permissions (--allow-net, --allow-read, etc.). Great mental model for confinement.  ￼
+	•	Practical pattern. Many teams spawn Deno with tight permission flags and V8 memory limits (--v8-flags=--max-old-space-size=…), trading cold‑start overhead for simple, robust isolation.  ￼
+	•	When to choose: If you’re comfortable with a separate process/runtime and want OS/process isolation + explicit permissions out of the box. Deno’s own multi‑tenant platform uses isolates with strong tenant isolation.  ￼
+
+Containers / micro‑VMs
+	•	Strongest isolation envelope (namespaces, cgroups, seccomp, etc.) but highest complexity and latency. Typically used for multi‑tenant “run user code” platforms; often overkill for embedding into a single app unless your risk tolerance demands it. (General trade‑off; consider combining with isolated‑vm or Deno for layered defense.)
+
+⸻
+
+Quick‑start: a safe isolated‑vm sandbox (Node.js)	
+
+
+https://github.com/laverdet/isolated-vm
+https://nodejs.org/api/vm.html
+https://backstage.io/blog/2023/06/21/switching-out-sandbox/
+https://github.com/patriksimek/vm2/issues/533
+https://docs.deno.com/runtime/fundamentals/security/
+https://healeycodes.com/sandboxing-javascript-code
+https://nvd.nist.gov/vuln/detail/CVE-2022-39266

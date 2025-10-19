@@ -60,20 +60,6 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Explore Database Schema",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "644D35FA-3245-4928-A8AD-4E70446054C2"
-          },
-          "sync": {
-            "lastModified": "2025-10-15T23:02:37.445Z",
-            "checksum": "e15778482d8cc67baa2d928d97304a8e703cba0a5fc8475f8e2438ed4fc65e05"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Execute Research Query",
             "Status": "Active"
           },
@@ -281,7 +267,8 @@
             ],
             "PayloadUpstreamPaths": [
               "synthesis.*",
-              "report.*"
+              "report.*",
+              "visualizations.*"
             ]
           },
           "relatedEntities": {
@@ -327,8 +314,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2025-10-18T13:29:52.422Z",
-            "checksum": "0872f26fd4a8b01dac784940babe04f1ed1b30ad1c2efb5ddfa87fd7e1c2867a"
+            "lastModified": "2025-10-19T20:35:28.352Z",
+            "checksum": "b2ea69d4c29a9eeef5384b1ced3789c1dfb624e7a74925b55a10d3c5219610b7"
           }
         }
       ],
