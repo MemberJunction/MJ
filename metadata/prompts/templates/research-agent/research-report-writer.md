@@ -147,6 +147,31 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 **Use HTML by default** - it provides superior presentation, data visualization, and professional output. HTML reports should be your standard choice unless the user specifically requests Markdown.
 
+## 🚨 CRITICAL: HTML is a Static String, NOT Code
+
+**IMPORTANT - You are generating a static HTML string, not executable code:**
+
+1. **NO template literal syntax** - Don't use `${}` or `${""}` placeholders
+2. **NO JavaScript execution** - The HTML won't execute any code, it's just markup
+3. **Embed content directly** - SVG, text, and data go directly into the HTML string
+4. **Use actual values** - Not variables, not placeholders, but the actual content
+
+**❌ WRONG - Using template literal placeholders:**
+```html
+<div class="chart-container">
+  ${"<svg>...</svg>"}  <!-- This is WRONG - outputs literally as text -->
+</div>
+```
+
+**✅ CORRECT - Embed content directly:**
+```html
+<div class="chart-container">
+  <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
+    <!-- Actual SVG content here -->
+  </svg>
+</div>
+```
+
 **When to use HTML (almost always):**
 - ✅ Research involves ANY quantitative data (counts, metrics, percentages, trends)
 - ✅ Multiple sources need comparison or organization
@@ -156,7 +181,43 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 **Charts and Visualizations - STRONGLY RECOMMENDED:**
 
-If your research includes **any quantitative data**, you should create **at least one chart or graph** using the "Create SVG Chart" action. Consider creating multiple visualizations if the data supports it:
+If your research includes **any quantitative data**, you should create **at least one chart or graph** using the SVG visualization actions (Create SVG Chart, Create SVG Diagram, Create SVG Network, Create SVG Infographic, etc.). Consider creating multiple visualizations if the data supports it.
+
+**How to Embed SVG in HTML Reports:**
+
+1. **Call the SVG action** (e.g., "Create SVG Chart") - it returns the SVG as a string
+2. **Copy the SVG string directly** into your HTML - no modifications needed
+3. **Don't wrap in placeholders** - just paste the actual SVG markup
+
+**Example workflow:**
+```typescript
+// Step 1: Call Create SVG Chart action
+const chartResult = await executeAction("Create SVG Chart", {
+  ChartType: "bar",
+  Data: JSON.stringify([{category: "A", value: 10}, {category: "B", value: 20}]),
+  // ... other params
+});
+
+// Step 2: The action returns the SVG string in chartResult.Message
+// Step 3: Embed it DIRECTLY in your HTML report - like this:
+
+const htmlReport = `
+<!DOCTYPE html>
+<html>
+<body>
+  <h1>My Report</h1>
+  <div class="chart-container">
+    ${chartResult.Message}  <!-- The actual SVG markup goes here -->
+  </div>
+</body>
+</html>
+`;
+```
+
+**What this means for you:**
+- When you call "Create SVG Chart" or other SVG actions, they return the complete `<svg>...</svg>` element
+- You can directly embed this into your HTML string where you want the visualization to appear
+- The SVG is already complete - no need for placeholders or template variables
 
 - **Distributions**: Use pie or bar charts (e.g., market share, category breakdown)
 - **Trends**: Use line or area charts (e.g., growth over time, historical patterns)

@@ -379,5 +379,6 @@ Package ALL rows from a query into ONE finding with CSV data:
 - Include `data` property when raw dataset is needed for downstream processing
 - Omit `data` property when only the analysis/summary is needed
 - Always document `columnMaxLength` in source when trimming is applied
+- **FOR FULL RESULTS** - when you pull a set of rows from a research query, **RETURN ALL ROWS** do _not_ omit rows and say something like "(remaining rows omitted for brevity)"
 
 Remember: **Get Entity Details is your friend** - it shows you EXACTLY what fields exist and what the data looks like. Use it!

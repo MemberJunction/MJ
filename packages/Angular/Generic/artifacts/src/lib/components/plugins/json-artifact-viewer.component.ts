@@ -397,12 +397,15 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
 
   /**
    * Clean up double-escaped characters that appear in LLM-generated HTML
-   * Removes literal "\\n" and "\\t" which cause rendering issues
+   * Removes literal "\\n", "\\t", and "\\\"" which cause rendering issues
    */
   private cleanEscapedCharacters(html: string): string {
+    // Remove escaped quotes (\" becomes ")
+    let cleaned = html.replace(/\\"/g, '"');
+
     // Remove escaped newlines (\\n becomes nothing)
     // HTML doesn't need whitespace for formatting, and these cause display issues
-    let cleaned = html.replace(/\\n/g, '');
+    cleaned = cleaned.replace(/\\n/g, '');
 
     // Remove escaped tabs
     cleaned = cleaned.replace(/\\t/g, '');

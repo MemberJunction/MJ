@@ -228,7 +228,14 @@
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-magnifying-glass-chart",
-      "PayloadSelfWritePaths": "[\"metadata\", \"plan\", \"sources\", \"findings\", \"comparisons\", \"contradictions\", \"iterations\", \"webResearch\", \"databaseResearch\", \"fileResearch\"]",
+      "PayloadSelfWritePaths": [
+        "metadata.*",
+        "plan.*",
+        "findings.*",
+        "comparisons.*",
+        "contradictions.*",
+        "iterations.*"
+      ],
       "FinalPayloadValidation": "@file:validation/research-agent-validation.json",
       "FinalPayloadValidationMode": "Retry",
       "FinalPayloadValidationMaxRetries": 3
@@ -380,8 +387,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-18T13:29:52.253Z",
-      "checksum": "4d615e637a1aa4d38cc0d69c44abcc4992c4d404ce1c8436fceefc93fce06661"
+      "lastModified": "2025-10-19T22:05:03.490Z",
+      "checksum": "a92fd9781968b0104365800a4116c45308ecaa08d436cde2cff7d35ea1fffdda"
     }
   }
 ]
