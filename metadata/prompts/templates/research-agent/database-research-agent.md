@@ -64,22 +64,34 @@ Use the **exact** entity name from the `Get Entity List` action for example if a
 - `DataFormat` (optional): 'csv' (default, more efficient) or 'json'
 - `AnalysisRequest` (optional): Instructions for LLM to analyze the data
 - `ReturnType` (optional): 'data only', 'analysis only', or 'data and analysis' (default if AnalysisRequest provided)
+- `ColumnMaxLength` (optional): Maximum length for column values (e.g., 50). Longer values will be trimmed to save context. Use when querying tables with verbose text/JSON fields.
 
-**Example - Get raw data**:
-```
-Action: Execute Research Query
-Params:
-  Query="SELECT TOP 10 [Name], [Vendor] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
-  DataFormat="csv"
-```
-
-**Example - Get analysis only (PREFERRED)**:
+**Example - Get analysis only (best for summaries)**:
 ```
 Action: Execute Research Query
 Params:
   Query="SELECT [Name], [Vendor], [MaxInputTokens] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
   AnalysisRequest="Summarize the top 5 models by max input tokens and their vendors"
   ReturnType="analysis only"
+```
+
+**Example - Get raw data with column limits (for detailed work)**:
+```
+Action: Execute Research Query
+Params:
+  Query="SELECT [Name], [Description], [PromptText], [Category] FROM [__mj].[vwAIPrompts] WHERE [IsActive]=1"
+  DataFormat="csv"
+  ColumnMaxLength=50
+  ReturnType="data only"
+```
+*This returns full records but trims long text fields (like PromptText) to 50 chars, allowing you to work with individual rows without context explosion.*
+
+**Example - Get raw data (small result sets)**:
+```
+Action: Execute Research Query
+Params:
+  Query="SELECT TOP 10 [Name], [Vendor] FROM [__mj].[vwAIModels] WHERE [IsActive]=1"
+  DataFormat="csv"
 ```
 
 ## Key Rules
@@ -95,15 +107,26 @@ Params:
 - ❌ **NEVER** pull large result sets when analysis is sufficient
 - Whenever possible, use GROUP BY and various aggregation functions to get the insights you need. Only pull raw data when mandatory for your needs.
 
-#### Using AnalysisRequest (PREFERRED)
-- ✅ **Use `AnalysisRequest` + `ReturnType="analysis only"`** if possible and it makes sense
-- ✅ This returns ONLY the analysis, not the raw data (massive context savings)
-- ✅ Examples of good analysis requests:
-  - "Analyze the top 5 items by revenue"
-  - "Find common patterns in Fields X and Y in the results"
-  - "Identify any anomalies or outliers in the data"
-- Don't ask for analysis with things you can do in **SQL** for example SUM, MIN, MAX, AVG, etc.
-- When necessary, it is okay to return `data only` if you truly need the raw data in context. 
+#### Smart Data Retrieval Strategy - Choose the Right Approach
+
+**1. Summary/Insights Only** → Use `AnalysisRequest` + `ReturnType="analysis only"`
+- ✅ When you need trends, patterns, aggregates, or high-level insights
+- ✅ Massive context savings (no raw data returned)
+- ✅ Examples: "Analyze top 5 items by revenue", "Find common patterns", "Identify outliers"
+- ❌ Can't access individual records for further processing
+- ❌ Don't use for things you can do in SQL (SUM, MIN, MAX, AVG, COUNT, etc.)
+
+**2. Full Record Access (Raw Data)** → Use `ReturnType="data only"` with `ColumnMaxLength`
+- ✅ When you need to iterate over individual records
+- ✅ When building detailed reports requiring specific row data
+- ✅ When you need to process/transform data in subsequent steps
+- ✅ **Use `ColumnMaxLength=50`** (or appropriate value) to trim verbose text/JSON fields
+- ✅ Balances access to records with context efficiency
+- ❌ More context usage than analysis only (but controlled with column limits)
+
+**3. Both** → Use `ReturnType="data and analysis"` sparingly
+- ⚠️ Highest context usage
+- ✅ Only when you need both LLM analysis AND access to individual records 
 
 #### Get Entity Details Usage
 - ✅ **Query 3-5 entities at a time**, review results, then get more if needed
@@ -138,6 +161,49 @@ Params:
 
 You must follow the LoopAgentResponse format. Put your findings into `payloadChangeRequest.newElements.findings` array.
 
+### ❌ ANTI-PATTERN: Don't Create One Finding Per Row!
+
+**NEVER do this** - it wastes massive context by repeating source metadata for every row:
+```json
+{
+  "findings": [
+    {
+      "description": "GPT 3.5 model",
+      "source": { "type": "database", "entities": "AI Models", "query": "...", "rowCount": 80 }
+    },
+    {
+      "description": "GPT 4 model",
+      "source": { "type": "database", "entities": "AI Models", "query": "...", "rowCount": 80 }
+    },
+    // ... 78 more findings with identical source metadata - WASTEFUL!
+  ]
+}
+```
+
+### ✅ CORRECT PATTERN: Use CSV Data in Single Finding
+
+Package ALL rows from a query into ONE finding with CSV data:
+```json
+{
+  "findings": [
+    {
+      "description": "Retrieved 80 AI models for analysis",
+      "data": "Name,Type,Vendor,IsActive\n\"GPT 3.5\",\"LLM\",\"OpenAI\",true\n\"GPT 4\",\"LLM\",\"OpenAI\",true\n...",
+      "source": { "type": "database", "entities": "AI Models", "query": "...", "rowCount": 80 }
+      // ✅ Source stated ONCE, all 80 rows in CSV data
+    }
+  ]
+}
+```
+
+**When to use multiple findings:**
+- Different queries (different tables/filters) → separate findings
+- Different analysis types (summary vs. raw data) → separate findings
+- Different research aspects (models vs. prompts vs. vendors) → separate findings
+
+**NOT for:**
+- Individual rows from same query → use CSV in ONE finding
+
 **Example when completing research (with efficient context usage):**
 ```json
 {
@@ -149,25 +215,30 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
     "newElements": {
       "findings": [
         {
-          "content": "Analysis of 127 AI models shows: OpenAI leads with 45 models (35%), followed by Anthropic with 32 models (25%). The remaining 6 vendors share 40% of the market. Average max input tokens: 8,192. Most models support streaming (87%).",
+          "description": "Analysis of 127 AI models shows: OpenAI leads with 45 models (35%), followed by Anthropic with 32 models (25%). The remaining 6 vendors share 40% of the market. Average max input tokens: 8,192. Most models support streaming (87%).",
           "source": {
             "type": "database",
-            "entity": "AI Models",
+            "entities": "AI Models",
             "query": "SELECT [Vendor], [Name], [MaxInputTokens], [SupportsStreaming] FROM [__mj].[vwAIModels] WHERE [IsActive]=1",
-            "analysisUsed": "Summarize vendor distribution, calculate average max tokens, and report streaming support percentage",
+            "analysisRequest": "Summarize vendor distribution, calculate average max tokens, and report streaming support percentage",
+            "returnType": "analysis only",
             "rowCount": 127
           },
           "confidence": "high"
-        }
-      ],
-      "sources": [
+        },
         {
-          "type": "database",
-          "entity": "AI Models",
-          "totalRows": 127,
-          "contextEfficiency": "Used AnalysisRequest - no raw data returned"
+          "description": "Retrieved 35 active AI prompts with trimmed descriptions for downstream categorization",
+          "data": "ID,Name,Description,Category,Type\n\"abc-123\",\"Code Review Prompt\",\"Analyzes code for best practices and pot...\",\"Development\",\"Chat\"\n\"def-456\",\"Translation Prompt\",\"Translates text between languages while...\",\"Language\",\"Chat\"\n\"ghi-789\",\"SQL Query Helper\",\"Helps write and optimize SQL queries for...\",\"Database\",\"Chat\"",
+          "source": {
+            "type": "database",
+            "entities": "AI Prompts",
+            "query": "SELECT ID, Name, Description, Category, Type FROM __mj.vwAIPrompts WHERE Status='Active'",
+            "rowCount": 35,
+            "columnMaxLength": 50
+          },
+          "confidence": "high"
         }
-      ]
+      ] 
     }
   }
 }
@@ -190,6 +261,11 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
 }
 ```
 
-**CRITICAL**: Do NOT add `findings` or `sources` at the top level of your response. They MUST be inside `payloadChangeRequest.newElements` or `payloadChangeRequest.updateElements`.
+**CRITICAL Rules:**
+- Do NOT add `findings` or `sources` at the top level of your response. They MUST be inside `payloadChangeRequest.newElements` or `payloadChangeRequest.updateElements`.
+- **ONE finding per query result set** - put all rows in CSV `data` property, NOT one finding per row
+- Include `data` property when raw dataset is needed for downstream processing
+- Omit `data` property when only the analysis/summary is needed
+- Always document `columnMaxLength` in source when trimming is applied
 
 Remember: **Get Entity Details is your friend** - it shows you EXACTLY what fields exist and what the data looks like. Use it!

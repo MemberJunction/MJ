@@ -104,6 +104,7 @@ export class ExecuteResearchQueryAction extends BaseAction {
             const analysisRequest = this.getStringParam(params, "analysisrequest");
             const returnType = this.getStringParam(params, "returntype") ||
                 (analysisRequest ? 'data and analysis' : 'data only');
+            const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 50); // Default: 50 chars, 0 = no limit
 
             // Validate query security
             const securityValidation = this.validateQuerySecurity(query);
@@ -154,9 +155,12 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 // Format data based on requested format
                 let formattedData: string | undefined;
                 if (dataFormat === 'csv') {
-                    formattedData = this.formatAsCSV(results);
+                    formattedData = this.formatAsCSV(results, columnMaxLength);
                 } else if (dataFormat === 'json') {
-                    formattedData = JSON.stringify(results, null, 2);
+                    const trimmedResults = columnMaxLength > 0
+                        ? this.trimResultColumns(results, columnMaxLength)
+                        : results;
+                    formattedData = JSON.stringify(trimmedResults, null, 2);
                 }
 
                 // Perform analysis if requested
@@ -170,7 +174,8 @@ export class ExecuteResearchQueryAction extends BaseAction {
                             results,
                             columns,
                             analysisRequest,
-                            params
+                            params,
+                            columnMaxLength
                         );
 
                         if (analysisResult.success) {
@@ -345,15 +350,27 @@ export class ExecuteResearchQueryAction extends BaseAction {
 
     /**
      * Formats results as CSV string with proper escaping
+     * @param results Array of result objects
+     * @param columnMaxLength Optional maximum length for column values (0 = no limit)
      */
-    private formatAsCSV(results: any[]): string {
+    private formatAsCSV(results: any[], columnMaxLength: number = 0): string {
         if (results.length === 0) return '';
 
         const headers = Object.keys(results[0]);
         const csvRows = [this.formatCSVRow(headers)];
 
         for (const row of results) {
-            const values = headers.map(header => this.formatCSVValue(row[header]));
+            const values = headers.map(header => {
+                let value = row[header];
+                // Apply column length limit if specified
+                if (columnMaxLength > 0 && value != null) {
+                    const stringValue = String(value);
+                    if (stringValue.length > columnMaxLength) {
+                        value = stringValue.substring(0, columnMaxLength) + '...';
+                    }
+                }
+                return this.formatCSVValue(value);
+            });
             csvRows.push(values.join(','));
         }
 
@@ -389,13 +406,35 @@ export class ExecuteResearchQueryAction extends BaseAction {
     }
 
     /**
+     * Trims columns in result set to maximum length
+     * Used for JSON format results to prevent verbose fields from overwhelming context
+     * @param results Array of result objects
+     * @param maxLength Maximum length for string values
+     * @returns New array with trimmed values
+     */
+    private trimResultColumns(results: any[], maxLength: number): any[] {
+        return results.map(row => {
+            const trimmedRow: any = {};
+            for (const [key, value] of Object.entries(row)) {
+                if (value != null && typeof value === 'string' && value.length > maxLength) {
+                    trimmedRow[key] = value.substring(0, maxLength) + '...';
+                } else {
+                    trimmedRow[key] = value;
+                }
+            }
+            return trimmedRow;
+        });
+    }
+
+    /**
      * Analyze query data using AI prompt
      */
     private async analyzeQueryData(
         results: any[],
         columns: Array<{ ColumnName: string; DataType: string; IsNullable: boolean }>,
         analysisRequest: string,
-        params: RunActionParams
+        params: RunActionParams,
+        columnMaxLength: number = 0
     ): Promise<{ success: boolean; analysis?: string; error?: string }> {
         try {
             // Ensure AIEngine is initialized
@@ -411,7 +450,8 @@ export class ExecuteResearchQueryAction extends BaseAction {
             }
 
             // Format data as CSV for more efficient token usage
-            const dataCSV = this.formatAsCSV(results);
+            // Apply column max length to trim verbose fields
+            const dataCSV = this.formatAsCSV(results, columnMaxLength);
 
             // Build prompt parameters with data context
             const promptParams = new AIPromptParams();

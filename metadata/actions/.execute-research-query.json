@@ -126,6 +126,25 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "ColumnMaxLength",
+            "DefaultValue": "50",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum length for column values in characters. Values longer than this will be trimmed with '...' suffix to save context. Use when querying tables with verbose text/JSON fields (e.g., PromptText, Description). Example: 50 = trim to 50 characters. Default: 50. Set to 0 if you want FULL column results. Applies to both CSV and JSON formats.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9BCB13D7-4D0C-44E0-8B38-5D5E0DE81782"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T15:28:47.497Z",
+            "checksum": "4f2a94505cc164dd99ba8a8e15355e523a977c0027a0415c3116f62f5067c962"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "Results",
             "Type": "Output",
             "ValueType": "Other",
