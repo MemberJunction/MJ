@@ -1,0 +1,286 @@
+[
+  {
+    "fields": {
+      "Name": "Create SVG Chart",
+      "Description": "Generates SVG charts from data using Vega-Lite. Supports various chart types including bar, line, pie, scatter, and area charts. Designed for AI agents and workflows to create publication-quality visualizations from structured data without writing visualization code.",
+      "DriverClass": "__CreateSVGChart",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-chart-pie",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ChartType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of chart to generate: 'bar', 'line', 'pie', 'scatter', 'area', 'point'. Required unless VegaLiteSpec is provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "588CFAFD-1EA3-478E-935A-33932113B44A"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.113Z",
+            "checksum": "060ffb6c8836cfbbde94bdd57604738a505f8f0714be2cfd3c985f24d3860966"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Data",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "JSON array of data objects. Each object represents a data point with field names as keys. Required unless VegaLiteSpec is provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "71FD517A-B020-4D93-A543-67ABE3BD48BD"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.126Z",
+            "checksum": "a7fdbfc33e2d60c5a96d99240fdbeabe7e72444e7d33541fda4413578a1c76f7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "XField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field name for X axis (required for bar, line, scatter, area, point charts). Example: 'category', 'date', 'label'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4884669D-97F3-4310-87EF-2ED2D92E4979"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.137Z",
+            "checksum": "794255f63bd12eab60fc614bfff550f67b2e7c8c216781c2b6f25875adcd0539"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "YField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field name for Y axis (required for bar, line, scatter, area, point charts). Example: 'value', 'count', 'amount'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C94A6AFB-640A-4984-8746-FD03CD2217D2"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.145Z",
+            "checksum": "0786da765f24ad5c97e9c64e33895dd0446860463b5dc0fb9e15f62efe60bf74"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ThetaField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field name for pie slice size (required for pie charts). Example: 'count', 'value', 'percentage'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "671E5709-A089-4FD3-9CF1-C6F002DCE357"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.155Z",
+            "checksum": "5591840951902858379dce7d1ee64cc7f9d99d9d444271b5fdd67fb396e099d6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ColorField",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Field name for color encoding (optional). Adds color differentiation by category. Example: 'category', 'type', 'status'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "594520D7-C9CC-4ADC-95E4-394747302829"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.164Z",
+            "checksum": "7267644167213eb6168d79203ee7726a4c163700b7910b46c6e170415f58e52c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Chart title (optional). Displayed at the top of the chart.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "0F8129B4-C0A9-4DC8-B3AC-7C8A9743C075"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.176Z",
+            "checksum": "92905bee5a1eef4974b74b39b404e75a3d90688b18bc3240714680d388b9fff2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Width",
+            "DefaultValue": "400",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Chart width in pixels. Default: 400.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5BA494B6-E742-441F-AA15-BD7587EB8B26"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.188Z",
+            "checksum": "98a04bcb466d4c3a998137bc7bf2203c6cd65f9c6c0aef00cf40c26a5fd335cb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Height",
+            "DefaultValue": "300",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Chart height in pixels. Default: 300.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DD01BD72-1555-43C5-A7C1-0B1199E0E298"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.199Z",
+            "checksum": "638d093096c89441fbb7eb4b966d8179dbc14ea6a0a8dcfb27139286391ac297"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "VegaLiteSpec",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Full Vega-Lite JSON specification (optional). If provided, overrides all other parameters and uses the complete spec directly. For advanced users who want full control over visualization.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "821A9947-2C6E-4ACD-A240-32C4C3984A83"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.209Z",
+            "checksum": "546a5dbe20d18f804963d05f69658e0a8111523a7f838c4cdb0d8a2dc1f6a9bb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Generated SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AB4D1DDE-0B66-4E82-A99D-9C5B80A3085E"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.229Z",
+            "checksum": "754788aedce1a97f89fd0926253b3a2e933fcc737baeb922527ef759531f2446"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Chart generated successfully. SVG markup returned in Message field."
+          },
+          "primaryKey": {
+            "ID": "7405B524-7AA8-4A62-AF4D-99A55E764567"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.248Z",
+            "checksum": "a0d42519fa4134cf3deacb27b4d03fdddf1344a4b0c0d0a4c8b46ae42052204f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Required parameters are missing. Either provide VegaLiteSpec, or provide ChartType and Data."
+          },
+          "primaryKey": {
+            "ID": "FEE3B108-3F65-4B9A-BC5F-2FCADA68172C"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.258Z",
+            "checksum": "9fdf1261bd2c7b3ab3f0121b74fa9919f864c05af7d51c8aae99535c63011013"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_DATA",
+            "IsSuccess": false,
+            "Description": "Data parameter must be a valid JSON array of objects."
+          },
+          "primaryKey": {
+            "ID": "6A904526-B5B6-44B6-851A-F8EF376449EB"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.269Z",
+            "checksum": "4308bd751cff10fc6d4c1a9fcebd539981556c16d2eaffbedb95dd03a199a233"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CHART_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate chart due to invalid configuration or data. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "740840DE-3A10-4920-A6B4-0771673684A0"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T03:09:39.278Z",
+            "checksum": "c7e23a2a9fba0674c0dcac448b77c48c0d6731dd0bb664c48debb5c1d13471a2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "88D95CCD-EBAB-4760-80AD-39B12E251175"
+    },
+    "sync": {
+      "lastModified": "2025-10-18T03:09:39.071Z",
+      "checksum": "b149bad80046c6f2c4e6840f68dcd182a4fb774f273eba5bb4d515b63b0835b0"
+    }
+  }
+]

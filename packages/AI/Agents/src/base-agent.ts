@@ -14,7 +14,7 @@
 import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -1707,6 +1707,40 @@ export class BaseAgent {
     }
 
     /**
+     * Determines if a prompt execution error is fatal and should stop agent execution.
+     * Fatal errors are those that won't be resolved by retrying, such as context length
+     * exceeded (when no larger model is available), authentication failures, or invalid
+     * request format.
+     *
+     * @param promptResult - The result from prompt execution
+     * @returns true if the error is fatal and agent should terminate, false otherwise
+     * @protected
+     */
+    protected isFatalPromptError(promptResult: AIPromptRunResult): boolean {
+        // If no error info, not fatal (might be transient)
+        if (!promptResult?.chatResult?.errorInfo) {
+            return false;
+        }
+
+        const errorInfo = promptResult.chatResult.errorInfo;
+
+        // Check severity first - if marked as Fatal by the error analyzer, respect that
+        if (errorInfo.severity === 'Fatal') {
+            return true;
+        }
+
+        // Fatal error types that should stop agent execution immediately
+        // These won't be resolved by retrying the same prompt
+        const fatalErrorTypes: AIErrorType[] = [
+            'ContextLengthExceeded',  // No model can handle this context size (after failover attempts)
+            'Authentication',          // API key is invalid or missing
+            'InvalidRequest'           // Request format or parameters are wrong
+        ];
+
+        return fatalErrorTypes.includes(errorInfo.errorType);
+    }
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -2142,8 +2176,42 @@ export class BaseAgent {
     }
 
     /**
+     * Formats a parameter value for display in action execution messages.
+     * Truncates long strings and formats objects/arrays for readability.
+     *
+     * @param {any} value - The parameter value to format
+     * @param {number} maxLength - Maximum length before truncation (default: 100)
+     * @returns {string} Formatted value suitable for message display
+     * @private
+     */
+    private formatParamValueForMessage(value: any, maxLength: number = 100): string {
+        if (value === null || value === undefined) {
+            return 'null';
+        }
+
+        let stringValue: string;
+
+        if (typeof value === 'string') {
+            stringValue = value;
+        } else if (typeof value === 'object') {
+            // For objects/arrays, use compact JSON
+            stringValue = JSON.stringify(value);
+        } else {
+            stringValue = String(value);
+        }
+
+        // Truncate if too long
+        if (stringValue.length > maxLength) {
+            return `\`${stringValue.substring(0, maxLength)}...\``;
+        }
+
+        // Use inline code formatting for values
+        return `\`${stringValue}\``;
+    }
+
+    /**
      * Gets the agent type name for a given type ID.
-     * 
+     *
      * @param {string} typeID - The agent type ID
      * @returns {string} The agent type name or 'Unknown'
      * @private
@@ -2712,17 +2780,39 @@ export class BaseAgent {
                 stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
                 // don't save here, we save when we call finalizeStepEntity()
             }
-                        
+
+            // Check if prompt execution failed
+            if (!promptResult.success) {
+                await this.finalizeStepEntity(stepEntity, false, promptResult.errorMessage);
+
+                // Check if this is a fatal error that shouldn't be retried
+                const isFatal = this.isFatalPromptError(promptResult);
+
+                this.logStatus(
+                    `❌ Prompt execution failed: ${promptResult.errorMessage} (fatal: ${isFatal})`,
+                    true,
+                    params
+                );
+
+                return {
+                    errorMessage: promptResult.errorMessage || 'Prompt execution failed',
+                    step: 'Failed' as const,
+                    terminate: isFatal, // Terminate for fatal errors, allow retry for transient errors
+                    previousPayload: payload,
+                    newPayload: payload
+                };
+            }
+
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
                 const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
-                return { 
+                return {
                     ...cancelledResult,
-                    terminate: true, 
+                    terminate: true,
                     step: 'Failed', // Cancelled is treated as failed
                     previousPayload: cancelledResult.payload,
-                    newPayload: cancelledResult.payload // No changes, just return the same payload   
+                    newPayload: cancelledResult.payload // No changes, just return the same payload
                 }
             }
 
@@ -3735,39 +3825,41 @@ export class BaseAgent {
             }
 
             // Report action execution progress with markdown formatting for parameters
+            // Use same format as assistant message for consistency
             let progressMessage: string;
             if (actions.length === 1) {
                 const aa = actions[0];
-                progressMessage = `Executing action: **${aa.name}**`;
-                
+                progressMessage = `Executing **${aa.name}** action`;
+
                 // Add parameters if they exist
                 if (aa.params && Object.keys(aa.params).length > 0) {
                     const paramsList = Object.entries(aa.params)
                         .map(([key, value]) => {
-                            const displayValue = typeof value === 'object' 
-                                ? JSON.stringify(value, null, 2) 
-                                : String(value);
-                            return `  - \`${key}\`: ${displayValue}`;
+                            const displayValue = this.formatParamValueForMessage(value);
+                            return `• **${key}**: ${displayValue}`;
                         })
                         .join('\n');
-                    progressMessage += `\n${paramsList}`;
+                    progressMessage += ` with parameters:\n${paramsList}`;
+                } else {
+                    progressMessage += '.';
                 }
             } else {
-                progressMessage = `Executing ${actions.length} actions:`;
-                actions.forEach(aa => {
-                    progressMessage += `\n\n• **${aa.name}**`;
+                progressMessage = `Executing **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+                    let actionText = `${index + 1}. **${aa.name}**`;
+
+                    // Add parameters if they exist
                     if (aa.params && Object.keys(aa.params).length > 0) {
                         const paramsList = Object.entries(aa.params)
                             .map(([key, value]) => {
-                                const displayValue = typeof value === 'object' 
-                                    ? JSON.stringify(value, null, 2) 
-                                    : String(value);
-                                return `  - \`${key}\`: ${displayValue}`;
+                                const displayValue = this.formatParamValueForMessage(value);
+                                return `   • **${key}**: ${displayValue}`;
                             })
                             .join('\n');
-                        progressMessage += `\n${paramsList}`;
+                        actionText += `\n${paramsList}`;
                     }
-                });
+
+                    return actionText;
+                }).join('\n\n');
             }
                 
             params.onProgress?.({
@@ -3780,17 +3872,51 @@ export class BaseAgent {
                 },
                 displayMode: 'live' // Only show in live mode
             });
-            
-            // Add assistant message indicating we're executing actions with more detail
-            const actionMessage = actions.length === 1 
-                ? `I'm executing the "${actions[0].name}" action...`
-                : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
-            
+
+            // Build detailed action execution message with parameters using markdown formatting
+            // This creates a permanent, lightweight record of what was requested
+            let actionMessage: string;
+            if (actions.length === 1) {
+                const aa = actions[0];
+                actionMessage = `I'm executing the **${aa.name}** action`;
+
+                // Add parameters if they exist
+                if (aa.params && Object.keys(aa.params).length > 0) {
+                    const paramsList = Object.entries(aa.params)
+                        .map(([key, value]) => {
+                            const displayValue = this.formatParamValueForMessage(value);
+                            return `• **${key}**: ${displayValue}`;
+                        })
+                        .join('\n');
+                    actionMessage += ` with parameters:\n${paramsList}`;
+                } else {
+                    actionMessage += '.';
+                }
+            } else {
+                actionMessage = `I'm executing **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+                    let actionText = `${index + 1}. **${aa.name}**`;
+
+                    // Add parameters if they exist
+                    if (aa.params && Object.keys(aa.params).length > 0) {
+                        const paramsList = Object.entries(aa.params)
+                            .map(([key, value]) => {
+                                const displayValue = this.formatParamValueForMessage(value);
+                                return `   • **${key}**: ${displayValue}`;
+                            })
+                            .join('\n');
+                        actionText += `\n${paramsList}`;
+                    }
+
+                    return actionText;
+                }).join('\n\n');
+            }
+
+            // Add assistant message (no metadata - this is a permanent record)
             params.conversationMessages.push({
                 role: 'assistant',
                 content: actionMessage
             });
-            
+
             const actionEngine = ActionEngineServer.Instance;
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
 
@@ -3894,14 +4020,59 @@ export class BaseAgent {
             
             // Check if any actions failed
             const failedActions = actionSummaries.filter(a => !a.success);
-            
+
             // Add user message with the results
             const resultsMessage = (failedActions.length > 0 ? `${failedActions.length} of ${actionSummaries.length} failed:` : `Action results:`) + `\n${JSON.stringify(actionSummaries, null, 2)}`;
-                
+
+            // Build metadata from AI Agent Actions configuration
+            // If multiple actions, use the most restrictive (shortest) expiration settings
+            let metadata: AgentChatMessageMetadata | undefined;
+            const agentActionConfigs = actionResults
+                .map(r => agentActions.find(aa => aa.ActionID === r.actionEntity.ID))
+                .filter(aa => aa != null);
+
+            if (agentActionConfigs.length > 0) {
+                // Find the most restrictive expiration settings
+                let minExpirationTurns: number | null = null;
+                let expirationMode: 'None' | 'Remove' | 'Compact' = 'None';
+                let compactMode: 'First N Chars' | 'AI Summary' | undefined;
+                let compactLength: number | undefined;
+                let compactPromptId: string | undefined;
+
+                for (const agentAction of agentActionConfigs) {
+                    // Track shortest expiration (most restrictive)
+                    if (agentAction.ResultExpirationTurns != null) {
+                        if (minExpirationTurns === null || agentAction.ResultExpirationTurns < minExpirationTurns) {
+                            minExpirationTurns = agentAction.ResultExpirationTurns;
+                            expirationMode = agentAction.ResultExpirationMode as 'None' | 'Remove' | 'Compact' || 'None';
+                            compactMode = agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined;
+                            compactLength = agentAction.CompactLength;
+                            compactPromptId = agentAction.CompactPromptID;
+                        }
+                    }
+                }
+
+                // Only add metadata if we have expiration settings
+                if (minExpirationTurns !== null && expirationMode !== 'None') {
+                    const currentStepCount = this._agentRun?.Steps?.length || 0;
+                    metadata = {
+                        turnAdded: currentStepCount,
+                        messageType: 'action-result',
+                        expirationTurns: minExpirationTurns,
+                        expirationMode: expirationMode,
+                        compactMode: compactMode,
+                        compactLength: compactLength,
+                        compactPromptId: compactPromptId
+                    };
+                }
+            }
+
+            // Add user message with results and optional metadata
             params.conversationMessages.push({
                 role: 'user',
-                content: resultsMessage
-            });
+                content: resultsMessage,
+                metadata: metadata
+            } as AgentChatMessage);
             
             // Call agent type's post-processing for actions
             let finalPayload = currentPayload;

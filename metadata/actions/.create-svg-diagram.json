@@ -1,0 +1,165 @@
+[
+  {
+    "fields": {
+      "Name": "Create SVG Diagram",
+      "Description": "Generates SVG diagrams including flowcharts, org charts, and ER diagrams. Uses dagre for directed graph layouts and d3-hierarchy for tree structures. Designed for AI agents and workflows to create publication-quality diagrams from structured data.",
+      "DriverClass": "__CreateSVGDiagram",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-diagram-project",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of diagram to generate: 'flow' (flowchart), 'org' (org chart), or 'er' (entity-relationship diagram). Required.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Nodes",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "JSON array or object of nodes. For flow diagrams: array of {id, kind, label, note, icon, width, height}. For org charts: nested object with {id, label, role, avatarUrl, children}. For ER diagrams: array of {id, name, attrs}. Required.",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Edges",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "JSON array of edges/relationships (for flow and ER diagrams). For flow: {from, to, label, dashed}. For ER: {from, to, label}. Not used for org charts.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Direction",
+            "DefaultValue": "TB",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Layout direction for flow diagrams: 'TB' (top-bottom), 'LR' (left-right), 'RL' (right-left), 'BT' (bottom-top). Default: 'TB'.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Width",
+            "DefaultValue": "800",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram width in pixels. Default: 800.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Height",
+            "DefaultValue": "600",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram height in pixels. Default: 600.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram title (optional). Displayed at the top of the diagram.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Palette",
+            "DefaultValue": "mjDefault",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Color palette: 'mjDefault', 'gray', 'pastel', or 'highContrast'. Default: 'mjDefault'.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Seed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Random seed for deterministic layouts (optional). Use same seed for reproducible diagrams.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Generated SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
+            "IsRequired": false
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Diagram generated successfully. SVG markup returned in Message field."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Required parameters are missing. DiagramType and Nodes are required."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_DIAGRAM_TYPE",
+            "IsSuccess": false,
+            "Description": "DiagramType must be 'flow', 'org', or 'er'."
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DIAGRAM_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate diagram due to invalid configuration or data. Check error message for specific details."
+          }
+        }
+      ]
+    }
+  }
+]

@@ -83,6 +83,16 @@ export * from './custom/user-management/create-employee.action';
 export * from './custom/user-management/assign-user-roles.action';
 export * from './custom/user-management/validate-email-unique.action';
 
+// Visualization Actions
+export * from './custom/visualization/create-svg-chart.action';
+export * from './custom/visualization/create-svg-diagram.action';
+export * from './custom/visualization/create-svg-word-cloud.action';
+export * from './custom/visualization/create-svg-network.action';
+export * from './custom/visualization/create-svg-infographic.action';
+export * from './custom/visualization/shared/svg-types';
+export * from './custom/visualization/shared/svg-utils';
+export * from './custom/visualization/shared/svg-theming';
+
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
 import { LoadSlackWebhookAction } from './custom/communication/slack-webhook.action';
@@ -156,6 +166,11 @@ import { LoadCreateUserAction } from './custom/user-management/create-user.actio
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
 import { LoadAssignUserRolesAction } from './custom/user-management/assign-user-roles.action';
 import { LoadValidateEmailUniqueAction } from './custom/user-management/validate-email-unique.action';
+import { LoadCreateSVGChartAction } from './custom/visualization/create-svg-chart.action';
+import { LoadCreateSVGDiagramAction } from './custom/visualization/create-svg-diagram.action';
+import { LoadCreateSVGWordCloudAction } from './custom/visualization/create-svg-word-cloud.action';
+import { LoadCreateSVGNetworkAction } from './custom/visualization/create-svg-network.action';
+import { LoadCreateSVGInfographicAction } from './custom/visualization/create-svg-infographic.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -235,6 +250,11 @@ export function LoadAllCoreActions() {
     LoadCreateEmployeeAction();
     LoadAssignUserRolesAction();
     LoadValidateEmailUniqueAction();
+    LoadCreateSVGChartAction();
+    LoadCreateSVGDiagramAction();
+    LoadCreateSVGWordCloudAction();
+    LoadCreateSVGNetworkAction();
+    LoadCreateSVGInfographicAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

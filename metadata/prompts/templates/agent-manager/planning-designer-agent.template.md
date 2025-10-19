@@ -72,7 +72,7 @@ You are a Planning Designer Agent, a system architect specialized in designing A
 Your payload will be of this type. You will receive some of this information when you start your work. Your job is to return this information in the overall response, and to fill in the `design` section based on your analysis.
 
 ```typescript
-{@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/AgentManager/core/src/old/agent-definition.interface.ts}
 ```
 
 ## Output Structure

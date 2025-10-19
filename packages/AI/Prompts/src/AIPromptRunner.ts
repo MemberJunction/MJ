@@ -1,4 +1,4 @@
-import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer } from '@memberjunction/ai';
+import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey, ErrorAnalyzer, AIErrorInfo } from '@memberjunction/ai';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, RunView } from '@memberjunction/core';
 import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/global';
@@ -2342,13 +2342,30 @@ export class AIPromptRunner {
   private createFailoverErrorResult(lastError: Error | null, failoverAttempts: FailoverAttempt[]): ChatResult {
     const startTime = new Date();
     const endTime = new Date();
-    
+
+    // Check if this is a ContextLengthExceeded error - if so, mark as Fatal
+    const hasContextLengthError = failoverAttempts.some(a =>
+      a.errorType === 'ContextLengthExceeded' ||
+      ErrorAnalyzer.analyzeError(a.error).errorType === 'ContextLengthExceeded'
+    );
+
+    // If ContextLengthExceeded and all failover attempts failed, this is fatal
+    let errorInfo: AIErrorInfo | undefined;
+    if (lastError) {
+      errorInfo = ErrorAnalyzer.analyzeError(lastError);
+      // Override severity to Fatal if context length exceeded and no larger models exist
+      if (hasContextLengthError && errorInfo.errorType === 'ContextLengthExceeded') {
+        errorInfo.severity = 'Fatal';
+      }
+    }
+
     return {
       success: false,
       startTime: startTime,
       endTime: endTime,
       errorMessage: lastError?.message || 'Unknown error',
       exception: lastError,
+      errorInfo: errorInfo,
       statusText: `Failover failed after ${failoverAttempts.length} attempts`,
       timeElapsed: endTime.getTime() - startTime.getTime(),
       data: null
@@ -4021,49 +4038,63 @@ export class AIPromptRunner {
 
     // If we have context length errors, prioritize models with larger context windows
     if (hasContextLengthError) {
-      const currentMaxTokens = currentModel.ModelVendors?.length > 0 ? 
+      const currentMaxTokens = currentModel.ModelVendors?.length > 0 ?
         Math.max(...currentModel.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
-      
+
       // Filter out models with same or smaller context windows
       candidates = candidates.filter(c => {
-        const candidateMaxTokens = c.model.ModelVendors?.length > 0 ? 
+        const candidateMaxTokens = c.model.ModelVendors?.length > 0 ?
           Math.max(...c.model.ModelVendors.map(mv => mv.MaxInputTokens || 0)) : 0;
         return candidateMaxTokens > currentMaxTokens;
       });
-      
+
+      // If no larger models exist, this is a fatal error - return empty to stop retrying
+      if (candidates.length === 0) {
+        LogStatusEx({
+          message: `❌ Context length exceeded and no models with larger context windows available. Current model: ${currentModel.Name} (${currentMaxTokens} max tokens). This is a fatal error.`,
+          category: 'AI',
+          additionalArgs: [{
+            currentModel: currentModel.Name,
+            currentMaxTokens,
+            availableModels: allCandidates.map(c => c.model.Name).join(', '),
+            reason: 'No models with larger context windows available for failover'
+          }]
+        });
+        // Return empty array - caller will see no candidates and stop retrying
+        return [];
+      }
+
       // Sort by priority first (existing algorithm), then by context window size as tiebreaker
       candidates.sort((a, b) => {
         // Primary sort: priority (higher is better) - maintains existing algorithm
         if (a.priority !== b.priority) {
           return b.priority - a.priority;
         }
-        
+
         // Secondary sort: context window size (largest first) - only as tiebreaker
-        const aMaxTokens = a.model.ModelVendors?.length > 0 ? 
+        const aMaxTokens = a.model.ModelVendors?.length > 0 ?
           Math.max(...a.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-        const bMaxTokens = b.model.ModelVendors?.length > 0 ? 
+        const bMaxTokens = b.model.ModelVendors?.length > 0 ?
           Math.max(...b.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-        
+
         return bMaxTokens - aMaxTokens;
       });
-      
+
       // Log context-aware failover selection
-      if (candidates.length > 0) {
-        const bestCandidate = candidates[0];
-        const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ? 
-          Math.max(...bestCandidate.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
-        LogStatusEx({
-          message: `🔄 Context-aware failover: Selected model ${bestCandidate.model.Name} with ${bestCandidateMaxTokens} max input tokens (vs ${currentMaxTokens} for failed model)`,
-          category: 'AI',
-          additionalArgs: [{
-            currentModel: currentModel.Name,
-            currentMaxTokens,
-            selectedModel: bestCandidate.model.Name,
-            selectedMaxTokens: bestCandidateMaxTokens,
-            candidateCount: candidates.length
-          }]
-        });
-      }
+      const bestCandidate = candidates[0];
+      const bestCandidateMaxTokens = bestCandidate.model.ModelVendors?.length > 0 ?
+        Math.max(...bestCandidate.model.ModelVendors.map((mv: AIModelVendorEntity) => mv.MaxInputTokens || 0)) : 0;
+      LogStatusEx({
+        message: `🔄 Context-aware failover: Selected model ${bestCandidate.model.Name} with ${bestCandidateMaxTokens} max input tokens (vs ${currentMaxTokens} for failed model)`,
+        category: 'AI',
+        additionalArgs: [{
+          currentModel: currentModel.Name,
+          currentMaxTokens,
+          selectedModel: bestCandidate.model.Name,
+          selectedMaxTokens: bestCandidateMaxTokens,
+          candidateCount: candidates.length
+        }]
+      });
     } else {
       // Final sort by priority (higher is better) for non-context-length errors
       candidates.sort((a, b) => b.priority - a.priority);

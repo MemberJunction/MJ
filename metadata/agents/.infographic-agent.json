@@ -1,0 +1,65 @@
+[
+  {
+    "fields": {
+      "Name": "Infographic Agent",
+      "Description": "Specialized visualization expert that creates publication-quality SVG infographics from data and instructions. Composes multi-panel visualizations using charts, diagrams, networks, and word clouds. Can iterate to refine visualizations and intelligently assemble them into comprehensive infographics with professional layouts.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": true,
+      "InvocationMode": "Both",
+      "IconClass": "fa-solid fa-chart-mixed",
+      "PayloadDownstreamPaths": ["*"],
+      "PayloadUpstreamPaths": ["infographic.*", "visualizations.*"]
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Infographic Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create SVG Chart",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create SVG Diagram",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create SVG Word Cloud",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create SVG Network",
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create SVG Infographic",
+            "Status": "Active"
+          }
+        }
+      ]
+    }
+  }
+]

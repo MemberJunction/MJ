@@ -2,8 +2,12 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { MJGlobal } from "@memberjunction/global";
-import { BaseEntity } from "@memberjunction/core";
+import { BaseEntity, LogError } from "@memberjunction/core";
 import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+import { AIEngine } from '@memberjunction/aiengine';
+import type { AIPromptEntityExtended } from '@memberjunction/core-entities';
 
 /**
  * Action that executes read-only SQL SELECT queries for research purposes with
@@ -96,7 +100,11 @@ export class ExecuteResearchQueryAction extends BaseAction {
 
             const maxRows = this.getNumericParam(params, "maxrows", 1000);
             const timeout = this.getNumericParam(params, "timeout", 30);
-            const resultFormat = this.getStringParam(params, "resultformat") || 'json';
+            const dataFormat = this.getStringParam(params, "dataformat") || 'csv';
+            const analysisRequest = this.getStringParam(params, "analysisrequest");
+            const returnType = this.getStringParam(params, "returntype") ||
+                (analysisRequest ? 'data and analysis' : 'data only');
+            const columnMaxLength = this.getNumericParam(params, "columnmaxlength", 50); // Default: 50 chars, 0 = no limit
 
             // Validate query security
             const securityValidation = this.validateQuerySecurity(query);
@@ -144,31 +152,60 @@ export class ExecuteResearchQueryAction extends BaseAction {
                 // Generate validation warnings
                 const warnings = this.generateValidationWarnings(query, results.length, executionTimeMs);
 
-                // Format results based on requested format
-                let formattedResults: any = results;
-                if (resultFormat === 'csv') {
-                    formattedResults = this.formatAsCSV(results);
-                } else if (resultFormat === 'table') {
-                    formattedResults = this.formatAsTable(results);
+                // Format data based on requested format
+                let formattedData: string | undefined;
+                if (dataFormat === 'csv') {
+                    formattedData = this.formatAsCSV(results, columnMaxLength);
+                } else if (dataFormat === 'json') {
+                    const trimmedResults = columnMaxLength > 0
+                        ? this.trimResultColumns(results, columnMaxLength)
+                        : results;
+                    formattedData = JSON.stringify(trimmedResults, null, 2);
+                }
+
+                // Perform analysis if requested
+                let analysis: string | undefined;
+                if (analysisRequest && (returnType === 'analysis only' || returnType === 'data and analysis')) {
+                    if (results.length === 0) {
+                        // Don't call LLM for empty results - generate immediate response
+                        analysis = 'Query returned no results. No data available to analyze.';
+                    } else {
+                        const analysisResult = await this.analyzeQueryData(
+                            results,
+                            columns,
+                            analysisRequest,
+                            params,
+                            columnMaxLength
+                        );
+
+                        if (analysisResult.success) {
+                            analysis = analysisResult.analysis;
+                        } else {
+                            LogError(`Failed to analyze query data: ${analysisResult.error}`);
+                        }
+                    }
                 }
 
                 const totalExecutionTime = Date.now() - startTime;
 
-                // Build detailed message with actual results
+                // Build detailed message based on return type
                 const message = this.buildDetailedMessage(
                     results,
                     columns,
                     executionTimeMs,
                     totalExecutionTime,
                     wasTruncated,
-                    warnings
+                    warnings,
+                    returnType,
+                    formattedData,
+                    analysis
                 );
 
-                return {
+                // Build result object based on return type
+                const resultData = {
                     Success: true,
                     ResultCode: "SUCCESS",
                     Message: message,
-                    Results: formattedResults,
                     Columns: columns,
                     RowCount: results.length,
                     ExecutionTimeMs: executionTimeMs,
@@ -177,6 +214,16 @@ export class ExecuteResearchQueryAction extends BaseAction {
                     ValidationWarnings: warnings,
                     Query: limitedQuery
                 } as ActionResultSimple;
+
+                // Add data and/or analysis to results based on returnType
+                if (returnType === 'data only' || returnType === 'data and analysis') {
+                    (resultData as any).Results = formattedData || results;
+                }
+                if (returnType === 'analysis only' || returnType === 'data and analysis') {
+                    (resultData as any).Analysis = analysis;
+                }
+
+                return resultData;
 
             } catch (queryError: any) {
                 // Handle query timeout
@@ -302,24 +349,27 @@ export class ExecuteResearchQueryAction extends BaseAction {
     }
 
     /**
-     * Formats results as CSV string
+     * Formats results as CSV string with proper escaping
+     * @param results Array of result objects
+     * @param columnMaxLength Optional maximum length for column values (0 = no limit)
      */
-    private formatAsCSV(results: any[]): string {
+    private formatAsCSV(results: any[], columnMaxLength: number = 0): string {
         if (results.length === 0) return '';
 
         const headers = Object.keys(results[0]);
-        const csvRows = [headers.join(',')];
+        const csvRows = [this.formatCSVRow(headers)];
 
         for (const row of results) {
             const values = headers.map(header => {
-                const value = row[header];
-                if (value == null) return '';
-                // Escape quotes and wrap in quotes if contains comma or quote
-                const stringValue = String(value);
-                if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-                    return `"${stringValue.replace(/"/g, '""')}"`;
+                let value = row[header];
+                // Apply column length limit if specified
+                if (columnMaxLength > 0 && value != null) {
+                    const stringValue = String(value);
+                    if (stringValue.length > columnMaxLength) {
+                        value = stringValue.substring(0, columnMaxLength) + '...';
+                    }
                 }
-                return stringValue;
+                return this.formatCSVValue(value);
             });
             csvRows.push(values.join(','));
         }
@@ -328,34 +378,124 @@ export class ExecuteResearchQueryAction extends BaseAction {
     }
 
     /**
-     * Formats results as ASCII table
+     * Formats a single CSV row (for headers)
      */
-    private formatAsTable(results: any[]): string {
-        if (results.length === 0) return 'No results';
+    private formatCSVRow(values: string[]): string {
+        return values.map(value => this.formatCSVValue(value)).join(',');
+    }
 
-        const headers = Object.keys(results[0]);
+    /**
+     * Formats a single CSV value with proper escaping
+     * - Null/undefined values become empty strings
+     * - All string values are quoted and escaped
+     * - Numbers and booleans are converted to strings and quoted
+     */
+    private formatCSVValue(value: any): string {
+        if (value == null) {
+            return '""';
+        }
 
-        // Calculate column widths
-        const widths = headers.map(header => {
-            const valueWidths = results.map(row => String(row[header] ?? '').length);
-            return Math.max(header.length, ...valueWidths, 3);
+        // Convert to string
+        const stringValue = String(value);
+
+        // Always quote and escape for maximum compatibility
+        // Escape existing double quotes by doubling them
+        const escaped = stringValue.replace(/"/g, '""');
+
+        return `"${escaped}"`;
+    }
+
+    /**
+     * Trims columns in result set to maximum length
+     * Used for JSON format results to prevent verbose fields from overwhelming context
+     * @param results Array of result objects
+     * @param maxLength Maximum length for string values
+     * @returns New array with trimmed values
+     */
+    private trimResultColumns(results: any[], maxLength: number): any[] {
+        return results.map(row => {
+            const trimmedRow: any = {};
+            for (const [key, value] of Object.entries(row)) {
+                if (value != null && typeof value === 'string' && value.length > maxLength) {
+                    trimmedRow[key] = value.substring(0, maxLength) + '...';
+                } else {
+                    trimmedRow[key] = value;
+                }
+            }
+            return trimmedRow;
         });
+    }
 
-        // Build separator
-        const separator = '+' + widths.map(w => '-'.repeat(w + 2)).join('+') + '+';
+    /**
+     * Analyze query data using AI prompt
+     */
+    private async analyzeQueryData(
+        results: any[],
+        columns: Array<{ ColumnName: string; DataType: string; IsNullable: boolean }>,
+        analysisRequest: string,
+        params: RunActionParams,
+        columnMaxLength: number = 0
+    ): Promise<{ success: boolean; analysis?: string; error?: string }> {
+        try {
+            // Ensure AIEngine is initialized
+            await AIEngine.Instance.Config(false, params.ContextUser);
 
-        // Build header row
-        const headerRow = '|' + headers.map((h, i) => ` ${h.padEnd(widths[i])} `).join('|') + '|';
+            // Get the analysis prompt from AIEngine
+            const prompt = this.getPromptByNameAndCategory('Analyze Query Data', 'MJ: System');
+            if (!prompt) {
+                return {
+                    success: false,
+                    error: "Prompt 'Analyze Query Data' not found. Ensure metadata has been synced."
+                };
+            }
 
-        // Build data rows
-        const dataRows = results.map(row => {
-            return '|' + headers.map((h, i) => {
-                const value = String(row[h] ?? '').substring(0, widths[i]);
-                return ` ${value.padEnd(widths[i])} `;
-            }).join('|') + '|';
-        });
+            // Format data as CSV for more efficient token usage
+            // Apply column max length to trim verbose fields
+            const dataCSV = this.formatAsCSV(results, columnMaxLength);
 
-        return [separator, headerRow, separator, ...dataRows, separator].join('\n');
+            // Build prompt parameters with data context
+            const promptParams = new AIPromptParams();
+            promptParams.prompt = prompt;
+            promptParams.data = {
+                data: dataCSV,
+                columns: columns,
+                rowCount: results.length,
+                analysisRequest: analysisRequest
+            };
+            promptParams.contextUser = params.ContextUser;
+
+            // Execute the prompt
+            const runner = new AIPromptRunner();
+            const result = await runner.ExecutePrompt<{ analysis: string }>(promptParams);
+
+            if (!result.success) {
+                return {
+                    success: false,
+                    error: result.errorMessage || "Prompt execution failed"
+                };
+            }
+
+            return {
+                success: true,
+                analysis: result.result?.analysis || String(result.result)
+            };
+
+        } catch (error) {
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : String(error)
+            };
+        }
+    }
+
+    /**
+     * Get prompt by name and category from AIEngine
+     */
+    private getPromptByNameAndCategory(name: string, category: string): AIPromptEntityExtended | undefined {
+        return AIEngine.Instance.Prompts.find(p =>
+            p.Name.trim().toLowerCase() === name.trim().toLowerCase() &&
+            p.Category?.trim().toLowerCase() === category?.trim().toLowerCase()
+        );
     }
 
     /**
@@ -393,7 +533,10 @@ export class ExecuteResearchQueryAction extends BaseAction {
         executionTimeMs: number,
         totalTimeMs: number,
         wasTruncated: boolean,
-        warnings: string[]
+        warnings: string[],
+        returnType: string,
+        formattedData?: string,
+        analysis?: string
     ): string {
         const lines: string[] = [];
 
@@ -428,14 +571,29 @@ export class ExecuteResearchQueryAction extends BaseAction {
             lines.push('');
         }
 
-        // Results Data
-        if (results.length > 0) {
-            lines.push(`## Data (${results.length} row${results.length !== 1 ? 's' : ''})\n`);
-            lines.push('```json');
-            lines.push(JSON.stringify(results, null, 2));
-            lines.push('```');
-        } else {
-            lines.push(`## Data\n*No rows returned*`);
+        // Analysis section (if applicable)
+        if (analysis && (returnType === 'analysis only' || returnType === 'data and analysis')) {
+            lines.push(`## Analysis\n`);
+            lines.push(analysis);
+            lines.push('');
+        }
+
+        // Results Data (if applicable)
+        if (returnType === 'data only' || returnType === 'data and analysis') {
+            if (results.length > 0) {
+                lines.push(`## Data (${results.length} row${results.length !== 1 ? 's' : ''})\n`);
+                if (formattedData) {
+                    lines.push('```');
+                    lines.push(formattedData);
+                    lines.push('```');
+                } else {
+                    lines.push('```json');
+                    lines.push(JSON.stringify(results, null, 2));
+                    lines.push('```');
+                }
+            } else {
+                lines.push(`## Data\n*No rows returned*`);
+            }
         }
 
         lines.push(`\n---`);

@@ -53,7 +53,7 @@ Your specialized actions include:
 Your payload will be of this type. Each time a sub-agent provides feedback, you keep track of it and add the results from the sub-agent's work into the overall state. When you call subsequent sub-agents, you pass along the full details of the type to them, and when you receive updates back, you populate the aggregate results and ultimately return the complete payload.
 
 ```typescript
-{@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/AgentManager/core/src/old/agent-definition.interface.ts}
 ```
 
 Focus on the `AgentManagerPayload` interface for the payload structure and the `AIAgentDefinition` interface for the recursive agent hierarchy structure.

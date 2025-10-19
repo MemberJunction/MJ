@@ -1,5 +1,5 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
-import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef } from '@angular/core';
+import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
 import { RunView } from '@memberjunction/core';
@@ -20,14 +20,29 @@ import { marked } from 'marked';
         <button class="btn-icon" title="Copy Content" (click)="onCopy()">
           <i class="fas fa-copy"></i> Copy
         </button>
+        @if (displayHtml) {
+          <button class="btn-icon" title="Open in New Window" (click)="openInNewWindow()">
+            <i class="fas fa-external-link-alt"></i> New Window
+          </button>
+          <button class="btn-icon" title="Print" (click)="printHtml()">
+            <i class="fas fa-print"></i> Print
+          </button>
+        }
       </div>
 
-      <!-- Display content: priority order = displayMarkdown > displayHtml > JSON editor -->
+      <!-- Display content: priority order = displayHtml > displayMarkdown > JSON editor -->
       <div class="display-content">
-        @if (displayMarkdown) {
+        @if (displayHtml && htmlBlobUrl) {
+          <!-- Sandboxed iframe for rich HTML using blob URL -->
+          <iframe
+            #htmlFrame
+            [src]="htmlBlobUrl"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals"
+            class="html-iframe"
+            (load)="onIframeLoad()">
+          </iframe>
+        } @else if (displayMarkdown) {
           <div class="markdown-content" [innerHTML]="renderedMarkdown"></div>
-        } @else if (displayHtml) {
-          <div class="html-content" [innerHTML]="displayHtml"></div>
         } @else {
           <div class="json-editor-container">
             <mj-code-editor
@@ -51,6 +66,7 @@ import { marked } from 'marked';
     .display-toolbar {
       display: flex;
       justify-content: flex-end;
+      gap: 8px;
       padding: 8px;
       background: #f8f9fa;
       border-bottom: 1px solid #dee2e6;
@@ -66,6 +82,7 @@ import { marked } from 'marked';
       display: flex;
       align-items: center;
       gap: 6px;
+      transition: all 0.2s;
     }
 
     .btn-icon:hover {
@@ -75,14 +92,20 @@ import { marked } from 'marked';
 
     .display-content {
       flex: 1;
+      overflow: auto;
+      min-height: 0;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
-      min-height: 0;
     }
 
-    .markdown-content,
-    .html-content {
+    .html-iframe {
+      width: 100%;
+      border: none;
+      background: white;
+      display: block;
+    }
+
+    .markdown-content {
       flex: 1;
       padding: 20px;
       overflow: auto;
@@ -98,18 +121,31 @@ import { marked } from 'marked';
   `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'JsonArtifactViewerPlugin')
-export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit {
+export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
+  @ViewChild('htmlFrame') htmlFrame?: ElementRef<HTMLIFrameElement>;
+
   public jsonContent = '';
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
+  public htmlBlobUrl: SafeResourceUrl | null = null;
   public renderedMarkdown: SafeHtml | null = null;
   private versionAttributes: ArtifactVersionAttributeEntity[] = [];
+  private unsafeBlobUrl: string | null = null; // Keep unsafe URL for cleanup
 
   constructor(
     private cdr: ChangeDetectorRef,
     private sanitizer: DomSanitizer
   ) {
     super();
+  }
+
+  ngOnDestroy(): void {
+    // Clean up blob URL to prevent memory leaks
+    if (this.unsafeBlobUrl) {
+      URL.revokeObjectURL(this.unsafeBlobUrl);
+      this.unsafeBlobUrl = null;
+      this.htmlBlobUrl = null;
+    }
   }
 
   async ngOnInit(): Promise<void> {
@@ -123,11 +159,11 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   /**
-   * Override to return true when showing extracted displayMarkdown or displayHtml.
+   * Override to return true when showing extracted displayHtml or displayMarkdown.
    * Returns false when showing raw JSON editor (no extract rules available).
    */
   public override get isShowingElevatedDisplay(): boolean {
-    return !!(this.displayMarkdown || this.displayHtml);
+    return !!(this.displayHtml || this.displayMarkdown);
   }
 
   /**
@@ -163,19 +199,33 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         console.log(`📦 JSON Plugin: Loaded ${this.versionAttributes.length} attributes for version ${this.artifactVersion.ID}`);
         console.log(`📦 Attributes:`, this.versionAttributes.map(a => ({ name: a.Name, hasValue: !!a.Value })));
 
-        // Check for displayMarkdown or displayHtml attributes (from extract rules)
-        const displayMarkdownAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displaymarkdown');
+        // Check for displayHtml and displayMarkdown attributes (from extract rules)
+        // Priority: displayHtml > displayMarkdown
         const displayHtmlAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displayhtml');
+        const displayMarkdownAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displaymarkdown');
 
-        console.log(`📦 displayMarkdownAttr:`, displayMarkdownAttr ? { name: displayMarkdownAttr.Name, valueLength: displayMarkdownAttr.Value?.length } : 'not found');
         console.log(`📦 displayHtmlAttr:`, displayHtmlAttr ? { name: displayHtmlAttr.Name, valueLength: displayHtmlAttr.Value?.length } : 'not found');
+        console.log(`📦 displayMarkdownAttr:`, displayMarkdownAttr ? { name: displayMarkdownAttr.Name, valueLength: displayMarkdownAttr.Value?.length } : 'not found');
 
-        // Parse attribute values
-        this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
+        // Parse attribute values - fix "null" string bug
         this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
+        this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
 
-        // Convert markdown to HTML if we have markdown content
-        if (this.displayMarkdown) {
+        // Clean up double-escaped characters in HTML (from LLM generation)
+        if (this.displayHtml) {
+          this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
+        }
+
+        // Create blob URL for HTML to avoid srcdoc sanitization issues
+        if (this.displayHtml) {
+          const blob = new Blob([this.displayHtml], { type: 'text/html' });
+          this.unsafeBlobUrl = URL.createObjectURL(blob);
+          // Sanitize the blob URL so Angular trusts it in the iframe
+          this.htmlBlobUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.unsafeBlobUrl);
+        }
+
+        // Convert markdown to HTML if we have markdown content (and no HTML)
+        if (this.displayMarkdown && !this.displayHtml) {
           try {
             const html = marked.parse(this.displayMarkdown) as string;
             this.renderedMarkdown = this.sanitizer.sanitize(1, html); // 1 = SecurityContext.HTML
@@ -186,7 +236,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           }
         }
 
-        console.log(`📦 JSON Plugin: displayMarkdown=${!!this.displayMarkdown} (${this.displayMarkdown?.length} chars), displayHtml=${!!this.displayHtml} (${this.displayHtml?.length} chars)`);
+        console.log(`📦 JSON Plugin: displayHtml=${!!this.displayHtml} (${this.displayHtml?.length || 0} chars), displayMarkdown=${!!this.displayMarkdown} (${this.displayMarkdown?.length || 0} chars)`);
         console.log(`📦 isShowingElevatedDisplay=${this.isShowingElevatedDisplay}`);
       } else {
         console.log(`📦 JSON Plugin: No attributes found or query failed. Success=${result.Success}, ResultsLength=${result.Results?.length}`);
@@ -199,22 +249,143 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   private parseAttributeValue(value: string | null | undefined): string | null {
     if (!value) return null;
 
+    // Fix bug: Some extractors return string "null" instead of actual null
+    if (value === 'null' || value.trim() === '') {
+      return null;
+    }
+
     try {
       // Try to parse as JSON first
       const parsed = JSON.parse(value);
       if (typeof parsed === 'string') {
+        // Check if parsed string is also "null"
+        if (parsed === 'null' || parsed.trim() === '') {
+          return null;
+        }
         return parsed;
       }
       return JSON.stringify(parsed, null, 2);
     } catch {
-      // If not valid JSON, return as-is
-      return value;
+      // If not valid JSON, return as-is (unless it's "null")
+      return value === 'null' ? null : value;
+    }
+  }
+
+  onIframeLoad(): void {
+    // Inject base styles if HTML doesn't have them
+    if (this.htmlFrame) {
+      const iframe = this.htmlFrame.nativeElement;
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+
+      if (iframeDoc) {
+        // Check if HTML already has styles
+        const hasStyles = iframeDoc.querySelector('style') || iframeDoc.querySelector('link[rel="stylesheet"]');
+
+        if (!hasStyles) {
+          // Inject minimal base styles for better defaults
+          const style = iframeDoc.createElement('style');
+          style.textContent = `
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+              line-height: 1.6;
+              color: #333;
+              margin: 20px;
+              padding: 0;
+            }
+            h1, h2, h3 { color: #2c3e50; margin-top: 1.5em; margin-bottom: 0.5em; }
+            h1 { font-size: 2em; border-bottom: 2px solid #3498db; padding-bottom: 0.3em; }
+            h2 { font-size: 1.5em; }
+            table { border-collapse: collapse; width: 100%; margin: 1em 0; }
+            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+            th { background-color: #f8f9fa; font-weight: 600; }
+            pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto; }
+            code { background: #f6f8fa; padding: 2px 6px; border-radius: 3px; font-family: monospace; }
+          `;
+          iframeDoc.head.appendChild(style);
+        }
+
+        // Inject width override to ensure content fills iframe
+        const widthOverride = iframeDoc.createElement('style');
+        widthOverride.textContent = `
+          body {
+            max-width: none !important;
+            width: 100% !important;
+            margin: 20px 10px 5px 20px !important; /* top right bottom left */
+            padding: 0 !important;
+            box-sizing: border-box !important;
+          }
+        `;
+        iframeDoc.head.appendChild(widthOverride);
+
+        console.log('📦 Iframe loaded, hasStyles:', !!hasStyles);
+
+        // Auto-resize iframe to fit content
+        this.resizeIframeToContent();
+      }
+    }
+  }
+
+  private resizeIframeToContent(): void {
+    if (this.htmlFrame) {
+      const iframe = this.htmlFrame.nativeElement;
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
+
+      if (iframeDoc && iframeDoc.body) {
+        // Get the actual content height
+        const contentHeight = Math.max(
+          iframeDoc.body.scrollHeight,
+          iframeDoc.body.offsetHeight,
+          iframeDoc.documentElement.scrollHeight,
+          iframeDoc.documentElement.offsetHeight
+        );
+
+        // Set iframe height to match content (with a bit of padding)
+        iframe.style.height = `${contentHeight + 20}px`;
+
+        // Get the iframe's actual width (excluding borders)
+        const iframeWidth = iframe.clientWidth;
+
+        // Force body to use full iframe width with consistent margins
+        if (iframeDoc.body) {
+          const marginSize = 20; // 20px margins on each side
+          const bodyWidth = iframeWidth - (marginSize * 2);
+
+          iframeDoc.body.style.width = `${bodyWidth}px`;
+          iframeDoc.body.style.maxWidth = 'none';
+          iframeDoc.body.style.margin = `${marginSize}px`;
+          iframeDoc.body.style.padding = '0';
+          iframeDoc.body.style.boxSizing = 'border-box';
+        }
+
+        console.log('📦 Iframe resized - Height:', contentHeight + 20, 'px, Width:', iframeWidth, 'px');
+      }
+    }
+  }
+
+  openInNewWindow(): void {
+    if (this.displayHtml) {
+      const newWindow = window.open('', '_blank');
+      if (newWindow) {
+        newWindow.document.write(this.displayHtml);
+        newWindow.document.close();
+      }
+    }
+  }
+
+  printHtml(): void {
+    if (this.htmlFrame) {
+      const iframe = this.htmlFrame.nativeElement;
+      const iframeWindow = iframe.contentWindow;
+      if (iframeWindow) {
+        iframeWindow.focus();
+        iframeWindow.print();
+      }
     }
   }
 
   onCopy(): void {
-    // Copy based on what's being displayed
-    const content = this.displayMarkdown || this.displayHtml || this.jsonContent;
+    // Copy based on what's being displayed - prioritize displayHtml
+    const content = this.displayHtml || this.displayMarkdown || this.jsonContent;
     if (content) {
       navigator.clipboard.writeText(content).then(() => {
         console.log('✅ Copied content to clipboard');
@@ -222,5 +393,26 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         console.error('Failed to copy to clipboard:', err);
       });
     }
+  }
+
+  /**
+   * Clean up double-escaped characters that appear in LLM-generated HTML
+   * Removes literal "\\n" and "\\t" which cause rendering issues
+   */
+  private cleanEscapedCharacters(html: string): string {
+    // Remove escaped newlines (\\n becomes nothing)
+    // HTML doesn't need whitespace for formatting, and these cause display issues
+    let cleaned = html.replace(/\\n/g, '');
+
+    // Remove escaped tabs
+    cleaned = cleaned.replace(/\\t/g, '');
+
+    // Remove double-escaped tabs
+    cleaned = cleaned.replace(/\\\\t/g, '');
+
+    // Remove double-escaped newlines
+    cleaned = cleaned.replace(/\\\\n/g, '');
+
+    return cleaned;
   }
 }

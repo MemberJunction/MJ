@@ -70,20 +70,76 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "ResultFormat",
-            "DefaultValue": "json",
+            "Name": "DataFormat",
+            "DefaultValue": "csv",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Format for results: 'json' (structured objects), 'csv' (comma-separated values), or 'table' (formatted text table). Default: json.",
+            "Description": "Format for data output: 'csv' (comma-separated values - more token efficient) or 'json' (structured objects). Default: csv. CSV format significantly reduces token usage by avoiding field repetition in every row.",
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "91E2B74B-4C2F-4C8C-99CE-A0467DB627AE"
+            "ID": "AC046C76-618A-44FC-845A-1F8169FE08A8"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:25.195Z",
-            "checksum": "c36a7d27ac8afcb4e8403b8ebcee31dabb4640795afa755220e9f3092329a959"
+            "lastModified": "2025-10-18T13:29:38.686Z",
+            "checksum": "efce69bafa5e24f3ec91c6361f3bd734ff60d289ae6b4fb85d3c98e696de0258"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AnalysisRequest",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Optional analysis instructions for the LLM to analyze the query results. When provided, the results will be analyzed according to these instructions. Example: 'Summarize the top 5 products by revenue' or 'Identify any anomalies in the data'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4BC6BD62-CF78-4021-B5F5-E1D976E6C0B0"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T13:29:38.703Z",
+            "checksum": "3d22a056e16959725eeb5a9422de49cc8dc0d4e1c13b987451d5110fcf9826b1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReturnType",
+            "DefaultValue": "data and analysis",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "What to return: 'data only' (just query results), 'analysis only' (just LLM analysis), or 'data and analysis' (both). Default: 'data and analysis' if AnalysisRequest is provided, otherwise 'data only'. This parameter is ignored if AnalysisRequest is not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "88597ED2-6A44-4E8A-B555-BEC2E2786B27"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T13:29:38.715Z",
+            "checksum": "44965263b3d07fcd452b5b5a8804cb4886ebf80c277a34d5a94693964d9d0fd7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ColumnMaxLength",
+            "DefaultValue": "50",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum length for column values in characters. Values longer than this will be trimmed with '...' suffix to save context. Use when querying tables with verbose text/JSON fields (e.g., PromptText, Description). Example: 50 = trim to 50 characters. Default: 50. Set to 0 if you want FULL column results. Applies to both CSV and JSON formats.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9BCB13D7-4D0C-44E0-8B38-5D5E0DE81782"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T15:28:47.497Z",
+            "checksum": "4f2a94505cc164dd99ba8a8e15355e523a977c0027a0415c3116f62f5067c962"
           }
         },
         {
@@ -192,6 +248,24 @@
           "sync": {
             "lastModified": "2025-10-15T23:02:25.302Z",
             "checksum": "fec6afc97c35f6b0991c5cde46776f0f538e4c402735b29e396ba832883fb560"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Analysis",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "LLM-generated analysis of the query results based on the AnalysisRequest parameter. Only present when AnalysisRequest is provided and ReturnType includes 'analysis'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9B1AAB3-74A4-44D0-99CB-2F3580F344DD"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T13:29:38.786Z",
+            "checksum": "5f161c0910ce868c61ae4555b524c139eab594328a1f12213631d33e1824ec2f"
           }
         }
       ],

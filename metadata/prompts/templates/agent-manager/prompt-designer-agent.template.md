@@ -123,7 +123,7 @@ Standard variables available:
 Your payload will be of this type. You will receive some of this information when you start your work. Your job is to return this information in the overall response, and to fill in the `prompts` section based on your analysis.
 
 ```typescript
-{@include ../../../../packages/AI/AgentManager/core/src/interfaces/agent-definition.interface.ts}
+{@include ../../../../packages/AI/AgentManager/core/src/old/agent-definition.interface.ts}
 ```
 
 ## Output Structure
