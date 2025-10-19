@@ -14,7 +14,7 @@
 import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -1707,6 +1707,40 @@ export class BaseAgent {
     }
 
     /**
+     * Determines if a prompt execution error is fatal and should stop agent execution.
+     * Fatal errors are those that won't be resolved by retrying, such as context length
+     * exceeded (when no larger model is available), authentication failures, or invalid
+     * request format.
+     *
+     * @param promptResult - The result from prompt execution
+     * @returns true if the error is fatal and agent should terminate, false otherwise
+     * @protected
+     */
+    protected isFatalPromptError(promptResult: AIPromptRunResult): boolean {
+        // If no error info, not fatal (might be transient)
+        if (!promptResult?.chatResult?.errorInfo) {
+            return false;
+        }
+
+        const errorInfo = promptResult.chatResult.errorInfo;
+
+        // Check severity first - if marked as Fatal by the error analyzer, respect that
+        if (errorInfo.severity === 'Fatal') {
+            return true;
+        }
+
+        // Fatal error types that should stop agent execution immediately
+        // These won't be resolved by retrying the same prompt
+        const fatalErrorTypes: AIErrorType[] = [
+            'ContextLengthExceeded',  // No model can handle this context size (after failover attempts)
+            'Authentication',          // API key is invalid or missing
+            'InvalidRequest'           // Request format or parameters are wrong
+        ];
+
+        return fatalErrorTypes.includes(errorInfo.errorType);
+    }
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -2746,17 +2780,39 @@ export class BaseAgent {
                 stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
                 // don't save here, we save when we call finalizeStepEntity()
             }
-                        
+
+            // Check if prompt execution failed
+            if (!promptResult.success) {
+                await this.finalizeStepEntity(stepEntity, false, promptResult.errorMessage);
+
+                // Check if this is a fatal error that shouldn't be retried
+                const isFatal = this.isFatalPromptError(promptResult);
+
+                this.logStatus(
+                    `❌ Prompt execution failed: ${promptResult.errorMessage} (fatal: ${isFatal})`,
+                    true,
+                    params
+                );
+
+                return {
+                    errorMessage: promptResult.errorMessage || 'Prompt execution failed',
+                    step: 'Failed' as const,
+                    terminate: isFatal, // Terminate for fatal errors, allow retry for transient errors
+                    previousPayload: payload,
+                    newPayload: payload
+                };
+            }
+
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
                 const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
-                return { 
+                return {
                     ...cancelledResult,
-                    terminate: true, 
+                    terminate: true,
                     step: 'Failed', // Cancelled is treated as failed
                     previousPayload: cancelledResult.payload,
-                    newPayload: cancelledResult.payload // No changes, just return the same payload   
+                    newPayload: cancelledResult.payload // No changes, just return the same payload
                 }
             }
 
