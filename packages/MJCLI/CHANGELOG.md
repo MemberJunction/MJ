@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/cli
 
+## 2.108.0
+
+### Patch Changes
+
+- 1fa712a: Add improved logging for individual record errors.
+- Updated dependencies [1fa712a]
+- Updated dependencies [8a53629]
+  - @memberjunction/metadata-sync@2.108.0
+  - @memberjunction/ai-cli@2.108.0
+  - @memberjunction/codegen-lib@2.108.0
+  - @memberjunction/sqlserver-dataprovider@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes

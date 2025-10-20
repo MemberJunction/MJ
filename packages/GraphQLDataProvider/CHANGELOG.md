@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/graphql-dataprovider
 
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [d205a6c]
+- Updated dependencies [656d86c]
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/actions-base@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes

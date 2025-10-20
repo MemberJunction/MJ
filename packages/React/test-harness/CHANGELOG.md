@@ -1,5 +1,13 @@
 # @memberjunction/react-test-harness
 
+## 2.108.0
+
+### Patch Changes
+
+- 748bd8b: Add Run query missing category path lint rule to require a CategoryPath in the RunQuery Params when QueryName is provided.
+  - @memberjunction/react-runtime@2.108.0
+  - @memberjunction/interactive-component-types@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes

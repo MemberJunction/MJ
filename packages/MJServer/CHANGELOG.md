@@ -1,5 +1,57 @@
 # Change Log - @memberjunction/server
 
+## 2.108.0
+
+### Minor Changes
+
+- a4d545b: migration
+- 656d86c: Migration
+
+### Patch Changes
+
+- Updated dependencies [5d51137]
+- Updated dependencies [687e2ae]
+- Updated dependencies [30ec87a]
+- Updated dependencies [d205a6c]
+- Updated dependencies [4a7e34c]
+- Updated dependencies [c8983c6]
+- Updated dependencies [656d86c]
+  - @memberjunction/core-actions@2.108.0
+  - @memberjunction/ai-agents@2.108.0
+  - @memberjunction/aiengine@2.108.0
+  - @memberjunction/ai-agent-manager-actions@2.108.0
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/scheduling-engine@2.108.0
+  - @memberjunction/ai-prompts@2.108.0
+  - @memberjunction/ai-vectors-pinecone@2.108.0
+  - @memberjunction/core-entities-server@2.108.0
+  - @memberjunction/queue@2.108.0
+  - @memberjunction/sqlserver-dataprovider@2.108.0
+  - @memberjunction/templates@2.108.0
+  - @memberjunction/graphql-dataprovider@2.108.0
+  - @memberjunction/actions-bizapps-lms@2.108.0
+  - @memberjunction/actions-bizapps-social@2.108.0
+  - @memberjunction/scheduling-actions@2.108.0
+  - @memberjunction/actions-apollo@2.108.0
+  - @memberjunction/actions-bizapps-accounting@2.108.0
+  - @memberjunction/actions-bizapps-crm@2.108.0
+  - @memberjunction/entity-communications-server@2.108.0
+  - @memberjunction/doc-utils@2.108.0
+  - @memberjunction/external-change-detection@2.108.0
+  - @memberjunction/data-context@2.108.0
+  - @memberjunction/storage@2.108.0
+  - @memberjunction/scheduling-engine-base@2.108.0
+  - @memberjunction/ai-provider-bundle@2.108.0
+  - @memberjunction/data-context-server@2.108.0
+  - @memberjunction/skip-types@2.108.0
+  - @memberjunction/component-registry-client-sdk@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+  - @memberjunction/scheduling-base-types@2.108.0
+
 ## 2.107.0
 
 ### Minor Changes

@@ -1,5 +1,14 @@
 # @memberjunction/ng-tasks
 
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [656d86c]
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/ai-engine-base@2.108.0
+  - @memberjunction/core@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes

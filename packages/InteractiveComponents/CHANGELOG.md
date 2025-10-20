@@ -1,5 +1,12 @@
 # @memberjunction/interactive-component-types
 
+## 2.108.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@2.108.0
+- @memberjunction/core@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes

@@ -1,5 +1,30 @@
 # @memberjunction/ng-conversations
 
+## 2.108.0
+
+### Minor Changes
+
+- a4d545b: migration
+
+### Patch Changes
+
+- 687e2ae: UI Fixes for Conversation Artifacts and Refactoring of the Agent Embedding System
+- Updated dependencies [d205a6c]
+- Updated dependencies [656d86c]
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/graphql-dataprovider@2.108.0
+  - @memberjunction/ai-engine-base@2.108.0
+  - @memberjunction/ng-artifacts@2.108.0
+  - @memberjunction/ng-base-types@2.108.0
+  - @memberjunction/ng-code-editor@2.108.0
+  - @memberjunction/ng-notifications@2.108.0
+  - @memberjunction/ng-tasks@2.108.0
+  - @memberjunction/ng-container-directives@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
 ## 2.107.0
 
 ### Minor Changes

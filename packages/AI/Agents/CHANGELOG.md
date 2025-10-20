@@ -1,5 +1,29 @@
 # @memberjunction/ai-agents
 
+## 2.108.0
+
+### Minor Changes
+
+- 5d51137: Major enhancement to the Sage conversation manager agent adding semantic agent search using local embeddings, scheduling job actions, improved prompts, agent permission checking, and user plan confirmation workflow.
+- d205a6c: migration
+- 656d86c: Migration
+
+### Patch Changes
+
+- 687e2ae: UI Fixes for Conversation Artifacts and Refactoring of the Agent Embedding System
+- Updated dependencies [687e2ae]
+- Updated dependencies [d205a6c]
+- Updated dependencies [656d86c]
+  - @memberjunction/aiengine@2.108.0
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/actions-base@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/ai-prompts@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes

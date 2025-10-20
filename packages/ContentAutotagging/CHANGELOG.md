@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [687e2ae]
+- Updated dependencies [656d86c]
+  - @memberjunction/aiengine@2.108.0
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/ai-provider-bundle@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes

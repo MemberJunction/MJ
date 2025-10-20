@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 2.108.0
+
+### Minor Changes
+
+- 56dc09f: Artifact Collection UI + Collection Permission Migration
+
 ## 2.107.0
 
 ## 2.106.0

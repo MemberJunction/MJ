@@ -1,5 +1,22 @@
 # @memberjunction/metadata-sync
 
+## 2.108.0
+
+### Minor Changes
+
+- 8a53629: Migration
+
+### Patch Changes
+
+- 1fa712a: Add improved logging for individual record errors.
+- Updated dependencies [656d86c]
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/core-entities-server@2.108.0
+  - @memberjunction/sqlserver-dataprovider@2.108.0
+  - @memberjunction/graphql-dataprovider@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
 ## 2.107.0
 
 ### Patch Changes
