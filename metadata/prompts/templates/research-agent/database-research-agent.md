@@ -60,7 +60,7 @@ You are a specialized Database Research Agent. Your job is to **find and extract
 The following entities exist in the system. Invoke the `Get Entity Details` action to learn more about entities that could be relevant to your work.
 
 {% for entity in ALL_ENTITIES %}
-## {{ entity.Name }}
+### {{ entity.Name }}
 {{ entity.Description }}
 {% endfor %}
 
