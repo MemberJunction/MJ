@@ -120,6 +120,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: AI Agent Data Sources" [Visible]="record.IsSaved"> 
+                        MJ: AI Agent Data Sources
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Data Sources','AgentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Data Sources')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Data Sources')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="AIAgent Notes" [Visible]="record.IsSaved"> 
                         AIAgent Notes
                     </mj-tab>

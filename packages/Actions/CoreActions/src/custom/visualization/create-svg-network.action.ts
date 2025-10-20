@@ -115,6 +115,18 @@ export class CreateSVGNetworkAction extends BaseAction {
             const showLegendParam = this.getParamValue(params, 'ShowLegend');
             const showLegend = showLegendParam ? this.ensureString(showLegendParam, 'ShowLegend').toLowerCase() === 'true' : false;
 
+            // Parse interactivity parameters
+            const enableTooltipsParam = this.getParamValue(params, 'EnableTooltips');
+            const enableTooltips = enableTooltipsParam ? this.ensureString(enableTooltipsParam, 'EnableTooltips').toLowerCase() === 'true' : false;
+            const enablePanZoomParam = this.getParamValue(params, 'EnablePanZoom');
+            const enablePanZoom = enablePanZoomParam ? this.ensureString(enablePanZoomParam, 'EnablePanZoom').toLowerCase() === 'true' : false;
+            const showZoomControlsParam = this.getParamValue(params, 'ShowZoomControls');
+            const showZoomControls = showZoomControlsParam ? this.ensureString(showZoomControlsParam, 'ShowZoomControls').toLowerCase() === 'true' : false;
+            const wrapWithContainerParam = this.getParamValue(params, 'WrapWithContainer');
+            const wrapWithContainer = wrapWithContainerParam ? this.ensureString(wrapWithContainerParam, 'WrapWithContainer').toLowerCase() === 'true' : false;
+            const maxContainerWidth = parseInt(this.ensureString(this.getParamValue(params, 'MaxContainerWidth') || '1200', 'MaxContainerWidth'));
+            const maxContainerHeight = parseInt(this.ensureString(this.getParamValue(params, 'MaxContainerHeight') || '800', 'MaxContainerHeight'));
+
             // Create branding configuration
             const branding: Branding = {
                 palette: { type: 'named', name: paletteName as any },
@@ -133,13 +145,13 @@ export class CreateSVGNetworkAction extends BaseAction {
 
             switch (networkType) {
                 case 'force':
-                    svg = await this.renderForceNetwork(params, viewBox, branding, title, seed, showLabels, showLegend, warnings);
+                    svg = await this.renderForceNetwork(params, viewBox, branding, title, seed, showLabels, showLegend, enableTooltips, enablePanZoom, showZoomControls, warnings);
                     break;
                 case 'tree':
-                    svg = await this.renderDecisionTree(params, viewBox, branding, title, showLabels);
+                    svg = await this.renderDecisionTree(params, viewBox, branding, title, showLabels, enableTooltips, enablePanZoom, showZoomControls);
                     break;
                 case 'radial':
-                    svg = await this.renderRadialNetwork(params, viewBox, branding, title, seed, showLabels, warnings);
+                    svg = await this.renderRadialNetwork(params, viewBox, branding, title, seed, showLabels, enableTooltips, enablePanZoom, showZoomControls, warnings);
                     break;
                 default:
                     return {
@@ -147,6 +159,11 @@ export class CreateSVGNetworkAction extends BaseAction {
                         Message: `Unsupported network type: ${networkType}`,
                         ResultCode: 'INVALID_NETWORK_TYPE',
                     };
+            }
+
+            // Apply scroll container wrapping if requested
+            if (wrapWithContainer) {
+                svg = SVGUtils.wrapWithScrollContainer(svg, maxContainerWidth, maxContainerHeight);
             }
 
             return {
@@ -178,6 +195,9 @@ export class CreateSVGNetworkAction extends BaseAction {
         seed: number,
         showLabels: boolean,
         showLegend: boolean,
+        enableTooltips: boolean,
+        enablePanZoom: boolean,
+        showZoomControls: boolean,
         warnings: string[]
     ): Promise<string> {
         // Parse nodes and edges
@@ -260,10 +280,15 @@ export class CreateSVGNetworkAction extends BaseAction {
         const groups = [...new Set(nodes.map((n) => n.group).filter((g): g is string => g != null))];
         const groupColorMap = new Map(groups.map((g, i) => [g, getColorForIndex(i, branding.palette)]));
 
+        // Wrap content in pan/zoom container if needed
+        const contentContainer = doc.createElementNS(ns, 'g');
+        contentContainer.setAttribute('id', enablePanZoom ? 'pan-zoom-container' : 'content-container');
+        svg.appendChild(contentContainer);
+
         // Render edges
         const edgesGroup = doc.createElementNS(ns, 'g');
         edgesGroup.setAttribute('id', 'edges');
-        svg.appendChild(edgesGroup);
+        contentContainer.appendChild(edgesGroup);
 
         for (const edge of edges as any[]) {
             const sourceSim = simNodes.find((n) => n.id === edge.source.id || n.id === edge.source);
@@ -291,11 +316,18 @@ export class CreateSVGNetworkAction extends BaseAction {
         // Render nodes
         const nodesGroup = doc.createElementNS(ns, 'g');
         nodesGroup.setAttribute('id', 'nodes');
-        svg.appendChild(nodesGroup);
+        contentContainer.appendChild(nodesGroup);
 
         for (const node of simNodes) {
             const g = doc.createElementNS(ns, 'g');
             g.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+            g.setAttribute('data-node-id', node.id);
+
+            // Add tooltip data if enabled
+            if (enableTooltips) {
+                const tooltipText = `${node.label || node.id}${node.group ? ' (' + node.group + ')' : ''}`;
+                g.setAttribute('data-tooltip', tooltipText);
+            }
 
             const radius = node.size || 10;
             const color = node.group ? groupColorMap.get(node.group) || palette.categorical[0] : palette.categorical[0];
@@ -305,6 +337,7 @@ export class CreateSVGNetworkAction extends BaseAction {
             circle.setAttribute('fill', color);
             circle.setAttribute('stroke', '#FFF');
             circle.setAttribute('stroke-width', '2');
+            circle.setAttribute('class', 'node-circle');
             g.appendChild(circle);
 
             if (showLabels && node.label) {
@@ -330,6 +363,18 @@ export class CreateSVGNetworkAction extends BaseAction {
             this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
         }
 
+        // Add interactivity features
+        if (enableTooltips) {
+            SVGUtils.addTooltipSupport(svg, doc);
+        }
+
+        if (enablePanZoom) {
+            const panZoomScript = doc.createElementNS(ns, 'script');
+            panZoomScript.setAttribute('type', 'text/javascript');
+            panZoomScript.textContent = SVGUtils.generatePanZoomScript('pan-zoom-container', 0.5, 3, showZoomControls).replace(/<script[^>]*>|<\/script>/gi, '');
+            svg.appendChild(panZoomScript);
+        }
+
         // Sanitize and return
         return SVGUtils.sanitizeSVG(svg.outerHTML);
     }
@@ -342,7 +387,10 @@ export class CreateSVGNetworkAction extends BaseAction {
         viewBox: ViewBox,
         branding: Branding,
         title: string,
-        showLabels: boolean
+        showLabels: boolean,
+        enableTooltips: boolean,
+        enablePanZoom: boolean,
+        showZoomControls: boolean
     ): Promise<string> {
         // Parse tree
         const nodesParam = this.getParamValue(params, 'Nodes');
@@ -496,6 +544,9 @@ export class CreateSVGNetworkAction extends BaseAction {
         title: string,
         seed: number,
         showLabels: boolean,
+        enableTooltips: boolean,
+        enablePanZoom: boolean,
+        showZoomControls: boolean,
         warnings: string[]
     ): Promise<string> {
         // Parse nodes and edges

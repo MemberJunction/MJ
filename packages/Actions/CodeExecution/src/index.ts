@@ -4,5 +4,6 @@
  */
 
 export * from './CodeExecutionService';
+export * from './WorkerPool';
 export * from './types';
 export * from './libraries';

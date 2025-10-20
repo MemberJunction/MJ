@@ -102,6 +102,16 @@ export interface InteractivityOptions {
     tooltips?: boolean;
     /** Enable expand/collapse for trees */
     expandCollapse?: boolean;
+    /** Enable pan and zoom */
+    panZoom?: boolean;
+    /** Minimum zoom scale (default: 0.5) */
+    panZoomMinScale?: number;
+    /** Maximum zoom scale (default: 3) */
+    panZoomMaxScale?: number;
+    /** Show zoom control buttons (default: false) */
+    panZoomShowControls?: boolean;
+    /** Highlight connected nodes on hover (network graphs) */
+    highlightConnected?: boolean;
 }
 
 /**
@@ -116,6 +126,12 @@ export interface ExportControls {
     idPrefix?: string;
     /** Seed for deterministic random layouts */
     seed?: number;
+    /** Wrap SVG in scrollable HTML container */
+    wrapWithContainer?: boolean;
+    /** Maximum container width (default: 1200) */
+    maxContainerWidth?: number;
+    /** Maximum container height (default: 800) */
+    maxContainerHeight?: number;
 }
 
 /**

@@ -41,6 +41,7 @@ import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import { AgentDataPreloader } from './AgentDataPreloader';
 import * as _ from 'lodash';
 
 /**
@@ -331,14 +332,95 @@ export class BaseAgent {
     }
 
     /**
-     * This overridable method is responsible for setting up any necessary one-time initalization of the 
+     * This overridable method is responsible for setting up any necessary one-time initalization of the
      * agent type. The base class sets up the AgentTypeInstance and also lets that agent type initialize
      * its state.
-     * @param params 
+     * @param params
      */
     protected async initializeAgentType(params: ExecuteAgentParams, config: AgentConfiguration) {
         this._agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
         this._agentTypeState = await this._agentTypeInstance.InitializeAgentTypeState(params);
+    }
+
+    /**
+     * Preloads data sources configured for the agent.
+     *
+     * This method loads data from RunView or RunQuery sources as configured in
+     * AIAgentDataSource metadata and merges it with caller-provided data, context, and payload.
+     * Data sources can target three destinations:
+     * - Data: For Nunjucks templates in prompts (visible to LLMs)
+     * - Context: For actions only (NOT visible to LLMs)
+     * - Payload: For agent state initialization
+     *
+     * Caller-provided values always take precedence over preloaded values.
+     *
+     * @param params - The execution parameters
+     * @private
+     */
+    private async preloadAgentData(params: ExecuteAgentParams): Promise<void> {
+        // Skip if disabled
+        if (params.disableDataPreloading === true) {
+            this.logStatus(`⏭️  Data preloading disabled for agent '${params.agent.Name}'`, true, params);
+            return;
+        }
+
+        try {
+            // Load preloaded data using the singleton service
+            const preloadedResult = await AgentDataPreloader.Instance.PreloadAgentData(
+                params.agent.ID,
+                params.contextUser,
+                this._agentRun?.ID
+            );
+
+            const totalSources =
+                Object.keys(preloadedResult.data).length +
+                Object.keys(preloadedResult.context).length +
+                Object.keys(preloadedResult.payload).length;
+
+            if (totalSources > 0) {
+                const destinations: string[] = [];
+                if (Object.keys(preloadedResult.data).length > 0) {
+                    destinations.push(`data(${Object.keys(preloadedResult.data).length})`);
+                }
+                if (Object.keys(preloadedResult.context).length > 0) {
+                    destinations.push(`context(${Object.keys(preloadedResult.context).length})`);
+                }
+                if (Object.keys(preloadedResult.payload).length > 0) {
+                    destinations.push(`payload(${Object.keys(preloadedResult.payload).length})`);
+                }
+
+                this.logStatus(
+                    `📊 Preloaded ${totalSources} data source(s) for agent '${params.agent.Name}': ${destinations.join(', ')}`,
+                    true,
+                    params
+                );
+
+                // Merge with existing data/context/payload (caller values take precedence)
+                params.data = {
+                    ...preloadedResult.data,
+                    ...params.data
+                };
+
+                params.context = {
+                    ...preloadedResult.context,
+                    ...params.context
+                };
+
+                params.payload = {
+                    ...preloadedResult.payload,
+                    ...params.payload
+                };
+            } else {
+                this.logStatus(`📭 No data sources configured for agent '${params.agent.Name}'`, true, params);
+            }
+        } catch (error) {
+            // Log error but don't fail the agent run
+            this.logError(`Failed to preload data for agent '${params.agent.Name}': ${error.message}`, {
+                agent: params.agent,
+                category: 'DataPreloading',
+                severity: 'warning'
+            });
+        }
     }
 
     /**
@@ -453,6 +535,9 @@ export class BaseAgent {
                 });
                 return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
             }
+
+            // Preload agent data sources unless disabled
+            await this.preloadAgentData(wrappedParams);
 
             // now initialize the agent type which gets us the instance setup in our class plus also gets the agent type to initialize
             // its state

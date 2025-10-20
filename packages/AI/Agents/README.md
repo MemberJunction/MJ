@@ -268,6 +268,302 @@ The callback is invoked:
 
 ## Advanced Features
 
+### Agent Data Preloading
+
+Agents can declaratively preload reference data without requiring custom application code or action calls. Data sources are configured through the `AIAgentDataSource` entity and automatically loaded before agent execution.
+
+#### Overview
+
+Data preloading solves the common problem of agents needing access to reference data (like entity lists, configuration values, or initial state) that doesn't change during execution. Instead of:
+- Writing custom application code to load data
+- Having agents call actions to fetch data (which bloats conversation context)
+- Manually passing the same data to every agent invocation
+
+Agents can now specify data sources that are automatically loaded and injected into the appropriate destination (`data`, `context`, or `payload`).
+
+#### Three Destination Types
+
+**1. Data Destination** - For Nunjucks templates in prompts (visible to LLMs)
+```typescript
+// Configuration
+{
+  "Name": "ALL_ENTITIES",
+  "SourceType": "RunView",
+  "EntityName": "Entities",
+  "OrderBy": "Name ASC",
+  "DestinationType": "Data",
+  "DestinationPath": null  // Uses "ALL_ENTITIES" at root level
+}
+
+// Result in agent prompt:
+// params.data.ALL_ENTITIES = [{ Name: "Users", ... }, { Name: "Entities", ... }]
+
+// Prompt can use Nunjucks:
+// You have access to {{ALL_ENTITIES.length}} entities:
+// {% for entity in ALL_ENTITIES %}
+// - {{entity.Name}}: {{entity.Description}}
+// {% endfor %}
+```
+
+**2. Context Destination** - For actions only (NOT visible to LLMs)
+```typescript
+// Configuration
+{
+  "Name": "ORG_SETTINGS",
+  "SourceType": "RunView",
+  "EntityName": "Organization Settings",
+  "ExtraFilter": "OrgID='${context.organizationId}'",
+  "DestinationType": "Context",
+  "DestinationPath": "organization.settings"
+}
+
+// Result:
+// params.context.organization.settings = { apiEndpoint: "...", features: [...] }
+
+// Actions can access context, but prompts/LLMs cannot
+// This keeps API keys and sensitive configuration away from LLMs
+```
+
+**3. Payload Destination** - For agent state initialization
+```typescript
+// Configuration
+{
+  "Name": "CustomerOrders",
+  "SourceType": "RunQuery",
+  "QueryName": "Recent Orders by Customer",
+  "Parameters": JSON.stringify({ customerId: "{{context.customerId}}" }),
+  "DestinationType": "Payload",
+  "DestinationPath": "analysis.orders.recent"
+}
+
+// Result:
+// params.payload.analysis.orders.recent = [{ OrderID: "123", ... }]
+
+// Agent starts with rich initial state without caller manually loading it
+```
+
+#### Data Source Types
+
+**RunView Data Sources** - Query entities with filters
+```typescript
+{
+  "Name": "ACTIVE_MODELS",
+  "SourceType": "RunView",
+  "EntityName": "AI Models",
+  "ExtraFilter": "IsActive=1 AND Vendor='OpenAI'",
+  "OrderBy": "Priority DESC",
+  "FieldsToRetrieve": JSON.stringify(["ID", "Name", "Vendor", "MaxInputTokens"]),
+  "ResultType": "simple",  // or "entity_object"
+  "MaxRows": 100,
+  "DestinationType": "Data"
+}
+```
+
+**RunQuery Data Sources** - Execute stored queries
+```typescript
+{
+  "Name": "MONTHLY_STATS",
+  "SourceType": "RunQuery",
+  "QueryName": "Monthly Analytics",
+  "CategoryPath": "/Reports/Analytics",
+  "Parameters": JSON.stringify({
+    month: "{{context.currentMonth}}",
+    year: "{{context.currentYear}}"
+  }),
+  "DestinationType": "Payload",
+  "DestinationPath": "stats.monthly"
+}
+```
+
+#### Path Support
+
+The `DestinationPath` field supports nested paths using dot notation:
+
+```typescript
+// Simple root-level
+{
+  "Name": "ENTITIES",
+  "DestinationPath": null  // Uses "ENTITIES" at root
+}
+// Result: data.ENTITIES
+
+// Nested paths
+{
+  "Name": "ModelList",
+  "DestinationPath": "config.ai.models"
+}
+// Result: data.config.ai.models
+
+// Deep nesting
+{
+  "Name": "CustomerData",
+  "DestinationPath": "analysis.customer.profile.orders"
+}
+// Result: payload.analysis.customer.profile.orders
+```
+
+#### Caching Policies
+
+Data sources support three caching strategies:
+
+**1. None** - No caching (default)
+```typescript
+{
+  "CachePolicy": "None"
+  // Data is loaded fresh every time
+}
+```
+
+**2. PerRun** - Cache for duration of a single agent run
+```typescript
+{
+  "CachePolicy": "PerRun"
+  // Multiple data sources with same AgentID+Name share cached data within one run
+  // Cache is cleared when agent run completes
+}
+```
+
+**3. PerAgent** - Global cache with TTL
+```typescript
+{
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 3600  // 1 hour
+  // Cached across all runs for this agent until TTL expires
+  // Good for rarely-changing reference data like entity lists
+}
+```
+
+#### Execution Control
+
+**Disable data preloading** for specific executions:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    disableDataPreloading: true  // Skip automatic data preloading
+});
+```
+
+**Caller precedence**: Caller-provided data always takes precedence over preloaded data:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    data: {
+        CUSTOM_ENTITIES: myEntities  // Overrides preloaded CUSTOM_ENTITIES
+    }
+});
+```
+
+#### Configuration Examples
+
+**Database Research Agent** - Preload entity metadata
+```typescript
+// Data source 1: All entities for reference
+{
+  "AgentID": "database-research-agent-id",
+  "Name": "ALL_ENTITIES",
+  "SourceType": "RunView",
+  "EntityName": "Entities",
+  "OrderBy": "Name ASC",
+  "FieldsToRetrieve": JSON.stringify(["ID", "Name", "SchemaName", "Description", "BaseView"]),
+  "DestinationType": "Data",
+  "ExecutionOrder": 1,
+  "Status": "Active",
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 3600
+}
+
+// Data source 2: Schema information
+{
+  "AgentID": "database-research-agent-id",
+  "Name": "SCHEMA_INFO",
+  "SourceType": "RunView",
+  "EntityName": "Entity Fields",
+  "DestinationType": "Data",
+  "DestinationPath": "schema.fields",
+  "ExecutionOrder": 2,
+  "Status": "Active",
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 3600
+}
+```
+
+**Customer Service Agent** - Preload customer context
+```typescript
+// Preload customer data into payload
+{
+  "AgentID": "customer-service-agent-id",
+  "Name": "CUSTOMER_PROFILE",
+  "SourceType": "RunView",
+  "EntityName": "Customers",
+  "ExtraFilter": "ID='{{context.customerId}}'",
+  "DestinationType": "Payload",
+  "DestinationPath": "customer.profile",
+  "Status": "Active",
+  "CachePolicy": "PerRun"
+}
+
+// Preload recent orders
+{
+  "AgentID": "customer-service-agent-id",
+  "Name": "RECENT_ORDERS",
+  "SourceType": "RunQuery",
+  "QueryName": "Recent Orders by Customer",
+  "Parameters": JSON.stringify({ customerId: "{{context.customerId}}", days: 30 }),
+  "DestinationType": "Payload",
+  "DestinationPath": "customer.orders",
+  "Status": "Active",
+  "CachePolicy": "PerRun"
+}
+
+// Preload organization settings (for actions)
+{
+  "AgentID": "customer-service-agent-id",
+  "Name": "ORG_CONFIG",
+  "SourceType": "RunView",
+  "EntityName": "Organization Settings",
+  "ExtraFilter": "OrgID='{{context.organizationId}}'",
+  "DestinationType": "Context",
+  "DestinationPath": "organization.config",
+  "Status": "Active",
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 1800
+}
+```
+
+#### Benefits
+
+- **Declarative**: Configure data preloading through metadata, not code
+- **Reusable**: Same agent works across different environments
+- **Efficient**: Caching reduces redundant database queries
+- **Clean Separation**: Keeps data in appropriate destinations (data/context/payload)
+- **Flexible**: Supports both RunView and RunQuery with full parameter control
+- **Secure**: Context destination keeps sensitive data away from LLMs
+- **Performance**: Multiple caching strategies for different use cases
+
+#### Database Schema
+
+The `AIAgentDataSource` table includes:
+- **AgentID**: The agent using this data source
+- **Name**: Variable name (used as fallback if DestinationPath is null)
+- **SourceType**: RunView or RunQuery
+- **EntityName**, **ExtraFilter**, **OrderBy**, **FieldsToRetrieve**, **ResultType**: RunView parameters
+- **QueryName**, **CategoryPath**, **Parameters**: RunQuery parameters
+- **MaxRows**: Limit results (applies to both source types)
+- **DestinationType**: Data, Context, or Payload
+- **DestinationPath**: Nested path using dot notation (optional)
+- **ExecutionOrder**: Order to execute when multiple sources exist
+- **Status**: Active or Disabled
+- **CachePolicy**: None, PerRun, or PerAgent
+- **CacheTimeoutSeconds**: TTL for PerAgent cache
+
+**Unique Constraint**: `AgentID + Name + DestinationType + DestinationPath`
+- Allows same Name across different destinations/paths
+- Example: "ENTITIES" can exist in both Data and Payload destinations
+
 ### Payload Scoping for Sub-Agents
 
 The framework now supports narrowing the payload that sub-agents work with through the `PayloadScope` field:

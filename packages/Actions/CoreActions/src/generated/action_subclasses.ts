@@ -25,40 +25,12 @@ export class Execute_Scheduled_Job_Now_Action extends BaseAction {
             
             
 /**
- * Get Scheduled Job Statistics
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Get Scheduled Job Statistics")
-export class Get_Scheduled_Job_Statistics_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
  * Update Scheduled Job
  * Generated Class
  * User Prompt: null
  */
 @RegisterClass(BaseAction, "Update Scheduled Job")
 export class Update_Scheduled_Job_Action extends BaseAction {
-    
-    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        throw new Error("Action not yet implemented")
-    }
-}        
-            
-            
-/**
- * Delete Scheduled Job
- * Generated Class
- * User Prompt: null
- */
-@RegisterClass(BaseAction, "Delete Scheduled Job")
-export class Delete_Scheduled_Job_Action extends BaseAction {
     
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         throw new Error("Action not yet implemented")
@@ -87,6 +59,34 @@ export class Query_Scheduled_Jobs_Action extends BaseAction {
  */
 @RegisterClass(BaseAction, "Create Scheduled Job")
 export class Create_Scheduled_Job_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Delete Scheduled Job
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Delete Scheduled Job")
+export class Delete_Scheduled_Job_Action extends BaseAction {
+    
+    protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        throw new Error("Action not yet implemented")
+    }
+}        
+            
+            
+/**
+ * Get Scheduled Job Statistics
+ * Generated Class
+ * User Prompt: null
+ */
+@RegisterClass(BaseAction, "Get Scheduled Job Statistics")
+export class Get_Scheduled_Job_Statistics_Action extends BaseAction {
     
     protected override async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         throw new Error("Action not yet implemented")

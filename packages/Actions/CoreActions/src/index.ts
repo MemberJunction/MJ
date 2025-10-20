@@ -92,6 +92,7 @@ export * from './custom/visualization/create-svg-diagram.action';
 export * from './custom/visualization/create-svg-word-cloud.action';
 export * from './custom/visualization/create-svg-network.action';
 export * from './custom/visualization/create-svg-infographic.action';
+export * from './custom/visualization/create-svg-sketch-diagram.action';
 export * from './custom/visualization/shared/svg-types';
 export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';
@@ -174,6 +175,7 @@ import { LoadCreateSVGDiagramAction } from './custom/visualization/create-svg-di
 import { LoadCreateSVGWordCloudAction } from './custom/visualization/create-svg-word-cloud.action';
 import { LoadCreateSVGNetworkAction } from './custom/visualization/create-svg-network.action';
 import { LoadCreateSVGInfographicAction } from './custom/visualization/create-svg-infographic.action';
+import { LoadCreateSVGSketchDiagramAction } from './custom/visualization/create-svg-sketch-diagram.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -258,6 +260,7 @@ export function LoadAllCoreActions() {
     LoadCreateSVGWordCloudAction();
     LoadCreateSVGNetworkAction();
     LoadCreateSVGInfographicAction();
+    LoadCreateSVGSketchDiagramAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

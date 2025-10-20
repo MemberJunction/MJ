@@ -172,120 +172,187 @@ export class CreateSVGWordCloudAction extends BaseAction {
         seed: number,
         warnings: string[]
     ): Promise<string> {
-        // Parse cloud-specific parameters
-        const rotation = this.getParamValue(params, 'Rotation') || 'few';
-        const minFont = parseInt(this.getParamValue(params, 'MinFont') || '10');
-        const maxFont = parseInt(this.getParamValue(params, 'MaxFont') || '80');
+        try {
+            // Parse cloud-specific parameters
+            const rotation = this.getParamValue(params, 'Rotation') || 'few';
+            const minFont = parseInt(this.getParamValue(params, 'MinFont') || '10');
+            const maxFont = parseInt(this.getParamValue(params, 'MaxFont') || '80');
 
-        // Calculate viewBox
-        const vb = SVGUtils.calculateViewBox(viewBox);
+            // Calculate viewBox
+            const vb = SVGUtils.calculateViewBox(viewBox);
 
-        // Create seeded random generator
-        const random = SVGUtils.seededRandom(seed);
+            // Create seeded random generator
+            const random = SVGUtils.seededRandom(seed);
 
-        // Calculate font sizes using log scale
-        const minWeight = Math.min(...words.map((w) => w.weight));
-        const maxWeight = Math.max(...words.map((w) => w.weight));
-        const logMin = Math.log(minWeight || 1);
-        const logMax = Math.log(maxWeight || 1);
+            // Calculate font sizes using log scale
+            const minWeight = Math.min(...words.map((w) => w.weight));
+            const maxWeight = Math.max(...words.map((w) => w.weight));
+            const logMin = Math.log(minWeight || 1);
+            const logMax = Math.log(maxWeight || 1);
 
-        const wordsWithSize = words.map((w) => {
-            const logWeight = Math.log(w.weight || 1);
-            const normalizedSize = logMax > logMin ? (logWeight - logMin) / (logMax - logMin) : 0.5;
-            const fontSize = minFont + normalizedSize * (maxFont - minFont);
+            const wordsWithSize = words.map((w) => {
+                const logWeight = Math.log(w.weight || 1);
+                const normalizedSize = logMax > logMin ? (logWeight - logMin) / (logMax - logMin) : 0.5;
+                const fontSize = minFont + normalizedSize * (maxFont - minFont);
 
-            return {
-                text: w.text,
-                size: fontSize,
-                weight: w.weight,
+                return {
+                    text: w.text,
+                    size: fontSize,
+                    weight: w.weight,
+                };
+            });
+
+            // Determine rotation angles based on strategy
+            const getRotation = (): number => {
+                switch (rotation) {
+                    case 'none':
+                        return 0;
+                    case 'few':
+                        return random() < 0.5 ? 0 : -90;
+                    case 'mixed':
+                        return Math.floor(random() * 4) * 45 - 90;
+                    default:
+                        return 0;
+                }
             };
-        });
 
-        // Determine rotation angles based on strategy
-        const getRotation = (): number => {
-            switch (rotation) {
-                case 'none':
-                    return 0;
-                case 'few':
-                    return random() < 0.5 ? 0 : -90;
-                case 'mixed':
-                    return Math.floor(random() * 4) * 45 - 90;
-                default:
-                    return 0;
-            }
-        };
+            // Create d3-cloud layout
+            return new Promise<string>((resolve, reject) => {
+                try {
+                    const layout = (d3Cloud as any)()
+                        .size([vb.contentWidth, vb.contentHeight])
+                        .words(wordsWithSize)
+                        .padding(5)
+                        .rotate(getRotation)
+                        .font(getFontSpec(branding.font).family)
+                        .fontSize((d) => d.size)
+                        .random(random)
+                        .spiral('archimedean')
+                        .on('end', (layoutWords) => {
+                            try {
+                                // Check if any words didn't fit
+                                const fittedWords = layoutWords.filter((w) => w.x != null && w.y != null);
+                                if (fittedWords.length < wordsWithSize.length) {
+                                    warnings.push(`${wordsWithSize.length - fittedWords.length} words did not fit in the layout`);
+                                }
 
-        // Create d3-cloud layout
-        return new Promise<string>((resolve, reject) => {
-            const layout = (d3Cloud as any)()
-                .size([vb.contentWidth, vb.contentHeight])
-                .words(wordsWithSize)
-                .padding(5)
-                .rotate(getRotation)
-                .font(getFontSpec(branding.font).family)
-                .fontSize((d) => d.size)
-                .random(random)
-                .spiral('archimedean')
-                .on('end', (layoutWords) => {
-                    try {
-                        // Check if any words didn't fit
-                        const fittedWords = layoutWords.filter((w) => w.x != null && w.y != null);
-                        if (fittedWords.length < wordsWithSize.length) {
-                            warnings.push(`${wordsWithSize.length - fittedWords.length} words did not fit in the layout`);
-                        }
+                                // Create SVG - STEP 1
+                                let doc;
+                                try {
+                                    doc = SVGUtils.createSVG(viewBox.width, viewBox.height, 'wordcloud');
+                                } catch (error) {
+                                    throw new Error(`[STEP 1: createSVG] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                }
 
-                        // Create SVG
-                        const doc = SVGUtils.createSVG(viewBox.width, viewBox.height, 'wordcloud');
-                        const svg = doc.querySelector('svg')!;
+                                // Get SVG element - STEP 2
+                                let svg;
+                                try {
+                                    svg = doc.querySelector('svg')!;
+                                    if (!svg) {
+                                        throw new Error('SVG element not found in document');
+                                    }
+                                } catch (error) {
+                                    throw new Error(`[STEP 2: querySelector] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                }
 
-                        // Add accessibility
-                        if (title) {
-                            SVGUtils.addA11y(svg, {
-                                title,
-                                ariaRole: 'img',
-                            });
-                        }
+                                // Add accessibility - STEP 3
+                                if (title) {
+                                    try {
+                                        SVGUtils.addA11y(svg, {
+                                            title,
+                                            ariaRole: 'img',
+                                        });
+                                    } catch (error) {
+                                        throw new Error(`[STEP 3: addA11y] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                    }
+                                }
 
-                        // Add styles
-                        const css = generateCSS(branding);
-                        SVGUtils.addStyles(svg, css);
+                                // Add styles - STEP 4
+                                try {
+                                    const css = generateCSS(branding);
+                                    SVGUtils.addStyles(svg, css);
+                                } catch (error) {
+                                    throw new Error(`[STEP 4: addStyles] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                }
 
-                        // Get palette
-                        const palette = getPalette(branding.palette);
+                                // Get palette - STEP 5
+                                let palette;
+                                try {
+                                    palette = getPalette(branding.palette);
+                                } catch (error) {
+                                    throw new Error(`[STEP 5: getPalette] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                }
 
-                        // Create container group
-                        const ns = svg.namespaceURI!;
-                        const container = doc.createElementNS(ns, 'g');
-                        container.setAttribute('transform', `translate(${vb.x + vb.contentWidth / 2}, ${vb.y + vb.contentHeight / 2})`);
-                        svg.appendChild(container);
+                                // Create container group - STEP 6
+                                try {
+                                    const ns = svg.namespaceURI!;
+                                    if (!ns) {
+                                        throw new Error('SVG namespaceURI is null');
+                                    }
+                                    const container = doc.createElementNS(ns, 'g');
+                                    container.setAttribute('transform', `translate(${vb.x + vb.contentWidth / 2}, ${vb.y + vb.contentHeight / 2})`);
+                                    svg.appendChild(container);
 
-                        // Render words
-                        fittedWords.forEach((word, i) => {
-                            const text = doc.createElementNS(ns, 'text');
-                            text.setAttribute('transform', `translate(${word.x || 0}, ${word.y || 0}) rotate(${word.rotate || 0})`);
-                            text.setAttribute('font-family', getFontSpec(branding.font).family);
-                            text.setAttribute('font-size', String(word.size));
-                            text.setAttribute('text-anchor', 'middle');
-                            text.setAttribute('fill', getColorForIndex(i, branding.palette));
-                            text.textContent = word.text;
+                                    // Render words - STEP 7
+                                    fittedWords.forEach((word, i) => {
+                                        try {
+                                            const text = doc.createElementNS(ns, 'text');
+                                            text.setAttribute('transform', `translate(${word.x || 0}, ${word.y || 0}) rotate(${word.rotate || 0})`);
+                                            text.setAttribute('font-family', getFontSpec(branding.font).family);
+                                            text.setAttribute('font-size', String(word.size));
+                                            text.setAttribute('text-anchor', 'middle');
+                                            text.setAttribute('font-weight', String(word.size > 40 ? 'bold' : 'normal'));
 
-                            container.appendChild(text);
+                                            // Get color from palette
+                                            const color = getColorForIndex(i, branding.palette);
+                                            text.setAttribute('fill', color);
+
+                                            // Add subtle stroke for better visibility
+                                            if (word.size > 30) {
+                                                text.setAttribute('stroke', palette.background);
+                                                text.setAttribute('stroke-width', '0.5');
+                                                text.setAttribute('paint-order', 'stroke fill');
+                                            }
+
+                                            text.textContent = word.text;
+                                            container.appendChild(text);
+                                        } catch (error) {
+                                            throw new Error(`[STEP 7: render word ${i} "${word.text}"] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                        }
+                                    });
+                                } catch (error) {
+                                    throw new Error(`[STEP 6: create container] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                }
+
+                                // Add title if present - STEP 8
+                                if (title) {
+                                    try {
+                                        this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
+                                    } catch (error) {
+                                        throw new Error(`[STEP 8: addTitle] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                    }
+                                }
+
+                                // Sanitize and resolve - STEP 9
+                                try {
+                                    const result = SVGUtils.sanitizeSVG(svg.outerHTML);
+                                    resolve(result);
+                                } catch (error) {
+                                    throw new Error(`[STEP 9: sanitizeSVG] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+                                }
+                            } catch (error) {
+                                reject(error);
+                            }
                         });
 
-                        // Add title if present
-                        if (title) {
-                            this.addTitle(doc, svg, title, vb.width, getFontSpec(branding.font));
-                        }
-
-                        // Sanitize and resolve
-                        resolve(SVGUtils.sanitizeSVG(svg.outerHTML));
-                    } catch (error) {
-                        reject(error);
-                    }
-                });
-
-            layout.start();
-        });
+                    layout.start();
+                } catch (error) {
+                    reject(new Error(`[d3-cloud layout setup] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`));
+                }
+            });
+        } catch (error) {
+            throw new Error(`[renderWordCloud outer] ${error instanceof Error ? error.message : String(error)}\nStack: ${error instanceof Error ? error.stack : 'N/A'}`);
+        }
     }
 
     /**
