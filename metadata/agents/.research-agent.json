@@ -296,6 +296,64 @@
                 }
               }
             ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Chart",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4F3EA387-6CCC-4364-BB0C-C8ACAF1C5343"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.447Z",
+                  "checksum": "b29c665b6e6389ba72c6c555cd6dd2be21273d586f50e12644a4df76e7a76648"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F5D1AF9E-09DA-4DD1-82CB-175120DD7498"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.461Z",
+                  "checksum": "dc864a22279dadcb4f627c6057446370e03779a14540d02262450ed5301aab66"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Network",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A6A64D5E-1061-4845-B539-9CC5355B5227"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.474Z",
+                  "checksum": "b9895c351ca1b6f190441acff08df924cf5c716ca3f5a23dec3116543e83d012"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Word Cloud",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B6A57192-803F-46B4-9A91-ABBE99ABA551"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.485Z",
+                  "checksum": "b98d16398b0f08d0244872e2b3ecd5a55625b9cf702602a2a7cb744bdbce22b1"
+                }
+              }
+            ],
             "MJ: AI Agent Relationships": [
               {
                 "fields": {

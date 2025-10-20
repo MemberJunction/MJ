@@ -309,12 +309,37 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
 
   private previousConversationId: string | null = null;
   private destroy$ = new Subject<void>();
-  private pollingInterval: any = null;
+  private _pollingIntervalObject: any = null;
+  private _enablePolling: boolean = false;
+  private _pollingInterval: number = 30000; // default to 30 seconds
 
   constructor(
     private conversationState: ConversationStateService,
     private activeTasksService: ActiveTasksService
   ) {}
+
+  public get enablePolling(): boolean {
+    return this._enablePolling;
+  }
+  public set enablePolling(value: boolean) {
+    this._enablePolling = value;
+    if (value) {
+      this.startPolling();
+    } else {
+      this.stopPolling();
+    }
+  }
+
+  public get pollingInterval(): number {
+    return this._pollingInterval;
+  }
+  public set pollingInterval(value: number) {
+    this._pollingInterval = value;
+    if (this.enablePolling) {
+      this.stopPolling();
+      this.startPolling();
+    }
+  }
 
   ngOnInit() {
     // Subscribe to active tasks from the service
@@ -331,11 +356,18 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
     }
 
     // Poll for task updates every 3 seconds when conversation is active
-    this.startPolling();
+    if (this.enablePolling) {
+      this.startPolling();
+    }
   }
 
   private startPolling(): void {
-    this.pollingInterval = setInterval(() => {
+    // if we already have a polling interval, do nothing
+    if (this._pollingIntervalObject) {
+      return;
+    }
+
+    this._pollingIntervalObject = setInterval(() => {
       if (this.conversationState.activeConversationId) {
         this.loadDatabaseTasks();
       }
@@ -343,9 +375,9 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
   }
 
   private stopPolling(): void {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
+    if (this._pollingIntervalObject) {
+      clearInterval(this._pollingIntervalObject);
+      this._pollingIntervalObject = null;
     }
   }
 
