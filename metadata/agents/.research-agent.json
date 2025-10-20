@@ -28,21 +28,27 @@
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Data Sources": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Entity List",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "A0438D04-00C5-4E62-9B65-C25AFA42EA1A"
-          },
-          "sync": {
-            "lastModified": "2025-10-16T22:41:51.034Z",
-            "checksum": "2bafc38f01aae6b9daadf13cb25ea478260803a41872efcb6db8a5f62bcf81af"
+            "Name": "ALL_ENTITIES",
+            "Description": "Complete list of all entities in the system for schema exploration and research",
+            "SourceType": "RunView",
+            "EntityName": "Entities",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 1,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
           }
-        },
+        }
+      ],
+      "AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
