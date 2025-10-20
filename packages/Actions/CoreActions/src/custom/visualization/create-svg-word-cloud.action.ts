@@ -73,7 +73,8 @@ export class CreateSVGWordCloudAction extends BaseAction {
      */
     protected async InternalRunAction(params: RunActionParams): Promise<SVGActionResult> {
         try {
-            const cloudType = this.getParamValue(params, 'CloudType')?.toLowerCase() || 'cloud';
+            const cloudTypeParam = this.getParamValue(params, 'CloudType');
+            const cloudType = cloudTypeParam ? this.ensureString(cloudTypeParam, 'CloudType').toLowerCase() : 'cloud';
 
             if (!['cloud', 'tagbar'].includes(cloudType)) {
                 return {
@@ -93,15 +94,15 @@ export class CreateSVGWordCloudAction extends BaseAction {
                 };
             }
 
-            let words: WordItem[] = JSON.parse(wordsParam);
+            let words: WordItem[] = this.parseJSON<WordItem[]>(wordsParam, 'Words');
 
             // Parse common parameters
-            const maxWords = parseInt(this.getParamValue(params, 'MaxWords') || '50');
-            const width = parseInt(this.getParamValue(params, 'Width') || '800');
-            const height = parseInt(this.getParamValue(params, 'Height') || '600');
-            const title = this.getParamValue(params, 'Title') || '';
-            const paletteName = this.getParamValue(params, 'Palette') || 'mjDefault';
-            const seed = parseInt(this.getParamValue(params, 'Seed') || String(Date.now()));
+            const maxWords = parseInt(this.ensureString(this.getParamValue(params, 'MaxWords') || '50', 'MaxWords'));
+            const width = parseInt(this.ensureString(this.getParamValue(params, 'Width') || '800', 'Width'));
+            const height = parseInt(this.ensureString(this.getParamValue(params, 'Height') || '600', 'Height'));
+            const title = this.ensureString(this.getParamValue(params, 'Title') || '', 'Title');
+            const paletteName = this.ensureString(this.getParamValue(params, 'Palette') || 'mjDefault', 'Palette');
+            const seed = parseInt(this.ensureString(this.getParamValue(params, 'Seed') || String(Date.now()), 'Seed'));
 
             // Sort by weight descending and limit
             words = words.sort((a, b) => b.weight - a.weight).slice(0, maxWords);
@@ -400,6 +401,56 @@ export class CreateSVGWordCloudAction extends BaseAction {
         text.setAttribute('font-weight', 'bold');
         text.textContent = title;
         svg.appendChild(text);
+    }
+
+    /**
+     * Helper to safely parse JSON that might already be an object
+     */
+    private parseJSON<T>(value: any, paramName: string): T {
+        // If it's already an object/array, return it
+        if (typeof value === 'object' && value !== null) {
+            return value as T;
+        }
+
+        // If it's a string, parse it
+        if (typeof value === 'string') {
+            try {
+                return JSON.parse(value) as T;
+            } catch (error) {
+                throw new Error(
+                    `Parameter '${paramName}' contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+                );
+            }
+        }
+
+        // For other types, error
+        throw new Error(
+            `Parameter '${paramName}' must be a JSON string or object. Received ${typeof value}.`
+        );
+    }
+
+    /**
+     * Helper to ensure a parameter value is a string, with type conversion and validation
+     */
+    private ensureString(value: any, paramName: string): string {
+        if (value == null) {
+            return '';
+        }
+
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        // Convert numbers and booleans to strings
+        if (typeof value === 'number' || typeof value === 'boolean') {
+            return String(value);
+        }
+
+        // For objects/arrays, reject with descriptive error
+        throw new Error(
+            `Parameter '${paramName}' must be a string, number, or boolean. ` +
+            `Received ${typeof value}. If providing JSON data, ensure it's passed as a string.`
+        );
     }
 
     /**

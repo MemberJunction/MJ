@@ -137,4 +137,13 @@ export interface AIErrorInfo {
      * @memberof AIErrorInfo
      */
     context?: Record<string, any>;
+
+    /**
+     * Original error object thrown by the provider's SDK or API.
+     * This allows for deeper inspection if needed.
+     * 
+     * @type {any}
+     * @memberof AIErrorInfo
+     */
+    error?: any;
 }

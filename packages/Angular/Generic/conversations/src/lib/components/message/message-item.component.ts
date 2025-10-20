@@ -54,6 +54,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
   public _elapsedTimeFormatted: string = '(0:00)';
+  public _agentRunDurationFormatted: string = '(0:00)';
   public isEditing: boolean = false;
   public editedText: string = '';
   private originalText: string = '';
@@ -110,34 +111,62 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Starts the elapsed time updater interval for temporary messages and active agent runs
+   * Updates every second for all active items
    */
   private startElapsedTimeUpdater(): void {
     if (this.isTemporaryMessage || this.isAgentRunActive) {
       // Initial update
-      Promise.resolve().then(() => {
-        if (this.isTemporaryMessage) {
-          this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
-        }
-        this.cdRef.detectChanges();
-      });
+      this.updateTimers();
+      this.cdRef.markForCheck();
 
       // Start interval if not already running
       if (this._elapsedTimeInterval === null) {
         this._elapsedTimeInterval = setInterval(() => {
-          if (this.isTemporaryMessage) {
-            this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
-          }
-          // Trigger change detection to update agentRunDuration getter for active runs
-          Promise.resolve().then(() => {
-            this.cdRef.detectChanges();
-          });
+          this.updateTimers();
+          // Use markForCheck to ensure Angular updates the view
+          this.cdRef.markForCheck();
         }, 1000);
       }
     }
   }
 
+  /**
+   * Update all timer displays
+   * Called every second by the interval timer
+   */
+  private updateTimers(): void {
+    // Update temporary message elapsed time
+    if (this.isTemporaryMessage) {
+      this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
+    }
+
+    // Update agent run duration for active runs
+    if (this.isAgentRunActive && this.agentRun?.__mj_CreatedAt) {
+      const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+      const now = new Date();
+      const diffMs = now.getTime() - createdAt.getTime();
+      this._agentRunDurationFormatted = this.formatDurationFromMs(diffMs);
+    }
+  }
+
   private formatElapsedTime(elapsedTime: number): string {
     let seconds = Math.floor(elapsedTime / 1000);
+    let minutes = Math.floor(seconds / 60);
+    seconds = seconds % 60;
+    let hours = Math.floor(minutes / 60);
+    minutes = minutes % 60;
+    let formattedTime = (hours > 0 ? hours + ':' : '') +
+      (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' +
+      (seconds < 10 ? '0' : '') + seconds;
+    return `(${formattedTime})`;
+  }
+
+  private formatDurationFromMs(diffMs: number): string {
+    if (diffMs <= 0) {
+      return '(0:00)';
+    }
+
+    let seconds = Math.floor(diffMs / 1000);
     let minutes = Math.floor(seconds / 60);
     seconds = seconds % 60;
     let hours = Math.floor(minutes / 60);

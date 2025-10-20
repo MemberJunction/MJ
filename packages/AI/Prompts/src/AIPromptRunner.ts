@@ -555,7 +555,7 @@ export class AIPromptRunner {
     const usage = chatResult.data?.usage;
     
     return {
-      success: true,
+      success: chatResult.success,
       rawResult: chatResult.data?.choices?.[0]?.message?.content,
       result: parsedResult?.result ? parsedResult.result as T : parsedResult as T,
       chatResult,
@@ -2570,11 +2570,13 @@ export class AIPromptRunner {
         return await llm.ChatCompletion(chatParams);
       }
     } catch (error) {
+      const errorInfo = ErrorAnalyzer.analyzeError(error, driverClass)
       this.logError(error, {
         category: 'ModelExecution',
         model: model,
         metadata: {
-          vendorId
+          vendorId,
+          errorInfo
         },
         maxErrorLength: params.maxErrorLength
       });
@@ -2682,6 +2684,35 @@ export class AIPromptRunner {
           vendorApiName,
           vendorSupportsEffortLevel
         );
+
+        // Check for fatal errors - don't attempt validation/retry on these
+        // Fatal errors (like ContextLengthExceeded when all models exhausted) cannot be resolved by retrying
+        if (!modelResult.success && modelResult.errorInfo?.severity === 'Fatal') {
+          // Record the fatal error attempt
+          const validationAttempt: ValidationAttempt = {
+            attemptNumber: attempt + 1,
+            success: false,
+            errorMessage: modelResult.errorMessage || 'Fatal error occurred',
+            rawOutput: '',
+            timestamp: new Date(),
+          };
+          validationAttempts.push(validationAttempt);
+
+          // Return immediately - no point in validation or retries for fatal errors
+          return {
+            modelResult,
+            parsedResult: {
+              result: null,
+              validationResult: undefined
+            },
+            validationAttempts,
+            cumulativeTokens: {
+              promptTokens: cumulativePromptTokens,
+              completionTokens: cumulativeCompletionTokens,
+              totalCost: cumulativeCost,
+            },
+          };
+        }
 
         // Accumulate token usage from this attempt
         if (modelResult.data?.usage) {

@@ -610,6 +610,52 @@ For AI Summary mode, prompts are resolved in this order:
 - **Token Savings**: Reduces context window usage by 70-95% for large results
 - **Agent-Aware**: Agents can detect compacted messages and request full expansion when needed
 
+### Context Length Recovery
+
+When a prompt execution fails due to context length overflow (even after model failover), BaseAgent provides **one-time automatic recovery** instead of immediately terminating. This gives the agent an opportunity to adapt its approach.
+
+**How It Works**:
+1. **Prompt fails with ContextLengthExceeded** → Detected as fatal error
+2. **First occurrence**: Recovery is attempted automatically (once per run)
+3. **Last user message is trimmed** using smart strategies:
+   - JSON arrays: Keeps first 10 items with truncation notice
+   - CSV data: Keeps header + first 10 rows
+   - Plain text: Keeps first 1000 characters
+4. **Agent receives clear guidance** explaining what happened and recommended actions
+5. **Agent gets Retry step** to choose alternative approach (e.g., more specific filters, batch requests)
+6. **If recovery fails again**: Normal fatal error handling (agent terminates)
+
+**Example Recovery Message**:
+```
+⚠️ CONTEXT OVERFLOW RECOVERY ⚠️
+
+The previous step returned a result that exceeded the context window (147,532 characters truncated).
+
+Here is a PARTIAL result from the previous action:
+---
+[First 10 items from JSON array...]
+... (487 more items truncated due to context length)
+---
+
+❗ THE ABOVE IS INCOMPLETE - the full result was too large for the context window.
+
+RECOMMENDED ACTIONS:
+1. Use a different action with more specific filters to get smaller result sets
+2. Request data in batches or pages instead of all at once
+3. Ask the user to clarify scope to narrow the query
+4. If you need the full data, acknowledge the limitation and ask the user how to proceed
+
+Please choose an alternative approach to complete your task.
+```
+
+**Benefits**:
+- **Resilient**: Agents can adapt instead of failing immediately
+- **Informative**: Clear explanation of what went wrong and how to recover
+- **Safe**: ONE-TIME recovery prevents infinite loops
+- **Smart**: Preserves data structure when possible (JSON, CSV)
+
+This feature is particularly useful when agents call actions that can return very large datasets (e.g., "Get Entity List" without filters).
+
 ### Action Integration
 ```typescript
 // In agent type's DetermineNextStep

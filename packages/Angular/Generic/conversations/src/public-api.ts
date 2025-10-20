@@ -9,6 +9,7 @@ export * from './lib/conversations.module';
 export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 export * from './lib/models/lazy-artifact-info';
+export * from './lib/models/conversation-complete-query.model';
 
 // Services - State
 export * from './lib/services/data-cache.service';

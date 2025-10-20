@@ -59,6 +59,7 @@ export class ErrorAnalyzer {
         // Check provider error code for context length exceeded (in case message parsing missed it)
         if (providerErrorCode === 'context_length_exceeded') {
             return {
+                error,
                 httpStatusCode,
                 errorType: 'ContextLengthExceeded',
                 severity: 'Fatal',
@@ -74,6 +75,7 @@ export class ErrorAnalyzer {
         }
         
         return {
+            error,
             httpStatusCode,
             errorType,
             severity,

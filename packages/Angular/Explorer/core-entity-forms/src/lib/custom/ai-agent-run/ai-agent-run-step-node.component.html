@@ -17,7 +17,12 @@
   
   <!-- Timeline Marker -->
   <div class="timeline-marker" [attr.data-color]="item.color">
-    <i class="fas" [ngClass]="item.icon"></i>
+    <img *ngIf="item.logoUrl"
+         [src]="item.logoUrl"
+         [alt]="item.title"
+         class="timeline-marker-logo"
+         (error)="onLogoError($event)" />
+    <i *ngIf="!item.logoUrl" class="fas" [ngClass]="item.icon"></i>
   </div>
   
   <!-- Timeline Content -->

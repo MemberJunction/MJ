@@ -44,6 +44,9 @@ export * from './custom/data/data-mapper.action';
 export * from './custom/data/explore-database-schema.action';
 export * from './custom/data/execute-research-query.action';
 
+// Code Execution Actions
+export * from './custom/code-execution/execute-code.action';
+
 // File Operation Actions
 export * from './custom/files/pdf-generator.action';
 export * from './custom/files/pdf-extractor.action';

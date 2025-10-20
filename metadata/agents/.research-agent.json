@@ -60,20 +60,6 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Explore Database Schema",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "644D35FA-3245-4928-A8AD-4E70446054C2"
-          },
-          "sync": {
-            "lastModified": "2025-10-15T23:02:37.445Z",
-            "checksum": "e15778482d8cc67baa2d928d97304a8e703cba0a5fc8475f8e2438ed4fc65e05"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Execute Research Query",
             "Status": "Active"
           },
@@ -242,7 +228,14 @@
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-magnifying-glass-chart",
-      "PayloadSelfWritePaths": "[\"metadata\", \"plan\", \"sources\", \"findings\", \"comparisons\", \"contradictions\", \"iterations\", \"webResearch\", \"databaseResearch\", \"fileResearch\"]",
+      "PayloadSelfWritePaths": [
+        "metadata.*",
+        "plan.*",
+        "findings.*",
+        "comparisons.*",
+        "contradictions.*",
+        "iterations.*"
+      ],
       "FinalPayloadValidation": "@file:validation/research-agent-validation.json",
       "FinalPayloadValidationMode": "Retry",
       "FinalPayloadValidationMaxRetries": 3
@@ -281,7 +274,8 @@
             ],
             "PayloadUpstreamPaths": [
               "synthesis.*",
-              "report.*"
+              "report.*",
+              "visualizations.*"
             ]
           },
           "relatedEntities": {
@@ -309,7 +303,16 @@
                   "SubAgentID": "@lookup:AI Agents.Name=Infographic Agent",
                   "Status": "Active",
                   "SubAgentOutputMapping": "{\"*\": \"visualizations\"}",
-                  "SubAgentContextPaths": ["*"]
+                  "SubAgentContextPaths": [
+                    "*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "75E27303-EA65-4EC6-A104-DF63359BCA61"
+                },
+                "sync": {
+                  "lastModified": "2025-10-19T17:24:37.534Z",
+                  "checksum": "6f01c3651388e68e96bed9d2805bcef0c5eb86061c8714b8a3df9c3fd2687177"
                 }
               }
             ]
@@ -318,8 +321,8 @@
             "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
           },
           "sync": {
-            "lastModified": "2025-10-18T13:29:52.422Z",
-            "checksum": "0872f26fd4a8b01dac784940babe04f1ed1b30ad1c2efb5ddfa87fd7e1c2867a"
+            "lastModified": "2025-10-19T20:35:28.352Z",
+            "checksum": "b2ea69d4c29a9eeef5384b1ced3789c1dfb624e7a74925b55a10d3c5219610b7"
           }
         }
       ],
@@ -384,8 +387,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2025-10-18T13:29:52.253Z",
-      "checksum": "4d615e637a1aa4d38cc0d69c44abcc4992c4d404ce1c8436fceefc93fce06661"
+      "lastModified": "2025-10-19T22:05:03.490Z",
+      "checksum": "a92fd9781968b0104365800a4116c45308ecaa08d436cde2cff7d35ea1fffdda"
     }
   }
 ]

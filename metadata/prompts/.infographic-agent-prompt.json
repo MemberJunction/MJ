@@ -15,9 +15,16 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Claude 4 Sonnet",
+            "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
-            "Priority": 10
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "FFE8F664-8CAA-44EA-A5D5-3909148AF361"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T20:20:06.600Z",
+            "checksum": "c839e7a8438b7b515a761e8c6e8753b0ccd7156ac144b11a46c63f4aa85176f7"
           }
         },
         {
@@ -26,6 +33,13 @@
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
             "Priority": 8
+          },
+          "primaryKey": {
+            "ID": "C29B4761-F1E1-4E1A-8229-8B14A4238619"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:35.102Z",
+            "checksum": "86e10c6ebe548ded62cbe0201ab707cd9ed9872329386f35db4f80daa614f6be"
           }
         },
         {
@@ -34,6 +48,13 @@
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
             "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "A32FD66C-3C77-4C1B-9819-8828CA15469C"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:35.111Z",
+            "checksum": "f9c074f4c7d9339c6b106c21d307d063b62cd5acf7d9e9a2960ffae45591a2bb"
           }
         },
         {
@@ -42,9 +63,23 @@
             "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
             "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "48E70C10-8859-46B0-82A0-9239F20F5F9B"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:35.120Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "FB0EBBA3-857F-4E02-B12C-22F82B6D52BF"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T17:24:35.035Z",
+      "checksum": "9bba8a0e075382139cb24b1344fe7b27b11ea7fc0d1a74c2a0c70e550d7cc81f"
     }
   }
 ]

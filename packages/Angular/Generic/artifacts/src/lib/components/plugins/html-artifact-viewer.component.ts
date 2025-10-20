@@ -103,9 +103,12 @@ export class HtmlArtifactViewerComponent extends BaseArtifactViewerPluginCompone
   }
 
   ngOnInit(): void {
-    // Get content and clean up double-escaped newlines that can appear in LLM-generated HTML
-    // These appear as literal "\\n" in the string and cause rendering issues
+    // Get content and clean up double-escaped characters that can appear in LLM-generated HTML
+    // These appear as literal "\\n", "\\t", "\\\"" in the string and cause rendering issues
     let content = this.getContent();
+
+    // Remove escaped quotes (\" becomes ")
+    content = content.replace(/\\"/g, '"');
 
     // Remove double-escaped newlines (\\n becomes nothing)
     // HTML doesn't need whitespace for formatting, and these cause display issues

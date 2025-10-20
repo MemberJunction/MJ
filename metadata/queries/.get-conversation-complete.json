@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "GetConversationComplete",
+      "CategoryID": "@lookup:Query Categories.Name=Conversations",
+      "UserQuestion": "What are all the messages, agent runs, and artifacts for this conversation?",
+      "Description": "Returns complete conversation data in a single query: all messages with their related agent runs and artifacts aggregated as JSON. Optimized for fast conversation loading.",
+      "SQL": "@file:SQL/get-conversation-complete.sql",
+      "TechnicalDescription": "Single-query optimization that replaces 4 separate queries (messages, agent runs, artifact map, batch artifacts/versions). Uses SQL Server FOR JSON PATH to aggregate related data as JSON columns. Agent runs and artifacts are returned as JSON arrays per conversation detail, avoiding row multiplication from JOINs. Client parses JSON and reconstructs objects. Reduces network round trips from 4 to 1 for ~70% faster conversation loading. Excludes heavy Content field from artifacts for performance.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 2,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "8F84DFB4-C38E-4B8D-80E7-9CCF30039E77"
+    },
+    "sync": {
+      "lastModified": "2025-10-20T00:08:15.318Z",
+      "checksum": "8d4e0165c4eb3cdd9bb6e171d016229275f07b66015d3129053549a94b54e3cb"
+    }
+  }
+]
