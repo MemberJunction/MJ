@@ -5,13 +5,15 @@ import {
   EventEmitter,
   OnInit,
   OnDestroy,
-  DoCheck
+  DoCheck,
+  ChangeDetectorRef
 } from '@angular/core';
 import { ConversationEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
+import { CollectionStateService } from '../../services/collection-state.service';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
@@ -44,23 +46,25 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   @Input() set activeConversationInput(value: string | undefined) {
     if (value && value !== this.conversationState.activeConversationId) {
-      // TODO: Navigate to this conversation
       console.log('🔗 Deep link to conversation:', value);
+      this.activeTab = 'conversations';
+      this.conversationState.setActiveConversation(value);
     }
   }
 
   @Input() set activeCollectionInput(value: string | undefined) {
-    if (value) {
-      // TODO: Navigate to this collection (collections not yet fully integrated with state service)
+    if (value && value !== this.collectionState.activeCollectionId) {
       console.log('🔗 Deep link to collection:', value);
+      this.activeTab = 'collections';
+      this.collectionState.setActiveCollection(value);
     }
   }
 
   @Input() set activeArtifactInput(value: string | undefined) {
     if (value && value !== this.activeArtifactId) {
-      this.activeArtifactId = value;
-      // TODO: Open this artifact in viewer
       console.log('🔗 Deep link to artifact:', value);
+      this.activeTab = 'collections';
+      this.artifactState.openArtifact(value);
     }
   }
 
@@ -108,7 +112,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   private previousConversationId: string | null = null;
   private previousTaskId: string | undefined = undefined;
-  private previousArtifactId: string | null = null;
+  private previousArtifactId: string | null = null; // Used to track artifact changes in ngDoCheck
   private destroy$ = new Subject<void>();
 
   // LocalStorage keys
@@ -120,7 +124,9 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   constructor(
     public conversationState: ConversationStateService,
-    public artifactState: ArtifactStateService
+    public artifactState: ArtifactStateService,
+    public collectionState: CollectionStateService,
+    private cdr: ChangeDetectorRef
   ) {
     super();
   }
@@ -216,9 +222,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
         // Also emit navigationChanged for URL updates (only if on conversations tab)
         if (this.activeTab === 'conversations' && currentId) {
-          this.navigationChanged.emit({
-            tab: 'conversations',
-            conversationId: currentId
+          // Defer emission until after change detection completes
+          Promise.resolve().then(() => {
+            this.navigationChanged.emit({
+              tab: 'conversations',
+              conversationId: currentId
+            });
           });
         }
       }
@@ -230,26 +239,31 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       if (currentTaskId !== this.previousTaskId) {
         this.previousTaskId = currentTaskId;
         if (currentTaskId) {
-          this.navigationChanged.emit({
-            tab: 'tasks',
-            taskId: currentTaskId
+          // Defer emission until after change detection completes
+          Promise.resolve().then(() => {
+            this.navigationChanged.emit({
+              tab: 'tasks',
+              taskId: currentTaskId
+            });
           });
         }
       }
     }
 
-    // Detect artifact selection changes (when on collections tab)
+    // Detect artifact changes (when on collections tab)
+    // This ensures URL stays in sync with artifact state even after async updates
     if (this.activeTab === 'collections') {
       const currentArtifactId = this.activeArtifactId;
       if (currentArtifactId !== this.previousArtifactId) {
         this.previousArtifactId = currentArtifactId;
-        if (currentArtifactId) {
+        // Defer emission until after change detection completes to avoid ExpressionChangedAfterItHasBeenCheckedError
+        Promise.resolve().then(() => {
           this.navigationChanged.emit({
             tab: 'collections',
-            artifactId: currentArtifactId
-            // TODO: Add collectionId when collections are integrated with state service
+            collectionId: this.collectionState.activeCollectionId || undefined,
+            artifactId: currentArtifactId || undefined
           });
-        }
+        });
       }
     }
   }
@@ -274,8 +288,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     if (tab === 'conversations') {
       navEvent.conversationId = this.conversationState.activeConversationId || undefined;
     } else if (tab === 'collections') {
-      // TODO: Get active collection ID from collections state service when integrated
-      navEvent.collectionId = undefined;
+      navEvent.collectionId = this.collectionState.activeCollectionId || undefined;
       navEvent.artifactId = this.activeArtifactId || undefined;
     } else if (tab === 'tasks') {
       navEvent.taskId = this.activeTaskId || undefined;
@@ -306,19 +319,70 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   handleSearchResult(result: SearchResult): void {
-    // Navigate to the conversation
-    if (result.conversationId) {
-      this.conversationState.setActiveConversation(result.conversationId);
+    console.log('🔍 Navigating to search result:', result);
+
+    switch (result.type) {
+      case 'conversation':
+        // Switch to conversations tab and select conversation
+        this.activeTab = 'conversations';
+        this.conversationState.setActiveConversation(result.id);
+        this.navigationChanged.emit({
+          tab: 'conversations',
+          conversationId: result.id
+        });
+        break;
+
+      case 'message':
+        // Switch to conversations tab, open conversation, and scroll to message (future enhancement)
+        this.activeTab = 'conversations';
+        if (result.conversationId) {
+          this.conversationState.setActiveConversation(result.conversationId);
+          this.navigationChanged.emit({
+            tab: 'conversations',
+            conversationId: result.conversationId
+            // TODO: Add messageId for scroll-to support in future
+          });
+        }
+        break;
+
+      case 'artifact':
+        // Switch to collections tab and open artifact
+        this.activeTab = 'collections';
+        this.artifactState.openArtifact(result.id);
+
+        // If artifact is in a collection, navigate to that collection
+        const collectionId = result.collectionId || undefined;
+
+        this.navigationChanged.emit({
+          tab: 'collections',
+          collectionId,
+          artifactId: result.id
+        });
+        break;
+
+      case 'collection':
+        // Switch to collections tab and navigate to collection
+        this.activeTab = 'collections';
+        this.collectionState.setActiveCollection(result.id);
+
+        this.navigationChanged.emit({
+          tab: 'collections',
+          collectionId: result.id
+        });
+        break;
+
+      case 'task':
+        // Switch to tasks tab and select task
+        this.activeTab = 'tasks';
+        this._activeTaskId = result.id;
+        this.navigationChanged.emit({
+          tab: 'tasks',
+          taskId: result.id
+        });
+        break;
     }
 
-    // If it's an artifact, open it in the artifact panel
-    if (result.type === 'artifact') {
-      this.artifactState.openArtifact(result.id);
-    }
-
-    // If it's a message, we could scroll to it in the future
-    // For now, just open the conversation
-
+    // Close search panel after navigation
     this.closeSearch();
   }
 
@@ -467,5 +531,55 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       tab: 'tasks',
       taskId: task.ID
     });
+  }
+
+  /**
+   * Handle collection navigation events
+   */
+  onCollectionNavigated(event: { collectionId: string | null; artifactId?: string | null }): void {
+    console.log('📁 Collection navigated:', event);
+
+    // IMPORTANT: Don't emit navigationChanged here when doing programmatic navigation (deep linking)
+    // The artifact state is managed separately and ngDoCheck will handle URL sync
+    // Only emit if the event explicitly includes an artifactId, or if we're intentionally closing the artifact
+    if (event.artifactId !== undefined) {
+      // Event explicitly specifies artifact state (user clicked artifact or intentionally closed it)
+      this.navigationChanged.emit({
+        tab: 'collections',
+        collectionId: event.collectionId || undefined,
+        artifactId: event.artifactId || undefined
+      });
+    } else if (!this.activeArtifactId) {
+      // No artifact currently open, safe to emit collection-only navigation
+      this.navigationChanged.emit({
+        tab: 'collections',
+        collectionId: event.collectionId || undefined
+      });
+    }
+    // Otherwise: artifact is open but event doesn't specify artifactId
+    // Don't emit - let ngDoCheck handle keeping the URL in sync with artifact state
+  }
+
+  /**
+   * Handle navigation from artifact links
+   */
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+    console.log('🔗 Navigating from artifact link:', event);
+
+    if (event.type === 'conversation') {
+      this.activeTab = 'conversations';
+      this.conversationState.setActiveConversation(event.id);
+      this.navigationChanged.emit({
+        tab: 'conversations',
+        conversationId: event.id
+      });
+    } else if (event.type === 'collection') {
+      this.activeTab = 'collections';
+      this.collectionState.setActiveCollection(event.id);
+      this.navigationChanged.emit({
+        tab: 'collections',
+        collectionId: event.id
+      });
+    }
   }
 }

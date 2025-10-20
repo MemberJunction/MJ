@@ -1,0 +1,270 @@
+[
+  {
+    "fields": {
+      "Name": "Create SVG Diagram",
+      "Description": "Generates SVG diagrams including flowcharts, org charts, and ER diagrams. Uses dagre for directed graph layouts and d3-hierarchy for tree structures. Designed for AI agents and workflows to create publication-quality diagrams from structured data.",
+      "DriverClass": "__CreateSVGDiagram",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-diagram-project",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of diagram to generate: 'flow' (flowchart), 'org' (org chart), or 'er' (entity-relationship diagram). Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "ED22E312-286C-47C0-8F9C-E2E39BD62F1F"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.891Z",
+            "checksum": "898a1c439993bd6743ee5e9e696d0b77d4e3563c80bb613facccd2fb5e9a0b41"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Nodes",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "JSON array or object of nodes. For flow diagrams: array of {id, kind, label, note, icon, width, height}. For org charts: nested object with {id, label, role, avatarUrl, children}. For ER diagrams: array of {id, name, attrs}. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A85F371C-0211-484A-8D9B-08FF7E7FA873"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.904Z",
+            "checksum": "06a62afe45eaa79035afdb74d404386eb2f98ff3b07992f90e5b9ff66de40e71"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Edges",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "JSON array of edges/relationships (for flow and ER diagrams). For flow: {from, to, label, dashed}. For ER: {from, to, label}. Not used for org charts.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3EF6F80D-A4E3-423B-999F-B97E098F35C4"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.915Z",
+            "checksum": "e0f6e7d7ca41235032875e01c602e005375768987a85ebba9e4232027999a624"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Direction",
+            "DefaultValue": "TB",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Layout direction for flow diagrams: 'TB' (top-bottom), 'LR' (left-right), 'RL' (right-left), 'BT' (bottom-top). Default: 'TB'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4AB95D44-F9D0-4F3E-A618-8459BF165E1D"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.925Z",
+            "checksum": "79315bebc3ba4905fbc17c0d80cc68e8df60d9a2de0f5842a863f76aaf1268e3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Width",
+            "DefaultValue": "800",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram width in pixels. Default: 800.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8EF38607-E7DF-475B-B9EA-67E457710BF2"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.936Z",
+            "checksum": "b9dbbe99a6577b3a17cb3a36e131cb61693e21ce1c2803e047445cd631190fb4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Height",
+            "DefaultValue": "600",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram height in pixels. Default: 600.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D7E158B8-F504-4338-B606-B635C9112453"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.946Z",
+            "checksum": "09249eab09c984f94aca7f7a208dac22c5e1e326556dba4266534cccf96de483"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram title (optional). Displayed at the top of the diagram.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4961AC91-D314-43E2-9127-E989DC25750A"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.956Z",
+            "checksum": "c6f163de71c5bea80bef37c3190b1ac0b711050890ba04ff5a2deba4b92840cd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Palette",
+            "DefaultValue": "mjDefault",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Color palette: 'mjDefault', 'gray', 'pastel', or 'highContrast'. Default: 'mjDefault'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9536A0D4-A5D7-421E-8BBD-C67BB45BCF05"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.965Z",
+            "checksum": "bf8052abe7b8b8da369abee23ea22d6c33337212ae172bacbdcd071194400ca3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Seed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Random seed for deterministic layouts (optional). Use same seed for reproducible diagrams.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "ADFA7B2F-D9FA-4EF9-B8A3-5497DFF173CD"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.975Z",
+            "checksum": "c084770b54f66ff2c8f5e2da8ba77c6c0811a42a94461ab75c2d1aa729fe7e55"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Generated SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "690A0CE9-8E35-4FFC-B29E-BAF4F63065B1"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:29.985Z",
+            "checksum": "754788aedce1a97f89fd0926253b3a2e933fcc737baeb922527ef759531f2446"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Diagram generated successfully. SVG markup returned in Message field."
+          },
+          "primaryKey": {
+            "ID": "41B0EFE2-8029-4B0A-A341-2EA7F9FF5458"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.003Z",
+            "checksum": "3dcf2fd86eb77436678cba2ce547e96c48a77ab63e89d1b636cc2ebf26e9182d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Required parameters are missing. DiagramType and Nodes are required."
+          },
+          "primaryKey": {
+            "ID": "A8845A7C-EFF3-4B02-ABDE-34CB9C24AB9D"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.011Z",
+            "checksum": "2b1f8bbcc21b66099ca82ad58f518c9d57e838062a26423f2a9b72f5336985bf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_DIAGRAM_TYPE",
+            "IsSuccess": false,
+            "Description": "DiagramType must be 'flow', 'org', or 'er'."
+          },
+          "primaryKey": {
+            "ID": "B40C7815-25FD-4EC4-BCCF-C92875EA4FDA"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.021Z",
+            "checksum": "89be7e7fb4e82ae334c74f87138de4aa61c0cf614913c4f48c5216a1cc81a716"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DIAGRAM_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate diagram due to invalid configuration or data. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "A296485D-B67D-456D-9F15-93688659E7CC"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.029Z",
+            "checksum": "d248d466751c0db48e5071a7939eb2a678c864824fa0e577f576aae07c523ab7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4FC4DE06-4986-4914-875C-446CE6E7F8AA"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T17:24:29.858Z",
+      "checksum": "e858a5f0025a58814625cffff6fe0adaed56525cc20fc8514ebfad1f352b9b1f"
+    }
+  }
+]

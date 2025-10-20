@@ -100,6 +100,9 @@ export class AgentStateService implements OnDestroy {
       return;
     }
 
+    const timestamp = new Date().toISOString();
+    console.log(`[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'})`);
+
     try {
       const rv = new RunView();
       // Valid statuses: Running, Completed, Paused, Failed, Cancelled
@@ -109,6 +112,7 @@ export class AgentStateService implements OnDestroy {
         filter += ` AND ConversationID='${conversationId}'`;
       }
 
+      console.log(`[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`);
       const result = await rv.RunView<AIAgentRunEntity>(
         {
           EntityName: 'MJ: AI Agent Runs',
@@ -122,11 +126,13 @@ export class AgentStateService implements OnDestroy {
 
       if (result.Success) {
         const runs = result.Results || [];
+        console.log(`[${timestamp}] 🤖 AgentStateService - Found ${runs.length} active agent(s)`);
         const agentsWithStatus = runs.map(run => this.mapRunToAgentWithStatus(run));
         this._activeAgents$.next(agentsWithStatus);
 
         // Stop polling if no active agents (optimization to reduce DB load)
         if (runs.length === 0 && this.pollSubscription) {
+          console.log(`[${timestamp}] 🤖 AgentStateService - No active agents, stopping polling`);
           this.stopPolling();
         }
       }

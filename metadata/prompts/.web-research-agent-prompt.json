@@ -5,7 +5,7 @@
       "Description": "System prompt for the Web Research Agent sub-agent. Guides the agent in formulating search queries, evaluating web sources, and extracting relevant research information from the internet.",
       "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
       "PromptRole": "System",
-      "TemplateText": "@file:web-research-agent.md",
+      "TemplateText": "@file:templates/research-agent/web-research-agent.md",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "Status": "Active",
       "PromptPosition": "First"
@@ -63,8 +63,8 @@
       "ID": "60407FD8-1EC8-48A1-9D79-AA43B66A2026"
     },
     "sync": {
-      "lastModified": "2025-10-15T23:02:35.818Z",
-      "checksum": "91dc0a7126022981abbde0e1e9dbbc5b881945fcb69622c83da8022a1abbc560"
+      "lastModified": "2025-10-19T22:27:16.354Z",
+      "checksum": "542184d63c993355edfb1a53e46508337c4be7b3a85debf4f34049b7f54adc93"
     }
   }
 ]

@@ -107,7 +107,8 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     reasoning: response.reasoning,
                     confidence: response.confidence,
-                    payloadChangeRequest: response.payloadChangeRequest
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    suggestedResponses: response.suggestedResponses
                 });
             }
 
@@ -119,7 +120,8 @@ export class LoopAgentType extends BaseAgentType {
             // Determine next step based on type
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 payloadChangeRequest: response.payloadChangeRequest,
-                terminate: response.taskComplete
+                terminate: response.taskComplete,
+                suggestedResponses: response.suggestedResponses
             }
             switch (response.nextStep.type) {
                 case 'Sub-Agent':

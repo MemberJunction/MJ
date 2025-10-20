@@ -33,7 +33,7 @@
           "fields": {
             "ActionID": "@parent:ID",
             "Name": "MaxResults",
-            "DefaultValue": "10",
+            "DefaultValue": "5",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
@@ -44,8 +44,8 @@
             "ID": "3C72374C-2012-4DAB-BE91-7E33527E4414"
           },
           "sync": {
-            "lastModified": "2025-10-15T23:02:26.919Z",
-            "checksum": "ec26fea374c53f7d3e6316e567238bd776f5f7d84c8acf067701b270a12bb1cf"
+            "lastModified": "2025-10-17T13:51:52.666Z",
+            "checksum": "7425c5aca05daa83166bb26c8496d521d1de7e16536c2a90ac5f42078880387b"
           }
         },
         {
@@ -245,6 +245,25 @@
           "sync": {
             "lastModified": "2025-10-15T23:02:27.086Z",
             "checksum": "a6cb3ef812bc4ab09b55922c5e7d3720052909e85e4145c8552fcf2bf9e97e41"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Verbosity",
+            "DefaultValue": "standard",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Controls amount of data returned in results. Options: 'minimal' (title, link, snippet only - best for AI agents), 'standard' (adds image, thumbnail - default), 'detailed' (all fields including htmlSnippet, pagemap, searchInformation). Accepts aliases: min/basic/simple (minimal), normal/default (standard), full/complete/verbose (detailed).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "99191FC6-7F07-4E0B-B59F-C1EC022457D8"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T13:51:52.714Z",
+            "checksum": "7d60dfe8162b932b76ed98c5ffc1ca910656eabca02c0ab5f835ae167c078a39"
           }
         },
         {

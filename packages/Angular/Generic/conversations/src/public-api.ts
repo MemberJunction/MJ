@@ -9,6 +9,7 @@ export * from './lib/conversations.module';
 export * from './lib/models/conversation-state.model';
 export * from './lib/models/notification.model';
 export * from './lib/models/lazy-artifact-info';
+export * from './lib/models/conversation-complete-query.model';
 
 // Services - State
 export * from './lib/services/data-cache.service';
@@ -23,6 +24,7 @@ export * from './lib/services/notification.service';
 export * from './lib/services/toast.service';
 export * from './lib/services/mention-parser.service';
 export * from './lib/services/mention-autocomplete.service';
+export * from './lib/services/collection-permission.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -37,6 +39,7 @@ export * from './lib/components/mention/mention-dropdown.component';
 export * from './lib/components/collection/collection-tree.component';
 export * from './lib/components/collection/collection-view.component';
 export * from './lib/components/collection/collection-artifact-card.component';
+export * from './lib/components/collection/artifact-collection-picker-modal.component';
 export * from './lib/components/project/project-selector.component';
 export * from './lib/components/project/project-form-modal.component';
 export * from './lib/components/task/tasks-full-view.component';

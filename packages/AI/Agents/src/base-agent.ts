@@ -14,7 +14,7 @@
 import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -24,14 +24,18 @@ import {
     AIPromptParams,
     AIPromptRunResult,
     ChildPromptParam,
-    ExecuteAgentParams, 
+    ExecuteAgentParams,
     AgentContextData,
     AgentConfiguration,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
     AgentAction,
     AgentSubAgentRequest,
-    BaseAgentNextStep
+    BaseAgentNextStep,
+    MessageLifecycleCallback,
+    MessageLifecycleEvent,
+    AgentChatMessage,
+    AgentChatMessageMetadata
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -143,6 +147,12 @@ export class BaseAgent {
     private _executionCounts: Map<string, number> = new Map();
 
     /**
+     * Callback for message lifecycle events (expiration, compaction, removal, expansion).
+     * @private
+     */
+    private _messageLifecycleCallback: MessageLifecycleCallback | undefined;
+
+    /**
      * Counter for validation-induced retries (when validation changes a step to Retry).
      * This is separate from FinalPayloadValidation retries.
      * @private
@@ -200,6 +210,15 @@ export class BaseAgent {
      * @private
      */
     private _validationRetryCount: number = 0;
+
+    /**
+     * Flag indicating whether a context recovery attempt has been made in this run.
+     * Context recovery trims conversation messages when context length is exceeded,
+     * giving the agent ONE opportunity to adapt its approach.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _contextRecoveryAttempted: boolean = false;
 
     /**
      * Gets the current validation retry count for the agent run.
@@ -394,6 +413,10 @@ export class BaseAgent {
             // Reset validation retry counters for this run
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
+            this._contextRecoveryAttempted = false;
+
+            // Store message lifecycle callback if provided
+            this._messageLifecycleCallback = params.onMessageLifecycle;
 
             // Initialize engines
             await this.initializeEngines(params.contextUser);
@@ -517,6 +540,9 @@ export class BaseAgent {
             if (params.cancellationToken?.aborted) {
                 throw new Error('Cancelled during execution');
             }
+
+            // Prune and compact expired messages before executing the next step
+            await this.pruneAndCompactExpiredMessages(params, stepCount);
 
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
@@ -1691,6 +1717,255 @@ export class BaseAgent {
     }
 
     /**
+     * Determines if a prompt execution error is fatal and should stop agent execution.
+     * Fatal errors are those that won't be resolved by retrying, such as context length
+     * exceeded (when no larger model is available), authentication failures, or invalid
+     * request format.
+     *
+     * @param promptResult - The result from prompt execution
+     * @returns true if the error is fatal and agent should terminate, false otherwise
+     * @protected
+     */
+    protected isFatalPromptError(promptResult: AIPromptRunResult): boolean {
+        // If no error info, not fatal (might be transient)
+        if (!promptResult?.chatResult?.errorInfo) {
+            return false;
+        }
+
+        const errorInfo = promptResult.chatResult.errorInfo;
+
+        // Check severity first - if marked as Fatal by the error analyzer, respect that
+        if (errorInfo.severity === 'Fatal') {
+            return true;
+        }
+
+        // Fatal error types that should stop agent execution immediately
+        // These won't be resolved by retrying the same prompt
+        const fatalErrorTypes: AIErrorType[] = [
+            'ContextLengthExceeded',  // No model can handle this context size (after failover attempts)
+            'Authentication',          // API key is invalid or missing
+            'InvalidRequest'           // Request format or parameters are wrong
+        ];
+
+        return fatalErrorTypes.includes(errorInfo.errorType);
+    }
+
+    /**
+     * Converts ChatMessageContent to a string representation.
+     * Handles both simple strings and content block arrays.
+     *
+     * @param content - The message content to convert
+     * @returns String representation of the content
+     * @protected
+     */
+    protected contentToString(content: ChatMessageContent): string {
+        if (typeof content === 'string') {
+            return content;
+        }
+
+        // Content is an array of blocks - convert to string
+        return content.map((block: ChatMessageContentBlock) => {
+            if (block.type === 'text') {
+                return block.content;
+            }
+            return `[${block.type}: ${block.content}]`;
+        }).join('\n');
+    }
+
+    /**
+     * Smart trimming of message content based on detected format.
+     * Attempts to preserve structure while reducing size.
+     *
+     * @param content - The message content to trim (must be string)
+     * @param maxLength - Maximum length for the trimmed content
+     * @returns Object with trimmed content and strategy used
+     * @protected
+     */
+    protected smartTrimContent(content: string, maxLength: number = 1000): { trimmed: string; strategy: string; originalLength: number } {
+        const originalLength = content.length;
+
+        // Try to parse as JSON
+        try {
+            const data = JSON.parse(content);
+
+            if (Array.isArray(data)) {
+                // JSON array - keep first 10 items
+                const itemsToKeep = 10;
+                if (data.length > itemsToKeep) {
+                    const truncated = data.slice(0, itemsToKeep);
+                    const trimmed = JSON.stringify(truncated, null, 2) +
+                        `\n\n... (${(data.length - itemsToKeep).toLocaleString()} more items truncated due to context length)`;
+                    return {
+                        trimmed,
+                        strategy: 'JSON array truncation',
+                        originalLength
+                    };
+                }
+            } else if (typeof data === 'object' && data !== null) {
+                // JSON object - keep structure but truncate long values
+                const truncated: any = {};
+                let fieldCount = 0;
+                const maxFields = 20;
+
+                for (const [key, value] of Object.entries(data)) {
+                    if (fieldCount >= maxFields) {
+                        truncated['...'] = `(${Object.keys(data).length - maxFields} more fields truncated)`;
+                        break;
+                    }
+                    if (typeof value === 'string' && value.length > 200) {
+                        truncated[key] = value.substring(0, 200) + '... (truncated)';
+                    } else if (Array.isArray(value) && value.length > 5) {
+                        truncated[key] = [...value.slice(0, 5), `... (${value.length - 5} more items)`];
+                    } else {
+                        truncated[key] = value;
+                    }
+                    fieldCount++;
+                }
+
+                return {
+                    trimmed: JSON.stringify(truncated, null, 2),
+                    strategy: 'JSON object field truncation',
+                    originalLength
+                };
+            }
+        } catch {
+            // Not JSON, continue to other strategies
+        }
+
+        // Try CSV detection (header + comma-separated values)
+        if (content.includes('\n')) {
+            const lines = content.split('\n');
+            const firstLine = lines[0];
+
+            // Check if first line looks like CSV header (contains commas)
+            if (firstLine.includes(',') && lines.length > 1) {
+                const rowsToKeep = 10;
+                if (lines.length > rowsToKeep + 1) {
+                    const header = lines[0];
+                    const dataRows = lines.slice(1, rowsToKeep + 1);
+                    const trimmed = [header, ...dataRows].join('\n') +
+                        `\n... (${(lines.length - rowsToKeep - 1).toLocaleString()} more rows truncated due to context length)`;
+                    return {
+                        trimmed,
+                        strategy: 'CSV row truncation',
+                        originalLength
+                    };
+                }
+            }
+        }
+
+        // Fallback: simple character truncation
+        if (content.length > maxLength) {
+            return {
+                trimmed: content.substring(0, maxLength) + '\n\n... (truncated due to context length)',
+                strategy: 'character truncation',
+                originalLength
+            };
+        }
+
+        // Content is already small enough
+        return {
+            trimmed: content,
+            strategy: 'no truncation needed',
+            originalLength
+        };
+    }
+
+    /**
+     * Attempts to recover from a context length exceeded error by trimming conversation messages.
+     * This gives the agent ONE opportunity to adapt its approach after receiving a large result
+     * that overflowed the context window.
+     *
+     * @param params - Agent execution parameters (conversationMessages will be modified)
+     * @param payload - Current payload to carry forward
+     * @param errorMessage - The original error message from the failed prompt
+     * @returns A Retry step with trimmed context and guidance for the agent
+     * @protected
+     */
+    protected async attemptContextRecovery<P>(
+        params: ExecuteAgentParams,
+        payload: P,
+        errorMessage: string
+    ): Promise<BaseAgentNextStep<P>> {
+        this.logStatus(
+            `⚠️ Context length exceeded - attempting recovery by trimming conversation messages`,
+            true,
+            params
+        );
+
+        // Find the last user message (usually the action/sub-agent result)
+        const messages = params.conversationMessages;
+        let lastUserMessageIndex = -1;
+
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role === 'user') {
+                lastUserMessageIndex = i;
+                break;
+            }
+        }
+
+        if (lastUserMessageIndex === -1) {
+            // No user message to trim - can't recover
+            this.logStatus(
+                `❌ Context recovery failed: No trimmable user messages found`,
+                true,
+                params
+            );
+            return {
+                errorMessage: `Context overflow with no trimmable messages: ${errorMessage}`,
+                step: 'Failed' as const,
+                terminate: true,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+
+        // Capture the original message for logging
+        const originalMessage = messages[lastUserMessageIndex];
+        const contentString = this.contentToString(originalMessage.content);
+        const trimResult = this.smartTrimContent(contentString, 1000);
+
+        this.logStatus(
+            `✂️ Trimmed message from ${trimResult.originalLength.toLocaleString()} to ${trimResult.trimmed.length.toLocaleString()} characters using ${trimResult.strategy}`,
+            true,
+            params
+        );
+
+        // Replace the message with trimmed version + explanation
+        messages[lastUserMessageIndex] = {
+            role: 'user',
+            content: `⚠️ CONTEXT OVERFLOW RECOVERY ⚠️
+
+The previous step returned a result that exceeded the context window (${(trimResult.originalLength - trimResult.trimmed.length).toLocaleString()} characters truncated).
+
+Here is a PARTIAL result from the previous action:
+---
+${trimResult.trimmed}
+---
+
+❗ THE ABOVE IS INCOMPLETE - the full result was too large for the context window.
+
+RECOMMENDED ACTIONS:
+1. Use a different action with more specific filters to get smaller result sets
+2. Request data in batches or pages instead of all at once
+3. Ask the user to clarify scope to narrow the query
+4. If you need the full data, acknowledge the limitation and ask the user how to proceed
+
+Please choose an alternative approach to complete your task.`
+        };
+
+        // Return Retry step to give agent another chance
+        return {
+            step: 'Retry' as const,
+            retryReason: 'Context length recovery - previous result too large',
+            retryInstructions: 'The previous action result exceeded context limits. Use more specific filters or request data in smaller batches.',
+            terminate: false,
+            previousPayload: payload,
+            newPayload: payload
+        };
+    }
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -1928,25 +2203,32 @@ export class BaseAgent {
      */
     protected async ExecuteSubAgent<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
-        subAgentRequest: AgentSubAgentRequest<SC>, 
+        subAgentRequest: AgentSubAgentRequest<SC>,
         subAgent: AIAgentEntityExtended,
         stepEntity: AIAgentRunStepEntityExtended,
-        payload?: SR
+        payload?: SR,
+        contextMessage?: ChatMessage
     ): Promise<ExecuteAgentResult<SR>> {
         try {
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
-            
+
             // Create a new AgentRunner instance
             const runner = new AgentRunner();
-            
-            // Prepare messages for sub-agent, adding the context message
-            const subAgentMessages: ChatMessage[] = [
-                // don't include the full conversation of the parent, just the subAgentRequest - we previously did this: ...params.conversationMessages,
-                {
-                    role: 'user',
-                    content: subAgentRequest.message
-                }
-            ];
+
+            // Prepare messages for sub-agent
+            // For related sub-agents, may include parent context message before the task message
+            const subAgentMessages: ChatMessage[] = [];
+
+            // Add context message first if provided (related sub-agents with SubAgentContextPaths)
+            if (contextMessage) {
+                subAgentMessages.push(contextMessage);
+            }
+
+            // Add the task message
+            subAgentMessages.push({
+                role: 'user',
+                content: subAgentRequest.message
+            });
             
             // Set parent run ID in the sub-agent's execution
             // This would need to be passed through the AgentRunner in a real implementation
@@ -2119,8 +2401,42 @@ export class BaseAgent {
     }
 
     /**
+     * Formats a parameter value for display in action execution messages.
+     * Truncates long strings and formats objects/arrays for readability.
+     *
+     * @param {any} value - The parameter value to format
+     * @param {number} maxLength - Maximum length before truncation (default: 100)
+     * @returns {string} Formatted value suitable for message display
+     * @private
+     */
+    private formatParamValueForMessage(value: any, maxLength: number = 100): string {
+        if (value === null || value === undefined) {
+            return 'null';
+        }
+
+        let stringValue: string;
+
+        if (typeof value === 'string') {
+            stringValue = value;
+        } else if (typeof value === 'object') {
+            // For objects/arrays, use compact JSON
+            stringValue = JSON.stringify(value);
+        } else {
+            stringValue = String(value);
+        }
+
+        // Truncate if too long
+        if (stringValue.length > maxLength) {
+            return `\`${stringValue.substring(0, maxLength)}...\``;
+        }
+
+        // Use inline code formatting for values
+        return `\`${stringValue}\``;
+    }
+
+    /**
      * Gets the agent type name for a given type ID.
-     * 
+     *
      * @param {string} typeID - The agent type ID
      * @returns {string} The agent type name or 'Unknown'
      * @private
@@ -2528,6 +2844,12 @@ export class BaseAgent {
         // Execute based on the previous decision using standard logic
         switch (previousDecision.step) {
             case 'Retry':
+                // Check if this is a message expansion request
+                if (previousDecision.messageIndex !== undefined) {
+                    // Handle message expansion before retrying
+                    const currentStepCount = this._agentRun?.Steps?.length || 0;
+                    this.executeExpandMessageStep(previousDecision, params, currentStepCount);
+                }
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
                 return await this.processSubAgentStep<P, P>(params, previousDecision!);
@@ -2683,17 +3005,56 @@ export class BaseAgent {
                 stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
                 // don't save here, we save when we call finalizeStepEntity()
             }
-                        
+
+            // Check if prompt execution failed
+            if (!promptResult.success) {
+                await this.finalizeStepEntity(stepEntity, false, promptResult.errorMessage);
+
+                // Check if this is a fatal error that shouldn't be retried
+                const isFatal = this.isFatalPromptError(promptResult);
+
+                // Check if this is a context length overflow that we can recover from
+                const isContextOverflow = isFatal &&
+                    promptResult.chatResult?.errorInfo?.errorType === 'ContextLengthExceeded';
+
+                if (isContextOverflow && !this._contextRecoveryAttempted) {
+                    // Attempt ONE-TIME context recovery
+                    this._contextRecoveryAttempted = true;
+
+                    this.logStatus(
+                        `⚠️ Context length exceeded - attempting recovery by trimming conversation`,
+                        true,
+                        params
+                    );
+
+                    return await this.attemptContextRecovery(params, payload, promptResult.errorMessage || 'Context length exceeded');
+                }
+
+                this.logStatus(
+                    `❌ Prompt execution failed: ${promptResult.errorMessage} (fatal: ${isFatal})`,
+                    true,
+                    params
+                );
+
+                return {
+                    errorMessage: promptResult.errorMessage || 'Prompt execution failed',
+                    step: 'Failed' as const,
+                    terminate: isFatal, // Terminate for fatal errors, allow retry for transient errors
+                    previousPayload: payload,
+                    newPayload: payload
+                };
+            }
+
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
                 const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
-                return { 
+                return {
                     ...cancelledResult,
-                    terminate: true, 
+                    terminate: true,
                     step: 'Failed', // Cancelled is treated as failed
                     previousPayload: cancelledResult.payload,
-                    newPayload: cancelledResult.payload // No changes, just return the same payload   
+                    newPayload: cancelledResult.payload // No changes, just return the same payload
                 }
             }
 
@@ -2937,12 +3298,14 @@ export class BaseAgent {
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
             // Execute sub-agent with scoped payload
+            // Child sub-agents don't use context messages (they inherit payload directly)
             const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                scopedPayload as SR
+                scopedPayload as SR,
+                undefined // No context message for child sub-agents
             );
             
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
@@ -3298,30 +3661,65 @@ export class BaseAgent {
         this.incrementExecutionCount(subAgentEntity.ID);
 
         try {
-            // Related agents don't use payload inheritance - they get the message only
+            // Related agents can receive parent data in two ways:
+            // 1. SubAgentInputMapping: Maps parent payload → sub-agent payload (structural data)
+            // 2. SubAgentContextPaths: Parent payload → sub-agent conversation context (LLM awareness)
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
-            // Execute related agent with independent payload (no payload parameter)
+            // Prepare initial payload via input mapping (if configured)
+            let initialSubAgentPayload: SR | undefined = undefined;
+            if (relationship.SubAgentInputMapping) {
+                const mapped = this.applySubAgentInputMapping(
+                    previousDecision.newPayload as unknown as Record<string, unknown>,
+                    relationship.SubAgentInputMapping
+                );
+                if (mapped && Object.keys(mapped).length > 0) {
+                    initialSubAgentPayload = mapped as SR;
+
+                    if (params.verbose === true || IsVerboseLoggingEnabled()) {
+                        LogStatus(`Related sub-agent '${subAgentRequest.name}' receiving mapped payload: ${JSON.stringify(Object.keys(mapped))}`);
+                    }
+                }
+            }
+
+            // Prepare context message with parent payload data (if configured)
+            let contextPaths: string[] = [];
+            if (relationship.SubAgentContextPaths) {
+                try {
+                    contextPaths = JSON.parse(relationship.SubAgentContextPaths);
+                } catch (parseError) {
+                    LogError(`Failed to parse SubAgentContextPaths for sub-agent ${subAgentRequest.name}: ${parseError.message}`);
+                }
+            }
+
+            const contextMessage = this.prepareRelatedSubAgentContextMessage(
+                previousDecision.newPayload as unknown as Record<string, unknown>,
+                contextPaths
+            );
+
+            if (contextMessage && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                LogStatus(`Related sub-agent '${subAgentRequest.name}' receiving context from paths: ${contextPaths.join(', ')}`);
+            }
+
+            // Execute related agent with prepared payload and context
             const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                undefined // Related agents start with empty/independent payload
+                initialSubAgentPayload, // Mapped payload from parent (or undefined if no mapping)
+                contextMessage // Context message with parent payload data (or undefined if no context paths)
             );
 
             let mergedPayload = previousDecision.newPayload; // Start with parent's payload
             let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
 
-            // Note: SubAgentOutputMapping field will be added by CodeGen after migration runs
-            const relationshipWithMapping = relationship as AIAgentRelationshipEntity & { SubAgentOutputMapping?: string };
-
-            if (subAgentResult.success && relationshipWithMapping.SubAgentOutputMapping) {
+            if (subAgentResult.success && relationship.SubAgentOutputMapping) {
                 // Apply output mapping if configured
                 const payloadChange = this.applySubAgentOutputMapping(
                     subAgentResult.payload as unknown as Record<string, unknown>,
                     previousDecision.newPayload as unknown as Record<string, unknown>,
-                    relationshipWithMapping.SubAgentOutputMapping
+                    relationship.SubAgentOutputMapping
                 );
 
                 if (payloadChange && payloadChange.updateElements) {
@@ -3360,7 +3758,7 @@ export class BaseAgent {
                     finalStep: subAgentResult.agentRun?.FinalStep,
                     errorMessage: subAgentResult.agentRun?.ErrorMessage,
                     stepCount: subAgentResult.agentRun?.Steps?.length || 0,
-                    hasMergedPayload: !!(relationshipWithMapping.SubAgentOutputMapping && mergedPayload !== previousDecision.newPayload)
+                    hasMergedPayload: !!(relationship.SubAgentOutputMapping && mergedPayload !== previousDecision.newPayload)
                 },
                 shouldTerminate: shouldTerminate,
                 nextStep: shouldTerminate ? 'success' : 'retry',
@@ -3368,6 +3766,11 @@ export class BaseAgent {
                     payloadChangeResult: currentStepPayloadChangeResult
                 })
             };
+
+            // Set PayloadAtEnd with the merged payload
+            if (stepEntity) {
+                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+            }
 
             // Finalize step entity
             await this.finalizeStepEntity(
@@ -3401,11 +3804,6 @@ export class BaseAgent {
                 role: 'user',
                 content: `Related sub-agent "${subAgentRequest.name}" completed:\n${JSON.stringify(subAgentSummary, null, 2)}`
             });
-
-            // Set PayloadAtEnd with the merged payload
-            if (stepEntity) {
-                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
-            }
 
             // Update the agent run's current payload
             if (this._agentRun) {
@@ -3492,6 +3890,117 @@ export class BaseAgent {
     }
 
     /**
+     * Applies sub-agent input mapping to prepare initial payload for related sub-agent.
+     * Maps parent payload paths to sub-agent initial payload paths.
+     * Enables structural data transfer from parent to related sub-agent.
+     *
+     * @param parentPayload - Parent agent's current payload
+     * @param mappingConfig - JSON mapping configuration string
+     * @returns Mapped payload object for sub-agent initialization, or null if mapping fails or produces empty result
+     * @private
+     */
+    private applySubAgentInputMapping(
+        parentPayload: Record<string, unknown>,
+        mappingConfig: string
+    ): Record<string, unknown> | null {
+        try {
+            const mapping: Record<string, string> = JSON.parse(mappingConfig);
+            const subAgentPayload: Record<string, unknown> = {};
+
+            for (const [parentPath, subAgentPath] of Object.entries(mapping)) {
+                let value: unknown;
+
+                if (parentPath === '*') {
+                    // Wildcard - send entire parent payload to sub-agent
+                    value = parentPayload;
+                } else {
+                    // Extract from parent payload using dot notation
+                    value = this.getValueFromPath(parentPayload, parentPath);
+                }
+
+                if (value !== undefined) {
+                    // Parse the sub-agent path and build nested object
+                    const pathParts = subAgentPath.split('.');
+                    let current = subAgentPayload;
+
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        const part = pathParts[i];
+                        if (!(part in current)) {
+                            current[part] = {};
+                        }
+                        current = current[part] as Record<string, unknown>;
+                    }
+
+                    current[pathParts[pathParts.length - 1]] = value;
+                }
+            }
+
+            if (Object.keys(subAgentPayload).length === 0) {
+                return null;
+            }
+
+            return subAgentPayload;
+        } catch (error) {
+            LogError(`Failed to parse SubAgentInputMapping: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Prepares a context message containing parent payload data for related sub-agent.
+     * Extracts specified paths from parent payload and formats them as a user message
+     * to provide LLM context to the sub-agent.
+     *
+     * @param parentPayload - Parent agent's current payload
+     * @param contextPaths - Array of paths to extract, or ["*"] for entire payload
+     * @returns ChatMessage with formatted context, or null if no paths specified or no data found
+     * @private
+     */
+    private prepareRelatedSubAgentContextMessage(
+        parentPayload: Record<string, unknown>,
+        contextPaths: string[]
+    ): ChatMessage | null {
+        if (!contextPaths || contextPaths.length === 0) {
+            return null;
+        }
+
+        // Check for wildcard - send entire payload
+        if (contextPaths.includes('*')) {
+            return {
+                role: 'user',
+                content: `Parent Agent Context:\n\n${JSON.stringify(parentPayload, null, 2)}`
+            };
+        }
+
+        // Extract specific paths
+        const contextData: Record<string, unknown> = {};
+
+        for (const path of contextPaths) {
+            const value = this.getValueFromPath(parentPayload, path);
+            if (value !== undefined) {
+                contextData[path] = value;
+            }
+        }
+
+        if (Object.keys(contextData).length === 0) {
+            return null;
+        }
+
+        // Format as readable context
+        const contextLines = Object.entries(contextData).map(([key, value]) => {
+            const valueStr = typeof value === 'object'
+                ? JSON.stringify(value, null, 2)
+                : String(value);
+            return `${key}:\n${valueStr}`;
+        });
+
+        return {
+            role: 'user',
+            content: `Parent Agent Context:\n\n${contextLines.join('\n\n')}`
+        };
+    }
+
+    /**
      * Helper method to get a value from a nested object path.
      * Supports both dot notation (obj.prop) and array indexing (arr[0]).
      *
@@ -3558,39 +4067,41 @@ export class BaseAgent {
             }
 
             // Report action execution progress with markdown formatting for parameters
+            // Use same format as assistant message for consistency
             let progressMessage: string;
             if (actions.length === 1) {
                 const aa = actions[0];
-                progressMessage = `Executing action: **${aa.name}**`;
-                
+                progressMessage = `Executing **${aa.name}** action`;
+
                 // Add parameters if they exist
                 if (aa.params && Object.keys(aa.params).length > 0) {
                     const paramsList = Object.entries(aa.params)
                         .map(([key, value]) => {
-                            const displayValue = typeof value === 'object' 
-                                ? JSON.stringify(value, null, 2) 
-                                : String(value);
-                            return `  - \`${key}\`: ${displayValue}`;
+                            const displayValue = this.formatParamValueForMessage(value);
+                            return `• **${key}**: ${displayValue}`;
                         })
                         .join('\n');
-                    progressMessage += `\n${paramsList}`;
+                    progressMessage += ` with parameters:\n${paramsList}`;
+                } else {
+                    progressMessage += '.';
                 }
             } else {
-                progressMessage = `Executing ${actions.length} actions:`;
-                actions.forEach(aa => {
-                    progressMessage += `\n\n• **${aa.name}**`;
+                progressMessage = `Executing **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+                    let actionText = `${index + 1}. **${aa.name}**`;
+
+                    // Add parameters if they exist
                     if (aa.params && Object.keys(aa.params).length > 0) {
                         const paramsList = Object.entries(aa.params)
                             .map(([key, value]) => {
-                                const displayValue = typeof value === 'object' 
-                                    ? JSON.stringify(value, null, 2) 
-                                    : String(value);
-                                return `  - \`${key}\`: ${displayValue}`;
+                                const displayValue = this.formatParamValueForMessage(value);
+                                return `   • **${key}**: ${displayValue}`;
                             })
                             .join('\n');
-                        progressMessage += `\n${paramsList}`;
+                        actionText += `\n${paramsList}`;
                     }
-                });
+
+                    return actionText;
+                }).join('\n\n');
             }
                 
             params.onProgress?.({
@@ -3603,17 +4114,51 @@ export class BaseAgent {
                 },
                 displayMode: 'live' // Only show in live mode
             });
-            
-            // Add assistant message indicating we're executing actions with more detail
-            const actionMessage = actions.length === 1 
-                ? `I'm executing the "${actions[0].name}" action...`
-                : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
-            
+
+            // Build detailed action execution message with parameters using markdown formatting
+            // This creates a permanent, lightweight record of what was requested
+            let actionMessage: string;
+            if (actions.length === 1) {
+                const aa = actions[0];
+                actionMessage = `I'm executing the **${aa.name}** action`;
+
+                // Add parameters if they exist
+                if (aa.params && Object.keys(aa.params).length > 0) {
+                    const paramsList = Object.entries(aa.params)
+                        .map(([key, value]) => {
+                            const displayValue = this.formatParamValueForMessage(value);
+                            return `• **${key}**: ${displayValue}`;
+                        })
+                        .join('\n');
+                    actionMessage += ` with parameters:\n${paramsList}`;
+                } else {
+                    actionMessage += '.';
+                }
+            } else {
+                actionMessage = `I'm executing **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+                    let actionText = `${index + 1}. **${aa.name}**`;
+
+                    // Add parameters if they exist
+                    if (aa.params && Object.keys(aa.params).length > 0) {
+                        const paramsList = Object.entries(aa.params)
+                            .map(([key, value]) => {
+                                const displayValue = this.formatParamValueForMessage(value);
+                                return `   • **${key}**: ${displayValue}`;
+                            })
+                            .join('\n');
+                        actionText += `\n${paramsList}`;
+                    }
+
+                    return actionText;
+                }).join('\n\n');
+            }
+
+            // Add assistant message (no metadata - this is a permanent record)
             params.conversationMessages.push({
                 role: 'assistant',
                 content: actionMessage
             });
-            
+
             const actionEngine = ActionEngineServer.Instance;
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
 
@@ -3717,14 +4262,59 @@ export class BaseAgent {
             
             // Check if any actions failed
             const failedActions = actionSummaries.filter(a => !a.success);
-            
+
             // Add user message with the results
             const resultsMessage = (failedActions.length > 0 ? `${failedActions.length} of ${actionSummaries.length} failed:` : `Action results:`) + `\n${JSON.stringify(actionSummaries, null, 2)}`;
-                
+
+            // Build metadata from AI Agent Actions configuration
+            // If multiple actions, use the most restrictive (shortest) expiration settings
+            let metadata: AgentChatMessageMetadata | undefined;
+            const agentActionConfigs = actionResults
+                .map(r => agentActions.find(aa => aa.ActionID === r.actionEntity.ID))
+                .filter(aa => aa != null);
+
+            if (agentActionConfigs.length > 0) {
+                // Find the most restrictive expiration settings
+                let minExpirationTurns: number | null = null;
+                let expirationMode: 'None' | 'Remove' | 'Compact' = 'None';
+                let compactMode: 'First N Chars' | 'AI Summary' | undefined;
+                let compactLength: number | undefined;
+                let compactPromptId: string | undefined;
+
+                for (const agentAction of agentActionConfigs) {
+                    // Track shortest expiration (most restrictive)
+                    if (agentAction.ResultExpirationTurns != null) {
+                        if (minExpirationTurns === null || agentAction.ResultExpirationTurns < minExpirationTurns) {
+                            minExpirationTurns = agentAction.ResultExpirationTurns;
+                            expirationMode = agentAction.ResultExpirationMode as 'None' | 'Remove' | 'Compact' || 'None';
+                            compactMode = agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined;
+                            compactLength = agentAction.CompactLength;
+                            compactPromptId = agentAction.CompactPromptID;
+                        }
+                    }
+                }
+
+                // Only add metadata if we have expiration settings
+                if (minExpirationTurns !== null && expirationMode !== 'None') {
+                    const currentStepCount = this._agentRun?.Steps?.length || 0;
+                    metadata = {
+                        turnAdded: currentStepCount,
+                        messageType: 'action-result',
+                        expirationTurns: minExpirationTurns,
+                        expirationMode: expirationMode,
+                        compactMode: compactMode,
+                        compactLength: compactLength,
+                        compactPromptId: compactPromptId
+                    };
+                }
+            }
+
+            // Add user message with results and optional metadata
             params.conversationMessages.push({
                 role: 'user',
-                content: resultsMessage
-            });
+                content: resultsMessage,
+                metadata: metadata
+            } as AgentChatMessage);
             
             // Call agent type's post-processing for actions
             let finalPayload = currentPayload;
@@ -3815,7 +4405,7 @@ export class BaseAgent {
         // Chat steps are successful - they indicate a need for user interaction
         await this.finalizeStepEntity(stepEntity, true);
         
-        return { 
+        return {
             step: 'Chat',
             terminate: true,
             message: previousDecision.message || 'Additional information needed from user',
@@ -3824,6 +4414,7 @@ export class BaseAgent {
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
             newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
+            suggestedResponses: previousDecision.suggestedResponses
         };
     }
 
@@ -3931,7 +4522,8 @@ export class BaseAgent {
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
-            agentRun: this._agentRun!
+            agentRun: this._agentRun!,
+            suggestedResponses: finalStep.suggestedResponses
         };
     }
 
@@ -4053,6 +4645,414 @@ export class BaseAgent {
         }
         
         return violations;
+    }
+
+    /**
+     * Prunes and compacts expired messages in the conversation based on configured expiration rules.
+     * Processes messages in three phases: identification, compaction, and removal.
+     *
+     * @param params - Agent execution parameters containing conversation messages
+     * @param currentTurn - Current turn number in the agent execution
+     * @protected
+     */
+    protected async pruneAndCompactExpiredMessages(
+        params: ExecuteAgentParams,
+        currentTurn: number
+    ): Promise<void> {
+        const messagesToCompact: Array<{
+            index: number;
+            message: AgentChatMessage;
+            metadata: {
+                compactMode: 'First N Chars' | 'AI Summary';
+                compactLength: number;
+                compactPromptId: string;
+                originalLength: number;
+            };
+        }> = [];
+        const messagesToRemove: number[] = [];
+
+        // Phase 1: Identify expired messages
+        for (let i = 0; i < params.conversationMessages.length; i++) {
+            const msg = params.conversationMessages[i] as AgentChatMessage;
+
+            // Skip messages without expiration metadata
+            if (!msg.metadata?.expirationTurns && msg.metadata?.expirationTurns !== 0) {
+                continue;
+            }
+
+            // Skip if expiration mode is None
+            if (msg.metadata.expirationMode === 'None') {
+                continue;
+            }
+
+            // Calculate age in turns
+            const turnAdded = msg.metadata.turnAdded || 0;
+            const turnsAlive = currentTurn - turnAdded;
+
+            // Check if expired
+            if (turnsAlive > msg.metadata.expirationTurns) {
+                msg.metadata.isExpired = true;
+
+                if (msg.metadata.expirationMode === 'Remove') {
+                    messagesToRemove.push(i);
+
+                    this.emitMessageLifecycleEvent({
+                        type: 'message-expired',
+                        turn: currentTurn,
+                        messageIndex: i,
+                        message: msg,
+                        reason: `Expired after ${turnsAlive} turns (limit: ${msg.metadata.expirationTurns})`
+                    });
+                } else if (msg.metadata.expirationMode === 'Compact') {
+                    // Ensure we have compact config
+                    if (msg.metadata.compactMode) {
+                        messagesToCompact.push({
+                            index: i,
+                            message: msg,
+                            metadata: {
+                                compactMode: msg.metadata.compactMode,
+                                compactLength: msg.metadata.compactLength || 500,
+                                compactPromptId: msg.metadata.compactPromptId || '',
+                                originalLength: typeof msg.content === 'string'
+                                    ? msg.content.length
+                                    : JSON.stringify(msg.content).length
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        // Phase 2: Compact messages (may involve async LLM calls)
+        const preserveOriginal = params.messageExpirationOverride?.preserveOriginalContent !== false;
+
+        for (const item of messagesToCompact) {
+            const originalContent = item.message.content;
+            const compacted = await this.compactMessage(
+                item.message,
+                item.metadata,
+                params
+            );
+
+            // Calculate token savings
+            const originalTokens = this.estimateTokens(originalContent);
+            const compactedTokens = this.estimateTokens(compacted);
+            const tokensSaved = originalTokens - compactedTokens;
+
+            // Update message in place
+            params.conversationMessages[item.index] = {
+                ...item.message,
+                content: compacted,
+                metadata: {
+                    ...item.message.metadata,
+                    wasCompacted: true,
+                    originalContent: preserveOriginal ? originalContent : undefined,
+                    originalLength: item.metadata.originalLength,
+                    tokensSaved,
+                    canExpand: preserveOriginal
+                }
+            };
+
+            this.emitMessageLifecycleEvent({
+                type: 'message-compacted',
+                turn: currentTurn,
+                messageIndex: item.index,
+                message: params.conversationMessages[item.index] as AgentChatMessage,
+                reason: `Compacted using ${item.metadata.compactMode} (saved ${tokensSaved} tokens)`,
+                tokensSaved
+            });
+        }
+
+        // Phase 3: Remove expired messages (reverse order to preserve indices)
+        for (let i = messagesToRemove.length - 1; i >= 0; i--) {
+            const index = messagesToRemove[i];
+            const removed = params.conversationMessages.splice(index, 1)[0];
+
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentTurn,
+                messageIndex: index,
+                message: removed as AgentChatMessage,
+                reason: 'Removed due to expiration'
+            });
+        }
+
+        // Log summary if verbose
+        if (params.verbose && (messagesToCompact.length > 0 || messagesToRemove.length > 0)) {
+            const totalSaved = messagesToCompact.reduce((sum, item) => {
+                const msg = params.conversationMessages[item.index] as AgentChatMessage;
+                return sum + (msg.metadata?.tokensSaved || 0);
+            }, 0);
+
+            console.log(`[Turn ${currentTurn}] Message pruning: ` +
+                `${messagesToCompact.length} compacted (saved ~${totalSaved} tokens), ` +
+                `${messagesToRemove.length} removed`);
+        }
+    }
+
+    /**
+     * Creates an AIAgentRunStep for message compaction operations.
+     * Records the compaction attempt with context about the message being compacted.
+     *
+     * @param prompt - The AI prompt used for compaction
+     * @param message - The message being compacted
+     * @param params - Agent execution parameters
+     * @returns The created run step entity
+     * @protected
+     */
+    protected async createCompactionStep(
+        prompt: AIPromptEntityExtended,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<AIAgentRunStepEntityExtended> {
+        if (!this._agentRun) {
+            throw new Error('Cannot create compaction step: agent run not initialized');
+        }
+
+        const md = new Metadata();
+        const step = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+            'MJ: AI Agent Run Steps',
+            params.contextUser
+        );
+
+        step.NewRecord();
+        step.AgentRunID = this._agentRun.ID;
+        step.StepType = 'Prompt';
+        step.Status = 'Running';
+        step.InputData = JSON.stringify({
+            stepName: 'Message Compaction',
+            description: `Compacting message using AI Summary (${message.metadata?.messageType || 'unknown'} from turn ${message.metadata?.turnAdded || 0})`,
+            messageType: message.metadata?.messageType,
+            turnAdded: message.metadata?.turnAdded,
+            originalLength: message.metadata?.originalLength ||
+                (typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length),
+            compactMode: 'AI Summary',
+            promptId: prompt.ID,
+            promptName: prompt.Name
+        });
+
+        await step.Save();
+        return step;
+    }
+
+    /**
+     * Updates the compaction step with execution results and token usage.
+     *
+     * @param step - The run step to update
+     * @param result - The prompt execution result
+     * @param message - The message that was compacted
+     * @param params - Agent execution parameters
+     * @protected
+     */
+    protected async updateCompactionStep(
+        step: AIAgentRunStepEntityExtended,
+        result: AIPromptRunResult<{ summary: string }>,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        step.Status = result.success ? 'Completed' : 'Failed';
+        const promptTokens = result.promptTokens || 0;
+        const completionTokens = result.completionTokens || 0;
+        step.OutputData = JSON.stringify({
+            success: result.success,
+            summaryLength: result.result?.summary?.length || 0,
+            tokensSaved: message.metadata?.tokensSaved || 0,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            cost: result.cost
+        });
+
+        if (!result.success) {
+            step.ErrorMessage = result.errorMessage || 'AI Summary compaction failed';
+        }
+
+        await step.Save();
+    }
+
+    /**
+     * Compacts a message using configured compaction mode.
+     *
+     * @param message - The message to compact
+     * @param metadata - Compaction configuration
+     * @param params - Agent execution parameters for context
+     * @returns Compacted content string
+     * @protected
+     */
+    protected async compactMessage(
+        message: AgentChatMessage,
+        metadata: {
+            compactMode: 'First N Chars' | 'AI Summary';
+            compactLength: number;
+            compactPromptId: string;
+            originalLength: number;
+        },
+        params: ExecuteAgentParams
+    ): Promise<string> {
+        const originalContent = typeof message.content === 'string'
+            ? message.content
+            : JSON.stringify(message.content);
+
+        switch (metadata.compactMode) {
+            case 'First N Chars': {
+                const length = metadata.compactLength;
+
+                if (originalContent.length <= length) {
+                    return originalContent; // Already short enough
+                }
+
+                const truncated = originalContent.substring(0, length);
+                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters. Agent can request expansion if needed.]`;
+            }
+
+            case 'AI Summary': {
+                try {
+                    // Get prompt for summarization with lookup hierarchy:
+                    // 1. Runtime override (metadata.compactPromptId from messageExpirationOverride)
+                    // 2. AIAgentAction.CompactPromptID
+                    // 3. Action.DefaultCompactPromptID
+                    // 4. System default compact prompt
+                    const promptId = metadata.compactPromptId || this.getSystemDefaultCompactPromptId();
+                    const prompt = AIEngine.Instance.Prompts.find(p => p.ID === promptId);
+
+                    if (!prompt) {
+                        // Fallback to First N Chars if prompt not found
+                        console.warn(`Compact prompt ${promptId} not found, falling back to First N Chars`);
+                        return this.compactMessage(message,
+                            { ...metadata, compactMode: 'First N Chars' },
+                            params
+                        );
+                    }
+
+                    // Create tracking step for this compaction
+                    const step = await this.createCompactionStep(prompt, message, params);
+
+                    // Execute summarization prompt
+                    const promptParams = new AIPromptParams();
+                    promptParams.prompt = prompt;
+                    promptParams.data = {
+                        originalContent,
+                        originalLength: metadata.originalLength,
+                        targetLength: metadata.compactLength || 500,
+                        messageType: message.metadata?.messageType || 'unknown',
+                        turnAdded: message.metadata?.turnAdded || 0
+                    };
+                    promptParams.contextUser = params.contextUser;
+
+                    const runner = new AIPromptRunner();
+                    const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);
+
+                    // Update step with result
+                    await this.updateCompactionStep(step, result, message, params);
+
+                    if (!result.success || !result.result?.summary) {
+                        // Fallback to First N Chars on failure
+                        console.warn('AI summary failed, falling back to First N Chars');
+                        return this.compactMessage(message,
+                            { ...metadata, compactMode: 'First N Chars' },
+                            params
+                        );
+                    }
+
+                    return `[AI Summary of ${metadata.originalLength} chars. Agent can request full expansion if needed.]\n\n${result.result.summary}`;
+
+                } catch (error) {
+                    console.error('Error during AI summary:', error);
+                    // Fallback to First N Chars
+                    return this.compactMessage(message,
+                        { ...metadata, compactMode: 'First N Chars' },
+                        params
+                    );
+                }
+            }
+
+            default:
+                return originalContent;
+        }
+    }
+
+    /**
+     * Returns the system default prompt ID for message compaction.
+     * Looks up the "Compact Agent Message" prompt by name.
+     * @protected
+     */
+    protected getSystemDefaultCompactPromptId(): string {
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Compact Agent Message');
+        if (!prompt) {
+            console.warn('System default compact prompt not found. Ensure "Compact Agent Message" prompt exists.');
+            return '';
+        }
+        return prompt.ID;
+    }
+
+    /**
+     * Estimates token count from content (rough approximation).
+     * Uses 4 chars per token heuristic (conservative estimate).
+     * @protected
+     */
+    protected estimateTokens(content: ChatMessage['content']): number {
+        const text = typeof content === 'string'
+            ? content
+            : JSON.stringify(content);
+        return Math.ceil(text.length / 4);
+    }
+
+    /**
+     * Emits message lifecycle event if callback is registered.
+     * @protected
+     */
+    protected emitMessageLifecycleEvent(event: MessageLifecycleEvent): void {
+        if (this._messageLifecycleCallback) {
+            this._messageLifecycleCallback(event);
+        }
+    }
+
+    /**
+     * Expands a previously compacted message to its original content.
+     *
+     * @param request - The expand message request
+     * @param params - Agent execution parameters
+     * @param currentTurn - Current turn number
+     * @protected
+     */
+    protected executeExpandMessageStep(
+        request: BaseAgentNextStep,
+        params: ExecuteAgentParams,
+        currentTurn: number
+    ): void {
+        const messageIndex = request.messageIndex;
+        const reason = request.expandReason;
+
+        if (messageIndex === undefined || messageIndex < 0 || messageIndex >= params.conversationMessages.length) {
+            console.warn(`Cannot expand message: index ${messageIndex} out of bounds`);
+            return;
+        }
+
+        const message = params.conversationMessages[messageIndex] as AgentChatMessage;
+
+        if (!message.metadata?.canExpand || !message.metadata?.originalContent) {
+            console.warn(`Cannot expand message at index ${messageIndex}: not expandable or no original content`);
+            return;
+        }
+
+        // Restore original content
+        message.content = message.metadata.originalContent;
+        message.metadata.wasCompacted = false;
+        message.metadata.canExpand = false;
+        delete message.metadata.originalContent;
+
+        // Emit lifecycle event
+        this.emitMessageLifecycleEvent({
+            type: 'message-expanded',
+            turn: currentTurn,
+            messageIndex,
+            message,
+            reason: reason || 'Agent requested expansion'
+        });
+
+        if (params.verbose) {
+            console.log(`[Turn ${currentTurn}] Expanded message at index ${messageIndex}`);
+        }
     }
 }
 

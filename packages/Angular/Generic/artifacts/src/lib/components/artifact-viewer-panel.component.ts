@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
-import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -18,7 +18,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() versionNumber?: number; // Version to display
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
+  @Input() viewContext: 'conversation' | 'collection' | null = null; // Where artifact is being viewed
+  @Input() contextCollectionId?: string; // If viewing in collection, which collection
   @Output() closed = new EventEmitter<void>();
+  @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
+  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -32,21 +36,20 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public error: string | null = null;
   public jsonContent = '';
   public showVersionDropdown = false;
-  public showLibraryDialog = false;
-  public collections: CollectionEntity[] = [];
-  public selectedCollectionId: string | null = null;
-  public newCollectionName = '';
-  public isCreatingCollection = false;
-  public isSavingToLibrary = false;
   public artifactCollections: CollectionArtifactEntity[] = [];
   public primaryCollection: CollectionEntity | null = null;
 
   // Tabbed interface
-  public activeTab: 'display' | 'json' | 'details' = 'display';
+  public activeTab: 'display' | 'json' | 'details' | 'links' = 'display';
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public versionAttributes: ArtifactVersionAttributeEntity[] = [];
   private artifactTypeDriverClass: string | null = null;
+
+  // Links tab data
+  public originConversation: ConversationEntity | null = null;
+  public allCollections: CollectionEntity[] = [];
+  public hasAccessToOriginConversation: boolean = false;
 
   // Cache plugin state to avoid losing it when switching tabs
   private cachedPluginShouldShowRaw: boolean = false;
@@ -167,6 +170,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         // Load collection associations
         await this.loadCollectionAssociations();
 
+        // Load links data
+        await this.loadLinksData();
+
         console.log(`📦 Loaded ${this.allVersions.length} versions for artifact ${this.artifactId}, showing v${this.selectedVersionNumber}`);
       } else {
         this.error = 'No artifact version found';
@@ -220,6 +226,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         // Parse values - they might be JSON-encoded strings
         this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
         this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
+
+        // Clean up double-escaped characters in HTML (from LLM generation)
+        if (this.displayHtml) {
+          this.displayHtml = this.cleanEscapedCharacters(this.displayHtml);
+        }
 
         // Default to display tab if we have a plugin or extracted display content
         // Otherwise default to JSON tab for JSON types, or Details tab as last resort
@@ -297,7 +308,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     });
   }
 
-  setActiveTab(tab: 'display' | 'json' | 'details'): void {
+  setActiveTab(tab: 'display' | 'json' | 'details' | 'links'): void {
     this.activeTab = tab;
   }
 
@@ -315,6 +326,27 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
 
     return value;
+  }
+
+  /**
+   * Clean up double-escaped characters that appear in LLM-generated HTML
+   * Removes literal "\\n" and "\\t" which cause rendering issues
+   */
+  private cleanEscapedCharacters(html: string): string {
+    // Remove escaped newlines (\\n becomes nothing)
+    // HTML doesn't need whitespace for formatting, and these cause display issues
+    let cleaned = html.replace(/\\n/g, '');
+
+    // Remove escaped tabs
+    cleaned = cleaned.replace(/\\t/g, '');
+
+    // Remove double-escaped tabs
+    cleaned = cleaned.replace(/\\\\t/g, '');
+
+    // Remove double-escaped newlines
+    cleaned = cleaned.replace(/\\\\n/g, '');
+
+    return cleaned;
   }
 
   private async loadCollectionAssociations(): Promise<void> {
@@ -359,13 +391,58 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   onCopyDisplayContent(): void {
-    const content = this.displayMarkdown || this.displayHtml;
+    const content = this.displayHtml || this.displayMarkdown;
     if (content) {
       navigator.clipboard.writeText(content).then(() => {
         console.log('✅ Copied display content to clipboard');
       }).catch(err => {
         console.error('Failed to copy to clipboard:', err);
       });
+    }
+  }
+
+  onPrintDisplayContent(): void {
+    // Try to delegate to the plugin viewer's print method
+    if (this.pluginViewer?.pluginInstance) {
+      const plugin = this.pluginViewer.pluginInstance as any;
+      if (typeof plugin.printHtml === 'function') {
+        plugin.printHtml();
+        return;
+      }
+    }
+
+    // Fallback: create a temporary print window with displayHtml or displayMarkdown
+    const content = this.displayHtml || this.displayMarkdown;
+    if (content) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        if (this.displayHtml) {
+          printWindow.document.write(content);
+        } else if (this.displayMarkdown) {
+          // Wrap markdown in basic HTML for printing
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Print</title>
+              <style>
+                body { font-family: sans-serif; padding: 20px; }
+                pre { background: #f5f5f5; padding: 10px; border-radius: 4px; }
+              </style>
+            </head>
+            <body>
+              <pre>${content}</pre>
+            </body>
+            </html>
+          `);
+        }
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+          printWindow.close();
+        }, 250);
+      }
     }
   }
 
@@ -388,182 +465,239 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   async onSaveToLibrary(): Promise<void> {
-    // If already in a collection, navigate to that collection
-    if (this.isInCollection && this.primaryCollection) {
-      // TODO: Implement navigation to collection view
-      // For now, just log - will need ConversationStateService or similar to navigate
-      console.log('Navigate to collection:', this.primaryCollection.Name, this.primaryCollection.ID);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        `This artifact is saved in collection: ${this.primaryCollection.Name}`,
-        'info',
-        3000
-      );
-      return;
-    }
-
-    // If not in a collection, show the save dialog
-    try {
-      // Load user's collections
-      const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
-        EntityName: 'MJ: Collections',
-        ExtraFilter: `EnvironmentID='${this.environmentId}'`,
-        OrderBy: 'Name',
-        ResultType: 'entity_object'
-      }, this.currentUser);
-
-      if (result.Success) {
-        this.collections = result.Results || [];
-        this.showLibraryDialog = true;
-      } else {
-        console.error('Failed to load collections:', result.ErrorMessage);
-        MJNotificationService.Instance.CreateSimpleNotification(
-          'Failed to load collections. Please try again.',
-          'error'
-        );
-      }
-    } catch (err) {
-      console.error('Error loading collections:', err);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Error loading collections. Please try again.',
-        'error'
-      );
-    }
+    // Always show the collection picker modal
+    // Artifacts can be saved to multiple collections
+    this.saveToCollectionRequested.emit({
+      artifactId: this.artifactId,
+      excludedCollectionIds: this.excludedCollectionIds
+    });
   }
 
-  async createNewCollection(): Promise<void> {
-    if (!this.newCollectionName.trim()) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Please enter a collection name',
-        'warning',
-        2000
-      );
-      return;
+  get excludedCollectionIds(): string[] {
+    // Return IDs of collections that already contain this artifact
+    return this.artifactCollections.map(ca => ca.CollectionID);
+  }
+
+  /**
+   * Called by parent component after user selects collections in the picker.
+   * Saves the artifact to the selected collections.
+   */
+  async saveToCollections(collectionIds: string[]): Promise<boolean> {
+    if (!this.artifactId || collectionIds.length === 0) {
+      return false;
     }
 
     try {
-      this.isCreatingCollection = true;
       const md = new Metadata();
-      const collection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
+      let successCount = 0;
 
-      collection.EnvironmentID = this.environmentId;
-      collection.Name = this.newCollectionName.trim();
-      collection.Description = 'Created from conversation';
+      // Save artifact to each selected collection
+      for (const collectionId of collectionIds) {
+        // Double check it doesn't already exist
+        const rv = new RunView();
+        const existingResult = await rv.RunView<CollectionArtifactEntity>({
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${this.artifactId}'`,
+          ResultType: 'entity_object'
+        }, this.currentUser);
 
-      const saved = await collection.Save();
+        if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
+          console.log(`Artifact already in collection ${collectionId}, skipping`);
+          continue;
+        }
 
-      if (saved) {
-        this.collections.push(collection);
-        this.selectedCollectionId = collection.ID;
-        this.newCollectionName = '';
-        console.log('✅ Created new collection:', collection.Name);
+        // Create junction record
+        const collectionArtifact = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
+        collectionArtifact.CollectionID = collectionId;
+        collectionArtifact.ArtifactID = this.artifactId;
+        collectionArtifact.Sequence = 0;
+
+        const saved = await collectionArtifact.Save();
+        if (saved) {
+          successCount++;
+        } else {
+          console.error(`Failed to save artifact to collection ${collectionId}`);
+        }
+      }
+
+      if (successCount > 0) {
+        console.log(`✅ Saved artifact to ${successCount} collection(s)`);
         MJNotificationService.Instance.CreateSimpleNotification(
-          `Collection "${collection.Name}" created successfully!`,
+          `Artifact saved to ${successCount} collection(s) successfully!`,
           'success',
           3000
         );
-      } else {
-        MJNotificationService.Instance.CreateSimpleNotification(
-          'Failed to create collection. Please try again.',
-          'error'
-        );
-      }
-    } catch (err) {
-      console.error('Error creating collection:', err);
-      LogError(err);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Error creating collection. Please try again.',
-        'error'
-      );
-    } finally {
-      this.isCreatingCollection = false;
-    }
-  }
-
-  async saveToSelectedCollection(): Promise<void> {
-    if (!this.selectedCollectionId) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Please select a collection',
-        'warning',
-        2000
-      );
-      return;
-    }
-
-    if (!this.artifactId) {
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'No artifact to save',
-        'error'
-      );
-      return;
-    }
-
-    try {
-      this.isSavingToLibrary = true;
-
-      // Check if artifact already exists in this collection
-      const rv = new RunView();
-      const existingResult = await rv.RunView<CollectionArtifactEntity>({
-        EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${this.selectedCollectionId}' AND ArtifactID='${this.artifactId}'`,
-        ResultType: 'entity_object'
-      }, this.currentUser);
-
-      if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
-        MJNotificationService.Instance.CreateSimpleNotification(
-          'This artifact is already in the selected collection',
-          'info',
-          3000
-        );
-        this.showLibraryDialog = false;
-        return;
-      }
-
-      // Create junction record
-      const md = new Metadata();
-      const collectionArtifact = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
-
-      collectionArtifact.CollectionID = this.selectedCollectionId;
-      collectionArtifact.ArtifactID = this.artifactId;
-      collectionArtifact.Sequence = 0; // Could calculate max sequence + 1 if needed
-
-      const saved = await collectionArtifact.Save();
-
-      if (saved) {
-        const collectionName = this.collections.find(c => c.ID === this.selectedCollectionId)?.Name || 'collection';
-        console.log(`✅ Saved artifact to ${collectionName}`);
-        MJNotificationService.Instance.CreateSimpleNotification(
-          `Artifact saved to ${collectionName} successfully!`,
-          'success',
-          3000
-        );
-        this.showLibraryDialog = false;
-        this.selectedCollectionId = null;
 
         // Reload collection associations to update the bookmark icon state
         await this.loadCollectionAssociations();
+        return true;
       } else {
         MJNotificationService.Instance.CreateSimpleNotification(
-          'Failed to save artifact to collection. Please try again.',
+          'Failed to save artifact to any collections',
           'error'
         );
+        return false;
       }
     } catch (err) {
-      console.error('Error saving to collection:', err);
+      console.error('Error saving to collections:', err);
       LogError(err);
       MJNotificationService.Instance.CreateSimpleNotification(
-        'Error saving artifact to collection. Please try again.',
+        'Error saving artifact to collections. Please try again.',
         'error'
       );
-    } finally {
-      this.isSavingToLibrary = false;
+      return false;
     }
   }
 
-  cancelLibraryDialog(): void {
-    this.showLibraryDialog = false;
-    this.selectedCollectionId = null;
-    this.newCollectionName = '';
+  /**
+   * Load links data: origin conversation and all collections containing this artifact
+   */
+  private async loadLinksData(): Promise<void> {
+    if (!this.artifactId) return;
+
+    try {
+      const md = new Metadata();
+      const rv = new RunView();
+
+      // Load all collections containing this artifact
+      const collArtifactsResult = await rv.RunView<CollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
+
+      if (collArtifactsResult.Success && collArtifactsResult.Results) {
+        // Get unique collection IDs
+        const collectionIds = [...new Set(collArtifactsResult.Results.map(ca => ca.CollectionID))];
+
+        if (collectionIds.length > 0) {
+          const collectionsFilter = collectionIds.map(id => `ID='${id}'`).join(' OR ');
+          const collectionsResult = await rv.RunView<CollectionEntity>({
+            EntityName: 'MJ: Collections',
+            ExtraFilter: collectionsFilter,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          if (collectionsResult.Success && collectionsResult.Results) {
+            this.allCollections = collectionsResult.Results;
+          }
+        }
+      }
+
+      // Load origin conversation (if artifact came from conversation)
+      // Artifacts are linked to conversations via ConversationDetailArtifact -> ConversationDetail -> Conversation
+      // Get all version IDs for this artifact
+      const versionIds = this.allVersions.map(v => v.ID);
+
+      if (versionIds.length > 0) {
+        const versionFilter = versionIds.map(id => `ArtifactVersionID='${id}'`).join(' OR ');
+        const convDetailArtifactsResult = await rv.RunView<ConversationDetailArtifactEntity>({
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: versionFilter,
+          MaxRows: 1,
+          ResultType: 'entity_object'
+        }, this.currentUser);
+
+        if (convDetailArtifactsResult.Success && convDetailArtifactsResult.Results && convDetailArtifactsResult.Results.length > 0) {
+          const conversationDetailId = convDetailArtifactsResult.Results[0].ConversationDetailID;
+
+          // Load the conversation detail to get the conversation ID
+          const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+          const detailLoaded = await conversationDetail.Load(conversationDetailId);
+
+          if (detailLoaded && conversationDetail.ConversationID) {
+            const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', this.currentUser);
+            const loaded = await conversation.Load(conversationDetail.ConversationID);
+
+            if (loaded) {
+              this.originConversation = conversation;
+
+              // Check if user has access (is owner or participant)
+              const userIsOwner = conversation.UserID === this.currentUser.ID;
+
+              // Check if user is a participant
+              const participantResult = await rv.RunView({
+                EntityName: 'Conversation Details',
+                ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.currentUser.ID}'`,
+                MaxRows: 1,
+                ResultType: 'simple'
+              }, this.currentUser);
+
+              const userIsParticipant = participantResult.Success &&
+                                         participantResult.Results &&
+                                         participantResult.Results.length > 0;
+
+              this.hasAccessToOriginConversation = userIsOwner || userIsParticipant;
+            }
+          }
+        }
+      }
+
+      console.log(`🔗 Loaded links: ${this.allCollections.length} collections, origin conversation: ${this.originConversation?.Name || 'none'}`);
+    } catch (error) {
+      console.error('Error loading links data:', error);
+    }
+  }
+
+  get hasLinksTab(): boolean {
+    // Show links tab if:
+    // 1. Viewing in collection and there's an origin conversation OR other collections
+    // 2. Viewing in conversation and there are any collections
+
+    if (this.viewContext === 'collection') {
+      // Show if there's an origin conversation, or more than 1 collection (current + others)
+      return !!this.originConversation || this.allCollections.length > 1;
+    } else if (this.viewContext === 'conversation') {
+      // Show if there are any collections
+      return this.allCollections.length > 0;
+    }
+
+    return false;
+  }
+
+  get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
+    const links: Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> = [];
+
+    // Add origin conversation if viewing in collection
+    if (this.viewContext === 'collection' && this.originConversation) {
+      links.push({
+        type: 'conversation',
+        id: this.originConversation.ID,
+        name: this.originConversation.Name || 'Untitled Conversation',
+        hasAccess: this.hasAccessToOriginConversation
+      });
+    }
+
+    // Add all collections (excluding current context if applicable)
+    for (const collection of this.allCollections) {
+      if (this.viewContext === 'collection' && collection.ID === this.contextCollectionId) {
+        // Skip current collection
+        continue;
+      }
+
+      links.push({
+        type: 'collection',
+        id: collection.ID,
+        name: collection.Name,
+        hasAccess: true // User can see it, so they have access
+      });
+    }
+
+    return links;
+  }
+
+  /**
+   * Navigate to a linked conversation or collection
+   */
+  onNavigateToLink(link: {type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}): void {
+    if (!link.hasAccess) {
+      return;
+    }
+
+    this.navigateToLink.emit({
+      type: link.type,
+      id: link.id
+    });
   }
 
   onClose(): void {

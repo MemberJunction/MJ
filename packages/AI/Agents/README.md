@@ -498,9 +498,163 @@ const result = await agent.ExecutePrompt({
 ### Context Management
 Agents automatically manage conversation context:
 - Maintains message history across steps
+- **Intelligent message expiration** - Automatically compacts or removes old action results
 - Compresses context when approaching token limits
 - Handles placeholder replacement in prompts
 - Preserves important context during compression
+
+### Message Expiration and Compaction
+
+The framework provides sophisticated message lifecycle management to prevent context bloat from large action results:
+
+**Per-Action Configuration** (in `AIAgentAction` table):
+- `ResultExpirationTurns`: Number of turns before message expires (e.g., 2)
+- `ResultExpirationMode`: 'None' | 'Remove' | 'Compact'
+- `CompactMode`: 'First N Chars' | 'AI Summary'
+- `CompactLength`: Character limit for 'First N Chars' mode
+- `CompactPromptID`: Custom AI prompt for 'AI Summary' mode
+
+**How It Works**:
+```typescript
+// Configure a Google Search action to compact results after 2 turns
+await agentAction.Save({
+    ResultExpirationTurns: 2,
+    ResultExpirationMode: 'Compact',
+    CompactMode: 'First N Chars',
+    CompactLength: 500
+});
+
+// Turn 1: Action returns 10,000 char search results
+// Turn 2: Results still in conversation (turn 1, limit 2)
+// Turn 3: Results still in conversation (turn 2, limit 2)
+// Turn 4: Results compacted to 500 chars (turn 3 > limit 2)
+//         Original content preserved in metadata for expansion
+```
+
+**Compaction Modes**:
+1. **First N Chars**: Fast truncation with annotation
+   ```
+   First 500 chars of result...
+
+   [Compacted: showing first 500 of 10000 characters. Agent can request expansion if needed.]
+   ```
+
+2. **AI Summary**: Intelligent LLM-based summarization
+   ```
+   [AI Summary of 10000 chars. Agent can request full expansion if needed.]
+
+   Search found 47 results for "MemberJunction". Top results include...
+   ```
+
+**Message Expansion**:
+Agents can restore compacted messages when needed:
+```typescript
+// In agent's JSON response
+{
+    "taskComplete": false,
+    "nextStep": {
+        "type": "Retry",
+        "messageIndex": 5,  // Index of compacted message
+        "reason": "Need full search results to answer user's question about item #47"
+    }
+}
+```
+
+**Runtime Override**:
+Test different expiration strategies without modifying database:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    messageExpirationOverride: {
+        expirationTurns: 1,
+        expirationMode: 'Compact',
+        compactMode: 'First N Chars',
+        compactLength: 200,
+        preserveOriginalContent: true
+    }
+});
+```
+
+**Lifecycle Monitoring**:
+Track message compaction for debugging and token savings analysis:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    onMessageLifecycle: (event) => {
+        console.log(`[Turn ${event.turn}] ${event.type}: ${event.reason}`);
+        if (event.tokensSaved) {
+            console.log(`  Tokens saved: ${event.tokensSaved}`);
+        }
+    }
+});
+// Output:
+// [Turn 3] message-compacted: Compacted using First N Chars (saved 2375 tokens)
+// [Turn 5] message-removed: Removed due to expiration
+```
+
+**Prompt Lookup Hierarchy**:
+For AI Summary mode, prompts are resolved in this order:
+1. Runtime override (`messageExpirationOverride.compactPromptId`)
+2. Agent action configuration (`AIAgentAction.CompactPromptID`)
+3. Action default (`Action.DefaultCompactPromptID`)
+4. System default ("Compact Agent Message" prompt)
+
+**Benefits**:
+- **Addresses Large Action Results**: Automatically handles the most common cause of context bloat
+- **Configurable Per-Action**: Different expiration strategies for different action types
+- **Non-Destructive**: Original content preserved in metadata for on-demand expansion
+- **Token Savings**: Reduces context window usage by 70-95% for large results
+- **Agent-Aware**: Agents can detect compacted messages and request full expansion when needed
+
+### Context Length Recovery
+
+When a prompt execution fails due to context length overflow (even after model failover), BaseAgent provides **one-time automatic recovery** instead of immediately terminating. This gives the agent an opportunity to adapt its approach.
+
+**How It Works**:
+1. **Prompt fails with ContextLengthExceeded** → Detected as fatal error
+2. **First occurrence**: Recovery is attempted automatically (once per run)
+3. **Last user message is trimmed** using smart strategies:
+   - JSON arrays: Keeps first 10 items with truncation notice
+   - CSV data: Keeps header + first 10 rows
+   - Plain text: Keeps first 1000 characters
+4. **Agent receives clear guidance** explaining what happened and recommended actions
+5. **Agent gets Retry step** to choose alternative approach (e.g., more specific filters, batch requests)
+6. **If recovery fails again**: Normal fatal error handling (agent terminates)
+
+**Example Recovery Message**:
+```
+⚠️ CONTEXT OVERFLOW RECOVERY ⚠️
+
+The previous step returned a result that exceeded the context window (147,532 characters truncated).
+
+Here is a PARTIAL result from the previous action:
+---
+[First 10 items from JSON array...]
+... (487 more items truncated due to context length)
+---
+
+❗ THE ABOVE IS INCOMPLETE - the full result was too large for the context window.
+
+RECOMMENDED ACTIONS:
+1. Use a different action with more specific filters to get smaller result sets
+2. Request data in batches or pages instead of all at once
+3. Ask the user to clarify scope to narrow the query
+4. If you need the full data, acknowledge the limitation and ask the user how to proceed
+
+Please choose an alternative approach to complete your task.
+```
+
+**Benefits**:
+- **Resilient**: Agents can adapt instead of failing immediately
+- **Informative**: Clear explanation of what went wrong and how to recover
+- **Safe**: ONE-TIME recovery prevents infinite loops
+- **Smart**: Preserves data structure when possible (JSON, CSV)
+
+This feature is particularly useful when agents call actions that can return very large datasets (e.g., "Get Entity List" without filters).
 
 ### Action Integration
 ```typescript

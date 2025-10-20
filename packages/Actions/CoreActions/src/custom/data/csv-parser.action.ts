@@ -103,7 +103,7 @@ export class CSVParserAction extends BaseFileHandlerAction {
                 skipEmptyLines: skipEmptyRows ? 'greedy' : false,
                 dynamicTyping: dynamicTyping,
                 preview: maxRows > 0 ? maxRows : undefined,
-                transformValue: (value: string) => {
+                transform: (value: string, field: string | number) => {
                     return trimValues ? value.trim() : value;
                 }
             });

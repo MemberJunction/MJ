@@ -46,6 +46,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Output() public viewThread = new EventEmitter<ConversationDetailEntity>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -98,9 +99,13 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
       this.updateDateFilterVisibility();
     }
 
-    // REMOVED: artifactMap change handling - artifacts are now pre-loaded during
-    // peripheral data load, so no need to re-render when map is populated
-    // The initial messages render will already have all artifact data available
+    // Watch for artifactMap changes to handle newly created artifacts
+    // While artifacts are pre-loaded during initial peripheral data load,
+    // new artifacts can be created mid-conversation (e.g., by agent runs)
+    // This ensures artifact cards appear in messages immediately without requiring a refresh
+    if (changes['artifactMap'] && this.messages && this.messageContainerRef) {
+      this.updateMessages(this.messages);
+    }
   }
 
   ngAfterViewChecked() {
@@ -167,14 +172,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
-          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          // Use LAST artifact (most recent) instead of first for display
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
 
           // Trigger lazy load and set properties
-          if (firstArtifact) {
+          if (lastArtifact) {
             // Lazy load in background - don't block UI
             Promise.all([
-              firstArtifact.getArtifact(),
-              firstArtifact.getVersion()
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
@@ -203,14 +211,17 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
-          const firstArtifact = artifactList && artifactList.length > 0 ? artifactList[0] : undefined;
+          // Use LAST artifact (most recent) instead of first for display
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
 
           // Trigger lazy load and set properties
-          if (firstArtifact) {
+          if (lastArtifact) {
             // Lazy load in background - don't block UI
             Promise.all([
-              firstArtifact.getArtifact(),
-              firstArtifact.getVersion()
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
             ]).then(([artifact, version]) => {
               instance.artifact = artifact;
               instance.artifactVersion = version;
@@ -239,6 +250,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
           instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
           instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
+          instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
 
           // Handle artifact actions if the output exists
           if (instance.artifactActionPerformed) {

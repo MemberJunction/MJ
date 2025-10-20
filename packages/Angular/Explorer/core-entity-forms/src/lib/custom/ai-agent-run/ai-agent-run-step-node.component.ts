@@ -121,24 +121,31 @@ export class AIAgentRunStepNodeComponent {
     if (this.item.type === 'step' && this.item.data) {
       const step = this.item.data;
       const parts = [];
-      
+
       if (step.TargetActionName) {
         parts.push(`Action: ${step.TargetActionName}`);
       }
       if (step.Error) {
         parts.push('Error occurred');
       }
-      
+
       return parts.join(' • ');
     }
-    
+
     if (this.item.type === 'action' && this.item.data) {
       const log = this.item.data;
       if (log.Message) {
         return log.Message.substring(0, 100) + (log.Message.length > 100 ? '...' : '');
       }
     }
-    
+
     return '';
+  }
+
+  onLogoError(event: Event): void {
+    // Hide the broken image and show the icon instead by clearing logoUrl
+    const imgElement = event.target as HTMLImageElement;
+    imgElement.style.display = 'none';
+    this.item.logoUrl = undefined;
   }
 }

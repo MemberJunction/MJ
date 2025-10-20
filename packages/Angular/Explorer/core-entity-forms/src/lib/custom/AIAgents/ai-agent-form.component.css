@@ -132,6 +132,23 @@
     opacity: 0.8;
 }
 
+.parent-agent.clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.parent-agent.clickable:hover {
+    background: #e3e7ed;
+    color: #2196f3;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.parent-agent.clickable:active {
+    transform: translateY(0);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
 /* Prompt Controls Section */
 .prompt-controls {
     flex: 1;
@@ -2424,3 +2441,134 @@
     }
 }
 
+/* ===================================
+   Unified Sub-Agents with Filtering
+   =================================== */
+
+/* Filter Controls */
+.sub-agent-filter-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.filter-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.filter-controls kendo-buttongroup {
+    flex: 0 0 auto;
+}
+
+/* Sub-Agent Type Badge */
+.sub-agent-type-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    z-index: 1;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+/* Sub-Agent Item Styling */
+.sub-agent-item {
+    position: relative;
+    padding-left: 8px;
+    transition: all 0.2s ease;
+}
+
+.sub-agent-item.child-sub-agent {
+    border-left: 4px solid #2196F3;
+}
+
+.sub-agent-item.related-sub-agent {
+    border-left: 4px solid #9C27B0;
+}
+
+.sub-agent-item:hover {
+    transform: translateX(4px);
+}
+
+/* Payload Info Tag */
+.payload-info {
+    background: #f5f5f5;
+    color: #666;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 11px;
+}
+
+/* Empty State Info Cards */
+.empty-state-info {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 24px 0;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.info-card {
+    background: #fafafa;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: left;
+}
+
+.info-card i {
+    font-size: 24px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.info-card strong {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.info-card p {
+    margin: 0;
+    font-size: 12px;
+    color: #666;
+}
+
+.empty-state-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
+}
+
+/* Responsive adjustments for sub-agent filters */
+@media (max-width: 768px) {
+    .sub-agent-filter-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filter-controls,
+    .header-actions {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .empty-state-info {
+        grid-template-columns: 1fr;
+    }
+}

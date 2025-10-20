@@ -10,6 +10,7 @@
 /**
  * Complete agent definition that supports n-levels of sub-agent hierarchy
  * All text fields support markdown formatting for rich documentation
+ * @deprecated
  */
 export interface AIAgentDefinition {
   // Basic Information

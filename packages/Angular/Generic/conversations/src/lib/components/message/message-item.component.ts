@@ -6,7 +6,9 @@ import {
   ChangeDetectorRef,
   OnDestroy,
   AfterViewInit,
-  OnInit
+  OnInit,
+  OnChanges,
+  SimpleChanges
 } from '@angular/core';
 import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
@@ -14,6 +16,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
+import { SuggestedResponse } from '../../models/conversation-state.model';
 
 /**
  * Component for displaying a single message in a conversation
@@ -28,7 +31,7 @@ import { MentionAutocompleteService } from '../../services/mention-autocomplete.
     '../../styles/custom-agent-icons.css'
   ]
 })
-export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
+export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges {
   @Input() public message!: ConversationDetailEntity;
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
@@ -46,10 +49,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
   @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
   public _elapsedTimeFormatted: string = '(0:00)';
+  public _agentRunDurationFormatted: string = '(0:00)';
   public isEditing: boolean = false;
   public editedText: string = '';
   private originalText: string = '';
@@ -58,6 +63,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public isAgentDetailsExpanded: boolean = false;
   public detailTasks: TaskEntity[] = [];
   private tasksLoaded: boolean = false;
+
+  // Memoization for mention parsing to prevent repeated parsing on change detection
+  private _cachedDisplayMessage: string = '';
+  private _cachedMessageText: string = '';
 
   constructor(
     private cdRef: ChangeDetectorRef,
@@ -69,6 +78,22 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   async ngOnInit() {
     // No longer need to load artifacts per message - they are preloaded in chat area
+  }
+
+  ngOnChanges(changes: SimpleChanges) {
+    // When agentRun input changes, restart the elapsed time updater if needed
+    if (changes['agentRun']) {
+      // If agent run becomes active, ensure interval is running
+      if (this.isAgentRunActive && this._elapsedTimeInterval === null) {
+        this.startElapsedTimeUpdater();
+      }
+      // If agent run completes, we can keep the interval running (it will stop naturally)
+      // or optionally stop it here for efficiency
+      else if (!this.isAgentRunActive && !this.isTemporaryMessage && this._elapsedTimeInterval !== null) {
+        clearInterval(this._elapsedTimeInterval);
+        this._elapsedTimeInterval = null;
+      }
+    }
   }
 
   ngAfterViewInit() {
@@ -85,28 +110,63 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Starts the elapsed time updater interval for temporary messages
+   * Starts the elapsed time updater interval for temporary messages and active agent runs
+   * Updates every second for all active items
    */
   private startElapsedTimeUpdater(): void {
-    if (this.isTemporaryMessage) {
-      Promise.resolve().then(() => {
-        this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
-        this.cdRef.detectChanges();
-      });
+    if (this.isTemporaryMessage || this.isAgentRunActive) {
+      // Initial update
+      this.updateTimers();
+      this.cdRef.markForCheck();
 
+      // Start interval if not already running
       if (this._elapsedTimeInterval === null) {
         this._elapsedTimeInterval = setInterval(() => {
-          this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
-          Promise.resolve().then(() => {
-            this.cdRef.detectChanges();
-          });
+          this.updateTimers();
+          // Use markForCheck to ensure Angular updates the view
+          this.cdRef.markForCheck();
         }, 1000);
       }
     }
   }
 
+  /**
+   * Update all timer displays
+   * Called every second by the interval timer
+   */
+  private updateTimers(): void {
+    // Update temporary message elapsed time
+    if (this.isTemporaryMessage) {
+      this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
+    }
+
+    // Update agent run duration for active runs
+    if (this.isAgentRunActive && this.agentRun?.__mj_CreatedAt) {
+      const createdAt = new Date(this.agentRun.__mj_CreatedAt);
+      const now = new Date();
+      const diffMs = now.getTime() - createdAt.getTime();
+      this._agentRunDurationFormatted = this.formatDurationFromMs(diffMs);
+    }
+  }
+
   private formatElapsedTime(elapsedTime: number): string {
     let seconds = Math.floor(elapsedTime / 1000);
+    let minutes = Math.floor(seconds / 60);
+    seconds = seconds % 60;
+    let hours = Math.floor(minutes / 60);
+    minutes = minutes % 60;
+    let formattedTime = (hours > 0 ? hours + ':' : '') +
+      (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' +
+      (seconds < 10 ? '0' : '') + seconds;
+    return `(${formattedTime})`;
+  }
+
+  private formatDurationFromMs(diffMs: number): string {
+    if (diffMs <= 0) {
+      return '(0:00)';
+    }
+
+    let seconds = Math.floor(diffMs / 1000);
     let minutes = Math.floor(seconds / 60);
     seconds = seconds % 60;
     let hours = Math.floor(minutes / 60);
@@ -176,8 +236,19 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       }
     }
 
+    // Use cached result if message text hasn't changed
+    if (this._cachedMessageText === text && this._cachedDisplayMessage) {
+      return this._cachedDisplayMessage;
+    }
+
     // Transform @mentions to HTML pills
-    return this.transformMentionsToHTML(text);
+    const transformed = this.transformMentionsToHTML(text);
+
+    // Cache the result
+    this._cachedMessageText = text;
+    this._cachedDisplayMessage = transformed;
+
+    return transformed;
   }
 
   /**
@@ -222,6 +293,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get isTemporaryMessage(): boolean {
     return this.isAIMessage && (!this.message.ID || this.message.ID.length === 0);
+  }
+
+  public get isAgentRunActive(): boolean {
+    if (!this.agentRun) {
+      return false;
+    }
+    const status = this.agentRun.Status?.toLowerCase();
+    return status === 'in-progress' || status === 'running';
   }
 
   public get messageStatus(): 'Complete' | 'In-Progress' | 'Error' {
@@ -363,6 +442,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this.isEditing = false;
         this.editedText = '';
         this.originalText = '';
+        // Invalidate display message cache since message changed
+        this._cachedMessageText = '';
+        this._cachedDisplayMessage = '';
         this.messageEdited.emit(this.message);
         this.cdRef.detectChanges();
       } else {
@@ -503,16 +585,29 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   /**
    * Get formatted duration for the agent run
-   * Calculate from created to updated timestamp
+   * For active runs: Calculate from created to NOW (live updates)
+   * For completed runs: Calculate from created to updated timestamp (static)
    */
   public get agentRunDuration(): string | null {
-    if (!this.agentRun || !this.agentRun.__mj_CreatedAt || !this.agentRun.__mj_UpdatedAt) {
+    if (!this.agentRun || !this.agentRun.__mj_CreatedAt) {
       return null;
     }
 
     const createdAt = new Date(this.agentRun.__mj_CreatedAt);
-    const updatedAt = new Date(this.agentRun.__mj_UpdatedAt);
-    const diffMs = updatedAt.getTime() - createdAt.getTime();
+    let endTime: Date;
+
+    // If agent run is still active, use current time for live updates
+    if (this.isAgentRunActive) {
+      endTime = new Date(); // Uses current UTC time
+    } else {
+      // For completed runs, use the final updated timestamp
+      if (!this.agentRun.__mj_UpdatedAt) {
+        return null;
+      }
+      endTime = new Date(this.agentRun.__mj_UpdatedAt);
+    }
+
+    const diffMs = endTime.getTime() - createdAt.getTime();
 
     if (diffMs <= 0) {
       return null;
@@ -596,6 +691,39 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       entityName: 'AI Agents',
       compositeKey
     });
+  }
+
+  /**
+   * Parse and return suggested responses from message data
+   * Uses strongly-typed SuggestedResponses property from ConversationDetailEntity
+   */
+  public get suggestedResponses(): SuggestedResponse[] {
+    try {
+      const rawData = this.message.SuggestedResponses;
+      if (!rawData) return [];
+
+      // Parse JSON string to array of SuggestedResponse objects
+      const responses = JSON.parse(rawData);
+
+      return Array.isArray(responses) ? responses : [];
+    } catch (error) {
+      console.error('Failed to parse suggested responses:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Check if current user is the conversation owner
+   */
+  public get isConversationOwner(): boolean {
+    return this.conversation?.UserID === this.currentUser.ID;
+  }
+
+  /**
+   * Handle suggested response selection
+   */
+  public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
+    this.suggestedResponseSelected.emit(event);
   }
 
 }

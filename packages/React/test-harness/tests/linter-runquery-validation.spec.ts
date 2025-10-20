@@ -501,4 +501,214 @@ describe('ComponentLinter - RunQuery/RunView Validation', () => {
       }
     });
   });
+
+  describe('RunQuery CategoryPath validation', () => {
+    it('should flag missing CategoryPath when query spec defines categoryPath', async () => {
+      const code = `
+        function TestComponent({ utilities }) {
+          const [data, setData] = useState([]);
+
+          useEffect(() => {
+            loadData();
+          }, []);
+
+          const loadData = async () => {
+            // Missing CategoryPath - this is brittle!
+            const result = await utilities.rq.RunQuery({
+              QueryName: 'AccountIndustryDistribution',
+              Parameters: { year: 2024 }
+            });
+
+            setData(result.Results || []);
+          };
+
+          return <div>{data.length} items</div>;
+        }
+      `;
+
+      const spec: ComponentSpec = {
+        name: 'TestComponent',
+        type: 'chart',
+        title: 'Test Component',
+        dataRequirements: {
+          mode: 'queries',
+          entities: [],
+          queries: [{
+            name: 'AccountIndustryDistribution',
+            categoryPath: 'Analytics/Accounts',
+            fields: [],
+            entityNames: ['Accounts']
+          }]
+        }
+      };
+
+      const violations = await linter.lint(code, spec);
+
+      const missingCategoryPath = violations.find(v =>
+        v.rule === 'runquery-missing-categorypath'
+      );
+
+      expect(missingCategoryPath).toBeDefined();
+      expect(missingCategoryPath?.severity).toBe('critical');
+      expect(missingCategoryPath?.message).toContain('missing required CategoryPath');
+      expect(missingCategoryPath?.message).toContain('AccountIndustryDistribution');
+      expect(missingCategoryPath?.suggestion?.example).toContain('Analytics/Accounts');
+    });
+
+    it('should NOT flag when CategoryPath is provided', async () => {
+      const code = `
+        function TestComponent({ utilities }) {
+          const [data, setData] = useState([]);
+
+          const loadData = async () => {
+            // Correctly includes CategoryPath
+            const result = await utilities.rq.RunQuery({
+              QueryName: 'AccountIndustryDistribution',
+              CategoryPath: 'Analytics/Accounts',
+              Parameters: { year: 2024 }
+            });
+
+            setData(result.Results || []);
+          };
+
+          return <div>{data.length} items</div>;
+        }
+      `;
+
+      const spec: ComponentSpec = {
+        name: 'TestComponent',
+        type: 'chart',
+        title: 'Test Component',
+        dataRequirements: {
+          mode: 'queries',
+          entities: [],
+          queries: [{
+            name: 'AccountIndustryDistribution',
+            categoryPath: 'Analytics/Accounts',
+            fields: [],
+            entityNames: ['Accounts']
+          }]
+        }
+      };
+
+      const violations = await linter.lint(code, spec);
+
+      const missingCategoryPath = violations.find(v =>
+        v.rule === 'runquery-missing-categorypath'
+      );
+
+      expect(missingCategoryPath).toBeUndefined();
+    });
+
+    it('should NOT flag when query spec does not define categoryPath', async () => {
+      const code = `
+        function TestComponent({ utilities }) {
+          const loadData = async () => {
+            // No CategoryPath needed because spec doesn't define one
+            const result = await utilities.rq.RunQuery({
+              QueryName: 'SimpleQuery',
+              Parameters: { id: 123 }
+            });
+
+            return result.Results;
+          };
+
+          return <div>Test</div>;
+        }
+      `;
+
+      const spec: ComponentSpec = {
+        name: 'TestComponent',
+        type: 'chart',
+        title: 'Test Component',
+        dataRequirements: {
+          mode: 'queries',
+          entities: [],
+          queries: [{
+            name: 'SimpleQuery',
+            categoryPath: '',  // Empty string when not used
+            fields: [],
+            entityNames: []
+          }]
+        }
+      };
+
+      const violations = await linter.lint(code, spec);
+
+      const missingCategoryPath = violations.find(v =>
+        v.rule === 'runquery-missing-categorypath'
+      );
+
+      expect(missingCategoryPath).toBeUndefined();
+    });
+
+    it('should handle multiple queries with different CategoryPath requirements', async () => {
+      const code = `
+        function TestComponent({ utilities }) {
+          const loadData = async () => {
+            // Query1 - missing CategoryPath (should flag)
+            const result1 = await utilities.rq.RunQuery({
+              QueryName: 'QueryWithCategory'
+            });
+
+            // Query2 - no CategoryPath needed (should NOT flag)
+            const result2 = await utilities.rq.RunQuery({
+              QueryName: 'QueryWithoutCategory'
+            });
+
+            // Query3 - has CategoryPath (should NOT flag)
+            const result3 = await utilities.rq.RunQuery({
+              QueryName: 'AnotherQueryWithCategory',
+              CategoryPath: 'Reports/Sales'
+            });
+
+            return { result1, result2, result3 };
+          };
+
+          return <div>Test</div>;
+        }
+      `;
+
+      const spec: ComponentSpec = {
+        name: 'TestComponent',
+        type: 'chart',
+        title: 'Test Component',
+        dataRequirements: {
+          mode: 'queries',
+          entities: [],
+          queries: [
+            {
+              name: 'QueryWithCategory',
+              categoryPath: 'Analytics/Users',
+              fields: [],
+              entityNames: ['Users']
+            },
+            {
+              name: 'QueryWithoutCategory',
+              categoryPath: '',  // Empty string when not used
+              fields: [],
+              entityNames: []
+            },
+            {
+              name: 'AnotherQueryWithCategory',
+              categoryPath: 'Reports/Sales',
+              fields: [],
+              entityNames: ['Sales']
+            }
+          ]
+        }
+      };
+
+      const violations = await linter.lint(code, spec);
+
+      const missingCategoryPathViolations = violations.filter(v =>
+        v.rule === 'runquery-missing-categorypath'
+      );
+
+      // Should only flag the first query
+      expect(missingCategoryPathViolations.length).toBe(1);
+      expect(missingCategoryPathViolations[0].message).toContain('QueryWithCategory');
+      expect(missingCategoryPathViolations[0].suggestion?.example).toContain('Analytics/Users');
+    });
+  });
 });

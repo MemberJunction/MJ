@@ -1,0 +1,298 @@
+/**
+ * @fileoverview Sandboxed code execution service for MemberJunction
+ * 
+ * Provides secure execution of JavaScript code in a controlled environment using vm2.
+ * Supports a curated list of safe npm packages for data manipulation and analysis.
+ * 
+ * @module @memberjunction/code-execution
+ * @author MemberJunction.com
+ * @since 2.46.0
+ */
+
+import { LogError, LogStatus } from '@memberjunction/core';
+import { 
+    CodeExecutionParams, 
+    CodeExecutionResult, 
+    JavaScriptExecutionOptions 
+} from './types';
+
+/**
+ * Service for executing code in a sandboxed environment
+ * 
+ * Security features:
+ * - Isolated VM using vm2's NodeVM
+ * - Timeout protection
+ * - No filesystem access (fs module mocked)
+ * - No network access (http, https, net modules blocked)
+ * - Allowlist-only npm package imports
+ * - Memory limits (requires Node.js process flags)
+ * 
+ * Supported libraries:
+ * - lodash: Data manipulation
+ * - date-fns: Date utilities
+ * - mathjs: Advanced mathematics
+ * - papaparse: CSV parsing
+ * - uuid: ID generation
+ * - validator: Input validation
+ * 
+ * @example
+ * ```typescript
+ * const service = new CodeExecutionService();
+ * const result = await service.execute({
+ *   code: 'const sum = input.values.reduce((a,b) => a+b, 0); output = sum;',
+ *   language: 'javascript',
+ *   inputData: { values: [1, 2, 3, 4, 5] }
+ * });
+ * console.log(result.output); // 15
+ * ```
+ */
+export class CodeExecutionService {
+    /**
+     * List of npm packages that are safe to import
+     * These packages have been vetted for security and don't provide
+     * filesystem, network, or process access
+     */
+    private readonly SAFE_LIBRARIES = [
+        'lodash',       // Data manipulation and utilities
+        'date-fns',     // Modern date utility library
+        'mathjs',       // Extended math library
+        'papaparse',    // CSV parsing
+        'uuid',         // UUID generation
+        'validator'     // String validators and sanitizers
+    ];
+
+    /**
+     * Execute code in a sandboxed environment
+     * 
+     * @param params - Execution parameters including code and input data
+     * @returns Promise resolving to execution result
+     */
+    async execute(params: CodeExecutionParams): Promise<CodeExecutionResult> {
+        const startTime = Date.now();
+
+        // Validate language
+        if (params.language !== 'javascript') {
+            return {
+                success: false,
+                errorType: 'SECURITY_ERROR',
+                error: `Unsupported language: ${params.language}. Only 'javascript' is supported.`
+            };
+        }
+
+        // Validate code is provided
+        if (!params.code || params.code.trim().length === 0) {
+            return {
+                success: false,
+                errorType: 'RUNTIME_ERROR',
+                error: 'Code parameter is required and cannot be empty'
+            };
+        }
+
+        // Set default options
+        const options: JavaScriptExecutionOptions = {
+            timeout: params.timeoutSeconds || 30,
+            memoryLimit: params.memoryLimitMB || 128,
+            allowedLibraries: this.SAFE_LIBRARIES
+        };
+
+        // Execute JavaScript
+        const result = await this.executeJavaScript(
+            params.code,
+            params.inputData,
+            options
+        );
+
+        result.executionTimeMs = Date.now() - startTime;
+        return result;
+    }
+
+    /**
+     * Execute JavaScript code using vm2 NodeVM sandbox
+     * 
+     * The code has access to:
+     * - input: The inputData parameter
+     * - output: Variable where code should store result
+     * - console: Limited console API (log, error, warn, info)
+     * - Safe libraries: Can require() packages from allowlist
+     * - Safe built-ins: JSON, Math, Date, Array, Object, String, Number, Boolean
+     * 
+     * The code does NOT have access to:
+     * - File system (fs module is mocked)
+     * - Network (http, https, net, axios, etc. are blocked)
+     * - Process control (child_process, cluster blocked)
+     * - Dangerous APIs (eval, Function constructor are disabled)
+     * 
+     * @private
+     */
+    private async executeJavaScript(
+        code: string,
+        inputData: any,
+        options: JavaScriptExecutionOptions
+    ): Promise<CodeExecutionResult> {
+        try {
+            // Dynamic import of vm2 (it may not be available in all environments)
+            let NodeVM: any;
+            try {
+                const vm2 = require('vm2');
+                NodeVM = vm2.NodeVM;
+            } catch (importError) {
+                return {
+                    success: false,
+                    errorType: 'RUNTIME_ERROR',
+                    error: 'vm2 package is not installed. Run: npm install vm2'
+                };
+            }
+
+            const logs: string[] = [];
+
+            // Create sandbox context
+            const sandbox = {
+                input: inputData,
+                output: null,
+                console: {
+                    log: (...args: any[]) => {
+                        logs.push(args.map(arg => this.formatConsoleArg(arg)).join(' '));
+                    },
+                    error: (...args: any[]) => {
+                        logs.push('ERROR: ' + args.map(arg => this.formatConsoleArg(arg)).join(' '));
+                    },
+                    warn: (...args: any[]) => {
+                        logs.push('WARN: ' + args.map(arg => this.formatConsoleArg(arg)).join(' '));
+                    },
+                    info: (...args: any[]) => {
+                        logs.push('INFO: ' + args.map(arg => this.formatConsoleArg(arg)).join(' '));
+                    }
+                },
+                // Provide safe global objects
+                JSON,
+                Math,
+                Date,
+                Array,
+                Object,
+                String,
+                Number,
+                Boolean,
+                // Note: setTimeout, setInterval, etc. are not provided to prevent async abuse
+            };
+
+            // Create VM with security restrictions
+            const vm = new NodeVM({
+                timeout: options.timeout * 1000, // Convert to milliseconds
+                sandbox,
+                
+                // Disable dangerous features
+                eval: false,        // Disable eval()
+                wasm: false,        // Disable WebAssembly
+                fixAsync: true,     // Prevent async abuse
+                
+                // Configure module imports
+                require: {
+                    external: options.allowedLibraries || this.SAFE_LIBRARIES,
+                    builtin: [],    // No built-in Node modules (like fs, path, etc.)
+                    root: './node_modules',
+                    
+                    // Mock dangerous modules
+                    mock: {
+                        fs: {},             // Block filesystem
+                        'fs/promises': {},  // Block async filesystem
+                        http: {},           // Block HTTP
+                        https: {},          // Block HTTPS
+                        net: {},            // Block raw network
+                        dgram: {},          // Block UDP
+                        child_process: {},  // Block process spawning
+                        cluster: {},        // Block clustering
+                        worker_threads: {}, // Block workers
+                        os: {},             // Block OS info
+                        process: {},        // Block process control
+                        // Block popular HTTP clients
+                        axios: {},
+                        'node-fetch': {},
+                        got: {},
+                        superagent: {},
+                        request: {}
+                    }
+                }
+            });
+
+            // Wrap code to properly capture output
+            // The code runs in module scope, so we need to export the output
+            const wrappedCode = `
+                module.exports = (function() {
+                    ${code}
+                    return output;
+                })();
+            `;
+
+            // Execute the code
+            const result = vm.run(wrappedCode, 'user-code.js');
+
+            return {
+                success: true,
+                output: result,
+                logs: logs.length > 0 ? logs : undefined
+            };
+
+        } catch (error: any) {
+            // Handle different types of errors
+            if (error.message?.includes('Script execution timed out')) {
+                return {
+                    success: false,
+                    errorType: 'TIMEOUT',
+                    error: `Code execution exceeded ${options.timeout} second timeout`,
+                    logs: []
+                };
+            }
+
+            if (error instanceof SyntaxError) {
+                return {
+                    success: false,
+                    errorType: 'SYNTAX_ERROR',
+                    error: `Syntax error: ${error.message}`,
+                    logs: []
+                };
+            }
+
+            // Check for security violations
+            if (error.message?.includes('not allowed') || 
+                error.message?.includes('access denied') ||
+                error.message?.includes('Cannot find module')) {
+                return {
+                    success: false,
+                    errorType: 'SECURITY_ERROR',
+                    error: `Security violation: ${error.message}`,
+                    logs: []
+                };
+            }
+
+            // Generic runtime error
+            LogError(`Code execution error: ${error.message}`, error);
+            return {
+                success: false,
+                errorType: 'RUNTIME_ERROR',
+                error: error.message || 'Unknown error during code execution',
+                logs: []
+            };
+        }
+    }
+
+    /**
+     * Format console arguments for logging
+     * Handles objects, arrays, and primitives
+     * 
+     * @private
+     */
+    private formatConsoleArg(arg: any): string {
+        if (arg === null) return 'null';
+        if (arg === undefined) return 'undefined';
+        
+        if (typeof arg === 'object') {
+            try {
+                return JSON.stringify(arg, null, 2);
+            } catch {
+                return String(arg);
+            }
+        }
+        
+        return String(arg);
+    }
+}

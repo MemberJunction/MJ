@@ -619,6 +619,12 @@ export const ActionSchema = z.object({
         * * Display Name: Icon Class
         * * SQL Data Type: nvarchar(100)
         * * Description: Font Awesome icon class (e.g., fa-cog, fa-play, fa-search) for visual representation of the action.`),
+    DefaultCompactPromptID: z.string().nullable().describe(`
+        * * Field Name: DefaultCompactPromptID
+        * * Display Name: Default Compact Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
         * * Display Name: Category
@@ -631,6 +637,10 @@ export const ActionSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(425)`),
+    DefaultCompactPrompt: z.string().nullable().describe(`
+        * * Field Name: DefaultCompactPrompt
+        * * Display Name: Default Compact Prompt
+        * * SQL Data Type: nvarchar(255)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -742,6 +752,42 @@ export const AIAgentActionSchema = z.object({
         * * Display Name: Max Executions Per Run
         * * SQL Data Type: int
         * * Description: Maximum number of times this action can be executed per agent run`),
+    ResultExpirationTurns: z.number().nullable().describe(`
+        * * Field Name: ResultExpirationTurns
+        * * Display Name: Result Expiration Turns
+        * * SQL Data Type: int
+        * * Description: Number of conversation turns before action results expire from conversation context. NULL = never expire (default). 0 = expire immediately after next turn.`),
+    ResultExpirationMode: z.union([z.literal('Compact'), z.literal('None'), z.literal('Remove')]).describe(`
+        * * Field Name: ResultExpirationMode
+        * * Display Name: Result Expiration Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Remove
+    *   * None
+    *   * Compact
+        * * Description: How to handle expired action results: None (no expiration, default), Remove (delete message entirely), Compact (reduce size via CompactMode while preserving key information).`),
+    CompactMode: z.union([z.literal('AI Summary'), z.literal('First N Chars')]).nullable().describe(`
+        * * Field Name: CompactMode
+        * * Display Name: Compact Mode
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI Summary
+    *   * First N Chars
+        * * Description: How to compact results when ResultExpirationMode=Compact: FirstNChars (truncate to CompactLength characters, fast and free), AISummary (use LLM to intelligently summarize with CompactPromptID or Action.DefaultCompactPromptID).`),
+    CompactLength: z.number().nullable().describe(`
+        * * Field Name: CompactLength
+        * * Display Name: Compact Length
+        * * SQL Data Type: int
+        * * Description: Number of characters to keep when CompactMode=FirstNChars. Required when CompactMode is FirstNChars, ignored otherwise.`),
+    CompactPromptID: z.string().nullable().describe(`
+        * * Field Name: CompactPromptID
+        * * Display Name: Compact Prompt ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+        * * Description: Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action.DefaultCompactPromptID -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -750,6 +796,10 @@ export const AIAgentActionSchema = z.object({
         * * Field Name: Action
         * * Display Name: Action
         * * SQL Data Type: nvarchar(425)`),
+    CompactPrompt: z.string().nullable().describe(`
+        * * Field Name: CompactPrompt
+        * * Display Name: Compact Prompt
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type AIAgentActionEntityType = z.infer<typeof AIAgentActionSchema>;
@@ -1298,6 +1348,17 @@ if this limit is exceeded.`),
         * * Related Entity/Foreign Key: Users (vwUsers.ID)
         * * Default Value: ECAFCCEC-6A37-EF11-86D4-000D3A4E707E
         * * Description: The user who owns and created this AI agent. Automatically set to the current user if not specified. Owner has full permissions (view, run, edit, delete) regardless of ACL entries.`),
+    InvocationMode: z.union([z.literal('Any'), z.literal('Sub-Agent'), z.literal('Top-Level')]).describe(`
+        * * Field Name: InvocationMode
+        * * Display Name: Invocation Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Sub-Agent
+    *   * Any
+    *   * Top-Level
+        * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -3871,6 +3932,11 @@ export const ConversationDetailSchema = z.object({
     *   * Complete
     *   * Error
         * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
+    SuggestedResponses: z.string().nullable().describe(`
+        * * Field Name: SuggestedResponses
+        * * Display Name: Suggested Responses
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).`),
     Conversation: z.string().nullable().describe(`
         * * Field Name: Conversation
         * * Display Name: Conversation
@@ -8007,6 +8073,16 @@ export const AIAgentRelationshipSchema = z.object({
         * * Display Name: Sub Agent Output Mapping
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration mapping sub-agent result payload paths to parent agent payload paths. Enables controlled merging of sub-agent results. Format: {"subAgentPath": "parentPath", "*": "captureAllPath"}. If null, sub-agent results are not automatically merged into parent payload.`),
+    SubAgentInputMapping: z.string().nullable().describe(`
+        * * Field Name: SubAgentInputMapping
+        * * Display Name: Sub Agent Input Mapping
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON mapping of parent payload paths to sub-agent initial payload paths. Enables structural data transfer from parent to related sub-agent. Format: {"parentPath": "subAgentPath", "parent.nested": "subAgent.field"}. Example: {"searchQuery": "query", "maxResults": "limit"}. If null, sub-agent starts with empty payload (default behavior).`),
+    SubAgentContextPaths: z.string().nullable().describe(`
+        * * Field Name: SubAgentContextPaths
+        * * Display Name: Sub Agent Context Paths
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -10211,6 +10287,81 @@ export const CollectionArtifactSchema = z.object({
 export type CollectionArtifactEntityType = z.infer<typeof CollectionArtifactSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Collection Permissions
+ */
+export const CollectionPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    CollectionID: z.string().describe(`
+        * * Field Name: CollectionID
+        * * Display Name: Collection ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)`),
+    CanRead: z.boolean().describe(`
+        * * Field Name: CanRead
+        * * Display Name: Can Read
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Always 1 - users must have read permission to access a shared collection`),
+    CanShare: z.boolean().describe(`
+        * * Field Name: CanShare
+        * * Display Name: Can Share
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can share this collection with others (but cannot grant more permissions than they have)`),
+    CanEdit: z.boolean().describe(`
+        * * Field Name: CanEdit
+        * * Display Name: Can Edit
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can add/remove artifacts to/from this collection`),
+    CanDelete: z.boolean().describe(`
+        * * Field Name: CanDelete
+        * * Display Name: Can Delete
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Can delete the collection, child collections, and artifacts`),
+    SharedByUserID: z.string().nullable().describe(`
+        * * Field Name: SharedByUserID
+        * * Display Name: Shared By User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who shared this collection (NULL if shared by owner)`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Collection: z.string().describe(`
+        * * Field Name: Collection
+        * * Display Name: Collection
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+    SharedByUser: z.string().nullable().describe(`
+        * * Field Name: SharedByUser
+        * * Display Name: Shared By User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type CollectionPermissionEntityType = z.infer<typeof CollectionPermissionSchema>;
+
+/**
  * zod schema definition for the entity MJ: Collections
  */
 export const CollectionSchema = z.object({
@@ -10265,6 +10416,12 @@ export const CollectionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    OwnerID: z.string().nullable().describe(`
+        * * Field Name: OwnerID
+        * * Display Name: Owner ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user who owns this collection and has full permissions`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -10273,6 +10430,10 @@ export const CollectionSchema = z.object({
         * * Field Name: Parent
         * * Display Name: Parent
         * * SQL Data Type: nvarchar(255)`),
+    Owner: z.string().nullable().describe(`
+        * * Field Name: Owner
+        * * Display Name: Owner
+        * * SQL Data Type: nvarchar(100)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent ID
@@ -17242,6 +17403,20 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     }
 
     /**
+    * * Field Name: DefaultCompactPromptID
+    * * Display Name: Default Compact Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Default prompt for compacting/summarizing this action's results when used by agents with CompactMode=AISummary. Action designers define how their specific results should be summarized. Can be overridden per agent in AIAgentAction.CompactPromptID.
+    */
+    get DefaultCompactPromptID(): string | null {
+        return this.Get('DefaultCompactPromptID');
+    }
+    set DefaultCompactPromptID(value: string | null) {
+        this.Set('DefaultCompactPromptID', value);
+    }
+
+    /**
     * * Field Name: Category
     * * Display Name: Category
     * * SQL Data Type: nvarchar(255)
@@ -17266,6 +17441,15 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: DefaultCompactPrompt
+    * * Display Name: Default Compact Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get DefaultCompactPrompt(): string | null {
+        return this.Get('DefaultCompactPrompt');
     }
 
     /**
@@ -17610,6 +17794,82 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     }
 
     /**
+    * * Field Name: ResultExpirationTurns
+    * * Display Name: Result Expiration Turns
+    * * SQL Data Type: int
+    * * Description: Number of conversation turns before action results expire from conversation context. NULL = never expire (default). 0 = expire immediately after next turn.
+    */
+    get ResultExpirationTurns(): number | null {
+        return this.Get('ResultExpirationTurns');
+    }
+    set ResultExpirationTurns(value: number | null) {
+        this.Set('ResultExpirationTurns', value);
+    }
+
+    /**
+    * * Field Name: ResultExpirationMode
+    * * Display Name: Result Expiration Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Remove
+    *   * None
+    *   * Compact
+    * * Description: How to handle expired action results: None (no expiration, default), Remove (delete message entirely), Compact (reduce size via CompactMode while preserving key information).
+    */
+    get ResultExpirationMode(): 'Compact' | 'None' | 'Remove' {
+        return this.Get('ResultExpirationMode');
+    }
+    set ResultExpirationMode(value: 'Compact' | 'None' | 'Remove') {
+        this.Set('ResultExpirationMode', value);
+    }
+
+    /**
+    * * Field Name: CompactMode
+    * * Display Name: Compact Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * AI Summary
+    *   * First N Chars
+    * * Description: How to compact results when ResultExpirationMode=Compact: FirstNChars (truncate to CompactLength characters, fast and free), AISummary (use LLM to intelligently summarize with CompactPromptID or Action.DefaultCompactPromptID).
+    */
+    get CompactMode(): 'AI Summary' | 'First N Chars' | null {
+        return this.Get('CompactMode');
+    }
+    set CompactMode(value: 'AI Summary' | 'First N Chars' | null) {
+        this.Set('CompactMode', value);
+    }
+
+    /**
+    * * Field Name: CompactLength
+    * * Display Name: Compact Length
+    * * SQL Data Type: int
+    * * Description: Number of characters to keep when CompactMode=FirstNChars. Required when CompactMode is FirstNChars, ignored otherwise.
+    */
+    get CompactLength(): number | null {
+        return this.Get('CompactLength');
+    }
+    set CompactLength(value: number | null) {
+        this.Set('CompactLength', value);
+    }
+
+    /**
+    * * Field Name: CompactPromptID
+    * * Display Name: Compact Prompt ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Prompts (vwAIPrompts.ID)
+    * * Description: Optional override for AI summarization prompt when CompactMode=AISummary. Lookup hierarchy: this field -> Action.DefaultCompactPromptID -> system default. Allows agent-specific summarization focus (e.g., technical vs. marketing perspective).
+    */
+    get CompactPromptID(): string | null {
+        return this.Get('CompactPromptID');
+    }
+    set CompactPromptID(value: string | null) {
+        this.Set('CompactPromptID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -17625,6 +17885,15 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     */
     get Action(): string | null {
         return this.Get('Action');
+    }
+
+    /**
+    * * Field Name: CompactPrompt
+    * * Display Name: Compact Prompt
+    * * SQL Data Type: nvarchar(255)
+    */
+    get CompactPrompt(): string | null {
+        return this.Get('CompactPrompt');
     }
 }
 
@@ -19067,6 +19336,25 @@ if this limit is exceeded.
     }
     set OwnerUserID(value: string) {
         this.Set('OwnerUserID', value);
+    }
+
+    /**
+    * * Field Name: InvocationMode
+    * * Display Name: Invocation Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Any
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Sub-Agent
+    *   * Any
+    *   * Top-Level
+    * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.
+    */
+    get InvocationMode(): 'Any' | 'Sub-Agent' | 'Top-Level' {
+        return this.Get('InvocationMode');
+    }
+    set InvocationMode(value: 'Any' | 'Sub-Agent' | 'Top-Level') {
+        this.Set('InvocationMode', value);
     }
 
     /**
@@ -25859,6 +26147,19 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     }
     set Status(value: 'Complete' | 'Error' | 'In-Progress') {
         this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: SuggestedResponses
+    * * Display Name: Suggested Responses
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of suggested responses that can be displayed to the user for quick replies. Each response object contains: text (display text), allowInput (boolean), iconClass (optional Font Awesome class), and data (optional payload).
+    */
+    get SuggestedResponses(): string | null {
+        return this.Get('SuggestedResponses');
+    }
+    set SuggestedResponses(value: string | null) {
+        this.Set('SuggestedResponses', value);
     }
 
     /**
@@ -36386,6 +36687,32 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     }
 
     /**
+    * * Field Name: SubAgentInputMapping
+    * * Display Name: Sub Agent Input Mapping
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON mapping of parent payload paths to sub-agent initial payload paths. Enables structural data transfer from parent to related sub-agent. Format: {"parentPath": "subAgentPath", "parent.nested": "subAgent.field"}. Example: {"searchQuery": "query", "maxResults": "limit"}. If null, sub-agent starts with empty payload (default behavior).
+    */
+    get SubAgentInputMapping(): string | null {
+        return this.Get('SubAgentInputMapping');
+    }
+    set SubAgentInputMapping(value: string | null) {
+        this.Set('SubAgentInputMapping', value);
+    }
+
+    /**
+    * * Field Name: SubAgentContextPaths
+    * * Display Name: Sub Agent Context Paths
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).
+    */
+    get SubAgentContextPaths(): string | null {
+        return this.Get('SubAgentContextPaths');
+    }
+    set SubAgentContextPaths(value: string | null) {
+        this.Set('SubAgentContextPaths', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -42289,6 +42616,194 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
 
 
 /**
+ * MJ: Collection Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: CollectionPermission
+ * * Base View: vwCollectionPermissions
+ * * @description Manages sharing permissions for collections, allowing granular access control
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Collection Permissions')
+export class CollectionPermissionEntity extends BaseEntity<CollectionPermissionEntityType> {
+    /**
+    * Loads the MJ: Collection Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Collection Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof CollectionPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: CollectionID
+    * * Display Name: Collection ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)
+    */
+    get CollectionID(): string {
+        return this.Get('CollectionID');
+    }
+    set CollectionID(value: string) {
+        this.Set('CollectionID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: CanRead
+    * * Display Name: Can Read
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Always 1 - users must have read permission to access a shared collection
+    */
+    get CanRead(): boolean {
+        return this.Get('CanRead');
+    }
+    set CanRead(value: boolean) {
+        this.Set('CanRead', value);
+    }
+
+    /**
+    * * Field Name: CanShare
+    * * Display Name: Can Share
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can share this collection with others (but cannot grant more permissions than they have)
+    */
+    get CanShare(): boolean {
+        return this.Get('CanShare');
+    }
+    set CanShare(value: boolean) {
+        this.Set('CanShare', value);
+    }
+
+    /**
+    * * Field Name: CanEdit
+    * * Display Name: Can Edit
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can add/remove artifacts to/from this collection
+    */
+    get CanEdit(): boolean {
+        return this.Get('CanEdit');
+    }
+    set CanEdit(value: boolean) {
+        this.Set('CanEdit', value);
+    }
+
+    /**
+    * * Field Name: CanDelete
+    * * Display Name: Can Delete
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Can delete the collection, child collections, and artifacts
+    */
+    get CanDelete(): boolean {
+        return this.Get('CanDelete');
+    }
+    set CanDelete(value: boolean) {
+        this.Set('CanDelete', value);
+    }
+
+    /**
+    * * Field Name: SharedByUserID
+    * * Display Name: Shared By User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who shared this collection (NULL if shared by owner)
+    */
+    get SharedByUserID(): string | null {
+        return this.Get('SharedByUserID');
+    }
+    set SharedByUserID(value: string | null) {
+        this.Set('SharedByUserID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Collection
+    * * Display Name: Collection
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Collection(): string {
+        return this.Get('Collection');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+
+    /**
+    * * Field Name: SharedByUser
+    * * Display Name: Shared By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SharedByUser(): string | null {
+        return this.Get('SharedByUser');
+    }
+}
+
+
+/**
  * MJ: Collections - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: Collection
@@ -42444,6 +42959,20 @@ export class CollectionEntity extends BaseEntity<CollectionEntityType> {
     }
 
     /**
+    * * Field Name: OwnerID
+    * * Display Name: Owner ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user who owns this collection and has full permissions
+    */
+    get OwnerID(): string | null {
+        return this.Get('OwnerID');
+    }
+    set OwnerID(value: string | null) {
+        this.Set('OwnerID', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -42459,6 +42988,15 @@ export class CollectionEntity extends BaseEntity<CollectionEntityType> {
     */
     get Parent(): string | null {
         return this.Get('Parent');
+    }
+
+    /**
+    * * Field Name: Owner
+    * * Display Name: Owner
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Owner(): string | null {
+        return this.Get('Owner');
     }
 
     /**

@@ -1,0 +1,293 @@
+[
+  {
+    "fields": {
+      "Name": "Execute Code",
+      "Description": "Executes JavaScript code in a secure sandboxed environment. Designed for AI agents to generate and run code for data analysis, transformations, and calculations. Supports lodash, date-fns, mathjs, papaparse, uuid, and validator libraries. No filesystem or network access.",
+      "DriverClass": "__ExecuteCode",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-code",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "code",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JavaScript code to execute. Code should set the 'output' variable with the result. Can access 'input' variable for input data. Can require allowed libraries (lodash, date-fns, mathjs, papaparse, uuid, validator). Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3759AEB2-95BD-421C-A4C9-A54E4586DD05"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.569Z",
+            "checksum": "0cf388eb9a736d1b377f4d134d6d1db3c4e64d843de49a0ccf419ed396703996"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "language",
+            "DefaultValue": "javascript",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Programming language. Currently only 'javascript' is supported. Default: 'javascript'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B29D4885-8745-4124-AFA9-58F185446DC7"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.578Z",
+            "checksum": "590ea03ca8cb0368f1765ecccae8909029b4e82596a5e59c9336175045a3f0a0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "inputData",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "JSON string of input data that will be available to the code as the 'input' variable. Optional.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "831CA34F-9FBC-49D8-B57C-D265440A0D5C"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.588Z",
+            "checksum": "f84f080826144c60edded150c25a30ff567941b282f3fb376cb51e29801188e2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "timeout",
+            "DefaultValue": "30",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum execution time in seconds. Code will be terminated if it exceeds this timeout. Default: 30 seconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EDCE982D-7F09-4C1E-B30A-AC44283683D4"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.598Z",
+            "checksum": "71da56aa061dd128471f0025cd6025318ee85945183bc2e30e6df6d724716a21"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "memoryLimit",
+            "DefaultValue": "128",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Memory limit in MB. Note: Memory limiting requires Node.js process-level configuration. Default: 128 MB.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1FB955C5-874A-4671-B1C0-6854944D2C38"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.607Z",
+            "checksum": "8e8178b31ce37b37b52b9aabe5ba7c93a624c0ce507799ffbda00da00260f20c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "output",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "The result value set by the code (value of the 'output' variable). Type depends on what the code sets.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "98516FDF-E6E9-4818-A727-A47993300AC7"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.618Z",
+            "checksum": "0a5c00c5cb76c2519ba1a6ddcf5bd2432eaac82471a17ac8af039a6695ed0032"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "logs",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of console log output from the code execution. Includes log, error, warn, and info messages.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5CE013B0-6A4E-43E2-A9BB-A9261CCE72D6"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.630Z",
+            "checksum": "9e95265d6e553bc8b4b3ab0b2a45bbbe8ecc2418d757f3fcb63f739675391d79"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "executionTimeMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Execution time in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D40B5FAC-2E7A-4040-B381-D2B46802C066"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.642Z",
+            "checksum": "b4861c46bc31f08c8d7b1655183ea809d8126de552ff28054d52978e993e2352"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Code executed successfully. Output and logs available in Message and output parameters."
+          },
+          "primaryKey": {
+            "ID": "B5C8BDD6-E2C4-4622-BFDF-354E0BAE98BA"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.653Z",
+            "checksum": "db1a7a097096a5ce4b66f410f69f9d92118a1c779783edbf65e89a25434082e6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CODE",
+            "IsSuccess": false,
+            "Description": "Required parameter 'code' is missing."
+          },
+          "primaryKey": {
+            "ID": "C2152B6F-F74B-4C14-B14A-F3619CC13169"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.662Z",
+            "checksum": "230abf4bde5eac71174a2cdee5d9505b7727fbd4926d75b73d4087f597c0fbd3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT_DATA",
+            "IsSuccess": false,
+            "Description": "The inputData parameter is not valid JSON."
+          },
+          "primaryKey": {
+            "ID": "AB6E8807-78AC-4D94-A958-80676F54921F"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.683Z",
+            "checksum": "f5433b6a055c4c7e1f0185ea9a22eeb681771fc53e587ad39eac24cd662fbd90"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SYNTAX_ERROR",
+            "IsSuccess": false,
+            "Description": "The code contains syntax errors and cannot be parsed."
+          },
+          "primaryKey": {
+            "ID": "586659FF-315A-4833-842A-57A2F423CEAF"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.695Z",
+            "checksum": "108d726e0765344cd16f59482d8dfcb731f8e828247caa2f228d91cac2c2681f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RUNTIME_ERROR",
+            "IsSuccess": false,
+            "Description": "The code threw an error during execution."
+          },
+          "primaryKey": {
+            "ID": "88325DA1-A68E-49BA-BCA8-14CDE0B78D54"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.703Z",
+            "checksum": "41e1b36eb34a18799d6c98a92e700aac82e24f1b0b53543e5d32e8c81fb13635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "TIMEOUT",
+            "IsSuccess": false,
+            "Description": "Code execution exceeded the timeout limit."
+          },
+          "primaryKey": {
+            "ID": "38E10362-6D9C-43DD-A1EF-BB7C8F7EEE28"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.711Z",
+            "checksum": "ff2550fd01b05d905599eefc01136a66d9ae7b90689e128e519d0fa587e1cbd4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SECURITY_ERROR",
+            "IsSuccess": false,
+            "Description": "Code attempted a security violation (e.g., accessing blocked modules)."
+          },
+          "primaryKey": {
+            "ID": "47BF92AE-87A3-4F43-9CDA-5AF88130A287"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.719Z",
+            "checksum": "73cd6f82dd09dcf6ca58a68b3308b8778e6bbe66e3e0ee9c96eb438638688910"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTION_FAILED",
+            "IsSuccess": false,
+            "Description": "Code execution failed for an unknown reason. Check error message for details."
+          },
+          "primaryKey": {
+            "ID": "8E6870F6-0F44-4637-A24F-49B901AB2CAF"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.727Z",
+            "checksum": "db0d9e88cd42913dc1d7805c262a002cbe9f09cb5014363c7f941f2760e28610"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F3BA81B8-1D89-4B13-A417-B32D8E8A6F88"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T17:24:30.538Z",
+      "checksum": "add3582f82f9dd1f84dfe468bd963cd3bc5e44b0110f28e42088fc9c7de00b41"
+    }
+  }
+]

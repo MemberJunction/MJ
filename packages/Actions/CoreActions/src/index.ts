@@ -44,6 +44,9 @@ export * from './custom/data/data-mapper.action';
 export * from './custom/data/explore-database-schema.action';
 export * from './custom/data/execute-research-query.action';
 
+// Code Execution Actions
+export * from './custom/code-execution/execute-code.action';
+
 // File Operation Actions
 export * from './custom/files/pdf-generator.action';
 export * from './custom/files/pdf-extractor.action';
@@ -74,6 +77,7 @@ export * from './custom/workflow/delay.action';
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
 export * from './custom/ai/summarize-content.action';
+export * from './custom/ai/find-best-agent.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -81,6 +85,16 @@ export * from './custom/user-management/create-user.action';
 export * from './custom/user-management/create-employee.action';
 export * from './custom/user-management/assign-user-roles.action';
 export * from './custom/user-management/validate-email-unique.action';
+
+// Visualization Actions
+export * from './custom/visualization/create-svg-chart.action';
+export * from './custom/visualization/create-svg-diagram.action';
+export * from './custom/visualization/create-svg-word-cloud.action';
+export * from './custom/visualization/create-svg-network.action';
+export * from './custom/visualization/create-svg-infographic.action';
+export * from './custom/visualization/shared/svg-types';
+export * from './custom/visualization/shared/svg-utils';
+export * from './custom/visualization/shared/svg-theming';
 
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
@@ -114,6 +128,8 @@ import { LoadXMLParserAction } from './custom/data/xml-parser.action';
 import { LoadAggregateDataAction } from './custom/data/aggregate-data.action';
 import { LoadDataMapperAction } from './custom/data/data-mapper.action';
 import { LoadExploreDatabaseSchemaAction } from './custom/data/explore-database-schema.action';
+import { LoadGetEntityListAction } from './custom/data/get-entity-list.action';
+import { LoadGetEntityDetailsAction } from './custom/data/get-entity-details.action';
 import { LoadExecuteResearchQueryAction } from './custom/data/execute-research-query.action';
 import { LoadPDFGeneratorAction } from './custom/files/pdf-generator.action';
 import { LoadPDFExtractorAction } from './custom/files/pdf-extractor.action';
@@ -147,11 +163,17 @@ import { LoadRetryAction } from './custom/workflow/retry.action';
 import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
 import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action';
+import { LoadFindBestAgentAction } from './custom/ai/find-best-agent.action';
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
 import { LoadAssignUserRolesAction } from './custom/user-management/assign-user-roles.action';
 import { LoadValidateEmailUniqueAction } from './custom/user-management/validate-email-unique.action';
+import { LoadCreateSVGChartAction } from './custom/visualization/create-svg-chart.action';
+import { LoadCreateSVGDiagramAction } from './custom/visualization/create-svg-diagram.action';
+import { LoadCreateSVGWordCloudAction } from './custom/visualization/create-svg-word-cloud.action';
+import { LoadCreateSVGNetworkAction } from './custom/visualization/create-svg-network.action';
+import { LoadCreateSVGInfographicAction } from './custom/visualization/create-svg-infographic.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -190,6 +212,8 @@ export function LoadAllCoreActions() {
     LoadAggregateDataAction();
     LoadDataMapperAction();
     LoadExploreDatabaseSchemaAction();
+    LoadGetEntityListAction();
+    LoadGetEntityDetailsAction();
     LoadExecuteResearchQueryAction();
     LoadPDFGeneratorAction();
     LoadPDFExtractorAction();
@@ -223,11 +247,17 @@ export function LoadAllCoreActions() {
     LoadDelayAction();
     LoadExecuteAIPromptAction();
     LoadSummarizeContentAction();
+    LoadFindBestAgentAction();
     LoadCheckUserPermissionAction();
     LoadCreateUserAction();
     LoadCreateEmployeeAction();
     LoadAssignUserRolesAction();
     LoadValidateEmailUniqueAction();
+    LoadCreateSVGChartAction();
+    LoadCreateSVGDiagramAction();
+    LoadCreateSVGWordCloudAction();
+    LoadCreateSVGNetworkAction();
+    LoadCreateSVGInfographicAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out
