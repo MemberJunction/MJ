@@ -4,15 +4,21 @@ Sandboxed JavaScript code execution service for MemberJunction AI agents and wor
 
 ## Overview
 
-This package provides secure, isolated execution of JavaScript code in a sandboxed environment using vm2. It's designed to enable AI agents to generate and run code for data analysis, transformations, and calculations without compromising system security.
+This package provides secure, isolated execution of JavaScript code in a sandboxed environment using `isolated-vm` with worker process isolation. It's designed to enable AI agents to generate and run code for data analysis, transformations, and calculations without compromising system security or stability.
+
+**⚠️ Security**: This package handles untrusted code execution. Please review [security-research.md](./security-research.md) for comprehensive security analysis, threat model, and implementation details.
 
 ## Features
 
-- **Secure Sandboxing**: Executes code in isolated VM with no filesystem or network access
+- **Multi-Layer Security**: 5 independent defense layers (process isolation, V8 isolates, module blocking, resource limits, library allowlist)
+- **Fault Isolation**: Workers run in separate processes - crashes don't affect main application
+- **Automatic Recovery**: Crashed workers automatically restart with circuit breaker protection
 - **Timeout Protection**: Configurable execution timeouts (default: 30 seconds)
-- **Safe Library Access**: Curated allowlist of npm packages for data manipulation
+- **Memory Limits**: Configurable per-execution memory limits (default: 128MB)
+- **Safe Library Access**: Curated allowlist of npm packages with inline implementations
 - **Console Logging**: Captures console output for debugging
 - **Type Safety**: Full TypeScript support with comprehensive interfaces
+- **Audit Trail**: Integrated with MemberJunction action logging
 
 ## Installation
 
@@ -27,8 +33,18 @@ npm install @memberjunction/code-execution
 ```typescript
 import { CodeExecutionService } from '@memberjunction/code-execution';
 
-const service = new CodeExecutionService();
+// Create service with optional worker pool configuration
+const service = new CodeExecutionService({
+  poolSize: 2,              // Number of worker processes (default: 2)
+  maxQueueSize: 100,        // Max queued requests (default: 100)
+  maxCrashesPerWorker: 3,   // Crashes before marking unhealthy (default: 3)
+  crashTimeWindow: 60000    // Time window for crash counting (default: 60s)
+});
 
+// Initialize the worker pool (can also be done automatically on first execute)
+await service.initialize();
+
+// Execute code
 const result = await service.execute({
   code: `
     const sum = input.values.reduce((a, b) => a + b, 0);
@@ -36,7 +52,9 @@ const result = await service.execute({
     output = { sum, average };
   `,
   language: 'javascript',
-  inputData: { values: [10, 20, 30, 40, 50] }
+  inputData: { values: [10, 20, 30, 40, 50] },
+  timeoutSeconds: 30,       // Optional: execution timeout (default: 30)
+  memoryLimitMB: 128        // Optional: memory limit (default: 128)
 });
 
 if (result.success) {
@@ -44,7 +62,17 @@ if (result.success) {
   console.log(result.logs);   // Any console.log output from the code
 } else {
   console.error(result.error);
+  console.error(result.errorType); // 'TIMEOUT' | 'MEMORY_LIMIT' | 'SYNTAX_ERROR' | etc.
 }
+
+// Check worker pool health
+const stats = service.getStats();
+console.log('Active workers:', stats.activeWorkers);
+console.log('Busy workers:', stats.busyWorkers);
+console.log('Queue length:', stats.queueLength);
+
+// Graceful shutdown (important for clean application exit)
+await service.shutdown();
 ```
 
 ### With Actions (for AI Agents)
@@ -114,23 +142,35 @@ const result = await service.execute({
 
 ## Security Model
 
+**For detailed security analysis, see [security-research.md](./security-research.md)**
+
+This package uses a **defense-in-depth** approach with five independent security layers:
+
+1. **Process Isolation** - Workers run in separate OS processes
+2. **V8 Isolates** - Each execution runs in isolated V8 context (via `isolated-vm`)
+3. **Module Blocking** - Dangerous Node.js modules are blocked
+4. **Resource Limits** - Enforced timeout and memory limits
+5. **Library Allowlist** - Only pre-vetted libraries available
+
 ### What Code CAN Do
 
 - Access input data via `input` variable
 - Set output data via `output` variable
 - Use console methods (log, error, warn, info)
-- Require allowed npm packages
+- Require allowed npm packages (lodash, date-fns, uuid, validator)
 - Perform calculations and data transformations
 - Use safe built-in objects (JSON, Math, Date, Array, Object, String, Number, Boolean)
 
 ### What Code CANNOT Do
 
-- Access filesystem (`fs` module is mocked)
-- Make network requests (`http`, `https`, `net`, `axios` are blocked)
-- Spawn processes (`child_process` is blocked)
+- Access filesystem (`fs`, `path` modules blocked)
+- Make network requests (`http`, `https`, `net`, `axios` blocked)
+- Spawn processes (`child_process`, `cluster` blocked)
+- Access system information (`os`, `process` blocked)
 - Access environment variables
-- Use `eval()` or `Function` constructor
+- Use `eval()` or `Function` constructor (for user code)
 - Run indefinitely (timeout enforced)
+- Exceed memory limits (128MB default)
 
 ## API Reference
 
@@ -289,19 +329,62 @@ const result = await service.execute({
 
 ## Best Practices
 
-1. **Set Appropriate Timeouts**: Adjust `timeoutSeconds` based on expected workload
-2. **Validate Input Data**: Ensure input data is in expected format before execution
-3. **Handle Errors Gracefully**: Always check `result.success` before using `result.output`
-4. **Use Console Logging**: Add `console.log()` statements for debugging
-5. **Leverage Libraries**: Use lodash, mathjs, etc. instead of reinventing the wheel
-6. **Keep Code Focused**: Break complex logic into smaller execution chunks
+1. **Initialize Once**: Create one `CodeExecutionService` instance and reuse it (worker pool is shared)
+2. **Shutdown Gracefully**: Call `service.shutdown()` during application shutdown to clean up workers
+3. **Set Appropriate Timeouts**: Adjust `timeoutSeconds` based on expected workload
+4. **Validate Input Data**: Ensure input data is in expected format before execution
+5. **Handle Errors Gracefully**: Always check `result.success` before using `result.output`
+6. **Monitor Pool Health**: Use `service.getStats()` to monitor worker health and queue depth
+7. **Use Console Logging**: Add `console.log()` statements for debugging
+8. **Leverage Libraries**: Use lodash, date-fns, etc. instead of reinventing the wheel
+9. **Keep Code Focused**: Break complex logic into smaller execution chunks
+10. **Review Security Docs**: Read [security-research.md](./security-research.md) for threat model and security considerations
+
+## Architecture
+
+### Worker Process Pool
+
+The service maintains a pool of worker processes for fault isolation:
+
+```
+┌─────────────────────────────────────┐
+│   Main Application Process          │
+│                                      │
+│  ┌────────────────────────────┐    │
+│  │  CodeExecutionService       │    │
+│  │                              │    │
+│  │  ┌──────────────────────┐   │    │
+│  │  │   WorkerPool         │   │    │
+│  │  │   - Queue Requests   │   │    │
+│  │  │   - Monitor Health   │   │    │
+│  │  │   - Auto Restart     │   │    │
+│  │  └──────────────────────┘   │    │
+│  └────────────────────────────┘    │
+│          │          │               │
+└──────────┼──────────┼───────────────┘
+           │          │ IPC (JSON)
+    ┌──────▼───┐  ┌───▼──────┐
+    │ Worker 1 │  │ Worker 2 │  (Separate OS Processes)
+    │          │  │          │
+    │ isolated │  │ isolated │
+    │   -vm    │  │   -vm    │
+    │          │  │          │
+    └──────────┘  └──────────┘
+```
+
+### Benefits of Process Isolation
+
+- **Fault Tolerance**: Worker crashes don't affect main app or other workers
+- **Resource Isolation**: Per-process memory limits and cleanup
+- **Automatic Recovery**: Crashed workers restart automatically
+- **Circuit Breaker**: Too many crashes → worker disabled to prevent crash loops
 
 ## Limitations
 
 - **Language Support**: Currently only JavaScript (Python may be added in future)
 - **Async Code**: No support for `async/await` or Promises (synchronous code only)
-- **Memory**: No hard memory limits enforced (relies on Node.js process limits)
 - **Library Expansion**: New libraries require code changes (not configurable at runtime)
+- **Throughput**: ~100-200 executions/sec per worker (horizontal scaling recommended for higher loads)
 
 ## Contributing
 
