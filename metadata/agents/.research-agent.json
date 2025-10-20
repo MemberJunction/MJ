@@ -45,6 +45,13 @@
             "Status": "Active",
             "CachePolicy": "PerAgent",
             "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "2F22C90E-05BF-4226-8F6F-209C74873D6F"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T17:26:44.744Z",
+            "checksum": "7ea0d7ed9bac9b78f5ef992deb0eaf14f6602d0a6f667dcd28561de39e3573f1"
           }
         }
       ],
