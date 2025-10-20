@@ -12,6 +12,9 @@
 
 Modern business users work with files scattered across multiple cloud platforms—Google Drive, SharePoint, Dropbox, Box, AWS S3, and more. AI applications need to process these files (PDFs, images, videos, documents) intelligently without forcing users to upload them multiple times or losing access to their native platform features.
 
+### RAG
+Another thought is if we want to build basic RAG features for files into our system we sortof handle this with the content auto-tagger in some ways, so we need to also think about how this ties to content auto-tagger and RAG.
+
 ### What We're Building
 
 An artifact-based file handling system that:
