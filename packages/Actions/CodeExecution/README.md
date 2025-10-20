@@ -164,7 +164,7 @@ This package uses a **defense-in-depth** approach with five independent security
 ### What Code CANNOT Do
 
 - Access filesystem (`fs`, `path` modules blocked)
-- Make network requests (`http`, `https`, `net`, `axios` blocked)
+- Make network requests (`http`, `https`, `net`, `axios` modules blocked, `fetch()` API disabled)
 - Spawn processes (`child_process`, `cluster` blocked)
 - Access system information (`os`, `process` blocked)
 - Access environment variables

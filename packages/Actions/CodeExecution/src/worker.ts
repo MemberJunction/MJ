@@ -123,6 +123,14 @@ async function executeInIsolate(params: CodeExecutionParams): Promise<CodeExecut
             globalThis.SyntaxError = SyntaxError;
         `);
 
+        // SECURITY: Block network access via fetch() API (available in Node.js 18+)
+        // This is a global in modern Node.js and must be explicitly disabled
+        await context.eval(`
+            globalThis.fetch = () => {
+                throw new Error('Security Error: Network access via fetch() is not allowed in sandboxed code');
+            };
+        `);
+
         // Set up module cache for require()
         await jail.set('_moduleCache', new ivm.Reference({}));
 

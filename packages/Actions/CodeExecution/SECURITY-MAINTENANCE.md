@@ -203,5 +203,26 @@ For security concerns, contact:
 | Date | Reviewer | Findings | Actions Taken |
 |------|----------|----------|---------------|
 | 2025-10-20 | Initial | Initial security hardening | Implemented process isolation, code review policy, CVE documentation |
+| 2025-10-20 | Colleague | Missing fetch() API blocking | Added explicit fetch() disabling in worker.ts - blocks Node.js 18+ global fetch() |
+
+## Lessons Learned
+
+### fetch() API Security Hole (2025-10-20)
+
+**Issue**: Node.js 18+ includes a global `fetch()` API that was not blocked in initial implementation. This would allow network access despite module blocking.
+
+**Root Cause**: Focus on `require()` module blocking missed newer global APIs added to Node.js runtime.
+
+**Fix**: Explicitly override `globalThis.fetch` with error-throwing function in worker.ts
+
+**Prevention**:
+- Document all Node.js global APIs that need blocking (fetch, WebSocket, etc.)
+- Review Node.js release notes for new globals during version upgrades
+- Add test case for attempting network access via fetch()
+
+**Action Items**:
+- [ ] Add test case: `fetch('https://example.com')` should throw security error
+- [ ] Review Node.js 18+ globals: WebSocket, structuredClone, BroadcastChannel, etc.
+- [ ] Document "Blocked Globals" section in security-research.md
 
 ## Next Review Due: January 2026

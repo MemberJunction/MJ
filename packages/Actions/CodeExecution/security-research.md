@@ -93,7 +93,7 @@ Production-grade sandboxed JavaScript execution using **isolated-vm** for AI age
 #### 2. Module Blocking
 Dangerous modules throw security errors:
 - **Filesystem**: `fs`, `path` (blocked)
-- **Network**: `http`, `https`, `net`, `axios` (blocked)
+- **Network**: `http`, `https`, `net`, `axios` (modules blocked), `fetch()` (API disabled)
 - **Process**: `child_process`, `cluster`, `os`, `process` (blocked)
 
 #### 3. Library Allowlist
@@ -141,7 +141,7 @@ Libraries are provided as inline JavaScript implementations:
 
 ## What Code CANNOT Do
 - Access filesystem (fs blocked)
-- Make network requests (http/https/net blocked)
+- Make network requests (http/https/net modules blocked, fetch() API disabled)
 - Spawn processes (child_process blocked)
 - Use eval() or Function constructor
 - Run beyond timeout limit
