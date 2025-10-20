@@ -13,6 +13,7 @@ export * from './actions/validate-agent-configuration.action';
 export * from './actions/deactivate-agent.action';
 export * from './actions/export-agent-bundle.action';
 export * from './actions/set-agent-prompt.action';
+export * from './actions/create-prompt.action';
 
 // Core types should be imported from the core package directly
 
@@ -29,6 +30,7 @@ import { LoadValidateAgentConfigurationAction } from './actions/validate-agent-c
 import { LoadDeactivateAgentAction } from './actions/deactivate-agent.action';
 import { LoadExportAgentBundleAction } from './actions/export-agent-bundle.action';
 import { LoadSetAgentPromptAction } from './actions/set-agent-prompt.action';
+import { LoadCreatePromptAction } from './actions/create-prompt.action';
 
 // Execute all loaders to register actions
 export function LoadAgentManagementActions() {
@@ -44,6 +46,7 @@ export function LoadAgentManagementActions() {
     LoadDeactivateAgentAction();
     LoadExportAgentBundleAction();
     LoadSetAgentPromptAction();
+    LoadCreatePromptAction();
 }
 
 // Auto-load on import

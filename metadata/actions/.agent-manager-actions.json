@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Create Agent",
-      "Description": "Creates a new AI agent with specified configuration. Supports creating both top-level agents and sub-agents. Optionally creates and associates a system prompt if PromptText is provided. Restricted to Agent Manager agent only.",
+      "Description": "Creates a new AI agent with specified configuration using AgentSpec for complete configuration. Supports creating agents from Planning Designer output (AIAgentDefinition) or direct AgentSpec objects. Automatically applies intelligent defaults, validates configuration, and recursively creates sub-agent hierarchies. Restricted to Agent Manager agent only.",
       "DriverClass": "Create Agent",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
@@ -14,109 +14,19 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Name",
+            "Name": "AgentSpec",
             "Type": "Input",
-            "ValueType": "Scalar",
+            "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Name of the new agent",
+            "Description": "Complete agent specification object (AgentSpec or AIAgentDefinition from Planning Designer). Includes name, description, type, actions, sub-agents, payload paths, validation rules, and all 50+ configuration fields.",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "F4DF50F1-B5B2-4F76-9787-02C01BAB5B75"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:39.505Z",
-            "checksum": "86e952ac7d428f29bd81a309be816b9480f1a6ed6b74e75f1aa8cb28d91b8da9"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Description",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Detailed description of the agent's purpose and capabilities",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "DE7AE66F-604E-4BC3-94F7-2107F2AA8CC7"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.513Z",
-            "checksum": "b759988f2346a125393b238ee8d85b6c89e8105d9fea29c9ef84c72dd58a4132"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "TypeID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the AI Agent Type. Either Type or TypeID must be provided",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "E44F54E6-69B3-4892-AF6D-28373DB52C7C"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.522Z",
-            "checksum": "303b54f28fab51d776d2827cfa70ceaa383e17a445825e4a16552c69eb54db5a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Type",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the AI Agent Type (e.g., 'Loop'). Either Type or TypeID must be provided",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "56BA11F2-D42F-4528-8F97-9FAC67CE8C28"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.530Z",
-            "checksum": "1647e74fe74eeaa87c342ed9b70d513e388916a9dc66aeb0a12feeb533c8970f"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ParentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the parent agent if this is a sub-agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "B66CF581-7DAD-4E97-B33C-543DF167DCF3"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.540Z",
-            "checksum": "0e925015a91b7872feb02109049385754e447d63902df8e7ea874d9ba02e7de6"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptText",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "System prompt text that defines the agent's behavior. If provided, creates and associates a prompt with the agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "486E6A9C-94D1-4F2C-A20C-CC75A3630F49"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.550Z",
-            "checksum": "565b830bae6d0a6e47df89d19828706c213479e8e50cf9c0576d122afb3842c4"
+            "lastModified": "2025-10-20T20:12:21.721Z",
+            "checksum": "a4b65c956e768817c309ae1379b57e9f2356817e1943667eb887f47ba62b63bf"
           }
         },
         {
@@ -144,15 +54,51 @@
             "Type": "Output",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the created prompt (if PromptText was provided)",
+            "Description": "ID of the created prompt (if prompt was included in AgentSpec)",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "6C8D279E-C833-40F7-BB9C-12A52AA93F4C"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:39.568Z",
-            "checksum": "6d7c1dc910969ddb575a6045a561ab46e8aaf38b7080fd925409c2a631b65379"
+            "lastModified": "2025-10-20T20:12:21.733Z",
+            "checksum": "ac27032bc2789383f624113f02d8b0c8020451836a8888f58623ec0dc0e88767"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubAgentIDs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON array of created sub-agent IDs",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B66CF581-7DAD-4E97-B33C-543DF167DCF3"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T20:12:21.744Z",
+            "checksum": "3de5517c4d98800e3a62e3df37de86533d7168087ca3f377cf552e12b61f2ae1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubAgentErrors",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON array of sub-agent creation errors (if any)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "486E6A9C-94D1-4F2C-A20C-CC75A3630F49"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T20:12:21.753Z",
+            "checksum": "aa06f2d58661445b54797623905bb271bc0e3912d6122c4d62809f741b1edaee"
           }
         }
       ]
@@ -161,8 +107,8 @@
       "ID": "AD6C84E7-20FF-405D-BD61-24759B2C6700"
     },
     "sync": {
-      "lastModified": "2025-06-24T17:33:33.505Z",
-      "checksum": "14f0398f10da90192efd4c9d04b83561321764a0ae6268a6e5a1593e28a7e7ac"
+      "lastModified": "2025-10-20T20:12:21.633Z",
+      "checksum": "c2f12ac33143e4690359d852352b5defff4abb87934b47a5c86857350921a481"
     }
   },
   {
@@ -1279,6 +1225,82 @@
     "sync": {
       "lastModified": "2025-06-24T17:33:33.552Z",
       "checksum": "2dcf59f60b72ec8ce1a02c6e048fb47af03b04d70f0f9522e22dd6d52a99cc39"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Prompt",
+      "Description": "Creates a new AI prompt using the PromptSpec interface for deterministic configuration. Accepts a complete PromptSpec object with 50+ configuration fields including response format, validation behavior, retry logic, model selection, LLM parameters, caching, and more. Automatically creates Template entity and AIPrompt entity with intelligent defaults optimized for agent prompts that need structured JSON responses with validation. Restricted to Agent Manager agent only.",
+      "DriverClass": "Create Prompt",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-alt"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptSpec",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Complete prompt specification object. Required fields: Name, Description, PromptText. Optional fields include: ResponseFormat (Any/JSON/Markdown/etc), PromptRole (System/User/Assistant), PromptPosition (First/Last), OutputType (string/object/etc), OutputExample, ValidationBehavior (None/Warn/Strict), MaxRetries, RetryStrategy, SelectionStrategy, PowerPreference, Models array, and 40+ other LLM/caching/parallelization parameters.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9B075154-C44E-4CBB-BD22-D4FDCF9346D8"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T20:12:21.925Z",
+            "checksum": "b65c1754ebb9f468b4a284cf2883aaa97be89b5b9495a61b3f4ea6e79463ff73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the newly created AI Prompt",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "26553FD3-92DB-4E07-986E-5851D797F5DD"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T20:12:21.936Z",
+            "checksum": "973706ba742111c74cd33b2a1421113c9004b0c7270337ad43385c5470db9d63"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TemplateID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ID of the created Template entity containing the prompt text",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "63DBF4E9-03A3-440D-A56F-0948BA341B6E"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T20:12:21.946Z",
+            "checksum": "fca7c6b835fcc388288e7e91c1a09cb3e622980ec91176c6838da811cf057549"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F9AA7A3F-E496-4D50-8DBB-DB98E31E0099"
+    },
+    "sync": {
+      "lastModified": "2025-10-20T20:12:21.667Z",
+      "checksum": "8bdee0c40161c3ac18f03ac67f1c2b4364d2ece1fc04a41cbf2790a2b169fe30"
     }
   }
 ]

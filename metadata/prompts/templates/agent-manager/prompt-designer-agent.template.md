@@ -127,18 +127,28 @@ Your payload will be of this type. You will receive some of this information whe
 ```
 
 ## Output Structure
-You are responsible for filling the `prompts` section of the AgentManagerPayload:
+You are responsible for filling the `prompts` section of the AgentManagerPayload with complete PromptSpec objects for each agent.
 
-Focus on populating prompts for each agent in the hierarchy:
-- prompts[agentName].systemPrompt: Complete system prompt
-- prompts[agentName].templateVariables: Documentation as markdown table
-- prompts[agentName].promptNotes: Analysis and optimization notes
+### PromptSpec Format
+For each agent in the hierarchy, create a PromptSpec object with these fields:
 
-Format your documentation with:
-- Tables for template variables
-- Code blocks for examples
-- Sections for different analyses
-- Clear headings and structure
+**Required Fields:**
+- `Name`: Unique prompt name (e.g., "Data Collector - Main Prompt")
+- `Description`: Clear purpose of the prompt
+- `PromptText`: The actual system prompt content
+
+**Commonly Used Optional Fields:**
+- `ResponseFormat`: "JSON" for structured output, "Text" for natural language (default: "JSON")
+- `PromptRole`: "System" for agent prompts (default: "System")
+- `PromptPosition`: "First" or "Last" (default: "First")
+- `OutputType`: "object" for JSON, "string" for text (default: "object")
+- `OutputExample`: JSON example when OutputType is "object"
+- `ValidationBehavior`: "Strict", "Warn", or "None" (default: "Strict")
+- `MaxRetries`: Number of retry attempts (default: 2)
+- `SelectionStrategy`: "Specific", "Default", or "ByPower" (default: "Specific")
+- `PowerPreference`: "Highest", "Balanced", or "Lowest" (default: "Highest")
+
+Focus on creating clear, effective system prompts with appropriate configuration. The Agent Manager will use the Create Prompt action to create these prompts in the system.
 
 Here is an example of how this JSON might look, but always **refer to the TypeScript shown above as the reference for what to return**.
 ```json
