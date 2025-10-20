@@ -1094,6 +1094,139 @@
   },
   {
     "fields": {
+      "Name": "Find Best Action",
+      "Description": "Finds the most relevant actions for a given task using semantic search with embeddings. Returns top N most similar actions based on task description. Used by Planning Designer Agent to discover relevant actions without searching through hundreds of options.",
+      "DriverClass": "Find Best Action",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-search"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TaskDescription",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Description of the task to find relevant actions for (e.g., 'Search the web for information')",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "CD2D64EF-DFDC-4119-BCBB-E63436AF5269"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T23:02:33.310Z",
+            "checksum": "ffa028f367faa242588c43a026f346233c350dbd4081454cd642cd1e0035fc0b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResults",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of actions to return (default: 10)",
+            "IsRequired": false,
+            "DefaultValue": "10"
+          },
+          "primaryKey": {
+            "ID": "882FAB67-CCD5-459C-AD58-B4E6FFB6C73F"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T23:02:33.320Z",
+            "checksum": "eb9b00b908c8052f8de30dbb7aa1470eaf023429cfb4431a5c7792bdcc1b23a4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinimumSimilarityScore",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum similarity score 0-1 (default: 0.5)",
+            "IsRequired": false,
+            "DefaultValue": "0.5"
+          },
+          "primaryKey": {
+            "ID": "784BF34C-F075-4B51-A451-BF150F814512"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T23:02:33.365Z",
+            "checksum": "bcf3a029ee3c646dfacec58ceea27156b47802d92191721754b809438410c108"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeAgentManagement",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Exclude agent management actions from results (default: true)",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "F1A8EFF3-1B86-4313-B225-0A84A55144D2"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T23:02:33.375Z",
+            "checksum": "860de184b100bd11dbeae9bb3726413f33f62b068fcd0ab8d0b1a88ec8a02105"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MatchedActions",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of matched actions with similarity scores",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E8022EAC-514F-43BB-B142-E5C37BDF58F4"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T23:02:33.385Z",
+            "checksum": "38b52ff90b85f8ead685f90041727beea4a0044e75b0db902f106a35990a58b4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MatchCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of matched actions returned",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1F540524-6267-4908-8BC2-4C501FA058CB"
+          },
+          "sync": {
+            "lastModified": "2025-10-20T23:02:33.394Z",
+            "checksum": "73805a0d4393bd1ed551be34831a8324b3512cedaec0820ee2a71c558f6f0251"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "FD932133-CB1D-4C96-8EFC-14F0C8CE045B"
+    },
+    "sync": {
+      "lastModified": "2025-10-20T23:02:33.129Z",
+      "checksum": "0ba7e7e317a46398c63a7f88d6369369ec9aad9fe3de4293b4f0d7eee3987eef"
+    }
+  },
+  {
+    "fields": {
       "Name": "Get Agent Details",
       "Description": "Gets detailed information about a specific agent including its full hierarchy (sub-agents, sub-sub-agents, etc.) and associated actions at each level. Restricted to Agent Manager agent only.",
       "DriverClass": "Get Agent Details",

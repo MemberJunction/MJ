@@ -6,13 +6,15 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, LogError, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEntity, LogError, Metadata, UserInfo, RunView } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelEntityExtended } from "@memberjunction/core-entities";
+import { AIActionEntity, AIModelEntityExtended, ActionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
+import { ActionEmbeddingService } from "./services/ActionEmbeddingService";
 import { AgentEmbeddingMetadata, AgentMatchResult } from "./types/AgentMatchResult";
+import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchResult";
 
 
 /**
@@ -46,6 +48,12 @@ export class AIEngine extends AIEngineBase {
     // Vector service for agent embeddings - initialized during AdditionalLoading
     private _agentVectorService: SimpleVectorService<AgentEmbeddingMetadata> | null = null;
 
+    // Vector service for action embeddings - initialized during AdditionalLoading
+    private _actionVectorService: SimpleVectorService<ActionEmbeddingMetadata> | null = null;
+
+    // Actions loaded from database
+    private _actions: ActionEntity[] = [];
+
     public static get Instance(): AIEngine {
         return super.getInstance<AIEngine>();
     }
@@ -56,6 +64,24 @@ export class AIEngine extends AIEngineBase {
      */
     public get AgentVectorService(): SimpleVectorService<AgentEmbeddingMetadata> | null {
         return this._agentVectorService;
+    }
+
+    /**
+     * Get the action vector service for semantic search.
+     * Initialized during AdditionalLoading - will be null before AIEngine.Config() completes.
+     */
+    public get ActionVectorService(): SimpleVectorService<ActionEmbeddingMetadata> | null {
+        return this._actionVectorService;
+    }
+
+    /**
+     * Get all available actions loaded from the database.
+     * Loaded during Config() - will be empty before AIEngine.Config() completes.
+     * NOTE: This returns ActionEntity (MJ Action system), not the deprecated AIActionEntity.
+     * For deprecated AI Actions, see the inherited Actions property.
+     */
+    public get SystemActions(): ActionEntity[] {
+        return this._actions;
     }
 
     /**
@@ -150,7 +176,7 @@ export class AIEngine extends AIEngineBase {
     }
 
     /**
-     * Override AdditionalLoading to compute agent embeddings.
+     * Override AdditionalLoading to load Actions and compute embeddings.
      * Called automatically during AIEngine initialization after base loading completes.
      * @param contextUser - User context for any additional operations
      */
@@ -158,8 +184,14 @@ export class AIEngine extends AIEngineBase {
         // Call parent first (sets up prompt-category associations, agent relationships, etc.)
         await super.AdditionalLoading(contextUser);
 
+        // Load Actions from database
+        await this.loadActions(contextUser);
+
         // Compute agent embeddings using agents already loaded by base class
         await this.loadAgentEmbeddings();
+
+        // Compute action embeddings using actions we just loaded
+        await this.loadActionEmbeddings();
     }
 
     /**
@@ -200,6 +232,76 @@ export class AIEngine extends AIEngineBase {
     }
 
     /**
+     * Load Actions from database.
+     * Called during AdditionalLoading to populate the Actions list.
+     * @private
+     */
+    private async loadActions(contextUser?: UserInfo): Promise<void> {
+        const startTime = Date.now();
+        console.log('AIEngine: Loading actions...');
+
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<ActionEntity>({
+                EntityName: 'Actions',
+                ExtraFilter: "Status = 'Active'",
+                OrderBy: 'Name',
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (result.Success && result.Results) {
+                this._actions = result.Results;
+                const duration = Date.now() - startTime;
+                console.log(`AIEngine: Loaded ${this._actions.length} actions in ${duration}ms`);
+            } else {
+                console.error(`Failed to load actions: ${result.ErrorMessage || 'Unknown error'}`);
+                this._actions = [];
+            }
+
+        } catch (error) {
+            console.error(`Error loading actions: ${error instanceof Error ? error.message : String(error)}`);
+            this._actions = [];
+        }
+    }
+
+    /**
+     * Load embeddings for all actions.
+     * Uses actions loaded in loadActions() - no additional database round trip needed.
+     * @private
+     */
+    private async loadActionEmbeddings(): Promise<void> {
+        const startTime = Date.now();
+        console.log('AIEngine: Loading action embeddings...');
+
+        try {
+            // Use actions loaded in loadActions()
+            const actions = this._actions;
+
+            if (!actions || actions.length === 0) {
+                console.log('AIEngine: No actions found to generate embeddings for');
+                return;
+            }
+
+            // Generate embeddings using static utility method
+            const entries = await ActionEmbeddingService.GenerateActionEmbeddings(
+                actions,
+                (text) => this.EmbedTextLocal(text)  // Pass our own embed method
+            );
+
+            // Load into vector service
+            this._actionVectorService = new SimpleVectorService();
+            this._actionVectorService.LoadVectors(entries);
+
+            const duration = Date.now() - startTime;
+            console.log(`AIEngine: Loaded embeddings for ${entries.length} actions in ${duration}ms`);
+
+        } catch (error) {
+            console.error(`Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
+            // Don't throw - allow AIEngine to continue loading even if embeddings fail
+        }
+    }
+
+    /**
      * Find agents similar to a task description using semantic search.
      * Convenience method that uses the cached agent vector service.
      *
@@ -220,6 +322,34 @@ export class AIEngine extends AIEngineBase {
 
         return AgentEmbeddingService.FindSimilarAgents(
             this._agentVectorService,
+            taskDescription,
+            (text) => this.EmbedTextLocal(text),
+            topK,
+            minSimilarity
+        );
+    }
+
+    /**
+     * Find actions similar to a task description using semantic search.
+     * Convenience method that uses the cached action vector service.
+     *
+     * @param taskDescription - The task description to match against action capabilities
+     * @param topK - Maximum number of results to return (default: 10)
+     * @param minSimilarity - Minimum similarity score 0-1 (default: 0.5)
+     * @returns Array of matching actions sorted by similarity score (highest first)
+     * @throws Error if action embeddings not loaded or task description empty
+     */
+    public async FindSimilarActions(
+        taskDescription: string,
+        topK: number = 10,
+        minSimilarity: number = 0.5
+    ): Promise<ActionMatchResult[]> {
+        if (!this._actionVectorService) {
+            throw new Error('Action embeddings not loaded. Ensure AIEngine.Config() has completed.');
+        }
+
+        return ActionEmbeddingService.FindSimilarActions(
+            this._actionVectorService,
             taskDescription,
             (text) => this.EmbedTextLocal(text),
             topK,

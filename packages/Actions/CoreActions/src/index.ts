@@ -78,6 +78,7 @@ export * from './custom/workflow/delay.action';
 export * from './custom/ai/execute-ai-prompt.action';
 export * from './custom/ai/summarize-content.action';
 export * from './custom/ai/find-best-agent.action';
+export * from './custom/ai/find-best-action.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -164,6 +165,7 @@ import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
 import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action';
 import { LoadFindBestAgentAction } from './custom/ai/find-best-agent.action';
+import { LoadFindBestActionAction } from './custom/ai/find-best-action.action';
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
@@ -248,6 +250,7 @@ export function LoadAllCoreActions() {
     LoadExecuteAIPromptAction();
     LoadSummarizeContentAction();
     LoadFindBestAgentAction();
+    LoadFindBestActionAction();
     LoadCheckUserPermissionAction();
     LoadCreateUserAction();
     LoadCreateEmployeeAction();
