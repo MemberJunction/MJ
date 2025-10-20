@@ -23,6 +23,7 @@ import { DataContext } from "@memberjunction/data-context";
 import { LogStatus, LogError } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
+import { ComponentSpec } from "@memberjunction/interactive-component-types";
 
 /**
  * Context type for Skip agent execution
@@ -111,7 +112,7 @@ export class SkipProxyAgent extends BaseAgent {
 
         // Extract context
         const context = params.context || {} as SkipAgentContext;
-        const conversationId = context.conversationId;
+        const conversationId = params.data?.conversationId;
 
         if (!params.contextUser) {
             LogError('[SkipProxyAgent] contextUser is required');
@@ -205,57 +206,46 @@ export class SkipProxyAgent extends BaseAgent {
     private mapSkipResponseToNextStep(
         apiResponse: SkipAPIResponse,
         conversationId: string
-    ): BaseAgentNextStep<SkipAgentPayload> {
+    ): BaseAgentNextStep<ComponentSpec> {
+      //return this.tempHack();
 
-        // Build the payload with full Skip response
-        const payload: SkipAgentPayload = {
-            skipResponse: apiResponse,
-            responsePhase: apiResponse.responsePhase,
-            conversationId
-        };
-
-
-        return this.tempHack();
-
-        switch (apiResponse.responsePhase) {
-            case 'analysis_complete': {
-                // Skip has completed analysis and returned results
-                const completeResponse = apiResponse as SkipAPIAnalysisCompleteResponse;
-                payload.message = completeResponse.title || 'Analysis complete';
-
-                return {
-                    terminate: true,
-                    step: 'Success',
-                    message: payload.message,
-                    newPayload: payload
-                };
-            }
-
-            case 'clarifying_question': {
-                // Skip needs more information from the user
-                const clarifyResponse = apiResponse as SkipAPIClarifyingQuestionResponse;
-                payload.message = clarifyResponse.clarifyingQuestion;
-
-                return {
-                    terminate: true,
-                    step: 'Chat',
-                    message: clarifyResponse.clarifyingQuestion,
-                    newPayload: payload
-                };
-            }
-
-            default: {
-                // Unknown or unexpected response phase
-                LogError(`[SkipProxyAgent] Unknown Skip response phase: ${apiResponse.responsePhase}`);
-                return {
-                    terminate: true,
-                    step: 'Failed',
-                    message: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
-                    errorMessage: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
-                    newPayload: payload
-                };
-            }
+      switch (apiResponse.responsePhase) {
+        case 'analysis_complete': {
+            // Skip has completed analysis and returned results
+            const completeResponse = apiResponse as SkipAPIAnalysisCompleteResponse;
+            const componentSpec = completeResponse.componentOptions[0].option;
+            return {
+                terminate: true,
+                step: 'Success',
+                message: completeResponse.title || 'Analysis complete',
+                newPayload: componentSpec  
+            };
         }
+
+        case 'clarifying_question': {
+            // Skip needs more information from the user
+            const clarifyResponse = apiResponse as SkipAPIClarifyingQuestionResponse;
+
+            return {
+                terminate: true,
+                step: 'Chat',
+                message: clarifyResponse.clarifyingQuestion,
+                newPayload: undefined
+            };
+        }
+
+        default: {
+            // Unknown or unexpected response phase
+            LogError(`[SkipProxyAgent] Unknown Skip response phase: ${apiResponse.responsePhase}`);
+            return {
+                terminate: true,
+                step: 'Failed',
+                message: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
+                errorMessage: `Unknown Skip response phase: ${apiResponse.responsePhase}`,
+                newPayload: undefined
+            };
+        }
+      }
     }
 
     private tempHack(): BaseAgentNextStep<SkipAgentPayload> {
