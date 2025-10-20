@@ -11,6 +11,7 @@
  * @since 2.109.0
  */
 
+import { AIEngine } from '@memberjunction/aiengine';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, RunView, RunQuery, UserInfo } from '@memberjunction/core';
 import { RunViewParams, RunQueryParams } from '@memberjunction/core';
 import { AIAgentDataSourceEntity } from '@memberjunction/core-entities'; 
@@ -220,19 +221,17 @@ export class AgentDataPreloader {
         agentId: string,
         contextUser: UserInfo
     ): Promise<AIAgentDataSourceEntity[]> {
-        const rv = new RunView();
-        const result = await rv.RunView<AIAgentDataSourceEntity>({
-            EntityName: 'MJ: AI Agent Data Sources',
-            ExtraFilter: `AgentID='${agentId}' AND Status='Active'`,
-            OrderBy: 'ExecutionOrder ASC, Name ASC',
-            ResultType: 'entity_object'
-        }, contextUser);
+        // Ensure AIEngine is configured
+        await AIEngine.Instance.Config(false, contextUser);
+        const data = AIEngine.Instance.AgentDataSources.filter(ads => ads.AgentID === agentId);
+        const sortedData = data.sort((a, b) => {
+            if (a.ExecutionOrder === b.ExecutionOrder) {
+                return a.Name.localeCompare(b.Name);
+            }
+            return (a.ExecutionOrder || 0) - (b.ExecutionOrder || 0);
+        });
 
-        if (!result.Success) {
-            throw new Error(`Failed to load data sources: ${result.ErrorMessage}`);
-        }
-
-        return result.Results || [];
+        return sortedData;
     }
 
     /**

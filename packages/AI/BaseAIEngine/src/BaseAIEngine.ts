@@ -18,7 +18,8 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIAgentStepEntity,
          AIAgentStepPathEntity,
          AIAgentRelationshipEntity,
-         AIAgentPermissionEntity} from "@memberjunction/core-entities";
+         AIAgentPermissionEntity,
+         AIAgentDataSourceEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
  
 // this class handles execution of AI Actions
@@ -34,6 +35,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPrompts: AIAgentPromptEntity[] = [];
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
+    private _agentDataSources: AIAgentDataSourceEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
     private _agentRelationships: AIAgentRelationshipEntity[] = [];
     private _agentTypes: AIAgentTypeEntity[] = [];
@@ -155,6 +157,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentPermissions',
                 EntityName: 'MJ: AI Agent Permissions'
+            },
+            {
+                PropertyName: '_agentDataSources',
+                EntityName: 'MJ: AI Agent Data Sources'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -437,6 +443,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             p.ConfigurationID === configurationId && 
             p.Name.toLowerCase() === paramName.toLowerCase()
         ) || null;
+    }
+
+    public get AgentDataSources(): AIAgentDataSourceEntity[] {
+        return this._agentDataSources;
     }
 
     public get AgentSteps(): AIAgentStepEntity[] {
