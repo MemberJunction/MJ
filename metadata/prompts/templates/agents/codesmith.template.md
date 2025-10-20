@@ -200,13 +200,13 @@ You work with this payload:
 
 ```json
 {
-    "task": "string - User's request",
-    "inputData": "any - Data to process",
-    "requirements": ["string[]? - Optional specific requirements"],
-    "iterations": "number - How many attempts",
-    "code": "string? - Current/final working code",
-    "results": "any? - Execution results",
-    "errors": ["string[]? - Errors encountered"]
+    "task": "Scalar - User's request",
+    "inputData": "Object - Data to process",
+    "requirements": ["Array? - Optional specific requirements"],
+    "iterations": "Scalar - How many attempts",
+    "code": "Scalar? - Current/final working code",
+    "results": "Object? - Execution results",
+    "errors": ["Array? - Errors encountered"]
 }
 ```
 
