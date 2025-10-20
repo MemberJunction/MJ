@@ -985,6 +985,163 @@ The action returns SVG markup in the result message - embed it directly in your 
 </div>
 ```
 
+**Creating Diagrams with the "Create SVG Diagram" Action:**
+
+When your research involves relationships, hierarchies, or data models that would benefit from visual diagrams, use the **Create SVG Diagram** action. This action supports three diagram types:
+
+1. **Entity-Relationship Diagrams (ERD)**: For database schemas, data models
+2. **Flowcharts**: For processes, workflows, decision trees
+3. **Org Charts**: For organizational hierarchies, team structures
+
+**🚨 IMPORTANT: DO NOT use Mermaid syntax** - Mermaid is not supported in our HTML reports. Use the Create SVG Diagram action instead, which generates proper SVG markup.
+
+**Example: Entity-Relationship Diagram**
+```json
+{
+  "DiagramType": "er",
+  "Nodes": [
+    {
+      "id": "entity_1",
+      "name": "AI Agents",
+      "attrs": ["ID: uniqueidentifier", "Name: nvarchar(255)", "Description: nvarchar(MAX)", "Status: nvarchar(20)"]
+    },
+    {
+      "id": "entity_2",
+      "name": "AI Agent Runs",
+      "attrs": ["ID: uniqueidentifier", "AgentID: uniqueidentifier", "StartedAt: datetimeoffset", "Status: nvarchar(20)"]
+    },
+    {
+      "id": "entity_3",
+      "name": "AI Agent Steps",
+      "attrs": ["ID: uniqueidentifier", "RunID: uniqueidentifier", "Sequence: int", "Status: nvarchar(20)"]
+    }
+  ],
+  "Edges": [
+    {
+      "from": "entity_1",
+      "to": "entity_2",
+      "label": "1:N"
+    },
+    {
+      "from": "entity_2",
+      "to": "entity_3",
+      "label": "1:N"
+    }
+  ],
+  "Title": "AI Agent Entity Relationships",
+  "Width": "1000",
+  "Height": "600"
+}
+```
+
+**Example: Flowchart**
+```json
+{
+  "DiagramType": "flow",
+  "Nodes": [
+    {
+      "id": "start",
+      "kind": "start",
+      "label": "User Request"
+    },
+    {
+      "id": "parse",
+      "kind": "process",
+      "label": "Parse Request"
+    },
+    {
+      "id": "decision",
+      "kind": "decision",
+      "label": "Data Available?"
+    },
+    {
+      "id": "query",
+      "kind": "process",
+      "label": "Query Database"
+    },
+    {
+      "id": "web",
+      "kind": "process",
+      "label": "Web Search"
+    },
+    {
+      "id": "report",
+      "kind": "process",
+      "label": "Generate Report"
+    },
+    {
+      "id": "end",
+      "kind": "end",
+      "label": "Complete"
+    }
+  ],
+  "Edges": [
+    {"from": "start", "to": "parse"},
+    {"from": "parse", "to": "decision"},
+    {"from": "decision", "to": "query", "label": "Yes"},
+    {"from": "decision", "to": "web", "label": "No"},
+    {"from": "query", "to": "report"},
+    {"from": "web", "to": "report"},
+    {"from": "report", "to": "end"}
+  ],
+  "Direction": "TB",
+  "Title": "Research Process Flow",
+  "Width": "600",
+  "Height": "800"
+}
+```
+
+**Example: Org Chart**
+```json
+{
+  "DiagramType": "org",
+  "Nodes": {
+    "id": "ceo",
+    "label": "CEO",
+    "role": "Chief Executive",
+    "children": [
+      {
+        "id": "cto",
+        "label": "CTO",
+        "role": "Technology",
+        "children": [
+          {"id": "dev1", "label": "Dev Team 1", "role": "Engineering"},
+          {"id": "dev2", "label": "Dev Team 2", "role": "Engineering"}
+        ]
+      },
+      {
+        "id": "coo",
+        "label": "COO",
+        "role": "Operations",
+        "children": [
+          {"id": "ops1", "label": "Ops Team", "role": "Support"}
+        ]
+      }
+    ]
+  },
+  "Title": "Organization Structure",
+  "Width": "800",
+  "Height": "500"
+}
+```
+
+**Key Parameters for Create SVG Diagram:**
+- **DiagramType**: 'er' (entity-relationship), 'flow' (flowchart), or 'org' (org chart) - **REQUIRED**
+- **Nodes**: Array of nodes (for flow/er) or nested object (for org) - **REQUIRED**
+- **Edges**: Array of relationships/connections (for flow/er) - not used for org charts
+- **Direction**: 'TB' (top-bottom), 'LR' (left-right), 'RL', 'BT' - for flow diagrams
+- **Title**: Diagram title (optional but recommended)
+- **Width** / **Height**: Dimensions in pixels (defaults: 800×600)
+- **Palette**: Color scheme ('mjDefault', 'gray', 'pastel', 'highContrast')
+
+The action returns SVG markup - wrap it in a scrollable container for large diagrams:
+
+```html
+<div class="svg-scroll-wrapper">
+  [SVG markup from Create SVG Diagram action]
+</div>
+```
+
 **Not Allowed**
 - External JavaScript libraries (keep it simple, inline if needed)
 - External fonts (stick to system fonts: -apple-system, BlinkMacSystemFont, 'Segoe UI', etc.)

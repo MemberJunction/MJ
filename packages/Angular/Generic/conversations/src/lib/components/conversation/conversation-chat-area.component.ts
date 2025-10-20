@@ -2,12 +2,12 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, Cha
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey } from '@memberjunction/core';
 import { ConversationEntity, ConversationDetailEntity, AIAgentRunEntity, AIAgentRunEntityExtended, ConversationDetailArtifactEntity, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
-import { DataCacheService } from '../../services/data-cache.service';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
 import { Subject } from 'rxjs';
@@ -52,6 +52,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public collectionPickerArtifactId: string | null = null;
   public collectionPickerExcludedIds: string[] = [];
 
+  // Conversation data cache: ConversationID -> Array of ConversationDetailComplete
+  // Stores raw query results so we don't need to re-query when switching conversations
+  private conversationDataCache = new Map<string, ConversationDetailComplete[]>();
+
   // Artifact mapping: ConversationDetailID -> Array of LazyArtifactInfo
   // Uses lazy-loading pattern: display data loaded immediately, full entities on-demand
   // Supports multiple artifacts per conversation detail (0-N relationship)
@@ -77,7 +81,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   constructor(
     public conversationState: ConversationStateService,
-    private dataCache: DataCacheService,
     private agentStateService: AgentStateService,
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
@@ -153,20 +156,46 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   private async loadMessages(conversationId: string): Promise<void> {
     try {
-      // PHASE 1: Load messages from cache (fast, shows content immediately)
-      // The cache will load from DB if not already cached
-      const loadedMessages = await this.dataCache.loadConversationDetails(conversationId, this.currentUser);
+      // Check if we have cached data for this conversation
+      const cachedData = this.conversationDataCache.get(conversationId);
 
-      this.messages = loadedMessages;
-      this.scrollToBottom = true;
-      this.cdr.detectChanges(); // Show messages immediately
+      if (cachedData) {
+        // Use cached data - instant load!
+        console.log(`📦 Loading conversation ${conversationId} from cache - instant!`);
+        this.buildMessagesFromCache(cachedData);
+        this.loadPeripheralData(conversationId); // Process cached data for maps
+      } else {
+        // Load from database with single optimized query
+        console.log(`🔍 Loading conversation ${conversationId} from database - single query`);
+        const rq = new RunQuery();
 
-      // PHASE 2: Load peripheral data in background (agent runs & artifacts)
-      this.isLoadingPeripheralData = true;
-      this.loadPeripheralData(conversationId).finally(() => {
-        this.isLoadingPeripheralData = false;
-        this.cdr.detectChanges();
-      });
+        const result = await rq.RunQuery({
+          QueryName: 'GetConversationComplete',
+          CategoryPath: 'MJ/Conversations',
+          Parameters: { ConversationID: conversationId }
+        }, this.currentUser);
+
+        if (!result.Success || !result.Results) {
+          console.error('Failed to load conversation data:', result.ErrorMessage);
+          this.messages = [];
+          return;
+        }
+
+        // Cache the raw results for future use
+        const conversationData = result.Results as ConversationDetailComplete[];
+        this.conversationDataCache.set(conversationId, conversationData);
+        console.log(`💾 Cached ${conversationData.length} conversation details for conversation ${conversationId}`);
+
+        // Build messages and show immediately
+        this.buildMessagesFromCache(conversationData);
+
+        // Process peripheral data (agent runs & artifacts) in background
+        this.isLoadingPeripheralData = true;
+        this.loadPeripheralData(conversationId).finally(() => {
+          this.isLoadingPeripheralData = false;
+          this.cdr.detectChanges();
+        });
+      }
     } catch (error) {
       console.error('Error loading messages:', error);
       this.messages = [];
@@ -174,147 +203,134 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   /**
-   * Load peripheral data (agent runs and artifacts) in background
-   * This allows messages to display immediately while slower queries complete
+   * Build message entities from cached conversation data
+   * Creates ConversationDetailEntity objects from the raw query results
+   */
+  private async buildMessagesFromCache(conversationData: ConversationDetailComplete[]): Promise<void> {
+    const md = new Metadata();
+    const messages: ConversationDetailEntity[] = [];
+
+    for (const row of conversationData) {
+      if (!row.ID) continue;
+
+      // Create entity object and load from raw data
+      const message = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+
+      // LoadFromData expects the same structure as the query result
+      // Since we're using SELECT *, all fields should be present
+      message.LoadFromData(row);
+
+      messages.push(message);
+    }
+
+    this.messages = messages;
+    this.scrollToBottom = true;
+    this.cdr.detectChanges(); // Show messages immediately
+  }
+
+  /**
+   * Process peripheral data (agent runs and artifacts) from cached conversation data
+   * Parses JSON columns and builds maps for display
    *
-   * PERFORMANCE OPTIMIZATION: Uses single optimized query for artifacts instead of 3 sequential queries
-   * - OLD: 3 sequential RunView queries (~880ms, ~500KB payload with Content field)
-   * - NEW: 1 RunQuery with JOINs (~200ms, ~15KB payload without Content field)
-   * - Lazy-loading pattern: Display data loaded immediately, full entities loaded on-demand
-   *
-   * Uses lastLoadedConversationId to ensure we only load once per conversation, even during
-   * multiple change detection cycles that might occur during async operations.
+   * PERFORMANCE OPTIMIZATION: Uses cached data instead of querying
+   * - Data already loaded by loadMessages() - no additional queries needed
+   * - Processes cached JSON data to build display maps
+   * - Instant when switching between conversations
    */
   private async loadPeripheralData(conversationId: string): Promise<void> {
     const timestamp = new Date().toISOString();
-    const stackTrace = new Error().stack?.split('\n').slice(2, 5).join('\n    ');
 
-    // Skip if we've already loaded peripheral data for this conversation
-    console.log(`[${timestamp}] 🔍 loadPeripheralData called - Last: ${this.lastLoadedConversationId}, Current: ${conversationId}`);
-    console.log(`   Called from:\n    ${stackTrace}`);
-
+    // Skip if we've already processed peripheral data for this conversation
     if (this.lastLoadedConversationId === conversationId) {
-      console.log(`[${timestamp}] ⏭️ Skipping peripheral data load - already loaded for conversation ${conversationId}`);
+      console.log(`[${timestamp}] ⏭️ Skipping peripheral data processing - already processed for conversation ${conversationId}`);
       return;
     }
 
-    // Mark this conversation as loaded to prevent duplicate loads from starting at same time or similar time
+    // Mark this conversation as processed to prevent duplicate processing
     this.lastLoadedConversationId = conversationId;
-    console.log(`[${timestamp}] 📊 Loading peripheral data for conversation ${conversationId} - EXECUTING DB QUERIES`);
+    console.log(`[${timestamp}] 📊 Processing peripheral data for conversation ${conversationId} from cache`);
 
     try {
-      const rv = new RunView();
-      const rq = new RunQuery();
+      // Get cached data - should always be present by the time we get here
+      const conversationData = this.conversationDataCache.get(conversationId);
+      if (!conversationData) {
+        console.warn(`No cached data found for conversation ${conversationId}`);
+        return;
+      }
+
       const md = new Metadata();
-      const convoDetailEntity = md.EntityByName("Conversation Details");
 
-      // Load agent runs and artifacts in parallel
-      const [agentRunsResult, artifactMapResult] = await Promise.all([
-        rv.RunView<AIAgentRunEntityExtended>(
-          {
-            EntityName: 'MJ: AI Agent Runs',
-            ExtraFilter: `ConversationDetailID IN (SELECT ID FROM [${convoDetailEntity.SchemaName}].[${convoDetailEntity.BaseView}] WHERE ConversationID='${conversationId}')`,
-            ResultType: 'entity_object',
-            // Only fetch fields we actually display to reduce payload size
-            Fields: ['ID', 'AgentID', 'Agent', 'Status', '__mj_CreatedAt', '__mj_UpdatedAt', 'TotalPromptTokensUsed', 'TotalCompletionTokensUsed', 'TotalCost', 'ConversationDetailID']
-          },
-          this.currentUser
-        ),
-        rq.RunQuery({
-          QueryName: 'GetConversationArtifactsMap',
-          CategoryPath: '/MJ/Conversations',
-          Parameters: { ConversationID: conversationId }
-        }, this.currentUser)
-      ]);
-
-      // Build agent runs map - single query loads all runs for this conversation
+      // Clear and rebuild maps from cached data
       this.agentRunsByDetailId.clear();
-      if (agentRunsResult.Success && agentRunsResult.Results) {
-        for (const run of agentRunsResult.Results) {
-          if (run.ConversationDetailID) {
-            this.agentRunsByDetailId.set(run.ConversationDetailID, run);
-          }
-        }
-      }
-
-      // Build artifact map using batch-loading pattern for better performance
       this.artifactsByDetailId.clear();
-      if (artifactMapResult.Success && artifactMapResult.Results && artifactMapResult.Results.length > 0) {
-        // PERFORMANCE: Batch load all artifacts and versions upfront to avoid N+1 queries
-        // Collect all unique artifact and version IDs
-        const artifactIds = new Set<string>();
-        const versionIds = new Set<string>();
 
-        for (const row of artifactMapResult.Results) {
-          artifactIds.add(row.ArtifactID);
-          versionIds.add(row.ArtifactVersionID);
+      for (const row of conversationData) {
+        // Skip rows without ID (should never happen, but type safety check)
+        if (!row.ID) {
+          console.warn('Skipping conversation detail row without ID');
+          continue;
         }
 
-        console.log(`📦 Batch loading ${artifactIds.size} artifacts and ${versionIds.size} versions...`);
+        const parsed = parseConversationDetailComplete(row);
 
-        // Batch load ALL artifacts and versions with 2 queries instead of N queries
-        const [artifactsResult, versionsResult] = await Promise.all([
-          rv.RunView<ArtifactEntity>({
-            EntityName: 'MJ: Artifacts',
-            ExtraFilter: `ID IN ('${Array.from(artifactIds).join("','")}')`,
-            ResultType: 'entity_object'
-          }, this.currentUser),
-          rv.RunView<ArtifactVersionEntity>({
-            EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
-            ResultType: 'entity_object'
-          }, this.currentUser)
-        ]);
+        // Build agent runs map
+        if (parsed.agentRuns.length > 0) {
+          // Convert AgentRunJSON to AIAgentRunEntityExtended
+          const agentRunData = parsed.agentRuns[0]; // Should only be one per detail
+          const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
 
-        // Create lookup maps for O(1) access
-        const artifactMap = new Map(artifactsResult.Results?.map(a => [a.ID, a]) || []);
-        const versionMap = new Map(versionsResult.Results?.map(v => [v.ID, v]) || []);
+          // Convert ISO date strings to Date objects
+          agentRun.LoadFromData({
+            ID: agentRunData.ID,
+            AgentID: agentRunData.AgentID,
+            Agent: agentRunData.Agent,
+            Status: agentRunData.Status,
+            __mj_CreatedAt: new Date(agentRunData.__mj_CreatedAt),
+            __mj_UpdatedAt: new Date(agentRunData.__mj_UpdatedAt),
+            TotalPromptTokensUsed: agentRunData.TotalPromptTokensUsed,
+            TotalCompletionTokensUsed: agentRunData.TotalCompletionTokensUsed,
+            TotalCost: agentRunData.TotalCost,
+            ConversationDetailID: agentRunData.ConversationDetailID
+          });
 
-        console.log(`📦 Batch loaded ${artifactMap.size} artifacts and ${versionMap.size} versions`);
-
-        // Group by ConversationDetailID with pre-loaded entities
-        for (const row of artifactMapResult.Results) {
-          const lazyInfo = new LazyArtifactInfo(
-            row,
-            this.currentUser,
-            artifactMap.get(row.ArtifactID),      // Pre-loaded artifact
-            versionMap.get(row.ArtifactVersionID)  // Pre-loaded version
-          );
-          const existing = this.artifactsByDetailId.get(row.ConversationDetailID) || [];
-          existing.push(lazyInfo);
-          this.artifactsByDetailId.set(row.ConversationDetailID, existing);
+          this.agentRunsByDetailId.set(row.ID, agentRun);
         }
 
-        // Create new Map reference to trigger Angular change detection
-        this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+        // Build artifacts map - no need to load full entities, just create LazyArtifactInfo
+        if (parsed.artifacts.length > 0) {
+          const artifactList: LazyArtifactInfo[] = [];
 
-        console.log(`📦 Loaded ${this.artifactsByDetailId.size} artifact mappings for conversation ${conversationId} (batch-loaded, no lazy loading needed)`);
+          for (const artifactData of parsed.artifacts) {
+            // Create LazyArtifactInfo with display data from query
+            // Full entities will be loaded on-demand when artifact is clicked
+            const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
+            artifactList.push(lazyInfo);
+          }
+
+          this.artifactsByDetailId.set(row.ID, artifactList);
+        }
       }
+
+      // Create new Map references to trigger Angular change detection
+      this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
+      this.artifactsByDetailId = new Map(this.artifactsByDetailId);
 
       // Update artifact count for header display (unique artifacts, not versions)
       this.artifactCount = this.calculateUniqueArtifactCount();
 
-      // Debug: Log all artifacts to console
-      console.log(`📊 Artifact Count: ${this.artifactCount}`);
-      console.log(`📦 Artifacts by Detail ID:`, Array.from(this.artifactsByDetailId.entries()).flatMap(([detailId, artifactList]) =>
-        artifactList.map(info => ({
-          conversationDetailId: detailId,
-          artifactId: info.artifactId,
-          artifactName: info.artifactName,
-          versionId: info.artifactVersionId,
-          versionNumber: info.versionNumber
-        }))
-      ));
+      // Debug: Log summary
+      console.log(`📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} artifact mappings (${this.artifactCount} unique artifacts)`);
 
       // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
       // This updates all message components with the newly loaded agent run data
       this.messages = [...this.messages]; // Create new array reference to trigger change detection
       this.cdr.detectChanges();
 
-      console.log(`✅ Peripheral data loaded successfully for conversation ${conversationId}`);
+      console.log(`✅ Peripheral data processed successfully for conversation ${conversationId} from cache`);
     } catch (error) {
-      console.error('Failed to load peripheral data:', error);
+      console.error('Failed to process peripheral data:', error);
       // Don't set lastLoadedConversationId on error so we can retry
+      this.lastLoadedConversationId = null;
     }
   }
 
@@ -361,6 +377,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
 
+    // Invalidate cache for this conversation since we have new messages
+    const conversationId = this.conversationState.activeConversationId;
+    if (conversationId) {
+      this.invalidateConversationCache(conversationId);
+    }
+
     // Scroll to bottom when agent responds
     this.scrollToBottom = true;
 
@@ -391,6 +413,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   /**
+   * Invalidate cached conversation data
+   * Called when new messages are added or conversation data changes
+   */
+  private invalidateConversationCache(conversationId: string): void {
+    this.conversationDataCache.delete(conversationId);
+    console.log(`🗑️ Invalidated cache for conversation ${conversationId}`);
+  }
+
+  /**
    * Add or update an agent run in the map
    * Called when a new agent run completes to keep the map in sync
    */
@@ -415,56 +446,68 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   /**
    * Reload artifacts for a specific message ID
    * Called after an artifact is created to update the UI immediately
-   * Uses same optimized query pattern as loadPeripheralData()
+   * Invalidates and refreshes the conversation cache
    */
   private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
     console.log(`🔄 Reloading artifacts for message ${conversationDetailId}`);
     try {
       const rq = new RunQuery();
+      const md = new Metadata();
 
       // Get the ConversationID for this detail
-      const md = new Metadata();
       const detail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
       if (!(await detail.Load(conversationDetailId))) {
         console.error('Failed to load conversation detail');
         return;
       }
 
-      // Use optimized query to reload all artifacts for this conversation
-      const artifactMapResult = await rq.RunQuery({
-        QueryName: 'GetConversationArtifactsMap',
+      // Invalidate cache since artifacts changed
+      this.invalidateConversationCache(detail.ConversationID);
+
+      // Use optimized single query to reload all conversation data
+      const result = await rq.RunQuery({
+        QueryName: 'GetConversationComplete',
         CategoryPath: '/MJ/Conversations',
         Parameters: { ConversationID: detail.ConversationID }
       }, this.currentUser);
 
-      console.log(`📊 Query result:`, {
-        success: artifactMapResult.Success,
-        count: artifactMapResult.Results?.length || 0,
-        error: artifactMapResult.ErrorMessage
-      });
+      if (!result.Success || !result.Results) {
+        console.error('Failed to reload artifacts:', result.ErrorMessage);
+        return;
+      }
 
-      if (artifactMapResult.Success && artifactMapResult.Results && artifactMapResult.Results.length > 0) {
-        // Clear existing artifacts for this detail and rebuild
-        this.artifactsByDetailId.delete(conversationDetailId);
+      console.log(`📊 Query result: ${result.Results.length} conversation details loaded`);
 
-        // Filter results for this specific conversation detail ID
-        const detailArtifacts = artifactMapResult.Results.filter(row => row.ConversationDetailID === conversationDetailId);
+      // Update cache with fresh data
+      const conversationData = result.Results as ConversationDetailComplete[];
+      this.conversationDataCache.set(detail.ConversationID, conversationData);
 
-        if (detailArtifacts.length > 0) {
-          const artifactList: LazyArtifactInfo[] = [];
-          for (const row of detailArtifacts) {
-            const lazyInfo = new LazyArtifactInfo(row, this.currentUser);
-            artifactList.push(lazyInfo);
-            console.log(`✅ Loaded artifact ${row.ArtifactID} v${row.VersionNumber} for message ${conversationDetailId}`);
+      // Find the specific conversation detail we're reloading and update its artifacts
+      for (const row of conversationData) {
+        if (row.ID === conversationDetailId) {
+          const parsed = parseConversationDetailComplete(row);
+
+          // Clear existing artifacts for this detail and rebuild
+          this.artifactsByDetailId.delete(conversationDetailId);
+
+          if (parsed.artifacts.length > 0) {
+            const artifactList: LazyArtifactInfo[] = [];
+            for (const artifactData of parsed.artifacts) {
+              const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
+              artifactList.push(lazyInfo);
+              console.log(`✅ Loaded artifact ${artifactData.ArtifactID} v${artifactData.VersionNumber} for message ${conversationDetailId}`);
+            }
+            this.artifactsByDetailId.set(conversationDetailId, artifactList);
           }
-          this.artifactsByDetailId.set(conversationDetailId, artifactList);
+
+          // Create new Map reference to trigger Angular change detection
+          this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+
+          // Update artifact count
+          this.artifactCount = this.calculateUniqueArtifactCount();
+
+          break; // Found and updated the target message
         }
-
-        // Create new Map reference to trigger Angular change detection
-        this.artifactsByDetailId = new Map(this.artifactsByDetailId);
-
-        // Update artifact count
-        this.artifactCount = this.calculateUniqueArtifactCount();
       }
     } catch (error) {
       console.error('Failed to reload artifacts for message:', error);

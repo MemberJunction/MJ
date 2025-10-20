@@ -14,7 +14,7 @@
 import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage, AIErrorType } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -212,6 +212,15 @@ export class BaseAgent {
     private _validationRetryCount: number = 0;
 
     /**
+     * Flag indicating whether a context recovery attempt has been made in this run.
+     * Context recovery trims conversation messages when context length is exceeded,
+     * giving the agent ONE opportunity to adapt its approach.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _contextRecoveryAttempted: boolean = false;
+
+    /**
      * Gets the current validation retry count for the agent run.
      * This count tracks how many times the agent has retried validation
      * during the FinalPayloadValidation step.
@@ -404,6 +413,7 @@ export class BaseAgent {
             // Reset validation retry counters for this run
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
+            this._contextRecoveryAttempted = false;
 
             // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
@@ -1741,6 +1751,221 @@ export class BaseAgent {
     }
 
     /**
+     * Converts ChatMessageContent to a string representation.
+     * Handles both simple strings and content block arrays.
+     *
+     * @param content - The message content to convert
+     * @returns String representation of the content
+     * @protected
+     */
+    protected contentToString(content: ChatMessageContent): string {
+        if (typeof content === 'string') {
+            return content;
+        }
+
+        // Content is an array of blocks - convert to string
+        return content.map((block: ChatMessageContentBlock) => {
+            if (block.type === 'text') {
+                return block.content;
+            }
+            return `[${block.type}: ${block.content}]`;
+        }).join('\n');
+    }
+
+    /**
+     * Smart trimming of message content based on detected format.
+     * Attempts to preserve structure while reducing size.
+     *
+     * @param content - The message content to trim (must be string)
+     * @param maxLength - Maximum length for the trimmed content
+     * @returns Object with trimmed content and strategy used
+     * @protected
+     */
+    protected smartTrimContent(content: string, maxLength: number = 1000): { trimmed: string; strategy: string; originalLength: number } {
+        const originalLength = content.length;
+
+        // Try to parse as JSON
+        try {
+            const data = JSON.parse(content);
+
+            if (Array.isArray(data)) {
+                // JSON array - keep first 10 items
+                const itemsToKeep = 10;
+                if (data.length > itemsToKeep) {
+                    const truncated = data.slice(0, itemsToKeep);
+                    const trimmed = JSON.stringify(truncated, null, 2) +
+                        `\n\n... (${(data.length - itemsToKeep).toLocaleString()} more items truncated due to context length)`;
+                    return {
+                        trimmed,
+                        strategy: 'JSON array truncation',
+                        originalLength
+                    };
+                }
+            } else if (typeof data === 'object' && data !== null) {
+                // JSON object - keep structure but truncate long values
+                const truncated: any = {};
+                let fieldCount = 0;
+                const maxFields = 20;
+
+                for (const [key, value] of Object.entries(data)) {
+                    if (fieldCount >= maxFields) {
+                        truncated['...'] = `(${Object.keys(data).length - maxFields} more fields truncated)`;
+                        break;
+                    }
+                    if (typeof value === 'string' && value.length > 200) {
+                        truncated[key] = value.substring(0, 200) + '... (truncated)';
+                    } else if (Array.isArray(value) && value.length > 5) {
+                        truncated[key] = [...value.slice(0, 5), `... (${value.length - 5} more items)`];
+                    } else {
+                        truncated[key] = value;
+                    }
+                    fieldCount++;
+                }
+
+                return {
+                    trimmed: JSON.stringify(truncated, null, 2),
+                    strategy: 'JSON object field truncation',
+                    originalLength
+                };
+            }
+        } catch {
+            // Not JSON, continue to other strategies
+        }
+
+        // Try CSV detection (header + comma-separated values)
+        if (content.includes('\n')) {
+            const lines = content.split('\n');
+            const firstLine = lines[0];
+
+            // Check if first line looks like CSV header (contains commas)
+            if (firstLine.includes(',') && lines.length > 1) {
+                const rowsToKeep = 10;
+                if (lines.length > rowsToKeep + 1) {
+                    const header = lines[0];
+                    const dataRows = lines.slice(1, rowsToKeep + 1);
+                    const trimmed = [header, ...dataRows].join('\n') +
+                        `\n... (${(lines.length - rowsToKeep - 1).toLocaleString()} more rows truncated due to context length)`;
+                    return {
+                        trimmed,
+                        strategy: 'CSV row truncation',
+                        originalLength
+                    };
+                }
+            }
+        }
+
+        // Fallback: simple character truncation
+        if (content.length > maxLength) {
+            return {
+                trimmed: content.substring(0, maxLength) + '\n\n... (truncated due to context length)',
+                strategy: 'character truncation',
+                originalLength
+            };
+        }
+
+        // Content is already small enough
+        return {
+            trimmed: content,
+            strategy: 'no truncation needed',
+            originalLength
+        };
+    }
+
+    /**
+     * Attempts to recover from a context length exceeded error by trimming conversation messages.
+     * This gives the agent ONE opportunity to adapt its approach after receiving a large result
+     * that overflowed the context window.
+     *
+     * @param params - Agent execution parameters (conversationMessages will be modified)
+     * @param payload - Current payload to carry forward
+     * @param errorMessage - The original error message from the failed prompt
+     * @returns A Retry step with trimmed context and guidance for the agent
+     * @protected
+     */
+    protected async attemptContextRecovery<P>(
+        params: ExecuteAgentParams,
+        payload: P,
+        errorMessage: string
+    ): Promise<BaseAgentNextStep<P>> {
+        this.logStatus(
+            `⚠️ Context length exceeded - attempting recovery by trimming conversation messages`,
+            true,
+            params
+        );
+
+        // Find the last user message (usually the action/sub-agent result)
+        const messages = params.conversationMessages;
+        let lastUserMessageIndex = -1;
+
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role === 'user') {
+                lastUserMessageIndex = i;
+                break;
+            }
+        }
+
+        if (lastUserMessageIndex === -1) {
+            // No user message to trim - can't recover
+            this.logStatus(
+                `❌ Context recovery failed: No trimmable user messages found`,
+                true,
+                params
+            );
+            return {
+                errorMessage: `Context overflow with no trimmable messages: ${errorMessage}`,
+                step: 'Failed' as const,
+                terminate: true,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+
+        // Capture the original message for logging
+        const originalMessage = messages[lastUserMessageIndex];
+        const contentString = this.contentToString(originalMessage.content);
+        const trimResult = this.smartTrimContent(contentString, 1000);
+
+        this.logStatus(
+            `✂️ Trimmed message from ${trimResult.originalLength.toLocaleString()} to ${trimResult.trimmed.length.toLocaleString()} characters using ${trimResult.strategy}`,
+            true,
+            params
+        );
+
+        // Replace the message with trimmed version + explanation
+        messages[lastUserMessageIndex] = {
+            role: 'user',
+            content: `⚠️ CONTEXT OVERFLOW RECOVERY ⚠️
+
+The previous step returned a result that exceeded the context window (${(trimResult.originalLength - trimResult.trimmed.length).toLocaleString()} characters truncated).
+
+Here is a PARTIAL result from the previous action:
+---
+${trimResult.trimmed}
+---
+
+❗ THE ABOVE IS INCOMPLETE - the full result was too large for the context window.
+
+RECOMMENDED ACTIONS:
+1. Use a different action with more specific filters to get smaller result sets
+2. Request data in batches or pages instead of all at once
+3. Ask the user to clarify scope to narrow the query
+4. If you need the full data, acknowledge the limitation and ask the user how to proceed
+
+Please choose an alternative approach to complete your task.`
+        };
+
+        // Return Retry step to give agent another chance
+        return {
+            step: 'Retry' as const,
+            retryReason: 'Context length recovery - previous result too large',
+            retryInstructions: 'The previous action result exceeded context limits. Use more specific filters or request data in smaller batches.',
+            terminate: false,
+            previousPayload: payload,
+            newPayload: payload
+        };
+    }
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -2787,6 +3012,23 @@ export class BaseAgent {
 
                 // Check if this is a fatal error that shouldn't be retried
                 const isFatal = this.isFatalPromptError(promptResult);
+
+                // Check if this is a context length overflow that we can recover from
+                const isContextOverflow = isFatal &&
+                    promptResult.chatResult?.errorInfo?.errorType === 'ContextLengthExceeded';
+
+                if (isContextOverflow && !this._contextRecoveryAttempted) {
+                    // Attempt ONE-TIME context recovery
+                    this._contextRecoveryAttempted = true;
+
+                    this.logStatus(
+                        `⚠️ Context length exceeded - attempting recovery by trimming conversation`,
+                        true,
+                        params
+                    );
+
+                    return await this.attemptContextRecovery(params, payload, promptResult.errorMessage || 'Context length exceeded');
+                }
 
                 this.logStatus(
                     `❌ Prompt execution failed: ${promptResult.errorMessage} (fatal: ${isFatal})`,
