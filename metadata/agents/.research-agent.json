@@ -313,6 +313,20 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Sketch Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9D2DACDB-49F0-4783-91D9-A2EF348B87DC"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T21:00:24.275Z",
+                  "checksum": "1f69440928e58cb33af27126b17dd476328b83810309708f6593e2bbc6bdc0b7"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
                   "ActionID": "@lookup:Actions.Name=Create SVG Chart",
                   "Status": "Active"
                 },

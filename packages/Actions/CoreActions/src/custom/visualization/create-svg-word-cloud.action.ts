@@ -266,7 +266,19 @@ export class CreateSVGWordCloudAction extends BaseAction {
                             text.setAttribute('font-family', getFontSpec(branding.font).family);
                             text.setAttribute('font-size', String(word.size));
                             text.setAttribute('text-anchor', 'middle');
-                            text.setAttribute('fill', getColorForIndex(i, branding.palette));
+                            text.setAttribute('font-weight', String(word.size > 40 ? 'bold' : 'normal'));
+
+                            // Get color from palette
+                            const color = getColorForIndex(i, branding.palette);
+                            text.setAttribute('fill', color);
+
+                            // Add subtle stroke for better visibility
+                            if (word.size > 30) {
+                                text.setAttribute('stroke', palette.background);
+                                text.setAttribute('stroke-width', '0.5');
+                                text.setAttribute('paint-order', 'stroke fill');
+                            }
+
                             text.textContent = word.text;
 
                             container.appendChild(text);
