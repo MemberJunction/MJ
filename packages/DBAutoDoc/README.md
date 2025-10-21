@@ -25,16 +25,19 @@ This tool works with **ANY** SQL Server database. You don't need MemberJunction 
 ## Installation
 
 ```bash
-# Install globally
+# Install globally (for standalone use)
 npm install -g @memberjunction/db-auto-doc
 
 # Or use with npx
 npx @memberjunction/db-auto-doc
+
+# Or use via MJ CLI (if you have MemberJunction installed)
+mj dbdoc --help
 ```
 
 ## Quick Start
 
-See [QUICKSTART.md](./QUICKSTART.md) for a 5-minute getting started guide.
+### Standalone CLI
 
 ```bash
 # 1. Initialize project
@@ -44,13 +47,49 @@ db-auto-doc init
 # AI_API_KEY=sk-your-key-here
 
 # 3. Analyze database
-db-auto-doc analyze --interactive
+db-auto-doc analyze
 
 # 4. Review results
 db-auto-doc review
 
 # 5. Export documentation
 db-auto-doc export --format=all
+```
+
+### Via MJ CLI (MemberJunction Users)
+
+```bash
+# Same commands, different prefix
+mj dbdoc init
+mj dbdoc analyze --schemas=dbo
+mj dbdoc review --unapproved-only
+mj dbdoc export --approved-only --execute
+```
+
+### Programmatic Usage
+
+```typescript
+import {
+  DatabaseConnection,
+  StateManager,
+  DatabaseAnalyzer,
+  SimpleAIClient,
+} from '@memberjunction/db-auto-doc';
+
+// Initialize
+const connection = DatabaseConnection.fromEnv();
+const stateManager = new StateManager();
+const aiClient = new SimpleAIClient();
+const analyzer = new DatabaseAnalyzer(connection, stateManager, aiClient);
+
+// Analyze
+await analyzer.analyze({ schemas: ['dbo'] });
+
+// Export
+import { SQLGenerator, MarkdownGenerator } from '@memberjunction/db-auto-doc';
+const state = stateManager.getState();
+const sqlGen = new SQLGenerator();
+const sql = sqlGen.generate(state);
 ```
 
 ## CLI Commands
@@ -166,11 +205,24 @@ db-auto-doc export --approved-only --execute
 5. **Output**: Generates SQL scripts and markdown docs
 6. **Application**: Optionally executes SQL to add extended properties
 
-## Documentation
+## Architecture
 
-- [QUICKSTART.md](./QUICKSTART.md) - 5-minute getting started guide
-- [IMPLEMENTATION-COMPLETE.md](./IMPLEMENTATION-COMPLETE.md) - Technical details
-- [FINAL-SUMMARY.md](./FINAL-SUMMARY.md) - High-level overview
+Built following the **AI CLI pattern** (similar to `@memberjunction/ai-cli`):
+- **oclif-based commands** in `src/commands/` (init, analyze, review, export, reset)
+- **Standalone package** with zero MJ runtime dependencies
+- **MJCLI integration** via thin delegation commands in `packages/MJCLI/src/commands/dbdoc/`
+- **Reusable services** exported for programmatic use
+- **State file architecture** enables incremental refinement across runs
+
+## Future Enhancements
+
+Possible future additions (not needed for current functionality):
+- Support for more AI providers (Groq, Cerebras, local models)
+- PostgreSQL/MySQL versions
+- Web UI for review
+- Dependency graph visualization
+- CI/CD integration examples
+- Schema diff detection for automatic re-documentation
 
 ## Requirements
 
