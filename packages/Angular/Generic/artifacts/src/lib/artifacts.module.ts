@@ -6,6 +6,7 @@ import { MarkdownModule } from 'ngx-markdown';
 // Import MJ modules
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { MJReactModule } from '@memberjunction/ng-react';
+import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 
 // Import plugin components (note: base component is abstract and NOT declared)
 import { JsonArtifactViewerComponent } from './components/plugins/json-artifact-viewer.component';
@@ -51,7 +52,8 @@ import { ArtifactMessageCardComponent } from './components/artifact-message-card
     FormsModule,
     MarkdownModule.forChild(),
     CodeEditorModule,
-    MJReactModule
+    MJReactModule,
+    MJNotificationsModule
   ],
   exports: [
     // Export artifact type plugin viewer
