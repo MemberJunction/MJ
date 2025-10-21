@@ -1,7 +1,11 @@
 /**
-  Remove obsolete Agent Management Actions and related records.
+  Remove obsolete Agent Management Actions and Prompt Designer Agent.
 
-  This migration removes 12 agent management actions that are no longer needed:
+  This migration removes:
+  - 12 obsolete agent management actions
+  - Prompt Designer Agent (functionality moved to Planning Designer Agent)
+
+  Actions being removed:
   1. Create Agent
   2. Update Agent
   3. List Agents
@@ -16,11 +20,19 @@
   12. List Actions
   13. Create Prompt
 
+  Agents being removed:
+  1. Prompt Designer Agent (ID: 82323658-FD6D-4F06-BAE5-39A0945C9DC0)
+     - Prompt creation functionality moved into Planning Designer Agent
+
   The removal is done in the correct dependency order:
   1. ActionExecutionLog records (references actions)
-  2. AIAgentAction associations (uses actions)
+  2. AIAgentAction associations (uses actions and agents)
   3. ActionParam records (belongs to actions)
   4. Action records themselves
+  5. AIAgentRun records (references agents)
+  6. AIAgentPrompt records (references agents)
+  7. AIAgentRelationship records (references agents)
+  8. AIAgent records themselves
 **/
 
 -- =====================================================
@@ -106,3 +118,39 @@ WHERE ID IN (
   '05A12211-BDF9-420B-BC6F-0BEFFF7654DD',  -- List Actions
   'F9AA7A3F-E496-4D50-8DBB-DB98E31E0099'   -- Create Prompt
 );
+
+-- =====================================================
+-- Step 5: Remove Prompt Designer Agent Run Records
+-- =====================================================
+
+DELETE FROM [${flyway:defaultSchema}].AIAgentRun
+WHERE AgentID = '82323658-FD6D-4F06-BAE5-39A0945C9DC0';  -- Prompt Designer Agent
+
+-- =====================================================
+-- Step 6: Remove Prompt Designer Agent Prompt Associations
+-- =====================================================
+
+DELETE FROM [${flyway:defaultSchema}].AIAgentPrompt
+WHERE AgentID = '82323658-FD6D-4F06-BAE5-39A0945C9DC0';  -- Prompt Designer Agent
+
+-- =====================================================
+-- Step 7: Remove Prompt Designer Agent Action Associations
+-- =====================================================
+
+DELETE FROM [${flyway:defaultSchema}].AIAgentAction
+WHERE AgentID = '82323658-FD6D-4F06-BAE5-39A0945C9DC0';  -- Prompt Designer Agent
+
+-- =====================================================
+-- Step 8: Remove Prompt Designer Agent Relationship Records
+-- =====================================================
+
+DELETE FROM [${flyway:defaultSchema}].AIAgentRelationship
+WHERE AgentID = '82323658-FD6D-4F06-BAE5-39A0945C9DC0'
+   OR SubAgentID = '82323658-FD6D-4F06-BAE5-39A0945C9DC0';
+
+-- =====================================================
+-- Step 9: Remove Prompt Designer Agent Record
+-- =====================================================
+
+DELETE FROM [${flyway:defaultSchema}].AIAgent
+WHERE ID = '82323658-FD6D-4F06-BAE5-39A0945C9DC0';  -- Prompt Designer Agent
