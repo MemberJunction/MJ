@@ -121,8 +121,8 @@
       "ID": "B41F7FAD-49F5-4897-92C9-4904C79DD5F5"
     },
     "sync": {
-      "lastModified": "2025-10-21T19:26:40.989Z",
-      "checksum": "e3d3d679873627bd2320da956b994e519bc76da1213ab84a43302c96365295a0"
+      "lastModified": "2025-10-21T20:58:47.217Z",
+      "checksum": "bcbc57ee91677f085ad7e7c84f8f537a4a5cabeb21e77b9a5a2b096f019eeb38"
     }
   },
   {
@@ -264,54 +264,6 @@
     "sync": {
       "lastModified": "2025-10-21T19:26:40.969Z",
       "checksum": "dc356ba7579f55b3a67ac90f4cce69ea9c5887033364bbde9664bda930582189"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Builder Agent - Main Prompt",
-      "Description": "System prompt for the Builder Agent that persists AgentSpec to database (code-driven)",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/agent-manager/builder-agent.template.md",
-      "Status": "Active",
-      "ResponseFormat": "JSON",
-      "SelectionStrategy": "Specific",
-      "PowerPreference": "Highest",
-      "ParallelizationMode": "None",
-      "OutputType": "object",
-      "OutputExample": "@file:output/agent-manager/builder-agent.example.json",
-      "ValidationBehavior": "Strict",
-      "MaxRetries": 2,
-      "RetryDelayMS": 1000,
-      "RetryStrategy": "Fixed",
-      "PromptRole": "System",
-      "PromptPosition": "First",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Management"
-    },
-    "relatedEntities": {
-      "MJ: AI Prompt Models": [
-        {
-          "fields": {
-            "PromptID": "@parent:ID",
-            "ModelID": "@lookup:AI Models.Name=Qwen 3 32B",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
-            "Priority": 10
-          },
-          "primaryKey": {
-            "ID": "CB4FE3FC-B10D-4174-97AA-519355CD000F"
-          },
-          "sync": {
-            "lastModified": "2025-10-21T19:26:41.224Z",
-            "checksum": "071e025446183a58e2bd40af7285599a556d58c9efdb7435fa14312f6be14523"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "D7BF9CA7-21F8-4EC3-A093-2EDDC0CDF872"
-    },
-    "sync": {
-      "lastModified": "2025-10-21T19:26:40.908Z",
-      "checksum": "43c4882fd6e76b563d7a6eee92c0891aaa70183b3e39aa28236909932bf886a9"
     }
   }
 ]

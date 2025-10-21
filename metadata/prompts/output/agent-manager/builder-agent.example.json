@@ -1,8 +1,0 @@
-{
-  "action": "return_to_parent",
-  "output": {
-    "success": true,
-    "agentId": "new-agent-id-12345",
-    "message": "Successfully created agent 'Customer Feedback Analyzer'"
-  }
-}

@@ -329,25 +329,6 @@
             "DriverClass": "AgentBuilderAgent",
             "IconClass": "fa-solid fa-hammer"
           },
-          "relatedEntities": {
-            "MJ: AI Agent Prompts": [
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "PromptID": "@lookup:AI Prompts.Name=Builder Agent - Main Prompt",
-                  "ExecutionOrder": 0,
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "21EFC9C0-B9EE-4EC2-AA5C-2D63CE7ADE8D"
-                },
-                "sync": {
-                  "lastModified": "2025-10-21T19:26:54.052Z",
-                  "checksum": "8f4145d5f31fa168067356b847076b65ae55d374ac36b80cb0360847b26dc10e"
-                }
-              }
-            ]
-          },
           "primaryKey": {
             "ID": "F3686377-DD93-480D-89AB-8427A36A5C2E"
           },
