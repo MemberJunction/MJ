@@ -108,7 +108,7 @@ SELECT
     @DefaultEnvironmentID AS [EnvironmentID],
     ca.[Name],
     ca.[Description],
-    ca.[ArtifactTypeID] AS [TypeID],
+    'E8BA10A3-019F-4C51-A8AA-397AB124F212' AS [TypeID], -- hard code to Component type
     ca.[Comments],
     -- Get UserID from Conversation (ConversationArtifact doesn't have it)
     c.[UserID],
