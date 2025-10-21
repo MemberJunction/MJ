@@ -131,7 +131,7 @@ export interface AgentSpec {
     /**
     * Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.
     */
-    StartingPayloadValidationMode(): 'Fail' | 'Warn';
+    StartingPayloadValidationMode: 'Fail' | 'Warn';
 
     /**
     * Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.

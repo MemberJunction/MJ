@@ -297,7 +297,7 @@ export class CreateAgentAction extends BaseAgentManagementAction {
             FinalPayloadValidationMode: spec.FinalPayloadValidationMode ?? 'Retry',
             FinalPayloadValidationMaxRetries: spec.FinalPayloadValidationMaxRetries ?? 3,
             StartingPayloadValidation: spec.StartingPayloadValidation ?? null,
-            StartingPayloadValidationMode: spec.StartingPayloadValidationMode ?? (() => 'Fail'),
+            StartingPayloadValidationMode: spec.StartingPayloadValidationMode ?? 'Fail',
 
             // Model and execution settings
             ModelSelectionMode: spec.ModelSelectionMode ?? 'Agent Type',
@@ -512,7 +512,7 @@ export class CreateAgentAction extends BaseAgentManagementAction {
         entity.FinalPayloadValidationMode = spec.FinalPayloadValidationMode || 'Retry';
         entity.FinalPayloadValidationMaxRetries = spec.FinalPayloadValidationMaxRetries || 3;
         entity.StartingPayloadValidation = spec.StartingPayloadValidation || null;
-        entity.StartingPayloadValidationMode = spec.StartingPayloadValidationMode?.() || 'Fail';
+        entity.StartingPayloadValidationMode = spec.StartingPayloadValidationMode || 'Fail';
 
         // Resource limits
         entity.MaxCostPerRun = spec.MaxCostPerRun || null;

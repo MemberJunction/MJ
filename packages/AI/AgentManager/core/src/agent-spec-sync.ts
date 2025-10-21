@@ -109,7 +109,7 @@ export class AgentSpecSync {
             this.spec = {
                 ID: '', // Will be set on save if empty
                 Name: '',
-                StartingPayloadValidationMode: () => 'Fail',
+                StartingPayloadValidationMode: 'Fail',
                 Actions: [],
                 SubAgents: []
             };
@@ -413,7 +413,11 @@ export class AgentSpecSync {
     private mapChildAgentToSpec(childAgent: AIAgentEntity): SubAgentSpec {
         return {
             Type: 'child',
-            SubAgentID: childAgent.ID
+            SubAgent: {
+                ID: childAgent.ID,
+                Name: childAgent.Name || '',
+                StartingPayloadValidationMode: 'Fail'
+            }
         };
     }
 
@@ -427,7 +431,11 @@ export class AgentSpecSync {
     private mapRelatedAgentToSpec(relationship: AIAgentRelationshipEntity): SubAgentSpec {
         return {
             Type: 'related',
-            SubAgentID: relationship.SubAgentID,
+            SubAgent: {
+                ID: relationship.SubAgentID,
+                Name: relationship.SubAgent || '',
+                StartingPayloadValidationMode: 'Fail'
+            },
             AgentRelationshipID: relationship.ID,
             SubAgentInputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentInputMapping),
             SubAgentOutputMapping: this.parseJsonField<Record<string, string>>(relationship.SubAgentOutputMapping),
@@ -535,7 +543,7 @@ export class AgentSpecSync {
         agentEntity.FinalPayloadValidationMaxRetries = this.spec.FinalPayloadValidationMaxRetries || 3;
 
         agentEntity.StartingPayloadValidation = this.spec.StartingPayloadValidation || null;
-        agentEntity.StartingPayloadValidationMode = this.spec.StartingPayloadValidationMode?.() || 'Fail';
+        agentEntity.StartingPayloadValidationMode = this.spec.StartingPayloadValidationMode || 'Fail';
 
         // Resource limits
         agentEntity.MaxCostPerRun = this.spec.MaxCostPerRun || null;
@@ -664,8 +672,8 @@ export class AgentSpecSync {
      * @throws {Error} If child agent doesn't exist or save fails
      */
     private async saveChildSubAgent(parentId: string, SubAgentSpec: SubAgentSpec): Promise<void> {
-        if (!SubAgentSpec.SubAgentID) {
-            throw new Error('Child sub-agent must have a SubAgentID');
+        if (!SubAgentSpec.SubAgent?.ID) {
+            throw new Error('Child sub-agent must have a SubAgent.ID');
         }
 
         // For child agents, we just need to ensure the ParentID is set correctly
@@ -676,9 +684,9 @@ export class AgentSpecSync {
             this._contextUser
         );
 
-        const loaded = await childEntity.Load(SubAgentSpec.SubAgentID);
+        const loaded = await childEntity.Load(SubAgentSpec.SubAgent.ID);
         if (!loaded) {
-            throw new Error(`Child agent ${SubAgentSpec.SubAgentID} not found`);
+            throw new Error(`Child agent ${SubAgentSpec.SubAgent.ID} not found`);
         }
 
         // Update parent ID if needed
@@ -686,7 +694,7 @@ export class AgentSpecSync {
             childEntity.ParentID = parentId;
             const saved = await childEntity.Save();
             if (!saved) {
-                throw new Error(`Failed to update ParentID for child agent ${SubAgentSpec.SubAgentID}`);
+                throw new Error(`Failed to update ParentID for child agent ${SubAgentSpec.SubAgent.ID}`);
             }
         }
     }
@@ -716,7 +724,7 @@ export class AgentSpecSync {
 
         // Map fields
         relationshipEntity.AgentID = agentId;
-        relationshipEntity.SubAgentID = SubAgentSpec.SubAgentID;
+        relationshipEntity.SubAgentID = SubAgentSpec.SubAgent.ID;
         relationshipEntity.Status = 'Active';
 
         // Serialize mapping fields
@@ -740,7 +748,7 @@ export class AgentSpecSync {
 
         const saved = await relationshipEntity.Save();
         if (!saved) {
-            throw new Error(`Failed to save relationship for sub-agent ${SubAgentSpec.SubAgentID}`);
+            throw new Error(`Failed to save relationship for sub-agent ${SubAgentSpec.SubAgent.ID}`);
         }
 
         // Update spec with saved ID
@@ -804,7 +812,7 @@ export class AgentSpecSync {
             MinExecutionsPerRun: partial.MinExecutionsPerRun,
             MaxExecutionsPerRun: partial.MaxExecutionsPerRun,
             StartingPayloadValidation: partial.StartingPayloadValidation,
-            StartingPayloadValidationMode: partial.StartingPayloadValidationMode || (() => 'Fail'),
+            StartingPayloadValidationMode: partial.StartingPayloadValidationMode || 'Fail',
             DefaultPromptEffortLevel: partial.DefaultPromptEffortLevel,
             ChatHandlingOption: partial.ChatHandlingOption,
             DefaultArtifactTypeID: partial.DefaultArtifactTypeID,
