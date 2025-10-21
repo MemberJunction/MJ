@@ -34,11 +34,12 @@ export class AgentBuilderAgent extends BaseAgent {
         console.log('🔨 Builder Agent: Starting agent persistence...');
 
         try {
-            // Extract AgentSpec from payload
-            const agentSpec = params.payload as unknown as AgentSpec;
+            // Extract AgentSpec from nested payload structure
+            // The payload has structure: { metadata, requirements, design, agentSpec }
+            const agentSpec = (params.payload as any).agentSpec as AgentSpec;
 
             if (!agentSpec) {
-                throw new Error('No AgentSpec found in payload');
+                throw new Error('No AgentSpec found in payload.agentSpec - ensure Architect Agent placed it there');
             }
 
             if (!agentSpec.Name) {

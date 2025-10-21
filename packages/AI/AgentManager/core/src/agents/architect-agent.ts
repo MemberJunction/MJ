@@ -51,27 +51,40 @@ export class AgentArchitectAgent extends BaseAgent {
         // Apply payload changes to get the spec that would be sent forward
         const payloadWithChanges = this.applyPayloadChanges<P>(currentPayload, nextStep);
 
+        // Extract the agentSpec from the nested payload structure
+        // The payload has structure: { metadata, requirements, design, agentSpec }
+        const agentSpec = (payloadWithChanges as any).agentSpec as AgentSpec;
+
+        console.log('🏗️ Architect Agent: Validating AgentSpec:', agentSpec ? `Name="${agentSpec.Name}"` : 'agentSpec is null/undefined');
+
         // Validate the AgentSpec
-        const validation = await this.validateAgentSpec(payloadWithChanges as unknown as AgentSpec, params);
+        const validation = await this.validateAgentSpec(agentSpec, params);
 
         if (validation.errors.length > 0) {
+            console.log('❌ Architect Agent: Validation failed with errors:', validation.errors);
             // Return retry with detailed error messages
             return {
                 ...nextStep,
                 step: 'Retry',
                 retryInstructions: this.formatValidationErrors(validation.errors),
-                newPayload: validation.correctedSpec ? validation.correctedSpec as P : nextStep.newPayload
+                newPayload: nextStep.newPayload
             };
         }
 
-        // If spec was auto-corrected, update the payload
+        // If spec was auto-corrected, update the payload with corrected spec
         if (validation.correctedSpec) {
+            console.log('✓ Architect Agent: Auto-corrected AgentSpec, updating payload');
+            const updatedPayload = {
+                ...(payloadWithChanges as any),
+                agentSpec: validation.correctedSpec
+            };
             return {
                 ...nextStep,
-                newPayload: validation.correctedSpec as P
+                newPayload: updatedPayload as P
             };
         }
 
+        console.log('✅ Architect Agent: AgentSpec validation passed');
         return nextStep;
     }
 
@@ -85,6 +98,13 @@ export class AgentArchitectAgent extends BaseAgent {
     ): Promise<{ errors: string[]; correctedSpec?: AgentSpec }> {
         const errors: string[] = [];
         let corrected = false;
+
+        // Check if spec exists
+        if (!spec) {
+            errors.push('❌ AgentSpec is null or undefined. Ensure you place the AgentSpec in payload.agentSpec (inside a payloadChangeRequest with newElements or replaceElements)');
+            return { errors };
+        }
+
         const correctedSpec = { ...spec };
 
         // 1. Validate required fields

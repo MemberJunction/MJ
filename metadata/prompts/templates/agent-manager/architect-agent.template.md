@@ -72,39 +72,51 @@ interface AgentSpec {
 6. **Map prompts** from design.prompts array (if provided):
    - Use exact PromptText from design
    - Default PromptRole: 'System', PromptPosition: 'First'
-7. **Return AgentSpec** in payload.agentSpec
+7. **CRITICAL: Place AgentSpec in payload.agentSpec**:
+   - The AgentSpec object goes in the `agentSpec` key
+   - See output format example below
 
-## Example Output
+## Output Format
+
+**CRITICAL**: You must return your AgentSpec using a `payloadChangeRequest`. The AgentSpec goes in the `agentSpec` key at the root level of the payload.
+
+### Correct Output Pattern:
 
 ```json
 {
-  "action": "return_to_parent",
-  "output": {
-    "agentSpec": {
-      "ID": "",
-      "Name": "Customer Feedback Analyzer",
-      "Description": "Analyzes customer feedback and generates weekly reports",
-      "StartingPayloadValidationMode": "Fail",
-      "InvocationMode": "Any",
-      "IconClass": "fa-solid fa-chart-line",
-      "Actions": [
-        {
-          "ActionID": "abc-123-query-action",
-          "Status": "Active"
-        },
-        {
-          "ActionID": "def-456-email-action",
-          "Status": "Active"
-        }
-      ],
-      "SubAgents": [],
-      "Prompts": [
-        {
-          "PromptText": "You are a customer feedback analyzer...",
-          "PromptRole": "System",
-          "PromptPosition": "First"
-        }
-      ]
+  "payloadChangeRequest": {
+    "newElements": {
+      "agentSpec": {
+        "ID": "",
+        "Name": "Customer Feedback Analyzer",
+        "Description": "Analyzes customer feedback and generates weekly reports",
+        "StartingPayloadValidationMode": "Fail",
+        "InvocationMode": "Any",
+        "IconClass": "fa-solid fa-chart-line",
+        "Actions": [],
+        "SubAgents": [],
+        "Prompts": [
+          {
+            "PromptText": "You are a customer feedback analyzer...",
+            "PromptRole": "System",
+            "PromptPosition": "First"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
+### If Updating an Existing Spec:
+
+Use `replaceElements` instead of `newElements`:
+
+```json
+{
+  "payloadChangeRequest": {
+    "replaceElements": {
+      "agentSpec": {...}
     }
   }
 }
