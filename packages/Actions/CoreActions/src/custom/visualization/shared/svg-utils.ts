@@ -326,4 +326,292 @@ export class SVGUtils {
             Z
         `.replace(/\s+/g, ' ').trim();
     }
+
+    /**
+     * Wraps SVG string in a scrollable HTML container
+     * Useful for large visualizations that exceed viewport size
+     *
+     * @param svgString - The SVG XML string to wrap
+     * @param maxWidth - Maximum container width in pixels (default: 1200)
+     * @param maxHeight - Maximum container height in pixels (default: 800)
+     * @param showBorder - Whether to show container border (default: true)
+     * @param borderColor - Border color (default: #ddd)
+     * @returns HTML string with SVG wrapped in scrollable div
+     */
+    static wrapWithScrollContainer(
+        svgString: string,
+        maxWidth: number = 1200,
+        maxHeight: number = 800,
+        showBorder: boolean = true,
+        borderColor: string = '#ddd'
+    ): string {
+        const borderStyle = showBorder ? `border: 1px solid ${borderColor};` : '';
+        return `<div style="max-width: ${maxWidth}px; max-height: ${maxHeight}px; overflow: auto; ${borderStyle} border-radius: 4px; background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${svgString}</div>`;
+    }
+
+    /**
+     * Generates self-contained pan/zoom script for SVG
+     * No external dependencies - fully embedded JavaScript
+     *
+     * @param containerId - ID of the SVG group to apply transform to
+     * @param minScale - Minimum zoom level (default: 0.5)
+     * @param maxScale - Maximum zoom level (default: 3)
+     * @param showControls - Show zoom in/out/reset buttons (default: false)
+     * @returns Script tag with pan/zoom implementation
+     */
+    static generatePanZoomScript(
+        containerId: string = 'pan-zoom-container',
+        minScale: number = 0.5,
+        maxScale: number = 3,
+        showControls: boolean = false
+    ): string {
+        return `<script type="text/javascript"><![CDATA[
+(function() {
+    const svg = document.currentScript.closest('svg');
+    const container = svg.getElementById('${containerId}');
+    if (!container) return;
+
+    let scale = 1, translateX = 0, translateY = 0;
+    let isDragging = false, startX, startY;
+
+    function updateTransform() {
+        container.setAttribute('transform',
+            'translate(' + translateX + ',' + translateY + ') scale(' + scale + ')');
+    }
+
+    // Mouse wheel zoom
+    svg.addEventListener('wheel', function(e) {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const newScale = Math.max(${minScale}, Math.min(${maxScale}, scale * delta));
+
+        // Zoom toward mouse position
+        const rect = svg.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        translateX = x - (x - translateX) * (newScale / scale);
+        translateY = y - (y - translateY) * (newScale / scale);
+        scale = newScale;
+
+        updateTransform();
+    });
+
+    // Pan with drag
+    svg.addEventListener('mousedown', function(e) {
+        if (e.button !== 0) return; // Left button only
+        isDragging = true;
+        startX = e.clientX - translateX;
+        startY = e.clientY - translateY;
+        svg.style.cursor = 'grabbing';
+    });
+
+    svg.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        translateX = e.clientX - startX;
+        translateY = e.clientY - startY;
+        updateTransform();
+    });
+
+    svg.addEventListener('mouseup', function() {
+        isDragging = false;
+        svg.style.cursor = 'grab';
+    });
+
+    svg.addEventListener('mouseleave', function() {
+        isDragging = false;
+        svg.style.cursor = 'default';
+    });
+
+    // Touch gestures
+    let touchStartDist = 0;
+    let touch1StartX = 0, touch1StartY = 0;
+
+    svg.addEventListener('touchstart', function(e) {
+        if (e.touches.length === 2) {
+            touchStartDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+        } else if (e.touches.length === 1) {
+            touch1StartX = e.touches[0].clientX - translateX;
+            touch1StartY = e.touches[0].clientY - translateY;
+        }
+    });
+
+    svg.addEventListener('touchmove', function(e) {
+        if (e.touches.length === 2) {
+            e.preventDefault();
+            const dist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            const delta = dist / touchStartDist;
+            scale = Math.max(${minScale}, Math.min(${maxScale}, scale * delta));
+            touchStartDist = dist;
+            updateTransform();
+        } else if (e.touches.length === 1 && !isDragging) {
+            translateX = e.touches[0].clientX - touch1StartX;
+            translateY = e.touches[0].clientY - touch1StartY;
+            updateTransform();
+        }
+    });
+
+    svg.style.cursor = 'grab';
+    ${showControls ? this.generateZoomControlsScript() : ''}
+})();
+]]></script>`;
+    }
+
+    /**
+     * Generates zoom control buttons script
+     * @returns Script code for zoom controls (internal use)
+     */
+    private static generateZoomControlsScript(): string {
+        return `
+    // Add zoom controls
+    const controlsGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    controlsGroup.setAttribute('id', 'zoom-controls');
+    controlsGroup.setAttribute('transform', 'translate(10, 10)');
+
+    const minScaleVal = ${0.5};
+    const maxScaleVal = ${3};
+
+    const buttonData = [
+        { y: 0, text: '+', action: 'in' },
+        { y: 35, text: '-', action: 'out' },
+        { y: 70, text: '⟲', action: 'reset' }
+    ];
+
+    buttonData.forEach(function(btn) {
+        const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+        g.style.cursor = 'pointer';
+
+        const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        rect.setAttribute('width', '30');
+        rect.setAttribute('height', '30');
+        rect.setAttribute('y', btn.y);
+        rect.setAttribute('fill', '#fff');
+        rect.setAttribute('stroke', '#333');
+        rect.setAttribute('stroke-width', '1');
+        rect.setAttribute('rx', '4');
+
+        const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+        text.setAttribute('x', '15');
+        text.setAttribute('y', btn.y + 20);
+        text.setAttribute('text-anchor', 'middle');
+        text.setAttribute('font-size', '16');
+        text.setAttribute('font-weight', 'bold');
+        text.textContent = btn.text;
+
+        g.appendChild(rect);
+        g.appendChild(text);
+
+        g.addEventListener('click', function() {
+            if (btn.action === 'in') {
+                scale = Math.min(maxScaleVal, scale * 1.2);
+            } else if (btn.action === 'out') {
+                scale = Math.max(minScaleVal, scale * 0.8);
+            } else if (btn.action === 'reset') {
+                scale = 1;
+                translateX = 0;
+                translateY = 0;
+            }
+            updateTransform();
+        });
+
+        controlsGroup.appendChild(g);
+    });
+
+    svg.appendChild(controlsGroup);
+    `;
+    }
+
+    /**
+     * Generates interactive tooltip script for SVG elements
+     * Elements must have data-tooltip attribute
+     *
+     * @param svg - SVG element to add tooltip to
+     * @param doc - Document to create elements in
+     * @returns Script tag with tooltip implementation
+     */
+    static addTooltipSupport(svg: SVGElement, doc: Document): void {
+        const ns = svg.namespaceURI!;
+
+        // Create tooltip text element
+        const tooltip = doc.createElementNS(ns, 'text');
+        tooltip.setAttribute('id', 'mj-tooltip');
+        tooltip.setAttribute('visibility', 'hidden');
+        tooltip.setAttribute('pointer-events', 'none');
+        tooltip.setAttribute('font-size', '12');
+        tooltip.setAttribute('font-family', 'sans-serif');
+        tooltip.setAttribute('fill', '#000');
+
+        // Add background rect for better readability
+        const tooltipBg = doc.createElementNS(ns, 'rect');
+        tooltipBg.setAttribute('id', 'mj-tooltip-bg');
+        tooltipBg.setAttribute('visibility', 'hidden');
+        tooltipBg.setAttribute('pointer-events', 'none');
+        tooltipBg.setAttribute('fill', '#fff');
+        tooltipBg.setAttribute('stroke', '#333');
+        tooltipBg.setAttribute('stroke-width', '1');
+        tooltipBg.setAttribute('rx', '3');
+        tooltipBg.setAttribute('opacity', '0.95');
+
+        svg.appendChild(tooltipBg);
+        svg.appendChild(tooltip);
+
+        // Add script for tooltip behavior
+        const script = doc.createElementNS(ns, 'script');
+        script.setAttribute('type', 'text/javascript');
+        script.textContent = `
+(function() {
+    const svg = document.currentScript.closest('svg');
+    const tooltip = svg.getElementById('mj-tooltip');
+    const tooltipBg = svg.getElementById('mj-tooltip-bg');
+
+    svg.querySelectorAll('[data-tooltip]').forEach(function(el) {
+        el.addEventListener('mouseenter', function(e) {
+            const content = this.getAttribute('data-tooltip');
+            const rect = svg.getBoundingClientRect();
+            const x = e.clientX - rect.left + 10;
+            const y = e.clientY - rect.top - 10;
+
+            tooltip.textContent = content;
+            tooltip.setAttribute('x', x);
+            tooltip.setAttribute('y', y);
+            tooltip.setAttribute('visibility', 'visible');
+
+            // Size background to text
+            const bbox = tooltip.getBBox();
+            tooltipBg.setAttribute('x', bbox.x - 4);
+            tooltipBg.setAttribute('y', bbox.y - 2);
+            tooltipBg.setAttribute('width', bbox.width + 8);
+            tooltipBg.setAttribute('height', bbox.height + 4);
+            tooltipBg.setAttribute('visibility', 'visible');
+        });
+
+        el.addEventListener('mouseleave', function() {
+            tooltip.setAttribute('visibility', 'hidden');
+            tooltipBg.setAttribute('visibility', 'hidden');
+        });
+
+        el.addEventListener('mousemove', function(e) {
+            const rect = svg.getBoundingClientRect();
+            const x = e.clientX - rect.left + 10;
+            const y = e.clientY - rect.top - 10;
+
+            tooltip.setAttribute('x', x);
+            tooltip.setAttribute('y', y);
+
+            const bbox = tooltip.getBBox();
+            tooltipBg.setAttribute('x', bbox.x - 4);
+            tooltipBg.setAttribute('y', bbox.y - 2);
+        });
+    });
+})();
+        `;
+
+        svg.appendChild(script);
+    }
 }

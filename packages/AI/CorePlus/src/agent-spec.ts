@@ -5,6 +5,25 @@
  * the underlying agent metadata in the database.
  */
 export interface AgentSpec {
+    /**
+     * Detailed markdown formatted requirements that explains the business goals of the agent but does
+     * not get into the specific technical implementation details.
+     */
+    RequirementsDefinition?: string;
+
+    /**
+     * Detailed markdown that explains the structure of the agent in great detail including all of the 
+     * attributes that will be necessary later to architect the metadata that is part of this AgentSpec.
+     * Information will include:
+     * - Agent architecture overview - basic top level info like name, description, agent type
+     * - Actions included in the agent
+     * - Sub-agents included in the agent
+     * - Prompt(s) for the agent
+     * - Payload structure including input and output JSON example
+     */
+    DetailedDesign?: string;
+
+    // Stuff below here is metadata that goes directly into the AI Agents entity
     ID: string;
     Name: string;
     Description?: string;
@@ -147,6 +166,17 @@ export interface AgentSpec {
      * Array of sub-agents that are included within this agent
      */
     SubAgents?: Array<SubAgentSpec>;
+
+    /**
+     * At least one prompt is mandatory for Loop agents, and prompts are optional for flow
+     * agents
+     */
+    Prompts?: Array<AgentPromptSpec>;
+
+    /**
+     * For flow agents only, this defines the steps that make up the flow
+     */
+    Paths?: Array<AgentStepPath>;
 }
 
 /**
@@ -214,7 +244,7 @@ export interface SubAgentSpec {
      */
     Type: 'child' | 'related';
 
-    SubAgentID: string;
+    SubAgent: AgentSpec;
 
     /**
      * Only used when type=='related'. This is the ID of the AIAgentRelationship that links the parent and sub-agent.
@@ -234,4 +264,72 @@ export interface SubAgentSpec {
      * doesn't fit the sub-agent's payload structure, this is where that info can go.
      */
     SubAgentContextPaths?: Record<string, string>;
+}
+
+/**
+ * Details of a prompt within an agent
+ */
+export interface AgentPromptSpec {
+    ID: string;
+    PromptID: string;
+    PromptName: string;
+    PromptDescription: string;
+
+    /**
+     * Text that will end up going into the Prompt.TemplateText property
+     */
+    PromptText: string;
+
+    /**
+     * 
+     */
+    PromptTypeID: string; 
+
+    /**
+     * Optional configuration ID that specifies 
+     * which AI configuration to use when executing 
+     * this prompt.
+     */
+    ConfigurationID?: string;
+}
+
+/**
+ * For flow agents, this defines a single step
+ */
+export interface AgentStep {
+    ID: string;
+    Name: string;
+    Description?: string;
+    StepType: 'Prompt' | 'Action' | 'Sub-Agent';
+    /**
+     * If this is the first step of the flow agent or not
+     */
+    StartingStep: boolean;
+
+    ActionID?: string;
+    SubAgentID?: string;
+    PromptID?: string;
+    PromptText?: string;
+    PromptName?: string;
+    PromptDescription?: string;
+
+    ActionOutputMapping?: string;
+    ActionInputMapping?: string;
+
+    Paths?: Array<AgentStepPath>
+}
+
+export interface AgentStepPath {
+    ID: string;
+    OriginStepID: string;
+    DestinationStepID: string;
+    /**
+     * Boolean expression to evaluate. If null, path is always taken. Evaluated against payload and step results.
+     */
+    Condition?: string;
+    Description?: string;
+    /**
+     * Path evaluation priority. Higher values are evaluated first. Use 0 or negative values for default/fallback paths that execute when no other conditions match.
+     */
+    Priority: number;
 }

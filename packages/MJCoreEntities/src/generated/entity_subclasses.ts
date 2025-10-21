@@ -7851,6 +7851,156 @@ export const AIAgentArtifactTypeSchema = z.object({
 export type AIAgentArtifactTypeEntityType = z.infer<typeof AIAgentArtifactTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Data Sources
+ */
+export const AIAgentDataSourceSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Variable name for the data in the data parameter (e.g., "ALL_ENTITIES"). Must be unique within an agent.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Description of what this data source provides`),
+    SourceType: z.union([z.literal('RunQuery'), z.literal('RunView')]).describe(`
+        * * Field Name: SourceType
+        * * Display Name: Source Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: RunView
+    * * Value List Type: List
+    * * Possible Values 
+    *   * RunQuery
+    *   * RunView
+        * * Description: Type of data source: RunView or RunQuery. Determines which parameters are used.`),
+    EntityName: z.string().nullable().describe(`
+        * * Field Name: EntityName
+        * * Display Name: Entity Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Entity name for RunView data sources (e.g., "Entities", "AI Models")`),
+    ExtraFilter: z.string().nullable().describe(`
+        * * Field Name: ExtraFilter
+        * * Display Name: Extra Filter
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: SQL WHERE clause filter for RunView data sources`),
+    OrderBy: z.string().nullable().describe(`
+        * * Field Name: OrderBy
+        * * Display Name: Order By
+        * * SQL Data Type: nvarchar(500)
+        * * Description: SQL ORDER BY clause for RunView data sources`),
+    FieldsToRetrieve: z.string().nullable().describe(`
+        * * Field Name: FieldsToRetrieve
+        * * Display Name: Fields To Retrieve
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of field names to return for RunView data sources (e.g., ["ID", "Name", "Description"])`),
+    ResultType: z.union([z.literal('entity_object'), z.literal('simple')]).nullable().describe(`
+        * * Field Name: ResultType
+        * * Display Name: Result Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: simple
+    * * Value List Type: List
+    * * Possible Values 
+    *   * entity_object
+    *   * simple
+        * * Description: Result type for RunView: simple (default) or entity_object`),
+    QueryName: z.string().nullable().describe(`
+        * * Field Name: QueryName
+        * * Display Name: Query Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Query name for RunQuery data sources`),
+    CategoryPath: z.string().nullable().describe(`
+        * * Field Name: CategoryPath
+        * * Display Name: Category Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Category path for RunQuery data sources (e.g., "/MJ/AI/Agents/")`),
+    Parameters: z.string().nullable().describe(`
+        * * Field Name: Parameters
+        * * Display Name: Parameters
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON object of parameters for RunQuery data sources (e.g., {"organizationId": "123"})`),
+    MaxRows: z.number().nullable().describe(`
+        * * Field Name: MaxRows
+        * * Display Name: Max Rows
+        * * SQL Data Type: int
+        * * Description: Maximum number of rows to return. Applies to both RunView and RunQuery.`),
+    ExecutionOrder: z.number().describe(`
+        * * Field Name: ExecutionOrder
+        * * Display Name: Execution Order
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Execution order when multiple data sources are defined for an agent (lower numbers execute first)`),
+    Status: z.union([z.literal('Active'), z.literal('Disabled')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+        * * Description: Status of the data source: Active or Disabled`),
+    CachePolicy: z.union([z.literal('None'), z.literal('PerAgent'), z.literal('PerRun')]).describe(`
+        * * Field Name: CachePolicy
+        * * Display Name: Cache Policy
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * PerRun
+    *   * PerAgent
+    *   * None
+        * * Description: Cache policy: None (no caching), PerRun (cache for duration of agent run), PerAgent (cache across runs with timeout)`),
+    CacheTimeoutSeconds: z.number().nullable().describe(`
+        * * Field Name: CacheTimeoutSeconds
+        * * Display Name: Cache Timeout Seconds
+        * * SQL Data Type: int
+        * * Description: Time-to-live in seconds for PerAgent cache policy. Ignored for other cache policies.`),
+    DestinationType: z.union([z.literal('Context'), z.literal('Data'), z.literal('Payload')]).describe(`
+        * * Field Name: DestinationType
+        * * Display Name: Destination Type
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Data
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Data
+    *   * Context
+    *   * Payload
+        * * Description: Destination for the preloaded data: Data (for Nunjucks templates in prompts), Context (for actions only), or Payload (for agent state)`),
+    DestinationPath: z.string().nullable().describe(`
+        * * Field Name: DestinationPath
+        * * Display Name: Destination Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Path within the destination where data should be injected. Supports nested paths using dot notation (e.g., "config.api.endpoints", "analysis.orders.recent"). If null, uses Name as root-level key.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type AIAgentDataSourceEntityType = z.infer<typeof AIAgentDataSourceSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Permissions
  */
 export const AIAgentPermissionSchema = z.object({
@@ -17634,21 +17784,43 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
 
     /**
     * Validate() method override for AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
     * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
+    * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
+    * * Table-Level: This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
+    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
     * * Table-Level: This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
+    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
     * @public
     * @method
     * @override
     */
     public override Validate(): ValidationResult {
         const result = super.Validate();
+        this.ValidateCompactLengthGreaterThanZero(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunIsNonNegative(result);
+        this.ValidateResultExpirationTurnsNonNegative(result);
+        this.ValidateCompactLengthRequiredForFirstNCharsMode(result);
+        this.ValidateCompactModeWhenResultExpirationModeIsCompact(result);
         this.ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result);
+        this.ValidateResultExpirationModeRequiresCompactFieldsEmpty(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
+    }
+
+    /**
+    * This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactLengthGreaterThanZero(result: ValidationResult) {
+    	if (this.CompactLength != null && this.CompactLength <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CompactLength", "CompactLength must be greater than zero if specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -17676,6 +17848,42 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     }
 
     /**
+    * This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultExpirationTurnsNonNegative(result: ValidationResult) {
+    	if (this.ResultExpirationTurns != null && this.ResultExpirationTurns < 0) {
+    		result.Errors.push(new ValidationErrorInfo("ResultExpirationTurns", "If provided, ResultExpirationTurns must be zero or greater.", this.ResultExpirationTurns, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactLengthRequiredForFirstNCharsMode(result: ValidationResult) {
+    	if (this.CompactMode === "First N Chars" && this.CompactLength == null) {
+    		result.Errors.push(new ValidationErrorInfo("CompactLength", "When CompactMode is set to 'First N Chars', CompactLength must be specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactModeWhenResultExpirationModeIsCompact(result: ValidationResult) {
+    	if (this.ResultExpirationMode === "Compact" && this.CompactMode == null) {
+    		result.Errors.push(new ValidationErrorInfo("CompactMode", "CompactMode must be specified when ResultExpirationMode is 'Compact'.", this.CompactMode, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
@@ -17684,6 +17892,20 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     public ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
     	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
     		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultExpirationModeRequiresCompactFieldsEmpty(result: ValidationResult) {
+    	if (this.ResultExpirationMode === "Compact") {
+    		if (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null) {
+    			result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "When ResultExpirationMode is set to 'Compact', the fields CompactMode, CompactLength, and CompactPromptID must be empty.", this.ResultExpirationMode, ValidationErrorType.Failure));
+    		}
     	}
     }
 
@@ -36080,6 +36302,410 @@ export class AIAgentArtifactTypeEntity extends BaseEntity<AIAgentArtifactTypeEnt
     */
     get ArtifactType(): string {
         return this.Get('ArtifactType');
+    }
+}
+
+
+/**
+ * MJ: AI Agent Data Sources - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentDataSource
+ * * Base View: vwAIAgentDataSources
+ * * @description Defines data sources that should be preloaded into the data parameter before agent execution. Supports both RunView and RunQuery sources with configurable caching.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Data Sources')
+export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityType> {
+    /**
+    * Loads the MJ: AI Agent Data Sources record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Data Sources record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof AIAgentDataSourceEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
+    * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
+    * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result);
+        this.ValidateEntityNameRequiredWhenSourceTypeRunView(result);
+        this.ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result: ValidationResult) {
+    	if (this.CachePolicy === "PerAgent" && this.CacheTimeoutSeconds == null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTimeoutSeconds", "When the cache policy is set to 'PerAgent', you must specify a cache timeout value.", this.CacheTimeoutSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityNameRequiredWhenSourceTypeRunView(result: ValidationResult) {
+    	if (this.SourceType === "RunView" && this.EntityName == null) {
+    		result.Errors.push(new ValidationErrorInfo("EntityName", "EntityName is required when SourceType is 'RunView'.", this.EntityName, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result: ValidationResult) {
+    	if (this.SourceType === "RunQuery" && this.QueryName == null) {
+    		result.Errors.push(new ValidationErrorInfo("QueryName", "The query name must be provided when Source Type is 'RunQuery'.", this.QueryName, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Variable name for the data in the data parameter (e.g., "ALL_ENTITIES"). Must be unique within an agent.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Description of what this data source provides
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: SourceType
+    * * Display Name: Source Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: RunView
+    * * Value List Type: List
+    * * Possible Values 
+    *   * RunQuery
+    *   * RunView
+    * * Description: Type of data source: RunView or RunQuery. Determines which parameters are used.
+    */
+    get SourceType(): 'RunQuery' | 'RunView' {
+        return this.Get('SourceType');
+    }
+    set SourceType(value: 'RunQuery' | 'RunView') {
+        this.Set('SourceType', value);
+    }
+
+    /**
+    * * Field Name: EntityName
+    * * Display Name: Entity Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Entity name for RunView data sources (e.g., "Entities", "AI Models")
+    */
+    get EntityName(): string | null {
+        return this.Get('EntityName');
+    }
+    set EntityName(value: string | null) {
+        this.Set('EntityName', value);
+    }
+
+    /**
+    * * Field Name: ExtraFilter
+    * * Display Name: Extra Filter
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: SQL WHERE clause filter for RunView data sources
+    */
+    get ExtraFilter(): string | null {
+        return this.Get('ExtraFilter');
+    }
+    set ExtraFilter(value: string | null) {
+        this.Set('ExtraFilter', value);
+    }
+
+    /**
+    * * Field Name: OrderBy
+    * * Display Name: Order By
+    * * SQL Data Type: nvarchar(500)
+    * * Description: SQL ORDER BY clause for RunView data sources
+    */
+    get OrderBy(): string | null {
+        return this.Get('OrderBy');
+    }
+    set OrderBy(value: string | null) {
+        this.Set('OrderBy', value);
+    }
+
+    /**
+    * * Field Name: FieldsToRetrieve
+    * * Display Name: Fields To Retrieve
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of field names to return for RunView data sources (e.g., ["ID", "Name", "Description"])
+    */
+    get FieldsToRetrieve(): string | null {
+        return this.Get('FieldsToRetrieve');
+    }
+    set FieldsToRetrieve(value: string | null) {
+        this.Set('FieldsToRetrieve', value);
+    }
+
+    /**
+    * * Field Name: ResultType
+    * * Display Name: Result Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: simple
+    * * Value List Type: List
+    * * Possible Values 
+    *   * entity_object
+    *   * simple
+    * * Description: Result type for RunView: simple (default) or entity_object
+    */
+    get ResultType(): 'entity_object' | 'simple' | null {
+        return this.Get('ResultType');
+    }
+    set ResultType(value: 'entity_object' | 'simple' | null) {
+        this.Set('ResultType', value);
+    }
+
+    /**
+    * * Field Name: QueryName
+    * * Display Name: Query Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Query name for RunQuery data sources
+    */
+    get QueryName(): string | null {
+        return this.Get('QueryName');
+    }
+    set QueryName(value: string | null) {
+        this.Set('QueryName', value);
+    }
+
+    /**
+    * * Field Name: CategoryPath
+    * * Display Name: Category Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Category path for RunQuery data sources (e.g., "/MJ/AI/Agents/")
+    */
+    get CategoryPath(): string | null {
+        return this.Get('CategoryPath');
+    }
+    set CategoryPath(value: string | null) {
+        this.Set('CategoryPath', value);
+    }
+
+    /**
+    * * Field Name: Parameters
+    * * Display Name: Parameters
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON object of parameters for RunQuery data sources (e.g., {"organizationId": "123"})
+    */
+    get Parameters(): string | null {
+        return this.Get('Parameters');
+    }
+    set Parameters(value: string | null) {
+        this.Set('Parameters', value);
+    }
+
+    /**
+    * * Field Name: MaxRows
+    * * Display Name: Max Rows
+    * * SQL Data Type: int
+    * * Description: Maximum number of rows to return. Applies to both RunView and RunQuery.
+    */
+    get MaxRows(): number | null {
+        return this.Get('MaxRows');
+    }
+    set MaxRows(value: number | null) {
+        this.Set('MaxRows', value);
+    }
+
+    /**
+    * * Field Name: ExecutionOrder
+    * * Display Name: Execution Order
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Execution order when multiple data sources are defined for an agent (lower numbers execute first)
+    */
+    get ExecutionOrder(): number {
+        return this.Get('ExecutionOrder');
+    }
+    set ExecutionOrder(value: number) {
+        this.Set('ExecutionOrder', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    * * Description: Status of the data source: Active or Disabled
+    */
+    get Status(): 'Active' | 'Disabled' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Disabled') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: CachePolicy
+    * * Display Name: Cache Policy
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * PerRun
+    *   * PerAgent
+    *   * None
+    * * Description: Cache policy: None (no caching), PerRun (cache for duration of agent run), PerAgent (cache across runs with timeout)
+    */
+    get CachePolicy(): 'None' | 'PerAgent' | 'PerRun' {
+        return this.Get('CachePolicy');
+    }
+    set CachePolicy(value: 'None' | 'PerAgent' | 'PerRun') {
+        this.Set('CachePolicy', value);
+    }
+
+    /**
+    * * Field Name: CacheTimeoutSeconds
+    * * Display Name: Cache Timeout Seconds
+    * * SQL Data Type: int
+    * * Description: Time-to-live in seconds for PerAgent cache policy. Ignored for other cache policies.
+    */
+    get CacheTimeoutSeconds(): number | null {
+        return this.Get('CacheTimeoutSeconds');
+    }
+    set CacheTimeoutSeconds(value: number | null) {
+        this.Set('CacheTimeoutSeconds', value);
+    }
+
+    /**
+    * * Field Name: DestinationType
+    * * Display Name: Destination Type
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Data
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Data
+    *   * Context
+    *   * Payload
+    * * Description: Destination for the preloaded data: Data (for Nunjucks templates in prompts), Context (for actions only), or Payload (for agent state)
+    */
+    get DestinationType(): 'Context' | 'Data' | 'Payload' {
+        return this.Get('DestinationType');
+    }
+    set DestinationType(value: 'Context' | 'Data' | 'Payload') {
+        this.Set('DestinationType', value);
+    }
+
+    /**
+    * * Field Name: DestinationPath
+    * * Display Name: Destination Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Path within the destination where data should be injected. Supports nested paths using dot notation (e.g., "config.api.endpoints", "analysis.orders.recent"). If null, uses Name as root-level key.
+    */
+    get DestinationPath(): string | null {
+        return this.Get('DestinationPath');
+    }
+    set DestinationPath(value: string | null) {
+        this.Set('DestinationPath', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
     }
 }
 

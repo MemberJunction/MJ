@@ -28,21 +28,34 @@
           }
         }
       ],
-      "AI Agent Actions": [
+      "MJ: AI Agent Data Sources": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Entity List",
-            "Status": "Active"
+            "Name": "ALL_ENTITIES",
+            "Description": "Complete list of all entities in the system for schema exploration and research",
+            "SourceType": "RunView",
+            "EntityName": "Entities",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 1,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
           },
           "primaryKey": {
-            "ID": "A0438D04-00C5-4E62-9B65-C25AFA42EA1A"
+            "ID": "2F22C90E-05BF-4226-8F6F-209C74873D6F"
           },
           "sync": {
-            "lastModified": "2025-10-16T22:41:51.034Z",
-            "checksum": "2bafc38f01aae6b9daadf13cb25ea478260803a41872efcb6db8a5f62bcf81af"
+            "lastModified": "2025-10-20T17:26:44.744Z",
+            "checksum": "7ea0d7ed9bac9b78f5ef992deb0eaf14f6602d0a6f667dcd28561de39e3573f1"
           }
-        },
+        }
+      ],
+      "AI Agent Actions": [
         {
           "fields": {
             "AgentID": "@parent:ID",
@@ -297,6 +310,20 @@
               }
             ],
             "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Sketch Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9D2DACDB-49F0-4783-91D9-A2EF348B87DC"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T21:00:24.275Z",
+                  "checksum": "1f69440928e58cb33af27126b17dd476328b83810309708f6593e2bbc6bdc0b7"
+                }
+              },
               {
                 "fields": {
                   "AgentID": "@parent:ID",
