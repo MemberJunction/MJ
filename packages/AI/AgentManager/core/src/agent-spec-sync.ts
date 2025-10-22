@@ -7,7 +7,9 @@ import {
 import {
     AIAgentEntity,
     AIAgentActionEntity,
-    AIAgentRelationshipEntity
+    AIAgentRelationshipEntity,
+    AIAgentStepEntity,
+    AIAgentStepPathEntity
 } from '@memberjunction/core-entities';
 import {
     AgentSpec,
@@ -256,7 +258,7 @@ export class AgentSpecSync {
         }
 
         // Step 2: Batch load related entities using RunViews for optimal performance
-        const [actionsResult, childAgentsResult, relatedAgentsResult] = await rv.RunViews([
+        const [actionsResult, childAgentsResult, relatedAgentsResult, promptsResult, stepsResult, pathsResult] = await rv.RunViews([
             {
                 EntityName: 'AI Agent Actions',
                 ExtraFilter: `AgentID='${agentId}'`,
@@ -274,6 +276,24 @@ export class AgentSpecSync {
                 ExtraFilter: `AgentID='${agentId}' AND Status='Active'`,
                 OrderBy: '__mj_CreatedAt',
                 ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: AI Agent Prompts',
+                ExtraFilter: `AgentID='${agentId}'`,
+                OrderBy: 'ExecutionOrder',
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: AI Agent Steps',
+                ExtraFilter: `AgentID='${agentId}'`,
+                OrderBy: 'Name',
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: AI Agent Step Paths',
+                ExtraFilter: `OriginStepID IN (SELECT ID FROM vwAIAgentSteps WHERE AgentID='${agentId}')`,
+                OrderBy: 'Priority DESC',
+                ResultType: 'entity_object'
             }
         ], this._contextUser);
 
@@ -287,13 +307,25 @@ export class AgentSpecSync {
         if (!relatedAgentsResult.Success) {
             throw new Error(`Failed to load related agents: ${relatedAgentsResult.ErrorMessage}`);
         }
+        if (!promptsResult.Success) {
+            throw new Error(`Failed to load agent prompts: ${promptsResult.ErrorMessage}`);
+        }
+        if (!stepsResult.Success) {
+            throw new Error(`Failed to load agent steps: ${stepsResult.ErrorMessage}`);
+        }
+        if (!pathsResult.Success) {
+            throw new Error(`Failed to load step paths: ${pathsResult.ErrorMessage}`);
+        }
 
         // Step 3: Map entities to raw spec format
         this.spec = this.mapEntitiesToRawSpec(
             agentEntity,
             actionsResult.Results || [],
             childAgentsResult.Results || [],
-            relatedAgentsResult.Results || []
+            relatedAgentsResult.Results || [],
+            promptsResult.Results || [],
+            stepsResult.Results || [],
+            pathsResult.Results || []
         );
 
         // Step 4: Recursively load sub-agents if requested
@@ -318,13 +350,19 @@ export class AgentSpecSync {
      * @param actions - Array of agent action entities
      * @param childAgents - Array of child agent entities (ParentID-based)
      * @param relatedAgents - Array of related agent relationship entities
+     * @param prompts - Array of agent prompt junction entities
+     * @param steps - Array of agent step entities (for Flow agents)
+     * @param paths - Array of step path entities (for Flow agents)
      * @returns Fully populated AgentSpec object
      */
     private mapEntitiesToRawSpec(
         agent: AIAgentEntity,
         actions: AIAgentActionEntity[],
         childAgents: AIAgentEntity[],
-        relatedAgents: AIAgentRelationshipEntity[]
+        relatedAgents: AIAgentRelationshipEntity[],
+        prompts: any[],
+        steps: AIAgentStepEntity[],
+        paths: AIAgentStepPathEntity[]
     ): AgentSpec {
         // Map all agent fields to spec
         const spec: AgentSpec = {
@@ -376,7 +414,16 @@ export class AgentSpecSync {
             SubAgents: [
                 ...childAgents.map(child => this.mapChildAgentToSpec(child)),
                 ...relatedAgents.map(rel => this.mapRelatedAgentToSpec(rel))
-            ]
+            ],
+
+            // Map prompts (agent-level prompts for Loop agents)
+            Prompts: prompts.map(prompt => this.mapPromptEntityToSpec(prompt)),
+
+            // Map steps (for Flow agents)
+            Steps: steps.map(step => this.mapStepEntityToSpec(step)),
+
+            // Map paths (for Flow agents)
+            Paths: paths.map(path => this.mapPathEntityToSpec(path))
         };
 
         return spec;
@@ -443,6 +490,62 @@ export class AgentSpecSync {
         };
     }
 
+    /**
+     * Map AIAgentPromptEntity junction to AgentPromptSpec format.
+     *
+     * @private
+     * @param promptJunction - The agent prompt junction entity
+     * @returns Mapped prompt spec
+     */
+    private mapPromptEntityToSpec(promptJunction: any): any {
+        // The AIAgentPrompt is just a junction table, we need to extract the actual prompt info
+        return {
+            PromptText: promptJunction.PromptText || '', // This comes from a view or needs separate load
+            PromptRole: promptJunction.PromptRole || 'System',
+            PromptPosition: promptJunction.PromptPosition || 'First'
+        };
+    }
+
+    /**
+     * Map AIAgentStepEntity to AgentStep format.
+     *
+     * @private
+     * @param step - The agent step entity
+     * @returns Mapped step spec
+     */
+    private mapStepEntityToSpec(step: AIAgentStepEntity): any {
+        return {
+            ID: step.ID,
+            Name: step.Name,
+            Description: step.Description || undefined,
+            StepType: step.StepType,
+            StartingStep: step.StartingStep,
+            ActionID: step.ActionID || undefined,
+            SubAgentID: step.SubAgentID || undefined,
+            PromptID: step.PromptID || undefined,
+            ActionInputMapping: this.parseJsonField<any>(step.ActionInputMapping),
+            ActionOutputMapping: this.parseJsonField<any>(step.ActionOutputMapping)
+        };
+    }
+
+    /**
+     * Map AIAgentStepPathEntity to AgentStepPath format.
+     *
+     * @private
+     * @param path - The agent step path entity
+     * @returns Mapped path spec
+     */
+    private mapPathEntityToSpec(path: AIAgentStepPathEntity): any {
+        return {
+            ID: path.ID,
+            OriginStepID: path.OriginStepID,
+            DestinationStepID: path.DestinationStepID,
+            Condition: path.Condition || undefined,
+            Description: path.Description || undefined,
+            Priority: path.Priority
+        };
+    }
+
     // ===== SAVING METHODS =====
 
     /**
@@ -487,6 +590,12 @@ export class AgentSpecSync {
         // Step 4: Save prompts
         await this.savePrompts(agentId);
 
+        // Step 5: Save steps (Flow agents only)
+        await this.saveSteps(agentId);
+
+        // Step 6: Save step paths (Flow agents only)
+        await this.saveStepPaths(agentId);
+
         this._isDirty = false;
         this._isLoaded = true;
 
@@ -524,6 +633,18 @@ export class AgentSpecSync {
         agentEntity.ParentID = this.spec.ParentID || null;
         agentEntity.DriverClass = this.spec.DriverClass || null;
         agentEntity.ModelSelectionMode = this.spec.ModelSelectionMode || 'Agent Type';
+
+        // Handle TypeID - supports lookup references or direct GUID
+        if ((this.spec as any).TypeID) {
+            agentEntity.TypeID = (this.spec as any).TypeID;
+        }
+
+        // Handle Status - defaults to Active if not specified
+        if ((this.spec as any).Status) {
+            agentEntity.Status = (this.spec as any).Status;
+        } else {
+            agentEntity.Status = 'Active';
+        }
 
         // Serialize JSON fields
         agentEntity.PayloadDownstreamPaths = JSON.stringify(
@@ -809,18 +930,32 @@ export class AgentSpecSync {
         for (let i = 0; i < this.spec.Prompts.length; i++) {
             const promptSpec = this.spec.Prompts[i];
 
-            // Create AIPrompt entity
-            const promptEntity = await md.GetEntityObject<any>(
+            // Check if this is an update (has PromptID) or create (no PromptID)
+            let promptEntity = await md.GetEntityObject<any>(
                 'AI Prompts',
                 this._contextUser
             );
 
-            // Set required fields
-            promptEntity.Name = `${this.spec.Name} - Prompt ${i + 1}`;
-            promptEntity.Description = `Agent prompt ${i + 1} for ${this.spec.Name}`;
-            promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
-            promptEntity.Status = 'Active';
-            promptEntity.ResponseFormat = 'JSON';
+            let isUpdate = false;
+            if ((promptSpec as any).PromptID && (promptSpec as any).PromptID !== '') {
+                // Load existing prompt for update
+                const loaded = await promptEntity.Load((promptSpec as any).PromptID);
+                if (loaded) {
+                    isUpdate = true;
+                    console.log(`💬 savePrompts: Updating existing prompt ID: ${(promptSpec as any).PromptID}`);
+                } else {
+                    console.warn(`💬 savePrompts: PromptID specified but not found, creating new prompt`);
+                }
+            }
+
+            // Set required fields (will update if existing, create if new)
+            if (!isUpdate) {
+                promptEntity.Name = `${this.spec.Name} - Prompt ${i + 1}`;
+                promptEntity.Description = `Agent prompt ${i + 1} for ${this.spec.Name}`;
+                promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
+                promptEntity.Status = 'Active';
+                promptEntity.ResponseFormat = 'JSON';
+            }
 
             // Handle prompt text - supports both string and object formats
             if (typeof (promptSpec as any).PromptText === 'string') {
@@ -848,7 +983,10 @@ export class AgentSpecSync {
                 throw new Error(`Failed to save prompt ${i + 1} for agent ${this.spec.Name}`);
             }
 
-            console.log(`✅ savePrompts: Created AIPrompt with ID: ${promptEntity.ID}`);
+            // Update the spec with the saved/updated ID
+            (promptSpec as any).PromptID = promptEntity.ID;
+
+            console.log(`✅ savePrompts: ${isUpdate ? 'Updated' : 'Created'} AIPrompt with ID: ${promptEntity.ID}`);
 
             // Create AIAgentPrompt junction
             const agentPromptEntity = await md.GetEntityObject<any>(
@@ -870,6 +1008,196 @@ export class AgentSpecSync {
         }
 
         console.log(`✅ savePrompts: Successfully saved all ${this.spec.Prompts.length} prompt(s)`);
+    }
+
+    /**
+     * Save all steps for this agent (Flow agents only).
+     *
+     * Creates AIAgentStep records for each step in the spec. Steps define the nodes
+     * in a Flow agent's execution graph.
+     *
+     * @private
+     * @param agentId - The parent agent ID
+     * @throws {Error} If any step save fails
+     */
+    private async saveSteps(agentId: string): Promise<void> {
+        console.log(`🔷 saveSteps: Called with agentId=${agentId}, Steps=${this.spec.Steps ? this.spec.Steps.length : 'undefined'}`);
+
+        if (!this.spec.Steps || this.spec.Steps.length === 0) {
+            console.log('🔷 saveSteps: No steps to save, returning early');
+            return;
+        }
+
+        console.log(`🔷 saveSteps: Processing ${this.spec.Steps.length} step(s)...`);
+        const md = new Metadata();
+
+        for (const stepSpec of this.spec.Steps) {
+            const stepEntity = await md.GetEntityObject<AIAgentStepEntity>(
+                'MJ: AI Agent Steps',
+                this._contextUser
+            );
+
+            // Load existing if ID provided
+            if (stepSpec.ID && stepSpec.ID !== '') {
+                await stepEntity.Load(stepSpec.ID);
+            }
+
+            // Map fields
+            stepEntity.AgentID = agentId;
+            stepEntity.Name = stepSpec.Name;
+            stepEntity.Description = stepSpec.Description || null;
+            stepEntity.StepType = stepSpec.StepType;
+            stepEntity.StartingStep = stepSpec.StartingStep;
+            stepEntity.ActionID = stepSpec.ActionID || null;
+            stepEntity.SubAgentID = stepSpec.SubAgentID || null;
+            stepEntity.Status = 'Active'; // Default to Active
+
+            // Handle inline prompt creation for Prompt-type steps
+            // If StepType is Prompt and PromptID is empty, create a new AIPrompt record
+            if (stepSpec.StepType === 'Prompt' && (!stepSpec.PromptID || stepSpec.PromptID === '')) {
+                if (stepSpec.PromptText) {
+                    console.log(`🔷 saveSteps: Creating inline prompt for step "${stepSpec.Name}"`);
+
+                    // Create AIPrompt entity (using any type for TemplateText dynamic property)
+                    const promptEntity = await md.GetEntityObject<any>(
+                        'AI Prompts',
+                        this._contextUser
+                    );
+
+                    // Set prompt fields
+                    promptEntity.Name = stepSpec.PromptName || `${stepSpec.Name} Prompt`;
+                    promptEntity.Description = stepSpec.PromptDescription || `Prompt for step: ${stepSpec.Name}`;
+                    promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
+                    promptEntity.Status = 'Active';
+                    promptEntity.ResponseFormat = 'JSON';
+                    promptEntity.TemplateText = stepSpec.PromptText; // TemplateText is a dynamic property
+
+                    const promptSaved = await promptEntity.Save();
+                    if (!promptSaved) {
+                        throw new Error(`Failed to save inline prompt for step "${stepSpec.Name}"`);
+                    }
+
+                    console.log(`✅ saveSteps: Created inline AIPrompt with ID: ${promptEntity.ID}`);
+
+                    // Link the created prompt to this step
+                    stepEntity.PromptID = promptEntity.ID;
+                    stepSpec.PromptID = promptEntity.ID; // Update spec too
+                } else {
+                    console.warn(`⚠️ saveSteps: Step "${stepSpec.Name}" is Prompt type with empty PromptID but no PromptText provided`);
+                    stepEntity.PromptID = null;
+                }
+            } else {
+                stepEntity.PromptID = stepSpec.PromptID || null;
+            }
+
+            // Map Action I/O mappings for Flow agent action steps
+            // Handle ActionInputMapping - convert object to JSON string if needed
+            if (stepSpec.ActionInputMapping) {
+                stepEntity.ActionInputMapping = typeof stepSpec.ActionInputMapping === 'string'
+                    ? stepSpec.ActionInputMapping
+                    : JSON.stringify(stepSpec.ActionInputMapping);
+            } else {
+                stepEntity.ActionInputMapping = null;
+            }
+
+            // Handle ActionOutputMapping - convert object to JSON string if needed
+            if (stepSpec.ActionOutputMapping) {
+                stepEntity.ActionOutputMapping = typeof stepSpec.ActionOutputMapping === 'string'
+                    ? stepSpec.ActionOutputMapping
+                    : JSON.stringify(stepSpec.ActionOutputMapping);
+            } else {
+                stepEntity.ActionOutputMapping = null;
+            }
+
+            const saved = await stepEntity.Save();
+            if (!saved) {
+                throw new Error(`Failed to save step "${stepSpec.Name}" for agent ${this.spec.Name}`);
+            }
+
+            // Update the spec with the saved ID so paths can reference it
+            stepSpec.ID = stepEntity.ID;
+
+            console.log(`✅ saveSteps: Created AIAgentStep with ID: ${stepEntity.ID}`);
+        }
+
+        console.log(`✅ saveSteps: Successfully saved all ${this.spec.Steps.length} step(s)`);
+    }
+
+    /**
+     * Save all step paths for this agent (Flow agents only).
+     *
+     * Creates AIAgentStepPath records that define the edges in a Flow agent's
+     * execution graph, including conditional branching logic.
+     *
+     * @private
+     * @param agentId - The parent agent ID
+     * @throws {Error} If any path save fails
+     */
+    private async saveStepPaths(agentId: string): Promise<void> {
+        console.log(`🔶 saveStepPaths: Called with agentId=${agentId}, Paths=${this.spec.Paths ? this.spec.Paths.length : 'undefined'}`);
+
+        if (!this.spec.Paths || this.spec.Paths.length === 0) {
+            console.log('🔶 saveStepPaths: No paths to save, returning early');
+            return;
+        }
+
+        console.log(`🔶 saveStepPaths: Processing ${this.spec.Paths.length} path(s)...`);
+        const md = new Metadata();
+
+        // Create a map of step names to IDs for easy lookup
+        const stepNameToId = new Map<string, string>();
+        if (this.spec.Steps) {
+            for (const step of this.spec.Steps) {
+                if (step.ID) {
+                    stepNameToId.set(step.Name, step.ID);
+                }
+            }
+        }
+
+        for (const pathSpec of this.spec.Paths) {
+            const pathEntity = await md.GetEntityObject<AIAgentStepPathEntity>(
+                'MJ: AI Agent Step Paths',
+                this._contextUser
+            );
+
+            // Load existing if ID provided
+            if (pathSpec.ID && pathSpec.ID !== '') {
+                await pathEntity.Load(pathSpec.ID);
+            }
+
+            // Resolve step IDs from step names
+            // OriginStepID and DestinationStepID can be either step IDs or step names
+            // If they're names, look them up in our map
+            let originStepId = pathSpec.OriginStepID;
+            let destinationStepId = pathSpec.DestinationStepID;
+
+            // Try to resolve as step names first
+            if (stepNameToId.has(pathSpec.OriginStepID)) {
+                originStepId = stepNameToId.get(pathSpec.OriginStepID)!;
+            }
+            if (stepNameToId.has(pathSpec.DestinationStepID)) {
+                destinationStepId = stepNameToId.get(pathSpec.DestinationStepID)!;
+            }
+
+            // Map fields
+            pathEntity.OriginStepID = originStepId;
+            pathEntity.DestinationStepID = destinationStepId;
+            pathEntity.Condition = pathSpec.Condition || null;
+            pathEntity.Description = pathSpec.Description || null;
+            pathEntity.Priority = pathSpec.Priority;
+
+            const saved = await pathEntity.Save();
+            if (!saved) {
+                throw new Error(`Failed to save path from "${pathSpec.OriginStepID}" to "${pathSpec.DestinationStepID}"`);
+            }
+
+            // Update the spec with the saved ID
+            pathSpec.ID = pathEntity.ID;
+
+            console.log(`✅ saveStepPaths: Created AIAgentStepPath with ID: ${pathEntity.ID}`);
+        }
+
+        console.log(`✅ saveStepPaths: Successfully saved all ${this.spec.Paths.length} path(s)`);
     }
 
     // ===== UTILITY METHODS =====
@@ -909,6 +1237,11 @@ export class AgentSpecSync {
             ID: partial.ID || '',
             Name: partial.Name || '',
             Description: partial.Description,
+
+            // TypeID and Status are extended fields (not in base AgentSpec interface)
+            TypeID: (partial as any).TypeID,
+            Status: (partial as any).Status || 'Active',
+
             IconClass: partial.IconClass,
             LogoURL: partial.LogoURL,
             ParentID: partial.ParentID,
@@ -937,7 +1270,11 @@ export class AgentSpecSync {
             InvocationMode: partial.InvocationMode || 'Any',
             Actions: partial.Actions || [],
             SubAgents: partial.SubAgents || [],
-            Prompts: partial.Prompts || []
+            Prompts: partial.Prompts || [],
+
+            // Flow agent fields - critical for Flow agent support
+            Steps: partial.Steps || [],
+            Paths: partial.Paths || []
         };
     }
 

@@ -29,6 +29,18 @@ export interface AgentSpec {
     Description?: string;
 
     /**
+     * Agent type ID - references MJ: AI Agent Types entity. Common values:
+     * - Loop: for iterative, LLM-driven agents
+     * - Flow: for deterministic, graph-based workflows
+     */
+    TypeID?: string;
+
+    /**
+     * Agent status - Active, Inactive, or Pending
+     */
+    Status?: 'Active' | 'Inactive' | 'Pending';
+
+    /**
     * Font Awesome icon class (e.g., fa-robot, fa-brain) for the agent. Used as fallback when LogoURL is not set or fails to load.
     */
     IconClass?: string;
@@ -175,6 +187,11 @@ export interface AgentSpec {
 
     /**
      * For flow agents only, this defines the steps that make up the flow
+     */
+    Steps?: Array<AgentStep>;
+
+    /**
+     * For flow agents only, this defines the paths between steps
      */
     Paths?: Array<AgentStepPath>;
 }
