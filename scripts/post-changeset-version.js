@@ -10,6 +10,10 @@
  * due to fixed groups and internal dependency resolution.
  *
  * This is a temporary measure while core@2.101.0+ has npm registry 403 issues.
+ *
+ * Important: We use `npm install --package-lock-only` to update the lockfile without
+ * fetching packages. This is necessary because changesets has already bumped versions
+ * but the new versions don't exist in the npm registry yet (they'll be published later).
  */
 
 const fs = require('fs');
@@ -145,11 +149,13 @@ checkAndFixCoreDependency();
 console.log('\nStep 3: Scanning all packages...');
 fixAllDependencies();
 
-// Run npm install if changes were made
+// Update lockfile if changes were made
 if (needsNpmInstall) {
-  console.log('\nStep 4: Running npm install to update lockfile...');
+  console.log('\nStep 4: Updating lockfile (package-lock.json only)...');
   try {
-    execSync('npm install', {
+    // Use --package-lock-only to avoid fetching packages that don't exist in registry yet
+    // This is safe because workspace packages are symlinked locally
+    execSync('npm install --package-lock-only', {
       stdio: 'inherit',
       cwd: path.join(__dirname, '..')
     });
@@ -159,7 +165,7 @@ if (needsNpmInstall) {
     process.exit(1);
   }
 } else {
-  console.log('\nStep 4: No changes needed, skipping npm install');
+  console.log('\nStep 4: No changes needed, skipping lockfile update');
 }
 
 console.log('\n✅ Post-changeset-version complete: core and global remain at 2.100.3\n');
