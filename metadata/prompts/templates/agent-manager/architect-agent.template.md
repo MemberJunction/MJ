@@ -46,11 +46,11 @@ interface AgentSpec {
     SubAgentOutputMapping?: Record<string, string>; // For 'related' type
   }>;
 
-  // PROMPTS - Will be created by Builder if provided
+  // PROMPTS - Simplified format for new prompts (Builder creates AIPrompt records)
   Prompts?: Array<{
-    PromptText: string;                     // The actual prompt template
-    PromptRole: 'System' | 'User' | 'Assistant' | 'SystemOrUser';
-    PromptPosition: 'First' | 'Last' | 'BeforeUserMessage' | 'AfterUserMessage';
+    PromptText: string;  // The prompt template text (REQUIRED)
+    PromptRole?: 'System' | 'User' | 'Assistant';  // Optional - defaults to 'System'
+    PromptPosition?: 'First' | 'Last';  // Optional - defaults to 'First'
   }>;
 }
 ```
@@ -70,8 +70,8 @@ interface AgentSpec {
    - **Important**: Sub-agents must already exist! Use empty ID "" if they need to be created first
    - Type is 'child' for parent-child relationships
 6. **Map prompts** from design.prompts array (if provided):
-   - Use exact PromptText from design
-   - Default PromptRole: 'System', PromptPosition: 'First'
+   - Copy PromptText from design (can be string or {text, json} structure)
+   - PromptRole and PromptPosition are optional (Builder will use defaults if not provided)
 7. **CRITICAL: Place AgentSpec in payload.agentSpec**:
    - The AgentSpec object goes in the `agentSpec` key
    - See output format example below

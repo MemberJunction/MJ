@@ -484,6 +484,9 @@ export class AgentSpecSync {
         // Step 3: Save sub-agents (both child and related)
         await this.saveSubAgents(agentId);
 
+        // Step 4: Save prompts
+        await this.savePrompts(agentId);
+
         this._isDirty = false;
         this._isLoaded = true;
 
@@ -755,6 +758,94 @@ export class AgentSpecSync {
         SubAgentSpec.AgentRelationshipID = relationshipEntity.ID;
     }
 
+    /**
+     * Save all prompts for this agent.
+     *
+     * Creates AIPrompt records (with template) and AIAgentPrompt junction records.
+     * Supports simplified prompt format from Architect Agent with just PromptText,
+     * PromptRole, and PromptPosition.
+     *
+     * @private
+     * @param agentId - The parent agent ID
+     * @throws {Error} If any prompt save fails
+     */
+    private async savePrompts(agentId: string): Promise<void> {
+        console.log(`💬 savePrompts: Called with agentId=${agentId}, Prompts=${this.spec.Prompts ? this.spec.Prompts.length : 'undefined'}`);
+
+        if (!this.spec.Prompts || this.spec.Prompts.length === 0) {
+            console.log('💬 savePrompts: No prompts to save, returning early');
+            return;
+        }
+
+        console.log(`💬 savePrompts: Processing ${this.spec.Prompts.length} prompt(s)...`);
+        const md = new Metadata();
+
+        for (let i = 0; i < this.spec.Prompts.length; i++) {
+            const promptSpec = this.spec.Prompts[i];
+
+            // Create AIPrompt entity
+            const promptEntity = await md.GetEntityObject<any>(
+                'AI Prompts',
+                this._contextUser
+            );
+
+            // Set required fields
+            promptEntity.Name = `${this.spec.Name} - Prompt ${i + 1}`;
+            promptEntity.Description = `Agent prompt ${i + 1} for ${this.spec.Name}`;
+            promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
+            promptEntity.Status = 'Active';
+            promptEntity.ResponseFormat = 'JSON';
+
+            // Handle prompt text - supports both string and object formats
+            if (typeof (promptSpec as any).PromptText === 'string') {
+                promptEntity.TemplateText = (promptSpec as any).PromptText;
+            } else if (typeof (promptSpec as any).PromptText === 'object') {
+                // Architect may send PromptText as {text: "...", json: {...}}
+                const promptTextObj = (promptSpec as any).PromptText as any;
+                let combinedText = promptTextObj.text || '';
+                if (promptTextObj.json) {
+                    combinedText += '\n\n```json\n' + JSON.stringify(promptTextObj.json, null, 2) + '\n```';
+                }
+                promptEntity.TemplateText = combinedText;
+            }
+
+            // Set prompt role and position if provided
+            if ((promptSpec as any).PromptRole) {
+                promptEntity.PromptRole = (promptSpec as any).PromptRole;
+            }
+            if ((promptSpec as any).PromptPosition) {
+                promptEntity.PromptPosition = (promptSpec as any).PromptPosition;
+            }
+
+            const saved = await promptEntity.Save();
+            if (!saved) {
+                throw new Error(`Failed to save prompt ${i + 1} for agent ${this.spec.Name}`);
+            }
+
+            console.log(`✅ savePrompts: Created AIPrompt with ID: ${promptEntity.ID}`);
+
+            // Create AIAgentPrompt junction
+            const agentPromptEntity = await md.GetEntityObject<any>(
+                'MJ: AI Agent Prompts',
+                this._contextUser
+            );
+
+            agentPromptEntity.AgentID = agentId;
+            agentPromptEntity.PromptID = promptEntity.ID;
+            agentPromptEntity.ExecutionOrder = i;
+            agentPromptEntity.Status = 'Active';
+
+            const junctionSaved = await agentPromptEntity.Save();
+            if (!junctionSaved) {
+                throw new Error(`Failed to save agent-prompt junction for prompt ${i + 1}`);
+            }
+
+            console.log(`✅ savePrompts: Created AIAgentPrompt junction with ID: ${agentPromptEntity.ID}`);
+        }
+
+        console.log(`✅ savePrompts: Successfully saved all ${this.spec.Prompts.length} prompt(s)`);
+    }
+
     // ===== UTILITY METHODS =====
 
     /**
@@ -819,7 +910,8 @@ export class AgentSpecSync {
             OwnerUserID: partial.OwnerUserID,
             InvocationMode: partial.InvocationMode || 'Any',
             Actions: partial.Actions || [],
-            SubAgents: partial.SubAgents || []
+            SubAgents: partial.SubAgents || [],
+            Prompts: partial.Prompts || []
         };
     }
 
