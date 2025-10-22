@@ -248,9 +248,10 @@ export class AgentArchitectAgent extends BaseAgent {
                 continue;
             }
 
-            // Validate SubAgent.SubAgent.ID
-            if (!subAgent.SubAgent.ID || subAgent.SubAgent.ID.trim().length === 0) {
-                errors.push(`❌ SubAgent at index ${i} is missing SubAgent.ID (the ID of the sub-agent to reference)`);
+            // SubAgent.ID can be empty string "" for NEW sub-agents (Builder creates them recursively)
+            // Only validate that ID is not null/undefined
+            if (subAgent.SubAgent.ID === null || subAgent.SubAgent.ID === undefined) {
+                errors.push(`❌ SubAgent at index ${i} has null/undefined SubAgent.ID (use empty string "" for new sub-agents, or provide existing agent GUID)`);
             }
 
             // Validate SubAgent.SubAgent.Name

@@ -36,17 +36,16 @@ interface AgentSpec {
   // SUB-AGENTS - Child or related agents
   SubAgents?: Array<{
     Type: 'child' | 'related';             // REQUIRED for each sub-agent
-    SubAgent: {                             // REQUIRED nested object
-      ID: string;                           // ID of existing agent to reference
-      Name: string;                         // Name of that agent
-      StartingPayloadValidationMode: 'Fail' | 'Warn';  // REQUIRED
-    };
+    SubAgent: AgentSpec;                    // REQUIRED - Full nested AgentSpec with ALL fields
+                                           // SubAgent.ID should be "" for NEW sub-agents
+                                           // SubAgent can have its own Actions, Prompts, etc.
     AgentRelationshipID?: string;           // For 'related' type (optional, auto-created)
     SubAgentInputMapping?: Record<string, string>;  // For 'related' type
     SubAgentOutputMapping?: Record<string, string>; // For 'related' type
   }>;
 
-  // PROMPTS - Simplified format for new prompts (Builder creates AIPrompt records)
+  // PROMPTS - Simplified format for prompts (Builder creates AIPrompt records)
+  // These are prompts for THIS AGENT only - sub-agents define their own prompts
   Prompts?: Array<{
     PromptText: string;  // The prompt template text (REQUIRED)
     PromptRole?: 'System' | 'User' | 'Assistant';  // Optional - defaults to 'System'
@@ -67,11 +66,17 @@ interface AgentSpec {
    - Use the exact `id` as `ActionID`
    - Set `Status: 'Active'`
 5. **Map sub-agents** from design.agentHierarchy.subAgents (if any):
-   - **Important**: Sub-agents must already exist! Use empty ID "" if they need to be created first
+   - **CRITICAL**: Each SubAgent is a FULL AgentSpec (not just ID/Name)
+   - Set `SubAgent.ID = ""` for NEW sub-agents (Builder creates them recursively)
+   - Include SubAgent.Name, Description, Actions, Prompts, etc.
    - Type is 'child' for parent-child relationships
-6. **Map prompts** from design.prompts array (if provided):
-   - Copy PromptText from design (can be string or {text, json} structure)
-   - PromptRole and PromptPosition are optional (Builder will use defaults if not provided)
+   - Sub-agents can have their own Actions and Prompts arrays
+6. **Map prompts** from design.prompts array:
+   - **Match agentName** in design.prompts to determine which agent each prompt belongs to
+   - Prompts where agentName matches parent → add to parent's Prompts array
+   - Prompts where agentName matches sub-agent → add to that SubAgent's Prompts array
+   - PromptText can be string or {text, json} structure
+   - PromptRole and PromptPosition are optional (Builder uses defaults if not provided)
 7. **CRITICAL: Place AgentSpec in payload.agentSpec**:
    - The AgentSpec object goes in the `agentSpec` key
    - See output format example below
@@ -80,7 +85,7 @@ interface AgentSpec {
 
 **CRITICAL**: You must return your AgentSpec using a `payloadChangeRequest`. The AgentSpec goes in the `agentSpec` key at the root level of the payload.
 
-### Correct Output Pattern:
+### Example 1: Simple Agent (No Sub-Agents)
 
 ```json
 {
@@ -108,6 +113,57 @@ interface AgentSpec {
 }
 ```
 
+### Example 2: Agent with Sub-Agent
+
+```json
+{
+  "payloadChangeRequest": {
+    "newElements": {
+      "agentSpec": {
+        "ID": "",
+        "Name": "agent name",
+        "Description": "This agent ...",
+        "StartingPayloadValidationMode": "Fail",
+        "IconClass": "fa-solid fa-music",
+        "Actions": [],
+        "SubAgents": [
+          {
+            "Type": "child",
+            "SubAgent": {
+              "ID": "",
+              "Name": "sub agent name",
+              "Description": "This agent should ...",
+              "StartingPayloadValidationMode": "Fail",
+              "Actions": [
+                {
+                  "ActionID": "{some action id}",
+                  "Status": "Active"
+                }
+              ],
+              "SubAgents": [],
+              "Prompts": [
+                {
+                  "PromptText": "You perform web searches and return results...",
+                  "PromptRole": "System",
+                  "PromptPosition": "First"
+                }
+              ]
+            }
+          }
+        ],
+        "Prompts": [
+          {
+            "PromptText": "You answer questions with...",
+            "PromptRole": "System",
+            "PromptPosition": "First"
+          }
+        ]
+      }
+    }
+  }
+}
+```
+
 ### If Updating an Existing Spec:
 
 Use `replaceElements` instead of `newElements`:
@@ -124,9 +180,11 @@ Use `replaceElements` instead of `newElements`:
 
 ## Critical Rules
 
-- **Always** include ID, Name, and StartingPayloadValidationMode
+- **Always** include ID, Name, and StartingPayloadValidationMode for every agent
 - **Use exact ActionID values** from the design (don't make up IDs)
-- **SubAgents must exist** before referencing them (or use empty ID for new ones)
+- **SubAgent.ID = ""** for NEW sub-agents (Builder creates them recursively)
+- **SubAgent is full AgentSpec** - include Name, Description, Actions, Prompts, etc.
+- **Match prompts to agents** - use design.prompts[].agentName to assign prompts correctly
 - **Don't guess field names** - follow the AgentSpec interface exactly
 - **Keep it minimal** - only include fields that have values from the design
 

@@ -666,38 +666,64 @@ export class AgentSpecSync {
      * Save a child sub-agent (ParentID-based relationship).
      *
      * For child agents, the relationship is established by setting the ParentID field
-     * on the child agent entity. If the SubAgentID is empty, this indicates a new
-     * child agent that needs to be created.
+     * on the child agent entity. If the SubAgent.ID is empty, this creates a new
+     * child agent recursively using AgentSpecSync.
+     *
+     * This enables creating complete agent hierarchies in one call - sub-agents are
+     * created first (depth-first), then parent references them via ParentID.
      *
      * @private
      * @param parentId - The parent agent ID
      * @param SubAgentSpec - The sub-agent specification
-     * @throws {Error} If child agent doesn't exist or save fails
+     * @throws {Error} If child agent save fails
      */
     private async saveChildSubAgent(parentId: string, SubAgentSpec: SubAgentSpec): Promise<void> {
-        if (!SubAgentSpec.SubAgent?.ID) {
-            throw new Error('Child sub-agent must have a SubAgent.ID');
-        }
+        console.log(`🔗 saveChildSubAgent: Processing child "${SubAgentSpec.SubAgent?.Name}", ID="${SubAgentSpec.SubAgent?.ID}"`);
 
-        // For child agents, we just need to ensure the ParentID is set correctly
-        // The sub-agent itself should already exist or be created separately
-        const md = new Metadata();
-        const childEntity = await md.GetEntityObject<AIAgentEntity>(
-            'AI Agents',
-            this._contextUser
-        );
+        // If SubAgent.ID is empty or missing, create the sub-agent recursively
+        if (!SubAgentSpec.SubAgent?.ID || SubAgentSpec.SubAgent.ID === '') {
+            console.log(`🔨 saveChildSubAgent: Creating new child sub-agent "${SubAgentSpec.SubAgent.Name}"...`);
 
-        const loaded = await childEntity.Load(SubAgentSpec.SubAgent.ID);
-        if (!loaded) {
-            throw new Error(`Child agent ${SubAgentSpec.SubAgent.ID} not found`);
-        }
+            // Set ParentID in the sub-agent spec before creating it
+            const childSpec: AgentSpec = {
+                ...SubAgentSpec.SubAgent,
+                ParentID: parentId
+            };
 
-        // Update parent ID if needed
-        if (childEntity.ParentID !== parentId) {
-            childEntity.ParentID = parentId;
-            const saved = await childEntity.Save();
-            if (!saved) {
-                throw new Error(`Failed to update ParentID for child agent ${SubAgentSpec.SubAgent.ID}`);
+            // Recursively create the sub-agent using AgentSpecSync
+            const childSync = new AgentSpecSync(childSpec, this._contextUser);
+            childSync.markDirty();
+            const childId = await childSync.SaveToDatabase();
+
+            // Update the SubAgentSpec with the created ID so parent can reference it
+            SubAgentSpec.SubAgent.ID = childId;
+
+            console.log(`✅ saveChildSubAgent: Created child sub-agent with ID: ${childId}`);
+        } else {
+            // SubAgent already exists - just ensure ParentID is set correctly
+            console.log(`🔗 saveChildSubAgent: Updating existing child sub-agent "${SubAgentSpec.SubAgent.ID}"...`);
+
+            const md = new Metadata();
+            const childEntity = await md.GetEntityObject<AIAgentEntity>(
+                'AI Agents',
+                this._contextUser
+            );
+
+            const loaded = await childEntity.Load(SubAgentSpec.SubAgent.ID);
+            if (!loaded) {
+                throw new Error(`Child agent ${SubAgentSpec.SubAgent.ID} not found in database`);
+            }
+
+            // Update parent ID if needed
+            if (childEntity.ParentID !== parentId) {
+                console.log(`🔗 saveChildSubAgent: Setting ParentID to ${parentId}`);
+                childEntity.ParentID = parentId;
+                const saved = await childEntity.Save();
+                if (!saved) {
+                    throw new Error(`Failed to update ParentID for child agent ${SubAgentSpec.SubAgent.ID}`);
+                }
+            } else {
+                console.log(`✅ saveChildSubAgent: ParentID already correct`);
             }
         }
     }

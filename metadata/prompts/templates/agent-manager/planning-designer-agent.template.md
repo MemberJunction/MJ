@@ -46,7 +46,7 @@ Create `design.agentHierarchy` with:
 - ✅ ONE agent with multiple actions for linear workflows
 
 ### 5. Create Prompts
-For each agent in your design, create a system prompt that:
+For **EACH agent** in your design (parent and sub-agents), create a system prompt that:
 - **Defines the role** clearly (e.g., "You are a data collector that gathers customer feedback")
 - **Lists responsibilities** (what the agent does)
 - **Provides workflow** (step-by-step process)
@@ -68,15 +68,21 @@ Your job is to [primary responsibility].
 Return JSON with: [describe structure]
 ```
 
-Add prompts to `design.prompts` array:
+Add prompts to `design.prompts` array with **agentName** field:
 ```json
 {
-  "agentName": "...",
+  "agentName": "MainAgentName",     // IMPORTANT: Matches agent name
   "promptText": "...",
   "promptRole": "System",
   "promptPosition": "First"
 }
 ```
+
+**CRITICAL**: If you have sub-agents, create separate prompt entries for each:
+- One prompt with `agentName: "ParentAgent"`
+- One prompt with `agentName: "SubAgent1"`
+- One prompt with `agentName: "SubAgent2"`
+- etc.
 
 ### 6. Return Design
 Return to parent with:
@@ -96,15 +102,35 @@ Return to parent with:
             "reason": "Why this action is needed"
           }
         ],
-        "subAgents": [],  // Only if necessary
+        "subAgents": [
+          {
+            "name": "SubAgentName",
+            "description": "What the sub-agent does",
+            "type": "Loop",
+            "actions": [
+              {
+                "id": "sub-agent-action-id",
+                "name": "Sub-Agent Action",
+                "reason": "Why sub-agent needs this"
+              }
+            ],
+            "subAgents": []
+          }
+        ],
         "payloadDownstreamPaths": ["*"],
         "payloadUpstreamPaths": ["result.*"]
       }
     },
     "prompts": [
       {
-        "agentName": "Main Agent",
-        "promptText": "# Agent Name\n\nYour job is to...",
+        "agentName": "MainAgentName",
+        "promptText": "# MainAgentName\n\nYour job is to...",
+        "promptRole": "System",
+        "promptPosition": "First"
+      },
+      {
+        "agentName": "SubAgentName",
+        "promptText": "# SubAgentName\n\nYour job is to...",
         "promptRole": "System",
         "promptPosition": "First"
       }
