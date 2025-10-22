@@ -70,7 +70,9 @@ export const loadModule = () => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
-          values = e.EntityFieldValues.map(
+          // Sort by Sequence to ensure consistent ordering in comments
+          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
@@ -360,7 +362,9 @@ ${validationFunctions}`
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
-          values = e.EntityFieldValues.map(
+          // Sort by Sequence to ensure consistent ordering in comments
+          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
@@ -407,7 +411,9 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
 
     let valueList: string = '';
     if (entityField.ValueListType && entityField.ValueListType.length > 0 && entityField.ValueListType.trim().toLowerCase() !== 'none') {
-      let values = entityField.EntityFieldValues.map(
+      // Sort by Sequence to ensure consistent ordering in comments
+      const sortedValues = sortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
+      let values = sortedValues.map(
         (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
       ).join('');
       valueList = `\n    * * Value List Type: ${entityField.ValueListType}\n    * * Possible Values ` + values;
