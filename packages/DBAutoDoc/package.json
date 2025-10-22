@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/db-auto-doc",
-  "version": "1.0.0",
+  "version": "2.109.0",
   "description": "AI-powered SQL Server database documentation generator. Analyzes your database structure, uses AI to generate comprehensive descriptions, and saves them as extended properties. Works standalone - no MemberJunction runtime required.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

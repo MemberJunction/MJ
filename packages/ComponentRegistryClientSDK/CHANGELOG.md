@@ -1,5 +1,13 @@
 # @memberjunction/component-registry-client-sdk
 
+## 2.109.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.109.0
+- @memberjunction/core@2.109.0
+- @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Patch Changes

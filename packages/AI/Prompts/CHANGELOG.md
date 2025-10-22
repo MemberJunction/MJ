@@ -1,5 +1,20 @@
 # @memberjunction/ai-prompts
 
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ai-core-plus@2.109.0
+  - @memberjunction/aiengine@2.109.0
+  - @memberjunction/templates-base-types@2.109.0
+  - @memberjunction/templates@2.109.0
+  - @memberjunction/ai@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Patch Changes

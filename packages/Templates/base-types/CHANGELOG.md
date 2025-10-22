@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/templates-base-types
 
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Patch Changes

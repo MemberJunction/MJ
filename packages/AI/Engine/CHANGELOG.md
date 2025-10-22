@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.109.0
+
+### Minor Changes
+
+- a38989b: Migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ai-core-plus@2.109.0
+  - @memberjunction/ai-engine-base@2.109.0
+  - @memberjunction/actions-base@2.109.0
+  - @memberjunction/ai@2.109.0
+  - @memberjunction/ai-vectors-memory@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Patch Changes

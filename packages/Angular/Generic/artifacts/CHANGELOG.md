@@ -1,5 +1,22 @@
 # @memberjunction/ng-artifacts
 
+## 2.109.0
+
+### Minor Changes
+
+- 6e45c17: migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ng-base-types@2.109.0
+  - @memberjunction/ng-code-editor@2.109.0
+  - @memberjunction/ng-notifications@2.109.0
+  - @memberjunction/ng-react@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Patch Changes

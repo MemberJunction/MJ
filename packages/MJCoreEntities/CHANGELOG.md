@@ -1,5 +1,17 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.109.0
+
+### Minor Changes
+
+- 6e45c17: migration
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.109.0
+- @memberjunction/core@2.109.0
+- @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Minor Changes

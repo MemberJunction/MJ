@@ -1,5 +1,18 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ai-agent-manager@2.109.0
+  - @memberjunction/actions-base@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Minor Changes

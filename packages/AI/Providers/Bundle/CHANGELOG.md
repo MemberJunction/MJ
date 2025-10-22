@@ -1,5 +1,20 @@
 # @memberjunction/ai-provider-bundle
 
+## 2.109.0
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@2.109.0
+- @memberjunction/ai-cerebras@2.109.0
+- @memberjunction/ai-groq@2.109.0
+- @memberjunction/ai-lmstudio@2.109.0
+- @memberjunction/ai-local-embeddings@2.109.0
+- @memberjunction/ai-mistral@2.109.0
+- @memberjunction/ai-ollama@2.109.0
+- @memberjunction/ai-openai@2.109.0
+- @memberjunction/ai-openrouter@2.109.0
+- @memberjunction/ai-xai@2.109.0
+
 ## 2.108.0
 
 ### Patch Changes

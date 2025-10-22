@@ -1,5 +1,21 @@
 # @memberjunction/metadata-sync
 
+## 2.109.0
+
+### Minor Changes
+
+- 1c155fb: Migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/graphql-dataprovider@2.109.0
+  - @memberjunction/core-entities-server@2.109.0
+  - @memberjunction/sqlserver-dataprovider@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Minor Changes

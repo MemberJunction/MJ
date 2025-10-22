@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/doc-utils
 
+## 2.109.0
+
+### Minor Changes
+
+- e9e8a36: Migration Fix
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
 ## 2.108.0
 
 ### Patch Changes

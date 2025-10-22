@@ -1,5 +1,54 @@
 # Change Log - @memberjunction/server
 
+## 2.109.0
+
+### Minor Changes
+
+- a38989b: Migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [e9e8a36]
+- Updated dependencies [e2a6338]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/doc-utils@2.109.0
+  - @memberjunction/ai-agents@2.109.0
+  - @memberjunction/ai-agent-manager@2.109.0
+  - @memberjunction/core-actions@2.109.0
+  - @memberjunction/ai-core-plus@2.109.0
+  - @memberjunction/aiengine@2.109.0
+  - @memberjunction/ai-agent-manager-actions@2.109.0
+  - @memberjunction/ai-prompts@2.109.0
+  - @memberjunction/actions-apollo@2.109.0
+  - @memberjunction/actions-bizapps-accounting@2.109.0
+  - @memberjunction/actions-bizapps-lms@2.109.0
+  - @memberjunction/actions-bizapps-social@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/entity-communications-server@2.109.0
+  - @memberjunction/external-change-detection@2.109.0
+  - @memberjunction/graphql-dataprovider@2.109.0
+  - @memberjunction/core-entities-server@2.109.0
+  - @memberjunction/data-context@2.109.0
+  - @memberjunction/queue@2.109.0
+  - @memberjunction/storage@2.109.0
+  - @memberjunction/sqlserver-dataprovider@2.109.0
+  - @memberjunction/scheduling-actions@2.109.0
+  - @memberjunction/scheduling-engine-base@2.109.0
+  - @memberjunction/scheduling-engine@2.109.0
+  - @memberjunction/templates@2.109.0
+  - @memberjunction/ai-vectors-pinecone@2.109.0
+  - @memberjunction/actions-bizapps-crm@2.109.0
+  - @memberjunction/data-context-server@2.109.0
+  - @memberjunction/skip-types@2.109.0
+  - @memberjunction/ai@2.109.0
+  - @memberjunction/ai-provider-bundle@2.109.0
+  - @memberjunction/component-registry-client-sdk@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+  - @memberjunction/scheduling-base-types@2.109.0
+
 ## 2.108.0
 
 ### Minor Changes
