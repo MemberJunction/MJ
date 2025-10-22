@@ -938,7 +938,7 @@
       "Name": "Sage - System Prompt",
       "Description": "System prompt for the ambient Conversation Manager agent that monitors and assists users in MemberJunction conversations.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/conversations/conversation-manager-agent.template.md",
+      "TemplateText": "@file:templates/sage/sage.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -1004,8 +1004,8 @@
       "ID": "49B60EDF-8E51-4406-9471-7B95F80A6D81"
     },
     "sync": {
-      "lastModified": "2025-10-17T01:10:38.951Z",
-      "checksum": "c3a3a1d70f71ef4cff10117d089c5b9ec33feaad50a86202c7e49fc9bf192c3a"
+      "lastModified": "2025-10-22T14:52:48.557Z",
+      "checksum": "8e77453258c2e550cacb065826571d80c088570b5d5f07fb2c76c16b1dd8df2e"
     }
   },
   {
@@ -1013,7 +1013,7 @@
       "Name": "Name Conversation",
       "Description": "Generates a concise name and description for a conversation based on the user's first message. Returns JSON with name (3-6 words) and description (1-2 sentences).",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/conversations/name-conversation.template.md",
+      "TemplateText": "@file:templates/sage/name-conversation.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
@@ -1079,8 +1079,8 @@
       "ID": "69FFD223-C98E-4081-808E-7E1D445D2F85"
     },
     "sync": {
-      "lastModified": "2025-10-19T14:11:18.366Z",
-      "checksum": "10d9661a10d0f762e016f8f20c8477bf806190b4c142ecb21a7c55515503f372"
+      "lastModified": "2025-10-22T14:52:42.824Z",
+      "checksum": "21aeab08c858ec8b49d9e5c12a57c2d2ab2af6a95ab34d1177f9a5536810e661"
     }
   }
 ]
