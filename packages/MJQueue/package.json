@@ -22,8 +22,8 @@
     "@memberjunction/ai": "2.109.0",
     "@memberjunction/ai-provider-bundle": "2.109.0",
     "@memberjunction/aiengine": "2.109.0",
-    "@memberjunction/core": "2.109.0",
-    "@memberjunction/global": "2.109.0",
+    "@memberjunction/core": "2.100.3",
+    "@memberjunction/global": "2.100.3",
     "@memberjunction/core-entities": "2.109.0",
     "@types/uuid": "^9.0.1",
     "uuid": "^9.0.0"
