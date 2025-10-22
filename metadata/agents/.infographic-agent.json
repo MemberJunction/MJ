@@ -105,15 +105,25 @@
             "lastModified": "2025-10-19T17:24:37.379Z",
             "checksum": "787164c881e756aa6419038b6c53a2fd81fe222b21d761c5ede4f8b6ce166220"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create SVG Sketch Diagram",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D210BBEF-AD8A-4249-A3B6-3A24FE1E3340"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:54.980Z",
+            "checksum": "1f69440928e58cb33af27126b17dd476328b83810309708f6593e2bbc6bdc0b7"
+          }
         }
       ]
     },
     "primaryKey": {
       "ID": "06F07CDD-5021-4737-A5CB-019204ADE8A8"
-    },
-    "sync": {
-      "lastModified": "2025-10-20T00:46:52.929Z",
-      "checksum": "6b96ee5bbe757c4f2fa78e08c06a1f06cceca140b9adf1409d9d9c0ec44b600c"
     }
   }
 ]

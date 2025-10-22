@@ -500,6 +500,31 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * ```
      */
     onMessageLifecycle?: MessageLifecycleCallback;
+
+    /**
+     * Optional flag to disable data preloading from AIAgentDataSource metadata.
+     * When true, the agent will not automatically preload data sources even if
+     * they are configured in the database. This is useful for:
+     * - Performance optimization when preloaded data is not needed
+     * - Testing scenarios where you want to control data explicitly
+     * - Cases where the caller provides all necessary data manually
+     *
+     * Default: false (data preloading is enabled)
+     *
+     * Note: Caller-provided data in the data parameter always takes precedence
+     * over preloaded data, even when preloading is enabled.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   disableDataPreloading: true,  // Skip automatic data preloading
+     *   data: { CUSTOM_DATA: myData }  // Use only caller-provided data
+     * };
+     * ```
+     */
+    disableDataPreloading?: boolean;
 }
 
 /**

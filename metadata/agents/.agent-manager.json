@@ -31,169 +31,15 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create Agent",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "D2368B52-6F7D-4960-A244-F12BFC8C202C"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.443Z",
-            "checksum": "fbc085346185f6e3aa25cf2afb0dd4eb0a83375e6605c4bf798534dd2ae36926"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Update Agent",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "D59B03BB-3857-4953-A72A-B932F11E19A5"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.457Z",
-            "checksum": "50276f3b998e31ecbb655ed9fb8237f6350baf2ae0e235e6d080306e30b7396a"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=List Agents",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "B32D211B-D19E-4CB1-A98D-9935F65D6DCC"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.470Z",
-            "checksum": "7f4147b15ea73634335ea91d6d4f1b8fabab0226b378807b434b4dbde6f410d2"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Deactivate Agent",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "6D0E574A-DD82-4C82-984C-FACB86524BEF"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.483Z",
-            "checksum": "7aba2a69c9ce4e5e08153912ad9e65ad26082708df577993c56e370d0d2a19f5"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Associate Action With Agent",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "C2F43B66-520C-4074-8771-7201F260684F"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.499Z",
-            "checksum": "29f551453ceb2a173d9d9cdc68818a1946a098c713010233e326f95458962e7d"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Create Sub Agent",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "F5494F88-43C8-49E0-AE02-2F9CFF7624CA"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.513Z",
-            "checksum": "9cb43283dae8687fa7523368844eb8efbaaa5fa2d15c7c6af849f11e2ac533e6"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Set Agent Prompt",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "24DA57E7-A763-494C-B478-4D9E78552F1F"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.527Z",
-            "checksum": "1819c3a7f27730a7381641f43941a20865c3dbaff54dcf319541c8ba9fdb81f5"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Validate Agent Configuration",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "F4036301-F442-4A24-A323-A7CE95A5FCDB"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.541Z",
-            "checksum": "6c9559e7efbafd05f0d1a08749047219e8888ac4e9e970f36d77f8788ce27dc1"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Export Agent Bundle",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "AE695A5B-7745-48CB-8C16-6F52A7472714"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.556Z",
-            "checksum": "bf8ce06da4bc4c931eb373d69b6ed4175e852e2e3d6778d7888a04d6361053e1"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Agent Details",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "7D2AA8C5-1751-46CC-AAF0-440D839537E5"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.570Z",
-            "checksum": "913938a2de849e1fb73be31e0befff3e0ec8fde7052ed8cd789286f8c2baa891"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Get Action Details",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "92384E94-B200-4216-893C-7092AA8351D4"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:05:09.583Z",
-            "checksum": "9ee443ab32d363ac682f620e53090c7e34de8b2890dd160251d56a9b4c786985"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=List Actions",
+            "ActionID": "@lookup:Actions.Name=Find Best Action",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "9E6E5CA6-F357-45E0-B8FA-05A4E1967EA2"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:05:09.598Z",
-            "checksum": "21383a844150044b41585d78777ad00c5bef8489ada87ffb03a003cd50738e35"
+            "lastModified": "2025-10-21T19:26:53.830Z",
+            "checksum": "f9a42f722410c74b44bc0e15a23aede71eec88f8bc488f7a691e688ba499769d"
           }
         },
         {
@@ -287,15 +133,15 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=List Actions",
+                  "ActionID": "@lookup:Actions.Name=Find Best Action",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "2EA67FAD-E5F5-45B7-9CB0-574F2084AD55"
                 },
                 "sync": {
-                  "lastModified": "2025-07-19T17:05:09.690Z",
-                  "checksum": "21383a844150044b41585d78777ad00c5bef8489ada87ffb03a003cd50738e35"
+                  "lastModified": "2025-10-21T19:26:53.965Z",
+                  "checksum": "f9a42f722410c74b44bc0e15a23aede71eec88f8bc488f7a691e688ba499769d"
                 }
               },
               {
@@ -369,15 +215,15 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=List Actions",
+                  "ActionID": "@lookup:Actions.Name=Find Best Action",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "33CE2DC3-A8B7-436A-8257-A6EC028C6DD1"
                 },
                 "sync": {
-                  "lastModified": "2025-07-19T17:05:09.754Z",
-                  "checksum": "21383a844150044b41585d78777ad00c5bef8489ada87ffb03a003cd50738e35"
+                  "lastModified": "2025-10-21T19:26:53.985Z",
+                  "checksum": "f9a42f722410c74b44bc0e15a23aede71eec88f8bc488f7a691e688ba499769d"
                 }
               },
               {
@@ -435,97 +281,60 @@
         {
           "fields": {
             "ParentID": "@parent:ID",
-            "Name": "Prompt Designer Agent",
-            "Description": "Expert prompt engineer specialized in crafting high-quality, effective prompts for AI agents. Creates system prompts that leverage agent type control structures and business logic.",
+            "Name": "Architect Agent",
+            "Description": "Transforms technical design into validated AgentSpec JSON using AgentSpec interface",
             "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
             "Status": "Active",
             "ExecutionOrder": 3,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-pen-fancy"
+            "DriverClass": "AgentArchitectAgent",
+            "IconClass": "fa-solid fa-drafting-compass"
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "PromptID": "@lookup:AI Prompts.Name=Prompt Designer Agent - Main Prompt",
+                  "PromptID": "@lookup:AI Prompts.Name=Architect Agent - Main Prompt",
                   "ExecutionOrder": 0,
                   "Status": "Active"
                 },
                 "primaryKey": {
-                  "ID": "329D4DBF-3C54-4C36-9B90-B29E01E4D8CC"
+                  "ID": "58AEEB52-ED16-48A7-BF04-3DF0CC85FB2A"
                 },
                 "sync": {
-                  "lastModified": "2025-07-19T17:05:09.818Z",
-                  "checksum": "fbebe1ec06b595aff86bd7ecec1594ef30fedc64fab3704dd32e7ea8dfa61468"
-                }
-              }
-            ],
-            "AI Agent Actions": [
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "738792A5-D2DF-49CE-A62A-18D77D26488F"
-                },
-                "sync": {
-                  "lastModified": "2025-07-19T17:05:09.831Z",
-                  "checksum": "886cf8aebf28d972c031e5cd7471325a3e6c0e55e1eae670d630dbd999485067"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=List Actions",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "0A8ACFEE-6C1E-448B-857E-4F027E1A45CD"
-                },
-                "sync": {
-                  "lastModified": "2025-07-19T17:05:09.842Z",
-                  "checksum": "21383a844150044b41585d78777ad00c5bef8489ada87ffb03a003cd50738e35"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Web Search",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "5A60FAE6-500F-4E3C-98C9-47CDBE4DB1E8"
-                },
-                "sync": {
-                  "lastModified": "2025-07-19T17:05:09.855Z",
-                  "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
-                }
-              },
-              {
-                "fields": {
-                  "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Web Page Content",
-                  "Status": "Active"
-                },
-                "primaryKey": {
-                  "ID": "C5D131BD-064F-497D-AD70-461F6A626573"
-                },
-                "sync": {
-                  "lastModified": "2025-07-19T17:05:09.865Z",
-                  "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+                  "lastModified": "2025-10-21T19:26:54.043Z",
+                  "checksum": "533b4d35f14b785e4366725b0d7326a44b6f4923cd225255c2304fff2d721784"
                 }
               }
             ]
           },
           "primaryKey": {
-            "ID": "82323658-FD6D-4F06-BAE5-39A0945C9DC0"
+            "ID": "F80CB55D-7C89-41B4-9E99-73A53EF3D92A"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:05:09.797Z",
-            "checksum": "dbc9684a1ec7d8639fc83d653114195a5f6161d80d563611ea47644d973390d9"
+            "lastModified": "2025-10-21T19:26:53.791Z",
+            "checksum": "86f59ebe97396d3637bb24d0bfaef73c4bf081744c388b8b5c2e24e03123c32e"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Builder Agent",
+            "Description": "Persists validated AgentSpec to database via AgentSpecSync",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 4,
+            "ExposeAsAction": false,
+            "DriverClass": "AgentBuilderAgent",
+            "IconClass": "fa-solid fa-hammer"
+          },
+          "primaryKey": {
+            "ID": "F3686377-DD93-480D-89AB-8427A36A5C2E"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:53.803Z",
+            "checksum": "8f0bbaf983b03726289456cd3c5cfcd38891f56862ca2bc2d16106246cd2b649"
           }
         }
       ]

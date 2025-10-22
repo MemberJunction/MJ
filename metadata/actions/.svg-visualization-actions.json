@@ -1,0 +1,405 @@
+[
+  {
+    "fields": {
+      "Name": "Create SVG Sketch Diagram",
+      "Description": "Creates hand-drawn/sketch-style SVG diagrams using Rough.js for informal, whiteboard-style visualizations. Supports flowcharts, org charts, and ER diagrams with configurable roughness and fill styles. Perfect for brainstorming presentations and informal documentation.",
+      "DriverClass": "__CreateSVGSketchDiagram",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-pencil",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DiagramType",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of diagram to create: 'flow' (flowchart), 'org' (organization chart), or 'er' (entity-relationship diagram)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "2F99346F-56E6-446B-B42A-476173CE8D80"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.407Z",
+            "checksum": "6285cb0c2cc6ac50b097ebb48df82a8756da64e0671e2ae0eebd7df71a8eddb5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Nodes",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON array or object defining the nodes/elements in the diagram. Structure varies by diagram type.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "40F01407-179F-4F0B-9905-17C5D5EE04C0"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.416Z",
+            "checksum": "ad9f984f6a52b9f495df4f21209231cea4f67b18deda56b54848537e168f4614"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Edges",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "JSON array defining connections between nodes (for flow and ER diagrams)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CB624E31-D9F8-4B63-B35C-FF1F6640B3D6"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.425Z",
+            "checksum": "11f10494cecc8e0f66f84e8f88115ecdf3ae4ba7b6d3abc0e6ff6d1cdc7610fd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Roughness",
+            "DefaultValue": "1.5",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Hand-drawn wobble intensity (0.5-3.0). Higher values create more sketchy appearance.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7F52570-E900-440F-AEE3-F39AC1858DCA"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.434Z",
+            "checksum": "af2fb1ddd6bca508aed4ead2d8f77716060ad357faf2c54ccdc8fa6f472c2a7a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FillStyle",
+            "DefaultValue": "hachure",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Fill pattern: 'solid', 'hachure' (parallel lines), 'cross-hatch' (crossed lines), or 'dots'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E63700E2-BB13-4C73-BE9C-787D49BC511B"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.443Z",
+            "checksum": "a368d7ead4cb9cac15708f51c821ff18ea0acdfd0428a8b3888b0c3bc997e9a5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Bowing",
+            "DefaultValue": "1",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Curve intensity for lines (0-5). Higher values create more pronounced curves.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "15CD72A5-FC8C-4D68-A84D-CA926C509B3A"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.453Z",
+            "checksum": "efc096e7161b9a405526e603f38ba7e58e84988704dfa9a63748f97673c8adb2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Direction",
+            "DefaultValue": "TB",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Layout direction for flowcharts: 'TB' (top-bottom), 'LR' (left-right), 'RL' (right-left), 'BT' (bottom-top)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "84D9C74E-8B46-407D-9F76-0A386F691805"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.462Z",
+            "checksum": "cca8672407b8a111f6edacfea8985259ffa4055455b806b877fd42131d9b1242"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Width",
+            "DefaultValue": "800",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram width in pixels",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7AE43703-D565-4A98-9A7F-78EBD27B67C2"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.472Z",
+            "checksum": "22252a8c7db1bca4bb75583d4b3df6a73016b2fad49191a46b77df7df0e1daeb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Height",
+            "DefaultValue": "600",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Diagram height in pixels",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "70408A52-5824-42F7-8B20-1B0D48BEF0D4"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.482Z",
+            "checksum": "bb264eb1c5ba4a3362483d8799e463b944ee87a179e8caf0967502d94e0f85c6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional diagram title displayed at the top",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DAF45CF7-A6E9-4B28-BCF6-2D50063AA40D"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.491Z",
+            "checksum": "d4126899edd444290be61e30280cd4a54d4a6b43c02bfe0c258a7867bfc6251b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Palette",
+            "DefaultValue": "mjDefault",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Color palette name: 'mjDefault', 'gray', 'pastel', 'highContrast'",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8AC2E614-8581-432F-9631-E3A910D98651"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.522Z",
+            "checksum": "4073fad58dfd355ee195bfdd0571d59f2fbf8355ea6c6b0922b95d40ff2a87b0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EnableTooltips",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Enable interactive tooltips on hover (requires inline SVG embedding)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "31216307-2751-4FC0-B17F-F1B11122E5F7"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.533Z",
+            "checksum": "5a26462a9f8101a6a32b5ebfffe1f9048b196b46ebd6a228ef75961e43cbfbf4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EnablePanZoom",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Enable pan and zoom interactivity (mouse wheel, drag, touch gestures)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "61E5359F-AF39-4630-8673-8E48FE07DF81"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.542Z",
+            "checksum": "d37d6a88ce465d436fa0df9c27c4d696a0c63bd5705f633c2e758332dd24f50f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ShowZoomControls",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Show zoom control buttons (+/-/reset) when pan/zoom is enabled",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E1DB18C4-418C-411D-B371-CAFD05FACD88"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.551Z",
+            "checksum": "769033dee6170bf2f451a4d47273527c2812346f439050ec7f6f093bf723c9e9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WrapWithContainer",
+            "DefaultValue": "false",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Wrap SVG in scrollable HTML container for large diagrams",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "479441EB-C760-4942-B2F0-D2DB4DAA31C2"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.561Z",
+            "checksum": "9d26676b854e73333b081bc8c59f4282fa93dc8c7f0e130ff10101a1d76b8f7e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxContainerWidth",
+            "DefaultValue": "1200",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum width of scrollable container in pixels",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BCD30107-2C7C-4E2A-BE8F-7DA883C5800B"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.570Z",
+            "checksum": "bad836b30aa341bf21b15c76f80bcd0348dba0a4d86a9ecd85391c9290ba008d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxContainerHeight",
+            "DefaultValue": "800",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum height of scrollable container in pixels",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B6D05006-08FC-47C4-BF70-A8BBCC0F1D94"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.579Z",
+            "checksum": "daeb1b971b6ceaf9e79fcf600131064d86ffcf8c5dfe23a1f5178323cc7645e8"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Sketch diagram successfully generated"
+          },
+          "primaryKey": {
+            "ID": "EF38F6EA-808E-4DFB-AAD3-C8E26D1FD27F"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.587Z",
+            "checksum": "10a765e10d188787e1fe49c5d51bb44c3aed339bb40dc8542c85c8596e0d731c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Required parameters (DiagramType, Nodes) are missing"
+          },
+          "primaryKey": {
+            "ID": "5C4BB0E2-A271-4EBE-91EA-53188B733686"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.594Z",
+            "checksum": "eed80c8bb9fd5299623d6a65e6f9319ff6feecae70b5bb8979d28665a2ce797a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_DIAGRAM_TYPE",
+            "IsSuccess": false,
+            "Description": "DiagramType must be 'flow', 'org', or 'er'"
+          },
+          "primaryKey": {
+            "ID": "2E139F36-0714-49EC-889E-F2324057A5F2"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.602Z",
+            "checksum": "47fb7fe96cc4551d8b300ef1b0f69f228d596c31bfca22f30b567b0452a3bda3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DIAGRAM_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate sketch diagram due to an error"
+          },
+          "primaryKey": {
+            "ID": "9B859D6F-6CDB-4138-8EEB-68E970C5FE03"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:39.613Z",
+            "checksum": "f2b42e76ac95669e9fdfe76dd66260bdb916094243d086b663ac411a5fb899bd"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C20BAFF4-022C-41E1-AB23-B2D200A2BE8C"
+    },
+    "sync": {
+      "lastModified": "2025-10-21T19:26:39.373Z",
+      "checksum": "d5d8801f415c826614ddf214fc75dba2be1951890ac8bd77c9e8d0c6deb9b2c5"
+    }
+  }
+]

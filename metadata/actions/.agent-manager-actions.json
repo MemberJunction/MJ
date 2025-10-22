@@ -1,1102 +1,70 @@
 [
   {
     "fields": {
-      "Name": "Create Agent",
-      "Description": "Creates a new AI agent with specified configuration. Supports creating both top-level agents and sub-agents. Optionally creates and associates a system prompt if PromptText is provided. Restricted to Agent Manager agent only.",
-      "DriverClass": "Create Agent",
+      "Name": "Find Best Action",
+      "Description": "Finds the most relevant actions for a given task using semantic search with embeddings. Returns top N most similar actions based on task description. Used by Planning Designer Agent to discover relevant actions without searching through hundreds of options.",
+      "DriverClass": "Find Best Action",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active",
-      "IconClass": "fa-solid fa-plus-circle"
+      "IconClass": "fa-solid fa-search"
     },
     "relatedEntities": {
       "Action Params": [
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Name",
+            "Name": "TaskDescription",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name of the new agent",
+            "Description": "Description of the task to find relevant actions for (e.g., 'Search the web for information')",
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "F4DF50F1-B5B2-4F76-9787-02C01BAB5B75"
+            "ID": "CD2D64EF-DFDC-4119-BCBB-E63436AF5269"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:39.505Z",
-            "checksum": "86e952ac7d428f29bd81a309be816b9480f1a6ed6b74e75f1aa8cb28d91b8da9"
+            "lastModified": "2025-10-21T19:26:32.973Z",
+            "checksum": "ffa028f367faa242588c43a026f346233c350dbd4081454cd642cd1e0035fc0b"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Description",
+            "Name": "MaxResults",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Detailed description of the agent's purpose and capabilities",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "DE7AE66F-604E-4BC3-94F7-2107F2AA8CC7"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.513Z",
-            "checksum": "b759988f2346a125393b238ee8d85b6c89e8105d9fea29c9ef84c72dd58a4132"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "TypeID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the AI Agent Type. Either Type or TypeID must be provided",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "E44F54E6-69B3-4892-AF6D-28373DB52C7C"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.522Z",
-            "checksum": "303b54f28fab51d776d2827cfa70ceaa383e17a445825e4a16552c69eb54db5a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Type",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the AI Agent Type (e.g., 'Loop'). Either Type or TypeID must be provided",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "56BA11F2-D42F-4528-8F97-9FAC67CE8C28"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.530Z",
-            "checksum": "1647e74fe74eeaa87c342ed9b70d513e388916a9dc66aeb0a12feeb533c8970f"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ParentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the parent agent if this is a sub-agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "B66CF581-7DAD-4E97-B33C-543DF167DCF3"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.540Z",
-            "checksum": "0e925015a91b7872feb02109049385754e447d63902df8e7ea874d9ba02e7de6"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptText",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "System prompt text that defines the agent's behavior. If provided, creates and associates a prompt with the agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "486E6A9C-94D1-4F2C-A20C-CC75A3630F49"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.550Z",
-            "checksum": "565b830bae6d0a6e47df89d19828706c213479e8e50cf9c0576d122afb3842c4"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the newly created agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "C5269575-D999-4EEC-8CAD-2339E0D9E82C"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.559Z",
-            "checksum": "16b9f853baefbc215cb0059dc19dae94e55f956ad4cb2f36b9a4c7bfd14541dc"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the created prompt (if PromptText was provided)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "6C8D279E-C833-40F7-BB9C-12A52AA93F4C"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.568Z",
-            "checksum": "6d7c1dc910969ddb575a6045a561ab46e8aaf38b7080fd925409c2a631b65379"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "AD6C84E7-20FF-405D-BD61-24759B2C6700"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.505Z",
-      "checksum": "14f0398f10da90192efd4c9d04b83561321764a0ae6268a6e5a1593e28a7e7ac"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Update Agent",
-      "Description": "Updates an existing AI agent's configuration. Optionally updates the agent's prompt text if provided. Restricted to Agent Manager agent only.",
-      "DriverClass": "Update Agent",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-pen"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the agent to update",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "A0FA9DE9-69B5-4F60-8E69-2A1CC3878C7F"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.589Z",
-            "checksum": "0d71b9853b44851b40415ae683585541159b0842d5d6daa29e18e4c8c9360905"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Name",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "New name for the agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "B96C7230-BFB6-48ED-A12D-905440316E5E"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.600Z",
-            "checksum": "eabb372e0d46bac0eeb55cd47c215025cfc92068db59dba762db6e64cc65adf8"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Description",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "New description for the agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "1889B665-B353-4A10-9176-60E43C059DEB"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.610Z",
-            "checksum": "4c5b8324287fb8e710126a659e1046015cc0a0752790b698d75b2eca46f3fcea"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptText",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "New system prompt text for the agent. Updates existing prompt or creates new one if none exists",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "087BC31F-E5BB-42C2-9237-4FD9CD139DCB"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.619Z",
-            "checksum": "218da49397ba4a14154bfef9faf921fdc0e734ebf9b7976a881bd450a211b601"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Status",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "New status (Active, Inactive, etc.)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "79688B70-44DA-4D47-98FE-FEA8A5212014"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.629Z",
-            "checksum": "66abe3ac19b4f29bafcd771956e3f1b51740b06cd4fafed3959d6258581a3ce9"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Success",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "True if update was successful",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "E8C15EDA-6A05-4ACC-97F1-15E988E502B5"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.637Z",
-            "checksum": "743c2380f9beef5e098ef710a5d7d3a8145ecd4f6405255f6e6216d477b8a2f8"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the updated or created prompt (if PromptText was provided)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "82FD8DE7-781E-4028-9B3D-33D7EB717231"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.648Z",
-            "checksum": "88b6d132f54fb5271e92d80d1b0452530239fcb998df7d0da907411b4c8fc1d3"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "DA51A9CA-F7FA-40DC-85D1-556A178E1E4E"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.510Z",
-      "checksum": "cdb5cc353ee2ae494fc0400729659015fed83edf18fb17157f482f628a38f03f"
-    }
-  },
-  {
-    "fields": {
-      "Name": "List Agents",
-      "Description": "Lists AI agents with optional filtering. Restricted to Agent Manager agent only.",
-      "DriverClass": "List Agents",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-list"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "IncludeInactive",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Include inactive agents in results",
+            "Description": "Maximum number of actions to return (default: 10)",
             "IsRequired": false,
-            "DefaultValue": "false"
+            "DefaultValue": "10"
           },
           "primaryKey": {
-            "ID": "64CE0408-5008-4EA2-8A89-EF602F34AE1A"
+            "ID": "882FAB67-CCD5-459C-AD58-B4E6FFB6C73F"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:39.667Z",
-            "checksum": "039d593ebd5221fa49d3c84ab4fa70afb96bc435634ce24943651b9835561a65"
+            "lastModified": "2025-10-21T19:26:32.986Z",
+            "checksum": "eb9b00b908c8052f8de30dbb7aa1470eaf023429cfb4431a5c7792bdcc1b23a4"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "ParentID",
+            "Name": "MinimumSimilarityScore",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Filter by parent agent ID",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "11DBBDB0-1498-409D-A2FF-8287E05D3A3B"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.676Z",
-            "checksum": "836aba343502e642f2722a1d9c0ec3ce32e4743d0ff7fc5a039771b4090423e7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "TypeID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by agent type ID",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "4CD96C75-4FD2-46E4-84FA-82BE332FFAB5"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.684Z",
-            "checksum": "3cb49f2970c39802574af79e02f90b39322039d7e9911caea1c976d0809f7ca6"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Agents",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": true,
-            "Description": "Array of agent objects",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "B17E08C3-DB89-4E62-9E29-7903C2D630E6"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.692Z",
-            "checksum": "e4028627f703e1f0a2cc9ada461fcfa826b97d3bd9d71dec32cc8d940b143f4c"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "63498D60-8EA5-4C8E-8D82-3E190D6CE078"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.514Z",
-      "checksum": "1798e8cfba616908d1c72cc9b22cfb60dcc33da5296b2c6a4e3841ab048e7039"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Deactivate Agent",
-      "Description": "Marks an agent as inactive (soft delete). Restricted to Agent Manager agent only.",
-      "DriverClass": "__DeactivateAgent",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-power-off"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the agent to deactivate",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "E28402B3-062C-4D2A-B333-403A2CA0377A"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.710Z",
-            "checksum": "b89b79dff2a793d62829eae24e014f1c6757c7e92e7bcca1d35142e9cbacbc11"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Reason",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Reason for deactivation",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "F798CB41-240B-4EBB-B053-70EA55A42329"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.717Z",
-            "checksum": "cfb3ee2ee3874c3a8b3340773a68d21b1b1944d28181baa1a142a7cedcd1458e"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Success",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "True if deactivation was successful",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "165BA7F4-6C2D-4CD4-9680-E1A7724F9313"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.726Z",
-            "checksum": "bc8e29d578b4a646645bda973cf9132e4545a0241bc443f091f16459d2b2a723"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "14A913E6-D6D7-4A03-B7E6-55C782D1ECA3"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.518Z",
-      "checksum": "72f7e366e6fa20ad79a216137674182f6a1e0fb5378a9ca792898182e872225a"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Associate Action With Agent",
-      "Description": "Associates an action with an agent. Restricted to Agent Manager agent only.",
-      "DriverClass": "Associate Action With Agent",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-link"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the agent",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "B1F2EEDD-9F30-4659-9323-0E806539BDDC"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.744Z",
-            "checksum": "dab3255e924bb084723b591c93efc6c72fa94bfe48381fac13d352bd586f8489"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ActionID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the action to associate",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "3A6FC1BF-35C1-440E-A7D6-61D997ED5C79"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.753Z",
-            "checksum": "f73ca11810445905c65fa0ce4b76b06f02f94132477a62c6c272dc8d1fb4086d"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Status",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Status of the association (Active/Inactive)",
+            "Description": "Minimum similarity score 0-1 (default: 0.5)",
             "IsRequired": false,
-            "DefaultValue": "Active"
+            "DefaultValue": "0.5"
           },
           "primaryKey": {
-            "ID": "D8C54EC8-8CF8-44AA-A2C3-72EA0F7E08B5"
+            "ID": "784BF34C-F075-4B51-A451-BF150F814512"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:39.761Z",
-            "checksum": "d47a972b8af6bf2670edfa84f55725b4ff7d6695d07fe93b97bc2c21c6fdf17f"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentActionID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the created agent-action association",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "30EBEA68-F334-41E8-B7E8-C39B20837856"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.770Z",
-            "checksum": "e2941013e4a4b534c9865995b9965824a3ba88a1769c3e16cec74771a3ddf613"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "9C4674A4-154D-455D-882F-5894B17B4BF8"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.522Z",
-      "checksum": "85092e2735ba407a6821d10cd26871f56b24917bd660a52dabb3f21f29bf50cc"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Create Sub Agent",
-      "Description": "Creates a new agent as a child of another agent. Optionally creates and associates a system prompt if PromptText is provided. Restricted to Agent Manager agent only.",
-      "DriverClass": "Create Sub Agent",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-plus-square"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ParentAgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the parent agent",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "A737C31C-F6FD-4537-8738-A8E40122EA48"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.788Z",
-            "checksum": "3586288276034ee02e0d5169771fc09356b0ec61d04f97bb7f179232ad0911a4"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Name",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the sub-agent",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "50030F5A-8CFB-4A62-9C72-3AA9992F2FCC"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.797Z",
-            "checksum": "72ed78a3abde69d8439710285c87c4dd8f548aae64f0cd23156db0f78e69fd9e"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Description",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Description of the sub-agent",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "078768FB-4D67-4773-B74B-F4C22AF293C2"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.805Z",
-            "checksum": "721a2b51a70d60c596fd4a4139d487b67b0941793f9ca71d61d9ad9092be9836"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "TypeID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the AI Agent Type. Either Type or TypeID must be provided",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "2D73C904-274C-49B2-89BF-F1B722BFE504"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.813Z",
-            "checksum": "303b54f28fab51d776d2827cfa70ceaa383e17a445825e4a16552c69eb54db5a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Type",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the AI Agent Type (e.g., 'Loop'). Either Type or TypeID must be provided",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "56BAD8DD-4E84-4631-BFDD-F49251305D5D"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.821Z",
-            "checksum": "1647e74fe74eeaa87c342ed9b70d513e388916a9dc66aeb0a12feeb533c8970f"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptText",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "System prompt text that defines the sub-agent's behavior. If provided, creates and associates a prompt with the agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "A428E722-6F2C-4B4B-AEAE-03C46568A583"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.830Z",
-            "checksum": "a330dd64d9f134d5b023f92e31ed74a8ed5675aad5f2a09d6d2c035cf79e8fd6"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExecutionOrder",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Execution order among sibling agents",
-            "IsRequired": false,
-            "DefaultValue": "1"
-          },
-          "primaryKey": {
-            "ID": "89356024-7AB0-4824-8162-DE1D34ACEC27"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.838Z",
-            "checksum": "8beda5117543cab0124b056cdd446c7f84f98fde7ba6ec4df2a1870f2f7b8453"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the newly created sub-agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "DD56796F-8046-4DB8-9009-EA9F4AFBF0D4"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.846Z",
-            "checksum": "dedb973d85e6d3f468f801fdf57b45c65f6e82ad855abb877b5427d396342240"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the created prompt (if PromptText was provided)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "9631F34C-3632-402C-83E6-4FFB9A416A0E"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.857Z",
-            "checksum": "6d7c1dc910969ddb575a6045a561ab46e8aaf38b7080fd925409c2a631b65379"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "BEC27BD2-6008-46E8-9A8E-204772DF2517"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.527Z",
-      "checksum": "d8be344ce298dd02a1a6bb7f3b0e62699e2662f0d440692ba3169bb2b3673245"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Set Agent Prompt",
-      "Description": "Associates or updates a prompt for an agent. Restricted to Agent Manager agent only.",
-      "DriverClass": "__SetAgentPrompt",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-comment-dots"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the agent",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "8D212D4D-8BFA-4949-9016-07D888F11DE0"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.875Z",
-            "checksum": "dab3255e924bb084723b591c93efc6c72fa94bfe48381fac13d352bd586f8489"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "PromptID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the prompt to associate",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "0EBAEC05-CB47-4FB7-B86F-C5D9C2E54F4D"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.883Z",
-            "checksum": "0abfb71f90751cf7e3121afeb80d8f15d4a9c95740f68cd88a948be1f4cabbab"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ExecutionOrder",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Order of prompt execution",
-            "IsRequired": false,
-            "DefaultValue": "0"
-          },
-          "primaryKey": {
-            "ID": "BE32A06B-8E29-4A88-A8ED-36ACC56FC4C5"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.891Z",
-            "checksum": "4dcc6fc564f606f255250b1caecbd31aaa335ea721562b11e5d7a498c9db45b7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Status",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Status of the prompt association",
-            "IsRequired": false,
-            "DefaultValue": "Active"
-          },
-          "primaryKey": {
-            "ID": "4D6F3BDA-75A2-4EDA-9C7C-13EFE2CD2CDE"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.899Z",
-            "checksum": "d771e4893be710978fd3bc2bbd5dd2fd1f2c5ea775d5b212b5d4135c30e21605"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AssociationID",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the prompt association",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "CEC2B281-54FB-4865-A004-4C6C5EF50ABB"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.909Z",
-            "checksum": "862e4f5e23c88f3b248470d90451af2fb37caa0aabbc6e904e58049d1d9a0020"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "00A65017-2C4A-420D-9043-F7E4AC5A35C4"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.531Z",
-      "checksum": "e98e8eb019c3991933451b9d0558653a9c4a686d2cfe27201bac53cf3f5e5cd5"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Validate Agent Configuration",
-      "Description": "Validates that an agent has all required prompts and actions configured. Restricted to Agent Manager agent only.",
-      "DriverClass": "__ValidateAgentConfiguration",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-check-circle"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the agent to validate",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "4B8A8DE1-F1C9-481D-BBD3-AA923295069D"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.927Z",
-            "checksum": "40b98f398b061049a445bb0c805e76ce2dfd22912225d3579a614bb59dee0930"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "IsValid",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "True if agent configuration is valid",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "646480E2-252D-4472-B2B7-1B0EC6C1D19F"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.936Z",
-            "checksum": "ca445dc21e167a8fc0dd571dde81dac222116d043ed22fcc5046cf162ea6388a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ValidationErrors",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": true,
-            "Description": "Array of validation error messages",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "B969B439-8447-443A-B739-392EEB848533"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.945Z",
-            "checksum": "e485571898af37ce69d18b9a59ac98e6ce3197750cc43dccf6187d59761d1da4"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "5D2C0B7D-93A0-42A1-B0EB-CDC5E60F090E"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.535Z",
-      "checksum": "164cd90e00c9a57625b792b195c042fa553de694a665412aa7e1f31fcbd1a263"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Export Agent Bundle",
-      "Description": "Exports an agent with all sub-agents and configurations as metadata. Restricted to Agent Manager agent only.",
-      "DriverClass": "__ExportAgentBundle",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-download"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the agent to export",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "1D2C77F6-2E75-434D-BAF4-C22648294CDF"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.962Z",
-            "checksum": "d2fe4f91531d8950ca71534b9b9e0ad00026b9d78041c5b67c2cc95a83ed6ba7"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "IncludeSubAgents",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Include all sub-agents in export",
-            "IsRequired": false,
-            "DefaultValue": "true"
-          },
-          "primaryKey": {
-            "ID": "0E68F9D4-C1DC-4ABF-B24B-5A36D34F0AF5"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.973Z",
-            "checksum": "57f732728b0442b196b3e879ebf24286882e1b7a5118cf618f8f0b259dd19f44"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "IncludePrompts",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Include associated prompts",
-            "IsRequired": false,
-            "DefaultValue": "true"
-          },
-          "primaryKey": {
-            "ID": "683B4B2C-BAD5-4AA2-8883-FA05422CB90A"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.983Z",
-            "checksum": "548eeb670cfd61cf962524e342b42bb25d2482f0dec57af2348276569647637b"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "IncludeActions",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Include associated actions",
-            "IsRequired": false,
-            "DefaultValue": "true"
-          },
-          "primaryKey": {
-            "ID": "D64F0A6B-E555-4654-AA0F-C665F8411981"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:39.992Z",
-            "checksum": "3cff7ba02fb27743f4e059ff3b8fab7abd0639a606ad29cb92de50792e975cfe"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "Bundle",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": false,
-            "Description": "Exported agent bundle as JSON",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "54C4928D-54A0-4FF6-8FD8-E49258C5F5C5"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:40.002Z",
-            "checksum": "5e3916af8f477bf19885dca0365a944b2aff91660310b37fd045183398590071"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "85F25A20-B62C-4BF2-9767-287105EC299C"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.539Z",
-      "checksum": "2a657c5f592edc2b595e9a7cb4b50ea83007065a6865ed9416edf49014c5a934"
-    }
-  },
-  {
-    "fields": {
-      "Name": "List Actions",
-      "Description": "Lists available actions that can be associated with agents. Used by Planning Designer Agent.",
-      "DriverClass": "List Actions",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-th-list"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "CategoryID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Filter by action category ID",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "C198BD07-F389-4A9D-953A-73AFCD0995B9"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:40.022Z",
-            "checksum": "fe644fd2b0bd5ba7f0fdc86654e6afdf921902418285243e88cb04fcfb62001b"
+            "lastModified": "2025-10-21T19:26:32.997Z",
+            "checksum": "bcf3a029ee3c646dfacec58ceea27156b47802d92191721754b809438410c108"
           }
         },
         {
@@ -1106,179 +74,62 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Exclude agent management actions from results",
+            "Description": "Exclude agent management actions from results (default: true)",
             "IsRequired": false,
             "DefaultValue": "true"
           },
           "primaryKey": {
-            "ID": "C37342ED-F81F-467C-84A2-84AE8310824F"
+            "ID": "F1A8EFF3-1B86-4313-B225-0A84A55144D2"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:40.032Z",
-            "checksum": "5b31f3b1549b9f194f256d5051f71b8cb76f281f3d6ce20d38b144cfd33fb128"
+            "lastModified": "2025-10-21T19:26:33.007Z",
+            "checksum": "860de184b100bd11dbeae9bb3726413f33f62b068fcd0ab8d0b1a88ec8a02105"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Actions",
+            "Name": "MatchedActions",
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of available actions",
+            "Description": "Array of matched actions with similarity scores",
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "82F6B523-09B7-45C3-8FAC-00B8C429AC8D"
+            "ID": "E8022EAC-514F-43BB-B142-E5C37BDF58F4"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:40.042Z",
-            "checksum": "085a573e56b2fb2abf979529204a77f2f7e39cdb11d177575938652477aa3c5c"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "05A12211-BDF9-420B-BC6F-0BEFFF7654DD"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.544Z",
-      "checksum": "9a64fb6b3dcaa6d2d01808d3496475970eebd9caceb89d925b1768e562545904"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Get Agent Details",
-      "Description": "Gets detailed information about a specific agent including its full hierarchy (sub-agents, sub-sub-agents, etc.) and associated actions at each level. Restricted to Agent Manager agent only.",
-      "DriverClass": "Get Agent Details",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-info-circle"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentID",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "ID of the agent to get details for",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "75F30D86-9BE4-4096-BF1F-C3E577B1183E"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:40.063Z",
-            "checksum": "4b1b094db40d7c46d59f40758e382a920543b18fce1d4c714eafeaed86119e9b"
+            "lastModified": "2025-10-21T19:26:33.019Z",
+            "checksum": "38b52ff90b85f8ead685f90041727beea4a0044e75b0db902f106a35990a58b4"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "IncludePrompts",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Whether to include prompt details in the response",
-            "IsRequired": false,
-            "DefaultValue": "false"
-          },
-          "primaryKey": {
-            "ID": "22B911FE-0868-452E-A8B1-3BB2BCCD3666"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:40.075Z",
-            "checksum": "0b44e0ee41e74edb1c26615fd84d541502453d0ee5b0cdcce73fe1b84472c702"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentDetails",
+            "Name": "MatchCount",
             "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": false,
-            "Description": "Full agent details including hierarchy and actions",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "93AF1F0E-D465-4684-A7E1-0036DCAD08F7"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:40.088Z",
-            "checksum": "638605102d82632b83bbd11d34419c1757f383242ed4cc86d4d8d2d590394a35"
-          }
-        }
-      ]
-    },
-    "primaryKey": {
-      "ID": "AF87C1F0-C94D-4A99-97A4-9638C56536DC"
-    },
-    "sync": {
-      "lastModified": "2025-06-24T17:33:33.548Z",
-      "checksum": "9701d6a9df01f84b9234e0dcc007e5d414b6b1cf1deced3382e42d81912dbe7b"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Get Action Details",
-      "Description": "Gets detailed information about a specific action including all metadata, parameters, and result codes. Restricted to Agent Manager agent only.",
-      "DriverClass": "Get Action Details",
-      "Type": "Custom",
-      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
-      "Status": "Active",
-      "IconClass": "fa-solid fa-info"
-    },
-    "relatedEntities": {
-      "Action Params": [
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ActionID",
-            "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "ID of the action to get details for",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "659ECA5D-A938-42F5-B0F7-0B118C4ECADE"
-          },
-          "sync": {
-            "lastModified": "2025-07-19T17:04:40.110Z",
-            "checksum": "7dfead49e5fe2bc2a5c46a3e7a97e92e4e8d1f2593e1d348f768861cd46777ee"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "ActionDetails",
-            "Type": "Output",
-            "ValueType": "Simple Object",
-            "IsArray": false,
-            "Description": "Full action details including parameters and result codes",
+            "Description": "Number of matched actions returned",
             "IsRequired": false
           },
           "primaryKey": {
-            "ID": "C0F50FF6-605C-48C0-B424-4B5030479A29"
+            "ID": "1F540524-6267-4908-8BC2-4C501FA058CB"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:04:40.119Z",
-            "checksum": "0984f22fbc39fece23a9dffda2726c0b9c1b17a105b83a6853bc8df30f2bfed3"
+            "lastModified": "2025-10-21T19:26:33.028Z",
+            "checksum": "73805a0d4393bd1ed551be34831a8324b3512cedaec0820ee2a71c558f6f0251"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "CA8DBEE4-2A48-4F0A-B74D-A200671EBE68"
+      "ID": "FD932133-CB1D-4C96-8EFC-14F0C8CE045B"
     },
     "sync": {
-      "lastModified": "2025-06-24T17:33:33.552Z",
-      "checksum": "2dcf59f60b72ec8ce1a02c6e048fb47af03b04d70f0f9522e22dd6d52a99cc39"
+      "lastModified": "2025-10-21T19:26:32.943Z",
+      "checksum": "0ba7e7e317a46398c63a7f88d6369369ec9aad9fe3de4293b4f0d7eee3987eef"
     }
   }
 ]

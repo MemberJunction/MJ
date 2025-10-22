@@ -1,0 +1,343 @@
+<div>
+  <kendo-dialog-titlebar (close)="cancel()">
+    <div style="font-size: 18px;">
+      <i class="fa-solid fa-database"></i> Load Component from Artifact
+    </div>
+  </kendo-dialog-titlebar>
+
+  <div class="artifact-load-content">
+    <!-- Left Filter Panel -->
+    <div class="filter-panel" [style.width]="isFilterPanelCollapsed ? '40px' : '280px'">
+      <div class="panel-header">
+        @if (!isFilterPanelCollapsed) {
+          <span>Filters</span>
+        }
+        <button kendoButton (click)="toggleFilterPanel()"
+                [fillMode]="'flat'"
+                [class.filter-active]="getActiveFilterCount() > 0"
+                [themeColor]="getActiveFilterCount() > 0 ? 'primary' : 'base'">
+          <i class="fa-solid fa-filter"></i>
+          @if (isFilterPanelCollapsed && getActiveFilterCount() > 0) {
+            <span class="filter-count">{{ getActiveFilterCount() }}</span>
+          }
+        </button>
+      </div>
+
+      @if (!isFilterPanelCollapsed) {
+        <div class="filter-content">
+          <!-- Search -->
+          <div class="filter-group">
+            <label>Search</label>
+            <input type="text"
+                   [(ngModel)]="searchTerm"
+                   (input)="onSearchInput()"
+                   placeholder="Name or description..."
+                   class="filter-input">
+          </div>
+
+          <!-- Artifact Type -->
+          <div class="filter-group">
+            <label>Artifact Type</label>
+            <select [(ngModel)]="selectedArtifactType"
+                    (change)="onArtifactTypeChange()"
+                    class="filter-select">
+              <option value="">Component (default)</option>
+              <option value="Component">Component</option>
+              <option value="Report">Report</option>
+              <option value="Dashboard">Dashboard</option>
+            </select>
+          </div>
+
+          <!-- User Email -->
+          <div class="filter-group">
+            <label>Filter by User</label>
+            <input type="text"
+                   [(ngModel)]="userEmail"
+                   (input)="filterArtifacts()"
+                   placeholder="Enter user email..."
+                   class="filter-input">
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+      <!-- Tabs -->
+      <div class="tabs">
+        <button class="tab"
+                [class.active]="activeTab === 0"
+                (click)="onTabSelect(0)">
+          <i class="fa-solid fa-file-code"></i> All Artifacts
+        </button>
+        <button class="tab"
+                [class.active]="activeTab === 1"
+                (click)="onTabSelect(1)">
+          <i class="fa-solid fa-folder"></i> Collections
+        </button>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="tab-content">
+        <!-- Artifacts Tab -->
+        @if (activeTab === 0) {
+          <div class="artifacts-view">
+            <!-- Paging Controls -->
+            <div class="paging-controls">
+              <button kendoButton
+                      (click)="previousPage()"
+                      [disabled]="!canGoPrevious()"
+                      [themeColor]="'base'">
+                <i class="fa-solid fa-chevron-left"></i> Previous
+              </button>
+              <span class="page-info">
+                Page {{ currentPage + 1 }} of {{ getTotalPages() }}
+                ({{ totalArtifacts }} total)
+              </span>
+              <button kendoButton
+                      (click)="nextPage()"
+                      [disabled]="!canGoNext()"
+                      [themeColor]="'base'">
+                Next <i class="fa-solid fa-chevron-right"></i>
+              </button>
+            </div>
+
+            <!-- Artifacts List -->
+            <div class="artifacts-list">
+              @if (isLoading) {
+                <div class="loading-state">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <p>Loading artifacts...</p>
+                </div>
+              }
+              @else if (artifacts.length === 0) {
+                <div class="empty-state">
+                  <i class="fa-solid fa-inbox"></i>
+                  <p>No artifacts found</p>
+                </div>
+              }
+              @else {
+                @for (artifact of artifacts; track artifact.ID) {
+                  <div class="artifact-item"
+                       [class.selected]="selectedArtifact?.ID === artifact.ID"
+                       (click)="selectArtifact(artifact)">
+                    <div class="artifact-content">
+                      <div class="artifact-main">
+                        <div class="artifact-name">
+                          <i class="fa-solid fa-file-code"></i>
+                          <span>{{ artifact.Name }}</span>
+                        </div>
+                        @if (artifact.Description) {
+                          <div class="artifact-description">
+                            {{ artifact.Description }}
+                          </div>
+                        }
+                      </div>
+                      <div class="artifact-meta">
+                        <div>{{ artifact.Type }}</div>
+                        <div>{{ artifact.__mj_UpdatedAt | date:'short' }}</div>
+                      </div>
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Collections Tab -->
+        @if (activeTab === 1) {
+          <div class="collections-view">
+            <div class="collections-list">
+              @if (isLoadingCollections) {
+                <div class="loading-state">
+                  <i class="fa-solid fa-spinner fa-spin"></i>
+                  <p>Loading collections...</p>
+                </div>
+              }
+              @else if (collections.length === 0) {
+                <div class="empty-state">
+                  <i class="fa-solid fa-folder-open"></i>
+                  <p>No collections found</p>
+                </div>
+              }
+              @else {
+                @for (collection of collections; track collection.ID) {
+                  <div class="collection-item"
+                       [class.selected]="selectedCollection?.ID === collection.ID"
+                       (click)="selectCollection(collection)">
+                    <div class="collection-icon">
+                      <i class="fa-solid fa-folder"></i>
+                    </div>
+                    <div class="collection-info">
+                      <div class="collection-name">{{ collection.Name }}</div>
+                      @if (collection.Description) {
+                        <div class="collection-description">{{ collection.Description }}</div>
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+
+            @if (selectedCollection) {
+              <div class="collection-artifacts">
+                <div class="section-header">
+                  <i class="fa-solid fa-file-code"></i>
+                  Artifacts in "{{ selectedCollection.Name }}"
+                </div>
+                @if (collectionArtifacts.length === 0) {
+                  <div class="empty-state">
+                    <i class="fa-solid fa-inbox"></i>
+                    <p>No artifacts in this collection</p>
+                  </div>
+                }
+                @else {
+                  @for (artifact of collectionArtifacts; track artifact.ID) {
+                    <div class="artifact-item"
+                         [class.selected]="selectedArtifact?.ID === artifact.ID"
+                         (click)="selectArtifact(artifact)">
+                      <div class="artifact-content">
+                        <div class="artifact-main">
+                          <div class="artifact-name">
+                            <i class="fa-solid fa-file-code"></i>
+                            <span>{{ artifact.Name }}</span>
+                          </div>
+                          @if (artifact.Description) {
+                            <div class="artifact-description">
+                              {{ artifact.Description }}
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    </div>
+                  }
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Right Version/Preview Panel -->
+    @if (selectedArtifact) {
+      <div class="version-panel">
+        <div class="panel-header">
+          <h4><i class="fa-solid fa-code-branch"></i> Versions</h4>
+        </div>
+
+        <div class="version-content">
+          @if (isLoadingVersions) {
+            <div class="loading-state">
+              <i class="fa-solid fa-spinner fa-spin"></i>
+              <p>Loading versions...</p>
+            </div>
+          }
+          @else if (artifactVersions.length === 0) {
+            <div class="empty-state">
+              <i class="fa-solid fa-info-circle"></i>
+              <p>No versions available</p>
+            </div>
+          }
+          @else {
+            <div class="version-list">
+              @for (version of artifactVersions; track version.ID) {
+                <div class="version-item"
+                     [class.selected]="selectedVersion?.ID === version.ID"
+                     (click)="selectVersion(version)">
+                  <div class="version-number">
+                    <i class="fa-solid fa-code-branch"></i>
+                    Version {{ version.VersionNumber }}
+                  </div>
+                  <div class="version-meta">
+                    <div>{{ version.__mj_UpdatedAt | date:'short' }}</div>
+                    @if (version.Comments) {
+                      <div class="version-comments">{{ version.Comments }}</div>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Preview Section -->
+            @if (selectedVersion) {
+              <div class="preview-section">
+                <div class="preview-header">
+                  <i class="fa-solid fa-eye"></i> Preview
+                </div>
+                @if (previewError) {
+                  <div class="preview-error">
+                    <i class="fa-solid fa-exclamation-triangle"></i>
+                    {{ previewError }}
+                  </div>
+                }
+                @else if (previewSpec) {
+                  <div class="preview-content">
+                    <div class="preview-item">
+                      <strong>Name:</strong> {{ previewSpec.name }}
+                    </div>
+                    @if (previewSpec.description) {
+                      <div class="preview-item">
+                        <strong>Description:</strong> {{ previewSpec.description }}
+                      </div>
+                    }
+                    @if (previewSpec.type) {
+                      <div class="preview-item">
+                        <strong>Type:</strong> {{ previewSpec.type }}
+                      </div>
+                    }
+                    @if (previewSpec.namespace) {
+                      <div class="preview-item">
+                        <strong>Namespace:</strong> {{ previewSpec.namespace }}
+                      </div>
+                    }
+                    <div class="preview-item">
+                      <strong>Has Code:</strong> {{ previewSpec.code ? 'Yes' : 'No' }}
+                    </div>
+                    @if (previewSpec.dependencies && previewSpec.dependencies.length > 0) {
+                      <div class="preview-item">
+                        <strong>Dependencies:</strong> {{ previewSpec.dependencies.length }}
+                      </div>
+                    }
+
+                    <!-- Full Spec JSON Viewer -->
+                    <div class="preview-json-section">
+                      <div class="preview-json-header" (click)="toggleJsonPreview()">
+                        <i class="fa-solid" [class.fa-chevron-right]="!showJsonPreview" [class.fa-chevron-down]="showJsonPreview"></i>
+                        <strong>Full Specification (JSON)</strong>
+                      </div>
+                      @if (showJsonPreview) {
+                        <div class="preview-json-content">
+                          <mj-code-editor
+                            [value]="getPreviewJSON()"
+                            [language]="'json'"
+                            [readonly]="true"
+                            [lineWrapping]="true"
+                            [setup]="'basic'"
+                            style="height: 300px; width: 100%;">
+                          </mj-code-editor>
+                        </div>
+                      }
+                    </div>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <kendo-dialog-actions>
+    <button kendoButton
+            [themeColor]="'primary'"
+            (click)="load()"
+            [disabled]="!canLoad()">
+      <i class="fa-solid fa-download"></i>
+      Load Component
+    </button>
+    <button kendoButton (click)="cancel()">Cancel</button>
+  </kendo-dialog-actions>
+</div>

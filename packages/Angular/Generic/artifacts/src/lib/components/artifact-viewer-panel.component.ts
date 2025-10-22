@@ -1,10 +1,14 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, SecurityContext } from '@angular/core';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
+import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ArtifactTypePluginViewerComponent } from './artifact-type-plugin-viewer.component';
+import { ArtifactViewerTab } from './base-artifact-viewer.component';
+import { marked } from 'marked';
 
 @Component({
   selector: 'mj-artifact-viewer-panel',
@@ -40,7 +44,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public primaryCollection: CollectionEntity | null = null;
 
   // Tabbed interface
-  public activeTab: 'display' | 'json' | 'details' | 'links' = 'display';
+  public activeTab: string = 'display'; // Changed to string to support dynamic tabs
   public displayMarkdown: string | null = null;
   public displayHtml: string | null = null;
   public versionAttributes: ArtifactVersionAttributeEntity[] = [];
@@ -54,6 +58,78 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   // Cache plugin state to avoid losing it when switching tabs
   private cachedPluginShouldShowRaw: boolean = false;
   private cachedPluginIsElevated: boolean = false;
+
+  // Cache plugin tabs (populated once when plugin loads)
+  private cachedPluginTabs: ArtifactViewerTab[] = [];
+
+  // Dynamic tabs from plugin
+  public get allTabs(): string[] {
+    // Start with Display tab
+    const tabs = ['Display'];
+
+    // Add cached plugin tabs
+    if (this.cachedPluginTabs.length > 0) {
+      const pluginTabLabels = this.cachedPluginTabs.map((t: ArtifactViewerTab) => t.label);
+      tabs.push(...pluginTabLabels);
+    }
+
+    // Add base tabs
+    tabs.push('JSON', 'Details');
+
+    // Conditionally add Links tab if there are links to show
+    if (this.hasLinksTab) {
+      tabs.push('Links');
+    }
+
+    return tabs;
+  }
+
+  /**
+   * Called when plugin is loaded/changed to cache its tabs (avoids binding issues)
+   */
+  public CachePluginTabs(): void {
+    const plugin = this.pluginViewer?.pluginInstance;
+
+    if (plugin?.GetAdditionalTabs) {
+      this.cachedPluginTabs = plugin.GetAdditionalTabs();
+    } else {
+      this.cachedPluginTabs = [];
+    }
+  }
+
+  public GetTabContent(tabName: string): { type: string; content: string; language?: string } | null {
+    // Check if this is a plugin-provided tab (use cached tabs - case-insensitive match)
+    const pluginTab = this.cachedPluginTabs.find((t: ArtifactViewerTab) =>
+      t.label.toLowerCase() === tabName.toLowerCase()
+    );
+
+    if (pluginTab) {
+      const content = typeof pluginTab.content === 'function'
+        ? pluginTab.content()
+        : pluginTab.content;
+
+      return {
+        type: pluginTab.contentType,
+        content: content,
+        language: pluginTab.language
+      };
+    }
+
+    // Handle base tabs
+    switch (tabName.toLowerCase()) {
+      case 'json':
+        return { type: 'json', content: this.jsonContent, language: 'json' };
+      case 'details':
+        return { type: 'html', content: this.displayMarkdown || this.displayHtml || '' };
+      default:
+        return null;
+    }
+  }
+
+  constructor(
+    private notificationService: MJNotificationService,
+    private sanitizer: DomSanitizer
+  ) {}
 
   async ngOnInit() {
     // Subscribe to refresh trigger for dynamic version changes
@@ -88,7 +164,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           // Just switch to the version we already have
           this.artifactVersion = targetVersion;
           this.selectedVersionNumber = targetVersion.VersionNumber || 1;
-          this.jsonContent = targetVersion.Content || '{}';
+          this.jsonContent = this.FormatJSON(targetVersion.Content || '{}');
 
           console.log(`📦 Switched to cached version ${this.selectedVersionNumber}`);
 
@@ -149,19 +225,19 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
             console.log(`📦 Loading specified version ${targetVersionNumber}`);
             this.artifactVersion = targetVersion;
             this.selectedVersionNumber = targetVersion.VersionNumber || 1;
-            this.jsonContent = targetVersion.Content || '{}';
+            this.jsonContent = this.FormatJSON(targetVersion.Content || '{}');
           } else {
             console.warn(`📦 Version ${targetVersionNumber} not found, defaulting to latest`);
             // Target version not found, default to latest
             this.artifactVersion = result.Results[0];
             this.selectedVersionNumber = this.artifactVersion.VersionNumber || 1;
-            this.jsonContent = this.artifactVersion.Content || '{}';
+            this.jsonContent = this.FormatJSON(this.artifactVersion.Content || '{}');
           }
         } else {
           // No target version, default to latest version (first in DESC order)
           this.artifactVersion = result.Results[0];
           this.selectedVersionNumber = this.artifactVersion.VersionNumber || 1;
-          this.jsonContent = this.artifactVersion.Content || '{}';
+          this.jsonContent = this.FormatJSON(this.artifactVersion.Content || '{}');
         }
 
         // Load version attributes
@@ -182,6 +258,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       this.error = 'Error loading artifact: ' + (err as Error).message;
     } finally {
       this.isLoading = false;
+
+      // Cache plugin tabs after loading (use setTimeout to ensure plugin is fully initialized)
+      setTimeout(() => {
+        this.CachePluginTabs();
+      }, 100);
     }
   }
 
@@ -455,13 +536,16 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   async selectVersion(version: ArtifactVersionEntity): Promise<void> {
     this.artifactVersion = version;
     this.selectedVersionNumber = version.VersionNumber || 1;
-    this.jsonContent = version.Content || '{}';
+    this.jsonContent = this.FormatJSON(version.Content || '{}');
     this.showVersionDropdown = false;
 
     // Load attributes for the selected version
     await this.loadVersionAttributes();
 
-    console.log(`📦 Switched to version ${this.selectedVersionNumber}`);
+    // Recache plugin tabs (version may have different metadata)
+    setTimeout(() => {
+      this.CachePluginTabs();
+    }, 100);
   }
 
   async onSaveToLibrary(): Promise<void> {
@@ -751,5 +835,84 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       console.error('Error loading artifact type by ID:', err);
       return null;
     }
+  }
+
+  /**
+   * Format JSON content using ParseJSONRecursive for deep parsing and formatting
+   */
+  private FormatJSON(content: string): string {
+    try {
+      // First parse the JSON string to an object
+      const obj = JSON.parse(content);
+
+      // Then use ParseJSONRecursive to extract any inline JSON strings
+      const parseOptions: ParseJSONOptions = {
+        extractInlineJson: true,
+        maxDepth: 100,
+        debug: false
+      };
+      const parsed = ParseJSONRecursive(obj, parseOptions);
+
+      // Finally stringify with formatting
+      return JSON.stringify(parsed, null, 2);
+    } catch (e) {
+      // Fallback to simple parse/stringify if ParseJSONRecursive fails
+      try {
+        const obj = JSON.parse(content);
+        return JSON.stringify(obj, null, 2);
+      } catch (e2) {
+        // If even simple parse fails, return as-is
+        return content;
+      }
+    }
+  }
+
+  /**
+   * Get icon class for a tab
+   */
+  public GetTabIcon(tabName: string): string | null {
+    // Base tabs
+    const baseIcons: Record<string, string> = {
+      'Display': 'fas fa-eye',
+      'Code': 'fas fa-code',
+      'JSON': 'fas fa-file-code',
+      'Details': 'fas fa-info-circle',
+      'Links': 'fas fa-link'
+    };
+
+    if (baseIcons[tabName]) {
+      return baseIcons[tabName];
+    }
+
+    // Check plugin tabs
+    const plugin = this.pluginViewer?.pluginInstance;
+    if (plugin?.GetAdditionalTabs) {
+      const pluginTab = plugin.GetAdditionalTabs().find((t: ArtifactViewerTab) => t.label === tabName);
+      if (pluginTab?.icon) {
+        return 'fas ' + pluginTab.icon; // Ensure full Font Awesome class
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Render markdown to HTML (for markdown tabs)
+   */
+  public RenderMarkdown(markdown: string): SafeHtml {
+    try {
+      const html = marked.parse(markdown);
+      return this.sanitizer.sanitize(SecurityContext.HTML, html) || '';
+    } catch (e) {
+      console.error('Failed to render markdown:', e);
+      return markdown;
+    }
+  }
+
+  /**
+   * Set active tab
+   */
+  public SetActiveTab(tabName: string): void {
+    this.activeTab = tabName.toLowerCase();
   }
 }

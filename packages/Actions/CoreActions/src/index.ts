@@ -78,6 +78,7 @@ export * from './custom/workflow/delay.action';
 export * from './custom/ai/execute-ai-prompt.action';
 export * from './custom/ai/summarize-content.action';
 export * from './custom/ai/find-best-agent.action';
+export * from './custom/ai/find-best-action.action';
 
 // User Management Actions
 export * from './custom/user-management/check-user-permission.action';
@@ -92,6 +93,7 @@ export * from './custom/visualization/create-svg-diagram.action';
 export * from './custom/visualization/create-svg-word-cloud.action';
 export * from './custom/visualization/create-svg-network.action';
 export * from './custom/visualization/create-svg-infographic.action';
+export * from './custom/visualization/create-svg-sketch-diagram.action';
 export * from './custom/visualization/shared/svg-types';
 export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';
@@ -164,6 +166,7 @@ import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
 import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action';
 import { LoadFindBestAgentAction } from './custom/ai/find-best-agent.action';
+import { LoadFindBestActionAction } from './custom/ai/find-best-action.action';
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
 import { LoadCreateEmployeeAction } from './custom/user-management/create-employee.action';
@@ -174,6 +177,7 @@ import { LoadCreateSVGDiagramAction } from './custom/visualization/create-svg-di
 import { LoadCreateSVGWordCloudAction } from './custom/visualization/create-svg-word-cloud.action';
 import { LoadCreateSVGNetworkAction } from './custom/visualization/create-svg-network.action';
 import { LoadCreateSVGInfographicAction } from './custom/visualization/create-svg-infographic.action';
+import { LoadCreateSVGSketchDiagramAction } from './custom/visualization/create-svg-sketch-diagram.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -248,6 +252,7 @@ export function LoadAllCoreActions() {
     LoadExecuteAIPromptAction();
     LoadSummarizeContentAction();
     LoadFindBestAgentAction();
+    LoadFindBestActionAction();
     LoadCheckUserPermissionAction();
     LoadCreateUserAction();
     LoadCreateEmployeeAction();
@@ -258,6 +263,7 @@ export function LoadAllCoreActions() {
     LoadCreateSVGWordCloudAction();
     LoadCreateSVGNetworkAction();
     LoadCreateSVGInfographicAction();
+    LoadCreateSVGSketchDiagramAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

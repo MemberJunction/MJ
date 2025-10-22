@@ -148,12 +148,38 @@ export class CreateSVGChartAction extends BaseAction {
             $schema: "https://vega.github.io/schema/vega-lite/v5.json",
             width,
             height,
-            data: { values: data }
+            data: { values: data },
+            padding: 20,
+            autosize: {
+                type: 'fit',
+                contains: 'padding'
+            }
         };
 
         if (title) {
-            baseSpec.title = title;
+            baseSpec.title = {
+                text: title,
+                anchor: 'middle',
+                offset: 20,
+                fontSize: 16,
+                fontWeight: 'bold'
+            };
         }
+
+        // Add config for better spacing and readability
+        baseSpec.config = {
+            axis: {
+                labelFontSize: 11,
+                titleFontSize: 12,
+                titlePadding: 10,
+                labelPadding: 5
+            },
+            legend: {
+                labelFontSize: 11,
+                titleFontSize: 12,
+                padding: 10
+            }
+        };
 
         // Build encoding based on chart type
         switch (chartType) {
@@ -162,7 +188,17 @@ export class CreateSVGChartAction extends BaseAction {
             case 'area':
             case 'point':
             case 'scatter':
-                baseSpec.mark = chartType === 'scatter' ? 'point' : chartType;
+                // For line and area charts, handle missing data points properly
+                if (chartType === 'line' || chartType === 'area') {
+                    baseSpec.mark = {
+                        type: chartType,
+                        point: chartType === 'line', // Show points on line charts
+                        interpolate: 'monotone', // Smooth curves
+                        tooltip: true
+                    };
+                } else {
+                    baseSpec.mark = chartType === 'scatter' ? 'point' : chartType;
+                }
                 baseSpec.encoding = this.buildCartesianEncoding(params);
                 break;
 
