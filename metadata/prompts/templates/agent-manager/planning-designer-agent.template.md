@@ -72,6 +72,9 @@ Create `design.agentHierarchy` with:
 **Choose Flow when**: Workflow is deterministic with clear branching logic
 
 ### 3. Select Actions
+
+**IMPORTANT**: Action IDs must be real GUIDs from "Find Best Action" output - never use placeholders like "web-search-001". Always call "Find Best Action" and use the exact ID from results.
+
 **Use "Find Best Action" action** to find relevant actions:
 - Provide TaskDescription (e.g., "search the web")
 - Review results (ID, name, description, similarity score)

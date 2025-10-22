@@ -132,11 +132,11 @@ Example:
    - Use the exact `id` as `ActionID`
    - Set `Status: 'Active'`
 5. **Map sub-agents** from design.agentHierarchy.subAgents (if any):
-   - **CRITICAL**: Each SubAgent is a FULL AgentSpec (not just ID/Name)
+   - **IMPORTANT**: Sub-agents are FULL AgentSpec objects with their own Actions, Steps, Paths, and Prompts - map ALL fields from design.agentHierarchy.subAgents[i], including nested sub-agents recursively.
    - Set `SubAgent.ID = ""` for NEW sub-agents (Builder creates them recursively)
-   - Include SubAgent.Name, Description, TypeID, Status, Actions, Prompts, etc.
    - Type is 'child' for parent-child relationships
-   - Sub-agents can have their own Actions, Prompts, Steps, Paths arrays
+   - For Flow sub-agents: Map actions, steps, and stepPaths arrays from design
+   - For Loop sub-agents: Map actions and find prompts where agentName matches
 6. **Map prompts** from design.prompts array:
    - **Match agentName** in design.prompts to determine which agent each prompt belongs to
    - Prompts where agentName matches parent → add to parent's Prompts array
