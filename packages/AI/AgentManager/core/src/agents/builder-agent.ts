@@ -1,6 +1,7 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AgentSpec } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 import { AgentSpecSync } from '../agent-spec-sync';
 
 /**
@@ -56,6 +57,12 @@ export class AgentBuilderAgent extends BaseAgent {
 
             // Save to database
             const agentId = await specSync.SaveToDatabase();
+
+            // Refresh metadata cache to include newly created agents/prompts/steps
+            console.log('🔄 Builder Agent: Refreshing metadata cache...');
+            const md = new Metadata();
+            await md.Refresh();
+            console.log('✅ Builder Agent: Metadata cache refreshed');
 
             console.log(`✅ Builder Agent: Successfully created agent with ID: ${agentId}`);
 
