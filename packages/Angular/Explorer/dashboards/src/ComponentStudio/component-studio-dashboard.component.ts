@@ -1295,6 +1295,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         // Create new version
         version = await this.metadata.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions');
         version.ArtifactID = artifact.ID;
+        version.UserID = this.metadata.CurrentUser.ID; // Required field
 
         // Get next version number
         const rv = new RunView();
@@ -1341,7 +1342,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         );
       }
       else {
-        console.error('Failed to save artifact version:', version.LatestResult?.Message);
+        console.error('Failed to save artifact version - Full LatestResult:', version.LatestResult);
         this.notificationService.CreateSimpleNotification(
           'Failed to save artifact version',
           'error'

@@ -333,7 +333,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
         );
         return artifact;
       } else {
-        console.error('Failed to create artifact:', artifact.LatestResult?.Message);
+        console.error('Failed to create artifact - Full LatestResult:', artifact.LatestResult);
         this.notificationService.CreateSimpleNotification(
           'Failed to create artifact',
           'error'

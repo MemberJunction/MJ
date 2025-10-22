@@ -90,6 +90,7 @@ PRINT '✓ Tracking table created';
 -- ============================================================================
 PRINT '';
 PRINT '=== Migrating ConversationArtifact → Artifact ===';
+PRINT 'NOTE: Using first version name as artifact name (more descriptive than generic "Skip Payload" names)';
 
 INSERT INTO [${flyway:defaultSchema}].[Artifact] (
     [ID],
@@ -106,7 +107,14 @@ OUTPUT inserted.[ID] INTO #MigratedArtifacts (ArtifactID)
 SELECT
     ca.[ID], -- Preserve original UUID
     @DefaultEnvironmentID AS [EnvironmentID],
-    ca.[Name],
+    -- Use first version's name (more descriptive than generic artifact name)
+    COALESCE(
+        (SELECT TOP 1 cav.[Name]
+         FROM [${flyway:defaultSchema}].[ConversationArtifactVersion] cav
+         WHERE cav.[ConversationArtifactID] = ca.[ID]
+         ORDER BY cav.[Version] ASC),
+        ca.[Name]
+    ) AS [Name],
     ca.[Description],
     'E8BA10A3-019F-4C51-A8AA-397AB124F212' AS [TypeID], -- hard code to Component type
     ca.[Comments],
