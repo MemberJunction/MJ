@@ -62,32 +62,24 @@
 
     @if (!isLoading && !error && artifact) {
       <div class="artifact-content-wrapper">
-        <!-- Tab Navigation -->
+        <!-- Tab Navigation (Dynamic) -->
         <div class="tab-navigation">
-          @if (hasDisplayTab) {
-            <button class="tab-btn" [class.active]="activeTab === 'display'" (click)="setActiveTab('display')">
-              <i class="fas fa-eye"></i> Display
-            </button>
-          }
-          @if (hasJsonTab) {
-            <button class="tab-btn" [class.active]="activeTab === 'json'" (click)="setActiveTab('json')">
-              <i class="fas fa-code"></i> JSON
-            </button>
-          }
-          <button class="tab-btn" [class.active]="activeTab === 'details'" (click)="setActiveTab('details')">
-            <i class="fas fa-info-circle"></i> Details
-          </button>
-          @if (hasLinksTab) {
-            <button class="tab-btn" [class.active]="activeTab === 'links'" (click)="setActiveTab('links')">
-              <i class="fas fa-link"></i> Links
+          @for (tab of allTabs; track tab) {
+            <button class="tab-btn"
+                    [class.active]="activeTab === tab.toLowerCase()"
+                    (click)="SetActiveTab(tab)">
+              @if (GetTabIcon(tab)) {
+                <i [class]="GetTabIcon(tab)!"></i>
+              }
+              {{ tab }}
             </button>
           }
         </div>
 
-        <!-- Tab Content -->
+        <!-- Tab Content (Dynamic) -->
         <div class="tab-content">
-          <!-- Display Tab (uses plugin system OR extracted attributes) -->
-          @if (activeTab === 'display' && hasDisplayTab) {
+          <!-- Display Tab - Special case for plugin rendering -->
+          @if (activeTab === 'display') {
             <div class="display-content">
               @if (hasPlugin && artifactVersion && artifactTypeName) {
                 <!-- Use plugin viewer if available -->
@@ -118,26 +110,7 @@
             </div>
           }
 
-          <!-- JSON Tab (only shown for elevated displays with JSON content) -->
-          @if (activeTab === 'json' && hasJsonTab) {
-            <div class="json-viewer">
-              <div class="json-toolbar">
-                <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
-                  <i class="fas fa-copy"></i> Copy
-                </button>
-              </div>
-              <div class="json-editor-container">
-                <mj-code-editor
-                  [(ngModel)]="jsonContent"
-                  [language]="'json'"
-                  [readonly]="true"
-                  style="width: 100%; height: 100%;">
-                </mj-code-editor>
-              </div>
-            </div>
-          }
-
-          <!-- Details Tab -->
+          <!-- Details Tab - Artifact metadata -->
           @if (activeTab === 'details') {
             <div class="details-content">
               <div class="artifact-meta">
@@ -192,7 +165,7 @@
             </div>
           }
 
-          <!-- Links Tab -->
+          <!-- Links Tab - Conversations and Collections -->
           @if (activeTab === 'links') {
             <div class="links-container">
               @if (linksToShow.length > 0) {
@@ -229,6 +202,54 @@
                 </div>
               }
             </div>
+          }
+
+          <!-- Dynamic Plugin Tabs and Base Tabs (JSON, etc.) -->
+          @if (activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links') {
+            @if (GetTabContent(activeTab); as tabData) {
+              <div class="dynamic-tab-content">
+                @switch (tabData.type) {
+                  @case ('markdown') {
+                    <div class="markdown-viewer" [innerHTML]="RenderMarkdown(tabData.content)"></div>
+                  }
+                  @case ('json') {
+                    <div class="json-viewer">
+                      <div class="json-toolbar">
+                        <button class="btn-icon" title="Copy JSON" (click)="onCopyToClipboard()">
+                          <i class="fas fa-copy"></i> Copy
+                        </button>
+                      </div>
+                      <div class="json-editor-container">
+                        <mj-code-editor
+                          [value]="tabData.content"
+                          [language]="'json'"
+                          [readonly]="true"
+                          [lineWrapping]="true"
+                          style="width: 100%; height: 100%;">
+                        </mj-code-editor>
+                      </div>
+                    </div>
+                  }
+                  @case ('code') {
+                    <div class="code-viewer">
+                      <mj-code-editor
+                        [value]="tabData.content"
+                        [language]="tabData.language || 'typescript'"
+                        [readonly]="true"
+                        [lineWrapping]="true"
+                        style="width: 100%; height: 100%;">
+                      </mj-code-editor>
+                    </div>
+                  }
+                  @case ('html') {
+                    <div class="html-viewer" [innerHTML]="tabData.content"></div>
+                  }
+                  @case ('plaintext') {
+                    <pre class="plaintext-viewer">{{ tabData.content }}</pre>
+                  }
+                }
+              </div>
+            }
           }
         </div>
       </div>

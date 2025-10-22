@@ -42,6 +42,7 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
 import { ActionGalleryModule } from '@memberjunction/ng-action-gallery';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { MemberJunctionCoreEntityFormsModule } from '@memberjunction/ng-core-entity-forms';
+import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 // AI Instrumentation Components
 import { KPICardComponent } from './AI/components/widgets/kpi-card.component';
 import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execution-widget.component';
@@ -52,6 +53,7 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
 import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
 import { TextImportDialogComponent } from './ComponentStudio/components/text-import-dialog.component';
 import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
+import { ArtifactLoadDialogComponent } from './ComponentStudio/components/artifact-load-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
@@ -101,6 +103,7 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     ComponentStudioDashboardComponent,
     TextImportDialogComponent,
     ArtifactSelectionDialogComponent,
+    ArtifactLoadDialogComponent,
     // Scheduling Dashboard Components
     SchedulingDashboardComponent,
     SchedulingMonitoringComponent,
@@ -131,7 +134,8 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     MJReactModule,
     SplitterModule,
     TabStripModule,
-    PanelBarModule
+    PanelBarModule,
+    MJNotificationsModule
   ],
   providers: [
     AIInstrumentationService,

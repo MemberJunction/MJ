@@ -3,6 +3,17 @@ import { ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
 /**
+ * Represents an additional tab that a plugin can provide to the artifact viewer
+ */
+export interface ArtifactViewerTab {
+  label: string;
+  icon?: string;
+  contentType: 'plaintext' | 'html' | 'markdown' | 'json' | 'code';
+  content: string | (() => string); // Static or lazy-loaded
+  language?: string; // For code type (typescript, json, etc.)
+}
+
+/**
  * Abstract base component for all artifact viewer plugins.
  * Provides common functionality and enforces the contract.
  * Note: This is an abstract class and should not be declared in Angular module.
@@ -104,4 +115,12 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
   protected getDescription(): string {
     return this.artifactVersion?.Description || '';
   }
+
+  /**
+   * Get additional tabs that this plugin wants to provide to the artifact viewer.
+   * Override this method to provide custom tabs for viewing metadata, code, etc.
+   *
+   * @returns Array of tab definitions, or undefined if no additional tabs
+   */
+  public GetAdditionalTabs?(): ArtifactViewerTab[];
 }
