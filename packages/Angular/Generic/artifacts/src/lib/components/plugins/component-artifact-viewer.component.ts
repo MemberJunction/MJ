@@ -1,4 +1,4 @@
-import { Component, ViewChild, AfterViewInit, OnInit } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, OnInit, OnChanges, SimpleChanges, Output, EventEmitter } from '@angular/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent, ArtifactViewerTab } from '../base-artifact-viewer.component';
 import { MJReactComponent, AngularAdapterService } from '@memberjunction/ng-react';
@@ -18,8 +18,9 @@ import { BuildComponentCompleteCode, ComponentSpec } from '@memberjunction/inter
   styleUrls: ['./component-artifact-viewer.component.scss']
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'ComponentArtifactViewerPlugin')
-export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit {
+export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, AfterViewInit, OnChanges {
   @ViewChild('reactComponent') reactComponent?: MJReactComponent;
+  @Output() tabsChanged = new EventEmitter<void>();
 
   // Component data
   public component: ComponentSpec | null = null;
@@ -35,16 +36,34 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     super();
   }
 
-  async ngOnInit(): Promise<void> {
-    // Extract component spec
-    if (this.artifactVersion.Content) {
-      this.component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
-    } else {
-      throw new Error('Artifact content is empty');
+  async ngOnChanges(changes: SimpleChanges): Promise<void> {
+    // When artifactVersion input changes, reload the component spec
+    if (changes['artifactVersion'] && !changes['artifactVersion'].firstChange) {
+      await this.loadComponentSpec();
+      // Notify parent that tabs may have changed
+      this.tabsChanged.emit();
     }
+  }
 
-    // Extract component parts
-    this.extractComponentParts();
+  private async loadComponentSpec(): Promise<void> {
+    try {
+      if (this.artifactVersion.Content) {
+        this.component = SafeJSONParse(this.artifactVersion.Content) as ComponentSpec;
+        this.extractComponentParts();
+      } else {
+        throw new Error('Artifact content is empty');
+      }
+    } catch (error) {
+      console.error('Failed to load component spec:', error);
+      this.hasError = true;
+      this.errorMessage = 'Failed to load component';
+      this.errorDetails = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  async ngOnInit(): Promise<void> {
+    // Load initial component spec
+    await this.loadComponentSpec();
 
     // Initialize Angular adapter for React components
     try {
@@ -68,14 +87,8 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
     const tabs: ArtifactViewerTab[] = [];
 
     if (!this.component) {
-      console.log('🔍 GetAdditionalTabs - no component');
       return tabs;
     }
-
-    console.log('🔍 GetAdditionalTabs - component keys:', Object.keys(this.component));
-    console.log('🔍 GetAdditionalTabs - has functionalRequirements?', !!this.component.functionalRequirements);
-    console.log('🔍 GetAdditionalTabs - has technicalDesign?', !!this.component.technicalDesign);
-    console.log('🔍 GetAdditionalTabs - has dataRequirements?', !!this.component.dataRequirements);
 
     // Functional Requirements tab
     if (this.component.functionalRequirements) {
@@ -117,7 +130,6 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       content: () => BuildComponentCompleteCode(this.component!)
     });
 
-    console.log('🔍 GetAdditionalTabs - returning tabs:', tabs.map(t => t.label));
     return tabs;
   }
 

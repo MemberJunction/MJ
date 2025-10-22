@@ -89,33 +89,24 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   public CachePluginTabs(): void {
     const plugin = this.pluginViewer?.pluginInstance;
-    console.log('🔍 CachePluginTabs - plugin instance:', plugin);
 
     if (plugin?.GetAdditionalTabs) {
       this.cachedPluginTabs = plugin.GetAdditionalTabs();
-      console.log('🔍 CachePluginTabs - cached tabs:', this.cachedPluginTabs.map(t => t.label));
     } else {
       this.cachedPluginTabs = [];
-      console.log('🔍 CachePluginTabs - no tabs to cache');
     }
   }
 
   public GetTabContent(tabName: string): { type: string; content: string; language?: string } | null {
-    console.log('🔍 GetTabContent - requested tab:', tabName);
-    console.log('🔍 GetTabContent - cached plugin tabs:', this.cachedPluginTabs.map(t => t.label));
-
     // Check if this is a plugin-provided tab (use cached tabs - case-insensitive match)
     const pluginTab = this.cachedPluginTabs.find((t: ArtifactViewerTab) =>
       t.label.toLowerCase() === tabName.toLowerCase()
     );
 
     if (pluginTab) {
-      console.log('🔍 GetTabContent - found plugin tab:', pluginTab.label, 'type:', pluginTab.contentType);
       const content = typeof pluginTab.content === 'function'
         ? pluginTab.content()
         : pluginTab.content;
-
-      console.log('🔍 GetTabContent - content length:', content?.length || 0);
 
       return {
         type: pluginTab.contentType,
@@ -125,15 +116,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
 
     // Handle base tabs
-    console.log('🔍 GetTabContent - checking base tabs');
     switch (tabName.toLowerCase()) {
       case 'json':
-        console.log('🔍 GetTabContent - returning JSON tab, length:', this.jsonContent.length);
         return { type: 'json', content: this.jsonContent, language: 'json' };
       case 'details':
         return { type: 'html', content: this.displayMarkdown || this.displayHtml || '' };
       default:
-        console.log('🔍 GetTabContent - no match for tab:', tabName);
         return null;
     }
   }
@@ -554,7 +542,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     // Load attributes for the selected version
     await this.loadVersionAttributes();
 
-    console.log(`📦 Switched to version ${this.selectedVersionNumber}`);
+    // Recache plugin tabs (version may have different metadata)
+    setTimeout(() => {
+      this.CachePluginTabs();
+    }, 100);
   }
 
   async onSaveToLibrary(): Promise<void> {
