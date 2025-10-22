@@ -90,7 +90,7 @@ PRINT '✓ Tracking table created';
 -- ============================================================================
 PRINT '';
 PRINT '=== Migrating ConversationArtifact → Artifact ===';
-PRINT 'NOTE: Using first version name as artifact name (more descriptive than generic "Skip Payload" names)';
+PRINT 'NOTE: Using ConversationArtifact name directly';
 
 INSERT INTO [${flyway:defaultSchema}].[Artifact] (
     [ID],
@@ -107,14 +107,7 @@ OUTPUT inserted.[ID] INTO #MigratedArtifacts (ArtifactID)
 SELECT
     ca.[ID], -- Preserve original UUID
     @DefaultEnvironmentID AS [EnvironmentID],
-    -- Use first version's name (more descriptive than generic artifact name)
-    COALESCE(
-        (SELECT TOP 1 cav.[Name]
-         FROM [${flyway:defaultSchema}].[ConversationArtifactVersion] cav
-         WHERE cav.[ConversationArtifactID] = ca.[ID]
-         ORDER BY cav.[Version] ASC),
-        ca.[Name]
-    ) AS [Name],
+    ca.[Name], -- Use ConversationArtifact's name directly
     ca.[Description],
     'E8BA10A3-019F-4C51-A8AA-397AB124F212' AS [TypeID], -- hard code to Component type
     ca.[Comments],
@@ -246,10 +239,11 @@ PRINT 'NOTE: Replacing JSON content with artifact names for cleaner chat history
 
 -- Update ConversationDetail.Message to show artifact name instead of full JSON
 UPDATE cd
-SET cd.[Message] = 'Generated component: ' + COALESCE(ca.[Name], 'Unnamed Component')
+SET cd.[Message] = 'Generated component: ' + COALESCE(a.[Name], 'Unnamed Component')
 FROM [${flyway:defaultSchema}].[ConversationDetail] cd
 INNER JOIN [${flyway:defaultSchema}].[ConversationArtifactVersion] cav ON cav.[ID] = cd.[ArtifactVersionID]
 INNER JOIN [${flyway:defaultSchema}].[ConversationArtifact] ca ON ca.[ID] = cav.[ConversationArtifactID]
+INNER JOIN [${flyway:defaultSchema}].[Artifact] a ON a.[ID] = ca.[ID]
 WHERE cd.[ArtifactVersionID] IS NOT NULL
   AND cd.[Message] IS NOT NULL
   AND (

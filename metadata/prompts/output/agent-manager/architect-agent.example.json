@@ -1,0 +1,33 @@
+{
+  "action": "return_to_parent",
+  "output": {
+    "agentSpec": {
+      "ID": "",
+      "Name": "Customer Feedback Analyzer",
+      "Description": "Analyzes customer feedback from multiple sources and generates comprehensive weekly reports with actionable insights",
+      "StartingPayloadValidationMode": "Fail",
+      "InvocationMode": "Any",
+      "IconClass": "fa-solid fa-chart-line",
+      "PayloadDownstreamPaths": ["*"],
+      "PayloadUpstreamPaths": ["analysis.*", "reports.*"],
+      "Actions": [
+        {
+          "ActionID": "abc-123-run-query",
+          "Status": "Active"
+        },
+        {
+          "ActionID": "def-456-send-email",
+          "Status": "Active"
+        }
+      ],
+      "SubAgents": [],
+      "Prompts": [
+        {
+          "PromptText": "You are a customer feedback analyzer specialized in extracting insights from customer data. Your role is to analyze feedback, identify trends, and generate actionable recommendations.",
+          "PromptRole": "System",
+          "PromptPosition": "First"
+        }
+      ]
+    }
+  }
+}

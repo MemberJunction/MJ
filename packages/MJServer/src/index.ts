@@ -40,6 +40,10 @@ LoadCoreEntitiesServerSubClasses(); // prevent tree shaking for this dynamic mod
 import { LoadAgentManagementActions } from '@memberjunction/ai-agent-manager-actions';
 LoadAgentManagementActions();
 
+// Load agent manager core classes (registers custom agent classes like AgentBuilderAgent, AgentArchitectAgent)
+import { LoadAgentManagerCore } from '@memberjunction/ai-agent-manager';
+LoadAgentManagerCore();
+
 import { LoadSchedulingEngine } from '@memberjunction/scheduling-engine';
 LoadSchedulingEngine(); // This also loads drivers
 
