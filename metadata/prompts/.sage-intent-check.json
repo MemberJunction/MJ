@@ -4,14 +4,14 @@
       "Name": "Check Sage Intent",
       "Description": "Fast intent check to determine if user's message continues with previous agent or requires Sage routing evaluation. Uses ultra-fast models for sub-500ms response.",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "TemplateText": "@file:templates/conversations/check-sage-intent.template.md",
+      "TemplateText": "@file:templates/sage/check-intent.template.md",
       "Status": "Active",
       "ResponseFormat": "JSON",
       "SelectionStrategy": "Specific",
       "PowerPreference": "Lowest",
       "ParallelizationMode": "None",
       "OutputType": "object",
-      "OutputExample": "@file:output/conversations/check-sage-intent.example.json",
+      "OutputExample": "@file:output/sage/check-intent.example.json",
       "ValidationBehavior": "Warn",
       "MaxRetries": 1,
       "RetryDelayMS": 500,
@@ -73,8 +73,8 @@
       "ID": "278E47C4-7D0C-46A7-B178-7C68D1DD9756"
     },
     "sync": {
-      "lastModified": "2025-10-15T23:02:34.997Z",
-      "checksum": "6d6f76db325b6f8b2ca429dcfb7cd921d15906c1baba936363156686a97b14a7"
+      "lastModified": "2025-10-22T14:52:57.583Z",
+      "checksum": "7398f7b8e070f529c8d3e5fa1ab1b685bfc0aca78b5fa80e7676cce0231ae3b7"
     }
   }
 ]
