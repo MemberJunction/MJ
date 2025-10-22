@@ -1,9 +1,9 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Metadata, CompositeKey } from '@memberjunction/core';
-import { MJGlobal } from '@memberjunction/global';
+import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
 
 /**
  * Wrapper component for the conversations interface within MJ Explorer
@@ -40,6 +40,7 @@ import { SharedService } from '@memberjunction/ng-shared';
     }
   `]
 })
+@RegisterClass(BaseNavigationComponent, 'Chat')
 export class ChatWrapperComponent implements OnInit {
   public environmentId: string = '';
   public conversationId?: string;

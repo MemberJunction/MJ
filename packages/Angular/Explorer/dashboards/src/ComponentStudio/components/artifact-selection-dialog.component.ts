@@ -1,14 +1,15 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { RunView, Metadata, UserInfo } from '@memberjunction/core';
-import { ConversationArtifactEntity, ConversationArtifactVersionEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 export interface ArtifactSelectionResult {
-  artifact: ConversationArtifactEntity;
+  artifact: ArtifactEntity;
   action: 'new-version' | 'update-version';
-  versionToUpdate?: ConversationArtifactVersionEntity;
+  versionToUpdate?: ArtifactVersionEntity;
 }
 
 @Component({
@@ -18,15 +19,15 @@ export interface ArtifactSelectionResult {
 })
 export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   // Data
-  artifacts: ConversationArtifactEntity[] = [];
-  artifactVersions: ConversationArtifactVersionEntity[] = [];
-  
+  artifacts: ArtifactEntity[] = [];
+  artifactVersions: ArtifactVersionEntity[] = [];
+
   // Paging State
   currentPage = 0;
   pageSize = 25;
   totalArtifacts = 0;
   hasMorePages = false;
-  
+
   // UI State
   isLoading = true;
   searchTerm = '';
@@ -34,11 +35,11 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   selectedArtifactType = '';
   showNewArtifactForm = false;
   isFilterPanelCollapsed = false;
-  
-  
+
+
   // Selection State
-  selectedArtifact: ConversationArtifactEntity | null = null;
-  selectedVersion: ConversationArtifactVersionEntity | null = null;
+  selectedArtifact: ArtifactEntity | null = null;
+  selectedVersion: ArtifactVersionEntity | null = null;
   versionAction: 'new' | 'update' = 'new';
   
   // New Artifact Form
@@ -51,7 +52,8 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   private searchSubject = new Subject<string>();
 
   constructor(
-    public dialog: DialogRef
+    public dialog: DialogRef,
+    private notificationService: MJNotificationService
   ) {}
 
   async ngOnInit() {
@@ -75,15 +77,15 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   async loadArtifacts() {
     this.isLoading = true;
     try {
-      const rv = new RunView();       
-      
+      const rv = new RunView();
+
       // Calculate StartRow for server-side paging
       const startRow = this.currentPage * this.pageSize;
-      
+
       // Load artifacts with paging
-      const result = await rv.RunView<ConversationArtifactEntity>({
+      const result = await rv.RunView<ArtifactEntity>({
         ExtraFilter: this._artifactFilter,
-        EntityName: 'MJ: Conversation Artifacts',
+        EntityName: 'MJ: Artifacts',
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: this.pageSize,
         StartRow: startRow,
@@ -92,7 +94,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
       if (result.Success && result.Results) {
         this.artifacts = result.Results;
-        
+
         // Calculate total pages using TotalRowCount from server
         this.totalArtifacts = result.TotalRowCount || 0;
         const totalPages = Math.ceil(this.totalArtifacts / this.pageSize);
@@ -126,8 +128,8 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     // Filter by user email if provided
     if (this.userEmail?.trim()) {
       const md = new Metadata();
-      const schemaName = md.EntityByName("Conversations")?.SchemaName || "__mj";
-      const userFilter = `ConversationID IN(SELECT ID FROM ${schemaName}.vwConversations WHERE [User] LIKE '%${this.userEmail.trim()}%')`;
+      const schemaName = md.EntityByName("Users")?.SchemaName || "__mj";
+      const userFilter = `UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`;
       filters.push(userFilter);
     }
     
@@ -143,12 +145,12 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     this.selectedVersion = null;
   }
 
-  async selectArtifact(artifact: ConversationArtifactEntity) {
+  async selectArtifact(artifact: ArtifactEntity) {
     this.selectedArtifact = artifact;
     this.showNewArtifactForm = false;
     this.versionAction = 'new';
     this.selectedVersion = null;
-    
+
     // Load versions for this artifact
     await this.loadVersions(artifact.ID);
   }
@@ -156,10 +158,10 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   async loadVersions(artifactId: string) {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ConversationArtifactVersionEntity>({
-        EntityName: 'MJ: Conversation Artifact Versions',
-        ExtraFilter: `ConversationArtifactID = '${artifactId}'`,
-        OrderBy: 'Version DESC',
+      const result = await rv.RunView<ArtifactVersionEntity>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID = '${artifactId}'`,
+        OrderBy: 'VersionNumber DESC',
         ResultType: 'entity_object'
       });
 
@@ -174,7 +176,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
   getNextVersionNumber(): number {
     if (this.artifactVersions.length === 0) return 1;
-    return Math.max(...this.artifactVersions.map(v => v.Version)) + 1;
+    return Math.max(...this.artifactVersions.map(v => v.VersionNumber)) + 1;
   }
 
   // Paging methods
@@ -246,11 +248,11 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     if (this.showNewArtifactForm) {
       return 'Create & Save';
     }
-    
+
     if (this.versionAction === 'update' && this.selectedVersion) {
-      return `Update Version ${this.selectedVersion.Version}`;
+      return `Update Version ${this.selectedVersion.VersionNumber}`;
     }
-    
+
     return `Save as Version ${this.getNextVersionNumber()}`;
   }
 
@@ -285,22 +287,22 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       // If updating, show confirmation
       if (this.versionAction === 'update') {
         const confirm = window.confirm(
-          `Are you sure you want to overwrite version ${this.selectedVersion!.Version}? This action cannot be undone.`
+          `Are you sure you want to overwrite version ${this.selectedVersion!.VersionNumber}? This action cannot be undone.`
         );
-        
+
         if (!confirm) return;
       }
-      
+
       this.dialog.close(result);
     }
   }
 
-  private async createNewArtifact(): Promise<ConversationArtifactEntity | null> {
+  private async createNewArtifact(): Promise<ArtifactEntity | null> {
     try {
-      const artifact = await this.metadata.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts');
+      const artifact = await this.metadata.GetEntityObject<ArtifactEntity>('MJ: Artifacts');
       artifact.Name = this.newArtifactName;
       artifact.Description = this.newArtifactDescription || null;
-      
+
       // Get Component artifact type
       const rv = new RunView();
       const typeResult = await rv.RunView({
@@ -310,23 +312,40 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       });
 
       if (typeResult.Success && typeResult.Results?.length > 0) {
-        artifact.ArtifactTypeID = typeResult.Results[0].ID;
+        artifact.TypeID = typeResult.Results[0].ID;
       }
 
-      artifact.SharingScope = 'None';
+      // Set default environment if available from current user
+      // Environment ID is optional - will be set by server if not provided
+      const envId = (this.metadata.CurrentUser as any)?.EnvironmentID;
+      if (envId) {
+        artifact.EnvironmentID = envId;
+      }
+
       artifact.Comments = 'Created from Component Studio';
 
       const saveResult = await artifact.Save();
       if (saveResult) {
+        this.notificationService.CreateSimpleNotification(
+          `Artifact "${artifact.Name}" created successfully`,
+          'success',
+          3000
+        );
         return artifact;
       } else {
-        console.error('Failed to create artifact:', artifact.LatestResult?.Message);
-        alert('Failed to create artifact. Check console for details.');
+        console.error('Failed to create artifact - Full LatestResult:', artifact.LatestResult);
+        this.notificationService.CreateSimpleNotification(
+          'Failed to create artifact',
+          'error'
+        );
         return null;
       }
     } catch (error) {
       console.error('Error creating artifact:', error);
-      alert('Error creating artifact. Check console for details.');
+      this.notificationService.CreateSimpleNotification(
+        'Error creating artifact',
+        'error'
+      );
       return null;
     }
   }

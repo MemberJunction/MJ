@@ -116,7 +116,7 @@
                                     }
                                 </div>
                                 <div class="artifact-meta">
-                                    <div>{{ artifact.ArtifactType }}</div>
+                                    <div>{{ artifact.Type }}</div>
                                     <div>{{ artifact.__mj_UpdatedAt | date:'short' }}</div>
                                 </div>
                             </div>
@@ -186,12 +186,12 @@
                                 @for (version of artifactVersions; track version.ID) {
                                     <label class="version-item" 
                                            [class.selected]="selectedVersion?.ID === version.ID">
-                                        <input type="radio" 
+                                        <input type="radio"
                                             name="selectedVersion"
                                             [value]="version"
                                             [(ngModel)]="selectedVersion">
                                         <div class="version-info">
-                                            <div class="version-number">Version {{ version.Version }}</div>
+                                            <div class="version-number">Version {{ version.VersionNumber }}</div>
                                             <div class="version-date">{{ version.__mj_UpdatedAt | date:'short' }}</div>
                                         </div>
                                     </label>
@@ -201,7 +201,7 @@
                             @if (selectedVersion) {
                                 <div class="warning">
                                     <i class="fa-solid fa-exclamation-triangle"></i>
-                                    <span>Warning: This will overwrite version {{ selectedVersion.Version }}</span>
+                                    <span>Warning: This will overwrite version {{ selectedVersion.VersionNumber }}</span>
                                 </div>
                             }
                         }
