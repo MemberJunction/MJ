@@ -35,6 +35,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   private previousConversationId: string | null = null;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   public isProcessing: boolean = false;
+  private intentCheckMessage: ConversationDetailEntity | null = null; // Temporary message shown during intent checking
+  public isLoadingConversation: boolean = true; // True while loading initial conversation messages
   public memberCount: number = 1;
   public artifactCount: number = 0;
   public isShared: boolean = false;
@@ -71,6 +73,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   // Subject to trigger artifact viewer refresh when new version is created
   public artifactViewerRefresh$ = new Subject<{artifactId: string; versionNumber: number}>();
 
+  // Track initialization state to prevent loading messages before agents are ready
+  private isInitialized: boolean = false;
+
   // Resize state
   private isResizing: boolean = false;
   private startX: number = 0;
@@ -89,16 +94,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   ) {}
 
   async ngOnInit() {
-    // Initialize mention service BEFORE loading messages
+    // CRITICAL: Initialize AI Engine and mention service BEFORE loading any messages
     // This ensures agents are loaded and available for @mention parsing in existing messages
+    // Without this, @mentions won't be highlighted when reloading existing conversations
     await this.mentionAutocompleteService.initialize(this.currentUser);
 
     // Load saved artifact pane width
     this.loadArtifactPaneWidth();
 
+    // Mark as initialized so ngDoCheck can proceed
+    this.isInitialized = true;
+
     // Initial load if there's already an active conversation
     if (this.conversationState.activeConversationId) {
-      this.onConversationChanged(this.conversationState.activeConversationId);
+      await this.onConversationChanged(this.conversationState.activeConversationId);
     }
 
     // Setup resize listeners
@@ -107,6 +116,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   ngDoCheck() {
+    // Don't process conversation changes until initialization is complete
+    // This prevents race condition where messages load before agents are ready
+    if (!this.isInitialized) {
+      return;
+    }
+
     // Detect conversation ID changes using change detection
     const currentId = this.conversationState.activeConversationId;
     if (currentId !== this.previousConversationId) {
@@ -146,11 +161,23 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.selectedArtifactId = null;
 
     if (conversationId) {
-      await this.loadMessages(conversationId);
-      await this.restoreActiveTasks(conversationId);
-      this.agentStateService.startPolling(this.currentUser, conversationId);
+      // Show loading state
+      this.isLoadingConversation = true;
+      this.messages = []; // Clear messages to avoid showing stale data
+      this.cdr.detectChanges();
+
+      try {
+        await this.loadMessages(conversationId);
+        await this.restoreActiveTasks(conversationId);
+        this.agentStateService.startPolling(this.currentUser, conversationId);
+      } finally {
+        // Hide loading state
+        this.isLoadingConversation = false;
+        this.cdr.detectChanges();
+      }
     } else {
       this.messages = [];
+      this.isLoadingConversation = false;
     }
   }
 
@@ -938,6 +965,44 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     if (this.scrollContainer) {
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
+    }
+  }
+
+  /**
+   * Handle intent check started - show temporary "Analyzing intent..." message
+   */
+  async onIntentCheckStarted(): Promise<void> {
+    const md = new Metadata();
+    const tempMessage = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
+
+    // Create a temporary message that looks like an AI response in-progress
+    tempMessage.Message = '🔍 Analyzing your request to determine the best agent...';
+    tempMessage.Role = 'AI';
+    tempMessage.Status = 'In-Progress';
+    // Set created date using LoadFromData to bypass read-only protection
+    tempMessage.LoadFromData({
+      Message: tempMessage.Message,
+      Role: tempMessage.Role,
+      Status: tempMessage.Status,
+      __mj_CreatedAt: new Date()
+    });
+    // No ID means it's temporary (won't be saved)
+
+    this.intentCheckMessage = tempMessage;
+    this.messages = [...this.messages, tempMessage];
+    this.scrollToBottom = true;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Handle intent check completed - remove temporary message
+   */
+  onIntentCheckCompleted(): void {
+    if (this.intentCheckMessage) {
+      // Remove the temporary intent check message
+      this.messages = this.messages.filter(m => m !== this.intentCheckMessage);
+      this.intentCheckMessage = null;
+      this.cdr.detectChanges();
     }
   }
 }

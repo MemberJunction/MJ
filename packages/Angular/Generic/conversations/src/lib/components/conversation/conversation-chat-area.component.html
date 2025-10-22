@@ -45,59 +45,72 @@
     <div class="chat-content-area">
     <!-- Messages Pane -->
     <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
-        <div class="chat-messages-wrapper">
-        <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
-            <mj-conversation-message-list
-            [messages]="messages"
-            [conversation]="conversationState.activeConversation"
-            [currentUser]="currentUser"
-            [isProcessing]="isProcessing"
-            [artifactMap]="artifactsByDetailId"
-            [agentRunMap]="agentRunsByDetailId"
-            (replyInThread)="onReplyInThread($event)"
-            (viewThread)="onViewThread($event)"
-            (retryMessage)="onRetryMessage($event)"
-            (artifactClicked)="onArtifactClicked($event)"
-            (messageEdited)="onMessageEdited($event)"
-            (openEntityRecord)="onOpenEntityRecord($event)"
-            (suggestedResponseSelected)="onSuggestedResponseSelected($event)">
-            </mj-conversation-message-list>
-
-            <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
-            <span class="scroll-to-bottom-icon" style="left: 50%;"
-                  *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
-                  (click)="scrollToBottomAnimate()">
-                <i class="fas fa-arrow-down"></i>
-            </span>
-        </div>
-
-        <!-- Fixed Input Area -->
-        <div class="chat-input-container">
-            @if (isLoadingPeripheralData) {
-              <!-- Loading State -->
-              <div class="loading-peripheral-placeholder">
-                <div class="loading-peripheral-content">
-                  <i class="fas fa-spinner fa-spin"></i>
-                  <span>Loading conversation data...</span>
-                </div>
-              </div>
-            } @else {
-              <!-- Input Component -->
-              <mj-message-input
-              *ngIf="conversationState.activeConversation"
-              [conversationId]="conversationState.activeConversation.ID"
+        @if (isLoadingConversation) {
+          <!-- Loading State - Show centered spinner while conversation loads -->
+          <div class="conversation-loading-state">
+            <div class="loading-content">
+              <i class="fas fa-spinner fa-spin"></i>
+              <span>Loading conversation...</span>
+            </div>
+          </div>
+        } @else {
+          <!-- Normal Message View -->
+          <div class="chat-messages-wrapper">
+          <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
+              <mj-conversation-message-list
+              [messages]="messages"
+              [conversation]="conversationState.activeConversation"
               [currentUser]="currentUser"
-              [conversationHistory]="messages"
-              [disabled]="isProcessing"
-              (messageSent)="onMessageSent($event)"
-              (agentResponse)="onAgentResponse($event)"
-              (agentRunDetected)="onAgentRunDetected($event)"
-              (artifactCreated)="onArtifactCreated($event)"
-              (conversationRenamed)="onConversationRenamed($event)">
-              </mj-message-input>
-            }
-        </div>
-        </div>
+              [isProcessing]="isProcessing"
+              [artifactMap]="artifactsByDetailId"
+              [agentRunMap]="agentRunsByDetailId"
+              (replyInThread)="onReplyInThread($event)"
+              (viewThread)="onViewThread($event)"
+              (retryMessage)="onRetryMessage($event)"
+              (artifactClicked)="onArtifactClicked($event)"
+              (messageEdited)="onMessageEdited($event)"
+              (openEntityRecord)="onOpenEntityRecord($event)"
+              (suggestedResponseSelected)="onSuggestedResponseSelected($event)">
+              </mj-conversation-message-list>
+
+              <!-- Scroll to Bottom Icon (positioned within scroll container for proper centering) -->
+              <span class="scroll-to-bottom-icon" style="left: 50%;"
+                    *ngIf="showScrollToBottomIcon && messages && messages.length > 0"
+                    (click)="scrollToBottomAnimate()">
+                  <i class="fas fa-arrow-down"></i>
+              </span>
+          </div>
+
+          <!-- Fixed Input Area -->
+          <div class="chat-input-container">
+              @if (isLoadingPeripheralData) {
+                <!-- Loading State -->
+                <div class="loading-peripheral-placeholder">
+                  <div class="loading-peripheral-content">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <span>Loading conversation data...</span>
+                  </div>
+                </div>
+              } @else {
+                <!-- Input Component -->
+                <mj-message-input
+                *ngIf="conversationState.activeConversation"
+                [conversationId]="conversationState.activeConversation.ID"
+                [currentUser]="currentUser"
+                [conversationHistory]="messages"
+                [disabled]="isProcessing"
+                (messageSent)="onMessageSent($event)"
+                (agentResponse)="onAgentResponse($event)"
+                (agentRunDetected)="onAgentRunDetected($event)"
+                (artifactCreated)="onArtifactCreated($event)"
+                (conversationRenamed)="onConversationRenamed($event)"
+                (intentCheckStarted)="onIntentCheckStarted()"
+                (intentCheckCompleted)="onIntentCheckCompleted()">
+                </mj-message-input>
+              }
+          </div>
+          </div>
+        }
     </div>
 
     <!-- Artifact Viewer Pane -->

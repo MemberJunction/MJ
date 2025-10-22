@@ -186,6 +186,59 @@
   font-weight: 400;
 }
 
+/* Time pill - unified styling for all AI message states */
+.time-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: auto;
+  transition: all 0.3s ease;
+}
+
+.time-pill i {
+  font-size: 10px;
+}
+
+/* Complete state - light blue (default) */
+.time-pill.complete {
+  background: #E0F2FE;
+  color: #0369A1;
+}
+
+/* In-progress state - purple/violet with subtle pulse */
+.time-pill.in-progress {
+  background: #F3E8FF;
+  color: #7C3AED;
+  animation: pillPulse 2s ease-in-out infinite;
+}
+
+/* Active agent run state - indigo with subtle pulse */
+.time-pill.active {
+  background: #E0E7FF;
+  color: #4F46E5;
+  animation: pillPulse 2s ease-in-out infinite;
+}
+
+/* Failed state - red */
+.time-pill.failed {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+@keyframes pillPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Deprecated - keeping for backward compatibility but no longer used */
 .generation-time {
   display: inline-flex;
   align-items: center;
@@ -203,6 +256,7 @@
   font-size: 10px;
 }
 
+/* Deprecated - keeping for backward compatibility but no longer used */
 .message-elapsed {
   color: #AAA;
   font-size: 11px;

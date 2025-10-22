@@ -12,33 +12,30 @@
       </span>
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
 
-      <!-- Generation time for completed AI messages (only show if no active agent run) -->
-      <span *ngIf="!isUserMessage && formattedGenerationTime && !isTemporaryMessage && !isAgentRunActive" class="generation-time">
-        <i class="fas fa-clock"></i>
-        {{ formattedGenerationTime }}
-      </span>
-
-      <!-- Agent run icon (clickable to expand details) -->
-      <span *ngIf="hasAgentRun"
-            class="agent-run-icon"
-            (click)="toggleAgentDetails()"
-            [class.expanded]="isAgentDetailsExpanded"
-            title="Click to view agent execution details">
-        <i class="fas fa-cog"></i>
-      </span>
-
       <!-- Status indicator for user messages -->
       <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">
         <i class="fas" [ngClass]="messageStatus === 'Error' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'"></i>
         <span class="status-text">{{ getStatusText() }}</span>
       </span>
 
-      <!-- Elapsed time for AI messages still processing (temporary messages) -->
-      <span *ngIf="isTemporaryMessage" class="message-elapsed">{{ _elapsedTimeFormatted }}</span>
+      <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
+      <span *ngIf="!isUserMessage && timePillText"
+            class="time-pill"
+            [class.in-progress]="isTemporaryMessage"
+            [class.active]="!isTemporaryMessage && isAgentRunActive"
+            [class.complete]="!isTemporaryMessage && !isAgentRunActive && messageStatus === 'Complete'"
+            [class.failed]="messageStatus === 'Error'">
+        <i class="fas fa-clock"></i>
+        {{ timePillText }}
+      </span>
 
-      <!-- Agent run duration timer for active agent runs (live updating) -->
-      <span *ngIf="!isTemporaryMessage && isAgentRunActive && hasAgentRun" class="message-elapsed agent-run-timer">
-        {{ _agentRunDurationFormatted }}
+      <!-- Agent run icon (clickable to expand details) - always rightmost when present -->
+      <span *ngIf="hasAgentRun"
+            class="agent-run-icon"
+            (click)="toggleAgentDetails()"
+            [class.expanded]="isAgentDetailsExpanded"
+            title="Click to view agent execution details">
+        <i class="fas fa-cog"></i>
       </span>
     </div>
 
