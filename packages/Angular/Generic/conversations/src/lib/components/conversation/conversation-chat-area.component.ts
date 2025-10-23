@@ -67,6 +67,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   // Loaded once per conversation and kept in sync as new runs are created
   public agentRunsByDetailId = new Map<string, AIAgentRunEntityExtended>();
 
+  // Timer for smooth agent run UI updates (updates every second while agent runs)
+  private agentRunUpdateTimer: any = null;
+
   // Loading state for peripheral data
   public isLoadingPeripheralData: boolean = false;
 
@@ -147,6 +150,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   ngOnDestroy() {
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
+
+    // Stop agent run update timer
+    this.stopAgentRunUpdateTimer();
 
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
@@ -400,6 +406,79 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId);
   }
 
+  /**
+   * Handle agent run update event from progress updates
+   * This is called on EVERY progress update with the full, live agent run object
+   * Provides real-time updates of status, timestamps, tokens, cost during execution
+   */
+  onAgentRunUpdate(event: {conversationDetailId: string; agentRun: AIAgentRunEntityExtended}): void {
+    // Directly update map with fresh data from progress (no database query needed)
+    this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+
+    // Create new Map reference to trigger Angular change detection
+    this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
+
+    // Force message list to re-render with updated agent run
+    // This ensures message components receive the fresh agent run data
+    this.messages = [...this.messages];
+    this.cdr.detectChanges();
+
+    console.log(`🔄 Agent run updated for detail ${event.conversationDetailId}, Status: ${event.agentRun.Status}`);
+
+    // Start 1-second update timer for smooth UI updates (if not already running)
+    this.startAgentRunUpdateTimer();
+
+    // If agent completed or failed, stop the timer
+    const status = event.agentRun.Status?.toLowerCase();
+    if (status === 'complete' || status === 'completed' || status === 'failed' || status === 'error') {
+      this.stopAgentRunUpdateTimer();
+    }
+  }
+
+  /**
+   * Start 1-second timer for smooth agent run UI updates
+   * Updates the message list every second to keep elapsed times current
+   */
+  private startAgentRunUpdateTimer(): void {
+    // Don't start if already running
+    if (this.agentRunUpdateTimer !== null) {
+      return;
+    }
+
+    console.log('⏱️ Starting agent run update timer (1-second interval)');
+    this.agentRunUpdateTimer = setInterval(() => {
+      // Check if we have any active agent runs
+      let hasActiveRuns = false;
+      for (const agentRun of this.agentRunsByDetailId.values()) {
+        const status = agentRun.Status?.toLowerCase();
+        if (status === 'in-progress' || status === 'running') {
+          hasActiveRuns = true;
+          break;
+        }
+      }
+
+      if (hasActiveRuns) {
+        // Force message list to re-render so timers update
+        this.messages = [...this.messages];
+        this.cdr.detectChanges();
+      } else {
+        // No active runs, stop the timer
+        this.stopAgentRunUpdateTimer();
+      }
+    }, 1000);
+  }
+
+  /**
+   * Stop the agent run update timer
+   */
+  private stopAgentRunUpdateTimer(): void {
+    if (this.agentRunUpdateTimer !== null) {
+      console.log('⏹️ Stopping agent run update timer');
+      clearInterval(this.agentRunUpdateTimer);
+      this.agentRunUpdateTimer = null;
+    }
+  }
+
   async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
     // Add the agent's response message to the conversation
     this.messages = [...this.messages, event.message];
@@ -413,13 +492,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Scroll to bottom when agent responds
     this.scrollToBottom = true;
 
-    // Add agent run to the map if present (fallback if not already loaded from progress)
+    // CRITICAL FIX: Always refresh the agent run data when agent completes
+    // This ensures we get the final status and timestamps, replacing any stale data from when agent started
     // agentResult is ExecuteAgentResult which contains agentRun property
     if (event.agentResult?.agentRun?.ID) {
-      // Only load if not already in map (progress update may have already loaded it)
-      if (!this.agentRunsByDetailId.has(event.message.ID)) {
-        await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID);
-      }
+      await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID, true);  // forceRefresh = true
     }
 
     // Reload artifact mapping for this message to pick up newly created artifacts
@@ -451,18 +528,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   /**
    * Add or update an agent run in the map
    * Called when a new agent run completes to keep the map in sync
+   * @param forceRefresh If true, always reload from database even if already in map (used when status changes)
    */
-  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string): Promise<void> {
+  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<void> {
     try {
-      if (!this.agentRunsByDetailId.has(conversationDetailId)) {
+      // Always refresh if forced, or if not in map yet
+      if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
         const md = new Metadata();
         const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+
+          // Create new Map reference to trigger Angular change detection
+          this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
+
+          // Force message list to re-render with updated agent run
+          this.messages = [...this.messages];
+          this.cdr.detectChanges();
+
+          console.log(`✅ Agent run ${forceRefresh ? 'refreshed' : 'added'} in map for detail ${conversationDetailId}, Status: ${agentRun.Status}`);
         }
-      }
-      else {
-        // nothing to do, temp console log to catch how many of these where we were wasting time
+      } else {
         console.log(`⏭️ Agent run for detail ${conversationDetailId} already in map, skipping load`);
       }
     } catch (error) {

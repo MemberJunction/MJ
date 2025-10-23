@@ -21,9 +21,9 @@
       <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
       <span *ngIf="!isUserMessage && timePillText"
             class="time-pill"
-            [class.in-progress]="isTemporaryMessage"
-            [class.active]="!isTemporaryMessage && isAgentRunActive"
-            [class.complete]="!isTemporaryMessage && !isAgentRunActive && messageStatus === 'Complete'"
+            [class.in-progress]="isInProgressAIMessage"
+            [class.active]="!isInProgressAIMessage && isAgentRunActive"
+            [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
             [class.failed]="messageStatus === 'Error'">
         <i class="fas fa-clock"></i>
         {{ timePillText }}
@@ -169,7 +169,7 @@
       }
     </div>
 
-    <div class="message-actions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+    <div class="message-actions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
       <!-- Retry button for failed AI messages -->
       <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry" *ngIf="messageStatus === 'Error' && isAIMessage">
         <i class="fas fa-redo"></i>
@@ -188,7 +188,7 @@
     </div>
 
     <!-- Reaction Buttons -->
-    <div class="message-reactions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+    <div class="message-reactions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
       <button class="reaction-btn" (click)="toggleReaction('like')">
         <i class="far fa-thumbs-up"></i>
         <span class="reaction-count">0</span>

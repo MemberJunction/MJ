@@ -84,20 +84,10 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     // No longer need to load artifacts per message - they are preloaded in chat area
   }
 
-  ngOnChanges(changes: SimpleChanges) {
-    // When agentRun input changes, restart the elapsed time updater if needed
-    if (changes['agentRun']) {
-      // If agent run becomes active, ensure interval is running
-      if (this.isAgentRunActive && this._elapsedTimeInterval === null) {
-        this.startElapsedTimeUpdater();
-      }
-      // If agent run completes, we can keep the interval running (it will stop naturally)
-      // or optionally stop it here for efficiency
-      else if (!this.isAgentRunActive && !this.isTemporaryMessage && this._elapsedTimeInterval !== null) {
-        clearInterval(this._elapsedTimeInterval);
-        this._elapsedTimeInterval = null;
-      }
-    }
+  ngOnChanges(_changes: SimpleChanges) {
+    // No longer need to manage timer for agentRun changes
+    // Parent's 1-second timer + agentRunDuration getter handles all agent run timing
+    // Component's timer only runs for temporary messages (handled in ngAfterViewInit)
   }
 
   /**
@@ -144,11 +134,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
-   * Starts the elapsed time updater interval for temporary messages and active agent runs
-   * Updates every second for all active items
+   * Starts the elapsed time updater interval for temporary messages only
+   * For agent runs with IDs, the parent's timer + agentRunDuration getter handles updates
+   * Updates every second for temporary messages that use _elapsedTimeFormatted
    */
   private startElapsedTimeUpdater(): void {
-    if (this.isTemporaryMessage || this.isAgentRunActive) {
+    // Only start timer for temporary messages (no ID yet)
+    // Agent runs with IDs use the parent's timer + agentRunDuration getter
+    if (this.isInProgressAIMessage) {
       // Initial update
       this.updateTimers();
       this.cdRef.markForCheck();
@@ -157,8 +150,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
       if (this._elapsedTimeInterval === null) {
         this._elapsedTimeInterval = setInterval(() => {
           this.updateTimers();
-          // Use markForCheck to ensure Angular updates the view
-          this.cdRef.markForCheck();
+          // Use detectChanges to force immediate synchronous view update
+          // markForCheck only schedules a check which may not happen if parent already checked
+          this.cdRef.detectChanges();
         }, 1000);
       }
     }
@@ -170,7 +164,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   private updateTimers(): void {
     // Update temporary message elapsed time
-    if (this.isTemporaryMessage) {
+    if (this.isInProgressAIMessage) {
       this._elapsedTimeFormatted = this.formatElapsedTime(this.elapsedTimeSinceLoad);
     }
 
@@ -341,8 +335,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
-  public get isTemporaryMessage(): boolean {
-    return this.isAIMessage && (!this.message.ID || this.message.ID.length === 0);
+  public get isInProgressAIMessage(): boolean {
+    return this.isAIMessage && this.message.Status === 'In-Progress';
   }
 
   public get isAgentRunActive(): boolean {
@@ -384,7 +378,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    * Unified time pill text for all AI message states
    * Returns the appropriate time display based on message state:
    * - Temporary messages (in-progress): Live elapsed time
-   * - Active agent runs: Live agent run duration
+   * - Active agent runs: Live agent run duration (calculated on-demand)
    * - Completed messages: Final generation time
    * - Failed messages: Time before failure
    */
@@ -394,13 +388,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
 
     // For temporary messages (in-progress), show live elapsed time
-    if (this.isTemporaryMessage) {
+    if (this.isInProgressAIMessage) {
       return this._elapsedTimeFormatted;
     }
 
-    // For active agent runs, show live agent run duration
+    // For active agent runs, calculate live duration from agentRun timestamps
+    // This getter recalculates every time using new Date(), so it updates smoothly
     if (this.isAgentRunActive && this.agentRun?.__mj_CreatedAt) {
-      return this._agentRunDurationFormatted;
+      return this.agentRunDuration;
     }
 
     // For completed or failed messages, show final generation time
@@ -441,7 +436,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (this.isAIMessage) {
       classes.push('ai-message');
       // Show in-progress styling for AI messages that are still processing
-      if (this.isTemporaryMessage || this.messageStatus === 'In-Progress') {
+      if (this.isInProgressAIMessage) {
         classes.push('in-progress');
       }
     } else if (this.isUserMessage) {

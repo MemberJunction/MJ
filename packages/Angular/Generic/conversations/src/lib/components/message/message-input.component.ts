@@ -34,6 +34,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
+  @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun: any}>(); // Emits when agent run data updates during progress
   @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
@@ -646,8 +647,10 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     let capturedAgentRunId: string | null = null;
 
     return async (progress) => {
-      // Extract agentRunId from progress metadata
-      const progressAgentRunId = progress.metadata?.agentRunId as string | undefined;
+      // CRITICAL FIX: Extract FULL agentRun object from progress metadata
+      // BaseAgent sends the complete AIAgentRunEntityExtended object with live timestamps
+      const progressAgentRun = progress.metadata?.agentRun as any | undefined;
+      const progressAgentRunId = progressAgentRun?.ID || progress.metadata?.agentRunId as string | undefined;
 
       // Capture the agent run ID from the first progress message
       if (!capturedAgentRunId && progressAgentRunId) {
@@ -687,11 +690,20 @@ export class MessageInputComponent implements OnInit, OnDestroy {
             return;
           }
 
-          // Emit agentRunId if we have it (for parent to track)
-          if (progressAgentRunId) {
+          // Emit agentRunId on first detection (for backward compatibility)
+          if (progressAgentRunId && !capturedAgentRunId) {
             this.agentRunDetected.emit({
               conversationDetailId: conversationDetail.ID,
               agentRunId: progressAgentRunId
+            });
+          }
+
+          // CRITICAL FIX: Emit FULL agent run object for incremental updates
+          // This contains live timestamps, status, and other fields that change during execution
+          if (progressAgentRun) {
+            this.agentRunUpdate.emit({
+              conversationDetailId: conversationDetail.ID,
+              agentRun: progressAgentRun
             });
           }
 
