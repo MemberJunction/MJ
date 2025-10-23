@@ -30,6 +30,7 @@ export interface ArtifactJSON {
   ArtifactName: string;
   ArtifactType: string;
   ArtifactDescription: string | null;
+  Visibility?: string;
 }
 
 /**

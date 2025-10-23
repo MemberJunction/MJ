@@ -136,7 +136,24 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       content: () => BuildComponentCompleteCode(resolvedComponent)
     });
 
+    // Spec tab - Shows fully resolved component spec in JSON format (rightmost)
+    tabs.push({
+      label: 'Spec',
+      icon: 'fa-file-code',
+      contentType: 'json',
+      content: () => JSON.stringify(resolvedComponent, null, 2),
+      language: 'json'
+    });
+
     return tabs;
+  }
+
+  /**
+   * Remove standard JSON tab since we provide "Resolved JSON" custom tab
+   * The custom tab shows the fully resolved component spec instead of raw artifact JSON
+   */
+  public GetStandardTabRemovals(): string[] {
+    return ['JSON'];
   }
 
   private extractComponentParts(): void {

@@ -820,7 +820,33 @@
   padding: 0;
 }
 
-.code-viewer, .plaintext-viewer {
+.code-viewer {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.code-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #F9FAFB;
+  border-bottom: 1px solid #E5E7EB;
+  flex-shrink: 0;
+}
+
+.code-editor-container {
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.plaintext-viewer {
   flex: 1;
   overflow: auto;
   padding: 12px;

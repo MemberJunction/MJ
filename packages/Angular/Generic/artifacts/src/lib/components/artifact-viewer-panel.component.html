@@ -232,13 +232,20 @@
                   }
                   @case ('code') {
                     <div class="code-viewer">
-                      <mj-code-editor
-                        [value]="tabData.content"
-                        [language]="tabData.language || 'typescript'"
-                        [readonly]="true"
-                        [lineWrapping]="true"
-                        style="width: 100%; height: 100%;">
-                      </mj-code-editor>
+                      <div class="code-toolbar">
+                        <button class="btn-icon" title="Copy Code" (click)="onCopyToClipboard()">
+                          <i class="fas fa-copy"></i> Copy
+                        </button>
+                      </div>
+                      <div class="code-editor-container">
+                        <mj-code-editor
+                          [value]="tabData.content"
+                          [language]="tabData.language || 'typescript'"
+                          [readonly]="true"
+                          [lineWrapping]="true"
+                          style="width: 100%; height: 100%;">
+                        </mj-code-editor>
+                      </div>
                     </div>
                   }
                   @case ('html') {

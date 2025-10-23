@@ -338,13 +338,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           const artifactList: LazyArtifactInfo[] = [];
 
           for (const artifactData of parsed.artifacts) {
+            // Filter out system-only artifacts from user view (e.g., Sage routing payloads)
+            if (artifactData.Visibility === 'System Only') {
+              continue;
+            }
+
             // Create LazyArtifactInfo with display data from query
             // Full entities will be loaded on-demand when artifact is clicked
             const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
             artifactList.push(lazyInfo);
           }
 
-          this.artifactsByDetailId.set(row.ID, artifactList);
+          // Only add to map if we have visible artifacts
+          if (artifactList.length > 0) {
+            this.artifactsByDetailId.set(row.ID, artifactList);
+          }
         }
       }
 

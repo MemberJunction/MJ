@@ -285,7 +285,7 @@ export class SearchService {
     const result = await rv.RunView<ArtifactEntity>(
       {
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: filter,
+        ExtraFilter: `${filter} AND (Visibility IS NULL OR Visibility='Always')`,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 100,
         ResultType: 'entity_object'

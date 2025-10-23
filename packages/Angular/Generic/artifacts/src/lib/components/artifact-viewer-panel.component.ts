@@ -57,7 +57,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   // Dynamic tabs from plugin
   public get allTabs(): string[] {
-    // Start with Display tab
+    // Start with Display tab (cannot be removed)
     const tabs = ['Display'];
 
     // Get plugin tabs directly from plugin instance (no caching needed - plugin always exists)
@@ -67,11 +67,20 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       tabs.push(...pluginTabLabels);
     }
 
-    // Add base tabs
-    tabs.push('JSON', 'Details');
+    // Get tabs to remove from plugin (case-insensitive)
+    const removals = this.pluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
+    const removalsLower = removals.map(r => r.toLowerCase());
 
-    // Conditionally add Links tab if there are links to show
-    if (this.hasLinksTab) {
+    // Add standard tabs (unless plugin removed them)
+    if (!removalsLower.includes('json')) {
+      tabs.push('JSON');
+    }
+    if (!removalsLower.includes('details')) {
+      tabs.push('Details');
+    }
+
+    // Conditionally add Links tab if has links AND not removed by plugin
+    if (this.hasLinksTab && !removalsLower.includes('links')) {
       tabs.push('Links');
     }
 
