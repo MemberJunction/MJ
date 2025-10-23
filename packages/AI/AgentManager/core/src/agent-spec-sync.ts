@@ -475,6 +475,10 @@ export class AgentSpecSync {
             OwnerUserID: agent.OwnerUserID || undefined,
             InvocationMode: agent.InvocationMode,
 
+            // Requirements and design documentation
+            FunctionalRequirement: (agent as any).FunctionalRequirement || undefined,
+            TechnicalDesign: (agent as any).TechnicalDesign || undefined,
+
             // Map actions
             Actions: actions.map(action => this.mapActionEntityToSpec(action)),
 
@@ -768,6 +772,10 @@ export class AgentSpecSync {
         }
         agentEntity.InvocationMode = this.spec.InvocationMode || 'Any';
 
+        // Requirements and design documentation
+        agentEntity.FunctionalRequirement = this.spec.FunctionalRequirement || null;
+        agentEntity.TechnicalDesign = this.spec.TechnicalDesign || null;
+
         // Validate if requested
         if (validate) {
             const validation = agentEntity.Validate();
@@ -901,31 +909,22 @@ export class AgentSpecSync {
 
             console.log(`✅ saveChildSubAgent: Created child sub-agent with ID: ${childId}`);
         } else {
-            // SubAgent already exists - just ensure ParentID is set correctly
+            // SubAgent already exists - update it recursively to capture all field changes
             console.log(`🔗 saveChildSubAgent: Updating existing child sub-agent "${SubAgentSpec.SubAgent.ID}"...`);
 
-            const md = new Metadata();
-            const childEntity = await md.GetEntityObject<AIAgentEntity>(
-                'AI Agents',
-                this._contextUser
-            );
+            // Set ParentID in the sub-agent spec
+            const childSpec: AgentSpec = {
+                ...SubAgentSpec.SubAgent,
+                ParentID: parentId
+            };
 
-            const loaded = await childEntity.Load(SubAgentSpec.SubAgent.ID);
-            if (!loaded) {
-                throw new Error(`Child agent ${SubAgentSpec.SubAgent.ID} not found in database`);
-            }
+            // Recursively update the sub-agent using AgentSpecSync
+            // This ensures all fields including FunctionalRequirement and TechnicalDesign are updated
+            const childSync = new AgentSpecSync(childSpec, this._contextUser);
+            childSync.markDirty();
+            await childSync.SaveToDatabase();
 
-            // Update parent ID if needed
-            if (childEntity.ParentID !== parentId) {
-                console.log(`🔗 saveChildSubAgent: Setting ParentID to ${parentId}`);
-                childEntity.ParentID = parentId;
-                const saved = await childEntity.Save();
-                if (!saved) {
-                    throw new Error(`Failed to update ParentID for child agent ${SubAgentSpec.SubAgent.ID}`);
-                }
-            } else {
-                console.log(`✅ saveChildSubAgent: ParentID already correct`);
-            }
+            console.log(`✅ saveChildSubAgent: Updated existing child sub-agent`);
         }
     }
 

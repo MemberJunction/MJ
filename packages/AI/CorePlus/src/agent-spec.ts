@@ -6,22 +6,21 @@
  */
 export interface AgentSpec {
     /**
-     * Detailed markdown formatted requirements that explains the business goals of the agent but does
-     * not get into the specific technical implementation details.
+     * Detailed markdown formatted requirements that explain the business goals of the agent without
+     * specific technical implementation details.
      */
-    RequirementsDefinition?: string;
+    FunctionalRequirement?: string;
 
     /**
-     * Detailed markdown that explains the structure of the agent in great detail including all of the 
-     * attributes that will be necessary later to architect the metadata that is part of this AgentSpec.
-     * Information will include:
+     * Detailed markdown that explains the structure of the agent including agent architecture,
+     * actions, sub-agents, prompts, and payload structure. Information will include:
      * - Agent architecture overview - basic top level info like name, description, agent type
      * - Actions included in the agent
      * - Sub-agents included in the agent
      * - Prompt(s) for the agent
      * - Payload structure including input and output JSON example
      */
-    DetailedDesign?: string;
+    TechnicalDesign?: string;
 
     // Stuff below here is metadata that goes directly into the AI Agents entity
     ID: string;

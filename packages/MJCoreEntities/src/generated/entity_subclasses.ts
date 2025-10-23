@@ -1359,6 +1359,16 @@ if this limit is exceeded.`),
     *   * Any
     *   * Top-Level
         * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`),
+    FunctionalRequirement: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirement
+        * * Display Name: Functional Requirement
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.`),
+    TechnicalDesign: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesign
+        * * Display Name: Technical Design
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -19658,6 +19668,32 @@ if this limit is exceeded.
     }
     set InvocationMode(value: 'Any' | 'Sub-Agent' | 'Top-Level') {
         this.Set('InvocationMode', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirement
+    * * Display Name: Functional Requirement
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.
+    */
+    get FunctionalRequirement(): string | null {
+        return this.Get('FunctionalRequirement');
+    }
+    set FunctionalRequirement(value: string | null) {
+        this.Set('FunctionalRequirement', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesign
+    * * Display Name: Technical Design
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure.
+    */
+    get TechnicalDesign(): string | null {
+        return this.Get('TechnicalDesign');
+    }
+    set TechnicalDesign(value: string | null) {
+        this.Set('TechnicalDesign', value);
     }
 
     /**

@@ -51,9 +51,8 @@ export class AgentArchitectAgent extends BaseAgent {
         // Apply payload changes to get the spec that would be sent forward
         const payloadWithChanges = this.applyPayloadChanges<P>(currentPayload, nextStep);
 
-        // Extract the agentSpec from the nested payload structure
-        // The payload has structure: { metadata, requirements, design, agentSpec }
-        const agentSpec = (payloadWithChanges as any).agentSpec as AgentSpec;
+        // The payload IS the AgentSpec
+        const agentSpec = payloadWithChanges as AgentSpec;
 
         console.log('🏗️ Architect Agent: Validating AgentSpec:', agentSpec ? `Name="${agentSpec.Name}"` : 'agentSpec is null/undefined');
 
@@ -74,13 +73,9 @@ export class AgentArchitectAgent extends BaseAgent {
         // If spec was auto-corrected, update the payload with corrected spec
         if (validation.correctedSpec) {
             console.log('✓ Architect Agent: Auto-corrected AgentSpec, updating payload');
-            const updatedPayload = {
-                ...(payloadWithChanges as any),
-                agentSpec: validation.correctedSpec
-            };
             return {
                 ...nextStep,
-                newPayload: updatedPayload as P
+                newPayload: validation.correctedSpec as P
             };
         }
 
