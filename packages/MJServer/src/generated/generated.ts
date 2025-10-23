@@ -11216,11 +11216,11 @@ export class MJEntity_ {
     @Field(() => [MJQueryEntity_])
     QueryEntities_EntityIDArray: MJQueryEntity_[]; // Link to QueryEntities
     
-    @Field(() => [MJRecordLink_])
-    MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
-    
     @Field(() => [MJAccessControlRule_])
     MJ_AccessControlRules_EntityIDArray: MJAccessControlRule_[]; // Link to MJ_AccessControlRules
+    
+    @Field(() => [MJRecordLink_])
+    MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
     
     @Field(() => [MJGeneratedCode_])
     GeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to GeneratedCodes
@@ -12029,17 +12029,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJRecordLink_])
-    async MJ_RecordLinks_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Record Links', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordLinks] WHERE [SourceEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Record Links', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAccessControlRule_])
     async MJ_AccessControlRules_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Access Control Rules', userPayload);
@@ -12048,6 +12037,17 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAccessControlRules] WHERE [EntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Access Control Rules', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Access Control Rules', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordLink_])
+    async MJ_RecordLinks_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordLinks] WHERE [SourceEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Record Links', rows);
         return result;
     }
         
@@ -34393,6 +34393,9 @@ export class MJCommunicationProvider_ {
     @Field(() => Boolean, {description: `Whether or not the provider supports replying to messages`}) 
     SupportsReplying: boolean;
         
+    @Field(() => Boolean, {description: `Whether or not the provider supports creating draft messages`}) 
+    SupportsDrafts: boolean;
+        
     @Field(() => [MJCommunicationProviderMessageType_])
     CommunicationProviderMessageTypes_CommunicationProviderIDArray: MJCommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
     
@@ -34432,6 +34435,9 @@ export class CreateMJCommunicationProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsReplying?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDrafts?: boolean;
 }
     
 
@@ -34466,6 +34472,9 @@ export class UpdateMJCommunicationProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsReplying?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDrafts?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

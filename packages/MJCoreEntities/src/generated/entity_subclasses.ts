@@ -2806,6 +2806,12 @@ export const CommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether or not the provider supports replying to messages`),
+    SupportsDrafts: z.boolean().describe(`
+        * * Field Name: SupportsDrafts
+        * * Display Name: Supports Drafts
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether or not the provider supports creating draft messages`),
 });
 
 export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
@@ -23414,6 +23420,20 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     }
     set SupportsReplying(value: boolean) {
         this.Set('SupportsReplying', value);
+    }
+
+    /**
+    * * Field Name: SupportsDrafts
+    * * Display Name: Supports Drafts
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether or not the provider supports creating draft messages
+    */
+    get SupportsDrafts(): boolean {
+        return this.Get('SupportsDrafts');
+    }
+    set SupportsDrafts(value: boolean) {
+        this.Set('SupportsDrafts', value);
     }
 }
 

@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import twilio from 'twilio';
@@ -306,6 +306,16 @@ export class TwilioProvider extends BaseCommunicationProvider {
         ErrorMessage: error.message || 'Error forwarding message'
       };
     }
+  }
+
+  /**
+   * Twilio does not support creating draft messages
+   */
+  public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+    return {
+      Success: false,
+      ErrorMessage: 'Twilio does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).'
+    };
   }
 }
 
