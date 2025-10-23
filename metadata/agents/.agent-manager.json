@@ -388,16 +388,57 @@
                   "StepType": "Action",
                   "StartingStep": true,
                   "ActionID": "@lookup:Actions.Name=Load Agent Spec",
-                  "ActionInputMapping": "{\"AgentID\": \"payload.agentId\"}",
-                  "ActionOutputMapping": "{\"AgentSpec\": \"loadedAgent.agentSpec\"}",
+                  "ActionInputMapping": {
+                    "AgentID": "payload.ID"
+                  },
+                  "ActionOutputMapping": {
+                    "AgentSpec.ID": "ID",
+                    "AgentSpec.Name": "Name",
+                    "AgentSpec.Description": "Description",
+                    "AgentSpec.TypeID": "TypeID",
+                    "AgentSpec.Status": "Status",
+                    "AgentSpec.FunctionalRequirement": "FunctionalRequirement",
+                    "AgentSpec.TechnicalDesign": "TechnicalDesign",
+                    "AgentSpec.IconClass": "IconClass",
+                    "AgentSpec.LogoURL": "LogoURL",
+                    "AgentSpec.ParentID": "ParentID",
+                    "AgentSpec.DriverClass": "DriverClass",
+                    "AgentSpec.ModelSelectionMode": "ModelSelectionMode",
+                    "AgentSpec.PayloadDownstreamPaths": "PayloadDownstreamPaths",
+                    "AgentSpec.PayloadUpstreamPaths": "PayloadUpstreamPaths",
+                    "AgentSpec.PayloadSelfReadPaths": "PayloadSelfReadPaths",
+                    "AgentSpec.PayloadSelfWritePaths": "PayloadSelfWritePaths",
+                    "AgentSpec.PayloadScope": "PayloadScope",
+                    "AgentSpec.FinalPayloadValidation": "FinalPayloadValidation",
+                    "AgentSpec.FinalPayloadValidationMode": "FinalPayloadValidationMode",
+                    "AgentSpec.FinalPayloadValidationMaxRetries": "FinalPayloadValidationMaxRetries",
+                    "AgentSpec.MaxCostPerRun": "MaxCostPerRun",
+                    "AgentSpec.MaxTokensPerRun": "MaxTokensPerRun",
+                    "AgentSpec.MaxIterationsPerRun": "MaxIterationsPerRun",
+                    "AgentSpec.MaxTimePerRun": "MaxTimePerRun",
+                    "AgentSpec.MinExecutionsPerRun": "MinExecutionsPerRun",
+                    "AgentSpec.MaxExecutionsPerRun": "MaxExecutionsPerRun",
+                    "AgentSpec.StartingPayloadValidation": "StartingPayloadValidation",
+                    "AgentSpec.StartingPayloadValidationMode": "StartingPayloadValidationMode",
+                    "AgentSpec.DefaultPromptEffortLevel": "DefaultPromptEffortLevel",
+                    "AgentSpec.ChatHandlingOption": "ChatHandlingOption",
+                    "AgentSpec.DefaultArtifactTypeID": "DefaultArtifactTypeID",
+                    "AgentSpec.OwnerUserID": "OwnerUserID",
+                    "AgentSpec.InvocationMode": "InvocationMode",
+                    "AgentSpec.Actions": "Actions",
+                    "AgentSpec.SubAgents": "SubAgents",
+                    "AgentSpec.Prompts": "Prompts",
+                    "AgentSpec.Steps": "Steps",
+                    "AgentSpec.Paths": "Paths"
+                  },
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "33533220-480D-4693-BAC0-980E98077CC7"
                 },
                 "sync": {
-                  "lastModified": "2025-10-23T15:05:24.096Z",
-                  "checksum": "90d9d973fcea422b42a610dcdadd5077c6cd9f04c462ca4f08a712861a7df4cf"
+                  "lastModified": "2025-10-23T17:33:05.046Z",
+                  "checksum": "34ca06e24cb328d1d99f1c25d092f7926454227a76f638afeb356b59d2ade564"
                 }
               }
             ]
