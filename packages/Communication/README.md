@@ -360,6 +360,26 @@ When contributing to the Communication Framework:
 4. Handle errors gracefully
 5. Update relevant documentation
 
+## Package Documentation
+
+For detailed documentation on individual packages, see:
+
+### Core Packages
+- **[Communication Types](./base-types/README.md)** - Base types, interfaces, and provider abstract class
+- **[Communication Engine](./engine/readme.md)** - Main orchestration engine and message processing
+
+### Entity Communication Packages
+- **[Entity Communications Base](./entity-comm-base/README.md)** - Base classes for entity-level communications
+- **[Entity Communications Server](./entity-comm-server/README.md)** - Server-side entity communication implementation
+- **[Entity Communications Client](./entity-comm-client/README.md)** - Client-side entity communication implementation
+
+### Provider Packages
+- **[Gmail Provider](./providers/gmail/README.md)** - Gmail/Google Suite integration with draft support
+- **[Microsoft Graph Provider](./providers/MSGraph/README.md)** - Office 365/Exchange integration with draft support
+- **[SendGrid Provider](./providers/sendgrid/README.md)** - SendGrid email service integration
+- **[Twilio Provider](./providers/twilio/README.md)** - SMS, WhatsApp, and Messenger integration
+- **[Provider Overview](./providers/README.md)** - General provider information
+
 ## License
 
 All Communication Framework packages follow the same licensing as the MemberJunction project.
