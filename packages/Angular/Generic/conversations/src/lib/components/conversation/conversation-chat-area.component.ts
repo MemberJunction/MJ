@@ -890,14 +890,18 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Reload artifacts to get full entities
     await this.reloadArtifactsForMessage(data.conversationDetailId);
 
-    // if we don't already have another artifact showing, let's show the newly created one
+    // Auto-open artifact panel if no artifact currently shown
     if (!this.showArtifactPanel) {
-      this.selectedArtifactId = data.artifactId;
-      this.showArtifactPanel = true;
+      const artifactList = this.artifactsByDetailId.get(data.conversationDetailId);
+      if (artifactList && artifactList.length > 0) {
+        // Show the LAST (most recent) artifact - use actual ID from map, not empty event data
+        this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
+        this.showArtifactPanel = true;
+      }
     }
 
-    // If artifact viewer is already open for this artifact, trigger refresh to show new version
-    if (this.showArtifactPanel && this.selectedArtifactId === data.artifactId) {
+    // If artifact viewer is already open and event has artifactId, trigger refresh to show new version
+    if (this.showArtifactPanel && data.artifactId && this.selectedArtifactId === data.artifactId) {
       // Emit event to refresh artifact viewer with new version
       this.artifactViewerRefresh$.next({artifactId: data.artifactId, versionNumber: data.versionNumber});
     }

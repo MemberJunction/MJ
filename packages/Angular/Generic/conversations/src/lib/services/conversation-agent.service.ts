@@ -312,7 +312,9 @@ export class ConversationAgentService {
     reasoning: string,
     conversationDetailId: string,
     payload?: any,
-    onProgress?: AgentExecutionProgressCallback
+    onProgress?: AgentExecutionProgressCallback,
+    sourceArtifactId?: string,
+    sourceArtifactVersionId?: string
   ): Promise<ExecuteAgentResult | null> {
     if (!this._aiClient) {
       const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
@@ -352,7 +354,9 @@ export class ConversationAgentService {
           invocationReason: reasoning
         },
         ...(payload ? { payload } : {}),
-        onProgress: onProgress
+        onProgress: onProgress,
+        ...(sourceArtifactId ? { sourceArtifactId } : {}),
+        ...(sourceArtifactVersionId ? { sourceArtifactVersionId } : {})
       };
 
       // Run the sub-agent

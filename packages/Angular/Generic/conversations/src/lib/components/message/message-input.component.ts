@@ -1562,7 +1562,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         'Continuing previous work based on user feedback',
         statusMessage.ID,
         previousPayload,
-        this.createProgressCallback(statusMessage, agentName)
+        this.createProgressCallback(statusMessage, agentName),
+        previousArtifactInfo?.artifactId,
+        previousArtifactInfo?.versionId
       );
 
       // Remove from active tasks
@@ -1866,7 +1868,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         'Continuing previous conversation with user',
         agentResponseMessage.ID,
         previousPayload, // Pass previous OUTPUT artifact payload for continuity
-        this.createProgressCallback(agentResponseMessage, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName),
+        previousArtifactInfo?.artifactId,
+        previousArtifactInfo?.versionId
       );
 
       // Remove from active tasks
