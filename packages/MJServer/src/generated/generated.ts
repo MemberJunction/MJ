@@ -2875,9 +2875,9 @@ export class MJAIAgent_ {
     @MaxLength(16)
     TypeID?: string;
         
-    @Field({nullable: true, description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
+    @Field({description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
     @MaxLength(40)
-    Status?: string;
+    Status: string;
         
     @Field({nullable: true, description: `Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`}) 
     @MaxLength(510)
@@ -3095,7 +3095,7 @@ export class CreateMJAIAgentInput {
     TypeID: string | null;
 
     @Field({ nullable: true })
-    Status: string | null;
+    Status?: string;
 
     @Field({ nullable: true })
     DriverClass: string | null;
@@ -3216,7 +3216,7 @@ export class UpdateMJAIAgentInput {
     TypeID?: string | null;
 
     @Field({ nullable: true })
-    Status?: string | null;
+    Status?: string;
 
     @Field({ nullable: true })
     DriverClass?: string | null;

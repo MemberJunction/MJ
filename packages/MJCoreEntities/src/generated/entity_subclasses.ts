@@ -1194,10 +1194,16 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
-    Status: z.string().nullable().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
         * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`),
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
@@ -19299,12 +19305,18 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Field Name: Status
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
     * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.
     */
-    get Status(): string | null {
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
         return this.Get('Status');
     }
-    set Status(value: string | null) {
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
         this.Set('Status', value);
     }
 
