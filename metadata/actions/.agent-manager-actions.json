@@ -188,51 +188,15 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": false,
-            "Description": "Complete AgentSpec structure with all nested data",
+            "Description": "Complete AgentSpec structure including Actions, SubAgents, Prompts, Steps, Paths, FunctionalRequirement, and TechnicalDesign",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "13C8999A-2F6F-4804-B319-0896ED148921"
           },
           "sync": {
-            "lastModified": "2025-10-22T22:18:07.323Z",
-            "checksum": "8dd99aec8ac176f407841987bf062da11669deb470c6efd5caf8890eab867865"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentName",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Name of the loaded agent",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "D5332F36-AE54-415C-8C4A-D735559E44E3"
-          },
-          "sync": {
-            "lastModified": "2025-10-22T22:18:07.332Z",
-            "checksum": "9ab01a5698b5e318ce3fa9946fde5bab6f91b3ad671a45b41248540817109020"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AgentType",
-            "Type": "Output",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "TypeID of the agent (Loop or Flow)",
-            "IsRequired": false
-          },
-          "primaryKey": {
-            "ID": "A13653C5-2DC9-48C6-AF0C-BC108B0EF275"
-          },
-          "sync": {
-            "lastModified": "2025-10-22T22:18:07.351Z",
-            "checksum": "a355f5d0546df136fda03dfdafcfe12aee51aaddef80ff7f3c6b7e407224a59f"
+            "lastModified": "2025-10-23T19:17:21.357Z",
+            "checksum": "567d51c41cdbfe594020b315999e96d663997850aa02cb566184c067e613b335"
           }
         }
       ]

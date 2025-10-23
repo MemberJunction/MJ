@@ -476,8 +476,8 @@ export class AgentSpecSync {
             InvocationMode: agent.InvocationMode,
 
             // Requirements and design documentation
-            FunctionalRequirement: (agent as any).FunctionalRequirement || undefined,
-            TechnicalDesign: (agent as any).TechnicalDesign || undefined,
+            FunctionalRequirement: (agent as any).FunctionalRequirement || null,
+            TechnicalDesign: (agent as any).TechnicalDesign || null,
 
             // Map actions
             Actions: actions.map(action => this.mapActionEntityToSpec(action)),

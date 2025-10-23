@@ -88,45 +88,25 @@ export class LoadAgentSpecAction extends BaseAction {
             // Get complete AgentSpec as JSON
             const agentSpec = specSync.toJSON();
 
-            // Add output parameters
+            // Ensure FunctionalRequirement and TechnicalDesign are always present (even if null)
+            if (!('FunctionalRequirement' in agentSpec)) {
+                agentSpec.FunctionalRequirement = null;
+            }
+            if (!('TechnicalDesign' in agentSpec)) {
+                agentSpec.TechnicalDesign = null;
+            }
+
+            // Add ONLY AgentSpec output parameter
             params.Params.push({
                 Name: 'AgentSpec',
                 Type: 'Output',
                 Value: agentSpec
             });
 
-            params.Params.push({
-                Name: 'AgentName',
-                Type: 'Output',
-                Value: agentSpec.Name
-            });
-
-            params.Params.push({
-                Name: 'AgentType',
-                Type: 'Output',
-                Value: agentSpec.TypeID
-            });
-
-            // Build response message with summary
-            const responseData = {
-                message: `Successfully loaded agent "${agentSpec.Name}"`,
-                agentId: agentSpec.ID,
-                agentName: agentSpec.Name,
-                agentType: agentSpec.TypeID,
-                status: agentSpec.Status,
-                description: agentSpec.Description,
-                actionCount: agentSpec.Actions?.length || 0,
-                subAgentCount: agentSpec.SubAgents?.length || 0,
-                promptCount: agentSpec.Prompts?.length || 0,
-                stepCount: agentSpec.Steps?.length || 0,
-                pathCount: agentSpec.Paths?.length || 0,
-                agentSpec: agentSpec  // Complete structure
-            };
-
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: JSON.stringify(responseData, null, 2)
+                Message: JSON.stringify(agentSpec, null, 2)
             };
 
         } catch (error) {
