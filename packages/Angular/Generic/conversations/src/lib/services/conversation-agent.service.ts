@@ -354,13 +354,11 @@ export class ConversationAgentService {
           invocationReason: reasoning
         },
         ...(payload ? { payload } : {}),
-        onProgress: onProgress,
-        ...(sourceArtifactId ? { sourceArtifactId } : {}),
-        ...(sourceArtifactVersionId ? { sourceArtifactVersionId } : {})
+        onProgress: onProgress
       };
 
-      // Run the sub-agent
-      const result = await this._aiClient.RunAIAgent(params);
+      // Run the sub-agent with optional source artifact info for versioning (GraphQL layer only)
+      const result = await this._aiClient.RunAIAgent(params, sourceArtifactId, sourceArtifactVersionId);
 
       return result;
     } catch (error) {

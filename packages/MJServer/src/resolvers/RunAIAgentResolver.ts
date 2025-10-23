@@ -321,7 +321,9 @@ export class RunAIAgentResolver extends ResolverBase {
         configurationId?: string,
         conversationDetailId?: string,
         createArtifacts: boolean = false,
-        createNotification: boolean = false
+        createNotification: boolean = false,
+        sourceArtifactId?: string,
+        sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
         
@@ -391,7 +393,8 @@ export class RunAIAgentResolver extends ResolverBase {
                         result.agentRun,
                         result.payload,
                         currentUser,
-                        conversationDetailId
+                        conversationDetailId,
+                        sourceArtifactId
                     );
 
                     // Create notification if enabled and artifact was created successfully
@@ -507,7 +510,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('configurationId', { nullable: true }) configurationId?: string,
         @Arg('conversationDetailId', { nullable: true }) conversationDetailId?: string,
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
-        @Arg('createNotification', { nullable: true }) createNotification?: boolean
+        @Arg('createNotification', { nullable: true }) createNotification?: boolean,
+        @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -525,7 +530,9 @@ export class RunAIAgentResolver extends ResolverBase {
             configurationId,
             conversationDetailId,
             createArtifacts || false,
-            createNotification || false
+            createNotification || false,
+            sourceArtifactId,
+            sourceArtifactVersionId
         );
     }
 
@@ -549,7 +556,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('configurationId', { nullable: true }) configurationId?: string,
         @Arg('conversationDetailId', { nullable: true }) conversationDetailId?: string,
         @Arg('createArtifacts', { nullable: true }) createArtifacts?: boolean,
-        @Arg('createNotification', { nullable: true }) createNotification?: boolean
+        @Arg('createNotification', { nullable: true }) createNotification?: boolean,
+        @Arg('sourceArtifactId', { nullable: true }) sourceArtifactId?: string,
+        @Arg('sourceArtifactVersionId', { nullable: true }) sourceArtifactVersionId?: string
     ): Promise<AIAgentRunResult> {
         const p = GetReadWriteProvider(providers);
         return this.executeAIAgent(
@@ -567,8 +576,41 @@ export class RunAIAgentResolver extends ResolverBase {
             configurationId,
             conversationDetailId,
             createArtifacts || false,
-            createNotification || false
+            createNotification || false,
+            sourceArtifactId,
+            sourceArtifactVersionId
         );
+    }
+
+    /**
+     * Get the maximum version number for an artifact
+     * Used when creating new version of an explicitly specified artifact
+     */
+    private async getMaxVersionForArtifact(
+        artifactId: string,
+        contextUser: UserInfo
+    ): Promise<number> {
+        try {
+            const rv = new RunView();
+
+            // Query all versions for this artifact to find max version number
+            const result = await rv.RunView<ArtifactVersionEntity>({
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ArtifactID='${artifactId}'`,
+                OrderBy: 'VersionNumber DESC',
+                MaxRows: 1,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (result.Success && result.Results && result.Results.length > 0) {
+                return result.Results[0].VersionNumber || 0;
+            }
+
+            return 0; // No versions found, will create version 1
+        } catch (error) {
+            LogError(`Error getting max version for artifact: ${(error as Error).message}`);
+            return 0;
+        }
     }
 
     /**
@@ -626,7 +668,8 @@ export class RunAIAgentResolver extends ResolverBase {
         agentRun: AIAgentRunEntityExtended,
         payload: any,
         contextUser: UserInfo,
-        conversationDetailId?: string
+        conversationDetailId?: string,
+        sourceArtifactId?: string
     ): Promise<{ artifactId?: string; versionId?: string; versionNumber?: number }> {
         // Validate inputs
         if (!payload || Object.keys(payload).length === 0) {
@@ -658,19 +701,28 @@ export class RunAIAgentResolver extends ResolverBase {
             let newVersionNumber: number;
             let isNewArtifact = false;
 
-            const previousArtifact = await this.findPreviousArtifactForMessage(
-                conversationDetailId,
-                contextUser
-            );
+            // Priority 1: Use explicit source artifact if provided (agent continuity/refinement)
+            if (sourceArtifactId) {
+                const maxVersion = await this.getMaxVersionForArtifact(sourceArtifactId, contextUser);
+                artifactId = sourceArtifactId;
+                newVersionNumber = maxVersion + 1;
+                LogStatus(`Creating version ${newVersionNumber} of source artifact ${artifactId} (explicit source)`);
+            }
+            // Priority 2: Try to find previous artifact for this message (fallback)
+            else {
+                const previousArtifact = await this.findPreviousArtifactForMessage(
+                    conversationDetailId,
+                    contextUser
+                );
 
-            if (previousArtifact) {
-                // Create new version of existing artifact
-                artifactId = previousArtifact.artifactId;
-                newVersionNumber = previousArtifact.versionNumber + 1;
-                LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
-            } else {
-                // Create new artifact header
-                const artifact = await md.GetEntityObject<ArtifactEntity>(
+                if (previousArtifact) {
+                    // Create new version of existing artifact
+                    artifactId = previousArtifact.artifactId;
+                    newVersionNumber = previousArtifact.versionNumber + 1;
+                    LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
+                } else {
+                    // Create new artifact header
+                    const artifact = await md.GetEntityObject<ArtifactEntity>(
                     'MJ: Artifacts',
                     contextUser
                 );
@@ -705,10 +757,11 @@ export class RunAIAgentResolver extends ResolverBase {
                     throw new Error('Failed to save artifact');
                 }
 
-                artifactId = artifact.ID;
-                newVersionNumber = 1;
-                isNewArtifact = true;
-                LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})`);
+                    artifactId = artifact.ID;
+                    newVersionNumber = 1;
+                    isNewArtifact = true;
+                    LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})`);
+                }
             }
 
             // 2. Create artifact version with content

@@ -299,7 +299,11 @@ export class GraphQLAIClient {
      * }
      * ```
      */
-    public async RunAIAgent(params: ExecuteAgentParams): Promise<ExecuteAgentResult> {
+    public async RunAIAgent(
+        params: ExecuteAgentParams,
+        sourceArtifactId?: string,
+        sourceArtifactVersionId?: string
+    ): Promise<ExecuteAgentResult> {
         let subscription: any;
 
         try {
@@ -357,7 +361,9 @@ export class GraphQLAIClient {
                     $configurationId: String,
                     $conversationDetailId: String,
                     $createArtifacts: Boolean,
-                    $createNotification: Boolean
+                    $createNotification: Boolean,
+                    $sourceArtifactId: String,
+                    $sourceArtifactVersionId: String
                 ) {
                     RunAIAgent(
                         agentId: $agentId,
@@ -371,7 +377,9 @@ export class GraphQLAIClient {
                         configurationId: $configurationId,
                         conversationDetailId: $conversationDetailId,
                         createArtifacts: $createArtifacts,
-                        createNotification: $createNotification
+                        createNotification: $createNotification,
+                        sourceArtifactId: $sourceArtifactId,
+                        sourceArtifactVersionId: $sourceArtifactVersionId
                     ) {
                         success
                         errorMessage
@@ -382,7 +390,7 @@ export class GraphQLAIClient {
             `;
 
             // Prepare variables
-            const variables = this.prepareAgentVariables(params);
+            const variables = this.prepareAgentVariables(params, sourceArtifactId, sourceArtifactVersionId);
 
             // Execute the mutation
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
@@ -402,10 +410,16 @@ export class GraphQLAIClient {
     /**
      * Prepares variables for the AI agent mutation
      * @param params The agent parameters
+     * @param sourceArtifactId Optional source artifact ID for versioning
+     * @param sourceArtifactVersionId Optional source artifact version ID for versioning
      * @returns The prepared variables for GraphQL
      * @private
      */
-    private prepareAgentVariables(params: ExecuteAgentParams): Record<string, any> {
+    private prepareAgentVariables(
+        params: ExecuteAgentParams,
+        sourceArtifactId?: string,
+        sourceArtifactVersionId?: string
+    ): Record<string, any> {
         const variables: Record<string, any> = {
             agentId: params.agent.ID,
             messages: JSON.stringify(params.conversationMessages),
@@ -431,6 +445,9 @@ export class GraphQLAIClient {
             variables.createArtifacts = true;
             variables.createNotification = true;
         }
+        // Add source artifact tracking for versioning (GraphQL resolver-level concern)
+        if (sourceArtifactId !== undefined) variables.sourceArtifactId = sourceArtifactId;
+        if (sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = sourceArtifactVersionId;
 
         return variables;
     }
