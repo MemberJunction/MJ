@@ -255,6 +255,22 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.message.Role?.trim().toLowerCase() === 'user';
   }
 
+  /**
+   * Get the actual sender name for user messages
+   * Uses the denormalized User field from the view if available,
+   * otherwise falls back to current user name
+   */
+  public get messageSenderName(): string {
+    // Use the denormalized User field from the ConversationDetail view
+    // This is populated from the UserID (if present) or falls back to Conversation.UserID
+    if (this.message.User) {
+      return this.message.User;
+    }
+
+    // Fallback to current user name (for backwards compatibility)
+    return this.currentUser.Name;
+  }
+
   public get isConversationManager(): boolean {
     return this.aiAgentInfo?.name === 'Sage';
   }

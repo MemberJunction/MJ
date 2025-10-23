@@ -119,7 +119,7 @@ export class ConversationStateService {
     this.isLoading = true;
     try {
       const rv = new RunView();
-      const filter = `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
+      const filter = `EnvironmentID='${environmentId}' AND UserID='${currentUser.ID}' AND (IsArchived IS NULL OR IsArchived=0)`;
 
       const result = await rv.RunView<ConversationEntity>(
         {
