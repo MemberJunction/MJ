@@ -787,8 +787,11 @@ export class RunAIAgentResolver extends ResolverBase {
                 );
 
                 // Check for valid name value (not null, not empty, not string "null")
-                const extractedName = nameAttr?.Value?.trim();
+                let extractedName = nameAttr?.Value?.trim();
                 if (extractedName && extractedName.toLowerCase() !== 'null') {
+                    // Strip surrounding quotes (double or single) from start and end
+                    extractedName = extractedName.replace(/^["']|["']$/g, '');
+
                     // Load artifact to update with extracted name
                     const artifact = await md.GetEntityObject<ArtifactEntity>(
                         'MJ: Artifacts',

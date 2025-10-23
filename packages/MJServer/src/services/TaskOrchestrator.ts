@@ -755,8 +755,11 @@ export class TaskOrchestrator {
             );
 
             // Check for valid name value (not null, not empty, not string "null")
-            const extractedName = nameAttr?.Value?.trim();
+            let extractedName = nameAttr?.Value?.trim();
             if (extractedName && extractedName.toLowerCase() !== 'null') {
+                // Strip surrounding quotes (double or single) from start and end
+                extractedName = extractedName.replace(/^["']|["']$/g, '');
+
                 artifact.Name = extractedName;
                 if (await artifact.Save()) {
                     LogStatus(`✨ Updated artifact name to: ${artifact.Name}`);
