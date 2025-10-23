@@ -4,7 +4,7 @@
       "Name": "Demo Loop Agent",
       "Description": "Simple demo agent showcasing loop agent capabilities. Can perform web searches, retrieve stock prices, get weather forecasts, look up census data, and fetch web page content. The AI dynamically determines the pathway and can execute multiple actions in parallel with no predetermined sequence.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
-      "Status": "Active",
+      "Status": "Disabled",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-infinity"
@@ -104,8 +104,8 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2025-10-17T01:10:52.554Z",
-      "checksum": "d6ed15dec61f6b857e6a3c15db574c4426a4da0092630a4fb591cba49d338be8"
+      "lastModified": "2025-10-23T17:38:13.876Z",
+      "checksum": "b71eeaff668e9cadc6b7e1adc5ae6a4d6b88d1cccf9158e076830ab2cd461ecb"
     }
   },
   {
@@ -113,7 +113,7 @@
       "Name": "Demo Flow Agent",
       "Description": "Simple Agent Demo! This agent demonstrates the basic functionality of a flow agent, which follows a deterministic pathway",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
-      "Status": "Active",
+      "Status": "Disabled",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-chart-diagram"
@@ -306,8 +306,8 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2025-08-12T19:54:43.056Z",
-      "checksum": "59e5c770f4d1f62283cd68ea16b3281c26a95aa3ea9f68124ba0535d7a2f1e7a"
+      "lastModified": "2025-10-23T17:38:13.931Z",
+      "checksum": "d873b5f2ab16bc892d32c069e50f57f6a29b96e90e172b1bdab4fda623d3075f"
     }
   },
   {
