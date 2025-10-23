@@ -709,6 +709,16 @@ export class TaskOrchestrator {
             artifact.UserID = this.contextUser.ID;
             artifact.EnvironmentID = (this.contextUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
+            // Set visibility based on agent's ArtifactCreationMode
+            // Will compile after CodeGen adds the new fields
+            const creationMode = agent.ArtifactCreationMode;
+            if (creationMode === 'System Only') {
+                artifact.Visibility = 'System Only';
+                LogStatus(`Task artifact marked as "System Only" per agent configuration`);
+            } else {
+                artifact.Visibility = 'Always';
+            }
+
             const artifactSaved = await artifact.Save();
             if (!artifactSaved) {
                 LogError('Failed to save artifact');

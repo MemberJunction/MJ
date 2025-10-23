@@ -639,6 +639,16 @@ export class RunAIAgentResolver extends ResolverBase {
             return {};
         }
 
+        // Check agent's ArtifactCreationMode
+        await AIEngine.Instance.Config(false, contextUser);
+        const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
+        const creationMode = agent?.ArtifactCreationMode;
+
+        if (creationMode === 'Never') {
+            LogStatus(`Skipping artifact creation - agent "${agent?.Name}" has ArtifactCreationMode='Never'`);
+            return {};
+        }
+
         try {
             const md = new Metadata();
             const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
@@ -665,7 +675,7 @@ export class RunAIAgentResolver extends ResolverBase {
                     contextUser
                 );
 
-                // Get agent info for naming
+                // Get agent info for naming and visibility control
                 await AIEngine.Instance.Config(false, contextUser);
                 const agent = AIEngine.Instance.Agents.find(a => a.ID === agentRun.AgentID);
                 const agentName = agent?.Name || 'Agent';
@@ -680,6 +690,16 @@ export class RunAIAgentResolver extends ResolverBase {
                 artifact.UserID = contextUser.ID;
                 artifact.EnvironmentID = (contextUser as any).EnvironmentID ||
                                         'F51358F3-9447-4176-B313-BF8025FD8D09';
+
+                // Set visibility based on agent's ArtifactCreationMode
+                // Will compile after CodeGen adds the new fields
+                const creationMode = agent.ArtifactCreationMode;
+                if (creationMode === 'System Only') {
+                    artifact.Visibility = 'System Only';
+                    LogStatus(`Artifact marked as "System Only" per agent configuration`);
+                } else {
+                    artifact.Visibility = 'Always';
+                }
 
                 if (!(await artifact.Save())) {
                     throw new Error('Failed to save artifact');
