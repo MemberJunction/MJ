@@ -424,9 +424,13 @@ export class GraphQLAIClient {
         if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
         if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
         if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
-        if (params.conversationDetailId !== undefined) variables.conversationDetailId = params.conversationDetailId;
-        if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
-        if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
+        if (params.conversationDetailId !== undefined) {
+            variables.conversationDetailId = params.conversationDetailId;
+            // When conversationDetailId is provided, enable server-side artifact and notification creation
+            // This is a GraphQL resolver-level concern, not agent execution concern
+            variables.createArtifacts = true;
+            variables.createNotification = true;
+        }
 
         return variables;
     }
