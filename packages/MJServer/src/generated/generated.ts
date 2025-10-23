@@ -2967,6 +2967,10 @@ if this limit is exceeded.`})
     @MaxLength(40)
     InvocationMode: string;
         
+    @Field({description: `Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`}) 
+    @MaxLength(40)
+    ArtifactCreationMode: string;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -3168,6 +3172,9 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     InvocationMode?: string;
+
+    @Field({ nullable: true })
+    ArtifactCreationMode?: string;
 }
     
 
@@ -3289,6 +3296,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     InvocationMode?: string;
+
+    @Field({ nullable: true })
+    ArtifactCreationMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41812,6 +41822,10 @@ export class MJArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`}) 
+    @MaxLength(40)
+    Visibility: string;
+        
     @Field() 
     @MaxLength(510)
     Environment: string;
@@ -41860,6 +41874,9 @@ export class CreateMJArtifactInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Visibility?: string;
 }
     
 
@@ -41888,6 +41905,9 @@ export class UpdateMJArtifactInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Visibility?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

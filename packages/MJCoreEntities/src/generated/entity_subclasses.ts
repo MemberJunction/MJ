@@ -1365,6 +1365,17 @@ if this limit is exceeded.`),
     *   * Any
     *   * Top-Level
         * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`),
+    ArtifactCreationMode: z.union([z.literal('Always'), z.literal('Never'), z.literal('System Only')]).describe(`
+        * * Field Name: ArtifactCreationMode
+        * * Display Name: Artifact Creation Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Never
+    *   * Always
+    *   * System Only
+        * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -10460,6 +10471,16 @@ export const ArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Visibility: z.union([z.literal('Always'), z.literal('System Only')]).describe(`
+        * * Field Name: Visibility
+        * * Display Name: Visibility
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System Only
+    *   * Always
+        * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -19670,6 +19691,25 @@ if this limit is exceeded.
     }
     set InvocationMode(value: 'Any' | 'Sub-Agent' | 'Top-Level') {
         this.Set('InvocationMode', value);
+    }
+
+    /**
+    * * Field Name: ArtifactCreationMode
+    * * Display Name: Artifact Creation Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Never
+    *   * Always
+    *   * System Only
+    * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.
+    */
+    get ArtifactCreationMode(): 'Always' | 'Never' | 'System Only' {
+        return this.Get('ArtifactCreationMode');
+    }
+    set ArtifactCreationMode(value: 'Always' | 'Never' | 'System Only') {
+        this.Set('ArtifactCreationMode', value);
     }
 
     /**
@@ -43384,6 +43424,24 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Visibility
+    * * Display Name: Visibility
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System Only
+    *   * Always
+    * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).
+    */
+    get Visibility(): 'Always' | 'System Only' {
+        return this.Get('Visibility');
+    }
+    set Visibility(value: 'Always' | 'System Only') {
+        this.Set('Visibility', value);
     }
 
     /**
