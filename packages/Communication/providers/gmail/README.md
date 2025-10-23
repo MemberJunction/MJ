@@ -7,6 +7,7 @@ Gmail/Google Suite provider implementation for the MemberJunction Communication 
 The Gmail Communication Provider integrates Gmail's API with MemberJunction's communication infrastructure, providing:
 
 - Email sending capabilities with full HTML and plain text support
+- **Draft message creation** for composing emails to be sent later
 - Email retrieval with flexible query options
 - Reply-to-message functionality maintaining thread context
 - Message forwarding capabilities
@@ -116,6 +117,36 @@ if (result.Success) {
   console.error('Failed to get messages:', result.ErrorMessage);
 }
 ```
+
+### Creating Draft Messages
+
+```typescript
+import { CreateDraftParams, CreateDraftResult } from '@memberjunction/communication-types';
+
+const draftMessage: ProcessedMessage = {
+  To: 'recipient@example.com',
+  From: 'sender@example.com',
+  ProcessedSubject: 'Draft Email Subject',
+  ProcessedBody: 'This is a draft email that can be edited later',
+  ProcessedHTMLBody: '<p>This is a draft email that can be edited later</p>',
+  CCRecipients: ['cc@example.com']
+};
+
+const params: CreateDraftParams = {
+  Message: draftMessage
+};
+
+const result: CreateDraftResult = await provider.CreateDraft(params);
+
+if (result.Success) {
+  console.log(`Draft created with ID: ${result.DraftID}`);
+  // The draft can now be edited or sent through Gmail's interface
+} else {
+  console.error('Failed to create draft:', result.ErrorMessage);
+}
+```
+
+**Note**: Drafts created through this provider will appear in the authenticated user's Gmail drafts folder and can be edited or sent through Gmail's web interface or mobile app.
 
 ### Replying to Messages
 

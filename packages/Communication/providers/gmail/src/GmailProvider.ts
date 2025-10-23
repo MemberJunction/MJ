@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, ForwardMessageParams, ForwardMessageResult, GetMessageMessage, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessageMessage, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
@@ -464,6 +464,53 @@ export class GmailProvider extends BaseCommunicationProvider {
     } catch (error: any) {
       LogError(`Error marking message ${messageId} as read`, undefined, error);
       return false;
+    }
+  }
+
+  /**
+   * Creates a draft message in Gmail
+   */
+  public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+    try {
+      const userEmail = await this.getUserEmail();
+      if (!userEmail) {
+        return {
+          Success: false,
+          ErrorMessage: 'Could not get user email'
+        };
+      }
+
+      // Reuse existing email content creation logic
+      const raw = this.createEmailContent(params.Message);
+
+      // Create draft using Gmail API
+      const result = await this.gmailClient.users.drafts.create({
+        userId: 'me',
+        requestBody: {
+          message: { raw }
+        }
+      });
+
+      if (result && result.status >= 200 && result.status < 300) {
+        LogStatus(`Draft created via Gmail: ${result.data.id}`);
+        return {
+          Success: true,
+          DraftID: result.data.id || undefined,
+          Result: result.data
+        };
+      } else {
+        LogError('Failed to create draft via Gmail', undefined, result);
+        return {
+          Success: false,
+          ErrorMessage: `Failed to create draft: ${result?.statusText || 'Unknown error'}`
+        };
+      }
+    } catch (error: any) {
+      LogError('Error creating draft via Gmail', undefined, error);
+      return {
+        Success: false,
+        ErrorMessage: error.message || 'Error creating draft'
+      };
     }
   }
 }

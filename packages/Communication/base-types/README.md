@@ -55,6 +55,10 @@ export class MyEmailProvider extends BaseCommunicationProvider {
     public async ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
         // Implement message replies
     }
+
+    public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+        // Implement draft creation (or return error if not supported)
+    }
 }
 ```
 
@@ -155,6 +159,28 @@ type ReplyToMessageParams<T = Record<string, any>> = {
 };
 ```
 
+### CreateDraftParams
+Parameters for creating draft messages:
+
+```typescript
+type CreateDraftParams = {
+    Message: ProcessedMessage;
+    ContextData?: Record<string, any>;
+};
+```
+
+### CreateDraftResult
+Result structure for draft creation:
+
+```typescript
+type CreateDraftResult<T = Record<string, any>> = {
+    Success: boolean;
+    ErrorMessage?: string;
+    DraftID?: string;  // Provider-specific draft identifier
+    Result?: T;        // Provider-specific result data
+};
+```
+
 ## Usage Examples
 
 ### Setting up the Communication Engine
@@ -233,6 +259,14 @@ export class CustomSMSProvider extends BaseCommunicationProvider {
     public async ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
         // SMS reply implementation
         return { Success: true };
+    }
+
+    public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+        // SMS providers typically don't support drafts
+        return {
+            Success: false,
+            ErrorMessage: 'SMS providers do not support draft messages'
+        };
     }
 
     private async sendSMS(to: string, message: string): Promise<any> {

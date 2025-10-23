@@ -12,6 +12,8 @@ This package provides a Twilio-based implementation of the MemberJunction Commun
 
 The provider automatically detects the appropriate channel based on the recipient format and handles all necessary formatting and API interactions with Twilio's services.
 
+**Note**: Twilio does not support draft messages. The `CreateDraft()` method returns an error indicating this limitation, as SMS/messaging services don't have a draft concept.
+
 ## Installation
 
 ```bash

@@ -8,7 +8,8 @@ import {
   AfterViewInit,
   OnInit,
   OnChanges,
-  SimpleChanges
+  SimpleChanges,
+  DoCheck
 } from '@angular/core';
 import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
@@ -31,7 +32,7 @@ import { SuggestedResponse } from '../../models/conversation-state.model';
     '../../styles/custom-agent-icons.css'
   ]
 })
-export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges {
+export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges, DoCheck {
   @Input() public message!: ConversationDetailEntity;
   @Input() public conversation!: ConversationEntity | null;
   @Input() public currentUser!: UserInfo;
@@ -53,11 +54,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
-  public _elapsedTimeFormatted: string = '(0:00)';
-  public _agentRunDurationFormatted: string = '(0:00)';
+  public _elapsedTimeFormatted: string = '0:00';
+  public _agentRunDurationFormatted: string = '0:00';
   public isEditing: boolean = false;
   public editedText: string = '';
   private originalText: string = '';
+
+  // Track previous status for DoCheck comparison
+  private _previousMessageStatus: 'Complete' | 'In-Progress' | 'Error' | undefined = undefined;
 
   // Agent run details
   public isAgentDetailsExpanded: boolean = false;
@@ -94,6 +98,36 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
         this._elapsedTimeInterval = null;
       }
     }
+  }
+
+  /**
+   * DoCheck lifecycle hook - detects changes to message properties
+   * This runs on every change detection cycle, so we check if Status actually changed
+   * This is more reliable than ngOnChanges when the message object reference doesn't change
+   */
+  ngDoCheck() {
+    if (!this.message) {
+      return;
+    }
+
+    const currentStatus = this.message.Status;
+
+    // Check if status changed from non-Complete to Complete
+    if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
+      console.log(`🎯 Message ${this.message.ID} status changed to Complete, stopping timer`);
+
+      // Stop the elapsed time interval
+      if (this._elapsedTimeInterval !== null) {
+        clearInterval(this._elapsedTimeInterval);
+        this._elapsedTimeInterval = null;
+      }
+
+      // Force change detection to update the pill color
+      this.cdRef.markForCheck();
+    }
+
+    // Update previous status for next check
+    this._previousMessageStatus = currentStatus;
   }
 
   ngAfterViewInit() {
@@ -158,12 +192,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let formattedTime = (hours > 0 ? hours + ':' : '') +
       (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' +
       (seconds < 10 ? '0' : '') + seconds;
-    return `(${formattedTime})`;
+    return formattedTime;
   }
 
   private formatDurationFromMs(diffMs: number): string {
     if (diffMs <= 0) {
-      return '(0:00)';
+      return '0:00';
     }
 
     let seconds = Math.floor(diffMs / 1000);
@@ -174,7 +208,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     let formattedTime = (hours > 0 ? hours + ':' : '') +
       (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' +
       (seconds < 10 ? '0' : '') + seconds;
-    return `(${formattedTime})`;
+    return formattedTime;
   }
 
   public get elapsedTimeSinceLoad(): number {
@@ -328,6 +362,33 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get hasArtifact(): boolean {
     return !!this.artifactVersion;
+  }
+
+  /**
+   * Unified time pill text for all AI message states
+   * Returns the appropriate time display based on message state:
+   * - Temporary messages (in-progress): Live elapsed time
+   * - Active agent runs: Live agent run duration
+   * - Completed messages: Final generation time
+   * - Failed messages: Time before failure
+   */
+  public get timePillText(): string | null {
+    if (this.isUserMessage) {
+      return null;
+    }
+
+    // For temporary messages (in-progress), show live elapsed time
+    if (this.isTemporaryMessage) {
+      return this._elapsedTimeFormatted;
+    }
+
+    // For active agent runs, show live agent run duration
+    if (this.isAgentRunActive && this.agentRun?.__mj_CreatedAt) {
+      return this._agentRunDurationFormatted;
+    }
+
+    // For completed or failed messages, show final generation time
+    return this.formattedGenerationTime;
   }
 
   public get formattedGenerationTime(): string | null {
