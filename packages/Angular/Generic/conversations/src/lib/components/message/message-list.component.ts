@@ -166,6 +166,10 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         if (existing) {
           // Update existing component
           const instance = existing.instance as MessageItemComponent;
+
+          // Store previous message for comparison
+          const previousMessage = instance.message;
+
           instance.message = message;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
@@ -197,6 +201,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
+
+          // Manually trigger change detection in child component when message status changes
+          // This is necessary because we're using OnPush change detection and direct property assignment
+          // doesn't trigger ngOnChanges (only reference changes do)
+          if (previousMessage && previousMessage.Status !== message.Status) {
+            // Use ChangeDetectorRef from the component instance to force update
+            (instance as any).cdRef?.markForCheck();
+          }
         } else {
           // Create new component
           const componentRef = this.messageContainerRef.createComponent(MessageItemComponent);

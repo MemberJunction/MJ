@@ -161,6 +161,48 @@ if (result.Success) {
 }
 ```
 
+### Creating Draft Messages
+
+Create draft messages that can be edited and sent later (only supported by providers with mailbox access):
+
+```typescript
+import { CommunicationEngine } from '@memberjunction/communication-engine';
+import { Message } from '@memberjunction/communication-types';
+
+// Get the engine instance
+const engine = CommunicationEngine.Instance;
+await engine.Config();
+
+// Create a message
+const message = new Message();
+message.To = 'recipient@example.com';
+message.From = 'sender@example.com';
+message.Subject = 'Draft Message';
+message.Body = 'This is a draft message that can be edited later';
+
+// Create draft using Gmail (or 'Microsoft Graph')
+const result = await engine.CreateDraft(
+    message,
+    'Gmail',
+    contextUser
+);
+
+if (result.Success) {
+    console.log(`Draft created with ID: ${result.DraftID}`);
+    // Draft can now be edited or sent through the provider's native interface
+} else {
+    console.error(`Failed to create draft: ${result.ErrorMessage}`);
+}
+```
+
+**Providers Supporting Drafts**:
+- **Gmail**: Drafts created in Gmail drafts folder
+- **Microsoft Graph**: Drafts created in Outlook/Exchange drafts folder
+
+**Providers NOT Supporting Drafts**:
+- **SendGrid**: Service-based email, no mailbox
+- **Twilio**: SMS/messaging service, no draft concept
+
 ### Working with Providers
 
 ```typescript
@@ -207,6 +249,21 @@ Parameters:
 
 ##### `SendMessages(providerName: string, providerMessageTypeName: string, message: Message, recipients: MessageRecipient[], previewOnly?: boolean): Promise<MessageResult[]>`
 Sends messages to multiple recipients in a single run.
+
+##### `CreateDraft(message: Message, providerName: string, contextUser?: UserInfo): Promise<CreateDraftResult>`
+Creates a draft message using the specified provider.
+
+Parameters:
+- `message`: The message to save as a draft
+- `providerName`: Name of the provider (must support drafts, e.g., 'Gmail', 'Microsoft Graph')
+- `contextUser`: Optional user context for server-side operations
+
+Returns a `CreateDraftResult` with:
+- `Success`: Whether the draft was created successfully
+- `DraftID`: The provider-specific draft identifier (if successful)
+- `ErrorMessage`: Error details (if failed)
+
+**Note**: Only providers with mailbox access support drafts (Gmail, MS Graph). Service-based providers (SendGrid, Twilio) will return an error.
 
 ### ProcessedMessageServer
 

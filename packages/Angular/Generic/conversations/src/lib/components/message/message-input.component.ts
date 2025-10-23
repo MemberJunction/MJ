@@ -36,6 +36,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
   @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
+  @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
+  @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
 
   @ViewChild('messageTextarea') messageTextarea!: ElementRef;
 
@@ -542,11 +544,11 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   /**
    * Checks if message should continue with the previous agent
-   * Shows UI indicator during check
+   * Emits events to show temporary intent checking message in conversation
    */
   private async checkContinuityIntent(agentId: string, message: string): Promise<'YES' | 'NO' | 'UNSURE'> {
-    this.processingMessage = 'Analyzing intent...';
-    this.isProcessing = true;
+    // Emit event to show temporary "Analyzing intent..." message in conversation
+    this.intentCheckStarted.emit();
 
     try {
       const intent = await this.agentService.checkAgentContinuityIntent(
@@ -559,8 +561,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       console.error('❌ Intent check failed, defaulting to UNSURE:', error);
       return 'UNSURE';
     } finally {
-      this.processingMessage = 'AI is responding...';
-      this.isProcessing = false;
+      // Emit event to remove temporary intent checking message
+      this.intentCheckCompleted.emit();
     }
   }
 

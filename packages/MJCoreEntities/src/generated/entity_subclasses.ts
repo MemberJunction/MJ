@@ -2806,6 +2806,12 @@ export const CommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether or not the provider supports replying to messages`),
+    SupportsDrafts: z.boolean().describe(`
+        * * Field Name: SupportsDrafts
+        * * Display Name: Supports Drafts
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether or not the provider supports creating draft messages`),
 });
 
 export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
@@ -23415,6 +23421,20 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     set SupportsReplying(value: boolean) {
         this.Set('SupportsReplying', value);
     }
+
+    /**
+    * * Field Name: SupportsDrafts
+    * * Display Name: Supports Drafts
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether or not the provider supports creating draft messages
+    */
+    get SupportsDrafts(): boolean {
+        return this.Get('SupportsDrafts');
+    }
+    set SupportsDrafts(value: boolean) {
+        this.Set('SupportsDrafts', value);
+    }
 }
 
 
@@ -26347,7 +26367,8 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     /**
     * * Field Name: ArtifactID
     * * Display Name: Artifact ID
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
     * * Description: Optional reference to a conversation artifact associated with this conversation detail
     */
@@ -26361,7 +26382,8 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     /**
     * * Field Name: ArtifactVersionID
     * * Display Name: Artifact Version ID
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
     * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail
     */
@@ -44979,6 +45001,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifact Permissions')
 export class ConversationArtifactPermissionEntity extends BaseEntity<ConversationArtifactPermissionEntityType> {
@@ -45098,6 +45121,7 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifact Versions')
 export class ConversationArtifactVersionEntity extends BaseEntity<ConversationArtifactVersionEntityType> {
@@ -45300,6 +45324,7 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifacts')
 export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactEntityType> {

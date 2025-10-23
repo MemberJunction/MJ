@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
 import { RegisterClass } from "@memberjunction/global";
 import sgMail, { MailDataRequired,  } from '@sendgrid/mail';
 import { __API_KEY } from "./config";
@@ -105,6 +105,16 @@ export class SendGridProvider extends BaseCommunicationProvider {
      */
     public ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
         throw new Error("SendGridProvider does not support replying to messages");
+    }
+
+    /**
+     * SendGrid does not support creating draft messages
+     */
+    public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+        return {
+            Success: false,
+            ErrorMessage: 'SendGrid does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).'
+        };
     }
 }
 
