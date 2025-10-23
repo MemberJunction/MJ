@@ -54,13 +54,13 @@ export class DialogService {
         content: options.message,
         actions: [
           {
-            text: options.cancelText || 'Cancel',
-            primary: false
-          },
-          {
             text: options.okText || 'OK',
             primary: true,
             themeColor: options.dangerous ? 'error' : 'primary'
+          },
+          {
+            text: options.cancelText || 'Cancel',
+            primary: false
           }
         ],
         width: 450,
@@ -115,12 +115,12 @@ export class DialogService {
         content: InputDialogComponent,
         actions: [
           {
-            text: options.cancelText || 'Cancel',
-            primary: false
-          },
-          {
             text: options.okText || 'OK',
             primary: true
+          },
+          {
+            text: options.cancelText || 'Cancel',
+            primary: false
           }
         ],
         width: 500,
