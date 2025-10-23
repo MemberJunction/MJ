@@ -577,6 +577,7 @@ export class AgentSpecSync {
         if (!fullPrompt) {
             // Fallback if prompt not found
             return {
+                PromptID: agentPrompt.PromptID || '',
                 PromptText: '',
                 PromptRole: 'System',
                 PromptPosition: 'First'
@@ -584,6 +585,7 @@ export class AgentSpecSync {
         }
 
         return {
+            PromptID: fullPrompt.ID || '',
             PromptText: fullPrompt.TemplateText || '',
             PromptRole: fullPrompt.PromptRole || 'System',
             PromptPosition: fullPrompt.PromptPosition || 'First'
@@ -1347,6 +1349,8 @@ export class AgentSpecSync {
             DefaultArtifactTypeID: partial.DefaultArtifactTypeID,
             OwnerUserID: partial.OwnerUserID,
             InvocationMode: partial.InvocationMode || 'Any',
+            FunctionalRequirement: partial.FunctionalRequirement,
+            TechnicalDesign: partial.TechnicalDesign,
             Actions: partial.Actions || [],
             SubAgents: partial.SubAgents || [],
             Prompts: partial.Prompts || [],

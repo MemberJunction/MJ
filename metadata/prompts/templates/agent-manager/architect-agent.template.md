@@ -75,6 +75,7 @@ interface AgentSpec {
   // These are prompts for THIS AGENT only - sub-agents define their own prompts
   // REQUIRED for Loop agents (at least one), OPTIONAL for Flow agents
   Prompts?: Array<{
+    PromptID: string;   // Leave empty "" for new prompts, or GUID to update existing prompt
     PromptText: string;  // The prompt template text (REQUIRED)
     PromptRole?: 'System' | 'User' | 'Assistant';  // Optional - defaults to 'System'
     PromptPosition?: 'First' | 'Last';  // Optional - defaults to 'First'
