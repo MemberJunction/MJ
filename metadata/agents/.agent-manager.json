@@ -59,20 +59,6 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Load Agent Spec",
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "8BA80DC3-7F57-4093-9EC4-66B16D6F938E"
-          },
-          "sync": {
-            "lastModified": "2025-10-22T22:18:16.230Z",
-            "checksum": "45c1e8f070df671f059637bb70f8d5d126e5251246f3241ad0457121b0a46ab5"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
             "ActionID": "@lookup:Actions.Name=Web Search",
             "Status": "Active"
           },
@@ -363,6 +349,65 @@
           "sync": {
             "lastModified": "2025-10-21T19:26:53.803Z",
             "checksum": "8f0bbaf983b03726289456cd3c5cfcd38891f56862ca2bc2d16106246cd2b649"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Agent Spec Loader",
+            "Description": "Simple flow agent that loads complete agent specification from database by agent ID",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+            "Status": "Active",
+            "ExecutionOrder": 5,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-download"
+          },
+          "relatedEntities": {
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Load Agent Spec",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "90BB672E-1837-4CF3-8C75-6F1A454C6D3A"
+                },
+                "sync": {
+                  "lastModified": "2025-10-23T15:05:24.072Z",
+                  "checksum": "45c1e8f070df671f059637bb70f8d5d126e5251246f3241ad0457121b0a46ab5"
+                }
+              }
+            ],
+            "MJ: AI Agent Steps": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "Load Agent Spec",
+                  "StepType": "Action",
+                  "StartingStep": true,
+                  "ActionID": "@lookup:Actions.Name=Load Agent Spec",
+                  "ActionInputMapping": "{\"AgentID\": \"payload.agentId\"}",
+                  "ActionOutputMapping": "{\"AgentSpec\": \"loadedAgent.agentSpec\"}",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "33533220-480D-4693-BAC0-980E98077CC7"
+                },
+                "sync": {
+                  "lastModified": "2025-10-23T15:05:24.096Z",
+                  "checksum": "90d9d973fcea422b42a610dcdadd5077c6cd9f04c462ca4f08a712861a7df4cf"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
+          },
+          "sync": {
+            "lastModified": "2025-10-23T15:05:23.981Z",
+            "checksum": "dee3ab1c2106a8de71169aa76a6157c9ed7f2346d7169af60aece7bb6a74ca3f"
           }
         }
       ]
