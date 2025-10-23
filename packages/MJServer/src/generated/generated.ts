@@ -12172,6 +12172,13 @@ export class MJUser_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.`}) 
+    UserImageURL?: string;
+        
+    @Field({nullable: true, description: `Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`}) 
+    @MaxLength(200)
+    UserImageIconClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(202)
     FirstLast?: string;
@@ -12409,6 +12416,12 @@ export class CreateMJUserInput {
 
     @Field({ nullable: true })
     EmployeeID: string | null;
+
+    @Field({ nullable: true })
+    UserImageURL: string | null;
+
+    @Field({ nullable: true })
+    UserImageIconClass: string | null;
 }
     
 
@@ -12452,6 +12465,12 @@ export class UpdateMJUserInput {
 
     @Field({ nullable: true })
     EmployeeID?: string | null;
+
+    @Field({ nullable: true })
+    UserImageURL?: string | null;
+
+    @Field({ nullable: true })
+    UserImageIconClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

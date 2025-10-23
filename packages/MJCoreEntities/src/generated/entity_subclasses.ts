@@ -15629,6 +15629,16 @@ export const UserSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserImageURL: z.string().nullable().describe(`
+        * * Field Name: UserImageURL
+        * * Display Name: User Image URL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.`),
+    UserImageIconClass: z.string().nullable().describe(`
+        * * Field Name: UserImageIconClass
+        * * Display Name: User Image Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`),
     FirstLast: z.string().nullable().describe(`
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -57037,6 +57047,32 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UserImageURL
+    * * Display Name: User Image URL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.
+    */
+    get UserImageURL(): string | null {
+        return this.Get('UserImageURL');
+    }
+    set UserImageURL(value: string | null) {
+        this.Set('UserImageURL', value);
+    }
+
+    /**
+    * * Field Name: UserImageIconClass
+    * * Display Name: User Image Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".
+    */
+    get UserImageIconClass(): string | null {
+        return this.Get('UserImageIconClass');
+    }
+    set UserImageIconClass(value: string | null) {
+        this.Set('UserImageIconClass', value);
     }
 
     /**
