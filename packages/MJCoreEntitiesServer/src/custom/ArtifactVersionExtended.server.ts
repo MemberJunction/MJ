@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, Metadata, RunView, LogError } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, Metadata, RunView, LogError, IMetadataProvider } from "@memberjunction/core";
 import { ArtifactVersionEntity, ArtifactEntity, ArtifactTypeEntity, ArtifactVersionAttributeEntity, ArtifactExtractor } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { createHash } from 'crypto';
@@ -112,7 +112,8 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
         }
 
         // Load the parent Artifact to get TypeID
-        const md = new Metadata();
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
         const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.ContextCurrentUser);
         const loadedArtifact = await artifact.Load(this.ArtifactID);
 
@@ -176,7 +177,8 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
             return [];
         }
 
-        const md = new Metadata();
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
         const operations: Promise<boolean>[] = [];
         const savedAttributes: ArtifactVersionAttributeEntity[] = [];
 
@@ -255,7 +257,8 @@ export class ArtifactVersionExtended extends ArtifactVersionEntity {
      */
     protected async LoadArtifactTypeHierarchy(typeId: string): Promise<ArtifactTypeEntity[]> {
         const hierarchy: ArtifactTypeEntity[] = [];
-        const md = new Metadata();
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
         let currentTypeId: string | null = typeId;
 
         // Walk up the hierarchy (max 10 levels to prevent infinite loops)

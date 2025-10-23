@@ -232,8 +232,10 @@ export class QueryEntityExtended extends QueryEntity {
     }
     
     private async syncQueryParameters(extractedParams: ExtractedParameter[]): Promise<void> {
-        const md = new Metadata();
-        
+        // Use the entity's provider instead of creating new Metadata instance
+        // Use same casting pattern as RefreshRelatedMetadata method
+        const md = this.ProviderToUse as any as IMetadataProvider;
+
         try {
             // Get existing query parameters
             const rv = this.RunViewProviderToUse
@@ -375,8 +377,10 @@ export class QueryEntityExtended extends QueryEntity {
     }
     
     private async syncQueryFields(extractedFields: ExtractedField[]): Promise<void> {
-        const md = new Metadata();
-        
+        // Use the entity's provider instead of creating new Metadata instance
+        // Use same casting pattern as RefreshRelatedMetadata method
+        const md = this.ProviderToUse as any as IMetadataProvider;
+
         try {
             const existingFields: QueryFieldEntity[] = [];
             if (this.IsSaved) {
@@ -495,8 +499,10 @@ export class QueryEntityExtended extends QueryEntity {
     }
     
     private async syncQueryEntities(extractedEntities: ExtractedEntity[]): Promise<void> {
-        const md = new Metadata();
-        
+        // Use the entity's provider instead of creating new Metadata instance
+        // Use same casting pattern as RefreshRelatedMetadata method
+        const md = this.ProviderToUse as any as IMetadataProvider;
+
         try {
             // Get existing query entities
             const existingEntities: QueryEntityEntity[] = [];

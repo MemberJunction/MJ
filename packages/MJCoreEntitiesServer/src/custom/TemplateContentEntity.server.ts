@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { TemplateContentEntity, TemplateParamEntity, TemplateEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -106,8 +106,9 @@ export class TemplateContentEntityExtended extends TemplateContentEntity {
     }
     
     private async syncTemplateParameters(extractedParams: ExtractedParameter[]): Promise<void> {
-        const md = new Metadata();
-        
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
+
         try {
             // Get existing template parameters
             const rv = this.RunViewProviderToUse;
