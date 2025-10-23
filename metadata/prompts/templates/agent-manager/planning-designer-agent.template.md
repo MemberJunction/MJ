@@ -184,8 +184,13 @@ Add prompts to `design.prompts` array with **agentName** field:
 - One prompt with `agentName: "SubAgent2"`
 - etc.
 
-### 7. Return Design
-Return to parent with:
+### 7. Present Design Plan to User
+
+**CRITICAL**: When presenting the design plan for user confirmation, you must include BOTH a conversational summary AND the complete JSON payload.
+
+### 8. Return Design (Only After User Confirmation)
+
+Once user explicitly confirms (e.g., "yes", "looks good", "proceed"), return to parent with:
 ```json
 {
   "action": "return_to_parent",

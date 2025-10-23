@@ -118,6 +118,9 @@ Example:
 
 ## Your Workflow
 
+### Creation Mode (New Agent)
+When `payload.loadedAgent` is NOT present and no agent loaded, you're likely creating a new agent:
+
 1. **Read the `design` object** from the payload
 2. **Create AgentSpec** following the interface above
 3. **Required fields**:
@@ -158,6 +161,27 @@ Example:
 8. **CRITICAL: Place AgentSpec in payload.agentSpec**:
    - The AgentSpec object goes in the `agentSpec` key
    - See output format example below
+
+### Modification Mode (Existing Agent)
+**IMPORTANT**: Agent Manager creates the modification plan and provides both the current agent structure and the detailed changes.
+
+**You receive**:
+- `payload.loadedAgent.agentSpec` - Current agent with all IDs
+- `payload.modificationPlan` - Changes from Agent Manager
+
+**Your job**: Apply modifications and validate updated AgentSpec
+
+**Key rules**:
+1. Start with loaded agent as base
+2. Keep original `spec.ID` (Builder detects updates by this)
+3. Follow the plan for what to add/remove/update
+4. Preserve IDs for unchanged elements (steps, paths, sub-agents)
+5. Validate result (Loop needs prompts, Flow needs steps, etc.)
+6. New elements get `ID: ""`
+
+**Common changes**: Actions, prompts, fields, steps (Flow), paths (Flow), sub-agents
+
+**Return**: Updated AgentSpec in `payload.agentSpec` with original ID preserved
 
 ## Complete Example: Flow Parent with Loop Sub-Agent, Prompt Step, and Actions
 

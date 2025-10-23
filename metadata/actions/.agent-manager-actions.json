@@ -131,5 +131,118 @@
       "lastModified": "2025-10-21T19:26:32.943Z",
       "checksum": "0ba7e7e317a46398c63a7f88d6369369ec9aad9fe3de4293b4f0d7eee3987eef"
     }
+  },
+  {
+    "fields": {
+      "Name": "Load Agent Spec",
+      "Description": "Loads the complete AgentSpec structure for an existing agent by ID. Returns full agent specification including all nested structures: Actions, SubAgents, Prompts, Steps, and Paths. Used by Agent Manager for modification workflow.",
+      "DriverClass": "Load Agent Spec",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-download"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The UUID of the agent to load (required)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "363B9477-06E4-4ECD-BB9F-D78C8D0BA763"
+          },
+          "sync": {
+            "lastModified": "2025-10-22T22:18:07.298Z",
+            "checksum": "b001ba0b591f4e6db401be29b14bef86d509ee8e08f0a3f63893d3ad0d34b095"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSubAgents",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to load nested sub-agents recursively (default: true)",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "A32545BE-97D6-4C34-83A4-4E6AEC38FFDE"
+          },
+          "sync": {
+            "lastModified": "2025-10-22T22:18:07.311Z",
+            "checksum": "ab98e86e419249e6f3a964a8b2d5859f51e96bd3b1cbb4460c8160d8a462dd06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentSpec",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Complete AgentSpec structure with all nested data",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "13C8999A-2F6F-4804-B319-0896ED148921"
+          },
+          "sync": {
+            "lastModified": "2025-10-22T22:18:07.323Z",
+            "checksum": "8dd99aec8ac176f407841987bf062da11669deb470c6efd5caf8890eab867865"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the loaded agent",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D5332F36-AE54-415C-8C4A-D735559E44E3"
+          },
+          "sync": {
+            "lastModified": "2025-10-22T22:18:07.332Z",
+            "checksum": "9ab01a5698b5e318ce3fa9946fde5bab6f91b3ad671a45b41248540817109020"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentType",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "TypeID of the agent (Loop or Flow)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A13653C5-2DC9-48C6-AF0C-BC108B0EF275"
+          },
+          "sync": {
+            "lastModified": "2025-10-22T22:18:07.351Z",
+            "checksum": "a355f5d0546df136fda03dfdafcfe12aee51aaddef80ff7f3c6b7e407224a59f"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3E7FB0AE-D63B-4478-B66A-98C887E51BF3"
+    },
+    "sync": {
+      "lastModified": "2025-10-22T22:18:07.251Z",
+      "checksum": "0513e301964c4afab934734e4caaf755cb5cdef76e6b7e611f4044e237b5c588"
+    }
   }
 ]

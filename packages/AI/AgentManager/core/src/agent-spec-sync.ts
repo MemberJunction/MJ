@@ -258,7 +258,8 @@ export class AgentSpecSync {
         }
 
         // Step 2: Batch load related entities using RunViews for optimal performance
-        const [actionsResult, childAgentsResult, relatedAgentsResult, promptsResult, stepsResult, pathsResult] = await rv.RunViews([
+        // Note: Load paths separately after steps to avoid hardcoded view name in subquery
+        const [actionsResult, childAgentsResult, relatedAgentsResult, promptsResult, stepsResult] = await rv.RunViews([
             {
                 EntityName: 'AI Agent Actions',
                 ExtraFilter: `AgentID='${agentId}'`,
@@ -288,12 +289,6 @@ export class AgentSpecSync {
                 ExtraFilter: `AgentID='${agentId}'`,
                 OrderBy: 'Name',
                 ResultType: 'entity_object'
-            },
-            {
-                EntityName: 'MJ: AI Agent Step Paths',
-                ExtraFilter: `OriginStepID IN (SELECT ID FROM vwAIAgentSteps WHERE AgentID='${agentId}')`,
-                OrderBy: 'Priority DESC',
-                ResultType: 'entity_object'
             }
         ], this._contextUser);
 
@@ -313,8 +308,53 @@ export class AgentSpecSync {
         if (!stepsResult.Success) {
             throw new Error(`Failed to load agent steps: ${stepsResult.ErrorMessage}`);
         }
-        if (!pathsResult.Success) {
-            throw new Error(`Failed to load step paths: ${pathsResult.ErrorMessage}`);
+
+        // Step 2b: Load paths separately using step IDs to avoid hardcoded view name
+        let pathsResult;
+        const steps = stepsResult.Results || [];
+        if (steps.length > 0) {
+            const stepIds = steps.map((s: AIAgentStepEntity) => `'${s.ID}'`).join(',');
+            pathsResult = await rv.RunView<AIAgentStepPathEntity>({
+                EntityName: 'MJ: AI Agent Step Paths',
+                ExtraFilter: `OriginStepID IN (${stepIds})`,
+                OrderBy: 'Priority DESC',
+                ResultType: 'entity_object'
+            }, this._contextUser);
+
+            if (!pathsResult.Success) {
+                throw new Error(`Failed to load step paths: ${pathsResult.ErrorMessage}`);
+            }
+        } else {
+            // No steps, so no paths
+            pathsResult = {
+                Success: true,
+                Results: [],
+                RowCount: 0
+            };
+        }
+
+        // Step 2c: Load full AI Prompt records to get PromptText, PromptRole, PromptPosition
+        let fullPromptsResult;
+        const agentPrompts = promptsResult.Results || [];
+        if (agentPrompts.length > 0) {
+            const promptIds = agentPrompts.map((p: any) => `'${p.PromptID}'`).join(',');
+            fullPromptsResult = await rv.RunView({
+                EntityName: 'AI Prompts',
+                ExtraFilter: `ID IN (${promptIds})`,
+                OrderBy: 'Name',
+                ResultType: 'entity_object'
+            }, this._contextUser);
+
+            if (!fullPromptsResult.Success) {
+                throw new Error(`Failed to load AI prompts: ${fullPromptsResult.ErrorMessage}`);
+            }
+        } else {
+            // No prompts
+            fullPromptsResult = {
+                Success: true,
+                Results: [],
+                RowCount: 0
+            };
         }
 
         // Step 3: Map entities to raw spec format
@@ -324,15 +364,39 @@ export class AgentSpecSync {
             childAgentsResult.Results || [],
             relatedAgentsResult.Results || [],
             promptsResult.Results || [],
+            fullPromptsResult.Results || [],
             stepsResult.Results || [],
             pathsResult.Results || []
         );
 
         // Step 4: Recursively load sub-agents if requested
         if (includeSubAgents && this.spec.SubAgents && this.spec.SubAgents.length > 0) {
-            // Note: We don't recursively populate the full spec here since SubAgentSpec
-            // only contains the ID and relationship metadata. To get full details,
-            // users can call LoadFromDatabase on the SubAgentID separately if needed.
+            // Recursively load complete specs for all sub-agents
+            for (const subAgentSpec of this.spec.SubAgents) {
+                if (subAgentSpec.SubAgent && subAgentSpec.SubAgent.ID) {
+                    try {
+                        // Load the complete sub-agent spec recursively
+                        const subAgentSync = await AgentSpecSync.LoadFromDatabase(
+                            subAgentSpec.SubAgent.ID,
+                            this._contextUser,
+                            true // Recursively load nested sub-agents too
+                        );
+
+                        // Replace the minimal SubAgent with the complete spec
+                        const fullSubAgentSpec = subAgentSync.toJSON();
+
+                        // Preserve the relationship metadata while adding full spec details
+                        subAgentSpec.SubAgent = {
+                            ...fullSubAgentSpec,
+                            // Ensure we preserve any relationship-specific overrides
+                            StartingPayloadValidationMode: subAgentSpec.SubAgent.StartingPayloadValidationMode || fullSubAgentSpec.StartingPayloadValidationMode
+                        };
+                    } catch (error) {
+                        LogError(`Failed to load sub-agent ${subAgentSpec.SubAgent.ID}: ${error instanceof Error ? error.message : String(error)}`);
+                        // Continue with partial data rather than failing completely
+                    }
+                }
+            }
         }
 
         this._isLoaded = true;
@@ -350,7 +414,8 @@ export class AgentSpecSync {
      * @param actions - Array of agent action entities
      * @param childAgents - Array of child agent entities (ParentID-based)
      * @param relatedAgents - Array of related agent relationship entities
-     * @param prompts - Array of agent prompt junction entities
+     * @param agentPrompts - Array of agent prompt junction entities
+     * @param fullPrompts - Array of full AI Prompt entities with PromptText, PromptRole, PromptPosition
      * @param steps - Array of agent step entities (for Flow agents)
      * @param paths - Array of step path entities (for Flow agents)
      * @returns Fully populated AgentSpec object
@@ -360,7 +425,8 @@ export class AgentSpecSync {
         actions: AIAgentActionEntity[],
         childAgents: AIAgentEntity[],
         relatedAgents: AIAgentRelationshipEntity[],
-        prompts: any[],
+        agentPrompts: any[],
+        fullPrompts: any[],
         steps: AIAgentStepEntity[],
         paths: AIAgentStepPathEntity[]
     ): AgentSpec {
@@ -369,6 +435,8 @@ export class AgentSpecSync {
             ID: agent.ID,
             Name: agent.Name || '',
             Description: agent.Description || undefined,
+            TypeID: agent.TypeID || undefined,
+            Status: (agent.Status as 'Active' | 'Inactive' | 'Pending') || undefined,
             IconClass: agent.IconClass || undefined,
             LogoURL: agent.LogoURL || undefined,
             ParentID: agent.ParentID || undefined,
@@ -417,7 +485,7 @@ export class AgentSpecSync {
             ],
 
             // Map prompts (agent-level prompts for Loop agents)
-            Prompts: prompts.map(prompt => this.mapPromptEntityToSpec(prompt)),
+            Prompts: agentPrompts.map(agentPrompt => this.mapPromptEntityToSpec(agentPrompt, fullPrompts)),
 
             // Map steps (for Flow agents)
             Steps: steps.map(step => this.mapStepEntityToSpec(step)),
@@ -494,15 +562,27 @@ export class AgentSpecSync {
      * Map AIAgentPromptEntity junction to AgentPromptSpec format.
      *
      * @private
-     * @param promptJunction - The agent prompt junction entity
+     * @param agentPrompt - The agent prompt junction entity (has PromptID, ExecutionOrder)
+     * @param fullPrompts - Array of full AI Prompt entities
      * @returns Mapped prompt spec
      */
-    private mapPromptEntityToSpec(promptJunction: any): any {
-        // The AIAgentPrompt is just a junction table, we need to extract the actual prompt info
+    private mapPromptEntityToSpec(agentPrompt: any, fullPrompts: any[]): any {
+        // Find the full prompt data by matching PromptID
+        const fullPrompt = fullPrompts.find((p: any) => p.ID === agentPrompt.PromptID);
+
+        if (!fullPrompt) {
+            // Fallback if prompt not found
+            return {
+                PromptText: '',
+                PromptRole: 'System',
+                PromptPosition: 'First'
+            };
+        }
+
         return {
-            PromptText: promptJunction.PromptText || '', // This comes from a view or needs separate load
-            PromptRole: promptJunction.PromptRole || 'System',
-            PromptPosition: promptJunction.PromptPosition || 'First'
+            PromptText: fullPrompt.TemplateText || '',
+            PromptRole: fullPrompt.PromptRole || 'System',
+            PromptPosition: fullPrompt.PromptPosition || 'First'
         };
     }
 
