@@ -355,7 +355,9 @@ export class GraphQLAIClient {
                     $lastRunId: String,
                     $autoPopulateLastRunPayload: Boolean,
                     $configurationId: String,
-                    $conversationDetailId: String
+                    $conversationDetailId: String,
+                    $createArtifacts: Boolean,
+                    $createNotification: Boolean
                 ) {
                     RunAIAgent(
                         agentId: $agentId,
@@ -367,7 +369,9 @@ export class GraphQLAIClient {
                         lastRunId: $lastRunId,
                         autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
                         configurationId: $configurationId,
-                        conversationDetailId: $conversationDetailId
+                        conversationDetailId: $conversationDetailId,
+                        createArtifacts: $createArtifacts,
+                        createNotification: $createNotification
                     ) {
                         success
                         errorMessage
@@ -421,6 +425,8 @@ export class GraphQLAIClient {
         if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
         if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
         if (params.conversationDetailId !== undefined) variables.conversationDetailId = params.conversationDetailId;
+        if (params.createArtifacts !== undefined) variables.createArtifacts = params.createArtifacts;
+        if (params.createNotification !== undefined) variables.createNotification = params.createNotification;
 
         return variables;
     }

@@ -229,6 +229,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           this.cdr.detectChanges();
         });
       }
+
+      // After loading messages, check for in-progress runs and ensure we're receiving updates
+      await this.detectAndReconnectToInProgressRuns(conversationId);
+
     } catch (error) {
       console.error('Error loading messages:', error);
       this.messages = [];
@@ -412,18 +416,24 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
   onAgentRunUpdate(event: {conversationDetailId: string; agentRun: AIAgentRunEntityExtended}): void {
+    console.log(`🔄 [AgentRunUpdate] Received update for detail ${event.conversationDetailId}`);
+    console.log(`   - Agent Run ID: ${event.agentRun?.ID}`);
+    console.log(`   - Status: ${event.agentRun?.Status}`);
+    console.log(`   - Map size BEFORE: ${this.agentRunsByDetailId.size}`);
+    console.log(`   - Was in map: ${this.agentRunsByDetailId.has(event.conversationDetailId)}`);
+
     // Directly update map with fresh data from progress (no database query needed)
+    // Don't create new Map - message-list component needs to keep the same reference
     this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
 
-    // Create new Map reference to trigger Angular change detection
-    this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
+    console.log(`   - Map size AFTER: ${this.agentRunsByDetailId.size}`);
+    console.log(`   - Verify set worked: ${this.agentRunsByDetailId.has(event.conversationDetailId)}`);
+    console.log(`   - Retrieved value ID: ${this.agentRunsByDetailId.get(event.conversationDetailId)?.ID}`);
 
     // Force message list to re-render with updated agent run
     // This ensures message components receive the fresh agent run data
     this.messages = [...this.messages];
     this.cdr.detectChanges();
-
-    console.log(`🔄 Agent run updated for detail ${event.conversationDetailId}, Status: ${event.agentRun.Status}`);
 
     // Start 1-second update timer for smooth UI updates (if not already running)
     this.startAgentRunUpdateTimer();
@@ -539,10 +549,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
 
-          // Create new Map reference to trigger Angular change detection
-          this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
-
           // Force message list to re-render with updated agent run
+          // Keep same Map reference so message-list component can access updates
           this.messages = [...this.messages];
           this.cdr.detectChanges();
 
@@ -1052,6 +1060,43 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
+  }
+
+  /**
+   * Detect in-progress agent runs/tasks and reconnect to their streaming updates
+   * Called after loading a conversation to resume progress tracking
+   */
+  private async detectAndReconnectToInProgressRuns(conversationId: string): Promise<void> {
+    // Check for in-progress messages
+    const inProgressMessages = this.messages.filter(
+      m => m.Status === 'In-Progress' && m.Role === 'AI'
+    );
+
+    if (inProgressMessages.length === 0) {
+      return;
+    }
+
+    console.log(`🔄 Found ${inProgressMessages.length} in-progress messages, reconnecting...`);
+
+    // For each in-progress message, check if there's an active agent run
+    for (const message of inProgressMessages) {
+      if (message.AgentID) {
+        // Check agent state service for this run
+        const agentRun = this.agentRunsByDetailId.get(message.ID);
+
+        if (agentRun && agentRun.Status === 'Running') {
+          console.log(`🔌 Reconnecting to agent run ${agentRun.ID} for message ${message.ID}`);
+
+          // Agent state service polling will automatically pick this up
+          // The WebSocket subscription is already active via PushStatusUpdates()
+          // No additional action needed - just log for visibility
+        }
+      }
+    }
+
+    // Agent state service is already polling via startPolling() in onConversationChanged()
+    // WebSocket subscription is already active via message-input component's subscribeToPushStatus()
+    // Both will automatically receive updates for these in-progress runs
   }
 
   /**

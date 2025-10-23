@@ -200,7 +200,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           }
 
           // Update agent run from map
-          instance.agentRun = this.agentRunMap.get(message.ID) || null;
+          const agentRun = this.agentRunMap.get(message.ID) || null;
+          console.log(`📋 [MessageList.updateMessages] Updating message ${message.ID.substring(0, 8)}`);
+          console.log(`   - Map size: ${this.agentRunMap.size}`);
+          console.log(`   - Map has key: ${this.agentRunMap.has(message.ID)}`);
+          console.log(`   - Agent run found: ${agentRun ? 'YES' : 'NO'}`);
+          if (agentRun) {
+            console.log(`   - Agent run ID: ${agentRun.ID}`);
+            console.log(`   - Agent run Status: ${agentRun.Status}`);
+          }
+          instance.agentRun = agentRun;
 
           // Manually trigger change detection in child component when message status changes
           // This is necessary because we're using OnPush change detection and direct property assignment

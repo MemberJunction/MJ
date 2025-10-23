@@ -609,12 +609,14 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
    */
   public async toggleAgentDetails(): Promise<void> {
     this.isAgentDetailsExpanded = !this.isAgentDetailsExpanded;
-    console.log(`🔧 Toggle agent details for message ${this.message.ID}:`, {
+    console.log(`🔧 [MessageItem.toggleAgentDetails] Message ${this.message.ID.substring(0, 8)}:`, {
       expanded: this.isAgentDetailsExpanded,
       hasAgentRun: this.hasAgentRun,
       agentRunExists: !!this.agentRun,
       agentRunId: this.agentRun?.ID,
-      messageAgentId: this.message?.AgentID
+      agentRunStatus: this.agentRun?.Status,
+      messageAgentId: this.message?.AgentID,
+      messageStatus: this.message?.Status
     });
 
     // Load tasks when expanding if not already loaded

@@ -162,7 +162,9 @@ export class ConversationAgentService {
           conversationId: conversationId,
           latestMessageId: message.ID
         },
-        onProgress: onProgress
+        onProgress: onProgress,
+        createArtifacts: true,
+        createNotification: true
       };
 
       // Run the agent
@@ -352,7 +354,9 @@ export class ConversationAgentService {
           invocationReason: reasoning
         },
         ...(payload ? { payload } : {}),
-        onProgress: onProgress
+        onProgress: onProgress,
+        createArtifacts: true,
+        createNotification: true
       };
 
       // Run the sub-agent
