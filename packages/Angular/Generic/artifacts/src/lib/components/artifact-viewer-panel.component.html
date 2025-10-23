@@ -78,18 +78,22 @@
 
         <!-- Tab Content (Dynamic) -->
         <div class="tab-content">
-          <!-- Display Tab - Special case for plugin rendering -->
-          @if (activeTab === 'display') {
+          <!-- Plugin Viewer - Created once, kept alive, shown/hidden with CSS -->
+          @if (hasPlugin && artifactVersion && artifactTypeName) {
+            <div class="plugin-container" [style.display]="activeTab === 'display' ? 'block' : 'none'">
+              <mj-artifact-type-plugin-viewer
+                [artifactVersion]="artifactVersion"
+                [artifactTypeName]="artifactTypeName"
+                [contentType]="contentType"
+                [readonly]="true">
+              </mj-artifact-type-plugin-viewer>
+            </div>
+          }
+
+          <!-- Display Tab - Fallback content when no plugin -->
+          @if (activeTab === 'display' && (!hasPlugin || !artifactVersion)) {
             <div class="display-content">
-              @if (hasPlugin && artifactVersion && artifactTypeName) {
-                <!-- Use plugin viewer if available -->
-                <mj-artifact-type-plugin-viewer
-                  [artifactVersion]="artifactVersion"
-                  [artifactTypeName]="artifactTypeName"
-                  [contentType]="contentType"
-                  [readonly]="true">
-                </mj-artifact-type-plugin-viewer>
-              } @else if (displayMarkdown || displayHtml) {
+              @if (displayMarkdown || displayHtml) {
                 <!-- Fallback to extracted markdown/HTML attributes -->
                 <div class="display-toolbar">
                   <button class="btn-icon" title="Print" (click)="onPrintDisplayContent()">
@@ -110,9 +114,8 @@
             </div>
           }
 
-          <!-- Details Tab - Artifact metadata -->
-          @if (activeTab === 'details') {
-            <div class="details-content">
+          <!-- Details Tab - Artifact metadata (always in DOM, hidden with CSS) -->
+          <div class="details-content" [style.display]="activeTab === 'details' ? 'block' : 'none'">
               <div class="artifact-meta">
                 <div class="meta-item">
                   <label>Type</label>
@@ -163,46 +166,43 @@
                 </div>
               }
             </div>
-          }
 
-          <!-- Links Tab - Conversations and Collections -->
-          @if (activeTab === 'links') {
-            <div class="links-container">
-              @if (linksToShow.length > 0) {
-                <div class="links-section">
-                  @for (link of linksToShow; track link.id) {
-                    <div class="link-item">
-                      <div class="link-icon">
-                        @if (link.type === 'conversation') {
-                          <i class="fas fa-comments"></i>
-                        } @else {
-                          <i class="fas fa-folder"></i>
-                        }
-                      </div>
-                      <div class="link-content">
-                        <div class="link-name">{{ link.name }}</div>
-                        <div class="link-type">{{ link.type === 'conversation' ? 'Conversation' : 'Collection' }}</div>
-                      </div>
-                      <div class="link-actions">
-                        <button
-                          class="link-action-btn"
-                          [disabled]="!link.hasAccess"
-                          [title]="link.hasAccess ? 'Open' : 'No access'"
-                          (click)="onNavigateToLink(link)">
-                          <i class="fas fa-arrow-right"></i>
-                        </button>
-                      </div>
+          <!-- Links Tab - Conversations and Collections (always in DOM, hidden with CSS) -->
+          <div class="links-container" [style.display]="activeTab === 'links' ? 'block' : 'none'">
+            @if (linksToShow.length > 0) {
+              <div class="links-section">
+                @for (link of linksToShow; track link.id) {
+                  <div class="link-item">
+                    <div class="link-icon">
+                      @if (link.type === 'conversation') {
+                        <i class="fas fa-comments"></i>
+                      } @else {
+                        <i class="fas fa-folder"></i>
+                      }
                     </div>
-                  }
-                </div>
-              } @else {
-                <div class="empty-state">
-                  <i class="fas fa-link"></i>
-                  <p>No links available</p>
-                </div>
-              }
-            </div>
-          }
+                    <div class="link-content">
+                      <div class="link-name">{{ link.name }}</div>
+                      <div class="link-type">{{ link.type === 'conversation' ? 'Conversation' : 'Collection' }}</div>
+                    </div>
+                    <div class="link-actions">
+                      <button
+                        class="link-action-btn"
+                        [disabled]="!link.hasAccess"
+                        [title]="link.hasAccess ? 'Open' : 'No access'"
+                        (click)="onNavigateToLink(link)">
+                        <i class="fas fa-arrow-right"></i>
+                      </button>
+                    </div>
+                  </div>
+                }
+              </div>
+            } @else {
+              <div class="empty-state">
+                <i class="fas fa-link"></i>
+                <p>No links available</p>
+              </div>
+            }
+          </div>
 
           <!-- Dynamic Plugin Tabs and Base Tabs (JSON, etc.) -->
           @if (activeTab !== 'display' && activeTab !== 'details' && activeTab !== 'links') {

@@ -55,21 +55,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public allCollections: CollectionEntity[] = [];
   public hasAccessToOriginConversation: boolean = false;
 
-  // Cache plugin state to avoid losing it when switching tabs
-  private cachedPluginShouldShowRaw: boolean = false;
-  private cachedPluginIsElevated: boolean = false;
-
-  // Cache plugin tabs (populated once when plugin loads)
-  private cachedPluginTabs: ArtifactViewerTab[] = [];
-
   // Dynamic tabs from plugin
   public get allTabs(): string[] {
     // Start with Display tab
     const tabs = ['Display'];
 
-    // Add cached plugin tabs
-    if (this.cachedPluginTabs.length > 0) {
-      const pluginTabLabels = this.cachedPluginTabs.map((t: ArtifactViewerTab) => t.label);
+    // Get plugin tabs directly from plugin instance (no caching needed - plugin always exists)
+    if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
+      const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
+      const pluginTabLabels = pluginTabs.map((t: ArtifactViewerTab) => t.label);
       tabs.push(...pluginTabLabels);
     }
 
@@ -84,35 +78,25 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     return tabs;
   }
 
-  /**
-   * Called when plugin is loaded/changed to cache its tabs (avoids binding issues)
-   */
-  public CachePluginTabs(): void {
-    const plugin = this.pluginViewer?.pluginInstance;
-
-    if (plugin?.GetAdditionalTabs) {
-      this.cachedPluginTabs = plugin.GetAdditionalTabs();
-    } else {
-      this.cachedPluginTabs = [];
-    }
-  }
-
   public GetTabContent(tabName: string): { type: string; content: string; language?: string } | null {
-    // Check if this is a plugin-provided tab (use cached tabs - case-insensitive match)
-    const pluginTab = this.cachedPluginTabs.find((t: ArtifactViewerTab) =>
-      t.label.toLowerCase() === tabName.toLowerCase()
-    );
+    // Check if this is a plugin-provided tab (query directly from plugin - no cache needed)
+    if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
+      const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
+      const pluginTab = pluginTabs.find((t: ArtifactViewerTab) =>
+        t.label.toLowerCase() === tabName.toLowerCase()
+      );
 
-    if (pluginTab) {
-      const content = typeof pluginTab.content === 'function'
-        ? pluginTab.content()
-        : pluginTab.content;
+      if (pluginTab) {
+        const content = typeof pluginTab.content === 'function'
+          ? pluginTab.content()
+          : pluginTab.content;
 
-      return {
-        type: pluginTab.contentType,
-        content: content,
-        language: pluginTab.language
-      };
+        return {
+          type: pluginTab.contentType,
+          content: content,
+          language: pluginTab.language
+        };
+      }
     }
 
     // Handle base tabs
@@ -188,10 +172,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       this.isLoading = true;
       this.error = null;
 
-      // Reset cached plugin state when loading new artifact
-      this.cachedPluginShouldShowRaw = false;
-      this.cachedPluginIsElevated = false;
-
       const md = new Metadata();
 
       // Load artifact
@@ -258,11 +238,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       this.error = 'Error loading artifact: ' + (err as Error).message;
     } finally {
       this.isLoading = false;
-
-      // Cache plugin tabs after loading (use setTimeout to ensure plugin is fully initialized)
-      setTimeout(() => {
-        this.CachePluginTabs();
-      }, 100);
     }
   }
 
@@ -358,17 +333,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   get hasJsonTab(): boolean {
-    // Try to get fresh plugin state if plugin viewer is available
+    // Query plugin directly (no cache needed - plugin always exists when it should)
     const pluginInstance = this.pluginViewer?.pluginInstance;
-    if (pluginInstance) {
-      // Update cache with current values
-      this.cachedPluginShouldShowRaw = pluginInstance.parentShouldShowRawContent;
-      this.cachedPluginIsElevated = pluginInstance.isShowingElevatedDisplay;
-    }
-
-    // Use cached value (or current value if plugin is available)
-    // This ensures the JSON tab doesn't disappear when switching to it
-    return this.cachedPluginShouldShowRaw;
+    return pluginInstance?.parentShouldShowRawContent || false;
   }
 
   get artifactTypeName(): string {
@@ -541,11 +508,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     // Load attributes for the selected version
     await this.loadVersionAttributes();
-
-    // Recache plugin tabs (version may have different metadata)
-    setTimeout(() => {
-      this.CachePluginTabs();
-    }, 100);
   }
 
   async onSaveToLibrary(): Promise<void> {

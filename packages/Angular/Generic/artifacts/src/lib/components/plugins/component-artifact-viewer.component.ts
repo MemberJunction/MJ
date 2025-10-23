@@ -27,6 +27,10 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public componentCode: string = "";
   public componentName: string = '';
 
+  public get resolvedComponentSpec(): ComponentSpec | null {
+    return this.reactComponent?.resolvedComponentSpec || this.component;
+  }
+
   // Error state
   public hasError = false;
   public errorMessage = '';
@@ -86,37 +90,39 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
   public GetAdditionalTabs(): ArtifactViewerTab[] {
     const tabs: ArtifactViewerTab[] = [];
 
-    if (!this.component) {
+    const resolvedComponent = this.resolvedComponentSpec;
+
+    if (!resolvedComponent) {
       return tabs;
     }
 
     // Functional Requirements tab
-    if (this.component.functionalRequirements) {
+    if (resolvedComponent.functionalRequirements) {
       tabs.push({
         label: 'Functional',
         icon: 'fa-clipboard-list',
         contentType: 'markdown',
-        content: this.component.functionalRequirements
+        content: resolvedComponent.functionalRequirements
       });
     }
 
     // Technical Design tab
-    if (this.component.technicalDesign) {
+    if (resolvedComponent.technicalDesign) {
       tabs.push({
         label: 'Technical',
         icon: 'fa-wrench',
         contentType: 'markdown',
-        content: this.component.technicalDesign
+        content: resolvedComponent.technicalDesign
       });
     }
 
     // Data Requirements tab
-    if (this.component.dataRequirements) {
+    if (resolvedComponent.dataRequirements) {
       tabs.push({
         label: 'Data',
         icon: 'fa-database',
         contentType: 'json',
-        content: JSON.stringify(this.component.dataRequirements, null, 2),
+        content: JSON.stringify(resolvedComponent.dataRequirements, null, 2),
         language: 'json'
       });
     }
@@ -127,18 +133,18 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
       icon: 'fa-code',
       contentType: 'code',
       language: 'typescript',
-      content: () => BuildComponentCompleteCode(this.component!)
+      content: () => BuildComponentCompleteCode(resolvedComponent)
     });
 
     return tabs;
   }
 
   private extractComponentParts(): void {
-    if (this.component?.name) {
-      this.componentName = this.component.name;
+    if (this.resolvedComponentSpec?.name) {
+      this.componentName = this.resolvedComponentSpec.name;
     }
-    if (this.component?.code) {
-      this.componentCode = BuildComponentCompleteCode(this.component);
+    if (this.resolvedComponentSpec?.code) {
+      this.componentCode = BuildComponentCompleteCode(this.resolvedComponentSpec);
     }
   }
 
