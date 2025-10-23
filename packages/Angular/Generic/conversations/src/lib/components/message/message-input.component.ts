@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -34,7 +34,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
-  @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun: any}>(); // Emits when agent run data updates during progress
+  @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
+  @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentRunId?: string}>(); // Emits when message completes (success or error)
   @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
@@ -671,29 +672,24 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     let capturedAgentRunId: string | null = null;
 
     return async (progress) => {
-      // CRITICAL FIX: Extract FULL agentRun object from progress metadata
-      // BaseAgent sends the complete AIAgentRunEntityExtended object with live timestamps
-      const progressAgentRun = progress.metadata?.agentRun as any | undefined;
+      let progressAgentRun = progress.metadata?.agentRun as any | undefined;
       const progressAgentRunId = progressAgentRun?.ID || progress.metadata?.agentRunId as string | undefined;
 
-      console.log(`🔍 [ProgressCallback ${agentName}] metadata:`, {
-        hasMetadata: !!progress.metadata,
-        metadataKeys: progress.metadata ? Object.keys(progress.metadata) : [],
-        hasAgentRun: !!progressAgentRun,
-        agentRunId: progressAgentRunId,
-        conversationDetailId: conversationDetail.ID
-      });
+      // if (!progressAgentRun && progressAgentRunId) {
+      //   // load the full agent run object from the database if we only have the ID
+      //   const md = new Metadata();
+      //   progressAgentRun = await md.GetEntityObject<AIAgentRunEntity>("MJ: AI Agent Runs");
+      //   await progressAgentRun.Load(progressAgentRunId);
+      // }
 
       // Capture the agent run ID from the first progress message
       if (!capturedAgentRunId && progressAgentRunId) {
         capturedAgentRunId = progressAgentRunId;
-        console.log(`[${agentName}] 📌 Captured agent run ID: ${capturedAgentRunId} for conversation detail: ${conversationDetail.ID}`);
       }
 
       // Filter out progress messages from other concurrent agents
       // This prevents cross-contamination when multiple agents run in parallel
       if (capturedAgentRunId && progressAgentRunId && progressAgentRunId !== capturedAgentRunId) {
-        console.log(`[${agentName}] 🚫 Ignoring progress from different agent run (expected: ${capturedAgentRunId}, got: ${progressAgentRunId})`);
         return;
       }
 
@@ -706,11 +702,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       // Update the ConversationDetail message in real-time
       try {
         if (conversationDetail) {
-          console.log(`[${agentName}] Got conversation detail from cache - Status: ${conversationDetail.Status}, ID: ${conversationDetail.ID}`);
-
           // Check 1: Skip if message is already complete or errored
           if (conversationDetail.Status === 'Complete' || conversationDetail.Status === 'Error') {
-            console.log(`[${agentName}] ⛔ Skipping progress update - message status is ${conversationDetail.Status}`);
             return;
           }
 
@@ -718,28 +711,24 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           // Once a message is marked complete, we reject ALL further progress updates
           const completionTime = this.completionTimestamps.get(conversationDetail.ID);
           if (completionTime) {
-            console.log(`[${agentName}] ⛔ Skipping progress update - message was marked complete at ${completionTime}`);
             return;
           }
 
           // CRITICAL FIX: Emit FULL agent run object for incremental updates
           // This contains live timestamps, status, and other fields that change during execution
-          if (progressAgentRun) {
-            console.log(`📤 [ProgressCallback ${agentName}] Emitting agentRunUpdate event`);
+          if (progressAgentRun || progressAgentRunId) {
             this.agentRunUpdate.emit({
               conversationDetailId: conversationDetail.ID,
-              agentRun: progressAgentRun
+              agentRun: progressAgentRun,
+              agentRunId: progressAgentRunId
             });
           } else if (progressAgentRunId && !capturedAgentRunId) {
             // Fallback: If we don't have the full object but have the ID, emit agentRunDetected
             // This will trigger a database query to load the agent run
-            console.warn(`⚠️ [ProgressCallback ${agentName}] No agentRun object in metadata, falling back to agentRunDetected with ID`);
             this.agentRunDetected.emit({
               conversationDetailId: conversationDetail.ID,
               agentRunId: progressAgentRunId
             });
-          } else {
-            console.warn(`⚠️ [ProgressCallback ${agentName}] No agentRun data in metadata at all`);
           }
 
           if (conversationDetail.Status === 'In-Progress') {
@@ -2015,11 +2004,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
   /**
    * Marks a conversation detail as complete and records timestamp to prevent race conditions
+   * Emits event to parent to refresh agent run data from database
    */
   private markMessageComplete(conversationDetail: ConversationDetailEntity): void {
     const now = Date.now();
     this.completionTimestamps.set(conversationDetail.ID, now);
-    console.log(`🏁 Marked message ${conversationDetail.ID} as complete at ${now}`);
+
+    // Emit completion event to parent so it can refresh agent run data
+    this.messageComplete.emit({
+      conversationDetailId: conversationDetail.ID,
+      agentRunId: (conversationDetail as any).AgentRunID
+    });
   }
 
   /**

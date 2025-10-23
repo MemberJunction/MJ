@@ -411,24 +411,43 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   /**
+   * Handle message completion event from message-input
+   * Refreshes the agent run data in-place to get final status and timestamps
+   */
+  async onMessageComplete(event: {conversationDetailId: string; agentRunId?: string}): Promise<void> {
+    // Get existing agent run from map
+    const existingAgentRun = this.agentRunsByDetailId.get(event.conversationDetailId);
+
+    if (existingAgentRun?.ID) {
+      // Refresh the SAME object by calling Load() - preserves all references
+      await existingAgentRun.Load(existingAgentRun.ID);
+
+      // Trigger re-render to show updated status
+      this.messages = [...this.messages];
+      this.cdr.detectChanges();
+
+      // Stop timer since agent completed
+      this.stopAgentRunUpdateTimer();
+    }
+  }
+
+  /**
    * Handle agent run update event from progress updates
    * This is called on EVERY progress update with the full, live agent run object
    * Provides real-time updates of status, timestamps, tokens, cost during execution
    */
-  onAgentRunUpdate(event: {conversationDetailId: string; agentRun: AIAgentRunEntityExtended}): void {
-    console.log(`🔄 [AgentRunUpdate] Received update for detail ${event.conversationDetailId}`);
-    console.log(`   - Agent Run ID: ${event.agentRun?.ID}`);
-    console.log(`   - Status: ${event.agentRun?.Status}`);
-    console.log(`   - Map size BEFORE: ${this.agentRunsByDetailId.size}`);
-    console.log(`   - Was in map: ${this.agentRunsByDetailId.has(event.conversationDetailId)}`);
-
-    // Directly update map with fresh data from progress (no database query needed)
-    // Don't create new Map - message-list component needs to keep the same reference
-    this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
-
-    console.log(`   - Map size AFTER: ${this.agentRunsByDetailId.size}`);
-    console.log(`   - Verify set worked: ${this.agentRunsByDetailId.has(event.conversationDetailId)}`);
-    console.log(`   - Retrieved value ID: ${this.agentRunsByDetailId.get(event.conversationDetailId)?.ID}`);
+  async onAgentRunUpdate(event: {conversationDetailId: string; agentRun?: AIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+    let run: AIAgentRunEntityExtended;
+    if (event.agentRun) {
+      // Directly update map with fresh data from progress (no database query needed)
+      // Don't create new Map - message-list component needs to keep the same reference
+      this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+      run = event.agentRun;
+    }
+    else {
+      // no agent run, should have agentRunId
+      run = await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId!);
+    }
 
     // Force message list to re-render with updated agent run
     // This ensures message components receive the fresh agent run data
@@ -439,7 +458,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.startAgentRunUpdateTimer();
 
     // If agent completed or failed, stop the timer
-    const status = event.agentRun.Status?.toLowerCase();
+    const status = run.Status?.toLowerCase();
     if (status === 'complete' || status === 'completed' || status === 'failed' || status === 'error') {
       this.stopAgentRunUpdateTimer();
     }
@@ -540,7 +559,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    * Called when a new agent run completes to keep the map in sync
    * @param forceRefresh If true, always reload from database even if already in map (used when status changes)
    */
-  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<void> {
+  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<AIAgentRunEntityExtended> {
     try {
       // Always refresh if forced, or if not in map yet
       if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
@@ -554,13 +573,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           this.messages = [...this.messages];
           this.cdr.detectChanges();
 
-          console.log(`✅ Agent run ${forceRefresh ? 'refreshed' : 'added'} in map for detail ${conversationDetailId}, Status: ${agentRun.Status}`);
         }
-      } else {
-        console.log(`⏭️ Agent run for detail ${conversationDetailId} already in map, skipping load`);
+        return agentRun;
+      } 
+      else {
+        return this.agentRunsByDetailId.get(conversationDetailId)!;
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);
+      throw error;
     }
   }
 
