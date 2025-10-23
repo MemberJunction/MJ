@@ -377,8 +377,25 @@ export class FlowAgentType extends BaseAgentType {
                 
                 if (outputParam === '*') {
                     value = actionResult;
+                } else if (outputParam.includes('.')) {
+                    // Support dot notation for nested property access (e.g., "AgentSpec.ID")
+                    const parts = outputParam.split('.');
+                    value = actionResult;
+
+                    for (const part of parts) {
+                        if (value && typeof value === 'object' && !Array.isArray(value)) {
+                            // Case-insensitive lookup at each level
+                            const actualKey = Object.keys(value as Record<string, unknown>).find(
+                                key => key.toLowerCase() === part.toLowerCase()
+                            );
+                            value = actualKey ? (value as Record<string, unknown>)[actualKey] : undefined;
+                        } else {
+                            value = undefined;
+                            break;
+                        }
+                    }
                 } else {
-                    // Case-insensitive lookup for the output parameter
+                    // Simple case-insensitive lookup for non-dotted output parameters
                     const actualKey = Object.keys(actionResult).find(
                         key => key.toLowerCase() === outputParam.toLowerCase()
                     );
