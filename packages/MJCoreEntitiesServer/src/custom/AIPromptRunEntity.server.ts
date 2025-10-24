@@ -1,4 +1,4 @@
-import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, MJGlobal } from "@memberjunction/global";
 import { AIPromptRunEntityExtended } from "@memberjunction/core-entities";
 import { AIEngineBase, BasePriceUnitType } from "@memberjunction/ai-engine-base";
@@ -152,8 +152,8 @@ export class AIPromptRunEntityServer extends AIPromptRunEntityExtended {
      */
     protected async TriggerParentCostRollup(): Promise<void> {
         try {
-            // Load the parent prompt run
-            const md = new Metadata();
+            // Load the parent prompt run using entity's provider
+            const md = this.ProviderToUse as any as IMetadataProvider;
             const parent = await md.GetEntityObject<AIPromptRunEntityServer>(
                 'MJ: AI Prompt Runs',
                 this.ContextCurrentUser
