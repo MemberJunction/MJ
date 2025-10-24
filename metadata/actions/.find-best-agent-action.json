@@ -89,6 +89,25 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "ExcludeSubAgents",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to exclude agents with invocation mode 'Sub-Agent' from search results. Sub-agents are typically called by other agents. Defaults to true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4195795C-0613-453E-9688-CEE6CD390C46"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T18:24:15.019Z",
+            "checksum": "ca00df0e3c5c0d2f160a8e6da1073b741968e67064023d9ea285af975706d980"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "MatchedAgents",
             "Type": "Output",
             "ValueType": "Simple Object",
