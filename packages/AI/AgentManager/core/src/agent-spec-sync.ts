@@ -1007,6 +1007,7 @@ export class AgentSpecSync {
 
         console.log(`💬 savePrompts: Processing ${this.spec.Prompts.length} prompt(s)...`);
         const md = new Metadata();
+        const rv = new RunView();
 
         // Step 1: Create or update AIPrompt records
         for (let i = 0; i < this.spec.Prompts.length; i++) {
@@ -1069,13 +1070,33 @@ export class AgentSpecSync {
             console.log(`✅ savePrompts: ${isUpdate ? 'Updated' : 'Created'} AIPrompt with ID: ${promptEntity.ID}`);
 
             // Step 2: Create or update AIAgentPrompt junction
-            const agentPromptEntity = await md.GetEntityObject<any>(
-                'MJ: AI Agent Prompts',
-                this._contextUser
-            );
+            // Query for existing junction by AgentID + PromptID
+            const existingJunctionResult = await rv.RunView<any>({
+                EntityName: 'MJ: AI Agent Prompts',
+                ExtraFilter: `AgentID='${agentId}' AND PromptID='${promptEntity.ID}'`,
+                ResultType: 'entity_object'
+            }, this._contextUser);
 
-            agentPromptEntity.AgentID = agentId;
-            agentPromptEntity.PromptID = promptEntity.ID;
+            let agentPromptEntity: any;
+            let isJunctionUpdate = false;
+
+            if (existingJunctionResult.Success && existingJunctionResult.Results && existingJunctionResult.Results.length > 0) {
+                // Junction exists - load it for update
+                agentPromptEntity = existingJunctionResult.Results[0];
+                isJunctionUpdate = true;
+                console.log(`💬 savePrompts: Updating existing junction for prompt ${i + 1}`);
+            } else {
+                // Junction doesn't exist - create new one
+                agentPromptEntity = await md.GetEntityObject<any>(
+                    'MJ: AI Agent Prompts',
+                    this._contextUser
+                );
+                agentPromptEntity.AgentID = agentId;
+                agentPromptEntity.PromptID = promptEntity.ID;
+                console.log(`💬 savePrompts: Creating new junction for prompt ${i + 1}`);
+            }
+
+            // Set/update common fields (ExecutionOrder might change)
             agentPromptEntity.ExecutionOrder = i;
             agentPromptEntity.Status = 'Active';
 
@@ -1084,7 +1105,7 @@ export class AgentSpecSync {
                 throw new Error(`Failed to save agent-prompt junction for prompt ${i + 1}`);
             }
 
-            console.log(`✅ savePrompts: Saved AIAgentPrompt junction with ID: ${agentPromptEntity.ID}`);
+            console.log(`✅ savePrompts: ${isJunctionUpdate ? 'Updated' : 'Created'} AIAgentPrompt junction with ID: ${agentPromptEntity.ID}`);
         }
 
         console.log(`✅ savePrompts: Successfully saved all ${this.spec.Prompts.length} prompt(s)`);
