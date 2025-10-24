@@ -2875,9 +2875,9 @@ export class MJAIAgent_ {
     @MaxLength(16)
     TypeID?: string;
         
-    @Field({nullable: true, description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
+    @Field({description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
     @MaxLength(40)
-    Status?: string;
+    Status: string;
         
     @Field({nullable: true, description: `Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`}) 
     @MaxLength(510)
@@ -2966,6 +2966,10 @@ if this limit is exceeded.`})
     @Field({description: `Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`}) 
     @MaxLength(40)
     InvocationMode: string;
+        
+    @Field({description: `Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`}) 
+    @MaxLength(40)
+    ArtifactCreationMode: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -3095,7 +3099,7 @@ export class CreateMJAIAgentInput {
     TypeID: string | null;
 
     @Field({ nullable: true })
-    Status: string | null;
+    Status?: string;
 
     @Field({ nullable: true })
     DriverClass: string | null;
@@ -3168,6 +3172,9 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     InvocationMode?: string;
+
+    @Field({ nullable: true })
+    ArtifactCreationMode?: string;
 }
     
 
@@ -3216,7 +3223,7 @@ export class UpdateMJAIAgentInput {
     TypeID?: string | null;
 
     @Field({ nullable: true })
-    Status?: string | null;
+    Status?: string;
 
     @Field({ nullable: true })
     DriverClass?: string | null;
@@ -3289,6 +3296,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     InvocationMode?: string;
+
+    @Field({ nullable: true })
+    ArtifactCreationMode?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12162,6 +12172,13 @@ export class MJUser_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({nullable: true, description: `User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.`}) 
+    UserImageURL?: string;
+        
+    @Field({nullable: true, description: `Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`}) 
+    @MaxLength(200)
+    UserImageIconClass?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(202)
     FirstLast?: string;
@@ -12399,6 +12416,12 @@ export class CreateMJUserInput {
 
     @Field({ nullable: true })
     EmployeeID: string | null;
+
+    @Field({ nullable: true })
+    UserImageURL: string | null;
+
+    @Field({ nullable: true })
+    UserImageIconClass: string | null;
 }
     
 
@@ -12442,6 +12465,12 @@ export class UpdateMJUserInput {
 
     @Field({ nullable: true })
     EmployeeID?: string | null;
+
+    @Field({ nullable: true })
+    UserImageURL?: string | null;
+
+    @Field({ nullable: true })
+    UserImageIconClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41812,6 +41841,10 @@ export class MJArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`}) 
+    @MaxLength(40)
+    Visibility: string;
+        
     @Field() 
     @MaxLength(510)
     Environment: string;
@@ -41860,6 +41893,9 @@ export class CreateMJArtifactInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Visibility?: string;
 }
     
 
@@ -41888,6 +41924,9 @@ export class UpdateMJArtifactInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Visibility?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

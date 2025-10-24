@@ -83,15 +83,14 @@
                   <div class="general-settings">
                     <h2 class="section-title">General Settings</h2>
                     <div class="mj-grid mj-grid-responsive">
-                      <mj-settings-card 
+                      <mj-settings-card
                         title="Profile Information"
                         icon="fa-solid fa-user"
                         [expanded]="isSectionExpanded('profile')"
                         (toggle)="toggleSection('profile')"
                       >
                         <div class="card-content">
-                          <p>Manage your profile information and preferences.</p>
-                          <!-- Profile settings content will go here -->
+                          <mj-user-profile-settings></mj-user-profile-settings>
                         </div>
                       </mj-settings-card>
 

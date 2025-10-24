@@ -64,9 +64,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     if (value && value !== this.activeArtifactId) {
       console.log('🔗 Deep link to artifact:', value);
       this.activeTab = 'collections';
-      this.artifactState.openArtifact(value);
+      // Open artifact with version number if provided
+      this.artifactState.openArtifact(value, this._pendingVersionNumber);
+      this._pendingVersionNumber = undefined; // Clear after use
     }
   }
+
+  @Input() set activeVersionNumberInput(value: number | undefined) {
+    // Store version number to use when artifact is opened
+    this._pendingVersionNumber = value;
+  }
+
+  private _pendingVersionNumber?: number;
 
   @Input() set activeTaskInput(value: string | undefined) {
     if (value && value !== this._activeTaskId) {

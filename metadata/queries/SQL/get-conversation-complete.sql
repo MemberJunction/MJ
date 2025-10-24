@@ -6,6 +6,11 @@ SELECT
     -- Conversation Detail fields (all fields needed for display)
     cd.*,
 
+    -- User Avatar fields from vwUsers (for message display)
+    -- These fields come from the LEFT JOIN to User table in vwConversationDetails
+    u.UserImageURL,
+    u.UserImageIconClass,
+
     -- Agent Runs as JSON array (0-1 per conversation detail)
     -- Only includes fields needed for display in the gear icon
     (
@@ -37,7 +42,8 @@ SELECT
             av.ArtifactID,
             a.Name as ArtifactName,
             a.Type as ArtifactType,
-            a.Description as ArtifactDescription
+            a.Description as ArtifactDescription,
+            a.Visibility as Visibility
         FROM [__mj].[vwConversationDetailArtifacts] cda
         INNER JOIN [__mj].[vwArtifactVersions] av ON cda.ArtifactVersionID = av.ID
         INNER JOIN [__mj].[vwArtifacts] a ON av.ArtifactID = a.ID
@@ -48,5 +54,6 @@ SELECT
     ) as ArtifactsJSON
 
 FROM [__mj].[vwConversationDetails] cd
+LEFT OUTER JOIN [__mj].[vwUsers] u ON cd.UserID = u.ID
 WHERE cd.ConversationID = {{ ConversationID | sqlString }}
 ORDER BY cd.__mj_CreatedAt ASC

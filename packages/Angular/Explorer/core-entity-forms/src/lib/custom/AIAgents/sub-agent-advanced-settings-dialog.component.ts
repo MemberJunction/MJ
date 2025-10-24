@@ -9,7 +9,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 export interface SubAgentAdvancedSettingsFormData {
   executionOrder: number;
   executionMode: 'Sequential' | 'Parallel';
-  status: string;
+  status: 'Active' | 'Disabled' | 'Pending';
   typeID: string | null;
   exposeAsAction: boolean;
 }

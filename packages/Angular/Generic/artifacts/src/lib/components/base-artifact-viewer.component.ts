@@ -123,4 +123,16 @@ export abstract class BaseArtifactViewerPluginComponent implements IArtifactView
    * @returns Array of tab definitions, or undefined if no additional tabs
    */
   public GetAdditionalTabs?(): ArtifactViewerTab[];
+
+  /**
+   * Get list of standard tabs that this plugin wants to hide/remove.
+   * Use this when the plugin provides custom alternatives to standard tabs.
+   *
+   * Example: Component viewer provides custom "Resolved JSON" tab, so removes standard "JSON" tab
+   *
+   * @returns Array of standard tab names to remove (case-insensitive)
+   *          Valid values: 'JSON', 'Details', 'Links'
+   *          Note: 'Display' cannot be removed (it's the main view)
+   */
+  public GetStandardTabRemovals?(): string[];
 }

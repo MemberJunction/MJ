@@ -1,5 +1,5 @@
 import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { TaskEntity, TaskDependencyEntity, TaskTypeEntity, AIAgentEntityExtended, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity } from '@memberjunction/core-entities';
+import { TaskEntity, TaskDependencyEntity, TaskTypeEntity, AIAgentEntityExtended, ConversationDetailEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, UserNotificationEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
 import { PubSubEngine } from 'type-graphql';
@@ -50,7 +50,8 @@ export class TaskOrchestrator {
         private contextUser: UserInfo,
         private pubSub?: PubSubEngine,
         private sessionId?: string,
-        private userPayload?: UserPayload
+        private userPayload?: UserPayload,
+        private createNotifications: boolean = false
     ) {}
 
     /**
@@ -408,9 +409,14 @@ export class TaskOrchestrator {
         parentTask.Status = 'Complete';
         parentTask.PercentComplete = 100;
         parentTask.CompletedAt = new Date();
-        await parentTask.Save();
+        const saved = await parentTask.Save();
 
         LogStatus(`Parent workflow task completed: ${parentTask.Name}`);
+
+        // If notifications enabled, create user notification
+        if (this.createNotifications && saved) {
+            await this.createTaskGraphCompletionNotification(parentTask);
+        }
     }
 
     /**
@@ -703,6 +709,16 @@ export class TaskOrchestrator {
             artifact.UserID = this.contextUser.ID;
             artifact.EnvironmentID = (this.contextUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
 
+            // Set visibility based on agent's ArtifactCreationMode
+            // Will compile after CodeGen adds the new fields
+            const creationMode = agent.ArtifactCreationMode;
+            if (creationMode === 'System Only') {
+                artifact.Visibility = 'System Only';
+                LogStatus(`Task artifact marked as "System Only" per agent configuration`);
+            } else {
+                artifact.Visibility = 'Always';
+            }
+
             const artifactSaved = await artifact.Save();
             if (!artifactSaved) {
                 LogError('Failed to save artifact');
@@ -733,6 +749,23 @@ export class TaskOrchestrator {
 
             LogStatus(`Created artifact version: ${version.ID}`);
 
+            // Check for extracted Name attribute and update artifact with better name
+            const nameAttr = (version as any).Attributes?.find((attr: any) =>
+                attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
+            );
+
+            // Check for valid name value (not null, not empty, not string "null")
+            let extractedName = nameAttr?.Value?.trim();
+            if (extractedName && extractedName.toLowerCase() !== 'null') {
+                // Strip surrounding quotes (double or single) from start and end
+                extractedName = extractedName.replace(/^["']|["']$/g, '');
+
+                artifact.Name = extractedName;
+                if (await artifact.Save()) {
+                    LogStatus(`✨ Updated artifact name to: ${artifact.Name}`);
+                }
+            }
+
             // Create M2M relationship linking artifact to conversation detail
             const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
                 'MJ: Conversation Detail Artifacts',
@@ -751,6 +784,88 @@ export class TaskOrchestrator {
             LogStatus(`Linked artifact ${artifact.ID} to conversation detail ${conversationDetailId}`);
         } catch (error) {
             LogError(`Error creating artifact from output: ${error}`);
+        }
+    }
+
+    /**
+     * Create user notification for task graph completion
+     * Notifies user that their multi-step workflow has completed
+     */
+    private async createTaskGraphCompletionNotification(parentTask: TaskEntity): Promise<void> {
+        try {
+            if (!parentTask.ConversationDetailID) {
+                LogStatus('Skipping notification - no conversation detail linked');
+                return;
+            }
+
+            const md = new Metadata();
+
+            // Load conversation detail to get conversation ID
+            const detail = await md.GetEntityObject<ConversationDetailEntity>(
+                'Conversation Details',
+                this.contextUser
+            );
+            if (!(await detail.Load(parentTask.ConversationDetailID))) {
+                throw new Error(`Failed to load conversation detail ${parentTask.ConversationDetailID}`);
+            }
+
+            // Count child tasks and success rate
+            const rv = new RunView();
+            const tasksResult = await rv.RunView<TaskEntity>({
+                EntityName: 'MJ: Tasks',
+                ExtraFilter: `ParentID='${parentTask.ID}'`,
+                ResultType: 'entity_object'
+            }, this.contextUser);
+
+            const childTasks = tasksResult.Success ? (tasksResult.Results || []) : [];
+            const successCount = childTasks.filter(t => t.Status === 'Complete').length;
+            const totalCount = childTasks.length;
+
+            // Create notification
+            const notification = await md.GetEntityObject<UserNotificationEntity>(
+                'User Notifications',
+                this.contextUser
+            );
+
+            notification.UserID = this.contextUser.ID;
+            notification.Title = `Workflow "${parentTask.Name}" completed`;
+            notification.Message = `Your ${totalCount}-step workflow has finished. ${successCount} of ${totalCount} tasks completed successfully.`;
+
+            // Navigation configuration
+            notification.ResourceConfiguration = JSON.stringify({
+                type: 'conversation',
+                conversationId: detail.ConversationID,
+                messageId: parentTask.ConversationDetailID,
+                taskId: parentTask.ID
+            });
+
+            notification.Unread = true;
+
+            if (!(await notification.Save())) {
+                throw new Error('Failed to save notification');
+            }
+
+            LogStatus(`📬 Created task graph notification ${notification.ID} for user ${this.contextUser.ID}`);
+
+            // Publish real-time event if pubSub available
+            if (this.pubSub && this.userPayload) {
+                this.pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+                    userPayload: JSON.stringify(this.userPayload),
+                    message: JSON.stringify({
+                        type: 'notification',
+                        notificationId: notification.ID,
+                        action: 'create',
+                        title: notification.Title,
+                        message: notification.Message
+                    })
+                });
+
+                LogStatus(`📡 Published task graph notification event to client`);
+            }
+
+        } catch (error) {
+            LogError(`Failed to create task graph notification: ${(error as Error).message}`);
+            // Don't throw - notification failure shouldn't fail the task
         }
     }
 }
