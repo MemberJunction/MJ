@@ -397,6 +397,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       detail.ConversationID = this.conversationId;
       detail.Message = text.trim();
       detail.Role = 'User';
+      detail.UserID = this.currentUser.ID; // Set the user who sent the message
 
       if (this.parentMessageId) {
         detail.ParentID = this.parentMessageId;
@@ -429,6 +430,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     detail.ConversationID = this.conversationId;
     detail.Message = this.messageText.trim();
     detail.Role = 'User';
+    detail.UserID = this.currentUser.ID; // Set the user who sent the message
 
     if (this.parentMessageId) {
       detail.ParentID = this.parentMessageId;

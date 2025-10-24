@@ -45,6 +45,7 @@
     "@memberjunction/ng-conversations": "2.109.0",
     "@memberjunction/ng-ask-skip": "2.109.0",
     "@memberjunction/ng-auth-services": "2.109.0",
+    "@memberjunction/ng-user-avatar": "2.109.0",
     "@memberjunction/ng-explorer-settings": "2.109.0",
     "@memberjunction/ng-base-forms": "2.109.0",
     "@memberjunction/ng-entity-form-dialog": "2.109.0",

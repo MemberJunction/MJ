@@ -45,7 +45,7 @@
     <div class="chat-content-area">
     <!-- Messages Pane -->
     <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
-        @if (isLoadingConversation) {
+        @if (isLoadingConversation && conversationState.activeConversation) {
           <!-- Loading State - Show centered spinner while conversation loads -->
           <div class="conversation-loading-state">
             <div class="loading-content">
@@ -53,7 +53,7 @@
               <span>Loading conversation...</span>
             </div>
           </div>
-        } @else {
+        } @else if (conversationState.activeConversation) {
           <!-- Normal Message View -->
           <div class="chat-messages-wrapper">
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
@@ -62,8 +62,9 @@
               [conversation]="conversationState.activeConversation"
               [currentUser]="currentUser"
               [isProcessing]="isProcessing"
-              [artifactMap]="artifactsByDetailId"
+              [artifactMap]="effectiveArtifactsMap"
               [agentRunMap]="agentRunsByDetailId"
+              [userAvatarMap]="userAvatarMap"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
               (retryMessage)="onRetryMessage($event)"
@@ -190,9 +191,20 @@
     <div class="modal-content artifacts-modal" (click)="$event.stopPropagation()">
         <div class="modal-header">
         <h3>Conversation Artifacts</h3>
-        <button class="modal-close-btn" (click)="showArtifactsModal = false">
+        <div class="modal-header-actions">
+            @if (hasSystemArtifacts) {
+              <button class="toggle-system-btn"
+                      [class.active]="showSystemArtifacts"
+                      (click)="toggleSystemArtifacts()"
+                      title="Toggle system artifacts visibility">
+              <i class="fas fa-cog"></i>
+              <span>{{ showSystemArtifacts ? 'Hide' : 'Show' }} System</span>
+              </button>
+            }
+            <button class="modal-close-btn" (click)="showArtifactsModal = false">
             <i class="fas fa-times"></i>
-        </button>
+            </button>
+        </div>
         </div>
         <div class="modal-body artifacts-grid">
         @if (artifactsByDetailId.size === 0) {

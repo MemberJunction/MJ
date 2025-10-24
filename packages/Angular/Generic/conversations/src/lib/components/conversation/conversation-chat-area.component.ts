@@ -37,6 +37,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public isProcessing: boolean = false;
   private intentCheckMessage: ConversationDetailEntity | null = null; // Temporary message shown during intent checking
   public isLoadingConversation: boolean = true; // True while loading initial conversation messages
+
+  // Store raw query results and derived data
+  private rawConversationData: ConversationDetailComplete[] = [];
+  public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   public memberCount: number = 1;
   public artifactCount: number = 0;
   public isShared: boolean = false;
@@ -46,6 +50,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showProjectSelector: boolean = false;
   public showArtifactPanel: boolean = false;
   public showArtifactsModal: boolean = false;
+  public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
@@ -62,6 +67,13 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   // Uses lazy-loading pattern: display data loaded immediately, full entities on-demand
   // Supports multiple artifacts per conversation detail (0-N relationship)
   public artifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+
+  // System artifacts mapping: ConversationDetailID -> Array of LazyArtifactInfo (Visibility='System Only')
+  // Kept separate so we can toggle their display without reloading
+  private systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+
+  // Cached combined artifacts map - updated when toggle changes
+  private _combinedArtifactsMap: Map<string, LazyArtifactInfo[]> | null = null;
 
   // Agent run mapping: ConversationDetailID -> AIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
@@ -247,6 +259,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     const md = new Metadata();
     const messages: ConversationDetailEntity[] = [];
 
+    // Store raw conversation data for access to query-specific fields
+    this.rawConversationData = conversationData;
+
+    // Build user avatar map for fast lookups
+    this.buildUserAvatarMap(conversationData);
+
     for (const row of conversationData) {
       if (!row.ID) continue;
 
@@ -263,6 +281,33 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.messages = messages;
     this.scrollToBottom = true;
     this.cdr.detectChanges(); // Show messages immediately
+  }
+
+  /**
+   * Builds a map of UserID -> Avatar data for fast lookups
+   * Extracts unique users from conversation data and their avatar settings
+   */
+  private buildUserAvatarMap(conversationData: ConversationDetailComplete[]): void {
+    this.userAvatarMap.clear();
+
+    // Get unique users and their avatar data
+    const userMap = new Map<string, {imageUrl: string | null; iconClass: string | null}>();
+
+    for (const row of conversationData) {
+      // Only process user messages that have a UserID
+      if (row.Role?.toLowerCase() === 'user' && row.UserID) {
+        // Only add if we haven't seen this user yet
+        if (!userMap.has(row.UserID)) {
+          userMap.set(row.UserID, {
+            imageUrl: row.UserImageURL || null,
+            iconClass: row.UserImageIconClass || null
+          });
+        }
+      }
+    }
+
+    this.userAvatarMap = userMap;
+    console.log(`👤 Built user avatar map with ${this.userAvatarMap.size} unique users`);
   }
 
   /**
@@ -336,22 +381,27 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         // Build artifacts map - no need to load full entities, just create LazyArtifactInfo
         if (parsed.artifacts.length > 0) {
           const artifactList: LazyArtifactInfo[] = [];
+          const systemArtifactList: LazyArtifactInfo[] = [];
 
           for (const artifactData of parsed.artifacts) {
-            // Filter out system-only artifacts from user view (e.g., Sage routing payloads)
-            if (artifactData.Visibility === 'System Only') {
-              continue;
-            }
-
             // Create LazyArtifactInfo with display data from query
             // Full entities will be loaded on-demand when artifact is clicked
             const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-            artifactList.push(lazyInfo);
+
+            // Separate system-only artifacts from user-visible artifacts
+            if (artifactData.Visibility === 'System Only') {
+              systemArtifactList.push(lazyInfo);
+            } else {
+              artifactList.push(lazyInfo);
+            }
           }
 
-          // Only add to map if we have visible artifacts
+          // Add to appropriate maps
           if (artifactList.length > 0) {
             this.artifactsByDetailId.set(row.ID, artifactList);
+          }
+          if (systemArtifactList.length > 0) {
+            this.systemArtifactsByDetailId.set(row.ID, systemArtifactList);
           }
         }
       }
@@ -359,12 +409,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       // Create new Map references to trigger Angular change detection
       this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
       this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+      this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
+
+      // Clear combined cache since we loaded new artifacts
+      this._combinedArtifactsMap = null;
 
       // Update artifact count for header display (unique artifacts, not versions)
       this.artifactCount = this.calculateUniqueArtifactCount();
 
       // Debug: Log summary
-      console.log(`📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} artifact mappings (${this.artifactCount} unique artifacts)`);
+      const systemArtifactCount = this.systemArtifactsByDetailId.size;
+      console.log(`📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} user artifact mappings, ${systemArtifactCount} system artifact mappings (${this.artifactCount} unique user artifacts)`);
 
       // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
       // This updates all message components with the newly loaded agent run data
@@ -404,10 +459,38 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     } else {
       // Add new message to the list
       this.messages = [...this.messages, message];
+
+      // Ensure current user is in the avatar map for new messages
+      this.ensureCurrentUserInAvatarMap();
     }
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;
+  }
+
+  /**
+   * Ensures the current user is in the avatar map
+   * Called when new messages are created to ensure avatar data is available
+   */
+  private async ensureCurrentUserInAvatarMap(): Promise<void> {
+    const userId = this.currentUser.ID;
+
+    // If user already in map, skip
+    if (this.userAvatarMap.has(userId)) {
+      return;
+    }
+
+    // Load the current user's avatar data
+    const md = new Metadata();
+    const userEntity = await md.GetEntityObject<any>('Users');
+    await userEntity.Load(userId);
+
+    this.userAvatarMap.set(userId, {
+      imageUrl: userEntity.UserImageURL || null,
+      iconClass: userEntity.UserImageIconClass || null
+    });
+
+    console.log(`👤 Added current user to avatar map`);
   }
 
   /**
@@ -691,9 +774,67 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   /**
+   * Get the effective artifacts map based on showSystemArtifacts toggle
+   * Combines user-visible and system artifacts when toggle is on
+   * Uses caching to prevent infinite change detection loops
+   */
+  public get effectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
+    if (!this.showSystemArtifacts) {
+      // Only user-visible artifacts - no need to cache
+      return this.artifactsByDetailId;
+    }
+
+    // Return cached combined map if available
+    if (this._combinedArtifactsMap) {
+      return this._combinedArtifactsMap;
+    }
+
+    // Combine both maps when showing system artifacts
+    const combined = new Map<string, LazyArtifactInfo[]>();
+
+    // Add all user-visible artifacts
+    for (const [key, value] of this.artifactsByDetailId) {
+      combined.set(key, [...value]);
+    }
+
+    // Add system artifacts
+    for (const [key, value] of this.systemArtifactsByDetailId) {
+      if (combined.has(key)) {
+        // Merge with existing artifacts for this detail
+        combined.get(key)!.push(...value);
+      } else {
+        combined.set(key, [...value]);
+      }
+    }
+
+    // Cache the result
+    this._combinedArtifactsMap = combined;
+    return combined;
+  }
+
+  /**
+   * Toggles system artifacts visibility
+   * Clears the cache so the map will be rebuilt on next access
+   */
+  public toggleSystemArtifacts(): void {
+    this.showSystemArtifacts = !this.showSystemArtifacts;
+    this._combinedArtifactsMap = null; // Clear cache
+    this.cdr.detectChanges(); // Force update
+  }
+
+  /**
+   * Check if there are any system artifacts in this conversation
+   * Used to conditionally show/hide the "Show System" toggle button
+   */
+  public get hasSystemArtifacts(): boolean {
+    return this.systemArtifactsByDetailId.size > 0;
+  }
+
+  /**
    * Get unique artifacts grouped by artifact ID (not by conversation detail)
    * Returns the latest version info for each unique artifact with all versions
    * Works with LazyArtifactInfo - uses display data without loading full entities
+   * Respects showSystemArtifacts toggle
    */
   getArtifactsArray(): Array<{
     artifactId: string;
@@ -710,7 +851,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     }>();
 
     // Group by artifactId, collecting all version details
-    for (const artifactList of this.artifactsByDetailId.values()) {
+    // Use effectiveArtifactsMap to respect showSystemArtifacts toggle
+    for (const artifactList of this.effectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         const artifactId = info.artifactId;
         const versionId = info.artifactVersionId;

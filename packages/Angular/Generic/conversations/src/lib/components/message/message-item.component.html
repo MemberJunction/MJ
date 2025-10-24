@@ -1,7 +1,17 @@
 <div [class]="messageClasses">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
-      <i class="fas" [ngClass]="isAIMessage ? (aiAgentInfo?.iconClass || 'fa-robot') : 'fa-user'"></i>
+      @if (isUserMessage) {
+        @if (userAvatarUrl) {
+          <img [src]="userAvatarUrl" alt="User avatar" class="avatar-image" />
+        } @else if (userAvatarIconClass) {
+          <i [class]="userAvatarIconClass"></i>
+        } @else {
+          <i class="fas fa-user"></i>
+        }
+      } @else if (isAIMessage) {
+        <i class="fas" [ngClass]="aiAgentInfo?.iconClass || 'fa-robot'"></i>
+      }
     </div>
   </div>
 

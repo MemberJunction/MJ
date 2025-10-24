@@ -41,6 +41,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public artifact?: ArtifactEntity;
   @Input() public artifactVersion?: ArtifactVersionEntity;
   @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
+  @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -263,6 +264,30 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Fallback to current user name (for backwards compatibility)
     return this.currentUser.Name;
+  }
+
+  /**
+   * Get the user's avatar image URL from the userAvatarMap
+   * Uses fast O(1) lookup by UserID
+   */
+  public get userAvatarUrl(): string | null {
+    if (!this.isUserMessage || !this.message.UserID) {
+      return null;
+    }
+    const avatarData = this.userAvatarMap.get(this.message.UserID);
+    return avatarData?.imageUrl || null;
+  }
+
+  /**
+   * Get the user's avatar icon class from the userAvatarMap
+   * Uses fast O(1) lookup by UserID
+   */
+  public get userAvatarIconClass(): string | null {
+    if (!this.isUserMessage || !this.message.UserID) {
+      return null;
+    }
+    const avatarData = this.userAvatarMap.get(this.message.UserID);
+    return avatarData?.iconClass || null;
   }
 
   public get isConversationManager(): boolean {
