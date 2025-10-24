@@ -18,6 +18,32 @@ import {
 } from '@memberjunction/ai-core-plus';
 
 /**
+ * Represents a single database mutation performed by AgentSpecSync
+ */
+export interface AgentSpecSyncMutation {
+    /** Entity name (e.g., "AI Agents", "AI Prompts", "AIAgentAction") */
+    Entity: string;
+    /** Operation type */
+    Operation: 'Create' | 'Update' | 'Delete';
+    /** Record ID */
+    ID: string;
+    /** Human-readable description of what was done */
+    Description: string;
+}
+
+/**
+ * Result of SaveToDatabase operation including all mutations performed
+ */
+export interface AgentSpecSyncResult {
+    /** ID of the saved agent */
+    agentId: string;
+    /** Whether the operation succeeded */
+    success: boolean;
+    /** Array of all database mutations performed */
+    mutations: AgentSpecSyncMutation[];
+}
+
+/**
  * AgentSpecSync provides a high-level interface for working with AI Agent metadata in MemberJunction.
  *
  * This class serves as a bi-directional bridge between the simple, serializable {@link AgentSpec}
@@ -92,6 +118,12 @@ export class AgentSpecSync {
     private _contextUser?: UserInfo;
 
     /**
+     * Tracks all database mutations performed during save operations
+     * @private
+     */
+    private _mutations: AgentSpecSyncMutation[] = [];
+
+    /**
      * Create a new AgentSpecSync instance.
      *
      * Note: This constructor is typically not called directly. Instead, use the static factory methods:
@@ -117,6 +149,41 @@ export class AgentSpecSync {
             };
         }
         this._contextUser = contextUser;
+    }
+
+    // ===== MUTATION TRACKING METHODS =====
+
+    /**
+     * Track a database mutation performed during save operation
+     * @private
+     */
+    private trackMutation(
+        entity: string,
+        operation: 'Create' | 'Update' | 'Delete',
+        id: string,
+        description: string
+    ): void {
+        this._mutations.push({
+            Entity: entity,
+            Operation: operation,
+            ID: id,
+            Description: description
+        });
+    }
+
+    /**
+     * Get all mutations tracked during the last save operation
+     * @returns Array of mutations
+     */
+    public getMutations(): AgentSpecSyncMutation[] {
+        return [...this._mutations];
+    }
+
+    /**
+     * Clear all tracked mutations
+     */
+    public clearMutations(): void {
+        this._mutations = [];
     }
 
     // ===== STATIC FACTORY METHODS =====
@@ -644,7 +711,7 @@ export class AgentSpecSync {
      * database schema are executed, and any failures will prevent the save.
      *
      * @param validate - Whether to validate before saving (default: true)
-     * @returns Promise resolving to the saved agent ID
+     * @returns Promise resolving to result with agent ID, success flag, and all mutations performed
      * @throws {Error} If validation fails or save operation fails
      *
      * @example
@@ -654,38 +721,59 @@ export class AgentSpecSync {
      *     InvocationMode: 'Any'
      * }, contextUser);
      *
-     * const agentId = await spec.SaveToDatabase();
-     * console.log('Saved with ID:', agentId);
+     * const result = await spec.SaveToDatabase();
+     * console.log('Saved with ID:', result.agentId);
+     * console.log('Mutations:', result.mutations.length);
      * ```
      */
-    async SaveToDatabase(validate: boolean = true): Promise<string> {
+    async SaveToDatabase(validate: boolean = true): Promise<AgentSpecSyncResult> {
+        // Clear previous mutations
+        this.clearMutations();
+
         if (!this._isDirty && this._isLoaded) {
             // No changes to save
-            return this.spec.ID;
+            return {
+                agentId: this.spec.ID,
+                success: true,
+                mutations: []
+            };
         }
 
-        // Step 1: Save main agent entity
-        const agentId = await this.saveAgentEntity(validate);
+        try {
+            // Step 1: Save main agent entity
+            const agentId = await this.saveAgentEntity(validate);
 
-        // Step 2: Save actions
-        await this.saveActions(agentId);
+            // Step 2: Save actions
+            await this.saveActions(agentId);
 
-        // Step 3: Save sub-agents (both child and related)
-        await this.saveSubAgents(agentId);
+            // Step 3: Save sub-agents (both child and related)
+            await this.saveSubAgents(agentId);
 
-        // Step 4: Save prompts
-        await this.savePrompts(agentId);
+            // Step 4: Save prompts
+            await this.savePrompts(agentId);
 
-        // Step 5: Save steps (Flow agents only)
-        await this.saveSteps(agentId);
+            // Step 5: Save steps (Flow agents only)
+            await this.saveSteps(agentId);
 
-        // Step 6: Save step paths (Flow agents only)
-        await this.saveStepPaths(agentId);
+            // Step 6: Save step paths (Flow agents only)
+            await this.saveStepPaths(agentId);
 
-        this._isDirty = false;
-        this._isLoaded = true;
+            this._isDirty = false;
+            this._isLoaded = true;
 
-        return agentId;
+            return {
+                agentId,
+                success: true,
+                mutations: this.getMutations()
+            };
+        } catch (error) {
+            // Return failure with whatever mutations were completed before error
+            return {
+                agentId: this.spec.ID || '',
+                success: false,
+                mutations: this.getMutations()
+            };
+        }
     }
 
     /**
@@ -702,6 +790,9 @@ export class AgentSpecSync {
             'AI Agents',
             this._contextUser
         );
+
+        // Track if this is an update or create
+        const isUpdate = !!this.spec.ID;
 
         // If ID exists, load existing record
         if (this.spec.ID) {
@@ -795,6 +886,15 @@ export class AgentSpecSync {
 
         // Update spec with saved ID
         this.spec.ID = agentEntity.ID;
+
+        // Track the mutation
+        this.trackMutation(
+            'AI Agents',
+            isUpdate ? 'Update' : 'Create',
+            agentEntity.ID,
+            `${isUpdate ? 'Updated' : 'Created'} agent: ${this.spec.Name}`
+        );
+
         return agentEntity.ID;
     }
 
@@ -822,6 +922,9 @@ export class AgentSpecSync {
                 this._contextUser
             );
 
+            // Track if this is an update or create
+            const isUpdate = !!actionSpec.AgentActionID;
+
             // Load existing if ID provided
             if (actionSpec.AgentActionID) {
                 await actionEntity.Load(actionSpec.AgentActionID);
@@ -845,6 +948,14 @@ export class AgentSpecSync {
 
             // Update spec with saved ID
             actionSpec.AgentActionID = actionEntity.ID;
+
+            // Track the mutation
+            this.trackMutation(
+                'AI Agent Actions',
+                isUpdate ? 'Update' : 'Create',
+                actionEntity.ID,
+                `${isUpdate ? 'Updated' : 'Created'} action junction for action ${actionSpec.ActionID}`
+            );
         }
     }
 
@@ -904,12 +1015,12 @@ export class AgentSpecSync {
             // Recursively create the sub-agent using AgentSpecSync
             const childSync = new AgentSpecSync(childSpec, this._contextUser);
             childSync.markDirty();
-            const childId = await childSync.SaveToDatabase();
+            const childResult = await childSync.SaveToDatabase();
 
             // Update the SubAgentSpec with the created ID so parent can reference it
-            SubAgentSpec.SubAgent.ID = childId;
+            SubAgentSpec.SubAgent.ID = childResult.agentId;
 
-            console.log(`✅ saveChildSubAgent: Created child sub-agent with ID: ${childId}`);
+            console.log(`✅ saveChildSubAgent: Created child sub-agent with ID: ${childResult.agentId}`);
         } else {
             // SubAgent already exists - update it recursively to capture all field changes
             console.log(`🔗 saveChildSubAgent: Updating existing child sub-agent "${SubAgentSpec.SubAgent.ID}"...`);
@@ -949,7 +1060,8 @@ export class AgentSpecSync {
         );
 
         // Load existing if ID provided
-        if (SubAgentSpec.AgentRelationshipID) {
+        const isUpdate = !!SubAgentSpec.AgentRelationshipID;
+        if (isUpdate && SubAgentSpec.AgentRelationshipID) {
             await relationshipEntity.Load(SubAgentSpec.AgentRelationshipID);
         }
 
@@ -981,6 +1093,14 @@ export class AgentSpecSync {
         if (!saved) {
             throw new Error(`Failed to save relationship for sub-agent ${SubAgentSpec.SubAgent.ID}`);
         }
+
+        // Track mutation
+        this.trackMutation(
+            'AI Agent Relationships',
+            isUpdate ? 'Update' : 'Create',
+            relationshipEntity.ID,
+            `${isUpdate ? 'Updated' : 'Created'} agent relationship for sub-agent ${SubAgentSpec.SubAgent.ID}`
+        );
 
         // Update spec with saved ID
         SubAgentSpec.AgentRelationshipID = relationshipEntity.ID;
@@ -1064,6 +1184,14 @@ export class AgentSpecSync {
                 throw new Error(`Failed to save prompt ${i + 1} for agent ${this.spec.Name}`);
             }
 
+            // Track mutation
+            this.trackMutation(
+                'AI Prompts',
+                isUpdate ? 'Update' : 'Create',
+                promptEntity.ID,
+                `${isUpdate ? 'Updated' : 'Created'} prompt: ${promptEntity.Name}`
+            );
+
             // Update the spec with the saved/updated ID
             (promptSpec as any).PromptID = promptEntity.ID;
 
@@ -1105,6 +1233,14 @@ export class AgentSpecSync {
                 throw new Error(`Failed to save agent-prompt junction for prompt ${i + 1}`);
             }
 
+            // Track mutation
+            this.trackMutation(
+                'AI Agent Prompts',
+                isJunctionUpdate ? 'Update' : 'Create',
+                agentPromptEntity.ID,
+                `${isJunctionUpdate ? 'Updated' : 'Created'} agent-prompt junction for prompt ${promptEntity.ID}`
+            );
+
             console.log(`✅ savePrompts: ${isJunctionUpdate ? 'Updated' : 'Created'} AIAgentPrompt junction with ID: ${agentPromptEntity.ID}`);
         }
 
@@ -1139,7 +1275,8 @@ export class AgentSpecSync {
             );
 
             // Load existing if ID provided
-            if (stepSpec.ID && stepSpec.ID !== '') {
+            const isUpdate = !!(stepSpec.ID && stepSpec.ID !== '');
+            if (isUpdate) {
                 await stepEntity.Load(stepSpec.ID);
             }
 
@@ -1178,6 +1315,14 @@ export class AgentSpecSync {
                         throw new Error(`Failed to save inline prompt for step "${stepSpec.Name}"`);
                     }
 
+                    // Track mutation
+                    this.trackMutation(
+                        'AI Prompts',
+                        'Create',
+                        promptEntity.ID,
+                        `Created inline prompt: ${promptEntity.Name}`
+                    );
+
                     console.log(`✅ saveSteps: Created inline AIPrompt with ID: ${promptEntity.ID}`);
 
                     // Link the created prompt to this step
@@ -1214,6 +1359,14 @@ export class AgentSpecSync {
             if (!saved) {
                 throw new Error(`Failed to save step "${stepSpec.Name}" for agent ${this.spec.Name}`);
             }
+
+            // Track mutation
+            this.trackMutation(
+                'AI Agent Steps',
+                isUpdate ? 'Update' : 'Create',
+                stepEntity.ID,
+                `${isUpdate ? 'Updated' : 'Created'} step: ${stepSpec.Name}`
+            );
 
             // Update the spec with the saved ID so paths can reference it
             stepSpec.ID = stepEntity.ID;
@@ -1262,7 +1415,8 @@ export class AgentSpecSync {
             );
 
             // Load existing if ID provided
-            if (pathSpec.ID && pathSpec.ID !== '') {
+            const isUpdate = !!(pathSpec.ID && pathSpec.ID !== '');
+            if (isUpdate) {
                 await pathEntity.Load(pathSpec.ID);
             }
 
@@ -1291,6 +1445,14 @@ export class AgentSpecSync {
             if (!saved) {
                 throw new Error(`Failed to save path from "${pathSpec.OriginStepID}" to "${pathSpec.DestinationStepID}"`);
             }
+
+            // Track mutation
+            this.trackMutation(
+                'AI Agent Step Paths',
+                isUpdate ? 'Update' : 'Create',
+                pathEntity.ID,
+                `${isUpdate ? 'Updated' : 'Created'} path from "${pathSpec.OriginStepID}" to "${pathSpec.DestinationStepID}"`
+            );
 
             // Update the spec with the saved ID
             pathSpec.ID = pathEntity.ID;
