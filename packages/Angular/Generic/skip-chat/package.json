@@ -26,8 +26,8 @@
   },
   "dependencies": {
     "@memberjunction/core-entities": "2.110.1",
-    "@memberjunction/core": "2.110.1",
-    "@memberjunction/global": "2.110.1",
+    "@memberjunction/core": "2.100.3",
+    "@memberjunction/global": "2.100.3",
     "@memberjunction/graphql-dataprovider": "2.110.1",
     "@memberjunction/interactive-component-types": "2.110.1",
     "@memberjunction/skip-types": "2.110.1",

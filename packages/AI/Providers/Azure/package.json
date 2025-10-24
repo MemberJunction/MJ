@@ -18,7 +18,7 @@
     "@azure/core-auth": "^1.5.0",
     "@azure/identity": "^4.0.0",
     "@memberjunction/ai": "2.110.1",
-    "@memberjunction/global": "2.110.1"
+    "@memberjunction/global": "2.100.3"
   },
   "devDependencies": {
     "rimraf": "^5.0.0",

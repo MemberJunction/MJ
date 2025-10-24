@@ -21,6 +21,6 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.50.4",
     "@memberjunction/ai": "2.110.1",
-    "@memberjunction/global": "2.110.1"
+    "@memberjunction/global": "2.100.3"
   }
 }

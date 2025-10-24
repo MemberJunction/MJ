@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/ai": "2.110.1",
-    "@memberjunction/global": "2.110.1",
+    "@memberjunction/global": "2.100.3",
     "@memberjunction/ai-recommendations": "2.110.1",
     "openai": "^4.28.4",
     "axios": "^1.7.2",
