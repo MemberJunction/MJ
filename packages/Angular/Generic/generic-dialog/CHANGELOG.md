@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 2.110.1
+
 ## 2.110.0
 
 ## 2.109.0

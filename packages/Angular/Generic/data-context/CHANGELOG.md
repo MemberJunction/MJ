@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ng-data-context
 
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+
 ## 2.110.0
 
 ### Patch Changes

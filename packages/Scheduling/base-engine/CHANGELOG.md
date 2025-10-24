@@ -1,5 +1,14 @@
 # @memberjunction/scheduling-engine-base
 
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+- @memberjunction/scheduling-base-types@2.110.1
+
 ## 2.110.0
 
 ### Patch Changes

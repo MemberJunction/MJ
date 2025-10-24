@@ -1,5 +1,23 @@
 # @memberjunction/ng-conversations
 
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.110.1
+- @memberjunction/ai@2.110.1
+- @memberjunction/ai-core-plus@2.110.1
+- @memberjunction/ng-artifacts@2.110.1
+- @memberjunction/ng-base-types@2.110.1
+- @memberjunction/ng-code-editor@2.110.1
+- @memberjunction/ng-container-directives@2.110.1
+- @memberjunction/ng-notifications@2.110.1
+- @memberjunction/ng-tasks@2.110.1
+- @memberjunction/graphql-dataprovider@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+
 ## 2.110.0
 
 ### Minor Changes

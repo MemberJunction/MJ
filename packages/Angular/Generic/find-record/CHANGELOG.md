@@ -1,5 +1,15 @@
 # Change Log - @memberjunction/ng-find-record
 
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.110.1
+- @memberjunction/ng-container-directives@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+
 ## 2.110.0
 
 ### Patch Changes
