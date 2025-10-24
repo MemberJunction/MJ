@@ -1,9 +1,9 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import * as vega from 'vega';
-import * as vegaLite from 'vega-lite';
-import { TopLevelSpec as VegaLiteSpec } from 'vega-lite';
+// import * as vega from 'vega';
+// import * as vegaLite from 'vega-lite';
+// import { TopLevelSpec as VegaLiteSpec } from 'vega-lite';
 
 /**
  * Action that generates SVG charts from data using Vega-Lite.
@@ -70,255 +70,256 @@ export class CreateSVGChartAction extends BaseAction {
      *   - Message: The SVG string or error message
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
-        try {
-            // Check if a full Vega-Lite spec was provided
-            const specParam = this.getParamValue(params, 'VegaLiteSpec');
+        throw new Error("Not yet implemented");
+        // try {
+        //     // Check if a full Vega-Lite spec was provided
+        //     const specParam = this.getParamValue(params, 'VegaLiteSpec');
 
-            let vlSpec: VegaLiteSpec;
+        //     let vlSpec: VegaLiteSpec;
 
-            if (specParam) {
-                // Use the provided spec directly
-                vlSpec = this.parseJSON<VegaLiteSpec>(specParam, 'VegaLiteSpec');
-            } else {
-                // Build spec from individual parameters
-                const chartType = this.getParamValue(params, 'ChartType');
-                const dataParam = this.getParamValue(params, 'Data');
+        //     if (specParam) {
+        //         // Use the provided spec directly
+        //         vlSpec = this.parseJSON<VegaLiteSpec>(specParam, 'VegaLiteSpec');
+        //     } else {
+        //         // Build spec from individual parameters
+        //         const chartType = this.getParamValue(params, 'ChartType');
+        //         const dataParam = this.getParamValue(params, 'Data');
 
-                if (!chartType) {
-                    return {
-                        Success: false,
-                        Message: "ChartType parameter is required (or provide VegaLiteSpec)",
-                        ResultCode: "MISSING_PARAMETERS"
-                    };
-                }
+        //         if (!chartType) {
+        //             return {
+        //                 Success: false,
+        //                 Message: "ChartType parameter is required (or provide VegaLiteSpec)",
+        //                 ResultCode: "MISSING_PARAMETERS"
+        //             };
+        //         }
 
-                if (!dataParam) {
-                    return {
-                        Success: false,
-                        Message: "Data parameter is required (or provide VegaLiteSpec)",
-                        ResultCode: "MISSING_PARAMETERS"
-                    };
-                }
+        //         if (!dataParam) {
+        //             return {
+        //                 Success: false,
+        //                 Message: "Data parameter is required (or provide VegaLiteSpec)",
+        //                 ResultCode: "MISSING_PARAMETERS"
+        //             };
+        //         }
 
-                const data = this.parseJSON<any[]>(dataParam, 'Data');
+        //         const data = this.parseJSON<any[]>(dataParam, 'Data');
 
-                if (!Array.isArray(data)) {
-                    return {
-                        Success: false,
-                        Message: "Data parameter must be a JSON array",
-                        ResultCode: "INVALID_DATA"
-                    };
-                }
+        //         if (!Array.isArray(data)) {
+        //             return {
+        //                 Success: false,
+        //                 Message: "Data parameter must be a JSON array",
+        //                 ResultCode: "INVALID_DATA"
+        //             };
+        //         }
 
-                // Build the Vega-Lite spec
-                vlSpec = this.buildVegaLiteSpec(params, chartType.toLowerCase(), data);
-            }
+        //         // Build the Vega-Lite spec
+        //         vlSpec = this.buildVegaLiteSpec(params, chartType.toLowerCase(), data);
+        //     }
 
-            // Compile Vega-Lite to Vega
-            const vegaSpec = vegaLite.compile(vlSpec).spec;
+        //     // Compile Vega-Lite to Vega
+        //     const vegaSpec = vegaLite.compile(vlSpec).spec;
 
-            // Create a headless view and render to SVG
-            const view = new vega.View(vega.parse(vegaSpec), { renderer: 'none' });
-            const svg = await view.toSVG();
+        //     // Create a headless view and render to SVG
+        //     const view = new vega.View(vega.parse(vegaSpec), { renderer: 'none' });
+        //     const svg = await view.toSVG();
 
-            return {
-                Success: true,
-                ResultCode: "SUCCESS",
-                Message: svg
-            };
+        //     return {
+        //         Success: true,
+        //         ResultCode: "SUCCESS",
+        //         Message: svg
+        //     };
 
-        } catch (error) {
-            return {
-                Success: false,
-                Message: `Failed to generate chart: ${error instanceof Error ? error.message : String(error)}`,
-                ResultCode: "CHART_GENERATION_FAILED"
-            };
-        }
+        // } catch (error) {
+        //     return {
+        //         Success: false,
+        //         Message: `Failed to generate chart: ${error instanceof Error ? error.message : String(error)}`,
+        //         ResultCode: "CHART_GENERATION_FAILED"
+        //     };
+        // }
     }
 
-    /**
-     * Builds a Vega-Lite specification from action parameters
-     */
-    private buildVegaLiteSpec(params: RunActionParams, chartType: string, data: any[]): VegaLiteSpec {
-        const title = this.getParamValue(params, 'Title');
-        const width = parseInt(this.getParamValue(params, 'Width') || '400');
-        const height = parseInt(this.getParamValue(params, 'Height') || '300');
+//     /**
+//      * Builds a Vega-Lite specification from action parameters
+//      */
+//     private buildVegaLiteSpec(params: RunActionParams, chartType: string, data: any[]): VegaLiteSpec {
+//         const title = this.getParamValue(params, 'Title');
+//         const width = parseInt(this.getParamValue(params, 'Width') || '400');
+//         const height = parseInt(this.getParamValue(params, 'Height') || '300');
 
-        const baseSpec: any = {
-            $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-            width,
-            height,
-            data: { values: data },
-            padding: 20,
-            autosize: {
-                type: 'fit',
-                contains: 'padding'
-            }
-        };
+//         const baseSpec: any = {
+//             $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+//             width,
+//             height,
+//             data: { values: data },
+//             padding: 20,
+//             autosize: {
+//                 type: 'fit',
+//                 contains: 'padding'
+//             }
+//         };
 
-        if (title) {
-            baseSpec.title = {
-                text: title,
-                anchor: 'middle',
-                offset: 20,
-                fontSize: 16,
-                fontWeight: 'bold'
-            };
-        }
+//         if (title) {
+//             baseSpec.title = {
+//                 text: title,
+//                 anchor: 'middle',
+//                 offset: 20,
+//                 fontSize: 16,
+//                 fontWeight: 'bold'
+//             };
+//         }
 
-        // Add config for better spacing and readability
-        baseSpec.config = {
-            axis: {
-                labelFontSize: 11,
-                titleFontSize: 12,
-                titlePadding: 10,
-                labelPadding: 5
-            },
-            legend: {
-                labelFontSize: 11,
-                titleFontSize: 12,
-                padding: 10
-            }
-        };
+//         // Add config for better spacing and readability
+//         baseSpec.config = {
+//             axis: {
+//                 labelFontSize: 11,
+//                 titleFontSize: 12,
+//                 titlePadding: 10,
+//                 labelPadding: 5
+//             },
+//             legend: {
+//                 labelFontSize: 11,
+//                 titleFontSize: 12,
+//                 padding: 10
+//             }
+//         };
 
-        // Build encoding based on chart type
-        switch (chartType) {
-            case 'bar':
-            case 'line':
-            case 'area':
-            case 'point':
-            case 'scatter':
-                // For line and area charts, handle missing data points properly
-                if (chartType === 'line' || chartType === 'area') {
-                    baseSpec.mark = {
-                        type: chartType,
-                        point: chartType === 'line', // Show points on line charts
-                        interpolate: 'monotone', // Smooth curves
-                        tooltip: true
-                    };
-                } else {
-                    baseSpec.mark = chartType === 'scatter' ? 'point' : chartType;
-                }
-                baseSpec.encoding = this.buildCartesianEncoding(params);
-                break;
+//         // Build encoding based on chart type
+//         switch (chartType) {
+//             case 'bar':
+//             case 'line':
+//             case 'area':
+//             case 'point':
+//             case 'scatter':
+//                 // For line and area charts, handle missing data points properly
+//                 if (chartType === 'line' || chartType === 'area') {
+//                     baseSpec.mark = {
+//                         type: chartType,
+//                         point: chartType === 'line', // Show points on line charts
+//                         interpolate: 'monotone', // Smooth curves
+//                         tooltip: true
+//                     };
+//                 } else {
+//                     baseSpec.mark = chartType === 'scatter' ? 'point' : chartType;
+//                 }
+//                 baseSpec.encoding = this.buildCartesianEncoding(params);
+//                 break;
 
-            case 'pie':
-            case 'arc':
-                baseSpec.mark = 'arc';
-                baseSpec.encoding = this.buildPieEncoding(params);
-                break;
+//             case 'pie':
+//             case 'arc':
+//                 baseSpec.mark = 'arc';
+//                 baseSpec.encoding = this.buildPieEncoding(params);
+//                 break;
 
-            default:
-                throw new Error(`Unsupported chart type: ${chartType}. Supported types: bar, line, area, point, scatter, pie`);
-        }
+//             default:
+//                 throw new Error(`Unsupported chart type: ${chartType}. Supported types: bar, line, area, point, scatter, pie`);
+//         }
 
-        return baseSpec as VegaLiteSpec;
-    }
+//         return baseSpec as VegaLiteSpec;
+//     }
 
-    /**
-     * Builds encoding for Cartesian charts (bar, line, scatter, area)
-     */
-    private buildCartesianEncoding(params: RunActionParams): any {
-        const xField = this.getParamValue(params, 'XField');
-        const yField = this.getParamValue(params, 'YField');
-        const colorField = this.getParamValue(params, 'ColorField');
+//     /**
+//      * Builds encoding for Cartesian charts (bar, line, scatter, area)
+//      */
+//     private buildCartesianEncoding(params: RunActionParams): any {
+//         const xField = this.getParamValue(params, 'XField');
+//         const yField = this.getParamValue(params, 'YField');
+//         const colorField = this.getParamValue(params, 'ColorField');
 
-        if (!xField || !yField) {
-            throw new Error("XField and YField are required for this chart type");
-        }
+//         if (!xField || !yField) {
+//             throw new Error("XField and YField are required for this chart type");
+//         }
 
-        const encoding: any = {
-            x: { field: xField, type: this.inferFieldType(xField) },
-            y: { field: yField, type: 'quantitative' }
-        };
+//         const encoding: any = {
+//             x: { field: xField, type: this.inferFieldType(xField) },
+//             y: { field: yField, type: 'quantitative' }
+//         };
 
-        if (colorField) {
-            encoding.color = { field: colorField, type: 'nominal' };
-        }
+//         if (colorField) {
+//             encoding.color = { field: colorField, type: 'nominal' };
+//         }
 
-        return encoding;
-    }
+//         return encoding;
+//     }
 
-    /**
-     * Builds encoding for pie/arc charts
-     */
-    private buildPieEncoding(params: RunActionParams): any {
-        const thetaField = this.getParamValue(params, 'ThetaField');
-        const colorField = this.getParamValue(params, 'ColorField');
+//     /**
+//      * Builds encoding for pie/arc charts
+//      */
+//     private buildPieEncoding(params: RunActionParams): any {
+//         const thetaField = this.getParamValue(params, 'ThetaField');
+//         const colorField = this.getParamValue(params, 'ColorField');
 
-        if (!thetaField) {
-            throw new Error("ThetaField is required for pie charts");
-        }
+//         if (!thetaField) {
+//             throw new Error("ThetaField is required for pie charts");
+//         }
 
-        const encoding: any = {
-            theta: { field: thetaField, type: 'quantitative' }
-        };
+//         const encoding: any = {
+//             theta: { field: thetaField, type: 'quantitative' }
+//         };
 
-        if (colorField) {
-            encoding.color = { field: colorField, type: 'nominal' };
-        }
+//         if (colorField) {
+//             encoding.color = { field: colorField, type: 'nominal' };
+//         }
 
-        return encoding;
-    }
+//         return encoding;
+//     }
 
-    /**
-     * Infers the Vega-Lite field type from field name
-     */
-    private inferFieldType(fieldName: string): 'quantitative' | 'nominal' | 'ordinal' | 'temporal' {
-        const lowerName = fieldName.toLowerCase();
+//     /**
+//      * Infers the Vega-Lite field type from field name
+//      */
+//     private inferFieldType(fieldName: string): 'quantitative' | 'nominal' | 'ordinal' | 'temporal' {
+//         const lowerName = fieldName.toLowerCase();
 
-        // Temporal hints
-        if (lowerName.includes('date') || lowerName.includes('time') || lowerName.includes('year') || lowerName.includes('month')) {
-            return 'temporal';
-        }
+//         // Temporal hints
+//         if (lowerName.includes('date') || lowerName.includes('time') || lowerName.includes('year') || lowerName.includes('month')) {
+//             return 'temporal';
+//         }
 
-        // Quantitative hints
-        if (lowerName.includes('count') || lowerName.includes('value') || lowerName.includes('amount') || lowerName.includes('total')) {
-            return 'quantitative';
-        }
+//         // Quantitative hints
+//         if (lowerName.includes('count') || lowerName.includes('value') || lowerName.includes('amount') || lowerName.includes('total')) {
+//             return 'quantitative';
+//         }
 
-        // Default to nominal for categorical data
-        return 'nominal';
-    }
+//         // Default to nominal for categorical data
+//         return 'nominal';
+//     }
 
-    /**
-     * Helper to safely parse JSON that might already be an object
-     */
-    private parseJSON<T>(value: any, paramName: string): T {
-        // If it's already an object/array, return it
-        if (typeof value === 'object' && value !== null) {
-            return value as T;
-        }
+//     /**
+//      * Helper to safely parse JSON that might already be an object
+//      */
+//     private parseJSON<T>(value: any, paramName: string): T {
+//         // If it's already an object/array, return it
+//         if (typeof value === 'object' && value !== null) {
+//             return value as T;
+//         }
 
-        // If it's a string, parse it
-        if (typeof value === 'string') {
-            try {
-                return JSON.parse(value) as T;
-            } catch (error) {
-                throw new Error(
-                    `Parameter '${paramName}' contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`
-                );
-            }
-        }
+//         // If it's a string, parse it
+//         if (typeof value === 'string') {
+//             try {
+//                 return JSON.parse(value) as T;
+//             } catch (error) {
+//                 throw new Error(
+//                     `Parameter '${paramName}' contains invalid JSON: ${error instanceof Error ? error.message : String(error)}`
+//                 );
+//             }
+//         }
 
-        // For other types, error
-        throw new Error(
-            `Parameter '${paramName}' must be a JSON string or object. Received ${typeof value}.`
-        );
-    }
+//         // For other types, error
+//         throw new Error(
+//             `Parameter '${paramName}' must be a JSON string or object. Received ${typeof value}.`
+//         );
+//     }
 
-    /**
-     * Helper to get parameter value by name (case-insensitive)
-     */
-    private getParamValue(params: RunActionParams, paramName: string): string | null {
-        const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
-        if (param?.Value && typeof param.Value === 'string') {
-            return param?.Value?.trim() || null;
-        }
-        else {
-            return param?.Value || null;
-        }
-    }
+//     /**
+//      * Helper to get parameter value by name (case-insensitive)
+//      */
+//     private getParamValue(params: RunActionParams, paramName: string): string | null {
+//         const param = params.Params.find(p => p.Name.trim().toLowerCase() === paramName.toLowerCase());
+//         if (param?.Value && typeof param.Value === 'string') {
+//             return param?.Value?.trim() || null;
+//         }
+//         else {
+//             return param?.Value || null;
+//         }
+//     }
 }
 
 /**
