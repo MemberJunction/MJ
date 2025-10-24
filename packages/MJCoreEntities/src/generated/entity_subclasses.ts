@@ -1376,9 +1376,9 @@ if this limit is exceeded.`),
     *   * Always
     *   * System Only
         * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`),
-    FunctionalRequirement: z.string().nullable().describe(`
-        * * Field Name: FunctionalRequirement
-        * * Display Name: Functional Requirement
+    FunctionalRequirements: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirements
+        * * Display Name: Functional Requirements
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.`),
     TechnicalDesign: z.string().nullable().describe(`
@@ -19733,16 +19733,16 @@ if this limit is exceeded.
     }
 
     /**
-    * * Field Name: FunctionalRequirement
-    * * Display Name: Functional Requirement
+    * * Field Name: FunctionalRequirements
+    * * Display Name: Functional Requirements
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.
     */
-    get FunctionalRequirement(): string | null {
-        return this.Get('FunctionalRequirement');
+    get FunctionalRequirements(): string | null {
+        return this.Get('FunctionalRequirements');
     }
-    set FunctionalRequirement(value: string | null) {
-        this.Set('FunctionalRequirement', value);
+    set FunctionalRequirements(value: string | null) {
+        this.Set('FunctionalRequirements', value);
     }
 
     /**

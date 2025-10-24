@@ -88,9 +88,9 @@ export class LoadAgentSpecAction extends BaseAction {
             // Get complete AgentSpec as JSON
             const agentSpec = specSync.toJSON();
 
-            // Ensure FunctionalRequirement and TechnicalDesign are always present (even if null)
-            if (!('FunctionalRequirement' in agentSpec)) {
-                agentSpec.FunctionalRequirement = null;
+            // Ensure FunctionalRequirements and TechnicalDesign are always present (even if null)
+            if (!('FunctionalRequirements' in agentSpec)) {
+                agentSpec.FunctionalRequirements = null;
             }
             if (!('TechnicalDesign' in agentSpec)) {
                 agentSpec.TechnicalDesign = null;

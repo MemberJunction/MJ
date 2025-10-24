@@ -302,7 +302,7 @@ import { AIAgentEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="FunctionalRequirement"
+            FieldName="FunctionalRequirements"
             Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>

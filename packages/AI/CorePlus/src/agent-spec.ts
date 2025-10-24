@@ -9,7 +9,7 @@ export interface AgentSpec {
      * Detailed markdown formatted requirements that explain the business goals of the agent without
      * specific technical implementation details.
      */
-    FunctionalRequirement?: string;
+    FunctionalRequirements?: string;
 
     /**
      * Detailed markdown that explains the structure of the agent including agent architecture,

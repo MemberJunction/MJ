@@ -6,6 +6,7 @@
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
+      "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-robot"
     },

@@ -476,7 +476,7 @@ export class AgentSpecSync {
             InvocationMode: agent.InvocationMode,
 
             // Requirements and design documentation
-            FunctionalRequirement: (agent as any).FunctionalRequirement || null,
+            FunctionalRequirements: (agent as any).FunctionalRequirements || null,
             TechnicalDesign: (agent as any).TechnicalDesign || null,
 
             // Map actions
@@ -775,7 +775,7 @@ export class AgentSpecSync {
         agentEntity.InvocationMode = this.spec.InvocationMode || 'Any';
 
         // Requirements and design documentation
-        agentEntity.FunctionalRequirement = this.spec.FunctionalRequirement || null;
+        agentEntity.FunctionalRequirements = this.spec.FunctionalRequirements || null;
         agentEntity.TechnicalDesign = this.spec.TechnicalDesign || null;
 
         // Validate if requested
@@ -921,7 +921,7 @@ export class AgentSpecSync {
             };
 
             // Recursively update the sub-agent using AgentSpecSync
-            // This ensures all fields including FunctionalRequirement and TechnicalDesign are updated
+            // This ensures all fields including FunctionalRequirements and TechnicalDesign are updated
             const childSync = new AgentSpecSync(childSpec, this._contextUser);
             childSync.markDirty();
             await childSync.SaveToDatabase();
@@ -1369,7 +1369,7 @@ export class AgentSpecSync {
             DefaultArtifactTypeID: partial.DefaultArtifactTypeID,
             OwnerUserID: partial.OwnerUserID,
             InvocationMode: partial.InvocationMode || 'Any',
-            FunctionalRequirement: partial.FunctionalRequirement,
+            FunctionalRequirements: partial.FunctionalRequirements,
             TechnicalDesign: partial.TechnicalDesign,
             Actions: partial.Actions || [],
             SubAgents: partial.SubAgents || [],

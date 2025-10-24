@@ -3,7 +3,7 @@
 -- v2.110.x - Agent Manager payload restructuring
 
 ALTER TABLE ${flyway:defaultSchema}.AIAgent
-ADD FunctionalRequirement NVARCHAR(MAX) NULL,
+ADD FunctionalRequirements NVARCHAR(MAX) NULL,
     TechnicalDesign NVARCHAR(MAX) NULL;
 
 -- Add extended properties (descriptions)
@@ -12,7 +12,7 @@ EXEC sp_addextendedproperty
     @value = N'Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.',
     @level0type = N'SCHEMA', @level0name = '${flyway:defaultSchema}',
     @level1type = N'TABLE', @level1name = 'AIAgent',
-    @level2type = N'COLUMN', @level2name = 'FunctionalRequirement';
+    @level2type = N'COLUMN', @level2name = 'FunctionalRequirements';
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
@@ -22,23 +22,12 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = 'TechnicalDesign';
 
 
-
-
-
-
-
-
-
-
-
-
--- codegen
 /* SQL text to insert new entity field */
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = 'ecfe2a22-5d52-4068-aeab-141ca9a444a9'  OR 
-               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'FunctionalRequirement')
+         WHERE ID = 'f613597c-c38f-4d71-b64a-8bbcfd87d8cc'  OR 
+               (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'FunctionalRequirements')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
       BEGIN
@@ -71,11 +60,11 @@ EXEC sp_addextendedproperty
          )
          VALUES
          (
-            'ecfe2a22-5d52-4068-aeab-141ca9a444a9',
+            'f613597c-c38f-4d71-b64a-8bbcfd87d8cc',
             'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
             100091,
-            'FunctionalRequirement',
-            'Functional Requirement',
+            'FunctionalRequirements',
+            'Functional Requirements',
             'Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.',
             'nvarchar',
             -1,
@@ -102,7 +91,7 @@ EXEC sp_addextendedproperty
 
       IF NOT EXISTS (
          SELECT 1 FROM [${flyway:defaultSchema}].EntityField 
-         WHERE ID = '66d9c061-8f1a-4541-8901-f84cbcd6e265'  OR 
+         WHERE ID = 'caea2872-b089-4192-8fa8-1737ff357ffd'  OR 
                (EntityID = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND Name = 'TechnicalDesign')
          -- check to make sure we're not inserting a duplicate entity field metadata record
       )
@@ -136,7 +125,7 @@ EXEC sp_addextendedproperty
          )
          VALUES
          (
-            '66d9c061-8f1a-4541-8901-f84cbcd6e265',
+            'caea2872-b089-4192-8fa8-1737ff357ffd',
             'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- Entity: AI Agents
             100092,
             'TechnicalDesign',
@@ -409,7 +398,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIAgent]
     @OwnerUserID uniqueidentifier = NULL,
     @InvocationMode nvarchar(20) = NULL,
     @ArtifactCreationMode nvarchar(20) = NULL,
-    @FunctionalRequirement nvarchar(MAX),
+    @FunctionalRequirements nvarchar(MAX),
     @TechnicalDesign nvarchar(MAX)
 AS
 BEGIN
@@ -460,7 +449,7 @@ BEGIN
                 [OwnerUserID],
                 [InvocationMode],
                 [ArtifactCreationMode],
-                [FunctionalRequirement],
+                [FunctionalRequirements],
                 [TechnicalDesign]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -505,7 +494,7 @@ BEGIN
                 CASE @OwnerUserID WHEN '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END,
                 ISNULL(@InvocationMode, 'Any'),
                 ISNULL(@ArtifactCreationMode, 'Always'),
-                @FunctionalRequirement,
+                @FunctionalRequirements,
                 @TechnicalDesign
             )
     END
@@ -552,7 +541,7 @@ BEGIN
                 [OwnerUserID],
                 [InvocationMode],
                 [ArtifactCreationMode],
-                [FunctionalRequirement],
+                [FunctionalRequirements],
                 [TechnicalDesign]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -596,7 +585,7 @@ BEGIN
                 CASE @OwnerUserID WHEN '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE ISNULL(@OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END,
                 ISNULL(@InvocationMode, 'Any'),
                 ISNULL(@ArtifactCreationMode, 'Always'),
-                @FunctionalRequirement,
+                @FunctionalRequirements,
                 @TechnicalDesign
             )
     END
@@ -670,7 +659,7 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIAgent]
     @OwnerUserID uniqueidentifier,
     @InvocationMode nvarchar(20),
     @ArtifactCreationMode nvarchar(20),
-    @FunctionalRequirement nvarchar(MAX),
+    @FunctionalRequirements nvarchar(MAX),
     @TechnicalDesign nvarchar(MAX)
 AS
 BEGIN
@@ -716,7 +705,7 @@ BEGIN
         [OwnerUserID] = @OwnerUserID,
         [InvocationMode] = @InvocationMode,
         [ArtifactCreationMode] = @ArtifactCreationMode,
-        [FunctionalRequirement] = @FunctionalRequirement,
+        [FunctionalRequirements] = @FunctionalRequirements,
         [TechnicalDesign] = @TechnicalDesign
     WHERE
         [ID] = @ID
@@ -816,64 +805,64 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteAIAgent] TO [cdp_Integration
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID 6A87433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 36BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='6A87433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='36BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentItem'
 
-/* SQL text to update entity field related entity name field map for entity field ID 7087433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 42BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='7087433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='42BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='Item'
 
-/* SQL text to update entity field related entity name field map for entity field ID 5E87433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 1EBB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='5E87433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='1EBB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentSource'
 
-/* SQL text to update entity field related entity name field map for entity field ID 2787433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID B0BA433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='2787433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='B0BA433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='Source'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3787433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID D0BA433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3787433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='D0BA433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentSource'
 
-/* SQL text to update entity field related entity name field map for entity field ID 6187433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 24BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='6187433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='24BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 6287433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 26BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='6287433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='26BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentSourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 6387433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 28BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='6387433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='28BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentFileType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3087433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID C2BA433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3087433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='C2BA433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 4C87433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID FABA433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='4C87433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='FABA433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='AIModel'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3187433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID C4BA433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3187433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='C4BA433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentSourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 3287433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID C6BA433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='3287433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='C6BA433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ContentFileType'
 
 /* Index for Foreign Keys for EntityRelationship */
@@ -1250,29 +1239,29 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityRelationship] TO [cdp_
 
 
 
-/* SQL text to update entity field related entity name field map for entity field ID E787433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID CDBB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E787433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='CDBB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='User'
 
-/* SQL text to update entity field related entity name field map for entity field ID 8F87433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 72BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='8F87433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='72BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ResourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID 9F87433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 86BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='9F87433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='86BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='Role'
 
-/* SQL text to update entity field related entity name field map for entity field ID E987433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID D3BB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='E987433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='D3BB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='ResourceType'
 
-/* SQL text to update entity field related entity name field map for entity field ID A387433E-F36B-1410-848A-00E2629BC298 */
+/* SQL text to update entity field related entity name field map for entity field ID 8BBB433E-F36B-1410-848A-00E2629BC298 */
 EXEC [${flyway:defaultSchema}].spUpdateEntityFieldRelatedEntityNameFieldMap
-         @EntityFieldID='A387433E-F36B-1410-848A-00E2629BC298',
+         @EntityFieldID='8BBB433E-F36B-1410-848A-00E2629BC298',
          @RelatedEntityNameFieldMap='User'
 
 /* Index for Foreign Keys for UserRecordLog */

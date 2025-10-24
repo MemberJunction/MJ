@@ -7,13 +7,13 @@
 - **NEVER use `@lookup:` references** - these only work in metadata JSON files, not runtime payloads
 - **ALWAYS use actual GUIDs** for TypeID and other ID fields
 - **ALWAYS use plain strings** for all text fields (no structured objects)
-- **TechnicalDesign and FunctionalRequirement are markdown strings** - don't transform them into objects
+- **TechnicalDesign and FunctionalRequirements are markdown strings** - don't transform them into objects
   - ❌ WRONG: `{"text": "...", "json": {...}}` (structured object)
   - ✅ RIGHT: `"# Agent Name\n\n## Overview\n..."` (plain markdown string)
 
 ## Your Role
 
-Your job is to **parse the design documents** (`FunctionalRequirement` and `TechnicalDesign`) and **populate all AgentSpec fields** with proper validation.
+Your job is to **parse the design documents** (`FunctionalRequirements` and `TechnicalDesign`) and **populate all AgentSpec fields** with proper validation.
 
 ## 🚨 CRITICAL: Flow vs Loop Prompt Handling
 
@@ -135,10 +135,10 @@ Example:
 ### Creation Mode (New Agent)
 When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 
-**Your job**: Parse `FunctionalRequirement` and `TechnicalDesign` markdown documents, then populate all AgentSpec fields.
+**Your job**: Parse `FunctionalRequirements` and `TechnicalDesign` markdown documents, then populate all AgentSpec fields.
 
 1. **Read the documents from payload**:
-   - `payload.FunctionalRequirement` - business requirements (markdown string)
+   - `payload.FunctionalRequirements` - business requirements (markdown string)
    - `payload.TechnicalDesign` - technical architecture (markdown string)
    - **IMPORTANT**: These are ALREADY plain markdown strings - don't transform them into structured objects
    - **DO NOT** convert them to objects like `{text: "...", json: {...}}`
@@ -148,7 +148,7 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 
 3. **Populate AgentSpec fields** using `payloadChangeRequest`
    - **CRITICAL**: Use actual GUIDs for TypeID, not @lookup references
-   - FunctionalRequirement and TechnicalDesign are already in payload - don't modify them
+   - FunctionalRequirements and TechnicalDesign are already in payload - don't modify them
 ```json
 {
   "payloadChangeRequest": {
@@ -225,7 +225,7 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
    - `Status` must be 'Active' or 'Inactive'
    - `StartingPayloadValidationMode` must be 'Fail' or 'Warn'
    - `ID` must be empty string "" for new agents
-   - `FunctionalRequirement` and `TechnicalDesign` must remain as plain markdown strings
+   - `FunctionalRequirements` and `TechnicalDesign` must remain as plain markdown strings
 2. **Validate agent type constraints**:
    - **Loop agents**: MUST have at least one prompt in `Prompts` array
    - **Flow agents**: MUST have `Steps` and `Paths` arrays, MAY have empty `Prompts: []`
@@ -462,7 +462,7 @@ This example shows all patterns in one agent: Flow orchestration, Action steps w
   - ❌ NEVER use: `"@lookup:MJ: AI Agent Types.Name=Loop"` (this is metadata file syntax)
   - ✅ ALWAYS use: Actual GUID strings - these are runtime payloads, not metadata files
 - **Status is REQUIRED** - Always set to "Active" for new agents
-- **FunctionalRequirement and TechnicalDesign** - Keep as plain markdown strings, never transform to objects
+- **FunctionalRequirements and TechnicalDesign** - Keep as plain markdown strings, never transform to objects
 - **Loop agents need prompts** - At least ONE prompt required in Prompts array
 - **Flow agents need steps** - Steps and Paths arrays required (Prompts optional)
 - **Use exact ActionID values** from the design (don't make up IDs)
