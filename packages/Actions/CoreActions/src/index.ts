@@ -95,9 +95,11 @@ export * from './custom/visualization/create-svg-word-cloud.action';
 export * from './custom/visualization/create-svg-network.action';
 export * from './custom/visualization/create-svg-infographic.action';
 export * from './custom/visualization/create-svg-sketch-diagram.action';
+export * from './custom/visualization/create-mermaid-diagram.action';
 export * from './custom/visualization/shared/svg-types';
 export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';
+export * from './custom/visualization/shared/mermaid-types';
 
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
@@ -180,6 +182,7 @@ import { LoadCreateSVGWordCloudAction } from './custom/visualization/create-svg-
 import { LoadCreateSVGNetworkAction } from './custom/visualization/create-svg-network.action';
 import { LoadCreateSVGInfographicAction } from './custom/visualization/create-svg-infographic.action';
 import { LoadCreateSVGSketchDiagramAction } from './custom/visualization/create-svg-sketch-diagram.action';
+import { LoadCreateMermaidDiagramAction } from './custom/visualization/create-mermaid-diagram.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -267,6 +270,7 @@ export function LoadAllCoreActions() {
     LoadCreateSVGNetworkAction();
     LoadCreateSVGInfographicAction();
     LoadCreateSVGSketchDiagramAction();
+    LoadCreateMermaidDiagramAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

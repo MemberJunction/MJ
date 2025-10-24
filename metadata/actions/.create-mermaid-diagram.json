@@ -1,0 +1,189 @@
+[
+  {
+    "fields": {
+      "Name": "Create Mermaid Diagram",
+      "Description": "Generates SVG diagrams from Mermaid text syntax. Supports flowcharts, sequence diagrams, ER diagrams, class diagrams, state machines, Gantt charts, and more. Mermaid is a text-based diagram tool that converts markdown-like syntax into rich visualizations suitable for reports, documentation, and AI-generated content.",
+      "DriverClass": "__CreateMermaidDiagram",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-diagram-project",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Code",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Raw Mermaid diagram syntax (required). Supports flowchart, sequenceDiagram, erDiagram, classDiagram, stateDiagram, gantt, pie, gitGraph, journey, and more. See https://mermaid.js.org for syntax reference.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "1EE1B60C-26E2-409A-B58B-E26FAC6ACEDD"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.002Z",
+            "checksum": "dd44479e5ce73eef30260ceb97a5350c4f125a01199532f2ca324fc4de5a9930"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Theme",
+            "DefaultValue": "default",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Visual theme for the diagram. Options: 'default', 'dark', 'forest', 'neutral'. Default: 'default'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B2A6DC52-4A29-4E53-BE60-BE65380D4DBB"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.015Z",
+            "checksum": "bd7afbcb0661efccbe97d93352de82f76589f2bef73e7df7bda90472e771051f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Config",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Optional Mermaid configuration JSON for advanced customization. See https://mermaid.js.org/config/schema-docs/config.html for options.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B9271FAD-82FD-422F-B8BB-CDDDBE2A10BC"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.027Z",
+            "checksum": "b8295ec335d65c118f10333318e88697c0577e23e69c34cc1a80ebab61f76e9a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Generated SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EC261C18-91AB-4AF5-B29A-3CDCCA4DD51D"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.037Z",
+            "checksum": "754788aedce1a97f89fd0926253b3a2e933fcc737baeb922527ef759531f2446"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Diagram generated successfully. SVG markup returned in Message field."
+          },
+          "primaryKey": {
+            "ID": "FD9041C9-088D-4936-AAA8-CD306C2DE0A9"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.058Z",
+            "checksum": "3dcf2fd86eb77436678cba2ce547e96c48a77ab63e89d1b636cc2ebf26e9182d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Code parameter is required."
+          },
+          "primaryKey": {
+            "ID": "014E29F2-FC34-4930-9D0E-C3809068929A"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.069Z",
+            "checksum": "b5dbd6a32aa0d450611962232f69f85a74882f9169ab6cc97b2d1e954c69f710"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_THEME",
+            "IsSuccess": false,
+            "Description": "Invalid theme specified. Valid themes: default, dark, forest, neutral."
+          },
+          "primaryKey": {
+            "ID": "D78A3B28-054C-4385-BDB0-9EA993BCBB62"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.081Z",
+            "checksum": "72931d5141adc820b6218e81d5b8c3db71d10122c5706bc882cc85e2f519a9ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "CODE_TOO_LARGE",
+            "IsSuccess": false,
+            "Description": "Mermaid code exceeds maximum size limit (100KB)."
+          },
+          "primaryKey": {
+            "ID": "1DB9BF5A-1585-4CEC-A2B2-4BC8C1D223C1"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.092Z",
+            "checksum": "669a716901ee55575a6a61d00234cb3033cd3c2ba04f7932506a40c8db30c68f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CODE",
+            "IsSuccess": false,
+            "Description": "Mermaid code contains suspicious or invalid content."
+          },
+          "primaryKey": {
+            "ID": "DA1338BE-4D01-4AEC-BA45-767CC4C62187"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.103Z",
+            "checksum": "67c63625457acedc0b5c547b1231769715d77496a51e7755725bd7d40a037f7e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DIAGRAM_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate diagram due to invalid Mermaid syntax or rendering error. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "965054F9-E2CF-493A-9B45-88210C0A5328"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T11:54:35.114Z",
+            "checksum": "9a227a10fc38347015998df5275e59a96d13df6440585da49559aaf50d7c8c03"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8CCE12B9-5F28-4C49-8270-D02F1E0F245F"
+    },
+    "sync": {
+      "lastModified": "2025-10-24T11:54:34.959Z",
+      "checksum": "b616bc31cd78097fffd03c701bfa9bd46dd8dfc61a75429078fc76d0390438d3"
+    }
+  }
+]
