@@ -1,9 +1,9 @@
 [
   {
     "fields": {
-      "Name": "Find Best Agent",
+      "Name": "Find Candidate Agents",
       "Description": "Finds the best-matching AI agents for a given task using embedding-based semantic search. Returns agents ranked by similarity score.",
-      "DriverClass": "Find Best Agent",
+      "DriverClass": "Find Candidate Agents",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active",
@@ -223,8 +223,8 @@
       "ID": "EF610103-E48D-4D9C-8DA2-1CF5B05F8AB6"
     },
     "sync": {
-      "lastModified": "2025-10-17T01:10:25.513Z",
-      "checksum": "398b2c608b348a6649b00fb3a08ad8b369eef82a4dc293442a6410da3c6ef223"
+      "lastModified": "2025-10-24T17:55:07.612Z",
+      "checksum": "f109aadaddd372dd5ab15055ce9db0a78e2943dba1dbd3cdd61ab7051f482406"
     }
   }
 ]

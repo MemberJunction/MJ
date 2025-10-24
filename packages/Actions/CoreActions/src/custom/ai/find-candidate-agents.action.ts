@@ -14,7 +14,7 @@ import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
  * ```typescript
  * // Find agents for a research task
  * await runAction({
- *   ActionName: 'Find Best Agent',
+ *   ActionName: 'Find Candidate Agents',
  *   Params: [{
  *     Name: 'TaskDescription',
  *     Value: 'Research market trends and compile a comprehensive report'
@@ -28,12 +28,12 @@ import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Find Best Agent")
+@RegisterClass(BaseAction, "Find Candidate Agents")
 export class FindBestAgentAction extends BaseAction {
     // Singleton initialization removed - AIEngine handles embedding lifecycle
 
     /**
-     * Executes the Find Best Agent action.
+     * Executes the Find Candidate Agents action.
      *
      * @param params - The action parameters containing:
      *   - TaskDescription: Description of the task to find agents for (required)
@@ -175,7 +175,7 @@ export class FindBestAgentAction extends BaseAction {
             return {
                 Success: false,
                 ResultCode: 'EXECUTION_ERROR',
-                Message: `Failed to find best agent: ${error instanceof Error ? error.message : String(error)}`
+                Message: `Failed to Find Candidate Agents: ${error instanceof Error ? error.message : String(error)}`
             };
         }
     }

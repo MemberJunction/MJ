@@ -55,7 +55,7 @@ interface AgentSpec {
 
   // ACTIONS - Array of actions this agent can use
   Actions?: Array<{
-    ActionID: string;                       // ID from "Find Best Action" results
+    ActionID: string;                       // ID from "Find Candidate Actions" results
     Status?: 'Active' | 'Inactive';         // Default: 'Active'
     ResultExpirationMode?: 'None' | 'Time' | 'RunEnd';
   }>;

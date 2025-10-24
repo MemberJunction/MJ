@@ -308,7 +308,7 @@ export class AgentArchitectAgent extends BaseAgent {
                 }
 
                 if (!foundIds.has(action.ActionID)) {
-                    errors.push(`❌ Action with ID "${action.ActionID}" not found in database. Please use "Find Best Action" or "List Actions" to get valid action IDs.`);
+                    errors.push(`❌ Action with ID "${action.ActionID}" not found in database. Please use "Find Candidate Actions" or "List Actions" to get valid action IDs.`);
                 }
             }
 
