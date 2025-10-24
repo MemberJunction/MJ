@@ -182,4 +182,63 @@ export interface AgentManagerPayload {
       issues: string[];
     }[];
   };
+
+  /**
+   * Agent Loader section - for modification workflow
+   * Contains the loaded agent when modifying an existing agent
+   */
+  loadedAgent?: {
+    /** Full AgentSpec loaded from database with all nested structure */
+    agentSpec: any; // AgentSpec type from CorePlus
+    /** Copy of original spec for comparison during modification */
+    originalSpec: any; // AgentSpec type from CorePlus
+    /** When the agent was last modified in database */
+    lastModified: string;
+    /** Agent's current status */
+    status: string;
+  };
+
+  /**
+   * Modification Planner section - for modification workflow
+   * Contains the detailed plan for modifying an existing agent
+   */
+  modificationPlan?: {
+    /** High-level summary of all changes to be made */
+    changeSummary: string;
+    /** Fields that will be updated (field name -> old/new values) */
+    fieldsToUpdate?: Record<string, { old: any; new: any }>;
+    /** Actions to add (with action IDs from Find Best Action) */
+    actionsToAdd?: Array<{ id: string; name: string; reason: string }>;
+    /** Action IDs to remove from the agent */
+    actionsToRemove?: string[];
+    /** Sub-agents modifications (add/remove/update) */
+    subAgentsToModify?: Array<{
+      operation: 'add' | 'remove' | 'update';
+      subAgentName?: string;
+      subAgentId?: string;
+      details?: any;
+    }>;
+    /** Prompts to update or add */
+    promptsToUpdate?: Array<{
+      operation: 'add' | 'update' | 'remove';
+      agentName: string;
+      promptText?: string;
+      promptRole?: string;
+      promptPosition?: string;
+    }>;
+    /** Steps modifications for Flow agents only */
+    stepsToModify?: Array<{
+      operation: 'add' | 'remove' | 'update';
+      stepName?: string;
+      stepType?: string;
+      details?: any;
+    }>;
+    /** Paths modifications for Flow agents only */
+    pathsToModify?: Array<{
+      operation: 'add' | 'remove' | 'update';
+      from?: string;
+      to?: string;
+      details?: any;
+    }>;
+  };
 }

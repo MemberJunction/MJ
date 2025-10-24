@@ -20,7 +20,7 @@ import {
 } from "@memberjunction/skip-types";
 import { SkipSDK, SkipCallOptions } from "./skip-sdk.js";
 import { DataContext } from "@memberjunction/data-context";
-import { LogStatus, LogError } from "@memberjunction/core";
+import { LogStatus, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { ChatMessage } from "@memberjunction/ai";
 import { RegisterClass } from "@memberjunction/global";
 import { ComponentSpec } from "@memberjunction/interactive-component-types";
@@ -127,8 +127,15 @@ export class SkipProxyAgent extends BaseAgent {
             };
         }
 
-        // Convert MJ conversation messages to Skip format
-        const skipMessages = this.convertMessagesToSkipFormat(params.conversationMessages || []);
+        // Load conversation messages from database if conversationId is provided
+        // This ensures we get real UUIDs from ConversationDetailEntity records
+        let skipMessages: SkipMessage[];
+        if (conversationId && params.contextUser) {
+            skipMessages = await this.loadMessagesFromDatabase(conversationId, params.contextUser);
+        } else {
+            // Fallback to converting provided conversation messages
+            skipMessages = this.convertMessagesToSkipFormat(params.conversationMessages || []);
+        }
 
         // Prepare Skip SDK call options
         const skipOptions: SkipCallOptions = {
@@ -189,15 +196,92 @@ export class SkipProxyAgent extends BaseAgent {
     }
 
     /**
+     * Load conversation messages from database with real UUIDs using MemberJunction's RunView pattern
+     * This is the preferred method as it ensures all messages have proper conversationDetailIDs
+     */
+    private async loadMessagesFromDatabase(conversationId: string, contextUser: UserInfo): Promise<SkipMessage[]> {
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: 'Conversation Details',
+                ExtraFilter: `ConversationID='${conversationId}'`,
+                OrderBy: '__mj_CreatedAt ASC'
+            }, contextUser);
+
+            if (!result.Success) {
+                throw new Error(`Failed to load conversation details: ${result.ErrorMessage}`);
+            }
+
+            const allMessages = (result.Results || []).map((r: any) => {
+                // Map database role to Skip role
+                const dbRole = (r.Role || '').trim().toLowerCase();
+                const skipRole: 'user' | 'system' =
+                    (dbRole === 'ai' || dbRole === 'system' || dbRole === 'assistant') ? 'system' : 'user';
+
+                // For system messages, always send the raw Message from database
+                // Skip Brain needs the full JSON response to extract component specs for modification
+                // For user messages, use the message as-is
+                const content = r.Message;
+
+                const message: SkipMessage = {
+                    content: content,
+                    role: skipRole,
+                    conversationDetailID: r.ID,
+                    hiddenToUser: r.HiddenToUser,
+                    userRating: r.UserRating,
+                    userFeedback: r.UserFeedback,
+                    reflectionInsights: r.ReflectionInsights,
+                    summaryOfEarlierConveration: r.SummaryOfEarlierConversation,
+                    createdAt: r.__mj_CreatedAt,
+                    updatedAt: r.__mj_UpdatedAt,
+                };
+                return message;
+            });
+
+            // Find the index of the last user message
+            // We only want to include messages up to and including the most recent user message
+            // This filters out status messages and incomplete AI responses
+            const lastUserMessageIndex = allMessages.reduce((lastIndex, msg, currentIndex) => {
+                return msg.role === 'user' ? currentIndex : lastIndex;
+            }, -1);
+
+            if (lastUserMessageIndex === -1) {
+                // No user messages found, return all messages (shouldn't happen in practice)
+                return allMessages;
+            }
+
+            // Return messages up to and including the last user message
+            return allMessages.slice(0, lastUserMessageIndex + 1);
+        } catch (error) {
+            LogError(`[SkipProxyAgent] Error loading messages from database: ${error}`);
+            throw error;
+        }
+    }
+
+    /**
      * Convert MJ ChatMessage format to Skip SkipMessage format
+     * This is a fallback method when database loading is not available
      */
     private convertMessagesToSkipFormat(messages: ChatMessage[]): SkipMessage[] {
-        return messages.map((msg, index) => ({
-            // Skip only accepts 'user' or 'system' roles, map 'assistant' to 'system'
-            role: (msg.role === 'assistant' ? 'system' : msg.role) as 'user' | 'system',
-            content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
-            conversationDetailID: `temp-${index}` // Temporary ID for messages without real IDs
-        }));
+        return messages.map((msg, index) => {
+            // Extract conversationDetailID from metadata if available
+            const conversationDetailID = msg.metadata?.conversationDetailID || `temp-${index}`;
+
+            return {
+                // Skip only accepts 'user' or 'system' roles, map 'assistant' to 'system'
+                role: (msg.role === 'assistant' ? 'system' : msg.role) as 'user' | 'system',
+                content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content),
+                conversationDetailID,
+                // Include other SkipMessage fields from metadata if available
+                hiddenToUser: msg.metadata?.hiddenToUser,
+                userRating: msg.metadata?.userRating,
+                userFeedback: msg.metadata?.userFeedback,
+                reflectionInsights: msg.metadata?.reflectionInsights,
+                summaryOfEarlierConveration: msg.metadata?.summaryOfEarlierConversation,
+                createdAt: msg.metadata?.createdAt,
+                updatedAt: msg.metadata?.updatedAt
+            };
+        });
     }
 
     /**

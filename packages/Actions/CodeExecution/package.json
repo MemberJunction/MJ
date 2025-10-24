@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/code-execution",
-  "version": "2.109.0",
+  "version": "2.110.1",
   "description": "Sandboxed code execution service for MemberJunction actions and agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

@@ -1,5 +1,26 @@
 # @memberjunction/communication-twilio
 
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/communication-types@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/global@2.110.1
+
+## 2.110.0
+
+### Minor Changes
+
+- 93c00ac: migration
+
+### Patch Changes
+
+- Updated dependencies [93c00ac]
+  - @memberjunction/communication-types@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
 ## 2.109.0
 
 ### Patch Changes

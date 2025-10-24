@@ -1,5 +1,62 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.110.1
+
+### Patch Changes
+
+- 47733e0: Remove broken Vega packages from dependencies and remove implementation of Create SVG Chart action.
+  - @memberjunction/ai-agents@2.110.1
+  - @memberjunction/ai-engine-base@2.110.1
+  - @memberjunction/ai-core-plus@2.110.1
+  - @memberjunction/aiengine@2.110.1
+  - @memberjunction/ai-vector-sync@2.110.1
+  - @memberjunction/code-execution@2.110.1
+  - @memberjunction/actions@2.110.1
+  - @memberjunction/communication-engine@2.110.1
+  - @memberjunction/content-autotagging@2.110.1
+  - @memberjunction/external-change-detection@2.110.1
+  - @memberjunction/core@2.110.1
+  - @memberjunction/core-entities@2.110.1
+  - @memberjunction/core-entities-server@2.110.1
+  - @memberjunction/global@2.110.1
+  - @memberjunction/storage@2.110.1
+  - @memberjunction/sqlserver-dataprovider@2.110.1
+
+## 2.110.0
+
+### Minor Changes
+
+- c8b9aca: Migration
+
+### Patch Changes
+
+- 02d72ff: - Sort Zod schema entity field values by sequence in CodeGen for consistent ordering
+  - Add unique constraints to QueryCategory and Query tables to prevent duplicates
+  - Improve concurrent query creation handling in CreateQueryResolver
+  - Fix metadata provider usage in entity server classes
+  - Remove automatic error logging from SQLServerDataProvider
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+- Updated dependencies [93c00ac]
+- Updated dependencies [8f1384a]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/sqlserver-dataprovider@2.110.0
+  - @memberjunction/core-entities-server@2.110.0
+  - @memberjunction/ai-core-plus@2.110.0
+  - @memberjunction/ai-agents@2.110.0
+  - @memberjunction/communication-engine@2.110.0
+  - @memberjunction/ai-engine-base@2.110.0
+  - @memberjunction/aiengine@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/content-autotagging@2.110.0
+  - @memberjunction/external-change-detection@2.110.0
+  - @memberjunction/storage@2.110.0
+  - @memberjunction/ai-vector-sync@2.110.0
+  - @memberjunction/code-execution@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
 ## 2.109.0
 
 ### Minor Changes

@@ -1,5 +1,36 @@
 # @memberjunction/ng-dashboards
 
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@2.110.1
+- @memberjunction/ng-shared@2.110.1
+- @memberjunction/ng-action-gallery@2.110.1
+- @memberjunction/ng-ai-test-harness@2.110.1
+- @memberjunction/ng-container-directives@2.110.1
+- @memberjunction/ng-notifications@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/templates-base-types@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/ng-core-entity-forms@2.110.0
+  - @memberjunction/ng-shared@2.110.0
+  - @memberjunction/ng-action-gallery@2.110.0
+  - @memberjunction/ng-ai-test-harness@2.110.0
+  - @memberjunction/ng-notifications@2.110.0
+  - @memberjunction/templates-base-types@2.110.0
+  - @memberjunction/ng-container-directives@2.110.0
+  - @memberjunction/core@2.110.0
+
 ## 2.109.0
 
 ### Minor Changes

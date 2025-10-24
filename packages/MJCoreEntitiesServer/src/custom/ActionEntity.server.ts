@@ -1,4 +1,4 @@
-import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { ActionLibraryEntity, ActionParamEntity, ActionResultCodeEntity } from "@memberjunction/core-entities";
 import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
@@ -36,6 +36,8 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
     constructor(Entity: EntityInfo) {
         super(Entity); // call super
 
+        // In constructor we must use new Metadata() since entity isn't fully initialized yet
+        // This is an acceptable exception as it only checks provider type at construction time
         const md = new Metadata();
         if (md.ProviderType !== 'Database')
             throw new Error('This class is only supported for server-side/database providers. Remove this package from your application.');
@@ -148,8 +150,9 @@ export class ActionEntityServerEntity extends ActionEntityExtended {
         const librariesToAdd = codeLibraries.filter(l => !existingLibraries.some(el => el.Library.trim().toLowerCase() === l.LibraryName.trim().toLowerCase()));
         const librariesToRemove = existingLibraries.filter(el => !codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
         const librariesToUpdate = existingLibraries.filter(el => codeLibraries.some(l => l.LibraryName.trim().toLowerCase() === el.Library.trim().toLowerCase()));
-        const md = new Metadata();
-        
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
+
         for (const lib of librariesToAdd) {
             const libMetadata = md.Libraries.find(l => l.Name.trim().toLowerCase() === lib.LibraryName.trim().toLowerCase());
             if (libMetadata) {
@@ -324,7 +327,8 @@ ${JSON.stringify(parentAction.Params.map(p => {
      * Returns a simplified object with basic entity info: Name, Description and field list.
      */
     protected PrepareEntityInfo(): any {
-        const md = new Metadata();
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
         const entities = md.Entities.map(entity => ({
             Name: entity.Name,
             Description: entity.Description,
@@ -345,7 +349,8 @@ ${JSON.stringify(parentAction.Params.map(p => {
     protected async LoadParentAction(): Promise<ActionEntityExtended | null> {
         if (!this.ParentID) return null;
 
-        const md = new Metadata();
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
         const parent = await md.GetEntityObject<ActionEntityExtended>('Actions', this.ContextCurrentUser);
         if (await parent.Load(this.ParentID)) {
             return parent;
@@ -357,7 +362,8 @@ ${JSON.stringify(parentAction.Params.map(p => {
      * Processes generated parameters and saves them to the database
      */
     protected async ProcessGeneratedParameters(parameters: Array<any>): Promise<void> {
-        const md = new Metadata();
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
 
         try {
             // First, get existing parameters
@@ -461,7 +467,8 @@ ${JSON.stringify(parentAction.Params.map(p => {
      * Processes generated result codes and saves them to the database
      */
     protected async ProcessGeneratedResultCodes(resultCodes: Array<{ResultCode: string; Description: string; IsSuccess: boolean}>): Promise<void> {
-        const md = new Metadata();
+        // Use the entity's provider instead of creating new Metadata instance
+        const md = this.ProviderToUse as any as IMetadataProvider;
 
         try {
             // First, get existing result codes
