@@ -131,5 +131,82 @@
       "lastModified": "2025-10-21T19:26:32.943Z",
       "checksum": "0ba7e7e317a46398c63a7f88d6369369ec9aad9fe3de4293b4f0d7eee3987eef"
     }
+  },
+  {
+    "fields": {
+      "Name": "Load Agent Spec",
+      "Description": "Loads the complete AgentSpec structure for an existing agent by ID. Returns full agent specification including all nested structures: Actions, SubAgents, Prompts, Steps, and Paths. Used by Agent Manager for modification workflow.",
+      "DriverClass": "Load Agent Spec",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=Agent Management",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-download"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The UUID of the agent to load (required)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "363B9477-06E4-4ECD-BB9F-D78C8D0BA763"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T03:18:15.357Z",
+            "checksum": "b001ba0b591f4e6db401be29b14bef86d509ee8e08f0a3f63893d3ad0d34b095"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeSubAgents",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to load nested sub-agents recursively (default: true)",
+            "IsRequired": false,
+            "DefaultValue": "true"
+          },
+          "primaryKey": {
+            "ID": "A32545BE-97D6-4C34-83A4-4E6AEC38FFDE"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T03:18:15.370Z",
+            "checksum": "ab98e86e419249e6f3a964a8b2d5859f51e96bd3b1cbb4460c8160d8a462dd06"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AgentSpec",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Complete AgentSpec structure including Actions, SubAgents, Prompts, Steps, Paths, FunctionalRequirement, and TechnicalDesign",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "13C8999A-2F6F-4804-B319-0896ED148921"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T03:18:15.382Z",
+            "checksum": "567d51c41cdbfe594020b315999e96d663997850aa02cb566184c067e613b335"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "3E7FB0AE-D63B-4478-B66A-98C887E51BF3"
+    },
+    "sync": {
+      "lastModified": "2025-10-24T03:18:15.269Z",
+      "checksum": "0513e301964c4afab934734e4caaf755cb5cdef76e6b7e611f4044e237b5c588"
+    }
   }
 ]

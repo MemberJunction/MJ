@@ -157,6 +157,7 @@ export class FindBestAgentAction extends BaseAction {
                 taskDescription: taskDescription,
                 matchCount: filteredAgents.length,
                 allMatches: filteredAgents.map(a => ({
+                    agentId: a.agentId,  // Include agent ID for direct use with Load Agent Spec
                     agentName: a.agentName,
                     similarityScore: Math.round(a.similarityScore * 100) / 100, // Round to 2 decimal places
                     description: a.description,  // Full description, no truncation

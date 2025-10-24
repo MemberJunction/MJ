@@ -1376,6 +1376,16 @@ if this limit is exceeded.`),
     *   * Always
     *   * System Only
         * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`),
+    FunctionalRequirements: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirements
+        * * Display Name: Functional Requirements
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.`),
+    TechnicalDesign: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesign
+        * * Display Name: Technical Design
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -19720,6 +19730,32 @@ if this limit is exceeded.
     }
     set ArtifactCreationMode(value: 'Always' | 'Never' | 'System Only') {
         this.Set('ArtifactCreationMode', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirements
+    * * Display Name: Functional Requirements
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.
+    */
+    get FunctionalRequirements(): string | null {
+        return this.Get('FunctionalRequirements');
+    }
+    set FunctionalRequirements(value: string | null) {
+        this.Set('FunctionalRequirements', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesign
+    * * Display Name: Technical Design
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure.
+    */
+    get TechnicalDesign(): string | null {
+        return this.Get('TechnicalDesign');
+    }
+    set TechnicalDesign(value: string | null) {
+        this.Set('TechnicalDesign', value);
     }
 
     /**
