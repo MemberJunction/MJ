@@ -30,24 +30,77 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
 }
 
 /**
+ * Iteration context for tracking loop execution state
+ */
+export interface IterationContext {
+    stepId: string;
+    loopType: 'ForEach' | 'While';
+
+    // ForEach specific
+    collection?: any[];
+    currentIndex?: number;
+
+    // While specific
+    condition?: string;
+    iterationCount?: number;
+
+    // Common
+    itemVariable: string;
+    indexVariable?: string;
+    maxIterations: number;
+    continueOnError: boolean;
+    errors: any[];
+    results: any[];
+}
+
+/**
+ * ForEach loop configuration from AIAgentStep.Configuration
+ */
+export interface ForEachConfig {
+    type: 'ForEach';
+    collectionPath: string;
+    itemVariable?: string;
+    indexVariable?: string;
+    maxIterations?: number;
+    continueOnError?: boolean;
+}
+
+/**
+ * While loop configuration from AIAgentStep.Configuration
+ */
+export interface WhileConfig {
+    type: 'While';
+    condition: string;
+    itemVariable?: string;
+    maxIterations?: number;
+    continueOnError?: boolean;
+}
+
+/**
  * Flow execution state that tracks the progress through the workflow.
  * This is maintained by the Flow Agent Type during execution.
  */
 export class FlowExecutionState {
     /** The agent ID for this flow execution */
     agentId: string;
-    
+
     /** The current step being executed */
     currentStepId?: string;
-    
+
     /** Set of completed step IDs */
     completedStepIds: Set<string> = new Set();
-    
+
     /** Map of step results by step ID */
     stepResults: Map<string, unknown> = new Map();
-    
+
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];
+
+    /** Stack of active iteration contexts (supports nested loops) */
+    iterationStack: IterationContext[] = [];
+
+    /** Current loop variables available for mapping */
+    loopVariables: Map<string, any> = new Map();
 
     constructor(agentId: string) {
         this.agentId = agentId;
@@ -535,7 +588,7 @@ export class FlowAgentType extends BaseAgentType {
                         previousPayload: payload
                     });
                 }
-                
+
                 const retryStep: FlowAgentNextStep<P> = {
                     step: 'Retry',
                     message: node.Description || 'Executing prompt step for flow decision',
@@ -546,7 +599,13 @@ export class FlowAgentType extends BaseAgentType {
                     previousPayload: payload
                 };
                 return retryStep;
-                
+
+            case 'ForEach':
+                return await this.executeForEachStep(node, payload, flowState, params);
+
+            case 'While':
+                return await this.executeWhileStep(node, payload, flowState, params);
+
             default:
                 return this.createNextStep('Failed', {
                     errorMessage: `Unknown step type: ${node.StepType}`,
@@ -905,15 +964,20 @@ export class FlowAgentType extends BaseAgentType {
         }
 
         // Check if this is a special flow prompt step marker
-        const flowStep = step as FlowAgentNextStep<P>;
-        if (flowStep.flowPromptStepId) {
-            // This is a prompt step in the flow, let it execute normally
+        const flowStep = step as FlowAgentNextStep<P> & { isLoopBody?: boolean; loopStepId?: string };
+        if (flowStep.flowPromptStepId && !flowStep.isLoopBody) {
+            // This is a prompt step in the flow (not a loop body), let it execute normally
             return null;
         }
-        
+
         // Get the updated payload (after action execution)
         const payloadFromStep = payload || step.newPayload || params.payload || {} as P;
         const flowState = agentTypeState as FlowExecutionState;
+
+        // Check if we just completed a loop body iteration
+        if (flowStep.isLoopBody || (step as Record<string, unknown>).isLoopBody) {
+            return await this.handleLoopBodyCompletion(payloadFromStep, flowState, params);
+        }
         
         // CRITICAL FIX: Don't overwrite the flow state's payload if it already has accumulated data
         // The retry step only contains the action's output mapping result, not the full payload
@@ -1008,6 +1072,478 @@ export class FlowAgentType extends BaseAgentType {
         
         // For non-flow-prompt steps, use the default prompt
         return config.childPrompt || null;
+    }
+
+    /**
+     * Handles completion of a loop body iteration and determines whether to continue looping
+     */
+    private async handleLoopBodyCompletion<P>(
+        payload: P,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Check if we're in a loop
+        if (flowState.iterationStack.length === 0) {
+            // Not in a loop - shouldn't happen if isLoopBody was set
+            LogError('handleLoopBodyCompletion called but no active loop in iterationStack');
+            return null;
+        }
+
+        const currentLoop = flowState.iterationStack[flowState.iterationStack.length - 1];
+
+        // Store result from this iteration
+        currentLoop.results.push(payload);
+
+        // Increment counter
+        if (currentLoop.loopType === 'ForEach') {
+            currentLoop.currentIndex!++;
+        } else if (currentLoop.loopType === 'While') {
+            currentLoop.iterationCount!++;
+        }
+
+        // Get the loop step and re-execute it (which will check completion)
+        const loopStep = await this.getStepById(currentLoop.stepId);
+        if (!loopStep) {
+            return this.createNextStep('Failed', {
+                errorMessage: `Loop step not found: ${currentLoop.stepId}`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Re-execute the loop step (it will check if more iterations are needed)
+        if (currentLoop.loopType === 'ForEach') {
+            return this.executeForEachStep(loopStep, payload, flowState, params);
+        } else {
+            return this.executeWhileStep(loopStep, payload, flowState, params);
+        }
+    }
+
+    /**
+     * Executes a ForEach loop step
+     */
+    private async executeForEachStep<P>(
+        node: AIAgentStepEntity,
+        payload: P,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        if (!node.Configuration) {
+            return this.createNextStep('Failed', {
+                errorMessage: `ForEach step '${node.Name}' has no Configuration`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        const config: ForEachConfig = JSON.parse(node.Configuration);
+
+        // Get collection from payload
+        const collection = this.getValueFromPath(payload, config.collectionPath);
+        if (!Array.isArray(collection)) {
+            return this.createNextStep('Failed', {
+                errorMessage: `Collection path "${config.collectionPath}" did not resolve to an array`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Determine max iterations
+        const maxIterations = config.maxIterations === undefined
+            ? 1000  // Default
+            : config.maxIterations === 0
+                ? Number.MAX_SAFE_INTEGER  // Unlimited
+                : config.maxIterations;
+
+        // Find or create iteration context
+        let iterContext = flowState.iterationStack.find(i => i.stepId === node.ID);
+        if (!iterContext) {
+            iterContext = {
+                stepId: node.ID,
+                loopType: 'ForEach',
+                collection: collection,
+                currentIndex: 0,
+                itemVariable: config.itemVariable || 'item',
+                indexVariable: config.indexVariable || 'index',
+                maxIterations: maxIterations,
+                continueOnError: config.continueOnError || false,
+                errors: [],
+                results: []
+            };
+            flowState.iterationStack.push(iterContext);
+        }
+
+        // Check if loop is complete
+        if (iterContext.currentIndex >= iterContext.collection.length) {
+            // Clean up iteration context
+            flowState.iterationStack = flowState.iterationStack.filter(i => i.stepId !== node.ID);
+
+            // Store aggregated results
+            flowState.stepResults.set(node.ID, {
+                results: iterContext.results,
+                errors: iterContext.errors,
+                totalIterations: iterContext.currentIndex
+            });
+
+            // Find exit paths from this loop step
+            const exitPaths = await this.getValidPaths(node.ID, payload, flowState);
+            if (exitPaths.length === 0) {
+                return this.createSuccessStep({
+                    message: `ForEach loop completed: processed ${iterContext.currentIndex} items`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            const nextStep = await this.getStepById(exitPaths[0].DestinationStepID);
+            if (!nextStep) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `Exit step not found: ${exitPaths[0].DestinationStepID}`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            return this.createStepForFlowNode(params, nextStep, payload, flowState);
+        }
+
+        // Safety check
+        if (iterContext.currentIndex >= maxIterations) {
+            LogError(`ForEach loop "${node.Name}" exceeded maxIterations (${maxIterations})`);
+            return this.createNextStep('Failed', {
+                errorMessage: `Loop exceeded maximum iterations (${maxIterations})`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Inject current item into payload and loop variables
+        const currentItem = iterContext.collection[iterContext.currentIndex];
+        flowState.loopVariables.set(iterContext.itemVariable, currentItem);
+        if (iterContext.indexVariable) {
+            flowState.loopVariables.set(iterContext.indexVariable, iterContext.currentIndex);
+        }
+
+        const enhancedPayload = {
+            ...payload,
+            [iterContext.itemVariable]: currentItem,
+            [iterContext.indexVariable]: iterContext.currentIndex
+        } as P;
+
+        // Execute loop body based on LoopBodyType
+        return await this.executeLoopBody(node, enhancedPayload, flowState, params);
+    }
+
+    /**
+     * Executes a While loop step
+     */
+    private async executeWhileStep<P>(
+        node: AIAgentStepEntity,
+        payload: P,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        if (!node.Configuration) {
+            return this.createNextStep('Failed', {
+                errorMessage: `While step '${node.Name}' has no Configuration`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        const config: WhileConfig = JSON.parse(node.Configuration);
+
+        // Determine max iterations
+        const maxIterations = config.maxIterations === undefined
+            ? 100  // Default (lower than ForEach)
+            : config.maxIterations === 0
+                ? Number.MAX_SAFE_INTEGER  // Unlimited
+                : config.maxIterations;
+
+        // Find or create iteration context
+        let iterContext = flowState.iterationStack.find(i => i.stepId === node.ID);
+        if (!iterContext) {
+            iterContext = {
+                stepId: node.ID,
+                loopType: 'While',
+                condition: config.condition,
+                iterationCount: 0,
+                itemVariable: config.itemVariable || 'attempt',
+                maxIterations: maxIterations,
+                continueOnError: config.continueOnError || false,
+                errors: [],
+                results: []
+            };
+            flowState.iterationStack.push(iterContext);
+        }
+
+        // Evaluate condition
+        const evaluationContext = {
+            payload: payload,
+            flowContext: {
+                currentStepId: flowState.currentStepId,
+                completedSteps: Array.from(flowState.completedStepIds),
+                executionPath: flowState.executionPath
+            }
+        };
+
+        const evalResult = this._evaluator.evaluate(config.condition, evaluationContext);
+
+        // Check if loop should exit
+        if (!evalResult.success || !evalResult.value) {
+            // Condition is false or evaluation failed - exit loop
+            flowState.iterationStack = flowState.iterationStack.filter(i => i.stepId !== node.ID);
+
+            flowState.stepResults.set(node.ID, {
+                results: iterContext.results,
+                errors: iterContext.errors,
+                totalIterations: iterContext.iterationCount,
+                exitReason: evalResult.success ? 'condition_false' : 'evaluation_error'
+            });
+
+            const exitPaths = await this.getValidPaths(node.ID, payload, flowState);
+            if (exitPaths.length === 0) {
+                return this.createSuccessStep({
+                    message: `While loop completed after ${iterContext.iterationCount} iterations`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            const nextStep = await this.getStepById(exitPaths[0].DestinationStepID);
+            if (!nextStep) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `Exit step not found: ${exitPaths[0].DestinationStepID}`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            return this.createStepForFlowNode(params, nextStep, payload, flowState);
+        }
+
+        // Safety check
+        if (iterContext.iterationCount >= maxIterations) {
+            LogError(`While loop "${node.Name}" exceeded maxIterations (${maxIterations})`);
+            return this.createNextStep('Failed', {
+                errorMessage: `Loop exceeded maximum iterations (${maxIterations})`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Inject attempt context into payload
+        const attemptContext = {
+            attemptNumber: iterContext.iterationCount + 1,  // 1-based
+            totalAttempts: iterContext.iterationCount
+        };
+
+        flowState.loopVariables.set(iterContext.itemVariable, attemptContext);
+        flowState.loopVariables.set('index', iterContext.iterationCount);
+
+        const enhancedPayload = {
+            ...payload,
+            [iterContext.itemVariable]: attemptContext,
+            index: iterContext.iterationCount
+        } as P;
+
+        // Execute loop body
+        return await this.executeLoopBody(node, enhancedPayload, flowState, params);
+    }
+
+    /**
+     * Executes the loop body (Action, Sub-Agent, or Prompt) for a single iteration
+     */
+    private async executeLoopBody<P>(
+        node: AIAgentStepEntity,
+        payload: P,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        const userMessages = params.conversationMessages.filter(m => m.role === 'user');
+        const latestUserMessage = userMessages ? userMessages[userMessages.length - 1].content : "";
+        const latestUserMessageString = typeof latestUserMessage === 'string' ? latestUserMessage : latestUserMessage[0].content;
+
+        switch (node.LoopBodyType as string) {
+            case 'Action':
+                if (!node.ActionID) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `Loop body is Action but ActionID not set in step '${node.Name}'`,
+                        newPayload: payload,
+                        previousPayload: payload
+                    });
+                }
+
+                const actionName = await this.getActionName(node.ActionID);
+                if (!actionName) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `Action not found for step '${node.Name}': ${node.ActionID}`,
+                        newPayload: payload,
+                        previousPayload: payload
+                    });
+                }
+
+                // Resolve input mapping with loop variables
+                const resolvedParams = this.resolveInputMapping(
+                    node.ActionInputMapping,
+                    payload,
+                    flowState
+                );
+
+                const actionStep = this.createNextStep<P>('Actions', {
+                    actions: [{
+                        name: actionName,
+                        params: resolvedParams
+                    }],
+                    terminate: false,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+
+                // Mark this as a loop body action for post-processing
+                (actionStep as Record<string, unknown>).stepId = node.ID;
+                (actionStep as Record<string, unknown>).isLoopBody = true;
+                if (node.ActionOutputMapping) {
+                    (actionStep as Record<string, unknown>).actionOutputMapping = node.ActionOutputMapping;
+                }
+
+                return actionStep;
+
+            case 'Sub-Agent':
+                if (!node.SubAgentID) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `Loop body is Sub-Agent but SubAgentID not set in step '${node.Name}'`,
+                        newPayload: payload,
+                        previousPayload: payload
+                    });
+                }
+
+                const subAgentName = await this.getAgentName(node.SubAgentID);
+                if (!subAgentName) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `Sub-Agent not found for step '${node.Name}': ${node.SubAgentID}`,
+                        newPayload: payload,
+                        previousPayload: payload
+                    });
+                }
+
+                const subAgentStep = this.createNextStep('Sub-Agent', {
+                    subAgent: {
+                        name: subAgentName,
+                        message: latestUserMessageString || node.Description || `Execute sub-agent: ${subAgentName}`,
+                        terminateAfter: false
+                    },
+                    terminate: false,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+
+                // Mark this as a loop body sub-agent for post-processing
+                (subAgentStep as Record<string, unknown>).isLoopBody = true;
+                (subAgentStep as Record<string, unknown>).loopStepId = node.ID;
+
+                return subAgentStep;
+
+            case 'Prompt':
+                if (!node.PromptID) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `Loop body is Prompt but PromptID not set in step '${node.Name}'`,
+                        newPayload: payload,
+                        previousPayload: payload
+                    });
+                }
+
+                const promptStep: FlowAgentNextStep<P> = {
+                    step: 'Retry',
+                    message: node.Description || 'Executing prompt for loop iteration',
+                    terminate: false,
+                    flowPromptStepId: node.PromptID,
+                    newPayload: payload,
+                    previousPayload: payload,
+                    isLoopBody: true,
+                    loopStepId: node.ID
+                } as FlowAgentNextStep<P> & { isLoopBody?: boolean; loopStepId?: string };
+
+                return promptStep;
+
+            default:
+                return this.createNextStep('Failed', {
+                    errorMessage: `Unknown LoopBodyType: ${node.LoopBodyType} in step '${node.Name}'`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+        }
+    }
+
+    /**
+     * Resolves a value from input mapping, supporting loop variables and payload paths
+     * Resolution rules:
+     * - "item.field" → Loop variable property
+     * - "payload.field" → Payload path
+     * - "item" → Entire loop variable
+     * - "index" → Loop index
+     * - anything else → Static literal value
+     */
+    private resolveValue(value: string, context: { item?: any, index?: number, payload: any }): any {
+        if (typeof value !== 'string') {
+            return value;
+        }
+
+        if (value.startsWith('item.')) {
+            const path = value.substring(5);
+            return this.getValueFromPath(context.item, path);
+        } else if (value.startsWith('payload.')) {
+            const path = value.substring(8);
+            return this.getValueFromPath(context.payload, path);
+        } else if (value === 'item') {
+            return context.item;
+        } else if (value === 'index') {
+            return context.index;
+        } else {
+            // Static literal value
+            return value;
+        }
+    }
+
+    /**
+     * Resolves input mapping with loop variable context
+     */
+    private resolveInputMapping<P>(
+        mappingJson: string | null,
+        payload: P,
+        flowState: FlowExecutionState
+    ): Record<string, unknown> {
+        if (!mappingJson) {
+            return {};
+        }
+
+        try {
+            const mapping = JSON.parse(mappingJson);
+            const resolved: Record<string, unknown> = {};
+
+            // Get current loop context if in a loop
+            let item: any = undefined;
+            let index: number | undefined = undefined;
+
+            if (flowState.iterationStack.length > 0) {
+                const currentLoop = flowState.iterationStack[flowState.iterationStack.length - 1];
+                item = flowState.loopVariables.get(currentLoop.itemVariable);
+                index = currentLoop.loopType === 'ForEach'
+                    ? currentLoop.currentIndex
+                    : currentLoop.iterationCount;
+            }
+
+            const context = { item, index, payload };
+
+            for (const [key, value] of Object.entries(mapping)) {
+                resolved[key] = this.resolveValue(value as string, context);
+            }
+
+            return resolved;
+        } catch (error) {
+            LogError(`Failed to resolve input mapping: ${error.message}`);
+            return {};
+        }
     }
 }
 

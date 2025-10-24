@@ -72,6 +72,37 @@ Result of agent execution including:
 - Execution metadata
 - Error information
 
+### Iteration Types (v2.112+)
+
+Support for ForEach and While loops in both Flow and Loop agents:
+
+#### ForEachOperation
+```typescript
+interface ForEachOperation {
+    collectionPath: string;        // Path to array in payload
+    itemVariable?: string;         // Variable name (default: "item")
+    indexVariable?: string;        // Index variable (default: "index")
+    maxIterations?: number;        // Limit (undefined=1000, 0=unlimited)
+    continueOnError?: boolean;     // Continue if iteration fails
+    action?: { name: string; params: Record<string, unknown> };
+    subAgent?: { name: string; message: string; templateParameters?: Record<string, unknown> };
+}
+```
+
+#### WhileOperation
+```typescript
+interface WhileOperation {
+    condition: string;             // Boolean expression
+    itemVariable?: string;         // Variable name (default: "attempt")
+    maxIterations?: number;        // Limit (undefined=100, 0=unlimited)
+    continueOnError?: boolean;     // Continue if iteration fails
+    action?: { name: string; params: Record<string, unknown> };
+    subAgent?: { name: string; message: string; templateParameters?: Record<string, unknown> };
+}
+```
+
+**See:** [@memberjunction/ai-agents Guide](../Agents/guide-to-iterative-operations-in-agents.md) for complete documentation and examples.
+
 ## Effort Level Control
 
 MemberJunction supports granular control over AI model reasoning effort through a 1-100 integer scale. Higher values request more thorough reasoning and analysis from AI models that support effort levels.

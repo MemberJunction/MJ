@@ -10,12 +10,14 @@
  * @since 2.49.0
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { LoopAgentResponse } from './loop-agent-response-type';
+import { LoopAgentResponse, ForEachOperation, WhileOperation } from './loop-agent-response-type';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { AIEngine } from '@memberjunction/aiengine';
 
 /**
  * Implementation of the Loop Agent Type pattern.
@@ -53,6 +55,8 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  */
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
+    private _evaluator = new SafeExpressionEvaluator();
+
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization
         // but can be extended in the future if needed
@@ -163,6 +167,24 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.step = 'Chat';
                         retVal.message = response.message;
                         retVal.terminate = true; // when chat request, this agent needs to return back to the caller/user
+                    }
+                    break;
+                case 'ForEach':
+                    if (!response.nextStep.forEach) {
+                        retVal.step = 'Retry';
+                        retVal.errorMessage = 'ForEach type specified but forEach details missing';
+                    }
+                    else {
+                        return await this.executeForEachOperation(response.nextStep.forEach, params);
+                    }
+                    break;
+                case 'While':
+                    if (!response.nextStep.while) {
+                        retVal.step = 'Retry';
+                        retVal.errorMessage = 'While type specified but while details missing';
+                    }
+                    else {
+                        return await this.executeWhileOperation(response.nextStep.while, params);
                     }
                     break;
                 default:
@@ -379,6 +401,364 @@ export class LoopAgentType extends BaseAgentType {
     ): Promise<AIPromptEntityExtended | null> {
         // Loop agents always use the default prompt from configuration
         return config.childPrompt || null;
+    }
+
+    /**
+     * Executes a ForEach operation requested by the LLM
+     */
+    private async executeForEachOperation<P>(
+        forEach: ForEachOperation,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        const payload = params.payload || {} as P;
+
+        // Get collection from payload
+        const collection = this.getValueFromPath(payload, forEach.collectionPath);
+        if (!Array.isArray(collection)) {
+            return this.createRetryStep(
+                `Collection path "${forEach.collectionPath}" did not resolve to an array`
+            );
+        }
+
+        // Determine limits
+        const maxIterations = forEach.maxIterations === undefined
+            ? 1000
+            : forEach.maxIterations === 0
+                ? Number.MAX_SAFE_INTEGER
+                : forEach.maxIterations;
+
+        const itemVar = forEach.itemVariable || 'item';
+        const indexVar = forEach.indexVariable || 'index';
+
+        // Execute action or sub-agent for each item
+        const results = [];
+        const errors = [];
+
+        for (let i = 0; i < Math.min(collection.length, maxIterations); i++) {
+            const item = collection[i];
+
+            try {
+                let result;
+
+                if (forEach.action) {
+                    // Resolve templates in params
+                    const resolvedParams = this.resolveTemplates(forEach.action.params, {
+                        [itemVar]: item,
+                        [indexVar]: i,
+                        payload: payload
+                    });
+
+                    // Execute action
+                    const actionEntity = ActionEngineServer.Instance.Actions.find(a => a.Name === forEach.action!.name);
+                    if (!actionEntity) {
+                        throw new Error(`Action not found: ${forEach.action.name}`);
+                    }
+
+                    const actionResult = await ActionEngineServer.Instance.RunAction({
+                        Action: actionEntity,
+                        ContextUser: params.contextUser,
+                        Filters: [],
+                        Params: Object.entries(resolvedParams).map(([name, value]) => ({
+                            Name: name,
+                            Value: value,
+                            Type: 'Input' as const
+                        }))
+                    });
+
+                    if (!actionResult.Success) {
+                        throw new Error(actionResult.Message || 'Action execution failed');
+                    }
+
+                    result = actionResult;
+
+                } else if (forEach.subAgent) {
+                    // Resolve templates in message and params
+                    const resolvedMessage = this.resolveTemplateString(forEach.subAgent.message, {
+                        [itemVar]: item,
+                        [indexVar]: i,
+                        payload: payload
+                    });
+
+                    const resolvedParams = this.resolveTemplates(
+                        forEach.subAgent.templateParameters || {},
+                        {
+                            [itemVar]: item,
+                            [indexVar]: i,
+                            payload: payload
+                        }
+                    );
+
+                    // Create sub-agent next step
+                    // Note: This would need to be handled by BaseAgent's sub-agent execution logic
+                    // For now, we'll just collect the request
+                    result = {
+                        subAgentName: forEach.subAgent.name,
+                        message: resolvedMessage,
+                        params: resolvedParams
+                    };
+                }
+
+                results.push(result);
+
+            } catch (error) {
+                const errorInfo = { index: i, item, error: error.message };
+                errors.push(errorInfo);
+
+                if (!forEach.continueOnError) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `ForEach failed at index ${i}: ${error.message}`,
+                        newPayload: {
+                            ...payload,
+                            forEachResults: results,
+                            forEachErrors: errors
+                        } as P
+                    });
+                }
+            }
+        }
+
+        // Return success with aggregated results
+        return this.createNextStep('Retry', {
+            message: `Completed ForEach: processed ${collection.length} items`,
+            newPayload: {
+                ...payload,
+                forEachResults: results,
+                forEachErrors: errors
+            } as P
+        });
+    }
+
+    /**
+     * Executes a While operation requested by the LLM
+     */
+    private async executeWhileOperation<P>(
+        whileOp: WhileOperation,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        const payload = params.payload || {} as P;
+
+        const maxIterations = whileOp.maxIterations === undefined
+            ? 100
+            : whileOp.maxIterations === 0
+                ? Number.MAX_SAFE_INTEGER
+                : whileOp.maxIterations;
+
+        const itemVar = whileOp.itemVariable || 'attempt';
+        const results = [];
+        const errors = [];
+        let iterationCount = 0;
+        let currentPayload = payload;
+
+        while (iterationCount < maxIterations) {
+            // Evaluate condition
+            const evalContext = { payload: currentPayload, results, errors };
+            const evalResult = this._evaluator.evaluate(whileOp.condition, evalContext);
+
+            if (!evalResult.success || !evalResult.value) {
+                // Condition false or evaluation error - exit
+                break;
+            }
+
+            // Create attempt context
+            const attemptContext = {
+                attemptNumber: iterationCount + 1,
+                totalAttempts: iterationCount
+            };
+
+            try {
+                let result;
+
+                if (whileOp.action) {
+                    const resolvedParams = this.resolveTemplates(whileOp.action.params, {
+                        [itemVar]: attemptContext,
+                        index: iterationCount,
+                        payload: currentPayload
+                    });
+
+                    // Execute action
+                    const actionEntity = ActionEngineServer.Instance.Actions.find(a => a.Name === whileOp.action!.name);
+                    if (!actionEntity) {
+                        throw new Error(`Action not found: ${whileOp.action.name}`);
+                    }
+
+                    const actionResult = await ActionEngineServer.Instance.RunAction({
+                        Action: actionEntity,
+                        ContextUser: params.contextUser,
+                        Filters: [],
+                        Params: Object.entries(resolvedParams).map(([name, value]) => ({
+                            Name: name,
+                            Value: value,
+                            Type: 'Input' as const
+                        }))
+                    });
+
+                    if (!actionResult.Success) {
+                        throw new Error(actionResult.Message || 'Action execution failed');
+                    }
+
+                    result = actionResult;
+
+                } else if (whileOp.subAgent) {
+                    const resolvedMessage = this.resolveTemplateString(whileOp.subAgent.message, {
+                        [itemVar]: attemptContext,
+                        index: iterationCount,
+                        payload: currentPayload
+                    });
+
+                    const resolvedParams = this.resolveTemplates(
+                        whileOp.subAgent.templateParameters || {},
+                        {
+                            [itemVar]: attemptContext,
+                            index: iterationCount,
+                            payload: currentPayload
+                        }
+                    );
+
+                    result = {
+                        subAgentName: whileOp.subAgent.name,
+                        message: resolvedMessage,
+                        params: resolvedParams
+                    };
+                }
+
+                results.push(result);
+
+                // Update payload with result for next condition check
+                currentPayload = { ...currentPayload, whileLastResult: result } as P;
+
+            } catch (error) {
+                const errorInfo = { iteration: iterationCount, error: error.message };
+                errors.push(errorInfo);
+
+                if (!whileOp.continueOnError) {
+                    return this.createNextStep('Failed', {
+                        errorMessage: `While loop failed at iteration ${iterationCount}: ${error.message}`,
+                        newPayload: {
+                            ...currentPayload,
+                            whileResults: results,
+                            whileErrors: errors
+                        } as P
+                    });
+                }
+            }
+
+            iterationCount++;
+        }
+
+        return this.createNextStep('Retry', {
+            message: `Completed While loop after ${iterationCount} iterations`,
+            newPayload: {
+                ...currentPayload,
+                whileResults: results,
+                whileErrors: errors,
+                whileIterationCount: iterationCount
+            } as P
+        });
+    }
+
+    /**
+     * Resolves template variables in an object recursively
+     */
+    private resolveTemplates(
+        obj: Record<string, unknown>,
+        context: Record<string, any>
+    ): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string') {
+                result[key] = this.resolveValueFromContext(value, context);
+            } else if (Array.isArray(value)) {
+                result[key] = value.map(v =>
+                    typeof v === 'string' ? this.resolveValueFromContext(v, context) : v
+                );
+            } else if (typeof value === 'object' && value !== null) {
+                result[key] = this.resolveTemplates(value as Record<string, unknown>, context);
+            } else {
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Resolves template string with variable interpolation
+     */
+    private resolveTemplateString(template: string, context: Record<string, any>): string {
+        let result = template;
+
+        // Simple variable replacement for now
+        for (const [varName, varValue] of Object.entries(context)) {
+            const placeholder = `{{${varName}}}`;
+            if (result.includes(placeholder)) {
+                result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+                    typeof varValue === 'string' ? varValue : JSON.stringify(varValue));
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Resolves a value from context using variable references
+     */
+    private resolveValueFromContext(value: string, context: Record<string, any>): any {
+        // Check for direct context variable references
+        for (const [varName, varValue] of Object.entries(context)) {
+            if (value === varName) {
+                return varValue;
+            }
+
+            if (value.startsWith(`${varName}.`)) {
+                const path = value.substring(varName.length + 1);
+                return this.getValueFromPath(varValue, path);
+            }
+        }
+
+        // Static value
+        return value;
+    }
+
+    /**
+     * Helper to get value from nested object path
+     */
+    private getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+
+        for (const part of parts) {
+            if (!part) continue;
+
+            // Check for array indexing
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
+            } else {
+                // Regular property access
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
+            }
+        }
+
+        return current;
     }
 }
 
