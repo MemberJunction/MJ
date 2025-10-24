@@ -312,7 +312,9 @@ export class ConversationAgentService {
     reasoning: string,
     conversationDetailId: string,
     payload?: any,
-    onProgress?: AgentExecutionProgressCallback
+    onProgress?: AgentExecutionProgressCallback,
+    sourceArtifactId?: string,
+    sourceArtifactVersionId?: string
   ): Promise<ExecuteAgentResult | null> {
     if (!this._aiClient) {
       const errorMsg = 'AI Client not initialized, cannot invoke sub-agent';
@@ -355,8 +357,8 @@ export class ConversationAgentService {
         onProgress: onProgress
       };
 
-      // Run the sub-agent
-      const result = await this._aiClient.RunAIAgent(params);
+      // Run the sub-agent with optional source artifact info for versioning (GraphQL layer only)
+      const result = await this._aiClient.RunAIAgent(params, sourceArtifactId, sourceArtifactVersionId);
 
       return result;
     } catch (error) {

@@ -37,6 +37,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public isProcessing: boolean = false;
   private intentCheckMessage: ConversationDetailEntity | null = null; // Temporary message shown during intent checking
   public isLoadingConversation: boolean = true; // True while loading initial conversation messages
+
+  // Store raw query results and derived data
+  private rawConversationData: ConversationDetailComplete[] = [];
+  public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   public memberCount: number = 1;
   public artifactCount: number = 0;
   public isShared: boolean = false;
@@ -46,6 +50,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showProjectSelector: boolean = false;
   public showArtifactPanel: boolean = false;
   public showArtifactsModal: boolean = false;
+  public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
   public artifactPaneWidth: number = 40; // Default 40% width
@@ -63,9 +68,19 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   // Supports multiple artifacts per conversation detail (0-N relationship)
   public artifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
 
+  // System artifacts mapping: ConversationDetailID -> Array of LazyArtifactInfo (Visibility='System Only')
+  // Kept separate so we can toggle their display without reloading
+  private systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+
+  // Cached combined artifacts map - updated when toggle changes
+  private _combinedArtifactsMap: Map<string, LazyArtifactInfo[]> | null = null;
+
   // Agent run mapping: ConversationDetailID -> AIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
   public agentRunsByDetailId = new Map<string, AIAgentRunEntityExtended>();
+
+  // Timer for smooth agent run UI updates (updates every second while agent runs)
+  private agentRunUpdateTimer: any = null;
 
   // Loading state for peripheral data
   public isLoadingPeripheralData: boolean = false;
@@ -148,6 +163,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Stop polling when component is destroyed
     this.agentStateService.stopPolling();
 
+    // Stop agent run update timer
+    this.stopAgentRunUpdateTimer();
+
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
     window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
@@ -223,6 +241,10 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
           this.cdr.detectChanges();
         });
       }
+
+      // After loading messages, check for in-progress runs and ensure we're receiving updates
+      await this.detectAndReconnectToInProgressRuns(conversationId);
+
     } catch (error) {
       console.error('Error loading messages:', error);
       this.messages = [];
@@ -236,6 +258,12 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   private async buildMessagesFromCache(conversationData: ConversationDetailComplete[]): Promise<void> {
     const md = new Metadata();
     const messages: ConversationDetailEntity[] = [];
+
+    // Store raw conversation data for access to query-specific fields
+    this.rawConversationData = conversationData;
+
+    // Build user avatar map for fast lookups
+    this.buildUserAvatarMap(conversationData);
 
     for (const row of conversationData) {
       if (!row.ID) continue;
@@ -253,6 +281,33 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.messages = messages;
     this.scrollToBottom = true;
     this.cdr.detectChanges(); // Show messages immediately
+  }
+
+  /**
+   * Builds a map of UserID -> Avatar data for fast lookups
+   * Extracts unique users from conversation data and their avatar settings
+   */
+  private buildUserAvatarMap(conversationData: ConversationDetailComplete[]): void {
+    this.userAvatarMap.clear();
+
+    // Get unique users and their avatar data
+    const userMap = new Map<string, {imageUrl: string | null; iconClass: string | null}>();
+
+    for (const row of conversationData) {
+      // Only process user messages that have a UserID
+      if (row.Role?.toLowerCase() === 'user' && row.UserID) {
+        // Only add if we haven't seen this user yet
+        if (!userMap.has(row.UserID)) {
+          userMap.set(row.UserID, {
+            imageUrl: row.UserImageURL || null,
+            iconClass: row.UserImageIconClass || null
+          });
+        }
+      }
+    }
+
+    this.userAvatarMap = userMap;
+    console.log(`👤 Built user avatar map with ${this.userAvatarMap.size} unique users`);
   }
 
   /**
@@ -326,27 +381,45 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         // Build artifacts map - no need to load full entities, just create LazyArtifactInfo
         if (parsed.artifacts.length > 0) {
           const artifactList: LazyArtifactInfo[] = [];
+          const systemArtifactList: LazyArtifactInfo[] = [];
 
           for (const artifactData of parsed.artifacts) {
             // Create LazyArtifactInfo with display data from query
             // Full entities will be loaded on-demand when artifact is clicked
             const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-            artifactList.push(lazyInfo);
+
+            // Separate system-only artifacts from user-visible artifacts
+            if (artifactData.Visibility === 'System Only') {
+              systemArtifactList.push(lazyInfo);
+            } else {
+              artifactList.push(lazyInfo);
+            }
           }
 
-          this.artifactsByDetailId.set(row.ID, artifactList);
+          // Add to appropriate maps
+          if (artifactList.length > 0) {
+            this.artifactsByDetailId.set(row.ID, artifactList);
+          }
+          if (systemArtifactList.length > 0) {
+            this.systemArtifactsByDetailId.set(row.ID, systemArtifactList);
+          }
         }
       }
 
       // Create new Map references to trigger Angular change detection
       this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
       this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+      this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
+
+      // Clear combined cache since we loaded new artifacts
+      this._combinedArtifactsMap = null;
 
       // Update artifact count for header display (unique artifacts, not versions)
       this.artifactCount = this.calculateUniqueArtifactCount();
 
       // Debug: Log summary
-      console.log(`📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} artifact mappings (${this.artifactCount} unique artifacts)`);
+      const systemArtifactCount = this.systemArtifactsByDetailId.size;
+      console.log(`📊 Processed ${this.agentRunsByDetailId.size} agent runs, ${this.artifactsByDetailId.size} user artifact mappings, ${systemArtifactCount} system artifact mappings (${this.artifactCount} unique user artifacts)`);
 
       // CRITICAL: Trigger message re-render now that agent runs and artifacts are loaded
       // This updates all message components with the newly loaded agent run data
@@ -386,10 +459,38 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     } else {
       // Add new message to the list
       this.messages = [...this.messages, message];
+
+      // Ensure current user is in the avatar map for new messages
+      this.ensureCurrentUserInAvatarMap();
     }
 
     // Scroll to bottom when new message is sent
     this.scrollToBottom = true;
+  }
+
+  /**
+   * Ensures the current user is in the avatar map
+   * Called when new messages are created to ensure avatar data is available
+   */
+  private async ensureCurrentUserInAvatarMap(): Promise<void> {
+    const userId = this.currentUser.ID;
+
+    // If user already in map, skip
+    if (this.userAvatarMap.has(userId)) {
+      return;
+    }
+
+    // Load the current user's avatar data
+    const md = new Metadata();
+    const userEntity = await md.GetEntityObject<any>('Users');
+    await userEntity.Load(userId);
+
+    this.userAvatarMap.set(userId, {
+      imageUrl: userEntity.UserImageURL || null,
+      iconClass: userEntity.UserImageIconClass || null
+    });
+
+    console.log(`👤 Added current user to avatar map`);
   }
 
   /**
@@ -398,6 +499,104 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
    */
   async onAgentRunDetected(event: {conversationDetailId: string; agentRunId: string}): Promise<void> {
     await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId);
+  }
+
+  /**
+   * Handle message completion event from message-input
+   * Refreshes the agent run data in-place to get final status and timestamps
+   */
+  async onMessageComplete(event: {conversationDetailId: string; agentRunId?: string}): Promise<void> {
+    // Get existing agent run from map
+    const existingAgentRun = this.agentRunsByDetailId.get(event.conversationDetailId);
+
+    if (existingAgentRun?.ID) {
+      // Refresh the SAME object by calling Load() - preserves all references
+      await existingAgentRun.Load(existingAgentRun.ID);
+
+      // Trigger re-render to show updated status
+      this.messages = [...this.messages];
+      this.cdr.detectChanges();
+
+      // Stop timer since agent completed
+      this.stopAgentRunUpdateTimer();
+    }
+  }
+
+  /**
+   * Handle agent run update event from progress updates
+   * This is called on EVERY progress update with the full, live agent run object
+   * Provides real-time updates of status, timestamps, tokens, cost during execution
+   */
+  async onAgentRunUpdate(event: {conversationDetailId: string; agentRun?: AIAgentRunEntityExtended, agentRunId?: string}): Promise<void> {
+    let run: AIAgentRunEntityExtended;
+    if (event.agentRun) {
+      // Directly update map with fresh data from progress (no database query needed)
+      // Don't create new Map - message-list component needs to keep the same reference
+      this.agentRunsByDetailId.set(event.conversationDetailId, event.agentRun);
+      run = event.agentRun;
+    }
+    else {
+      // no agent run, should have agentRunId
+      run = await this.addAgentRunToMap(event.conversationDetailId, event.agentRunId!);
+    }
+
+    // Force message list to re-render with updated agent run
+    // This ensures message components receive the fresh agent run data
+    this.messages = [...this.messages];
+    this.cdr.detectChanges();
+
+    // Start 1-second update timer for smooth UI updates (if not already running)
+    this.startAgentRunUpdateTimer();
+
+    // If agent completed or failed, stop the timer
+    const status = run.Status?.toLowerCase();
+    if (status === 'complete' || status === 'completed' || status === 'failed' || status === 'error') {
+      this.stopAgentRunUpdateTimer();
+    }
+  }
+
+  /**
+   * Start 1-second timer for smooth agent run UI updates
+   * Updates the message list every second to keep elapsed times current
+   */
+  private startAgentRunUpdateTimer(): void {
+    // Don't start if already running
+    if (this.agentRunUpdateTimer !== null) {
+      return;
+    }
+
+    console.log('⏱️ Starting agent run update timer (1-second interval)');
+    this.agentRunUpdateTimer = setInterval(() => {
+      // Check if we have any active agent runs
+      let hasActiveRuns = false;
+      for (const agentRun of this.agentRunsByDetailId.values()) {
+        const status = agentRun.Status?.toLowerCase();
+        if (status === 'in-progress' || status === 'running') {
+          hasActiveRuns = true;
+          break;
+        }
+      }
+
+      if (hasActiveRuns) {
+        // Force message list to re-render so timers update
+        this.messages = [...this.messages];
+        this.cdr.detectChanges();
+      } else {
+        // No active runs, stop the timer
+        this.stopAgentRunUpdateTimer();
+      }
+    }, 1000);
+  }
+
+  /**
+   * Stop the agent run update timer
+   */
+  private stopAgentRunUpdateTimer(): void {
+    if (this.agentRunUpdateTimer !== null) {
+      console.log('⏹️ Stopping agent run update timer');
+      clearInterval(this.agentRunUpdateTimer);
+      this.agentRunUpdateTimer = null;
+    }
   }
 
   async onAgentResponse(event: {message: ConversationDetailEntity, agentResult: any}): Promise<void> {
@@ -413,13 +612,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Scroll to bottom when agent responds
     this.scrollToBottom = true;
 
-    // Add agent run to the map if present (fallback if not already loaded from progress)
+    // CRITICAL FIX: Always refresh the agent run data when agent completes
+    // This ensures we get the final status and timestamps, replacing any stale data from when agent started
     // agentResult is ExecuteAgentResult which contains agentRun property
     if (event.agentResult?.agentRun?.ID) {
-      // Only load if not already in map (progress update may have already loaded it)
-      if (!this.agentRunsByDetailId.has(event.message.ID)) {
-        await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID);
-      }
+      await this.addAgentRunToMap(event.message.ID, event.agentResult.agentRun.ID, true);  // forceRefresh = true
     }
 
     // Reload artifact mapping for this message to pick up newly created artifacts
@@ -451,22 +648,31 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   /**
    * Add or update an agent run in the map
    * Called when a new agent run completes to keep the map in sync
+   * @param forceRefresh If true, always reload from database even if already in map (used when status changes)
    */
-  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string): Promise<void> {
+  private async addAgentRunToMap(conversationDetailId: string, agentRunId: string, forceRefresh: boolean = false): Promise<AIAgentRunEntityExtended> {
     try {
-      if (!this.agentRunsByDetailId.has(conversationDetailId)) {
+      // Always refresh if forced, or if not in map yet
+      if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
         const md = new Metadata();
         const agentRun = await md.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
+
+          // Force message list to re-render with updated agent run
+          // Keep same Map reference so message-list component can access updates
+          this.messages = [...this.messages];
+          this.cdr.detectChanges();
+
         }
-      }
+        return agentRun;
+      } 
       else {
-        // nothing to do, temp console log to catch how many of these where we were wasting time
-        console.log(`⏭️ Agent run for detail ${conversationDetailId} already in map, skipping load`);
+        return this.agentRunsByDetailId.get(conversationDetailId)!;
       }
     } catch (error) {
       console.error('Failed to load agent run for map:', error);
+      throw error;
     }
   }
 
@@ -556,6 +762,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   /**
    * Calculate count of unique artifacts (not versions)
    * Works with LazyArtifactInfo - uses artifactId from display data
+   * Respects showSystemArtifacts toggle to update count dynamically
+   */
+  public get artifactCountDisplay(): number {
+    const uniqueArtifactIds = new Set<string>();
+    for (const artifactList of this.effectiveArtifactsMap.values()) {
+      for (const info of artifactList) {
+        uniqueArtifactIds.add(info.artifactId);
+      }
+    }
+    return uniqueArtifactIds.size;
+  }
+
+  /**
+   * Calculate count of unique artifacts (not versions) - user-visible only
+   * Used for initial artifact count (doesn't change with toggle)
    */
   private calculateUniqueArtifactCount(): number {
     const uniqueArtifactIds = new Set<string>();
@@ -568,26 +789,87 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   /**
+   * Get the effective artifacts map based on showSystemArtifacts toggle
+   * Combines user-visible and system artifacts when toggle is on
+   * Uses caching to prevent infinite change detection loops
+   */
+  public get effectiveArtifactsMap(): Map<string, LazyArtifactInfo[]> {
+    if (!this.showSystemArtifacts) {
+      // Only user-visible artifacts - no need to cache
+      return this.artifactsByDetailId;
+    }
+
+    // Return cached combined map if available
+    if (this._combinedArtifactsMap) {
+      return this._combinedArtifactsMap;
+    }
+
+    // Combine both maps when showing system artifacts
+    const combined = new Map<string, LazyArtifactInfo[]>();
+
+    // Add all user-visible artifacts
+    for (const [key, value] of this.artifactsByDetailId) {
+      combined.set(key, [...value]);
+    }
+
+    // Add system artifacts
+    for (const [key, value] of this.systemArtifactsByDetailId) {
+      if (combined.has(key)) {
+        // Merge with existing artifacts for this detail
+        combined.get(key)!.push(...value);
+      } else {
+        combined.set(key, [...value]);
+      }
+    }
+
+    // Cache the result
+    this._combinedArtifactsMap = combined;
+    return combined;
+  }
+
+  /**
+   * Toggles system artifacts visibility
+   * Clears the cache so the map will be rebuilt on next access
+   */
+  public toggleSystemArtifacts(): void {
+    this.showSystemArtifacts = !this.showSystemArtifacts;
+    this._combinedArtifactsMap = null; // Clear cache
+    this.cdr.detectChanges(); // Force update
+  }
+
+  /**
+   * Check if there are any system artifacts in this conversation
+   * Used to conditionally show/hide the "Show System" toggle button
+   */
+  public get hasSystemArtifacts(): boolean {
+    return this.systemArtifactsByDetailId.size > 0;
+  }
+
+  /**
    * Get unique artifacts grouped by artifact ID (not by conversation detail)
    * Returns the latest version info for each unique artifact with all versions
    * Works with LazyArtifactInfo - uses display data without loading full entities
+   * Respects showSystemArtifacts toggle
    */
   getArtifactsArray(): Array<{
     artifactId: string;
     versionId: string;
     name: string;
     versionCount: number;
+    visibility: string;
     versions: Array<{versionId: string; versionNumber: number}>
   }> {
     const artifactMap = new Map<string, {
       artifactId: string;
       versionId: string;
       name: string;
+      visibility: string;
       versions: Array<{versionId: string; versionNumber: number}>
     }>();
 
     // Group by artifactId, collecting all version details
-    for (const artifactList of this.artifactsByDetailId.values()) {
+    // Use effectiveArtifactsMap to respect showSystemArtifacts toggle
+    for (const artifactList of this.effectiveArtifactsMap.values()) {
       for (const info of artifactList) {
         const artifactId = info.artifactId;
         const versionId = info.artifactVersionId;
@@ -599,6 +881,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
             artifactId: artifactId,
             versionId: versionId, // Latest version ID
             name: name,
+            visibility: info.visibility,
             versions: [{versionId: versionId, versionNumber: versionNumber}]
           });
         } else {
@@ -618,6 +901,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       artifactId: item.artifactId,
       versionId: item.versionId,
       name: item.name,
+      visibility: item.visibility,
       versionCount: item.versions.length,
       versions: item.versions.sort((a, b) => b.versionNumber - a.versionNumber)
     }));
@@ -775,16 +1059,26 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Reload artifacts to get full entities
     await this.reloadArtifactsForMessage(data.conversationDetailId);
 
-    // if we don't already have another artifact showing, let's show the newly created one
-    if (!this.showArtifactPanel) {
-      this.selectedArtifactId = data.artifactId;
-      this.showArtifactPanel = true;
-    }
+    const artifactList = this.artifactsByDetailId.get(data.conversationDetailId);
 
-    // If artifact viewer is already open for this artifact, trigger refresh to show new version
-    if (this.showArtifactPanel && this.selectedArtifactId === data.artifactId) {
-      // Emit event to refresh artifact viewer with new version
-      this.artifactViewerRefresh$.next({artifactId: data.artifactId, versionNumber: data.versionNumber});
+    // Auto-open artifact panel if no artifact currently shown
+    if (!this.showArtifactPanel) {
+      if (artifactList && artifactList.length > 0) {
+        // Show the LAST (most recent) artifact - use actual ID from map, not empty event data
+        this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
+        this.showArtifactPanel = true;
+      }
+    } else if (this.selectedArtifactId && artifactList && artifactList.length > 0) {
+      // Panel is already open - check if new artifact is a new version of currently displayed artifact
+      const currentArtifact = artifactList.find(a => a.artifactId === this.selectedArtifactId);
+      if (currentArtifact) {
+        // New version of the same artifact - refresh to show latest version
+        const latestVersion = artifactList[artifactList.length - 1];
+        this.artifactViewerRefresh$.next({
+          artifactId: latestVersion.artifactId,
+          versionNumber: latestVersion.versionNumber
+        });
+      }
     }
 
     // Force change detection to update the UI immediately
@@ -966,6 +1260,43 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
     }
+  }
+
+  /**
+   * Detect in-progress agent runs/tasks and reconnect to their streaming updates
+   * Called after loading a conversation to resume progress tracking
+   */
+  private async detectAndReconnectToInProgressRuns(conversationId: string): Promise<void> {
+    // Check for in-progress messages
+    const inProgressMessages = this.messages.filter(
+      m => m.Status === 'In-Progress' && m.Role === 'AI'
+    );
+
+    if (inProgressMessages.length === 0) {
+      return;
+    }
+
+    console.log(`🔄 Found ${inProgressMessages.length} in-progress messages, reconnecting...`);
+
+    // For each in-progress message, check if there's an active agent run
+    for (const message of inProgressMessages) {
+      if (message.AgentID) {
+        // Check agent state service for this run
+        const agentRun = this.agentRunsByDetailId.get(message.ID);
+
+        if (agentRun && agentRun.Status === 'Running') {
+          console.log(`🔌 Reconnecting to agent run ${agentRun.ID} for message ${message.ID}`);
+
+          // Agent state service polling will automatically pick this up
+          // The WebSocket subscription is already active via PushStatusUpdates()
+          // No additional action needed - just log for visibility
+        }
+      }
+    }
+
+    // Agent state service is already polling via startPolling() in onConversationChanged()
+    // WebSocket subscription is already active via message-input component's subscribeToPushStatus()
+    // Both will automatically receive updates for these in-progress runs
   }
 
   /**

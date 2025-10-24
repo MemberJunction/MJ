@@ -1194,10 +1194,16 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
-    Status: z.string().nullable().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
         * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`),
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
@@ -1359,6 +1365,17 @@ if this limit is exceeded.`),
     *   * Any
     *   * Top-Level
         * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`),
+    ArtifactCreationMode: z.union([z.literal('Always'), z.literal('Never'), z.literal('System Only')]).describe(`
+        * * Field Name: ArtifactCreationMode
+        * * Display Name: Artifact Creation Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Never
+    *   * Always
+    *   * System Only
+        * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`),
     FunctionalRequirement: z.string().nullable().describe(`
         * * Field Name: FunctionalRequirement
         * * Display Name: Functional Requirement
@@ -10464,6 +10481,16 @@ export const ArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Visibility: z.union([z.literal('Always'), z.literal('System Only')]).describe(`
+        * * Field Name: Visibility
+        * * Display Name: Visibility
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System Only
+    *   * Always
+        * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -15612,6 +15639,16 @@ export const UserSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserImageURL: z.string().nullable().describe(`
+        * * Field Name: UserImageURL
+        * * Display Name: User Image URL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.`),
+    UserImageIconClass: z.string().nullable().describe(`
+        * * Field Name: UserImageIconClass
+        * * Display Name: User Image Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`),
     FirstLast: z.string().nullable().describe(`
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -19309,12 +19346,18 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Field Name: Status
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
     * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.
     */
-    get Status(): string | null {
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
         return this.Get('Status');
     }
-    set Status(value: string | null) {
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
         this.Set('Status', value);
     }
 
@@ -19668,6 +19711,25 @@ if this limit is exceeded.
     }
     set InvocationMode(value: 'Any' | 'Sub-Agent' | 'Top-Level') {
         this.Set('InvocationMode', value);
+    }
+
+    /**
+    * * Field Name: ArtifactCreationMode
+    * * Display Name: Artifact Creation Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Never
+    *   * Always
+    *   * System Only
+    * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.
+    */
+    get ArtifactCreationMode(): 'Always' | 'Never' | 'System Only' {
+        return this.Get('ArtifactCreationMode');
+    }
+    set ArtifactCreationMode(value: 'Always' | 'Never' | 'System Only') {
+        this.Set('ArtifactCreationMode', value);
     }
 
     /**
@@ -43411,6 +43473,24 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
     }
 
     /**
+    * * Field Name: Visibility
+    * * Display Name: Visibility
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System Only
+    *   * Always
+    * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).
+    */
+    get Visibility(): 'Always' | 'System Only' {
+        return this.Get('Visibility');
+    }
+    set Visibility(value: 'Always' | 'System Only') {
+        this.Set('Visibility', value);
+    }
+
+    /**
     * * Field Name: Environment
     * * Display Name: Environment
     * * SQL Data Type: nvarchar(255)
@@ -57003,6 +57083,32 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: UserImageURL
+    * * Display Name: User Image URL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.
+    */
+    get UserImageURL(): string | null {
+        return this.Get('UserImageURL');
+    }
+    set UserImageURL(value: string | null) {
+        this.Set('UserImageURL', value);
+    }
+
+    /**
+    * * Field Name: UserImageIconClass
+    * * Display Name: User Image Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".
+    */
+    get UserImageIconClass(): string | null {
+        return this.Get('UserImageIconClass');
+    }
+    set UserImageIconClass(value: string | null) {
+        this.Set('UserImageIconClass', value);
     }
 
     /**

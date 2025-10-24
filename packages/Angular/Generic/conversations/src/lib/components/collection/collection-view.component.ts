@@ -144,9 +144,10 @@ export class CollectionViewComponent implements OnInit, OnChanges {
       const rv = new RunView();
 
       // Load artifacts through the CollectionArtifacts join table
+      // Filter out System Only artifacts
       const result = await rv.RunView<ArtifactEntity>({
         EntityName: 'MJ: Artifacts',
-        ExtraFilter: `ID IN (SELECT ArtifactID FROM [__mj].[MJ: Collection Artifacts] WHERE CollectionID='${this.collection.ID}')`,
+        ExtraFilter: `ID IN (SELECT ArtifactID FROM [__mj].[MJ: Collection Artifacts] WHERE CollectionID='${this.collection.ID}') AND (Visibility IS NULL OR Visibility='Always')`,
         OrderBy: this.getOrderBy(),
         ResultType: 'entity_object'
       }, this.currentUser);

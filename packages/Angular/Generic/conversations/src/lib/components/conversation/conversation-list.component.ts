@@ -48,7 +48,7 @@ import { ToastService } from '../../services/toast.service';
                   </div>
                   <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
                     <div class="conversation-name">{{ conversation.Name }}</div>
-                    <div class="conversation-preview">{{ conversation.Description || 'No description' }}</div>
+                    <div class="conversation-preview">{{ conversation.Description }}</div>
                   </div>
                   <div class="conversation-actions">
                     <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
@@ -102,7 +102,7 @@ import { ToastService } from '../../services/toast.service';
                 </div>
                 <div class="conversation-info" [title]="conversation.Name + (conversation.Description ? '\n' + conversation.Description : '')">
                   <div class="conversation-name">{{ conversation.Name }}</div>
-                  <div class="conversation-preview">{{ conversation.Description || 'No description' }}</div>
+                  <div class="conversation-preview">{{ conversation.Description }}</div>
                 </div>
                 <div class="conversation-actions">
                   <button class="menu-btn" (click)="toggleMenu(conversation.ID, $event)" title="More options">
@@ -221,6 +221,7 @@ import { ToastService } from '../../services/toast.service';
       position: relative;
       color: rgba(255,255,255,0.7);
       font-size: 14px;
+      min-height: 45px;
     }
     .conversation-item:hover { background: rgba(255,255,255,0.08); color: white; }
     .conversation-item:hover .conversation-actions { opacity: 1; }
@@ -467,27 +468,36 @@ export class ConversationListComponent implements OnInit {
 
   async renameConversation(conversation: ConversationEntity): Promise<void> {
     try {
-      const newName = await this.dialogService.input({
-        title: 'Rename Conversation',
-        message: 'Enter a new name for this conversation',
+      const result = await this.dialogService.input({
+        title: 'Edit Conversation',
+        message: 'Update the name and description for this conversation',
         inputLabel: 'Conversation Name',
         inputValue: conversation.Name || '',
         placeholder: 'My Conversation',
         required: true,
-        okText: 'Rename',
+        secondInputLabel: 'Description',
+        secondInputValue: conversation.Description || '',
+        secondInputPlaceholder: 'Optional description',
+        secondInputRequired: false,
+        okText: 'Save',
         cancelText: 'Cancel'
       });
 
-      if (newName && newName !== conversation.Name) {
-        await this.conversationState.saveConversation(
-          conversation.ID,
-          { Name: newName },
-          this.currentUser
-        );
+      if (result) {
+        const newName = typeof result === 'string' ? result : result.value;
+        const newDescription = typeof result === 'string' ? conversation.Description : result.secondValue;
+
+        if (newName !== conversation.Name || newDescription !== conversation.Description) {
+          await this.conversationState.saveConversation(
+            conversation.ID,
+            { Name: newName, Description: newDescription || '' },
+            this.currentUser
+          );
+        }
       }
     } catch (error) {
       console.error('Error renaming conversation:', error);
-      await this.dialogService.alert('Error', 'Failed to rename conversation. Please try again.');
+      await this.dialogService.alert('Error', 'Failed to update conversation. Please try again.');
     }
   }
 

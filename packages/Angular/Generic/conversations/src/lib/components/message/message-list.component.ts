@@ -36,6 +36,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
+  @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
@@ -173,6 +174,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.message = message;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
+          instance.userAvatarMap = this.userAvatarMap;
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
@@ -220,6 +222,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.currentUser = this.currentUser;
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
+          instance.userAvatarMap = this.userAvatarMap;
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
@@ -244,15 +247,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           }
 
           // Pass agent run from map (loaded once per conversation)
-          const agentRun = this.agentRunMap.get(message.ID) || null;
-          console.log(`✨ Creating new message ${message.ID} component with agentRun:`, {
-            messageId: message.ID,
-            agentRunExists: !!agentRun,
-            agentRunId: agentRun?.ID,
-            mapSize: this.agentRunMap.size,
-            mapHasKey: this.agentRunMap.has(message.ID)
-          });
-          instance.agentRun = agentRun;
+          instance.agentRun = this.agentRunMap.get(message.ID) || null;
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));

@@ -61,7 +61,7 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
-            "Priority": 1
+            "Priority": 3
           },
           "primaryKey": {
             "ID": "F558B38B-2880-4D64-B207-87E0F1C0423F"

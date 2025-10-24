@@ -6,6 +6,7 @@
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ExecutionOrder": 0,
+      "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
       "IconClass": "fa-brands fa-superpowers"
     },
@@ -272,8 +273,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2025-10-15T16:30:20.212Z",
-      "checksum": "145e8d17f46c3da20b6701e3ca4a238617c4db513d884cc6ce925f7767c9cb8d"
+      "lastModified": "2025-10-23T18:08:38.558Z",
+      "checksum": "9dca48befacc6bea53664d4a45334941b496ade756d529025f81017dfd6ab578"
     }
   }
 ]

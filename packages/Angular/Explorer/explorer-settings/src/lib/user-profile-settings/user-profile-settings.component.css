@@ -1,0 +1,590 @@
+.user-profile-settings {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.user-profile-settings .profile-header {
+  margin-bottom: 1.5rem;
+}
+
+.user-profile-settings .profile-header h3 {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.user-profile-settings .profile-header .description {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+/* Alert Messages */
+.user-profile-settings .alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.user-profile-settings .alert i {
+  flex-shrink: 0;
+}
+
+.user-profile-settings .alert span {
+  flex: 1;
+}
+
+.user-profile-settings .alert .close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: inherit;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.user-profile-settings .alert .close-btn:hover {
+  opacity: 1;
+}
+
+.user-profile-settings .alert.alert-error {
+  background-color: #fee;
+  border: 1px solid #fcc;
+  color: #c33;
+}
+
+.user-profile-settings .alert.alert-success {
+  background-color: #efe;
+  border: 1px solid #cfc;
+  color: #3c3;
+}
+
+/* Avatar Preview */
+.user-profile-settings .avatar-preview-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.user-profile-settings .avatar-preview-section .preview-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.user-profile-settings .avatar-preview-section .preview-container {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: white;
+  border: 3px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-profile-settings .avatar-preview-section .preview-container .preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-profile-settings .avatar-preview-section .preview-container .preview-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.user-profile-settings .avatar-preview-section .preview-container .preview-icon-wrapper .preview-icon {
+  font-size: 3.5rem;
+  color: #666;
+}
+
+.user-profile-settings .avatar-preview-section .preview-container .preview-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #999;
+}
+
+.user-profile-settings .avatar-preview-section .preview-container .preview-placeholder i {
+  font-size: 2.5rem;
+}
+
+.user-profile-settings .avatar-preview-section .preview-container .preview-placeholder span {
+  font-size: 0.75rem;
+}
+
+/* Tab Navigation */
+.user-profile-settings .tab-navigation {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 2px solid #e0e0e0;
+}
+
+.user-profile-settings .tab-navigation .tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.user-profile-settings .tab-navigation .tab-btn i {
+  font-size: 1rem;
+}
+
+.user-profile-settings .tab-navigation .tab-btn:hover {
+  color: #333;
+  background: #f8f9fa;
+}
+
+.user-profile-settings .tab-navigation .tab-btn.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+  background: #f8f9fa;
+}
+
+/* Tab Content */
+.user-profile-settings .tab-content {
+  min-height: 300px;
+  padding: 1.5rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+/* Upload Section */
+.user-profile-settings .upload-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.user-profile-settings .upload-section .upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.user-profile-settings .upload-section .upload-btn:hover {
+  background: #0056b3;
+}
+
+.user-profile-settings .upload-section .upload-btn i {
+  font-size: 1rem;
+}
+
+.user-profile-settings .upload-section .upload-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.user-profile-settings .upload-section .upload-info i {
+  color: #007bff;
+}
+
+.user-profile-settings .upload-section .selected-file {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  width: 100%;
+  max-width: 400px;
+}
+
+.user-profile-settings .upload-section .selected-file i {
+  color: #007bff;
+  font-size: 1.2rem;
+}
+
+.user-profile-settings .upload-section .selected-file span {
+  flex: 1;
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-profile-settings .upload-section .selected-file .remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  color: #999;
+  transition: color 0.2s;
+}
+
+.user-profile-settings .upload-section .selected-file .remove-btn:hover {
+  color: #c33;
+}
+
+.user-profile-settings .upload-section .selected-file .remove-btn i {
+  font-size: 1rem;
+  color: inherit;
+}
+
+/* URL Section */
+.user-profile-settings .url-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.user-profile-settings .url-section label {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9rem;
+}
+
+.user-profile-settings .url-section .url-input {
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  transition: border-color 0.2s;
+}
+
+.user-profile-settings .url-section .url-input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.user-profile-settings .url-section .url-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #666;
+  font-size: 0.85rem;
+}
+
+.user-profile-settings .url-section .url-info i {
+  color: #007bff;
+}
+
+/* Icon Section */
+.user-profile-settings .icon-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.user-profile-settings .icon-section .icon-category .category-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 0.75rem 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #ddd;
+}
+
+.user-profile-settings .icon-section .icon-category .icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+  gap: 0.5rem;
+}
+
+.user-profile-settings .icon-section .icon-category .icon-grid .icon-option {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+  background: white;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.user-profile-settings .icon-section .icon-category .icon-grid .icon-option i {
+  font-size: 1.5rem;
+  color: #666;
+}
+
+.user-profile-settings .icon-section .icon-category .icon-grid .icon-option:hover {
+  border-color: #007bff;
+  background: #f0f8ff;
+}
+
+.user-profile-settings .icon-section .icon-category .icon-grid .icon-option:hover i {
+  color: #007bff;
+}
+
+.user-profile-settings .icon-section .icon-category .icon-grid .icon-option.selected {
+  border-color: #007bff;
+  background: #007bff;
+}
+
+.user-profile-settings .icon-section .icon-category .icon-grid .icon-option.selected i {
+  color: white;
+}
+
+/* Custom scrollbar */
+.user-profile-settings .icon-section::-webkit-scrollbar {
+  width: 6px;
+}
+
+.user-profile-settings .icon-section::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.user-profile-settings .icon-section::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.user-profile-settings .icon-section::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+/* Provider Section */
+.user-profile-settings .provider-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem 1rem;
+}
+
+.user-profile-settings .provider-section .provider-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.user-profile-settings .provider-section .provider-info i {
+  color: #007bff;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.user-profile-settings .provider-section .provider-info p {
+  margin: 0;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.user-profile-settings .provider-section .sync-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  background: #0078d4;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.user-profile-settings .provider-section .sync-btn:hover:not(:disabled) {
+  background: #005a9e;
+}
+
+.user-profile-settings .provider-section .sync-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.user-profile-settings .provider-section .sync-btn i {
+  font-size: 1.2rem;
+}
+
+.user-profile-settings .provider-section .provider-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  color: #666;
+  font-size: 0.85rem;
+  max-width: 500px;
+  text-align: center;
+}
+
+.user-profile-settings .provider-section .provider-note i {
+  color: #ffc107;
+  margin-top: 0.1rem;
+  flex-shrink: 0;
+}
+
+.user-profile-settings .provider-section .revert-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1.5rem;
+  background: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.user-profile-settings .provider-section .revert-btn:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+.user-profile-settings .provider-section .revert-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.user-profile-settings .provider-section .revert-btn i {
+  font-size: 1rem;
+}
+
+/* Action Buttons */
+.user-profile-settings .action-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.user-profile-settings .action-buttons .btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.user-profile-settings .action-buttons .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.user-profile-settings .action-buttons .btn i {
+  font-size: 0.9rem;
+}
+
+.user-profile-settings .action-buttons .btn i.fa-spin {
+  animation: spin 1s linear infinite;
+}
+
+.user-profile-settings .action-buttons .btn.btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.user-profile-settings .action-buttons .btn.btn-secondary:hover:not(:disabled) {
+  background: #5a6268;
+}
+
+.user-profile-settings .action-buttons .btn.btn-primary {
+  background: #28a745;
+  color: white;
+}
+
+.user-profile-settings .action-buttons .btn.btn-primary:hover:not(:disabled) {
+  background: #218838;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .user-profile-settings {
+    padding: 1rem;
+  }
+
+  .user-profile-settings .tab-navigation .tab-btn {
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.5rem;
+    font-size: 0.75rem;
+  }
+
+  .user-profile-settings .tab-navigation .tab-btn i {
+    font-size: 1.2rem;
+  }
+
+  .user-profile-settings .tab-navigation .tab-btn span {
+    font-size: 0.7rem;
+  }
+
+  .user-profile-settings .icon-section .icon-category .icon-grid {
+    grid-template-columns: repeat(auto-fill, minmax(45px, 1fr));
+  }
+
+  .user-profile-settings .action-buttons {
+    flex-direction: column-reverse;
+  }
+
+  .user-profile-settings .action-buttons .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

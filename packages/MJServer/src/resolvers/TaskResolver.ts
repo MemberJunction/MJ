@@ -53,7 +53,8 @@ export class TaskOrchestrationResolver extends ResolverBase {
         @Arg('environmentId') environmentId: string,
         @Arg('sessionId') sessionId: string,
         @PubSub() pubSub: PubSubEngine,
-        @Ctx() { userPayload }: AppContext
+        @Ctx() { userPayload }: AppContext,
+        @Arg('createNotifications', { nullable: true }) createNotifications?: boolean
     ): Promise<ExecuteTaskGraphResult> {
         try {
             LogStatus(`=== EXECUTING TASK GRAPH FOR CONVERSATION: ${conversationDetailId} ===`);
@@ -78,7 +79,7 @@ export class TaskOrchestrationResolver extends ResolverBase {
             }
 
             // Create task orchestrator with PubSub for progress updates
-            const orchestrator = new TaskOrchestrator(currentUser, pubSub, sessionId, userPayload);
+            const orchestrator = new TaskOrchestrator(currentUser, pubSub, sessionId, userPayload, createNotifications || false);
 
             // Create parent task and child tasks with dependencies
             const { parentTaskId, taskIdMap } = await orchestrator.createTasksFromGraph(
