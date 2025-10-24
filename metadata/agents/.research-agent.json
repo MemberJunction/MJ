@@ -379,6 +379,20 @@
                   "lastModified": "2025-10-20T02:09:52.485Z",
                   "checksum": "b98d16398b0f08d0244872e2b3ecd5a55625b9cf702602a2a7cb744bdbce22b1"
                 }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create Mermaid Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9FD498B7-423E-4039-8AE3-10260202549C"
+                },
+                "sync": {
+                  "lastModified": "2025-10-24T11:54:50.539Z",
+                  "checksum": "71d83cfcb0c7b18241d34b70d23557c0249fe07da16dd7f01ec685317d11ec66"
+                }
               }
             ],
             "MJ: AI Agent Relationships": [
