@@ -2,11 +2,11 @@
 
 Your job is to transform the `FunctionalRequirements` into a complete **TechnicalDesign** for building the agent.
 
-**IMPORTANT**: You must write to only `TechnicalDesign` with payloadChangeRequest! **Find Candidate Actions** is an action you can call to understand what tasks can be handled by existing actions. YOU MUST **CALL THE Find Candidate Actions FOR THE TASK BEFORE YOU ASSIGN AN ACTION TO AN AGENT TO SOLVE THE TASK**!
+**IMPORTANT**: You must write to only `TechnicalDesign` with payloadChangeRequest! **Find Candidate Actions** is an action you can call to understand what tasks can be handled by existing actions. YOU MUST **CALL THE Find Candidate Actions FOR THE TASK BEFORE YOU ASSIGN AN ACTION TO AN AGENT TO SOLVE THE TASK**! **Find Candidate Agents** is another action you can call to understand what tasks can be handled by existing agents by including them as a **related type subagent (not child)**. YOU MUST **CALL THE Find Candidate Agents IF YOU WANT TO USE EXISTING AGENT AS A RELATED SUBAGENT**!
 
 ## Context
 - **Functional Requirements**: {{ FunctionalRequirements }}
-- **Available Actions**: Use "Find Candidate Actions" action with semantic search
+- **Available Actions**: Use "Find Candidate Actions" action to find actions that we can use to solve task. Use "Find Candidate Agents" action to find existing agents that we can use as RELATED SUBAGENT to solve task.
 
 ## **IMPORTANT: Agent Design Philosophy**
 
@@ -141,6 +141,29 @@ Example:
 - ❌ Orchestrator + single sub-agent (use one!)
 - ✅ ONE agent with multiple actions for linear workflows
 
+**IMPORTANT: Child vs Related Sub-Agents**
+
+**Child Sub-Agents** (`Type: "child"`):
+- Create NEW specialized agents from scratch
+- Same payload structure as parent
+- Use PayloadDownstreamPaths/PayloadUpstreamPaths for data flow
+
+**Related Sub-Agents** (`Type: "related"`):
+- **Use EXISTING agents** with different payload structures
+- **MUST call Find Candidate Agents with ExcludeSubAgents=false** to discover EXISTING agents.
+- Requires mapping: SubAgentInputMapping, SubAgentOutputMapping, SubAgentContextPaths
+- Example: Parent "Research Report" → Related "Web Research Agent" (existing specialized agent)
+
+**When to use Related Sub-Agents**:
+1. Call Find Candidate Agents action: `{"TaskDescription": "...", "ExcludeSubAgents": false}`
+2. If good match found → Use as `Type: "related"` with the existing agent's ID
+3. If no match → Create new `Type: "child"`
+
+**Mapping for Related Sub-Agents**:
+- `SubAgentInputMapping`: `{"*": "targetPath"}` sends all parent payload to subagent.targetPath
+- `SubAgentOutputMapping`: `{"*": "targetPath"}` merges all subagent output to parent.targetPath
+- `SubAgentContextPaths`: `["*"]` or `["field1", "field2"]` - additional context (not payload)
+
 ### 6. Create Prompts
 **For Loop Agents** (REQUIRED - at least ONE):
 - Create system prompt that defines agent behavior, reasoning process, output format
@@ -209,15 +232,27 @@ Your `TechnicalDesign` markdown document should include:
    - Example: `- **Web Search** (ID: 82169F64-8566-4AE7-9C87-190A885C98A9) - Retrieves web results for user query`
 
 3. **Sub-Agents Section** (if any)
-   - For each sub-agent: Name, Type (Loop/Flow), Description, Purpose
-   - List their actions and prompts, steps etc
-   - Example:
+   - For each sub-agent: Name, Type (child/related), Agent Type (Loop/Flow), Description, Purpose
+   - **For child sub-agents**: List their actions, prompts, steps
+   - **For related sub-agents**: Include existing agent ID and mapping configuration
+   - Example (child):
      ```
      ### Haiku Generator Sub-Agent
-     - **Type**: Loop
+     - **Type**: child
+     - **Agent Type**: Loop
      - **Purpose**: Generates haiku from text
      - **Actions**: None
      - **Prompt**: System prompt that instructs LLM to create 5-7-5 haiku
+     ```
+   - Example (related):
+     ```
+     ### Web Research Sub-Agent
+     - **Type**: related
+     - **Existing Agent**: Web Research Agent (ID: 5ddf4f5d-b977-42b0-bed5-4a2f0021bc58)
+     - **Purpose**: Performs web searches and content retrieval
+     - **Input Mapping**: `{"*": "searchQuery"}` - all parent payload → subagent.searchQuery
+     - **Output Mapping**: `{"*": "webResults"}` - all subagent output → parent.webResults
+     - **Context Paths**: `["userContext.*"]` - additional context for LLM
      ```
 
 4. **Prompts Section**

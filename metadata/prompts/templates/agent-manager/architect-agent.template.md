@@ -63,12 +63,13 @@ interface AgentSpec {
   // SUB-AGENTS - Child or related agents
   SubAgents?: Array<{
     Type: 'child' | 'related';             // REQUIRED for each sub-agent
-    SubAgent: AgentSpec;                    // REQUIRED - Full nested AgentSpec with ALL fields
-                                           // SubAgent.ID should be "" for NEW sub-agents
-                                           // SubAgent can have its own Actions, Prompts, etc.
-    AgentRelationshipID?: string;           // For 'related' type (optional, auto-created)
-    SubAgentInputMapping?: Record<string, string>;  // For 'related' type
-    SubAgentOutputMapping?: Record<string, string>; // For 'related' type
+    SubAgent: AgentSpec;                    // REQUIRED - Full nested AgentSpec
+                                           // For child: SubAgent.ID should be "" (new agent)
+                                           // For related: SubAgent.ID should be existing agent GUID
+    AgentRelationshipID?: string;           // For 'related' type (leave "" for new, auto-created)
+    SubAgentInputMapping?: Record<string, string>;  // For 'related' type - parent payload → subagent
+    SubAgentOutputMapping?: Record<string, string>; // For 'related' type - subagent → parent payload
+    SubAgentContextPaths?: string[];        // For 'related' type - additional context (array of paths)
   }>;
 
   // PROMPTS - Simplified format for prompts (Builder creates AIPrompt records)
@@ -129,6 +130,39 @@ Example:
 ```
 
 **Both object and JSON string formats work** - object format is easier
+
+## IMPORTANT: Child vs Related SubAgents
+
+**Child SubAgents** (`Type: "child"`):
+- SubAgent.ID must be `""` (empty string) - AgentSpecSync creates new agent
+- Same payload structure as parent
+- No mapping fields needed (uses PayloadDownstreamPaths/PayloadUpstreamPaths)
+
+**Related SubAgents** (`Type: "related"`):
+- SubAgent.ID must be existing agent GUID (from Find Candidate Agents results)
+- SubAgent only needs: ID, Name, StartingPayloadValidationMode (minimal spec)
+- **REQUIRED**: SubAgentInputMapping, SubAgentOutputMapping, SubAgentContextPaths
+- AgentRelationshipID should be `""` (empty) - AgentSpecSync creates the relationship
+
+**Validation Rules**:
+- Child: SubAgent.ID = "" AND no mapping fields
+- Related: SubAgent.ID = GUID AND has mapping fields (Input/Output/Context)
+
+**Example (Related)**:
+```json
+{
+  "Type": "related",
+  "SubAgent": {
+    "ID": "5ddf4f5d-b977-42b0-bed5-4a2f0021bc58",
+    "Name": "Web Research Agent",
+    "StartingPayloadValidationMode": "Fail"
+  },
+  "AgentRelationshipID": "",
+  "SubAgentInputMapping": {"*": "searchQuery"},
+  "SubAgentOutputMapping": {"*": "webResults"},
+  "SubAgentContextPaths": ["userContext.*"]
+}
+```
 
 ## Your Workflow
 

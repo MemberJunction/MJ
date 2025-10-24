@@ -406,9 +406,26 @@ export class AgentArchitectAgent extends BaseAgent {
             }
 
             // Validate related-specific fields
-            if (subAgent.Type === 'related' && !subAgent.AgentRelationshipID) {
+            if (subAgent.Type === 'related') {
                 // AgentRelationshipID can be empty for new relationships, it will be created on save
-                // This is not an error
+
+                // IMPORTANT: Related agents REQUIRE existing agent ID
+                if (!subAgent.SubAgent.ID || subAgent.SubAgent.ID === '') {
+                    errors.push(`❌ Related SubAgent[${i}] "${subAgent.SubAgent.Name}" must have existing agent ID. Use Find Candidate Agents to get the ID.`);
+                }
+
+                // IMPORTANT: Related agents REQUIRE mapping fields
+                if (!subAgent.SubAgentInputMapping && !subAgent.SubAgentOutputMapping) {
+                    errors.push(`❌ Related SubAgent[${i}] "${subAgent.SubAgent.Name}" must have at least SubAgentInputMapping or SubAgentOutputMapping`);
+                }
+            }
+
+            // Validate child-specific fields
+            if (subAgent.Type === 'child') {
+                // Child agents should have empty ID (will be created)
+                if (subAgent.SubAgent.ID && subAgent.SubAgent.ID !== '') {
+                    errors.push(`❌ Child SubAgent[${i}] "${subAgent.SubAgent.Name}" should have empty ID (leave as ""). AgentSpecSync will create it.`);
+                }
             }
 
             // Recursively validate nested sub-agents

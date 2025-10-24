@@ -244,6 +244,20 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Find Candidate Agents",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B2D9B34B-891A-4C66-8450-D135BDE05F26"
+                },
+                "sync": {
+                  "lastModified": "2025-10-24T19:08:54.276Z",
+                  "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
                   "ActionID": "@lookup:Actions.Name=Text Analyzer",
                   "Status": "Active"
                 },
