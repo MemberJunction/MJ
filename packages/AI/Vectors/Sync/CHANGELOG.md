@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/ai-vector-sync
 
+## 2.110.0
+
+### Patch Changes
+
+- @memberjunction/aiengine@2.110.0
+- @memberjunction/ai-vectors@2.110.0
+- @memberjunction/templates-base-types@2.110.0
+- @memberjunction/templates@2.110.0
+- @memberjunction/ai-vectors-pinecone@2.110.0
+- @memberjunction/ai@2.110.0
+- @memberjunction/ai-vectordb@2.110.0
+- @memberjunction/core@2.110.0
+- @memberjunction/global@2.110.0
+
 ## 2.109.0
 
 ### Patch Changes

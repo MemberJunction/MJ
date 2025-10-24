@@ -1,5 +1,27 @@
 # Change Log - @memberjunction/sqlserver-dataprovider
 
+## 2.110.0
+
+### Patch Changes
+
+- 02d72ff: - Sort Zod schema entity field values by sequence in CodeGen for consistent ordering
+  - Add unique constraints to QueryCategory and Query tables to prevent duplicates
+  - Improve concurrent query creation handling in CreateQueryResolver
+  - Fix metadata provider usage in entity server classes
+  - Remove automatic error logging from SQLServerDataProvider
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/aiengine@2.110.0
+  - @memberjunction/ai-vector-dupe@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/queue@2.110.0
+  - @memberjunction/ai@2.110.0
+  - @memberjunction/ai-provider-bundle@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
 ## 2.109.0
 
 ### Patch Changes

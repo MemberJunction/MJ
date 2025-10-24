@@ -1,5 +1,61 @@
 # Change Log - @memberjunction/server
 
+## 2.110.0
+
+### Minor Changes
+
+- d2d7ab9: migration
+- c8b9aca: Migration
+
+### Patch Changes
+
+- 02d72ff: - Sort Zod schema entity field values by sequence in CodeGen for consistent ordering
+  - Add unique constraints to QueryCategory and Query tables to prevent duplicates
+  - Improve concurrent query creation handling in CreateQueryResolver
+  - Fix metadata provider usage in entity server classes
+  - Remove automatic error logging from SQLServerDataProvider
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+- Updated dependencies [93c00ac]
+- Updated dependencies [8f1384a]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/sqlserver-dataprovider@2.110.0
+  - @memberjunction/core-entities-server@2.110.0
+  - @memberjunction/core-actions@2.110.0
+  - @memberjunction/graphql-dataprovider@2.110.0
+  - @memberjunction/ai-agent-manager@2.110.0
+  - @memberjunction/ai-core-plus@2.110.0
+  - @memberjunction/ai-agents@2.110.0
+  - @memberjunction/entity-communications-server@2.110.0
+  - @memberjunction/ai-agent-manager-actions@2.110.0
+  - @memberjunction/aiengine@2.110.0
+  - @memberjunction/ai-prompts@2.110.0
+  - @memberjunction/actions-apollo@2.110.0
+  - @memberjunction/actions-bizapps-accounting@2.110.0
+  - @memberjunction/actions-bizapps-lms@2.110.0
+  - @memberjunction/actions-bizapps-social@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/doc-utils@2.110.0
+  - @memberjunction/external-change-detection@2.110.0
+  - @memberjunction/data-context@2.110.0
+  - @memberjunction/queue@2.110.0
+  - @memberjunction/storage@2.110.0
+  - @memberjunction/scheduling-actions@2.110.0
+  - @memberjunction/scheduling-engine-base@2.110.0
+  - @memberjunction/scheduling-engine@2.110.0
+  - @memberjunction/templates@2.110.0
+  - @memberjunction/ai-vectors-pinecone@2.110.0
+  - @memberjunction/actions-bizapps-crm@2.110.0
+  - @memberjunction/data-context-server@2.110.0
+  - @memberjunction/skip-types@2.110.0
+  - @memberjunction/ai@2.110.0
+  - @memberjunction/ai-provider-bundle@2.110.0
+  - @memberjunction/component-registry-client-sdk@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+  - @memberjunction/scheduling-base-types@2.110.0
+
 ## 2.109.0
 
 ### Minor Changes

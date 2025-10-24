@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/core-entities
 
+## 2.110.0
+
+### Minor Changes
+
+- 02d72ff: - Sort Zod schema entity field values by sequence in CodeGen for consistent ordering
+  - Add unique constraints to QueryCategory and Query tables to prevent duplicates
+  - Improve concurrent query creation handling in CreateQueryResolver
+  - Fix metadata provider usage in entity server classes
+  - Remove automatic error logging from SQLServerDataProvider
+- d2d7ab9: migration
+- c8b9aca: Migration
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.110.0
+- @memberjunction/core@2.110.0
+- @memberjunction/global@2.110.0
+
 ## 2.109.0
 
 ### Minor Changes

@@ -1,5 +1,23 @@
 # Change Log - @memberjunction/communication-engine
 
+## 2.110.0
+
+### Minor Changes
+
+- 93c00ac: migration
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+- Updated dependencies [93c00ac]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/communication-types@2.110.0
+  - @memberjunction/templates@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
 ## 2.109.0
 
 ### Patch Changes
