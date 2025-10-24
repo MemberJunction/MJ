@@ -1,31 +1,26 @@
 <div [class]="messageClasses">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
-      <i class="fas" [ngClass]="isAIMessage ? (aiAgentInfo?.iconClass || 'fa-robot') : 'fa-user'"></i>
+      @if (isUserMessage) {
+        @if (userAvatarUrl) {
+          <img [src]="userAvatarUrl" alt="User avatar" class="avatar-image" />
+        } @else if (userAvatarIconClass) {
+          <i [class]="userAvatarIconClass"></i>
+        } @else {
+          <i class="fas fa-user"></i>
+        }
+      } @else if (isAIMessage) {
+        <i class="fas" [ngClass]="aiAgentInfo?.iconClass || 'fa-robot'"></i>
+      }
     </div>
   </div>
 
   <div class="message-content">
     <div class="message-header">
       <span class="message-sender" [title]="isAIMessage ? (aiAgentInfo?.role || 'AI Assistant') : ''">
-        {{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : currentUser.Name }}
+        {{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : messageSenderName }}
       </span>
       <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
-
-      <!-- Generation time for completed AI messages (only show if no active agent run) -->
-      <span *ngIf="!isUserMessage && formattedGenerationTime && !isTemporaryMessage && !isAgentRunActive" class="generation-time">
-        <i class="fas fa-clock"></i>
-        {{ formattedGenerationTime }}
-      </span>
-
-      <!-- Agent run icon (clickable to expand details) -->
-      <span *ngIf="hasAgentRun"
-            class="agent-run-icon"
-            (click)="toggleAgentDetails()"
-            [class.expanded]="isAgentDetailsExpanded"
-            title="Click to view agent execution details">
-        <i class="fas fa-cog"></i>
-      </span>
 
       <!-- Status indicator for user messages -->
       <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">
@@ -33,12 +28,24 @@
         <span class="status-text">{{ getStatusText() }}</span>
       </span>
 
-      <!-- Elapsed time for AI messages still processing (temporary messages) -->
-      <span *ngIf="isTemporaryMessage" class="message-elapsed">{{ _elapsedTimeFormatted }}</span>
+      <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
+      <span *ngIf="!isUserMessage && timePillText"
+            class="time-pill"
+            [class.in-progress]="isInProgressAIMessage"
+            [class.active]="!isInProgressAIMessage && isAgentRunActive"
+            [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
+            [class.failed]="messageStatus === 'Error'">
+        <i class="fas fa-clock"></i>
+        {{ timePillText }}
+      </span>
 
-      <!-- Agent run duration timer for active agent runs (live updating) -->
-      <span *ngIf="!isTemporaryMessage && isAgentRunActive && hasAgentRun" class="message-elapsed agent-run-timer">
-        {{ _agentRunDurationFormatted }}
+      <!-- Agent run icon (clickable to expand details) - always rightmost when present -->
+      <span *ngIf="hasAgentRun"
+            class="agent-run-icon"
+            (click)="toggleAgentDetails()"
+            [class.expanded]="isAgentDetailsExpanded"
+            title="Click to view agent execution details">
+        <i class="fas fa-cog"></i>
       </span>
     </div>
 
@@ -53,13 +60,15 @@
 
         <!-- Artifact Message Card -->
         @if (hasArtifact && artifact && artifactVersion) {
-          <mj-artifact-message-card
-            [artifactId]="artifact.ID"
-            [artifact]="artifact"
-            [artifactVersion]="artifactVersion"
-            [currentUser]="currentUser"
-            (actionPerformed)="onArtifactActionPerformed($event)">
-          </mj-artifact-message-card>
+          <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact">
+            <mj-artifact-message-card
+              [artifactId]="artifact.ID"
+              [artifact]="artifact"
+              [artifactVersion]="artifactVersion"
+              [currentUser]="currentUser"
+              (actionPerformed)="onArtifactActionPerformed($event)">
+            </mj-artifact-message-card>
+          </div>
         }
 
         <!-- Suggested Responses (shown only for last message by owner) -->
@@ -172,7 +181,7 @@
       }
     </div>
 
-    <div class="message-actions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+    <div class="message-actions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
       <!-- Retry button for failed AI messages -->
       <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry" *ngIf="messageStatus === 'Error' && isAIMessage">
         <i class="fas fa-redo"></i>
@@ -191,7 +200,7 @@
     </div>
 
     <!-- Reaction Buttons -->
-    <div class="message-reactions" *ngIf="!isProcessing && !isTemporaryMessage && !isEditing">
+    <div class="message-reactions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
       <button class="reaction-btn" (click)="toggleReaction('like')">
         <i class="far fa-thumbs-up"></i>
         <span class="reaction-count">0</span>

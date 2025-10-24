@@ -1,4 +1,4 @@
-import { BaseCommunicationProvider, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
 import { Client } from '@microsoft/microsoft-graph-client';
 import { User, Message } from "@microsoft/microsoft-graph-types";
 import { RegisterClass } from "@memberjunction/global";
@@ -354,6 +354,71 @@ export class MSGraphProvider extends BaseCommunicationProvider{
         catch(ex){
             LogError(ex);
             return false;
+        }
+    }
+
+    public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+        try{
+            // Smart selection: use message.From if provided and different from default
+            let senderEmail: string | undefined;
+            if (params.Message.From &&
+                params.Message.From.trim() !== '' &&
+                params.Message.From !== Config.AZURE_ACCOUNT_EMAIL) {
+                senderEmail = params.Message.From;
+            }
+
+            const user: User | null = await this.GetServiceAccount(senderEmail);
+            if (!user) {
+                return {
+                    Success: false,
+                    ErrorMessage: 'Service account not found'
+                };
+            }
+
+            // Build message object (similar to SendSingleMessage but saved as draft)
+            const draftMessage: Record<string, any> = {
+                subject: params.Message.ProcessedSubject,
+                body: {
+                    contentType: params.Message.ProcessedHTMLBody ? 'HTML' : 'Text',
+                    content: params.Message.ProcessedHTMLBody || params.Message.ProcessedBody
+                },
+                toRecipients: [{
+                    emailAddress: { address: params.Message.To }
+                }],
+                ccRecipients: params.Message.CCRecipients?.map(recipient => ({
+                    emailAddress: { address: recipient }
+                })),
+                bccRecipients: params.Message.BCCRecipients?.map(recipient => ({
+                    emailAddress: { address: recipient }
+                }))
+            };
+
+            if (params.Message.Headers) {
+                // Convert Headers (Record<string, string>) to internetMessageHeaders (Array[{key:value}])
+                draftMessage.internetMessageHeaders = Object.entries(params.Message.Headers)
+                    .map(([key, value]) => ({
+                        name: key.startsWith('X-') ? key : `X-${key}`,
+                        value: value
+                    }));
+            }
+
+            // Create draft by POSTing to messages endpoint (not sendMail)
+            const createDraftPath = `${Auth.ApiConfig.uri}/${user.id}/messages`;
+            const result = await Auth.GraphClient.api(createDraftPath).post(draftMessage);
+
+            LogStatus(`Draft created via MS Graph: ${result.id}`);
+            return {
+                Success: true,
+                DraftID: result.id,
+                Result: result
+            };
+        }
+        catch(ex){
+            LogError('Error creating draft via MS Graph', undefined, ex);
+            return {
+                Success: false,
+                ErrorMessage: 'Error creating draft'
+            };
         }
     }
 }

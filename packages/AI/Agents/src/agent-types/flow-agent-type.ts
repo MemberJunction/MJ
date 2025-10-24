@@ -164,13 +164,14 @@ export class FlowAgentType extends BaseAgentType {
                             previousPayload: payload
                         });
                     }
-                    
-                    // Merge the prompt response into the current payload
-                    // Update the payload with the prompt result, iterate through each key in the prompt response and update/add
-                    // that key in the payload object
-                    for (const key of Object.keys(promptResponse)) {
-                        payload[key] = promptResponse[key];
-                    }
+
+                    // Deep merge the prompt response into the current payload
+                    // This preserves existing nested properties while adding/updating from the prompt
+                    // Example: If payload has {decision: {Y: 4, Z: 2}} and prompt returns {decision: {x: "string"}},
+                    // the result will be {decision: {x: "string", Y: 4, Z: 2}} instead of losing Y and Z
+                    const mergedPayload = this._payloadManager.deepMerge(payload, promptResponse);
+                    // Copy merged result back to payload reference (modifying in place for consistency)
+                    Object.assign(payload, mergedPayload);
                 }
             }
             
@@ -324,11 +325,12 @@ export class FlowAgentType extends BaseAgentType {
                 
                 
                 const evalResult = this._evaluator.evaluate(path.Condition, context);
-               
+
                 if (evalResult.success && evalResult.value) {
                     validPaths.push(path);
                 }
-                else {
+                else if (!evalResult.success) {
+                    // Only log errors when evaluation failed, not when condition is simply false
                     LogError(`Path condition failed: ${path.Condition}\n${evalResult.error}`);
                 }
             } catch (error) {
@@ -377,8 +379,25 @@ export class FlowAgentType extends BaseAgentType {
                 
                 if (outputParam === '*') {
                     value = actionResult;
+                } else if (outputParam.includes('.')) {
+                    // Support dot notation for nested property access (e.g., "AgentSpec.ID")
+                    const parts = outputParam.split('.');
+                    value = actionResult;
+
+                    for (const part of parts) {
+                        if (value && typeof value === 'object' && !Array.isArray(value)) {
+                            // Case-insensitive lookup at each level
+                            const actualKey = Object.keys(value as Record<string, unknown>).find(
+                                key => key.toLowerCase() === part.toLowerCase()
+                            );
+                            value = actualKey ? (value as Record<string, unknown>)[actualKey] : undefined;
+                        } else {
+                            value = undefined;
+                            break;
+                        }
+                    }
                 } else {
-                    // Case-insensitive lookup for the output parameter
+                    // Simple case-insensitive lookup for non-dotted output parameters
                     const actualKey = Object.keys(actionResult).find(
                         key => key.toLowerCase() === outputParam.toLowerCase()
                     );

@@ -150,6 +150,35 @@
   background-color: #9333EA; /* Purple for agents */
 }
 
+/* Avatar images (for users with uploaded photos or URLs) */
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* System artifact styling - subtle visual distinction */
+.artifact-wrapper.system-artifact {
+  opacity: 0.85;
+  position: relative;
+}
+
+.artifact-wrapper.system-artifact::before {
+  content: 'SYSTEM';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #9CA3AF;
+  background: #F3F4F6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  z-index: 10;
+}
+
 .message-content {
   flex: 1;
   min-width: 0;
@@ -186,6 +215,59 @@
   font-weight: 400;
 }
 
+/* Time pill - unified styling for all AI message states */
+.time-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: auto;
+  transition: all 0.3s ease;
+}
+
+.time-pill i {
+  font-size: 10px;
+}
+
+/* Complete state - light blue (default) */
+.time-pill.complete {
+  background: #E0F2FE;
+  color: #0369A1;
+}
+
+/* In-progress state - purple/violet with subtle pulse */
+.time-pill.in-progress {
+  background: #F3E8FF;
+  color: #7C3AED;
+  animation: pillPulse 2s ease-in-out infinite;
+}
+
+/* Active agent run state - indigo with subtle pulse */
+.time-pill.active {
+  background: #E0E7FF;
+  color: #4F46E5;
+  animation: pillPulse 2s ease-in-out infinite;
+}
+
+/* Failed state - red */
+.time-pill.failed {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+@keyframes pillPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Deprecated - keeping for backward compatibility but no longer used */
 .generation-time {
   display: inline-flex;
   align-items: center;
@@ -203,6 +285,7 @@
   font-size: 10px;
 }
 
+/* Deprecated - keeping for backward compatibility but no longer used */
 .message-elapsed {
   color: #AAA;
   font-size: 11px;

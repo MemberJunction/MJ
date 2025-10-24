@@ -313,6 +313,42 @@
     font-size: 18px;
     font-weight: 600;
 }
+.modal-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.toggle-system-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #F3F4F6;
+    border: 1px solid #E5E7EB;
+    cursor: pointer;
+    color: #6B7280;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+.toggle-system-btn:hover {
+    background: #E5E7EB;
+    border-color: #D1D5DB;
+    color: #374151;
+}
+.toggle-system-btn.active {
+    background: #3B82F6;
+    border-color: #3B82F6;
+    color: white;
+}
+.toggle-system-btn.active:hover {
+    background: #2563EB;
+    border-color: #2563EB;
+}
+.toggle-system-btn i {
+    font-size: 12px;
+}
 .modal-close-btn {
     background: none;
     border: none;
@@ -359,6 +395,30 @@
 }
 .artifact-modal-card.expanded {
     border-color: #3B82F6;
+}
+.artifact-modal-card.system-artifact {
+    opacity: 0.85;
+    border-color: #D1D5DB;
+    border-style: dashed;
+    position: relative;
+}
+.artifact-modal-card.system-artifact::before {
+    content: 'SYSTEM';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 9px;
+    font-weight: 600;
+    color: #9CA3AF;
+    background: #F3F4F6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    z-index: 10;
+}
+.artifact-modal-card.system-artifact:hover {
+    border-color: #9CA3AF;
+    box-shadow: 0 4px 12px rgba(156, 163, 175, 0.15);
 }
 .artifact-card-header {
     display: flex;
@@ -509,4 +569,31 @@
     to {
         opacity: 1;
     }
+}
+// Loading conversation state - centered spinner
+.conversation-loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 20px;
+  gap: 16px;
+  color: #6B7280;
+  font-size: 15px;
+
+  i {
+    font-size: 32px;
+    color: #3B82F6;
+  }
+
+  span {
+    font-weight: 500;
+  }
 }

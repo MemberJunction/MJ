@@ -25,6 +25,17 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
           class="k-textbox"
           (keydown.enter)="onEnterKey($event)">
       </div>
+      <div class="input-field" *ngIf="secondInputLabel">
+        <label class="input-label">
+          {{ secondInputLabel }}
+          <span *ngIf="secondInputRequired" class="required-mark">*</span>
+        </label>
+        <textarea
+          [(ngModel)]="secondValue"
+          [placeholder]="secondInputPlaceholder"
+          class="k-textarea">
+        </textarea>
+      </div>
     </div>
   `,
   styles: [`
@@ -78,6 +89,10 @@ export class InputDialogComponent {
   @Input() placeholder: string = '';
   @Input() required: boolean = false;
   @Input() value: string = '';
+  @Input() secondInputLabel: string = '';
+  @Input() secondInputPlaceholder: string = '';
+  @Input() secondInputRequired: boolean = false;
+  @Input() secondValue: string = '';
 
   constructor(public dialogRef: DialogRef) {}
 
@@ -95,5 +110,9 @@ export class InputDialogComponent {
 
   getValue(): string {
     return this.value.trim();
+  }
+
+  getSecondValue(): string {
+    return this.secondValue.trim();
   }
 }

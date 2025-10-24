@@ -51,9 +51,8 @@ export class AgentArchitectAgent extends BaseAgent {
         // Apply payload changes to get the spec that would be sent forward
         const payloadWithChanges = this.applyPayloadChanges<P>(currentPayload, nextStep);
 
-        // Extract the agentSpec from the nested payload structure
-        // The payload has structure: { metadata, requirements, design, agentSpec }
-        const agentSpec = (payloadWithChanges as any).agentSpec as AgentSpec;
+        // The payload IS the AgentSpec
+        const agentSpec = payloadWithChanges as AgentSpec;
 
         console.log('🏗️ Architect Agent: Validating AgentSpec:', agentSpec ? `Name="${agentSpec.Name}"` : 'agentSpec is null/undefined');
 
@@ -74,13 +73,9 @@ export class AgentArchitectAgent extends BaseAgent {
         // If spec was auto-corrected, update the payload with corrected spec
         if (validation.correctedSpec) {
             console.log('✓ Architect Agent: Auto-corrected AgentSpec, updating payload');
-            const updatedPayload = {
-                ...(payloadWithChanges as any),
-                agentSpec: validation.correctedSpec
-            };
             return {
                 ...nextStep,
-                newPayload: updatedPayload as P
+                newPayload: validation.correctedSpec as P
             };
         }
 
@@ -140,7 +135,116 @@ export class AgentArchitectAgent extends BaseAgent {
             }
         }
 
-        // 4. Validate optional but important fields
+        // 4. Validate TypeID and Status
+        const specWithType = correctedSpec as any;
+        if (!specWithType.TypeID) {
+            errors.push('❌ TypeID is required - must be "@lookup:MJ: AI Agent Types.Name=Loop" or "@lookup:MJ: AI Agent Types.Name=Flow"');
+        }
+
+        if (!specWithType.Status) {
+            // Auto-correct: add default
+            specWithType.Status = 'Active';
+            corrected = true;
+            console.log('✓ Auto-corrected: Added default Status = "Active"');
+        } else if (!['Active', 'Inactive', 'Pending'].includes(specWithType.Status)) {
+            errors.push(`❌ Status must be "Active", "Inactive", or "Pending", got: "${specWithType.Status}"`);
+        }
+
+        // 5. Validate agent type-specific requirements
+        const isLoopAgent = specWithType.TypeID?.includes('Loop');
+        const isFlowAgent = specWithType.TypeID?.includes('Flow');
+
+        if (isLoopAgent) {
+            // Loop agents require at least one prompt
+            if (!correctedSpec.Prompts || correctedSpec.Prompts.length === 0) {
+                errors.push('❌ Loop agents require at least ONE prompt in the Prompts array');
+            }
+        }
+
+        if (isFlowAgent) {
+            // CRITICAL: Flow agents MUST have empty Prompts array (no agent-level prompts)
+            if (correctedSpec.Prompts && correctedSpec.Prompts.length > 0) {
+                errors.push('❌ Flow agents MUST have empty Prompts array. If LLM is needed, use a Prompt step OR a Loop sub-agent instead of agent-level prompts.');
+            }
+
+            // Flow agents require Steps and Paths
+            if (!correctedSpec.Steps || correctedSpec.Steps.length === 0) {
+                errors.push('❌ Flow agents require at least ONE step in the Steps array');
+            }
+            // Paths are technically optional (single-step flows), but validate if present
+            if (correctedSpec.Steps && correctedSpec.Steps.length > 1) {
+                if (!correctedSpec.Paths || correctedSpec.Paths.length === 0) {
+                    errors.push('❌ Flow agents with multiple steps require at least ONE path in the Paths array');
+                }
+            }
+
+            // Validate that at least one step is marked as StartingStep
+            if (correctedSpec.Steps && correctedSpec.Steps.length > 0) {
+                const hasStartingStep = correctedSpec.Steps.some(step => step.StartingStep === true);
+                if (!hasStartingStep) {
+                    errors.push('❌ Flow agents require at least ONE step with StartingStep: true');
+                }
+
+                // Validate each step based on its type
+                for (let i = 0; i < correctedSpec.Steps.length; i++) {
+                    const step = correctedSpec.Steps[i];
+
+                    // Validate Action steps
+                    if (step.StepType === 'Action') {
+                        if (!step.ActionID) {
+                            errors.push(`❌ Action step "${step.Name}" (index ${i}) must have ActionID field`);
+                        }
+
+                        // Validate ActionInputMapping if provided (supports both string and object)
+                        if (step.ActionInputMapping) {
+                            try {
+                                if (typeof step.ActionInputMapping === 'string') {
+                                    JSON.parse(step.ActionInputMapping);
+                                }
+                                // else it's already an object, which is valid and will be stringified later
+                            } catch (e: any) {
+                                errors.push(`❌ Step "${step.Name}" (index ${i}) has invalid ActionInputMapping JSON: ${e?.message || String(e)}`);
+                            }
+                        }
+
+                        // Validate ActionOutputMapping if provided (supports both string and object)
+                        if (step.ActionOutputMapping) {
+                            try {
+                                if (typeof step.ActionOutputMapping === 'string') {
+                                    JSON.parse(step.ActionOutputMapping);
+                                }
+                                // else it's already an object, which is valid and will be stringified later
+                            } catch (e: any) {
+                                errors.push(`❌ Step "${step.Name}" (index ${i}) has invalid ActionOutputMapping JSON: ${e?.message || String(e)}`);
+                            }
+                        }
+                    }
+
+                    // Validate Prompt steps
+                    if (step.StepType === 'Prompt') {
+                        // If PromptID is empty or not provided, PromptText is required for inline creation
+                        if (!step.PromptID || step.PromptID === '') {
+                            if (!step.PromptText || step.PromptText.trim() === '') {
+                                errors.push(`❌ Prompt step "${step.Name}" (index ${i}) has empty PromptID but missing PromptText. For inline prompt creation, PromptText is required.`);
+                            }
+                            // PromptName and PromptDescription are recommended but not required
+                            if (!step.PromptName) {
+                                console.log(`⚠️ Warning: Prompt step "${step.Name}" (index ${i}) is missing PromptName (will default to "[Step Name] Prompt")`);
+                            }
+                        }
+                        // If PromptID is provided (existing prompt), other fields are optional
+                    }
+
+                    // Validate Sub-Agent steps
+                    if (step.StepType === 'Sub-Agent') {
+                        // SubAgentID can be empty "" for new sub-agents (will be linked by name matching)
+                        // No validation needed here - linking happens in AgentSpecSync
+                    }
+                }
+            }
+        }
+
+        // 6. Validate optional but important fields
         if (correctedSpec.FinalPayloadValidationMode &&
             !['Fail', 'Retry', 'Warn'].includes(correctedSpec.FinalPayloadValidationMode)) {
             errors.push(`❌ FinalPayloadValidationMode must be "Fail", "Retry", or "Warn", got: "${correctedSpec.FinalPayloadValidationMode}"`);
@@ -216,7 +320,7 @@ export class AgentArchitectAgent extends BaseAgent {
     }
 
     /**
-     * Validates SubAgent structure
+     * Validates SubAgent structure recursively
      */
     protected validateSubAgents(
         subAgents: AgentSpec['SubAgents']
@@ -259,6 +363,34 @@ export class AgentArchitectAgent extends BaseAgent {
                 errors.push(`❌ SubAgent at index ${i} is missing SubAgent.Name`);
             }
 
+            // Validate TypeID for sub-agent
+            if (!subAgent.SubAgent.TypeID) {
+                errors.push(`❌ SubAgent[${i}] "${subAgent.SubAgent.Name}" is missing TypeID field`);
+            } else {
+                // Validate Loop/Flow specific requirements for sub-agents
+                const isLoopSubAgent = subAgent.SubAgent.TypeID.includes('Loop');
+                const isFlowSubAgent = subAgent.SubAgent.TypeID.includes('Flow');
+
+                if (isLoopSubAgent) {
+                    // Loop sub-agents require at least one prompt
+                    if (!subAgent.SubAgent.Prompts || subAgent.SubAgent.Prompts.length === 0) {
+                        errors.push(`❌ Loop SubAgent[${i}] "${subAgent.SubAgent.Name}" requires at least ONE prompt in Prompts array`);
+                    }
+                }
+
+                if (isFlowSubAgent) {
+                    // Flow sub-agents MUST have empty Prompts array
+                    if (subAgent.SubAgent.Prompts && subAgent.SubAgent.Prompts.length > 0) {
+                        errors.push(`❌ Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" MUST have empty Prompts array. Use Prompt steps or Loop sub-agents for LLM functionality.`);
+                    }
+
+                    // Flow sub-agents require Steps
+                    if (!subAgent.SubAgent.Steps || subAgent.SubAgent.Steps.length === 0) {
+                        errors.push(`❌ Flow SubAgent[${i}] "${subAgent.SubAgent.Name}" requires at least ONE step in Steps array`);
+                    }
+                }
+            }
+
             // Auto-correct: Add default StartingPayloadValidationMode if missing
             if (!subAgent.SubAgent.StartingPayloadValidationMode) {
                 subAgent.SubAgent.StartingPayloadValidationMode = 'Fail';
@@ -266,10 +398,32 @@ export class AgentArchitectAgent extends BaseAgent {
                 console.log(`✓ Auto-corrected: Added SubAgent[${i}].SubAgent.StartingPayloadValidationMode = "Fail"`);
             }
 
+            // Auto-correct: Add default Status if missing
+            if (!subAgent.SubAgent.Status) {
+                subAgent.SubAgent.Status = 'Active';
+                corrected = true;
+                console.log(`✓ Auto-corrected: Added SubAgent[${i}].SubAgent.Status = "Active"`);
+            }
+
             // Validate related-specific fields
             if (subAgent.Type === 'related' && !subAgent.AgentRelationshipID) {
                 // AgentRelationshipID can be empty for new relationships, it will be created on save
                 // This is not an error
+            }
+
+            // Recursively validate nested sub-agents
+            if (subAgent.SubAgent.SubAgents && subAgent.SubAgent.SubAgents.length > 0) {
+                const nestedValidation = this.validateSubAgents(subAgent.SubAgent.SubAgents);
+                if (nestedValidation.errors.length > 0) {
+                    // Prefix nested errors with parent context
+                    const prefixedErrors = nestedValidation.errors.map(
+                        err => `SubAgent[${i}] "${subAgent.SubAgent.Name}" -> ${err}`
+                    );
+                    errors.push(...prefixedErrors);
+                }
+                if (nestedValidation.corrected) {
+                    corrected = true;
+                }
             }
         }
 

@@ -21,6 +21,7 @@ export class LazyArtifactInfo {
   public readonly artifactName: string;
   public readonly artifactType: string;
   public readonly artifactDescription: string;
+  public readonly visibility: string;
 
   // Full entities (lazy-loaded on first access via getArtifact() or getVersion())
   private _artifact: ArtifactEntity | null = null;
@@ -44,6 +45,7 @@ export class LazyArtifactInfo {
     this.artifactName = queryResult.ArtifactName;
     this.artifactType = queryResult.ArtifactType;
     this.artifactDescription = queryResult.ArtifactDescription || '';
+    this.visibility = queryResult.Visibility || 'User';
 
     // If entities were pre-loaded via batch query, use them immediately
     if (preloadedArtifact) {

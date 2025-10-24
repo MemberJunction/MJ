@@ -1,6 +1,6 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -20,7 +20,7 @@ import { Subscription } from 'rxjs';
   templateUrl: './message-input.component.html',
   styleUrl: './message-input.component.scss'
 })
-export class MessageInputComponent implements OnInit, OnDestroy {
+export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit {
   // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
   private readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
@@ -34,8 +34,12 @@ export class MessageInputComponent implements OnInit, OnDestroy {
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
   @Output() agentRunDetected = new EventEmitter<{conversationDetailId: string; agentRunId: string}>();
+  @Output() agentRunUpdate = new EventEmitter<{conversationDetailId: string; agentRun?: any, agentRunId?: string}>(); // Emits when agent run data updates during progress
+  @Output() messageComplete = new EventEmitter<{conversationDetailId: string; agentRunId?: string}>(); // Emits when message completes (success or error)
   @Output() artifactCreated = new EventEmitter<{artifactId: string; versionId: string; versionNumber: number; conversationDetailId: string; name: string}>();
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
+  @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
+  @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
 
   @ViewChild('messageTextarea') messageTextarea!: ElementRef;
 
@@ -81,11 +85,35 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     this.subscribeToPushStatus();
   }
 
+  ngOnChanges(changes: SimpleChanges) {
+    // When conversation changes, focus the input
+    if (changes['conversationId'] && !changes['conversationId'].firstChange) {
+      this.focusInput();
+    }
+  }
+
+  ngAfterViewInit() {
+    // Focus input on initial load
+    this.focusInput();
+  }
+
   ngOnDestroy() {
     // Clean up PubSub subscription
     if (this.pushStatusSubscription) {
       this.pushStatusSubscription.unsubscribe();
     }
+  }
+
+  /**
+   * Focus the message input textarea
+   */
+  private focusInput(): void {
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(() => {
+      if (this.messageTextarea?.nativeElement) {
+        this.messageTextarea.nativeElement.focus();
+      }
+    }, 100);
   }
 
   /**
@@ -369,6 +397,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       detail.ConversationID = this.conversationId;
       detail.Message = text.trim();
       detail.Role = 'User';
+      detail.UserID = this.currentUser.ID; // Set the user who sent the message
 
       if (this.parentMessageId) {
         detail.ParentID = this.parentMessageId;
@@ -401,6 +430,7 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     detail.ConversationID = this.conversationId;
     detail.Message = this.messageText.trim();
     detail.Role = 'User';
+    detail.UserID = this.currentUser.ID; // Set the user who sent the message
 
     if (this.parentMessageId) {
       detail.ParentID = this.parentMessageId;
@@ -542,11 +572,11 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   /**
    * Checks if message should continue with the previous agent
-   * Shows UI indicator during check
+   * Emits events to show temporary intent checking message in conversation
    */
   private async checkContinuityIntent(agentId: string, message: string): Promise<'YES' | 'NO' | 'UNSURE'> {
-    this.processingMessage = 'Analyzing intent...';
-    this.isProcessing = true;
+    // Emit event to show temporary "Analyzing intent..." message in conversation
+    this.intentCheckStarted.emit();
 
     try {
       const intent = await this.agentService.checkAgentContinuityIntent(
@@ -559,8 +589,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       console.error('❌ Intent check failed, defaulting to UNSURE:', error);
       return 'UNSURE';
     } finally {
-      this.processingMessage = 'AI is responding...';
-      this.isProcessing = false;
+      // Emit event to remove temporary intent checking message
+      this.intentCheckCompleted.emit();
     }
   }
 
@@ -644,19 +674,24 @@ export class MessageInputComponent implements OnInit, OnDestroy {
     let capturedAgentRunId: string | null = null;
 
     return async (progress) => {
-      // Extract agentRunId from progress metadata
-      const progressAgentRunId = progress.metadata?.agentRunId as string | undefined;
+      let progressAgentRun = progress.metadata?.agentRun as any | undefined;
+      const progressAgentRunId = progressAgentRun?.ID || progress.metadata?.agentRunId as string | undefined;
+
+      // if (!progressAgentRun && progressAgentRunId) {
+      //   // load the full agent run object from the database if we only have the ID
+      //   const md = new Metadata();
+      //   progressAgentRun = await md.GetEntityObject<AIAgentRunEntity>("MJ: AI Agent Runs");
+      //   await progressAgentRun.Load(progressAgentRunId);
+      // }
 
       // Capture the agent run ID from the first progress message
       if (!capturedAgentRunId && progressAgentRunId) {
         capturedAgentRunId = progressAgentRunId;
-        console.log(`[${agentName}] 📌 Captured agent run ID: ${capturedAgentRunId} for conversation detail: ${conversationDetail.ID}`);
       }
 
       // Filter out progress messages from other concurrent agents
       // This prevents cross-contamination when multiple agents run in parallel
       if (capturedAgentRunId && progressAgentRunId && progressAgentRunId !== capturedAgentRunId) {
-        console.log(`[${agentName}] 🚫 Ignoring progress from different agent run (expected: ${capturedAgentRunId}, got: ${progressAgentRunId})`);
         return;
       }
 
@@ -669,11 +704,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       // Update the ConversationDetail message in real-time
       try {
         if (conversationDetail) {
-          console.log(`[${agentName}] Got conversation detail from cache - Status: ${conversationDetail.Status}, ID: ${conversationDetail.ID}`);
-
           // Check 1: Skip if message is already complete or errored
           if (conversationDetail.Status === 'Complete' || conversationDetail.Status === 'Error') {
-            console.log(`[${agentName}] ⛔ Skipping progress update - message status is ${conversationDetail.Status}`);
             return;
           }
 
@@ -681,12 +713,20 @@ export class MessageInputComponent implements OnInit, OnDestroy {
           // Once a message is marked complete, we reject ALL further progress updates
           const completionTime = this.completionTimestamps.get(conversationDetail.ID);
           if (completionTime) {
-            console.log(`[${agentName}] ⛔ Skipping progress update - message was marked complete at ${completionTime}`);
             return;
           }
 
-          // Emit agentRunId if we have it (for parent to track)
-          if (progressAgentRunId) {
+          // CRITICAL FIX: Emit FULL agent run object for incremental updates
+          // This contains live timestamps, status, and other fields that change during execution
+          if (progressAgentRun || progressAgentRunId) {
+            this.agentRunUpdate.emit({
+              conversationDetailId: conversationDetail.ID,
+              agentRun: progressAgentRun,
+              agentRunId: progressAgentRunId
+            });
+          } else if (progressAgentRunId && !capturedAgentRunId) {
+            // Fallback: If we don't have the full object but have the ID, emit agentRunDetected
+            // This will trigger a database query to load the agent run
             this.agentRunDetected.emit({
               conversationDetailId: conversationDetail.ID,
               agentRunId: progressAgentRunId
@@ -827,9 +867,16 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         await this.updateConversationDetail(conversationManagerMessage, result.agentRun.Message, 'Complete', result.suggestedResponses );
 
         // Handle artifacts if any (but NOT task graphs - those are intermediate work products)
+        // Server already created artifacts - just emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
-          await this.createArtifactFromPayload(result.payload, conversationManagerMessage, result.agentRun.AgentID);
-          console.log('🎨 Artifact created and linked to Sage message');
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: conversationManagerMessage.ID,
+            name: ''
+          });
+          console.log('🎨 Server created artifact, UI will reload to show it');
           this.messageSent.emit(conversationManagerMessage);
         }
 
@@ -1010,12 +1057,13 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
       // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
       const mutation = `
-        mutation ExecuteTaskGraph($taskGraphJson: String!, $conversationDetailId: String!, $environmentId: String!, $sessionId: String!) {
+        mutation ExecuteTaskGraph($taskGraphJson: String!, $conversationDetailId: String!, $environmentId: String!, $sessionId: String!, $createNotifications: Boolean) {
           ExecuteTaskGraph(
             taskGraphJson: $taskGraphJson
             conversationDetailId: $conversationDetailId
             environmentId: $environmentId
             sessionId: $sessionId
+            createNotifications: $createNotifications
           ) {
             success
             errorMessage
@@ -1033,7 +1081,8 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         taskGraphJson: JSON.stringify(taskGraph),
         conversationDetailId: taskExecutionMessage.ID, // Link tasks to execution message, not CM message
         environmentId: environmentId,
-        sessionId: sessionId
+        sessionId: sessionId,
+        createNotifications: true
       };
 
       const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, variables);
@@ -1203,10 +1252,16 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         // Update message with result
         await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
-        // Handle artifacts
+        // Server created artifacts - emit event to trigger UI reload
         if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
-          await this.createArtifactFromPayload(agentResult.payload, agentResponseMessage, agentResult.agentRun.AgentID);
-          console.log('🎨 Artifact created from single task execution');
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: agentResponseMessage.ID,
+            name: ''
+          });
+          console.log('🎨 Server created artifact from single task execution');
           this.messageSent.emit(agentResponseMessage);
         }
       } else {
@@ -1302,10 +1357,16 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         
         await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
-        // Handle artifacts from sub-agent if any
+        // Server created artifacts - emit event to trigger UI reload
         if (subResult.payload && Object.keys(subResult.payload).length > 0) {
-          await this.createArtifactFromPayload(subResult.payload, agentResponseMessage, subResult.agentRun.AgentID);
-          console.log('🎨 Artifact created and linked to sub-agent message:', agentResponseMessage.ID);
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: agentResponseMessage.ID,
+            name: ''
+          });
+          console.log('🎨 Server created artifact for sub-agent message:', agentResponseMessage.ID);
           // Re-emit to trigger artifact display
           this.messageSent.emit(agentResponseMessage);
         }
@@ -1343,9 +1404,15 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
           await this.updateConversationDetail(agentResponseMessage, retryResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
-          // Handle artifacts
+          // Server created artifacts - emit event to trigger UI reload
           if (retryResult.payload && Object.keys(retryResult.payload).length > 0) {
-            await this.createArtifactFromPayload(retryResult.payload, agentResponseMessage, retryResult.agentRun.AgentID);
+            this.artifactCreated.emit({
+              artifactId: '',
+              versionId: '',
+              versionNumber: 0,
+              conversationDetailId: agentResponseMessage.ID,
+              name: ''
+            });
             this.messageSent.emit(agentResponseMessage);
           }
 
@@ -1497,7 +1564,9 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         'Continuing previous work based on user feedback',
         statusMessage.ID,
         previousPayload,
-        this.createProgressCallback(statusMessage, agentName)
+        this.createProgressCallback(statusMessage, agentName),
+        previousArtifactInfo?.artifactId,
+        previousArtifactInfo?.versionId
       );
 
       // Remove from active tasks
@@ -1518,15 +1587,16 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         await agentResponseMessage.Save();
         this.messageSent.emit(agentResponseMessage);
 
-        // Handle artifacts from agent if any - create new version if continuing same agent
+        // Server created artifacts (handles versioning automatically) - emit event to trigger UI reload
         if (continuityResult.payload && Object.keys(continuityResult.payload).length > 0) {
-          await this.createArtifactFromPayload(
-            continuityResult.payload,
-            agentResponseMessage,
-            lastAIMessage.AgentID,
-            previousArtifactInfo // Pass artifact info to create new version
-          );
-          console.log('🎨 Artifact created from agent continuity');
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: agentResponseMessage.ID,
+            name: ''
+          });
+          console.log('🎨 Server created artifact (versioned) from agent continuity');
           this.messageSent.emit(agentResponseMessage);
         }
 
@@ -1632,9 +1702,15 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
         await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
 
-        // Handle artifacts
+        // Server created artifacts - emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
-          await this.createArtifactFromPayload(result.payload, agentResponseMessage, result.agentRun.AgentID);
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: agentResponseMessage.ID,
+            name: ''
+          });
           this.messageSent.emit(agentResponseMessage);
         }
 
@@ -1794,7 +1870,9 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         'Continuing previous conversation with user',
         agentResponseMessage.ID,
         previousPayload, // Pass previous OUTPUT artifact payload for continuity
-        this.createProgressCallback(agentResponseMessage, agentName)
+        this.createProgressCallback(agentResponseMessage, agentName),
+        previousArtifactInfo?.artifactId,
+        previousArtifactInfo?.versionId
       );
 
       // Remove from active tasks
@@ -1804,14 +1882,15 @@ export class MessageInputComponent implements OnInit, OnDestroy {
         // Update the response message with agent result
         await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
 
-        // Handle artifacts - create new version if continuing with same agent and artifact
+        // Server created artifacts (handles versioning) - emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
-          await this.createArtifactFromPayload(
-            result.payload,
-            agentResponseMessage,
-            agentId,
-            previousArtifactInfo // Pass artifact info to create new version instead of new artifact
-          );
+          this.artifactCreated.emit({
+            artifactId: '',
+            versionId: '',
+            versionNumber: 0,
+            conversationDetailId: agentResponseMessage.ID,
+            name: ''
+          });
           this.messageSent.emit(agentResponseMessage);
         }
 
@@ -1859,117 +1938,6 @@ export class MessageInputComponent implements OnInit, OnDestroy {
       userMessage.Status = 'Complete';
       await userMessage.Save();
       this.messageSent.emit(userMessage);
-    }
-  }
-
-  /**
-   * Creates an artifact from an agent's payload and links it to the conversation detail
-   * If previousArtifactInfo is provided, creates a new version of the existing artifact
-   * Otherwise, creates a new artifact with version 1
-   * @param payload The agent's payload object
-   * @param message The conversation detail message to link to
-   * @param agentId The ID of the agent that produced the payload
-   * @param previousArtifactInfo Optional info about previous artifact to create new version
-   */
-  private async createArtifactFromPayload(
-    payload: any,
-    message: ConversationDetailEntity,
-    agentId?: string,
-    previousArtifactInfo?: {artifactId: string; versionId: string; versionNumber: number} | null
-  ): Promise<void> {
-    try {
-      const md = new Metadata();
-      let artifactId: string;
-      let newVersionNumber: number;
-
-      // If we have previous artifact info, we're creating a new version of existing artifact
-      if (previousArtifactInfo) {
-        artifactId = previousArtifactInfo.artifactId;
-        newVersionNumber = previousArtifactInfo.versionNumber + 1;
-        console.log(`📦 Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
-      } else {
-        // Create new Artifact header
-        const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
-
-        // Look up agent to get name and default artifact type
-        const agent = agentId
-          ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)
-          : null;
-        const agentName = agent?.Name || 'Agent';
-
-        artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
-        artifact.Description = `Payload returned by ${agentName}`;
-
-        // Use agent's DefaultArtifactTypeID if available, otherwise fall back to JSON
-        const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
-        artifact.TypeID = defaultArtifactTypeId || this.JSON_ARTIFACT_TYPE_ID;
-
-        artifact.UserID = this.currentUser.ID;
-        artifact.EnvironmentID = (this.currentUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
-
-        const artifactSaved = await artifact.Save();
-        if (!artifactSaved) {
-          console.error('Failed to save artifact');
-          return;
-        }
-
-        artifactId = artifact.ID;
-        newVersionNumber = 1;
-        console.log(`📦 Creating new artifact ${artifactId} with version 1`);
-      }
-
-      // Create Artifact Version with content
-      const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
-      version.ArtifactID = artifactId;
-      version.VersionNumber = newVersionNumber;
-      version.Content = JSON.stringify(payload, null, 2);
-      version.UserID = this.currentUser.ID;
-
-      const versionSaved = await version.Save();
-      if (!versionSaved) {
-        console.error('Failed to save artifact version');
-        return;
-      }
-
-      // Create M2M relationship using ConversationDetailArtifact junction table
-      const junction = await md.GetEntityObject<ConversationDetailArtifactEntity>(
-        'MJ: Conversation Detail Artifacts',
-        this.currentUser
-      );
-      junction.ConversationDetailID = message.ID;
-      junction.ArtifactVersionID = version.ID;
-      junction.Direction = 'Output'; // This artifact was produced as output from the agent
-
-      const junctionSaved = await junction.Save();
-      if (!junctionSaved) {
-        console.error('Failed to create artifact-message association');
-      }
-
-      // Emit with artifact name (load from DB if versioning existing artifact)
-      let artifactName: string;
-      if (previousArtifactInfo) {
-        const artifactEntity = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', this.currentUser);
-        if (await artifactEntity.Load(artifactId)) {
-          artifactName = artifactEntity.Name || 'Artifact';
-        } else {
-          artifactName = 'Artifact';
-        }
-      } else {
-        const agentName = agentId
-          ? AIEngineBase.Instance?.Agents?.find(a => a.ID === agentId)?.Name || 'Agent'
-          : 'Agent';
-        artifactName = `${agentName} Payload - ${new Date().toLocaleString()}`;
-      }
-
-      this.artifactCreated.emit({
-        artifactId,
-        versionId: version.ID,
-        versionNumber: newVersionNumber,
-        conversationDetailId: message.ID,
-        name: artifactName
-      });
-    } catch (error) {
-      console.error('Error creating artifact from payload:', error);
     }
   }
 
@@ -2042,11 +2010,17 @@ export class MessageInputComponent implements OnInit, OnDestroy {
 
   /**
    * Marks a conversation detail as complete and records timestamp to prevent race conditions
+   * Emits event to parent to refresh agent run data from database
    */
   private markMessageComplete(conversationDetail: ConversationDetailEntity): void {
     const now = Date.now();
     this.completionTimestamps.set(conversationDetail.ID, now);
-    console.log(`🏁 Marked message ${conversationDetail.ID} as complete at ${now}`);
+
+    // Emit completion event to parent so it can refresh agent run data
+    this.messageComplete.emit({
+      conversationDetailId: conversationDetail.ID,
+      agentRunId: (conversationDetail as any).AgentRunID
+    });
   }
 
   /**

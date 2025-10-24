@@ -16,13 +16,13 @@
       [disabled]="disabled"
       (click)="onResponseClick(response)"
       [title]="response.text">
-      <i *ngIf="response.iconClass" [class]="response.iconClass"></i>
+      <i *ngIf="response.iconClass" [class]="'fas ' + response.iconClass"></i>
       <span>{{ response.text }}</span>
     </button>
 
     <!-- Input option (allowInput: true) -->
     <div *ngIf="inputResponse" class="suggested-response-input-container">
-      <i *ngIf="inputResponse.iconClass" [class]="inputResponse.iconClass" class="input-icon"></i>
+      <i *ngIf="inputResponse.iconClass" [class]="'fas ' + inputResponse.iconClass" class="input-icon"></i>
       <input
         type="text"
         class="suggested-response-input"

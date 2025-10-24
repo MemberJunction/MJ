@@ -1,7 +1,10 @@
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { ExecuteAgentParams, AgentConfiguration, BaseAgentNextStep, AgentSpec } from '@memberjunction/ai-core-plus';
 import { RegisterClass } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
+import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
 import { AgentSpecSync } from '../agent-spec-sync';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
  * Builder Agent - Persists validated AgentSpec to database via AgentSpecSync
@@ -15,6 +18,7 @@ import { AgentSpecSync } from '../agent-spec-sync';
  * - Receive validated AgentSpec from payload
  * - Create AgentSpecSync instance
  * - Persist to database
+ * - Track mutations in AI Agent Run Steps table
  * - Return success with created agent ID, or failure with error details
  *
  * This agent does NOT iterate - it runs once and returns Success or Failed.
@@ -23,8 +27,9 @@ import { AgentSpecSync } from '../agent-spec-sync';
 export class AgentBuilderAgent extends BaseAgent {
 
     /**
-     * Override executeAgentInternal to run code instead of chat loop
-     * This follows the Skip Code Generator pattern
+     * Override executeAgentInternal to run code instead of chat loop.
+     *
+     * Directly creates the AI Agent Run Step with mutations from AgentSpecSync.
      */
     protected override async executeAgentInternal<P = any>(
         params: ExecuteAgentParams<P>,
@@ -34,55 +39,112 @@ export class AgentBuilderAgent extends BaseAgent {
         console.log('🔨 Builder Agent: Starting agent persistence...');
 
         try {
-            // Extract AgentSpec from nested payload structure
-            // The payload has structure: { metadata, requirements, design, agentSpec }
-            const agentSpec = (params.payload as any).agentSpec as AgentSpec;
-
+            // Validate payload
+            const agentSpec = params.payload as AgentSpec;
             if (!agentSpec) {
-                throw new Error('No AgentSpec found in payload.agentSpec - ensure Architect Agent placed it there');
+                throw new Error('No AgentSpec found in payload - ensure Architect Agent provided valid AgentSpec');
             }
-
             if (!agentSpec.Name) {
                 throw new Error('AgentSpec is missing required Name field');
             }
 
             console.log(`🔨 Builder Agent: Creating agent "${agentSpec.Name}"...`);
 
-            // Create AgentSpecSync instance
+            // Create AgentSpecSync and save to database
             const specSync = new AgentSpecSync(agentSpec, params.contextUser);
-
-            // Mark as dirty to ensure it saves
             specSync.markDirty();
 
-            // Save to database
-            const agentId = await specSync.SaveToDatabase();
+            const result = await specSync.SaveToDatabase();
 
-            console.log(`✅ Builder Agent: Successfully created agent with ID: ${agentId}`);
+            if (!result.success) {
+                throw new Error('AgentSpecSync.SaveToDatabase() returned success=false');
+            }
 
-            // Return success with the created agent ID
-            const updatedSpec = { ...agentSpec, ID: agentId };
+            console.log(`✅ Builder Agent: Successfully created agent with ID: ${result.agentId}`);
 
+            // Refresh metadata and template caches
+            console.log('🔄 Builder Agent: Refreshing metadata and template caches...');
+            const md = new Metadata();
+            await md.Refresh();
+
+            const templateEngine = new TemplateEngineServer();
+            await templateEngine.Config(true, params.contextUser);
+            console.log('✅ Builder Agent: Metadata and template caches refreshed');
+
+            // Create AI Agent Run Step record directly
+            const agentRunId = params.parentRun?.ID || 'unknown';
+            const stepEntity = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+                'MJ: AI Agent Run Steps',
+                params.contextUser
+            );
+
+            stepEntity.AgentRunID = agentRunId;
+            stepEntity.StepNumber = 2; // Validation is step 1, this is step 2
+            stepEntity.StepType = 'Decision';
+            stepEntity.StepName = 'Sync Agent Spec';
+            stepEntity.Status = 'Completed';
+            stepEntity.Success = true;
+            stepEntity.StartedAt = new Date();
+            stepEntity.CompletedAt = new Date();
+
+            // InputData = Full AgentSpec
+            stepEntity.InputData = JSON.stringify(agentSpec, null, 2);
+            stepEntity.PayloadAtStart = JSON.stringify(params.payload);
+
+            // OutputData = Mutations array
+            stepEntity.OutputData = JSON.stringify(result.mutations, null, 2);
+            stepEntity.PayloadAtEnd = stepEntity.PayloadAtStart;
+
+            await stepEntity.Save();
+            console.log(`✅ Builder Agent: Created AI Agent Run Step with ID: ${stepEntity.ID}`);
+
+            // Return success
+            const updatedSpec = { ...agentSpec, ID: result.agentId };
             return {
                 finalStep: {
                     terminate: true,
                     step: 'Success',
-                    reasoning: `Successfully created agent "${agentSpec.Name}" with ID: ${agentId}`,
+                    reasoning: `Successfully created agent "${agentSpec.Name}" with ID: ${result.agentId}`,
                     newPayload: updatedSpec as P
                 },
-                stepCount: 1
+                stepCount: 2
             };
 
         } catch (error: any) {
             console.error('❌ Builder Agent: Failed to create agent:', error);
 
-            // Return failure with error details
+            // Create failed AI Agent Run Step
+            const agentRunId = params.parentRun?.ID || 'unknown';
+            const md = new Metadata();
+            const stepEntity = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+                'MJ: AI Agent Run Steps',
+                params.contextUser
+            );
+
+            stepEntity.AgentRunID = agentRunId;
+            stepEntity.StepNumber = 2;
+            stepEntity.StepType = 'Decision';
+            stepEntity.StepName = 'Sync Agent Spec';
+            stepEntity.Status = 'Failed';
+            stepEntity.Success = false;
+            stepEntity.StartedAt = new Date();
+            stepEntity.CompletedAt = new Date();
+            stepEntity.ErrorMessage = error?.message || String(error);
+
+            stepEntity.InputData = JSON.stringify(params.payload, null, 2);
+            stepEntity.PayloadAtStart = JSON.stringify(params.payload);
+            stepEntity.OutputData = JSON.stringify({ error: error?.message || String(error) });
+            stepEntity.PayloadAtEnd = stepEntity.PayloadAtStart;
+
+            await stepEntity.Save();
+
             return {
                 finalStep: {
                     terminate: true,
                     step: 'Failed',
                     reasoning: `Failed to create agent: ${error?.message || String(error)}`
                 },
-                stepCount: 1
+                stepCount: 2
             };
         }
     }

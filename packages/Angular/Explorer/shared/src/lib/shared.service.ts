@@ -299,7 +299,8 @@ export const EventCodes = {
   UserNotificationsUpdated: "UserNotificationsUpdated",
   CloseCurrentTab: "CloseCurrentTab",
   ListCreated: "ListCreated",
-  ListClicked: 'ListClicked'
+  ListClicked: 'ListClicked',
+  AvatarUpdated: 'AvatarUpdated'
 } as const;
 
 export type EventCodes = typeof EventCodes[keyof typeof EventCodes];

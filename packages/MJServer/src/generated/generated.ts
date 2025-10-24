@@ -1757,11 +1757,11 @@ each time the agent processes a prompt step.`})
     @MaxLength(16)
     RootLastRunID?: string;
         
-    @Field(() => [MJAIAgentRunStep_])
-    MJ_AIAgentRunSteps_AgentRunIDArray: MJAIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
-    
     @Field(() => [MJAIAgentRun_])
     MJ_AIAgentRuns_ParentRunIDArray: MJAIAgentRun_[]; // Link to MJ_AIAgentRuns
+    
+    @Field(() => [MJAIAgentRunStep_])
+    MJ_AIAgentRunSteps_AgentRunIDArray: MJAIAgentRunStep_[]; // Link to MJ_AIAgentRunSteps
     
     @Field(() => [MJAIPromptRun_])
     MJ_AIPromptRuns_AgentRunIDArray: MJAIPromptRun_[]; // Link to MJ_AIPromptRuns
@@ -2070,17 +2070,6 @@ export class MJAIAgentRunResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJAIAgentRunStep_])
-    async MJ_AIAgentRunSteps_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [AgentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentRun_])
     async MJ_AIAgentRuns_ParentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Runs', userPayload);
@@ -2089,6 +2078,17 @@ export class MJAIAgentRunResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRuns] WHERE [ParentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Runs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Runs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIAgentRunStep_])
+    async MJ_AIAgentRunSteps_AgentRunIDArray(@Root() mjaiagentrun_: MJAIAgentRun_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Agent Run Steps', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentRunSteps] WHERE [AgentRunID]='${mjaiagentrun_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Run Steps', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Run Steps', rows);
         return result;
     }
         
@@ -2875,9 +2875,9 @@ export class MJAIAgent_ {
     @MaxLength(16)
     TypeID?: string;
         
-    @Field({nullable: true, description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
+    @Field({description: `Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`}) 
     @MaxLength(40)
-    Status?: string;
+    Status: string;
         
     @Field({nullable: true, description: `Optional override for the class name used by the MemberJunction class factory to instantiate this specific agent. If specified, this overrides the agent type's DriverClass. Useful for specialized agent implementations.`}) 
     @MaxLength(510)
@@ -2966,6 +2966,16 @@ if this limit is exceeded.`})
     @Field({description: `Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`}) 
     @MaxLength(40)
     InvocationMode: string;
+        
+    @Field({description: `Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`}) 
+    @MaxLength(40)
+    ArtifactCreationMode: string;
+        
+    @Field({nullable: true, description: `Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.`}) 
+    FunctionalRequirements?: string;
+        
+    @Field({nullable: true, description: `Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure.`}) 
+    TechnicalDesign?: string;
         
     @Field({nullable: true}) 
     @MaxLength(510)
@@ -3095,7 +3105,7 @@ export class CreateMJAIAgentInput {
     TypeID: string | null;
 
     @Field({ nullable: true })
-    Status: string | null;
+    Status?: string;
 
     @Field({ nullable: true })
     DriverClass: string | null;
@@ -3168,6 +3178,15 @@ export class CreateMJAIAgentInput {
 
     @Field({ nullable: true })
     InvocationMode?: string;
+
+    @Field({ nullable: true })
+    ArtifactCreationMode?: string;
+
+    @Field({ nullable: true })
+    FunctionalRequirements: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesign: string | null;
 }
     
 
@@ -3216,7 +3235,7 @@ export class UpdateMJAIAgentInput {
     TypeID?: string | null;
 
     @Field({ nullable: true })
-    Status?: string | null;
+    Status?: string;
 
     @Field({ nullable: true })
     DriverClass?: string | null;
@@ -3289,6 +3308,15 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     InvocationMode?: string;
+
+    @Field({ nullable: true })
+    ArtifactCreationMode?: string;
+
+    @Field({ nullable: true })
+    FunctionalRequirements?: string | null;
+
+    @Field({ nullable: true })
+    TechnicalDesign?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -6755,11 +6783,11 @@ export class MJAIPrompt_ {
     @Field(() => [MJAIPrompt_])
     AIPrompts_ResultSelectorPromptIDArray: MJAIPrompt_[]; // Link to AIPrompts
     
-    @Field(() => [MJAIPromptModel_])
-    MJ_AIPromptModels_PromptIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
-    
     @Field(() => [MJAIAgentPrompt_])
     MJ_AIAgentPrompts_PromptIDArray: MJAIAgentPrompt_[]; // Link to MJ_AIAgentPrompts
+    
+    @Field(() => [MJAIPromptModel_])
+    MJ_AIPromptModels_PromptIDArray: MJAIPromptModel_[]; // Link to MJ_AIPromptModels
     
     @Field(() => [MJAIAgentStep_])
     MJ_AIAgentSteps_PromptIDArray: MJAIAgentStep_[]; // Link to MJ_AIAgentSteps
@@ -7209,17 +7237,6 @@ export class MJAIPromptResolver extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJAIPromptModel_])
-    async MJ_AIPromptModels_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAIAgentPrompt_])
     async MJ_AIAgentPrompts_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: AI Agent Prompts', userPayload);
@@ -7228,6 +7245,17 @@ export class MJAIPromptResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIAgentPrompts] WHERE [PromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Prompts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Agent Prompts', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJAIPromptModel_])
+    async MJ_AIPromptModels_PromptIDArray(@Root() mjaiprompt_: MJAIPrompt_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: AI Prompt Models', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAIPromptModels] WHERE [PromptID]='${mjaiprompt_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Prompt Models', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: AI Prompt Models', rows);
         return result;
     }
         
@@ -11216,11 +11244,11 @@ export class MJEntity_ {
     @Field(() => [MJQueryEntity_])
     QueryEntities_EntityIDArray: MJQueryEntity_[]; // Link to QueryEntities
     
-    @Field(() => [MJRecordLink_])
-    MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
-    
     @Field(() => [MJAccessControlRule_])
     MJ_AccessControlRules_EntityIDArray: MJAccessControlRule_[]; // Link to MJ_AccessControlRules
+    
+    @Field(() => [MJRecordLink_])
+    MJ_RecordLinks_SourceEntityIDArray: MJRecordLink_[]; // Link to MJ_RecordLinks
     
     @Field(() => [MJGeneratedCode_])
     GeneratedCodes_LinkedEntityIDArray: MJGeneratedCode_[]; // Link to GeneratedCodes
@@ -12029,17 +12057,6 @@ export class MJEntityResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJRecordLink_])
-    async MJ_RecordLinks_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Record Links', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordLinks] WHERE [SourceEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Links', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Record Links', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJAccessControlRule_])
     async MJ_AccessControlRules_EntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Access Control Rules', userPayload);
@@ -12048,6 +12065,17 @@ export class MJEntityResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwAccessControlRules] WHERE [EntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Access Control Rules', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Access Control Rules', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJRecordLink_])
+    async MJ_RecordLinks_SourceEntityIDArray(@Root() mjentity_: MJEntity_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Record Links', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwRecordLinks] WHERE [SourceEntityID]='${mjentity_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Record Links', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Record Links', rows);
         return result;
     }
         
@@ -12161,6 +12189,13 @@ export class MJUser_ {
     @Field() 
     @MaxLength(10)
     _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true, description: `User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.`}) 
+    UserImageURL?: string;
+        
+    @Field({nullable: true, description: `Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`}) 
+    @MaxLength(200)
+    UserImageIconClass?: string;
         
     @Field({nullable: true}) 
     @MaxLength(202)
@@ -12294,11 +12329,11 @@ export class MJUser_ {
     @Field(() => [MJReportUserState_])
     MJ_ReportUserStates_UserIDArray: MJReportUserState_[]; // Link to MJ_ReportUserStates
     
-    @Field(() => [MJDashboardUserPreference_])
-    MJ_DashboardUserPreferences_UserIDArray: MJDashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
-    
     @Field(() => [MJDashboardUserState_])
     MJ_DashboardUserStates_UserIDArray: MJDashboardUserState_[]; // Link to MJ_DashboardUserStates
+    
+    @Field(() => [MJDashboardUserPreference_])
+    MJ_DashboardUserPreferences_UserIDArray: MJDashboardUserPreference_[]; // Link to MJ_DashboardUserPreferences
     
     @Field(() => [MJArtifactVersion_])
     MJ_ArtifactVersions_UserIDArray: MJArtifactVersion_[]; // Link to MJ_ArtifactVersions
@@ -12306,11 +12341,11 @@ export class MJUser_ {
     @Field(() => [MJPublicLink_])
     MJ_PublicLinks_UserIDArray: MJPublicLink_[]; // Link to MJ_PublicLinks
     
-    @Field(() => [MJScheduledJobRun_])
-    MJ_ScheduledJobRuns_ExecutedByUserIDArray: MJScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
-    
     @Field(() => [MJScheduledJob_])
     MJ_ScheduledJobs_NotifyUserIDArray: MJScheduledJob_[]; // Link to MJ_ScheduledJobs
+    
+    @Field(() => [MJScheduledJobRun_])
+    MJ_ScheduledJobRuns_ExecutedByUserIDArray: MJScheduledJobRun_[]; // Link to MJ_ScheduledJobRuns
     
     @Field(() => [MJArtifactPermission_])
     MJ_ArtifactPermissions_UserIDArray: MJArtifactPermission_[]; // Link to MJ_ArtifactPermissions
@@ -12399,6 +12434,12 @@ export class CreateMJUserInput {
 
     @Field({ nullable: true })
     EmployeeID: string | null;
+
+    @Field({ nullable: true })
+    UserImageURL: string | null;
+
+    @Field({ nullable: true })
+    UserImageIconClass: string | null;
 }
     
 
@@ -12442,6 +12483,12 @@ export class UpdateMJUserInput {
 
     @Field({ nullable: true })
     EmployeeID?: string | null;
+
+    @Field({ nullable: true })
+    UserImageURL?: string | null;
+
+    @Field({ nullable: true })
+    UserImageIconClass?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12912,17 +12959,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJDashboardUserPreference_])
-    async MJ_DashboardUserPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJDashboardUserState_])
     async MJ_DashboardUserStates_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Dashboard User States', userPayload);
@@ -12931,6 +12967,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserStates] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User States', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User States', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJDashboardUserPreference_])
+    async MJ_DashboardUserPreferences_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Dashboard User Preferences', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwDashboardUserPreferences] WHERE [UserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dashboard User Preferences', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Dashboard User Preferences', rows);
         return result;
     }
         
@@ -12956,17 +13003,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJScheduledJobRun_])
-    async MJ_ScheduledJobRuns_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ExecutedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJScheduledJob_])
     async MJ_ScheduledJobs_NotifyUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Scheduled Jobs', userPayload);
@@ -12975,6 +13011,17 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobs] WHERE [NotifyUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Jobs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Jobs', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJScheduledJobRun_])
+    async MJ_ScheduledJobRuns_ExecutedByUserIDArray(@Root() mjuser_: MJUser_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Scheduled Job Runs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwScheduledJobRuns] WHERE [ExecutedByUserID]='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Scheduled Job Runs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Scheduled Job Runs', rows);
         return result;
     }
         
@@ -34393,6 +34440,9 @@ export class MJCommunicationProvider_ {
     @Field(() => Boolean, {description: `Whether or not the provider supports replying to messages`}) 
     SupportsReplying: boolean;
         
+    @Field(() => Boolean, {description: `Whether or not the provider supports creating draft messages`}) 
+    SupportsDrafts: boolean;
+        
     @Field(() => [MJCommunicationProviderMessageType_])
     CommunicationProviderMessageTypes_CommunicationProviderIDArray: MJCommunicationProviderMessageType_[]; // Link to CommunicationProviderMessageTypes
     
@@ -34432,6 +34482,9 @@ export class CreateMJCommunicationProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsReplying?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDrafts?: boolean;
 }
     
 
@@ -34466,6 +34519,9 @@ export class UpdateMJCommunicationProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     SupportsReplying?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsDrafts?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -41803,6 +41859,10 @@ export class MJArtifact_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field({description: `Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`}) 
+    @MaxLength(40)
+    Visibility: string;
+        
     @Field() 
     @MaxLength(510)
     Environment: string;
@@ -41851,6 +41911,9 @@ export class CreateMJArtifactInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Visibility?: string;
 }
     
 
@@ -41879,6 +41942,9 @@ export class UpdateMJArtifactInput {
 
     @Field({ nullable: true })
     UserID?: string;
+
+    @Field({ nullable: true })
+    Visibility?: string;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

@@ -93,6 +93,17 @@ export class UserNotificationsComponent implements AfterViewInit {
             if (config.conversationId)
               url.push(config.conversationId);
             break;
+          case 'conversation':
+            url.push('chat');
+            // Build query string with conversation and artifact navigation
+            const queryParams: string[] = [];
+            if (config.conversationId) queryParams.push(`conversationId=${config.conversationId}`);
+            if (config.messageId) queryParams.push(`messageId=${config.messageId}`);
+            if (config.artifactId) queryParams.push(`artifactId=${config.artifactId}`);
+            if (config.versionNumber) queryParams.push(`versionNumber=${config.versionNumber}`);
+            if (config.taskId) queryParams.push(`taskId=${config.taskId}`);
+            queryString = queryParams.join('&');
+            break;
         }
       }
     }

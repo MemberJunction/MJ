@@ -7,8 +7,8 @@ import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import { DropDownListComponent } from '@progress/kendo-angular-dropdowns';
-import { MSFTUserImageService } from './MSFT_UserImageService';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
+import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 
 @Component({
     selector: 'mj-header-component',
@@ -22,6 +22,7 @@ export class HeaderComponent implements OnInit {
     public menuItems: Array<string> = [];
     public selectedMenuItem: string = '';
     public userImageURL: string = 'assets/user.png';
+    public userIconClass: string | null = null;
     @Output() public toggle = new EventEmitter();
 
     @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>
@@ -50,7 +51,12 @@ export class HeaderComponent implements OnInit {
         return SharedService.UnreadUserNotificationCount;
     }
 
-    constructor(public authBase: MJAuthBase, public sharedService: SharedService, private msftUserImageService: MSFTUserImageService, private router: Router) {}
+    constructor(
+        private authBase: MJAuthBase,
+        public sharedService: SharedService,
+        private router: Router,
+        private userAvatarService: UserAvatarService
+    ) {}
 
     // Listen for clicks outside the search area and user menu to close them
     @HostListener('document:click', ['$event'])
@@ -135,19 +141,91 @@ export class HeaderComponent implements OnInit {
                 await this.loadSearchableEntities();
 
                 const md = new Metadata();
-                this.userName = md.CurrentUser.FirstLast; // Store user name for display
+                const currentUserInfo = md.CurrentUser;
+                this.userName = currentUserInfo.FirstLast; // Store user name for display
 
-                const claims$ = (await this.authBase.getUserClaims()).pipe(take(1));
-                const claims = await firstValueFrom(claims$);
+                // Load the full UserEntity to access avatar fields
+                const currentUserEntity = await md.GetEntityObject<any>('Users');
+                await currentUserEntity.Load(currentUserInfo.ID);
 
-                if (this.isMicrosoft(claims)) {
-                  this.msftUserImageService.getPhoto(claims.accessToken).subscribe((blob: Blob) => {
-                    this.userImageURL = URL.createObjectURL(blob);
-                    this.sharedService.CurrentUserImage = this.userImageURL;
-                  });
+                // Auto-sync avatar from auth provider if user has no avatar settings in DB
+                if (!currentUserEntity.UserImageURL && !currentUserEntity.UserImageIconClass) {
+                    const synced = await this.syncAvatarFromAuthProvider(currentUserEntity);
+                    if (synced) {
+                        // Reload user entity to get saved values
+                        await currentUserEntity.Load(currentUserInfo.ID);
+                    }
                 }
+
+                // Load avatar for display (always from DB after potential sync)
+                this.loadUserAvatar(currentUserEntity);
+
+                // Listen for avatar updates from settings page
+                MJGlobal.Instance.GetEventListener(false).subscribe((updateEvent) => {
+                    if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
+                        // Reload the user entity to get updated avatar
+                        md.GetEntityObject<any>('Users').then(async (userEntity) => {
+                            await userEntity.Load(currentUserInfo.ID);
+                            this.loadUserAvatar(userEntity);
+                        });
+                    }
+                });
             }
         });
+    }
+
+    /**
+     * Syncs avatar from auth provider (Microsoft, Google, etc.)
+     * Gets the image URL and auth headers based on provider type
+     */
+    private async syncAvatarFromAuthProvider(user: any): Promise<boolean> {
+        try {
+            const claims = await firstValueFrom(await this.authBase.getUserClaims());
+
+            // Check if Microsoft
+            if (claims && claims.authority &&
+                (claims.authority.includes('microsoftonline.com') || claims.authority.includes('microsoft.com'))) {
+                // Microsoft Graph API photo endpoint
+                const imageUrl = 'https://graph.microsoft.com/v1.0/me/photo/$value';
+                const authHeaders = { 'Authorization': `Bearer ${claims.accessToken}` };
+
+                return await this.userAvatarService.syncFromImageUrl(user, imageUrl, authHeaders);
+            }
+
+            // TODO: Add support for other providers (Google, Auth0, etc.)
+            // if (isGoogle(claims)) {
+            //   const imageUrl = claims.picture; // Google provides picture URL directly
+            //   return await this.userAvatarService.syncFromImageUrl(user, imageUrl);
+            // }
+
+            return false;
+        } catch (error) {
+            console.warn('Could not sync avatar from auth provider:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Loads the user avatar for display in the header
+     * Priority: UserImageURL > UserImageIconClass > default
+     */
+    private loadUserAvatar(user: any): void {
+        // Check for image URL first
+        if (user.UserImageURL) {
+            this.userImageURL = user.UserImageURL;
+            this.userIconClass = null;
+            this.sharedService.CurrentUserImage = user.UserImageURL;
+        }
+        // Then check for icon class
+        else if (user.UserImageIconClass) {
+            this.userIconClass = user.UserImageIconClass;
+            this.userImageURL = ''; // Clear image URL so kendo-avatar doesn't show placeholder
+        }
+        // Default fallback
+        else {
+            this.userImageURL = 'assets/user.png';
+            this.userIconClass = null;
+        }
     }
 
     private async loadSearchableEntities() {

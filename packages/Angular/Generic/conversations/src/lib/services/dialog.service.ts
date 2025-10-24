@@ -17,6 +17,10 @@ export interface InputDialogOptions {
   inputType?: 'text' | 'textarea' | 'number' | 'email';
   placeholder?: string;
   required?: boolean;
+  secondInputLabel?: string;
+  secondInputValue?: string;
+  secondInputPlaceholder?: string;
+  secondInputRequired?: boolean;
   okText?: string;
   cancelText?: string;
 }
@@ -50,13 +54,13 @@ export class DialogService {
         content: options.message,
         actions: [
           {
-            text: options.cancelText || 'Cancel',
-            primary: false
-          },
-          {
             text: options.okText || 'OK',
             primary: true,
             themeColor: options.dangerous ? 'error' : 'primary'
+          },
+          {
+            text: options.cancelText || 'Cancel',
+            primary: false
           }
         ],
         width: 450,
@@ -99,21 +103,24 @@ export class DialogService {
 
   /**
    * Show an input dialog
-   * @returns Promise<string | null> - input value if OK clicked, null if cancelled
+   * @returns Promise<string | {value: string; secondValue?: string} | null> -
+   *          If single input: returns string
+   *          If dual input: returns object with both values
+   *          Returns null if cancelled
    */
-  input(options: InputDialogOptions): Promise<string | null> {
+  input(options: InputDialogOptions): Promise<string | {value: string; secondValue?: string} | null> {
     return new Promise((resolve) => {
       const dialogRef = this.kendoDialogService.open({
         title: options.title,
         content: InputDialogComponent,
         actions: [
           {
-            text: options.cancelText || 'Cancel',
-            primary: false
-          },
-          {
             text: options.okText || 'OK',
             primary: true
+          },
+          {
+            text: options.cancelText || 'Cancel',
+            primary: false
           }
         ],
         width: 500,
@@ -128,6 +135,10 @@ export class DialogService {
       componentInstance.placeholder = options.placeholder || '';
       componentInstance.required = options.required || false;
       componentInstance.value = options.inputValue || '';
+      componentInstance.secondInputLabel = options.secondInputLabel || '';
+      componentInstance.secondInputPlaceholder = options.secondInputPlaceholder || '';
+      componentInstance.secondInputRequired = options.secondInputRequired || false;
+      componentInstance.secondValue = options.secondInputValue || '';
 
       // Focus and select input after dialog opens
       setTimeout(() => {
@@ -144,7 +155,16 @@ export class DialogService {
           if (options.required && !value) {
             resolve(null);
           } else {
-            resolve(value);
+            // If second input is present, return object with both values
+            if (options.secondInputLabel) {
+              resolve({
+                value: value,
+                secondValue: componentInstance.getSecondValue()
+              });
+            } else {
+              // Single input - return string for backward compatibility
+              resolve(value);
+            }
           }
         } else {
           resolve(null);

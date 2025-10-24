@@ -23,7 +23,8 @@ import { JoinGridModule } from '@memberjunction/ng-join-grid';
 import { SqlLoggingComponent } from './sql-logging/sql-logging.component';
 
 @NgModule({
-  declarations: [],
+  declarations: [
+  ],
   imports: [
     CommonModule,
     GridModule,
@@ -47,7 +48,7 @@ import { SqlLoggingComponent } from './sql-logging/sql-logging.component';
   ],
   exports: [
     SettingsComponent,
-    SqlLoggingComponent
+    SqlLoggingComponent,
   ]
 })
 export class ExplorerSettingsModule { }

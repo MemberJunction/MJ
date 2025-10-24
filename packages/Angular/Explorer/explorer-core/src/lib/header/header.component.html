@@ -28,8 +28,14 @@
         
         <div class="user-info">
           <div class="user-dropdown-wrapper">
-            <kendo-avatar class="k-m-0 user-avatar" style="margin: 0;" [imageSrc]="userImageURL" shape="circle" (click)="toggleUserMenu()"> </kendo-avatar>
-            
+            @if (userIconClass) {
+              <div class="user-avatar-icon" (click)="toggleUserMenu()">
+                <i [class]="userIconClass"></i>
+              </div>
+            } @else {
+              <kendo-avatar class="k-m-0 user-avatar" style="margin: 0;" [imageSrc]="userImageURL" shape="circle" (click)="toggleUserMenu()"> </kendo-avatar>
+            }
+
             <!-- Custom dropdown menu -->
             <div class="user-dropdown-menu" [class.dropdown-open]="isUserMenuOpen">
               <div class="user-dropdown-header">

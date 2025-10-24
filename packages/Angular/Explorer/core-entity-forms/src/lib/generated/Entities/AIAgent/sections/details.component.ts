@@ -117,7 +117,7 @@ import { AIAgentEntity } from '@memberjunction/core-entities';
             [record]="record"
             [ShowLabel]="true"
             FieldName="Status"
-            Type="textbox"
+            Type="dropdownlist"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 
@@ -290,6 +290,27 @@ import { AIAgentEntity } from '@memberjunction/core-entities';
             [ShowLabel]="true"
             FieldName="InvocationMode"
             Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="ArtifactCreationMode"
+            Type="dropdownlist"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="FunctionalRequirements"
+            Type="textarea"
+            [EditMode]="EditMode"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="TechnicalDesign"
+            Type="textarea"
             [EditMode]="EditMode"
         ></mj-form-field>
         <mj-form-field 

@@ -30,6 +30,7 @@ export interface ArtifactJSON {
   ArtifactName: string;
   ArtifactType: string;
   ArtifactDescription: string | null;
+  Visibility: string;
 }
 
 /**
@@ -53,6 +54,18 @@ export type ConversationDetailComplete = ConversationDetailEntityType & {
    * Will be null if no artifacts exist
    */
   ArtifactsJSON: string | null;
+
+  /**
+   * User avatar image URL (Base64 or URL) - joined from vwUsers
+   * Will be null if user has no avatar image set
+   */
+  UserImageURL: string | null;
+
+  /**
+   * User avatar Font Awesome icon class - joined from vwUsers
+   * Will be null if user has no icon class set
+   */
+  UserImageIconClass: string | null;
 };
 
 /**

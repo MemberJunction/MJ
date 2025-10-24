@@ -84,8 +84,8 @@ export const ActionCategorySchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
         * * Description: Status of the action category (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
@@ -169,9 +169,9 @@ export const ActionContextSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Active
     *   * Disabled
+    *   * Pending
         * * Description: Status of the action context (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -385,9 +385,9 @@ export const ActionParamSchema = z.object({
         * * SQL Data Type: nchar(10)
     * * Value List Type: List
     * * Possible Values 
+    *   * Both
     *   * Input
     *   * Output
-    *   * Both
         * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.`),
     ValueType: z.union([z.literal('BaseEntity Sub-Class'), z.literal('BaseEntity Sub-Class'), z.literal('Other'), z.literal('Other'), z.literal('Scalar'), z.literal('Scalar'), z.literal('Simple Object'), z.literal('Simple Object')]).describe(`
         * * Field Name: ValueType
@@ -395,13 +395,13 @@ export const ActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * BaseEntity Sub-Class
+    *   * BaseEntity Sub-Class
     *   * Other
+    *   * Other
+    *   * Scalar
+    *   * Scalar
     *   * Simple Object
-    *   * BaseEntity Sub-Class
-    *   * Scalar
-    *   * Scalar
-    *   * BaseEntity Sub-Class
-    *   * Other
     *   * Simple Object
         * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field`),
     IsArray: z.boolean().describe(`
@@ -546,9 +546,9 @@ export const ActionSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Rejected
     *   * Approved
     *   * Pending
+    *   * Rejected
         * * Description: An action won't be usable until the code is approved.`),
     CodeApprovalComments: z.string().nullable().describe(`
         * * Field Name: CodeApprovalComments
@@ -589,8 +589,8 @@ export const ActionSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
         * * Description: Status of the action (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
@@ -729,8 +729,8 @@ export const AIAgentActionSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Active
+    *   * Pending
     *   * Revoked`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -764,9 +764,9 @@ export const AIAgentActionSchema = z.object({
         * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
-    *   * Remove
-    *   * None
     *   * Compact
+    *   * None
+    *   * Remove
         * * Description: How to handle expired action results: None (no expiration, default), Remove (delete message entirely), Compact (reduce size via CompactMode while preserving key information).`),
     CompactMode: z.union([z.literal('AI Summary'), z.literal('First N Chars')]).nullable().describe(`
         * * Field Name: CompactMode
@@ -837,9 +837,9 @@ export const AIAgentLearningCycleSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * In-Progress
-    *   * Failed
     *   * Complete
+    *   * Failed
+    *   * In-Progress
         * * Description: Status of the learning cycle (In-Progress, Complete, or Failed).`),
     AgentSummary: z.string().nullable().describe(`
         * * Field Name: AgentSummary
@@ -989,8 +989,8 @@ export const AIAgentNoteSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * User
     *   * Global
+    *   * User
         * * Description: Indicates the type of note, either User-specific or Global.`),
     UserID: z.string().nullable().describe(`
         * * Field Name: UserID
@@ -1047,10 +1047,10 @@ export const AIAgentRequestSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Canceled
     *   * Approved
-    *   * Requested
+    *   * Canceled
     *   * Rejected
+    *   * Requested
         * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).`),
     Request: z.string().describe(`
         * * Field Name: Request
@@ -1194,10 +1194,16 @@ export const AIAgentSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Agent Types (vwAIAgentTypes.ID)
         * * Description: Reference to the AIAgentType that defines the category and system-level behavior for this agent. Cannot be null.`),
-    Status: z.string().nullable().describe(`
+    Status: z.union([z.literal('Active'), z.literal('Disabled'), z.literal('Pending')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
         * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.`),
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
@@ -1317,8 +1323,8 @@ if this limit is exceeded.`),
         * * Default Value: Fail
     * * Value List Type: List
     * * Possible Values 
-    *   * Warn
     *   * Fail
+    *   * Warn
         * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.`),
     DefaultPromptEffortLevel: z.number().nullable().describe(`
         * * Field Name: DefaultPromptEffortLevel
@@ -1332,8 +1338,8 @@ if this limit is exceeded.`),
     * * Value List Type: List
     * * Possible Values 
     *   * Failed
-    *   * Success
     *   * Retry
+    *   * Success
         * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.`),
     DefaultArtifactTypeID: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactTypeID
@@ -1355,10 +1361,31 @@ if this limit is exceeded.`),
         * * Default Value: Any
     * * Value List Type: List
     * * Possible Values 
-    *   * Sub-Agent
     *   * Any
+    *   * Sub-Agent
     *   * Top-Level
         * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.`),
+    ArtifactCreationMode: z.union([z.literal('Always'), z.literal('Never'), z.literal('System Only')]).describe(`
+        * * Field Name: ArtifactCreationMode
+        * * Display Name: Artifact Creation Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Never
+    *   * Always
+    *   * System Only
+        * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`),
+    FunctionalRequirements: z.string().nullable().describe(`
+        * * Field Name: FunctionalRequirements
+        * * Display Name: Functional Requirements
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.`),
+    TechnicalDesign: z.string().nullable().describe(`
+        * * Field Name: TechnicalDesign
+        * * Display Name: Technical Design
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -1699,11 +1726,11 @@ export const AIPromptSchema = z.object({
         * * Default Value: Any
     * * Value List Type: List
     * * Possible Values 
-    *   * Markdown
-    *   * JSON
-    *   * Text
-    *   * ModelSpecific
     *   * Any
+    *   * JSON
+    *   * Markdown
+    *   * ModelSpecific
+    *   * Text
         * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.`),
     ModelSpecificResponseFormat: z.string().nullable().describe(`
         * * Field Name: ModelSpecificResponseFormat
@@ -1729,8 +1756,8 @@ export const AIPromptSchema = z.object({
         * * Default Value: Default
     * * Value List Type: List
     * * Possible Values 
-    *   * Default
     *   * ByPower
+    *   * Default
     *   * Specific
         * * Description: Determines how models are selected for this prompt (Default, Specific, ByPower).`),
     PowerPreference: z.union([z.literal('Balanced'), z.literal('Highest'), z.literal('Lowest')]).describe(`
@@ -1741,8 +1768,8 @@ export const AIPromptSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Balanced
-    *   * Lowest
     *   * Highest
+    *   * Lowest
         * * Description: When using ByPower selection strategy, determines whether to prefer highest, lowest, or balanced power models.`),
     ParallelizationMode: z.union([z.literal('ConfigParam'), z.literal('ModelSpecific'), z.literal('None'), z.literal('StaticCount')]).describe(`
         * * Field Name: ParallelizationMode
@@ -1752,9 +1779,9 @@ export const AIPromptSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * ConfigParam
-    *   * StaticCount
-    *   * None
     *   * ModelSpecific
+    *   * None
+    *   * StaticCount
         * * Description: Controls parallelization: None (no parallelization), StaticCount (use AIPrompt.ParallelCount for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel's individual settings).`),
     ParallelCount: z.number().nullable().describe(`
         * * Field Name: ParallelCount
@@ -1773,11 +1800,11 @@ export const AIPromptSchema = z.object({
         * * Default Value: string
     * * Value List Type: List
     * * Possible Values 
-    *   * number
-    *   * date
-    *   * string
-    *   * object
     *   * boolean
+    *   * date
+    *   * number
+    *   * object
+    *   * string
         * * Description: The expected data type of the prompt output: string, number, boolean, date, or object.`),
     OutputExample: z.string().nullable().describe(`
         * * Field Name: OutputExample
@@ -1791,9 +1818,9 @@ export const AIPromptSchema = z.object({
         * * Default Value: Warn
     * * Value List Type: List
     * * Possible Values 
+    *   * None
     *   * Strict
     *   * Warn
-    *   * None
         * * Description: Determines how validation failures are handled: Strict (fail), Warn (log warning), or None (ignore).`),
     MaxRetries: z.number().describe(`
         * * Field Name: MaxRetries
@@ -1814,9 +1841,9 @@ export const AIPromptSchema = z.object({
         * * Default Value: Fixed
     * * Value List Type: List
     * * Possible Values 
+    *   * Exponential
     *   * Fixed
     *   * Linear
-    *   * Exponential
         * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).`),
     ResultSelectorPromptID: z.string().nullable().describe(`
         * * Field Name: ResultSelectorPromptID
@@ -1881,10 +1908,10 @@ export const AIPromptSchema = z.object({
         * * Default Value: System
     * * Value List Type: List
     * * Possible Values 
-    *   * SystemOrUser
     *   * Assistant
-    *   * User
     *   * System
+    *   * SystemOrUser
+    *   * User
         * * Description: Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)`),
     PromptPosition: z.union([z.literal('First'), z.literal('Last')]).describe(`
         * * Field Name: PromptPosition
@@ -1954,14 +1981,14 @@ export const AIPromptSchema = z.object({
         * * Default Value: SameModelDifferentVendor
     * * Value List Type: List
     * * Possible Values 
+    *   * NextBestModel
+    *   * NextBestModel
+    *   * None
     *   * None
     *   * PowerRank
     *   * PowerRank
     *   * SameModelDifferentVendor
-    *   * NextBestModel
-    *   * NextBestModel
     *   * SameModelDifferentVendor
-    *   * None
         * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None`),
     FailoverMaxAttempts: z.number().nullable().describe(`
         * * Field Name: FailoverMaxAttempts
@@ -1982,12 +2009,12 @@ export const AIPromptSchema = z.object({
         * * Default Value: PreferSameModel
     * * Value List Type: List
     * * Possible Values 
-    *   * RequireSameModel
-    *   * RequireSameModel
     *   * PreferDifferentModel
     *   * PreferDifferentModel
     *   * PreferSameModel
     *   * PreferSameModel
+    *   * RequireSameModel
+    *   * RequireSameModel
         * * Description: Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel`),
     FailoverErrorScope: z.union([z.literal('All'), z.literal('All'), z.literal('NetworkOnly'), z.literal('NetworkOnly'), z.literal('RateLimitOnly'), z.literal('RateLimitOnly'), z.literal('ServiceErrorOnly'), z.literal('ServiceErrorOnly')]).describe(`
         * * Field Name: FailoverErrorScope
@@ -1996,14 +2023,14 @@ export const AIPromptSchema = z.object({
         * * Default Value: All
     * * Value List Type: List
     * * Possible Values 
-    *   * ServiceErrorOnly
-    *   * RateLimitOnly
-    *   * NetworkOnly
+    *   * All
     *   * All
     *   * NetworkOnly
+    *   * NetworkOnly
+    *   * RateLimitOnly
     *   * RateLimitOnly
     *   * ServiceErrorOnly
-    *   * All
+    *   * ServiceErrorOnly
         * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly`),
     EffortLevel: z.number().nullable().describe(`
         * * Field Name: EffortLevel
@@ -2080,8 +2107,8 @@ export const AIResultCacheSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Expired
     *   * Active
+    *   * Expired
         * * Description: The status of this result, indicating whether it is currently active or expired.`),
     ExpiredOn: z.date().nullable().describe(`
         * * Field Name: ExpiredOn
@@ -2388,8 +2415,8 @@ export const AuditLogSchema = z.object({
         * * Default Value: Allow
     * * Value List Type: List
     * * Possible Values 
-    *   * Success
-    *   * Failed`),
+    *   * Failed
+    *   * Success`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
@@ -2627,8 +2654,8 @@ export const CommunicationLogSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Sending
     *   * Receiving
+    *   * Sending
         * * Description: The direction of the communication log (Sending or Receiving).`),
     MessageDate: z.date().describe(`
         * * Field Name: MessageDate
@@ -2642,8 +2669,8 @@ export const CommunicationLogSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Failed
     *   * Complete
+    *   * Failed
     *   * In-Progress
     *   * Pending
         * * Description: The status of the logged message (Pending, In-Progress, Complete, Failed).`),
@@ -2709,8 +2736,8 @@ export const CommunicationProviderMessageTypeSchema = z.object({
         * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
         * * Description: The status of the provider message type (Disabled or Active).`),
     AdditionalAttributes: z.string().nullable().describe(`
         * * Field Name: AdditionalAttributes
@@ -2806,6 +2833,12 @@ export const CommunicationProviderSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: Whether or not the provider supports replying to messages`),
+    SupportsDrafts: z.boolean().describe(`
+        * * Field Name: SupportsDrafts
+        * * Display Name: Supports Drafts
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether or not the provider supports creating draft messages`),
 });
 
 export type CommunicationProviderEntityType = z.infer<typeof CommunicationProviderSchema>;
@@ -2830,8 +2863,8 @@ export const CommunicationRunSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Sending
     *   * Receiving
+    *   * Sending
         * * Description: The direction of the communication run (Sending or Receiving).`),
     Status: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('In-Progress'), z.literal('Pending')]).describe(`
         * * Field Name: Status
@@ -2841,8 +2874,8 @@ export const CommunicationRunSchema = z.object({
     * * Possible Values 
     *   * Complete
     *   * Failed
-    *   * Pending
     *   * In-Progress
+    *   * Pending
         * * Description: The status of the communication run (Pending, In-Progress, Complete, Failed).`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
@@ -3003,13 +3036,13 @@ export const CompanyIntegrationRunAPILogSchema = z.object({
         * * SQL Data Type: nvarchar(12)
     * * Value List Type: List
     * * Possible Values 
-    *   * PATCH
-    *   * PUT
     *   * DELETE
+    *   * GET
     *   * HEAD
     *   * OPTIONS
+    *   * PATCH
     *   * POST
-    *   * GET
+    *   * PUT
         * * Description: HTTP method used for the API call (GET, POST, PUT, DELETE, PATCH).`),
     URL: z.string().nullable().describe(`
         * * Field Name: URL
@@ -3148,10 +3181,10 @@ export const CompanyIntegrationRunSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Failed
-    *   * Success
     *   * In Progress
+    *   * Pending
+    *   * Success
         * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.`),
     ErrorLog: z.string().nullable().describe(`
         * * Field Name: ErrorLog
@@ -3831,8 +3864,8 @@ export const ConversationDetailSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * AI
-    *   * User
     *   * Error
+    *   * User
         * * Description: The role of the message sender (user, assistant, system, function).`),
     Message: z.string().describe(`
         * * Field Name: Message
@@ -3928,9 +3961,9 @@ export const ConversationDetailSchema = z.object({
         * * Default Value: Complete
     * * Value List Type: List
     * * Possible Values 
-    *   * In-Progress
     *   * Complete
     *   * Error
+    *   * In-Progress
         * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.`),
     SuggestedResponses: z.string().nullable().describe(`
         * * Field Name: SuggestedResponses
@@ -4178,9 +4211,9 @@ export const DashboardSchema = z.object({
         * * Default Value: Config
     * * Value List Type: List
     * * Possible Values 
+    *   * Code
     *   * Config
     *   * Dynamic Code
-    *   * Code
         * * Description: Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options`),
     Thumbnail: z.string().nullable().describe(`
         * * Field Name: Thumbnail
@@ -4194,8 +4227,8 @@ export const DashboardSchema = z.object({
         * * Default Value: Global
     * * Value List Type: List
     * * Possible Values 
-    *   * Global
     *   * App
+    *   * Global
         * * Description: Scope of the dashboard: Global or App-specific`),
     ApplicationID: z.string().nullable().describe(`
         * * Field Name: ApplicationID
@@ -4541,8 +4574,8 @@ export const DuplicateRunDetailMatchSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Approved
-    *   * Rejected
     *   * Pending
+    *   * Rejected
         * * Description: Current approval status of the proposed action (Pending, Approved, Rejected).`),
     RecordMergeLogID: z.string().nullable().describe(`
         * * Field Name: RecordMergeLogID
@@ -4606,10 +4639,10 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Error
     *   * Complete
-    *   * Skipped
+    *   * Error
     *   * Pending
+    *   * Skipped
         * * Description: Status of duplicate analysis for this record (Pending, Complete, Error).`),
     SkippedReason: z.string().nullable().describe(`
         * * Field Name: SkippedReason
@@ -4628,10 +4661,10 @@ export const DuplicateRunDetailSchema = z.object({
         * * Default Value: Not Applicable
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
+    *   * Complete
     *   * Error
     *   * Not Applicable
-    *   * Complete
+    *   * Pending
         * * Description: Status of any merge operations for this record (Not Applicable, Pending, Complete, Failed).`),
     MergeErrorMessage: z.string().nullable().describe(`
         * * Field Name: MergeErrorMessage
@@ -4693,8 +4726,8 @@ export const DuplicateRunSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Approved
-    *   * Rejected
     *   * Pending
+    *   * Rejected
         * * Description: Overall approval status for the duplicate run results (Pending, Approved, Rejected).`),
     ApprovalComments: z.string().nullable().describe(`
         * * Field Name: ApprovalComments
@@ -4714,9 +4747,9 @@ export const DuplicateRunSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
+    *   * Failed
     *   * In Progress
     *   * Pending
-    *   * Failed
         * * Description: Current processing status of the duplicate detection run (Pending, Running, Complete, Failed).`),
     ProcessingErrorMessage: z.string().nullable().describe(`
         * * Field Name: ProcessingErrorMessage
@@ -5168,8 +5201,8 @@ export const EntitySchema = z.object({
         * * Default Value: Hard
     * * Value List Type: List
     * * Possible Values 
-    *   * Soft
     *   * Hard
+    *   * Soft
         * * Description: Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity's basetable by the CodeGen tool.`),
     AllowRecordMerge: z.boolean().describe(`
         * * Field Name: AllowRecordMerge
@@ -5189,8 +5222,8 @@ export const EntitySchema = z.object({
         * * Default Value: Search
     * * Value List Type: List
     * * Possible Values 
-    *   * Search
     *   * Dropdown
+    *   * Search
         * * Description: When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.`),
     UserFormGenerated: z.boolean().describe(`
         * * Field Name: UserFormGenerated
@@ -5240,9 +5273,9 @@ export const EntitySchema = z.object({
         * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
+    *   * All
     *   * None
     *   * Sample
-    *   * All
         * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.`),
     RowsToPackSampleMethod: z.union([z.literal('bottom n'), z.literal('random'), z.literal('top n')]).describe(`
         * * Field Name: RowsToPackSampleMethod
@@ -5251,9 +5284,9 @@ export const EntitySchema = z.object({
         * * Default Value: random
     * * Value List Type: List
     * * Possible Values 
-    *   * top n
-    *   * random
     *   * bottom n
+    *   * random
+    *   * top n
         * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.`),
     RowsToPackSampleCount: z.number().describe(`
         * * Field Name: RowsToPackSampleCount
@@ -5288,9 +5321,9 @@ export const EntitySchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Deprecated
     *   * Disabled
-    *   * Active
         * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.`),
     DisplayName: z.string().nullable().describe(`
         * * Field Name: DisplayName
@@ -5356,9 +5389,9 @@ export const EntityActionFilterSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Disabled
     *   * Active
+    *   * Disabled
+    *   * Pending
         * * Description: Status of the entity action filter (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -5439,8 +5472,8 @@ export const EntityActionInvocationSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
         * * Description: Status of the entity action invocation (Pending, Active, Disabled).`),
     __mj_CreatedAt: z.date().describe(`
@@ -5486,9 +5519,9 @@ export const EntityActionParamSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Script
-    *   * Entity Object
     *   * Entity Field
+    *   * Entity Object
+    *   * Script
     *   * Static
         * * Description: Type of the value, which can be Static, Entity Object, or Script.`),
     Value: z.string().nullable().describe(`
@@ -5611,8 +5644,8 @@ export const EntityAIActionSchema = z.object({
         * * Default Value: After Save
     * * Value List Type: List
     * * Possible Values 
-    *   * before save
     *   * after save
+    *   * before save
         * * Description: The entity event that triggers this AI action (After Save, Before Delete, etc.).`),
     UserMessage: z.string().describe(`
         * * Field Name: UserMessage
@@ -5794,8 +5827,8 @@ export const EntityDocumentRunSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Pending
     *   * Failed
+    *   * Pending
         * * Description: Can be Pending, In Progress, Completed, or Failed`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -5926,8 +5959,8 @@ export const EntityDocumentSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
-    *   * Active`),
+    *   * Active
+    *   * Inactive`),
     TemplateID: z.string().describe(`
         * * Field Name: TemplateID
         * * Display Name: Template ID
@@ -6137,9 +6170,9 @@ export const EntityFieldSchema = z.object({
         * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
+    *   * List
     *   * ListOrUserEntry
     *   * None
-    *   * List
         * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.`),
     ExtendedType: z.union([z.literal('Code'), z.literal('Email'), z.literal('FaceTime'), z.literal('Geo'), z.literal('MSTeams'), z.literal('Other'), z.literal('SIP'), z.literal('SMS'), z.literal('Skype'), z.literal('Tel'), z.literal('URL'), z.literal('WhatsApp'), z.literal('ZoomMtg')]).nullable().describe(`
         * * Field Name: ExtendedType
@@ -6147,18 +6180,18 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * SMS
-    *   * Email
-    *   * WhatsApp
-    *   * MSTeams
-    *   * URL
-    *   * Skype
     *   * Code
+    *   * Email
     *   * FaceTime
-    *   * SIP
     *   * Geo
+    *   * MSTeams
     *   * Other
+    *   * SIP
+    *   * SMS
+    *   * Skype
     *   * Tel
+    *   * URL
+    *   * WhatsApp
     *   * ZoomMtg
         * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.`),
     CodeType: z.union([z.literal('CSS'), z.literal('HTML'), z.literal('JavaScript'), z.literal('Other'), z.literal('SQL'), z.literal('TypeScript')]).nullable().describe(`
@@ -6167,12 +6200,12 @@ export const EntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
+    *   * CSS
     *   * HTML
     *   * JavaScript
-    *   * CSS
-    *   * TypeScript
-    *   * SQL
     *   * Other
+    *   * SQL
+    *   * TypeScript
         * * Description: The type of code associated with this field. Only used when the ExtendedType field is set to "Code"`),
     DefaultInView: z.boolean().describe(`
         * * Field Name: DefaultInView
@@ -6233,8 +6266,8 @@ export const EntityFieldSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Category
-    *   * Top
     *   * Details
+    *   * Top
         * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details`),
     IsVirtual: z.boolean().describe(`
         * * Field Name: IsVirtual
@@ -6308,9 +6341,9 @@ export const EntityFieldSchema = z.object({
         * * Default Value: Auto
     * * Value List Type: List
     * * Possible Values 
+    *   * All
     *   * Auto
     *   * None
-    *   * All
         * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.`),
     Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Disabled')]).describe(`
         * * Field Name: Status
@@ -6319,8 +6352,8 @@ export const EntityFieldSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
     *   * Disabled
         * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`),
     FieldCodeName: z.string().nullable().describe(`
@@ -6580,8 +6613,8 @@ export const EntityRelationshipDisplayComponentSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Many to Many
     *   * Both
+    *   * Many to Many
     *   * One to Many
         * * Description: The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".`),
     __mj_CreatedAt: z.date().describe(`
@@ -7270,9 +7303,9 @@ export const GeneratedCodeSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Approved
     *   * Pending
     *   * Rejected
-    *   * Approved
         * * Description: Status of the generated code, e.g., Pending, Approved, or Rejected.`),
     Language: z.union([z.literal('CSS'), z.literal('HTML'), z.literal('JavaScript'), z.literal('Other'), z.literal('Python'), z.literal('SQL'), z.literal('TypeScript')]).describe(`
         * * Field Name: Language
@@ -7281,13 +7314,13 @@ export const GeneratedCodeSchema = z.object({
         * * Default Value: TypeScript
     * * Value List Type: List
     * * Possible Values 
+    *   * CSS
+    *   * HTML
+    *   * JavaScript
     *   * Other
     *   * Python
-    *   * JavaScript
     *   * SQL
-    *   * HTML
     *   * TypeScript
-    *   * CSS
         * * Description: Programming language of the generated code (TypeScript, SQL, HTML, CSS, JavaScript, Python, or Other).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -7446,9 +7479,9 @@ export const LibrarySchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Disabled
     *   * Pending
-    *   * Active
         * * Description: Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.`),
     TypeDefinitions: z.string().nullable().describe(`
         * * Field Name: TypeDefinitions
@@ -7498,12 +7531,12 @@ export const LibraryItemSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Variable
-    *   * Module
-    *   * Function
     *   * Class
+    *   * Function
     *   * Interface
+    *   * Module
     *   * Type
+    *   * Variable
         * * Description: Type of the library item for example Class, Interface, etc.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -7617,12 +7650,12 @@ export const ListDetailSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Complete
     *   * Disabled
     *   * Error
     *   * Other
-    *   * Rejected
     *   * Pending
-    *   * Complete
+    *   * Rejected
         * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.`),
     AdditionalData: z.string().nullable().describe(`
         * * Field Name: AdditionalData
@@ -7732,9 +7765,9 @@ export const AccessControlRuleSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Everyone
+    *   * Public
     *   * Role
     *   * User
-    *   * Public
         * * Description: Type of grantee receiving permission (User, Role, Everyone, Public). "Everyone" means all authenticated users whereas "Public" means any authenticated OR anonymous user.`),
     GranteeID: z.string().nullable().describe(`
         * * Field Name: GranteeID
@@ -7957,9 +7990,9 @@ export const AIAgentDataSourceSchema = z.object({
         * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
-    *   * PerRun
-    *   * PerAgent
     *   * None
+    *   * PerAgent
+    *   * PerRun
         * * Description: Cache policy: None (no caching), PerRun (cache for duration of agent run), PerAgent (cache across runs with timeout)`),
     CacheTimeoutSeconds: z.number().nullable().describe(`
         * * Field Name: CacheTimeoutSeconds
@@ -7973,8 +8006,8 @@ export const AIAgentDataSourceSchema = z.object({
         * * Default Value: Data
     * * Value List Type: List
     * * Possible Values 
-    *   * Data
     *   * Context
+    *   * Data
     *   * Payload
         * * Description: Destination for the preloaded data: Data (for Nunjucks templates in prompts), Context (for actions only), or Payload (for agent state)`),
     DestinationPath: z.string().nullable().describe(`
@@ -8126,9 +8159,9 @@ export const AIAgentPromptSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
+    *   * Inactive
     *   * Preview
         * * Description: The current status of this agent-prompt mapping. Values include Active, Inactive, Deprecated, and Preview.`),
     ContextBehavior: z.union([z.literal('Complete'), z.literal('Custom'), z.literal('InitialMessages'), z.literal('None'), z.literal('RecentMessages'), z.literal('Smart')]).describe(`
@@ -8138,12 +8171,12 @@ export const AIAgentPromptSchema = z.object({
         * * Default Value: Complete
     * * Value List Type: List
     * * Possible Values 
-    *   * InitialMessages
-    *   * None
-    *   * Smart
-    *   * RecentMessages
     *   * Complete
     *   * Custom
+    *   * InitialMessages
+    *   * None
+    *   * RecentMessages
+    *   * Smart
         * * Description: Determines how conversation context is filtered for this prompt: Complete, Smart, None, RecentMessages, InitialMessages, or Custom.`),
     ContextMessageCount: z.number().nullable().describe(`
         * * Field Name: ContextMessageCount
@@ -8204,9 +8237,9 @@ export const AIAgentRelationshipSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Revoked
-    *   * Pending
     *   * Active
+    *   * Pending
+    *   * Revoked
         * * Description: Status of the relationship: Pending (awaiting approval), Active (can invoke), or Revoked (no longer allowed)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -8274,11 +8307,11 @@ export const AIAgentRunStepSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Actions
-    *   * Validation
-    *   * Sub-Agent
     *   * Chat
     *   * Decision
     *   * Prompt
+    *   * Sub-Agent
+    *   * Validation
         * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation`),
     StepName: z.string().describe(`
         * * Field Name: StepName
@@ -8297,10 +8330,10 @@ export const AIAgentRunStepSchema = z.object({
         * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
+    *   * Cancelled
+    *   * Completed
     *   * Failed
     *   * Running
-    *   * Completed
-    *   * Cancelled
         * * Description: Current execution status of this step: Running, Completed, Failed, Cancelled`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
@@ -8365,13 +8398,13 @@ export const AIAgentRunStepSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Fail
-    *   * Pass
-    *   * Warn
     *   * Fail
-    *   * Warn
+    *   * Pass
     *   * Pass
     *   * Retry
     *   * Retry
+    *   * Warn
+    *   * Warn
         * * Description: Result of the final payload validation for this step. Pass indicates successful
 validation, Retry means validation failed but will retry, Fail means validation failed
 permanently, Warn means validation failed but execution continues.`),
@@ -8429,11 +8462,11 @@ export const AIAgentRunSchema = z.object({
         * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
-    *   * Failed
-    *   * Running
     *   * Cancelled
-    *   * Paused
     *   * Completed
+    *   * Failed
+    *   * Paused
+    *   * Running
         * * Description: Current status of the agent run. Running -> Completed/Failed/Cancelled`),
     StartedAt: z.date().describe(`
         * * Field Name: StartedAt
@@ -8547,9 +8580,9 @@ export const AIAgentRunSchema = z.object({
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
-    *   * User Request
-    *   * Timeout
     *   * System
+    *   * Timeout
+    *   * User Request
         * * Description: Reason for cancellation if the agent run was cancelled`),
     FinalStep: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Failed'), z.literal('Retry'), z.literal('Sub-Agent'), z.literal('Success')]).nullable().describe(`
         * * Field Name: FinalStep
@@ -8557,12 +8590,12 @@ export const AIAgentRunSchema = z.object({
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
-    *   * Chat
-    *   * Retry
     *   * Actions
+    *   * Chat
+    *   * Failed
+    *   * Retry
     *   * Sub-Agent
     *   * Success
-    *   * Failed
         * * Description: The final step type that concluded the agent run`),
     FinalPayload: z.string().nullable().describe(`
         * * Field Name: FinalPayload
@@ -8766,9 +8799,9 @@ export const AIAgentStepSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Sub-Agent
-    *   * Prompt
     *   * Action
+    *   * Prompt
+    *   * Sub-Agent
         * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
@@ -8793,8 +8826,8 @@ export const AIAgentStepSchema = z.object({
         * * Default Value: fail
     * * Value List Type: List
     * * Possible Values 
-    *   * fail
     *   * continue
+    *   * fail
     *   * retry`),
     ActionID: z.string().nullable().describe(`
         * * Field Name: ActionID
@@ -8853,8 +8886,8 @@ export const AIAgentStepSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
         * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute`),
     ActionInputMapping: z.string().nullable().describe(`
@@ -8984,11 +9017,11 @@ export const AIConfigurationParamSchema = z.object({
         * * Default Value: string
     * * Value List Type: List
     * * Possible Values 
-    *   * date
     *   * boolean
+    *   * date
     *   * number
-    *   * string
     *   * object
+    *   * string
         * * Description: The data type of the parameter (string, number, boolean, date, object).`),
     Value: z.string().describe(`
         * * Field Name: Value
@@ -9050,9 +9083,9 @@ export const AIConfigurationSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
+    *   * Inactive
     *   * Preview
         * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.`),
     DefaultPromptForContextCompressionID: z.string().nullable().describe(`
@@ -9125,10 +9158,10 @@ export const AIModelCostSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Expired
     *   * Active
+    *   * Expired
     *   * Invalid
+    *   * Pending
         * * Description: Current status of this pricing record. Active=currently in use, Pending=scheduled for future, Expired=no longer valid, Invalid=data error`),
     Currency: z.string().describe(`
         * * Field Name: Currency
@@ -9302,10 +9335,10 @@ export const AIModelVendorSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Preview
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
     *   * Inactive
+    *   * Preview
         * * Description: The current status of this model-vendor combination. Values include Active, Inactive, Deprecated, and Preview.`),
     DriverClass: z.string().nullable().describe(`
         * * Field Name: DriverClass
@@ -9439,9 +9472,9 @@ export const AIPromptModelSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
     *   * Active
     *   * Deprecated
+    *   * Inactive
     *   * Preview
         * * Description: The current status of this model configuration. Values include Active, Inactive, Deprecated, and Preview.`),
     ParallelizationMode: z.union([z.literal('ConfigParam'), z.literal('None'), z.literal('StaticCount')]).describe(`
@@ -9451,9 +9484,9 @@ export const AIPromptModelSchema = z.object({
         * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
+    *   * ConfigParam
     *   * None
     *   * StaticCount
-    *   * ConfigParam
         * * Description: Controls how this model participates in parallelization: None, StaticCount, or ConfigParam.`),
     ParallelCount: z.number().describe(`
         * * Field Name: ParallelCount
@@ -9615,10 +9648,10 @@ export const AIPromptRunSchema = z.object({
         * * Default Value: Single
     * * Value List Type: List
     * * Possible Values 
-    *   * ParallelParent
     *   * ParallelChild
-    *   * Single
+    *   * ParallelParent
     *   * ResultSelector
+    *   * Single
         * * Description: Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)`),
     ExecutionOrder: z.number().nullable().describe(`
         * * Field Name: ExecutionOrder
@@ -9836,11 +9869,11 @@ export const AIPromptRunSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Running
-    *   * Pending
-    *   * Failed
     *   * Cancelled
     *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Running
         * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled`),
     Cancelled: z.boolean().describe(`
         * * Field Name: Cancelled
@@ -9865,8 +9898,8 @@ export const AIPromptRunSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * ByPower
-    *   * Specific
     *   * Default
+    *   * Specific
         * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)`),
     CacheHit: z.boolean().describe(`
         * * Field Name: CacheHit
@@ -10061,10 +10094,10 @@ export const AIVendorTypeSchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
     *   * Active
-    *   * Preview
     *   * Deprecated
+    *   * Inactive
+    *   * Preview
         * * Description: The current status of this vendor type. Values include Active, Inactive, Deprecated, and Preview.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -10299,10 +10332,10 @@ export const ArtifactVersionAttributeSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * displayHtml
-    *   * name
-    *   * displayMarkdown
     *   * description
+    *   * displayHtml
+    *   * displayMarkdown
+    *   * name
         * * Description: Maps this attribute to a standard property for UI rendering: 'name', 'description', 'displayMarkdown', 'displayHtml', or NULL for custom attributes`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -10448,6 +10481,16 @@ export const ArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    Visibility: z.union([z.literal('Always'), z.literal('System Only')]).describe(`
+        * * Field Name: Visibility
+        * * Display Name: Visibility
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System Only
+    *   * Always
+        * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`),
     Environment: z.string().describe(`
         * * Field Name: Environment
         * * Display Name: Environment
@@ -10747,12 +10790,12 @@ export const ComponentLibrarySchema = z.object({
         * * SQL Data Type: nvarchar(100)
     * * Value List Type: List
     * * Possible Values 
-    *   * Other
     *   * Charting
-    *   * Runtime
-    *   * Utility
     *   * Core
+    *   * Other
+    *   * Runtime
     *   * UI
+    *   * Utility
         * * Description: Library category: Core, Runtime, UI, Charting, Utility, or Other`),
     CDNUrl: z.string().nullable().describe(`
         * * Field Name: CDNUrl
@@ -10786,9 +10829,9 @@ export const ComponentLibrarySchema = z.object({
         * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
+    *   * Disabled
         * * Description: Status of the component library. Active: fully supported; Deprecated: works but shows console warning; Disabled: throws error if used`),
     LintRules: z.string().nullable().describe(`
         * * Field Name: LintRules
@@ -10911,8 +10954,8 @@ export const ComponentRegistrySchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Active
-    *   * Offline
     *   * Deprecated
+    *   * Offline
         * * Description: Current status of the registry: active, deprecated, or offline`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -10975,16 +11018,16 @@ export const ComponentSchema = z.object({
         * * SQL Data Type: nvarchar(255)
     * * Value List Type: List
     * * Possible Values 
-    *   * Other
-    *   * Widget
     *   * Chart
-    *   * Navigation
     *   * Dashboard
+    *   * Form
+    *   * Navigation
+    *   * Other
+    *   * Report
     *   * Search
     *   * Table
     *   * Utility
-    *   * Report
-    *   * Form
+    *   * Widget
         * * Description: Component type: report, dashboard, form, table, chart, navigation, search, widget, utility, or other`),
     Status: z.union([z.literal('Deprecated'), z.literal('Draft'), z.literal('Published')]).nullable().describe(`
         * * Field Name: Status
@@ -10992,9 +11035,9 @@ export const ComponentSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Published
-    *   * Draft
     *   * Deprecated
+    *   * Draft
+    *   * Published
         * * Description: Publication status: draft, published, or deprecated`),
     DeveloperName: z.string().nullable().describe(`
         * * Field Name: DeveloperName
@@ -11136,9 +11179,9 @@ export const ConversationArtifactPermissionSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
+    *   * Edit
     *   * Owner
     *   * Read
-    *   * Edit
         * * Description: Level of access granted (Read, Edit, Owner)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -11249,9 +11292,9 @@ export const ConversationArtifactSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Everyone
+    *   * None
     *   * Public
     *   * SpecificUsers
-    *   * None
         * * Description: Controls who can view this artifact (None, SpecificUsers, Everyone, Public)`),
     Comments: z.string().nullable().describe(`
         * * Field Name: Comments
@@ -11576,8 +11619,8 @@ export const PublicLinkSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Artifact
-    *   * Conversation
     *   * Collection
+    *   * Conversation
         * * Description: Type of resource being shared (Artifact, Conversation, Collection)`),
     ResourceID: z.string().describe(`
         * * Field Name: ResourceID
@@ -11663,11 +11706,11 @@ export const QueryParameterSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * date
-    *   * string
-    *   * boolean
     *   * array
+    *   * boolean
+    *   * date
     *   * number
+    *   * string
         * * Description: The data type of the parameter used for validation and type conversion. Valid values are: "string" for text values, "number" for integers or decimals, "date" for date/datetime values (ISO 8601 format expected), "boolean" for true/false values, and "array" for multiple values (typically used with IN clauses). The type determines which validation filters can be applied and how the parameter is processed.`),
     IsRequired: z.boolean().nullable().describe(`
         * * Field Name: IsRequired
@@ -11930,11 +11973,11 @@ export const ScheduledJobRunSchema = z.object({
         * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
     *   * Running
     *   * Timeout
-    *   * Completed
-    *   * Cancelled
-    *   * Failed
         * * Description: Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.`),
     Success: z.boolean().nullable().describe(`
         * * Field Name: Success
@@ -12090,11 +12133,11 @@ export const ScheduledJobSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Paused
+    *   * Active
     *   * Disabled
     *   * Expired
+    *   * Paused
     *   * Pending
-    *   * Active
         * * Description: Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.`),
     Configuration: z.string().nullable().describe(`
         * * Field Name: Configuration
@@ -12192,8 +12235,8 @@ export const ScheduledJobSchema = z.object({
         * * Default Value: Skip
     * * Value List Type: List
     * * Possible Values 
-    *   * Queue
     *   * Concurrent
+    *   * Queue
     *   * Skip
         * * Description: Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.`),
     __mj_CreatedAt: z.date().describe(`
@@ -12248,9 +12291,9 @@ export const TaskDependencySchema = z.object({
         * * Default Value: Prerequisite
     * * Value List Type: List
     * * Possible Values 
-    *   * Prerequisite
     *   * Corequisite
     *   * Optional
+    *   * Prerequisite
         * * Description: Type of dependency relationship (Prerequisite, Corequisite, Optional)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -12370,12 +12413,12 @@ export const TaskSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Blocked
-    *   * Failed
-    *   * Deferred
-    *   * In Progress
-    *   * Pending
     *   * Cancelled
     *   * Complete
+    *   * Deferred
+    *   * Failed
+    *   * In Progress
+    *   * Pending
         * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)`),
     PercentComplete: z.number().nullable().describe(`
         * * Field Name: PercentComplete
@@ -12592,10 +12635,10 @@ export const QuerySchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Rejected
     *   * Approved
-    *   * Expired`),
+    *   * Expired
+    *   * Pending
+    *   * Rejected`),
     QualityRank: z.number().nullable().describe(`
         * * Field Name: QualityRank
         * * Display Name: Quality Rank
@@ -12782,8 +12825,8 @@ export const QueryEntitySchema = z.object({
         * * Default Value: Manual
     * * Value List Type: List
     * * Possible Values 
-    *   * Manual
     *   * AI
+    *   * Manual
         * * Description: Indicates how this entity-query relationship was identified. "AI" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). "Manual" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve.`),
     AutoDetectConfidenceScore: z.number().nullable().describe(`
         * * Field Name: AutoDetectConfidenceScore
@@ -12970,8 +13013,8 @@ export const QueueTaskSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Failed
     *   * Completed
+    *   * Failed
     *   * In Progress`),
     StartedAt: z.date().nullable().describe(`
         * * Field Name: StartedAt
@@ -13285,11 +13328,11 @@ export const RecommendationRunSchema = z.object({
         * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
+    *   * Canceled
     *   * Completed
     *   * Error
     *   * In Progress
-    *   * Canceled
+    *   * Pending
         * * Description: The status of the recommendation run`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
@@ -13390,9 +13433,9 @@ export const RecordChangeReplayRunSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Pending
-    *   * In Progress
     *   * Error
+    *   * In Progress
+    *   * Pending
         * * Description: Status of the replay run (Pending, In Progress, Complete, Error)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
@@ -13447,9 +13490,9 @@ export const RecordChangeSchema = z.object({
         * * Default Value: Create
     * * Value List Type: List
     * * Possible Values 
-    *   * Update
     *   * Create
     *   * Delete
+    *   * Update
         * * Description: Create, Update, or Delete`),
     Source: z.union([z.literal('External'), z.literal('Internal')]).describe(`
         * * Field Name: Source
@@ -13488,9 +13531,9 @@ export const RecordChangeSchema = z.object({
         * * Default Value: Complete
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Complete
     *   * Error
+    *   * Pending
         * * Description: For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error`),
     ErrorLog: z.string().nullable().describe(`
         * * Field Name: ErrorLog
@@ -13565,8 +13608,8 @@ export const RecordMergeDeletionLogSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Pending
-    *   * Error`),
+    *   * Error
+    *   * Pending`),
     ProcessingLog: z.string().nullable().describe(`
         * * Field Name: ProcessingLog
         * * Display Name: Processing Log
@@ -13617,8 +13660,8 @@ export const RecordMergeLogSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Approved
+    *   * Pending
     *   * Rejected
         * * Description: Field ApprovalStatus for entity Record Merge Logs.`),
     ApprovedByUserID: z.string().nullable().describe(`
@@ -13634,8 +13677,8 @@ export const RecordMergeLogSchema = z.object({
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Started
     *   * Error
+    *   * Started
         * * Description: Field ProcessingStatus for entity Record Merge Logs.`),
     ProcessingStartedAt: z.date().describe(`
         * * Field Name: ProcessingStartedAt
@@ -13816,9 +13859,9 @@ export const ReportSchema = z.object({
         * * Default Value: Personal
     * * Value List Type: List
     * * Possible Values 
-    *   * Specific
-    *   * None
     *   * Everyone
+    *   * None
+    *   * Specific
         * * Description: Field SharingScope for entity Reports.`),
     ConversationID: z.string().nullable().describe(`
         * * Field Name: ConversationID
@@ -14040,9 +14083,9 @@ export const ResourcePermissionSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * View
     *   * Edit
     *   * Owner
+    *   * View
         * * Description: Permission level defining the type of access (View, Edit, Owner)`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -14061,9 +14104,9 @@ export const ResourcePermissionSchema = z.object({
         * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
-    *   * Requested
     *   * Approved
     *   * Rejected
+    *   * Requested
     *   * Revoked
         * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.`),
     ResourceType: z.string().describe(`
@@ -14308,9 +14351,9 @@ export const ScheduledActionSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
+    *   * Custom
     *   * Daily
     *   * Monthly
-    *   * Custom
     *   * Weekly
     *   * Yearly
         * * Description: Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)`),
@@ -14331,9 +14374,9 @@ export const ScheduledActionSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Disabled
     *   * Expired
-    *   * Active
     *   * Pending
         * * Description: Status of the scheduled action (Pending, Active, Disabled, Expired)`),
     IntervalDays: z.number().nullable().describe(`
@@ -14639,14 +14682,14 @@ export const TemplateContentTypeSchema = z.object({
         * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
-    *   * HTML
     *   * CSS
+    *   * HTML
     *   * JSON
-    *   * Python
-    *   * Other
-    *   * TypeScript
     *   * JavaScript
     *   * Nunjucks
+    *   * Other
+    *   * Python
+    *   * TypeScript
         * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -14750,11 +14793,11 @@ export const TemplateParamSchema = z.object({
         * * Default Value: Scalar
     * * Value List Type: List
     * * Possible Values 
-    *   * Record
     *   * Array
-    *   * Object
-    *   * Scalar
     *   * Entity
+    *   * Object
+    *   * Record
+    *   * Scalar
         * * Description: Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.`),
     DefaultValue: z.string().nullable().describe(`
         * * Field Name: DefaultValue
@@ -15596,6 +15639,16 @@ export const UserSchema = z.object({
         * * Display Name: __mj _Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    UserImageURL: z.string().nullable().describe(`
+        * * Field Name: UserImageURL
+        * * Display Name: User Image URL
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.`),
+    UserImageIconClass: z.string().nullable().describe(`
+        * * Field Name: UserImageIconClass
+        * * Display Name: User Image Icon Class
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".`),
     FirstLast: z.string().nullable().describe(`
         * * Field Name: FirstLast
         * * Display Name: First Last
@@ -15760,10 +15813,10 @@ export const VersionInstallationSchema = z.object({
         * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * In Progress
     *   * Complete
-    *   * Pending
     *   * Failed
+    *   * In Progress
+    *   * Pending
         * * Description: Pending, Complete, Failed`),
     InstallLog: z.string().nullable().describe(`
         * * Field Name: InstallLog
@@ -15929,12 +15982,12 @@ export const WorkflowSchema = z.object({
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
+    *   * Days
+    *   * Hours
+    *   * Minutes
+    *   * Months
     *   * Weeks
     *   * Years
-    *   * Hours
-    *   * Months
-    *   * Days
-    *   * Minutes
         * * Description: Minutes, Hours, Days, Weeks, Months, Years`),
     AutoRunInterval: z.number().nullable().describe(`
         * * Field Name: AutoRunInterval
@@ -16280,8 +16333,8 @@ export class ActionCategoryEntity extends BaseEntity<ActionCategoryEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
     * * Description: Status of the action category (Pending, Active, Disabled).
     */
@@ -16499,9 +16552,9 @@ export class ActionContextEntity extends BaseEntity<ActionContextEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Active
     *   * Disabled
+    *   * Pending
     * * Description: Status of the action context (Pending, Active, Disabled).
     */
     get Status(): 'Active' | 'Disabled' | 'Pending' {
@@ -17065,9 +17118,9 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: nchar(10)
     * * Value List Type: List
     * * Possible Values 
+    *   * Both
     *   * Input
     *   * Output
-    *   * Both
     * * Description: Specifies whether this parameter is used for Input, Output, or Both directions in the action execution flow.
     */
     get Type(): 'Both' | 'Input' | 'Output' {
@@ -17083,13 +17136,13 @@ export class ActionParamEntity extends BaseEntity<ActionParamEntityType> {
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * BaseEntity Sub-Class
+    *   * BaseEntity Sub-Class
     *   * Other
+    *   * Other
+    *   * Scalar
+    *   * Scalar
     *   * Simple Object
-    *   * BaseEntity Sub-Class
-    *   * Scalar
-    *   * Scalar
-    *   * BaseEntity Sub-Class
-    *   * Other
     *   * Simple Object
     * * Description: Tracks the basic value type of the parameter, additional information can be provided in the Description field
     */
@@ -17456,9 +17509,9 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Rejected
     *   * Approved
     *   * Pending
+    *   * Rejected
     * * Description: An action won't be usable until the code is approved.
     */
     get CodeApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
@@ -17555,8 +17608,8 @@ export class ActionEntity extends BaseEntity<ActionEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
     * * Description: Status of the action (Pending, Active, Disabled).
     */
@@ -18033,8 +18086,8 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Active
+    *   * Pending
     *   * Revoked
     */
     get Status(): 'Active' | 'Pending' | 'Revoked' {
@@ -18110,9 +18163,9 @@ export class AIAgentActionEntity extends BaseEntity<AIAgentActionEntityType> {
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
-    *   * Remove
-    *   * None
     *   * Compact
+    *   * None
+    *   * Remove
     * * Description: How to handle expired action results: None (no expiration, default), Remove (delete message entirely), Compact (reduce size via CompactMode while preserving key information).
     */
     get ResultExpirationMode(): 'Compact' | 'None' | 'Remove' {
@@ -18286,9 +18339,9 @@ export class AIAgentLearningCycleEntity extends BaseEntity<AIAgentLearningCycleE
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * In-Progress
-    *   * Failed
     *   * Complete
+    *   * Failed
+    *   * In-Progress
     * * Description: Status of the learning cycle (In-Progress, Complete, or Failed).
     */
     get Status(): 'Complete' | 'Failed' | 'In-Progress' {
@@ -18678,8 +18731,8 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * User
     *   * Global
+    *   * User
     * * Description: Indicates the type of note, either User-specific or Global.
     */
     get Type(): 'Global' | 'User' {
@@ -18823,10 +18876,10 @@ export class AIAgentRequestEntity extends BaseEntity<AIAgentRequestEntityType> {
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Canceled
     *   * Approved
-    *   * Requested
+    *   * Canceled
     *   * Rejected
+    *   * Requested
     * * Description: Current status of the request (Requested, Approved, Rejected, Canceled).
     */
     get Status(): 'Approved' | 'Canceled' | 'Rejected' | 'Requested' {
@@ -19293,12 +19346,18 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * * Field Name: Status
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Disabled
+    *   * Pending
     * * Description: Current status of the AI agent. Active agents can be executed, Disabled agents are inactive, and Pending agents are awaiting configuration or approval. Allowed values: Active, Disabled, Pending.
     */
-    get Status(): string | null {
+    get Status(): 'Active' | 'Disabled' | 'Pending' {
         return this.Get('Status');
     }
-    set Status(value: string | null) {
+    set Status(value: 'Active' | 'Disabled' | 'Pending') {
         this.Set('Status', value);
     }
 
@@ -19564,8 +19623,8 @@ if this limit is exceeded.
     * * Default Value: Fail
     * * Value List Type: List
     * * Possible Values 
-    *   * Warn
     *   * Fail
+    *   * Warn
     * * Description: Determines how to handle StartingPayloadValidation failures. Fail = reject invalid input, Warn = log warning but proceed.
     */
     get StartingPayloadValidationMode(): 'Fail' | 'Warn' {
@@ -19595,8 +19654,8 @@ if this limit is exceeded.
     * * Value List Type: List
     * * Possible Values 
     *   * Failed
-    *   * Success
     *   * Retry
+    *   * Success
     * * Description: Controls how Chat next steps are handled. When null (default), Chat propagates to caller. When set to Success, Failed, or Retry, Chat steps are remapped to that value and re-validated.
     */
     get ChatHandlingOption(): 'Failed' | 'Retry' | 'Success' | null {
@@ -19642,8 +19701,8 @@ if this limit is exceeded.
     * * Default Value: Any
     * * Value List Type: List
     * * Possible Values 
-    *   * Sub-Agent
     *   * Any
+    *   * Sub-Agent
     *   * Top-Level
     * * Description: Controls how the agent can be invoked: Any (default - can be top-level or sub-agent), Top-Level (only callable as primary agent), Sub-Agent (only callable as sub-agent). Used to filter available agents in tools like Sage.
     */
@@ -19652,6 +19711,51 @@ if this limit is exceeded.
     }
     set InvocationMode(value: 'Any' | 'Sub-Agent' | 'Top-Level') {
         this.Set('InvocationMode', value);
+    }
+
+    /**
+    * * Field Name: ArtifactCreationMode
+    * * Display Name: Artifact Creation Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Never
+    *   * Always
+    *   * System Only
+    * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.
+    */
+    get ArtifactCreationMode(): 'Always' | 'Never' | 'System Only' {
+        return this.Get('ArtifactCreationMode');
+    }
+    set ArtifactCreationMode(value: 'Always' | 'Never' | 'System Only') {
+        this.Set('ArtifactCreationMode', value);
+    }
+
+    /**
+    * * Field Name: FunctionalRequirements
+    * * Display Name: Functional Requirements
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed markdown formatted requirements that explain the business goals of the agent without specific technical implementation details.
+    */
+    get FunctionalRequirements(): string | null {
+        return this.Get('FunctionalRequirements');
+    }
+    set FunctionalRequirements(value: string | null) {
+        this.Set('FunctionalRequirements', value);
+    }
+
+    /**
+    * * Field Name: TechnicalDesign
+    * * Display Name: Technical Design
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Detailed markdown that explains the structure of the agent including agent architecture, actions, sub-agents, prompts, and payload structure.
+    */
+    get TechnicalDesign(): string | null {
+        return this.Get('TechnicalDesign');
+    }
+    set TechnicalDesign(value: string | null) {
+        this.Set('TechnicalDesign', value);
     }
 
     /**
@@ -20709,11 +20813,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: Any
     * * Value List Type: List
     * * Possible Values 
-    *   * Markdown
-    *   * JSON
-    *   * Text
-    *   * ModelSpecific
     *   * Any
+    *   * JSON
+    *   * Markdown
+    *   * ModelSpecific
+    *   * Text
     * * Description: Specifies the expected response format for the AI model. Options include Any, Text, Markdown, JSON, and ModelSpecific. Defaults to Any if not specified.
     */
     get ResponseFormat(): 'Any' | 'JSON' | 'Markdown' | 'ModelSpecific' | 'Text' {
@@ -20771,8 +20875,8 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: Default
     * * Value List Type: List
     * * Possible Values 
-    *   * Default
     *   * ByPower
+    *   * Default
     *   * Specific
     * * Description: Determines how models are selected for this prompt (Default, Specific, ByPower).
     */
@@ -20791,8 +20895,8 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Balanced
-    *   * Lowest
     *   * Highest
+    *   * Lowest
     * * Description: When using ByPower selection strategy, determines whether to prefer highest, lowest, or balanced power models.
     */
     get PowerPreference(): 'Balanced' | 'Highest' | 'Lowest' {
@@ -20810,9 +20914,9 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * ConfigParam
-    *   * StaticCount
-    *   * None
     *   * ModelSpecific
+    *   * None
+    *   * StaticCount
     * * Description: Controls parallelization: None (no parallelization), StaticCount (use AIPrompt.ParallelCount for total runs), ConfigParam (use config param specified in ParallelConfigParam for total runs), or ModelSpecific (check each AIPromptModel's individual settings).
     */
     get ParallelizationMode(): 'ConfigParam' | 'ModelSpecific' | 'None' | 'StaticCount' {
@@ -20855,11 +20959,11 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: string
     * * Value List Type: List
     * * Possible Values 
-    *   * number
-    *   * date
-    *   * string
-    *   * object
     *   * boolean
+    *   * date
+    *   * number
+    *   * object
+    *   * string
     * * Description: The expected data type of the prompt output: string, number, boolean, date, or object.
     */
     get OutputType(): 'boolean' | 'date' | 'number' | 'object' | 'string' {
@@ -20889,9 +20993,9 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: Warn
     * * Value List Type: List
     * * Possible Values 
+    *   * None
     *   * Strict
     *   * Warn
-    *   * None
     * * Description: Determines how validation failures are handled: Strict (fail), Warn (log warning), or None (ignore).
     */
     get ValidationBehavior(): 'None' | 'Strict' | 'Warn' {
@@ -20936,9 +21040,9 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: Fixed
     * * Value List Type: List
     * * Possible Values 
+    *   * Exponential
     *   * Fixed
     *   * Linear
-    *   * Exponential
     * * Description: Strategy for calculating retry delays: Fixed (same delay each time), Exponential (doubling delay), or Linear (linearly increasing delay).
     */
     get RetryStrategy(): 'Exponential' | 'Fixed' | 'Linear' {
@@ -21083,10 +21187,10 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: System
     * * Value List Type: List
     * * Possible Values 
-    *   * SystemOrUser
     *   * Assistant
-    *   * User
     *   * System
+    *   * SystemOrUser
+    *   * User
     * * Description: Determines how the prompt is used in conversation: System (always first message), User (positioned by PromptPosition), Assistant (positioned by PromptPosition), or SystemOrUser (try system first, fallback to user last if system slot taken)
     */
     get PromptRole(): 'Assistant' | 'System' | 'SystemOrUser' | 'User' {
@@ -21252,14 +21356,14 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: SameModelDifferentVendor
     * * Value List Type: List
     * * Possible Values 
+    *   * NextBestModel
+    *   * NextBestModel
+    *   * None
     *   * None
     *   * PowerRank
     *   * PowerRank
     *   * SameModelDifferentVendor
-    *   * NextBestModel
-    *   * NextBestModel
     *   * SameModelDifferentVendor
-    *   * None
     * * Description: Failover strategy to use when the primary model fails. Options: SameModelDifferentVendor, NextBestModel, PowerRank, None
     */
     get FailoverStrategy(): 'NextBestModel' | 'NextBestModel' | 'None' | 'None' | 'PowerRank' | 'PowerRank' | 'SameModelDifferentVendor' | 'SameModelDifferentVendor' {
@@ -21304,12 +21408,12 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: PreferSameModel
     * * Value List Type: List
     * * Possible Values 
-    *   * RequireSameModel
-    *   * RequireSameModel
     *   * PreferDifferentModel
     *   * PreferDifferentModel
     *   * PreferSameModel
     *   * PreferSameModel
+    *   * RequireSameModel
+    *   * RequireSameModel
     * * Description: Strategy for selecting failover models. Options: PreferSameModel, PreferDifferentModel, RequireSameModel
     */
     get FailoverModelStrategy(): 'PreferDifferentModel' | 'PreferDifferentModel' | 'PreferSameModel' | 'PreferSameModel' | 'RequireSameModel' | 'RequireSameModel' {
@@ -21326,14 +21430,14 @@ export class AIPromptEntity extends BaseEntity<AIPromptEntityType> {
     * * Default Value: All
     * * Value List Type: List
     * * Possible Values 
-    *   * ServiceErrorOnly
-    *   * RateLimitOnly
-    *   * NetworkOnly
+    *   * All
     *   * All
     *   * NetworkOnly
+    *   * NetworkOnly
+    *   * RateLimitOnly
     *   * RateLimitOnly
     *   * ServiceErrorOnly
-    *   * All
+    *   * ServiceErrorOnly
     * * Description: Types of errors that should trigger failover. Options: All, NetworkOnly, RateLimitOnly, ServiceErrorOnly
     */
     get FailoverErrorScope(): 'All' | 'All' | 'NetworkOnly' | 'NetworkOnly' | 'RateLimitOnly' | 'RateLimitOnly' | 'ServiceErrorOnly' | 'ServiceErrorOnly' {
@@ -21528,8 +21632,8 @@ export class AIResultCacheEntity extends BaseEntity<AIResultCacheEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Expired
     *   * Active
+    *   * Expired
     * * Description: The status of this result, indicating whether it is currently active or expired.
     */
     get Status(): 'Active' | 'Expired' {
@@ -22337,8 +22441,8 @@ export class AuditLogEntity extends BaseEntity<AuditLogEntityType> {
     * * Default Value: Allow
     * * Value List Type: List
     * * Possible Values 
-    *   * Success
     *   * Failed
+    *   * Success
     */
     get Status(): 'Failed' | 'Success' {
         return this.Get('Status');
@@ -22952,8 +23056,8 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Sending
     *   * Receiving
+    *   * Sending
     * * Description: The direction of the communication log (Sending or Receiving).
     */
     get Direction(): 'Receiving' | 'Sending' {
@@ -22983,8 +23087,8 @@ export class CommunicationLogEntity extends BaseEntity<CommunicationLogEntityTyp
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Failed
     *   * Complete
+    *   * Failed
     *   * In-Progress
     *   * Pending
     * * Description: The status of the logged message (Pending, In-Progress, Complete, Failed).
@@ -23150,8 +23254,8 @@ export class CommunicationProviderMessageTypeEntity extends BaseEntity<Communica
     * * Default Value: Disabled
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     * * Description: The status of the provider message type (Disabled or Active).
     */
     get Status(): 'Active' | 'Disabled' {
@@ -23415,6 +23519,20 @@ export class CommunicationProviderEntity extends BaseEntity<CommunicationProvide
     set SupportsReplying(value: boolean) {
         this.Set('SupportsReplying', value);
     }
+
+    /**
+    * * Field Name: SupportsDrafts
+    * * Display Name: Supports Drafts
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether or not the provider supports creating draft messages
+    */
+    get SupportsDrafts(): boolean {
+        return this.Get('SupportsDrafts');
+    }
+    set SupportsDrafts(value: boolean) {
+        this.Set('SupportsDrafts', value);
+    }
 }
 
 
@@ -23480,8 +23598,8 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Sending
     *   * Receiving
+    *   * Sending
     * * Description: The direction of the communication run (Sending or Receiving).
     */
     get Direction(): 'Receiving' | 'Sending' {
@@ -23499,8 +23617,8 @@ export class CommunicationRunEntity extends BaseEntity<CommunicationRunEntityTyp
     * * Possible Values 
     *   * Complete
     *   * Failed
-    *   * Pending
     *   * In-Progress
+    *   * Pending
     * * Description: The status of the communication run (Pending, In-Progress, Complete, Failed).
     */
     get Status(): 'Complete' | 'Failed' | 'In-Progress' | 'Pending' {
@@ -23938,13 +24056,13 @@ export class CompanyIntegrationRunAPILogEntity extends BaseEntity<CompanyIntegra
     * * SQL Data Type: nvarchar(12)
     * * Value List Type: List
     * * Possible Values 
-    *   * PATCH
-    *   * PUT
     *   * DELETE
+    *   * GET
     *   * HEAD
     *   * OPTIONS
+    *   * PATCH
     *   * POST
-    *   * GET
+    *   * PUT
     * * Description: HTTP method used for the API call (GET, POST, PUT, DELETE, PATCH).
     */
     get RequestMethod(): 'DELETE' | 'GET' | 'HEAD' | 'OPTIONS' | 'PATCH' | 'POST' | 'PUT' | null {
@@ -24312,10 +24430,10 @@ export class CompanyIntegrationRunEntity extends BaseEntity<CompanyIntegrationRu
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Failed
-    *   * Success
     *   * In Progress
+    *   * Pending
+    *   * Success
     * * Description: Status of the integration run. Possible values: Pending, In Progress, Success, Failed.
     */
     get Status(): 'Failed' | 'In Progress' | 'Pending' | 'Success' {
@@ -26207,8 +26325,8 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Value List Type: List
     * * Possible Values 
     *   * AI
-    *   * User
     *   * Error
+    *   * User
     * * Description: The role of the message sender (user, assistant, system, function).
     */
     get Role(): 'AI' | 'Error' | 'User' {
@@ -26347,7 +26465,8 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     /**
     * * Field Name: ArtifactID
     * * Display Name: Artifact ID
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifacts (vwConversationArtifacts.ID)
     * * Description: Optional reference to a conversation artifact associated with this conversation detail
     */
@@ -26361,7 +26480,8 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     /**
     * * Field Name: ArtifactVersionID
     * * Display Name: Artifact Version ID
-    * * SQL Data Type: uniqueidentifier
+    * * 
+    * * @deprecated This field is deprecated and will be removed in a future version. Using it will result in console warnings.SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Conversation Artifact Versions (vwConversationArtifactVersions.ID)
     * * Description: Optional reference to a specific version of a conversation artifact associated with this conversation detail
     */
@@ -26434,9 +26554,9 @@ export class ConversationDetailEntity extends BaseEntity<ConversationDetailEntit
     * * Default Value: Complete
     * * Value List Type: List
     * * Possible Values 
-    *   * In-Progress
     *   * Complete
     *   * Error
+    *   * In-Progress
     * * Description: Status of the conversation message. Complete indicates finished processing, In-Progress indicates active agent work, Error indicates processing failed.
     */
     get Status(): 'Complete' | 'Error' | 'In-Progress' {
@@ -27102,9 +27222,9 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Default Value: Config
     * * Value List Type: List
     * * Possible Values 
+    *   * Code
     *   * Config
     *   * Dynamic Code
-    *   * Code
     * * Description: Dashboard type supporting Config (metadata-driven), Code (compiled TypeScript), and Dynamic Code (Skip-generated runtime JavaScript/React) options
     */
     get Type(): 'Code' | 'Config' | 'Dynamic Code' {
@@ -27134,8 +27254,8 @@ export class DashboardEntity extends BaseEntity<DashboardEntityType> {
     * * Default Value: Global
     * * Value List Type: List
     * * Possible Values 
-    *   * Global
     *   * App
+    *   * Global
     * * Description: Scope of the dashboard: Global or App-specific
     */
     get Scope(): 'App' | 'Global' {
@@ -28024,8 +28144,8 @@ export class DuplicateRunDetailMatchEntity extends BaseEntity<DuplicateRunDetail
     * * Value List Type: List
     * * Possible Values 
     *   * Approved
-    *   * Rejected
     *   * Pending
+    *   * Rejected
     * * Description: Current approval status of the proposed action (Pending, Approved, Rejected).
     */
     get ApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
@@ -28179,10 +28299,10 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Error
     *   * Complete
-    *   * Skipped
+    *   * Error
     *   * Pending
+    *   * Skipped
     * * Description: Status of duplicate analysis for this record (Pending, Complete, Error).
     */
     get MatchStatus(): 'Complete' | 'Error' | 'Pending' | 'Skipped' {
@@ -28225,10 +28345,10 @@ export class DuplicateRunDetailEntity extends BaseEntity<DuplicateRunDetailEntit
     * * Default Value: Not Applicable
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
+    *   * Complete
     *   * Error
     *   * Not Applicable
-    *   * Complete
+    *   * Pending
     * * Description: Status of any merge operations for this record (Not Applicable, Pending, Complete, Failed).
     */
     get MergeStatus(): 'Complete' | 'Error' | 'Not Applicable' | 'Pending' {
@@ -28388,8 +28508,8 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Approved
-    *   * Rejected
     *   * Pending
+    *   * Rejected
     * * Description: Overall approval status for the duplicate run results (Pending, Approved, Rejected).
     */
     get ApprovalStatus(): 'Approved' | 'Pending' | 'Rejected' {
@@ -28433,9 +28553,9 @@ export class DuplicateRunEntity extends BaseEntity<DuplicateRunEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
+    *   * Failed
     *   * In Progress
     *   * Pending
-    *   * Failed
     * * Description: Current processing status of the duplicate detection run (Pending, Running, Complete, Failed).
     */
     get ProcessingStatus(): 'Complete' | 'Failed' | 'In Progress' | 'Pending' {
@@ -29607,8 +29727,8 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: Hard
     * * Value List Type: List
     * * Possible Values 
-    *   * Soft
     *   * Hard
+    *   * Soft
     * * Description: Hard deletes physically remove rows from the underlying BaseTable. Soft deletes do not remove rows but instead mark the row as deleted by using the special field __mj_DeletedAt which will automatically be added to the entity's basetable by the CodeGen tool.
     */
     get DeleteType(): 'Hard' | 'Soft' {
@@ -29652,8 +29772,8 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: Search
     * * Value List Type: List
     * * Possible Values 
-    *   * Search
     *   * Dropdown
+    *   * Search
     * * Description: When another entity links to this entity with a foreign key, this is the default component type that will be used in the UI. CodeGen will populate the RelatedEntityDisplayType column in the Entity Fields entity with whatever is provided here whenever a new foreign key is detected by CodeGen. The selection can be overridden on a per-foreign-key basis in each row of the Entity Fields entity.
     */
     get RelationshipDefaultDisplayType(): 'Dropdown' | 'Search' {
@@ -29769,9 +29889,9 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
+    *   * All
     *   * None
     *   * Sample
-    *   * All
     * * Description: Determines how entity rows should be packaged for external use. Options include None, Sample, and All. Defaults to None.
     */
     get RowsToPackWithSchema(): 'All' | 'None' | 'Sample' {
@@ -29788,9 +29908,9 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: random
     * * Value List Type: List
     * * Possible Values 
-    *   * top n
-    *   * random
     *   * bottom n
+    *   * random
+    *   * top n
     * * Description: Defines the sampling method for row packing when RowsToPackWithSchema is set to Sample. Options include random, top n, and bottom n. Defaults to random.
     */
     get RowsToPackSampleMethod(): 'bottom n' | 'random' | 'top n' {
@@ -29873,9 +29993,9 @@ export class EntityEntity extends BaseEntity<EntityEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Deprecated
     *   * Disabled
-    *   * Active
     * * Description: Status of the entity. Active: fully functional; Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain.
     */
     get Status(): 'Active' | 'Deprecated' | 'Disabled' {
@@ -30043,9 +30163,9 @@ export class EntityActionFilterEntity extends BaseEntity<EntityActionFilterEntit
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Disabled
     *   * Active
+    *   * Disabled
+    *   * Pending
     * * Description: Status of the entity action filter (Pending, Active, Disabled).
     */
     get Status(): 'Active' | 'Disabled' | 'Pending' {
@@ -30258,8 +30378,8 @@ export class EntityActionInvocationEntity extends BaseEntity<EntityActionInvocat
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
     * * Description: Status of the entity action invocation (Pending, Active, Disabled).
     */
@@ -30376,9 +30496,9 @@ export class EntityActionParamEntity extends BaseEntity<EntityActionParamEntityT
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Script
-    *   * Entity Object
     *   * Entity Field
+    *   * Entity Object
+    *   * Script
     *   * Static
     * * Description: Type of the value, which can be Static, Entity Object, or Script.
     */
@@ -30689,8 +30809,8 @@ export class EntityAIActionEntity extends BaseEntity<EntityAIActionEntityType> {
     * * Default Value: After Save
     * * Value List Type: List
     * * Possible Values 
-    *   * before save
     *   * after save
+    *   * before save
     * * Description: The entity event that triggers this AI action (After Save, Before Delete, etc.).
     */
     get TriggerEvent(): 'after save' | 'before save' {
@@ -31156,8 +31276,8 @@ export class EntityDocumentRunEntity extends BaseEntity<EntityDocumentRunEntityT
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Pending
     *   * Failed
+    *   * Pending
     * * Description: Can be Pending, In Progress, Completed, or Failed
     */
     get Status(): 'Complete' | 'Failed' | 'Pending' {
@@ -31545,8 +31665,8 @@ export class EntityDocumentEntity extends BaseEntity<EntityDocumentEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
     *   * Active
+    *   * Inactive
     */
     get Status(): 'Active' | 'Inactive' {
         return this.Get('Status');
@@ -32058,9 +32178,9 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
+    *   * List
     *   * ListOrUserEntry
     *   * None
-    *   * List
     * * Description: Possible Values of None, List, ListOrUserEntry - the last option meaning that the list of possible values are options, but a user can enter anything else desired too.
     */
     get ValueListType(): 'List' | 'ListOrUserEntry' | 'None' {
@@ -32076,18 +32196,18 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * SMS
-    *   * Email
-    *   * WhatsApp
-    *   * MSTeams
-    *   * URL
-    *   * Skype
     *   * Code
+    *   * Email
     *   * FaceTime
-    *   * SIP
     *   * Geo
+    *   * MSTeams
     *   * Other
+    *   * SIP
+    *   * SMS
+    *   * Skype
     *   * Tel
+    *   * URL
+    *   * WhatsApp
     *   * ZoomMtg
     * * Description: Defines extended behaviors for a field such as for Email, Web URLs, Code, etc.
     */
@@ -32104,12 +32224,12 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
+    *   * CSS
     *   * HTML
     *   * JavaScript
-    *   * CSS
-    *   * TypeScript
-    *   * SQL
     *   * Other
+    *   * SQL
+    *   * TypeScript
     * * Description: The type of code associated with this field. Only used when the ExtendedType field is set to "Code"
     */
     get CodeType(): 'CSS' | 'HTML' | 'JavaScript' | 'Other' | 'SQL' | 'TypeScript' | null {
@@ -32250,8 +32370,8 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Category
-    *   * Top
     *   * Details
+    *   * Top
     * * Description: When set to Top, the field will be placed in a "top area" on the top of a generated form and visible regardless of which tab is displayed. When set to "category" Options: Top, Category, Details
     */
     get GeneratedFormSection(): 'Category' | 'Details' | 'Top' {
@@ -32420,9 +32540,9 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: Auto
     * * Value List Type: List
     * * Possible Values 
+    *   * All
     *   * Auto
     *   * None
-    *   * All
     * * Description: Determines whether values for the field should be included when the schema is packed. Options: Auto (include manually set or auto-derived values), None (exclude all values), All (include all distinct values from the table). Defaults to Auto.
     */
     get ValuesToPackWithSchema(): 'All' | 'Auto' | 'None' {
@@ -32439,8 +32559,8 @@ export class EntityFieldEntity extends BaseEntity<EntityFieldEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
     *   * Disabled
     * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use
     */
@@ -33099,8 +33219,8 @@ export class EntityRelationshipDisplayComponentEntity extends BaseEntity<EntityR
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Many to Many
     *   * Both
+    *   * Many to Many
     *   * One to Many
     * * Description: The type of relationship the component displays. Valid values are "One to Many", "Many to Many", or "Both".
     */
@@ -34912,9 +35032,9 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Approved
     *   * Pending
     *   * Rejected
-    *   * Approved
     * * Description: Status of the generated code, e.g., Pending, Approved, or Rejected.
     */
     get Status(): 'Approved' | 'Pending' | 'Rejected' {
@@ -34931,13 +35051,13 @@ export class GeneratedCodeEntity extends BaseEntity<GeneratedCodeEntityType> {
     * * Default Value: TypeScript
     * * Value List Type: List
     * * Possible Values 
+    *   * CSS
+    *   * HTML
+    *   * JavaScript
     *   * Other
     *   * Python
-    *   * JavaScript
     *   * SQL
-    *   * HTML
     *   * TypeScript
-    *   * CSS
     * * Description: Programming language of the generated code (TypeScript, SQL, HTML, CSS, JavaScript, Python, or Other).
     */
     get Language(): 'CSS' | 'HTML' | 'JavaScript' | 'Other' | 'Python' | 'SQL' | 'TypeScript' {
@@ -35364,9 +35484,9 @@ export class LibraryEntity extends BaseEntity<LibraryEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Disabled
     *   * Pending
-    *   * Active
     * * Description: Status of the library, only libraries marked as Active will be available for use by generated code. If a library was once active but no longer is, existing code that used the library will not be affected.
     */
     get Status(): 'Active' | 'Disabled' | 'Pending' {
@@ -35498,12 +35618,12 @@ export class LibraryItemEntity extends BaseEntity<LibraryItemEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Variable
-    *   * Module
-    *   * Function
     *   * Class
+    *   * Function
     *   * Interface
+    *   * Module
     *   * Type
+    *   * Variable
     * * Description: Type of the library item for example Class, Interface, etc.
     */
     get Type(): 'Class' | 'Function' | 'Interface' | 'Module' | 'Type' | 'Variable' {
@@ -35795,12 +35915,12 @@ export class ListDetailEntity extends BaseEntity<ListDetailEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Active
+    *   * Complete
     *   * Disabled
     *   * Error
     *   * Other
-    *   * Rejected
     *   * Pending
-    *   * Complete
+    *   * Rejected
     * * Description: Tracks the status of each individual list detail row to enable processing of various types and the use of the status column for filtering list detail rows within a list that are in a particular state.
     */
     get Status(): 'Active' | 'Complete' | 'Disabled' | 'Error' | 'Other' | 'Pending' | 'Rejected' {
@@ -36097,9 +36217,9 @@ export class AccessControlRuleEntity extends BaseEntity<AccessControlRuleEntityT
     * * Value List Type: List
     * * Possible Values 
     *   * Everyone
+    *   * Public
     *   * Role
     *   * User
-    *   * Public
     * * Description: Type of grantee receiving permission (User, Role, Everyone, Public). "Everyone" means all authenticated users whereas "Public" means any authenticated OR anonymous user.
     */
     get GranteeType(): 'Everyone' | 'Public' | 'Role' | 'User' {
@@ -36697,9 +36817,9 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
-    *   * PerRun
-    *   * PerAgent
     *   * None
+    *   * PerAgent
+    *   * PerRun
     * * Description: Cache policy: None (no caching), PerRun (cache for duration of agent run), PerAgent (cache across runs with timeout)
     */
     get CachePolicy(): 'None' | 'PerAgent' | 'PerRun' {
@@ -36729,8 +36849,8 @@ export class AIAgentDataSourceEntity extends BaseEntity<AIAgentDataSourceEntityT
     * * Default Value: Data
     * * Value List Type: List
     * * Possible Values 
-    *   * Data
     *   * Context
+    *   * Data
     *   * Payload
     * * Description: Destination for the preloaded data: Data (for Nunjucks templates in prompts), Context (for actions only), or Payload (for agent state)
     */
@@ -37167,9 +37287,9 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
+    *   * Inactive
     *   * Preview
     * * Description: The current status of this agent-prompt mapping. Values include Active, Inactive, Deprecated, and Preview.
     */
@@ -37187,12 +37307,12 @@ export class AIAgentPromptEntity extends BaseEntity<AIAgentPromptEntityType> {
     * * Default Value: Complete
     * * Value List Type: List
     * * Possible Values 
-    *   * InitialMessages
-    *   * None
-    *   * Smart
-    *   * RecentMessages
     *   * Complete
     *   * Custom
+    *   * InitialMessages
+    *   * None
+    *   * RecentMessages
+    *   * Smart
     * * Description: Determines how conversation context is filtered for this prompt: Complete, Smart, None, RecentMessages, InitialMessages, or Custom.
     */
     get ContextBehavior(): 'Complete' | 'Custom' | 'InitialMessages' | 'None' | 'RecentMessages' | 'Smart' {
@@ -37342,9 +37462,9 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Revoked
-    *   * Pending
     *   * Active
+    *   * Pending
+    *   * Revoked
     * * Description: Status of the relationship: Pending (awaiting approval), Active (can invoke), or Revoked (no longer allowed)
     */
     get Status(): 'Active' | 'Pending' | 'Revoked' {
@@ -37539,11 +37659,11 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Actions
-    *   * Validation
-    *   * Sub-Agent
     *   * Chat
     *   * Decision
     *   * Prompt
+    *   * Sub-Agent
+    *   * Validation
     * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation
     */
     get StepType(): 'Actions' | 'Chat' | 'Decision' | 'Prompt' | 'Sub-Agent' | 'Validation' {
@@ -37586,10 +37706,10 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
+    *   * Cancelled
+    *   * Completed
     *   * Failed
     *   * Running
-    *   * Completed
-    *   * Cancelled
     * * Description: Current execution status of this step: Running, Completed, Failed, Cancelled
     */
     get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Running' {
@@ -37744,13 +37864,13 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Fail
-    *   * Pass
-    *   * Warn
     *   * Fail
-    *   * Warn
+    *   * Pass
     *   * Pass
     *   * Retry
     *   * Retry
+    *   * Warn
+    *   * Warn
     * * Description: Result of the final payload validation for this step. Pass indicates successful
 validation, Retry means validation failed but will retry, Fail means validation failed
 permanently, Warn means validation failed but execution continues.
@@ -37920,11 +38040,11 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
-    *   * Failed
-    *   * Running
     *   * Cancelled
-    *   * Paused
     *   * Completed
+    *   * Failed
+    *   * Paused
+    *   * Running
     * * Description: Current status of the agent run. Running -> Completed/Failed/Cancelled
     */
     get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Paused' | 'Running' {
@@ -38201,9 +38321,9 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
-    *   * User Request
-    *   * Timeout
     *   * System
+    *   * Timeout
+    *   * User Request
     * * Description: Reason for cancellation if the agent run was cancelled
     */
     get CancellationReason(): 'System' | 'Timeout' | 'User Request' | null {
@@ -38219,12 +38339,12 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
-    *   * Chat
-    *   * Retry
     *   * Actions
+    *   * Chat
+    *   * Failed
+    *   * Retry
     *   * Sub-Agent
     *   * Success
-    *   * Failed
     * * Description: The final step type that concluded the agent run
     */
     get FinalStep(): 'Actions' | 'Chat' | 'Failed' | 'Retry' | 'Sub-Agent' | 'Success' | null {
@@ -38812,9 +38932,9 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Sub-Agent
-    *   * Prompt
     *   * Action
+    *   * Prompt
+    *   * Sub-Agent
     * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
     */
     get StepType(): 'Action' | 'Prompt' | 'Sub-Agent' {
@@ -38871,8 +38991,8 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     * * Default Value: fail
     * * Value List Type: List
     * * Possible Values 
-    *   * fail
     *   * continue
+    *   * fail
     *   * retry
     */
     get OnErrorBehavior(): 'continue' | 'fail' | 'retry' {
@@ -39013,8 +39133,8 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
     *   * Active
+    *   * Disabled
     *   * Pending
     * * Description: Controls whether this step is executed. Active=normal execution, Pending=skip but may activate later, Disabled=never execute
     */
@@ -39347,11 +39467,11 @@ export class AIConfigurationParamEntity extends BaseEntity<AIConfigurationParamE
     * * Default Value: string
     * * Value List Type: List
     * * Possible Values 
-    *   * date
     *   * boolean
+    *   * date
     *   * number
-    *   * string
     *   * object
+    *   * string
     * * Description: The data type of the parameter (string, number, boolean, date, object).
     */
     get Type(): 'boolean' | 'date' | 'number' | 'object' | 'string' {
@@ -39508,9 +39628,9 @@ export class AIConfigurationEntity extends BaseEntity<AIConfigurationEntityType>
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
+    *   * Inactive
     *   * Preview
     * * Description: The current status of the configuration. Values include Active, Inactive, Deprecated, and Preview.
     */
@@ -39762,10 +39882,10 @@ export class AIModelCostEntity extends BaseEntity<AIModelCostEntityType> {
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Expired
     *   * Active
+    *   * Expired
     *   * Invalid
+    *   * Pending
     * * Description: Current status of this pricing record. Active=currently in use, Pending=scheduled for future, Expired=no longer valid, Invalid=data error
     */
     get Status(): 'Active' | 'Expired' | 'Invalid' | 'Pending' {
@@ -40336,10 +40456,10 @@ export class AIModelVendorEntity extends BaseEntity<AIModelVendorEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Preview
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
     *   * Inactive
+    *   * Preview
     * * Description: The current status of this model-vendor combination. Values include Active, Inactive, Deprecated, and Preview.
     */
     get Status(): 'Active' | 'Deprecated' | 'Inactive' | 'Preview' {
@@ -40741,9 +40861,9 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
     *   * Active
     *   * Deprecated
+    *   * Inactive
     *   * Preview
     * * Description: The current status of this model configuration. Values include Active, Inactive, Deprecated, and Preview.
     */
@@ -40761,9 +40881,9 @@ export class AIPromptModelEntity extends BaseEntity<AIPromptModelEntityType> {
     * * Default Value: None
     * * Value List Type: List
     * * Possible Values 
+    *   * ConfigParam
     *   * None
     *   * StaticCount
-    *   * ConfigParam
     * * Description: Controls how this model participates in parallelization: None, StaticCount, or ConfigParam.
     */
     get ParallelizationMode(): 'ConfigParam' | 'None' | 'StaticCount' {
@@ -41216,10 +41336,10 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     * * Default Value: Single
     * * Value List Type: List
     * * Possible Values 
-    *   * ParallelParent
     *   * ParallelChild
-    *   * Single
+    *   * ParallelParent
     *   * ResultSelector
+    *   * Single
     * * Description: Type of prompt run execution: Single (standard single prompt), ParallelParent (coordinator for parallel execution), ParallelChild (individual parallel execution), ResultSelector (result selection prompt that chooses best result)
     */
     get RunType(): 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single' {
@@ -41773,11 +41893,11 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Running
-    *   * Pending
-    *   * Failed
     *   * Cancelled
     *   * Completed
+    *   * Failed
+    *   * Pending
+    *   * Running
     * * Description: Current execution status of the prompt run. Valid values: Pending, Running, Completed, Failed, Cancelled
     */
     get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Pending' | 'Running' {
@@ -41834,8 +41954,8 @@ export class AIPromptRunEntity extends BaseEntity<AIPromptRunEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * ByPower
-    *   * Specific
     *   * Default
+    *   * Specific
     * * Description: Strategy used for model selection. Valid values: Default (system default), Specific (specific models configured), ByPower (based on power ranking)
     */
     get SelectionStrategy(): 'ByPower' | 'Default' | 'Specific' | null {
@@ -42357,10 +42477,10 @@ export class AIVendorTypeEntity extends BaseEntity<AIVendorTypeEntityType> {
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Inactive
     *   * Active
-    *   * Preview
     *   * Deprecated
+    *   * Inactive
+    *   * Preview
     * * Description: The current status of this vendor type. Values include Active, Inactive, Deprecated, and Preview.
     */
     get Status(): 'Active' | 'Deprecated' | 'Inactive' | 'Preview' {
@@ -42966,10 +43086,10 @@ export class ArtifactVersionAttributeEntity extends BaseEntity<ArtifactVersionAt
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * displayHtml
-    *   * name
-    *   * displayMarkdown
     *   * description
+    *   * displayHtml
+    *   * displayMarkdown
+    *   * name
     * * Description: Maps this attribute to a standard property for UI rendering: 'name', 'description', 'displayMarkdown', 'displayHtml', or NULL for custom attributes
     */
     get StandardProperty(): 'description' | 'displayHtml' | 'displayMarkdown' | 'name' | null {
@@ -43350,6 +43470,24 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Visibility
+    * * Display Name: Visibility
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Always
+    * * Value List Type: List
+    * * Possible Values 
+    *   * System Only
+    *   * Always
+    * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).
+    */
+    get Visibility(): 'Always' | 'System Only' {
+        return this.Get('Visibility');
+    }
+    set Visibility(value: 'Always' | 'System Only') {
+        this.Set('Visibility', value);
     }
 
     /**
@@ -44113,12 +44251,12 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     * * SQL Data Type: nvarchar(100)
     * * Value List Type: List
     * * Possible Values 
-    *   * Other
     *   * Charting
-    *   * Runtime
-    *   * Utility
     *   * Core
+    *   * Other
+    *   * Runtime
     *   * UI
+    *   * Utility
     * * Description: Library category: Core, Runtime, UI, Charting, Utility, or Other
     */
     get Category(): 'Charting' | 'Core' | 'Other' | 'Runtime' | 'UI' | 'Utility' | null {
@@ -44194,9 +44332,9 @@ export class ComponentLibraryEntity extends BaseEntity<ComponentLibraryEntityTyp
     * * Default Value: Active
     * * Value List Type: List
     * * Possible Values 
-    *   * Disabled
-    *   * Deprecated
     *   * Active
+    *   * Deprecated
+    *   * Disabled
     * * Description: Status of the component library. Active: fully supported; Deprecated: works but shows console warning; Disabled: throws error if used
     */
     get Status(): 'Active' | 'Deprecated' | 'Disabled' {
@@ -44499,8 +44637,8 @@ export class ComponentRegistryEntity extends BaseEntity<ComponentRegistryEntityT
     * * Value List Type: List
     * * Possible Values 
     *   * Active
-    *   * Offline
     *   * Deprecated
+    *   * Offline
     * * Description: Current status of the registry: active, deprecated, or offline
     */
     get Status(): 'Active' | 'Deprecated' | 'Offline' | null {
@@ -44661,16 +44799,16 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * SQL Data Type: nvarchar(255)
     * * Value List Type: List
     * * Possible Values 
-    *   * Other
-    *   * Widget
     *   * Chart
-    *   * Navigation
     *   * Dashboard
+    *   * Form
+    *   * Navigation
+    *   * Other
+    *   * Report
     *   * Search
     *   * Table
     *   * Utility
-    *   * Report
-    *   * Form
+    *   * Widget
     * * Description: Component type: report, dashboard, form, table, chart, navigation, search, widget, utility, or other
     */
     get Type(): 'Chart' | 'Dashboard' | 'Form' | 'Navigation' | 'Other' | 'Report' | 'Search' | 'Table' | 'Utility' | 'Widget' | null {
@@ -44686,9 +44824,9 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Published
-    *   * Draft
     *   * Deprecated
+    *   * Draft
+    *   * Published
     * * Description: Publication status: draft, published, or deprecated
     */
     get Status(): 'Deprecated' | 'Draft' | 'Published' | null {
@@ -44979,6 +45117,7 @@ export class ComponentEntity extends BaseEntity<ComponentEntityType> {
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifact Permissions')
 export class ConversationArtifactPermissionEntity extends BaseEntity<ConversationArtifactPermissionEntityType> {
@@ -45045,9 +45184,9 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
+    *   * Edit
     *   * Owner
     *   * Read
-    *   * Edit
     * * Description: Level of access granted (Read, Edit, Owner)
     */
     get AccessLevel(): 'Edit' | 'Owner' | 'Read' {
@@ -45098,6 +45237,7 @@ export class ConversationArtifactPermissionEntity extends BaseEntity<Conversatio
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifact Versions')
 export class ConversationArtifactVersionEntity extends BaseEntity<ConversationArtifactVersionEntityType> {
@@ -45300,6 +45440,7 @@ export class ConversationArtifactVersionEntity extends BaseEntity<ConversationAr
  * @extends {BaseEntity}
  * @class
  * @public
+ * @deprecated This entity is deprecated and will be removed in a future version. Using it will result in console warnings.
  */
 @RegisterClass(BaseEntity, 'MJ: Conversation Artifacts')
 export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactEntityType> {
@@ -45429,9 +45570,9 @@ export class ConversationArtifactEntity extends BaseEntity<ConversationArtifactE
     * * Value List Type: List
     * * Possible Values 
     *   * Everyone
+    *   * None
     *   * Public
     *   * SpecificUsers
-    *   * None
     * * Description: Controls who can view this artifact (None, SpecificUsers, Everyone, Public)
     */
     get SharingScope(): 'Everyone' | 'None' | 'Public' | 'SpecificUsers' {
@@ -46282,8 +46423,8 @@ export class PublicLinkEntity extends BaseEntity<PublicLinkEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Artifact
-    *   * Conversation
     *   * Collection
+    *   * Conversation
     * * Description: Type of resource being shared (Artifact, Conversation, Collection)
     */
     get ResourceType(): 'Artifact' | 'Collection' | 'Conversation' {
@@ -46504,11 +46645,11 @@ export class QueryParameterEntity extends BaseEntity<QueryParameterEntityType> {
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * date
-    *   * string
-    *   * boolean
     *   * array
+    *   * boolean
+    *   * date
     *   * number
+    *   * string
     * * Description: The data type of the parameter used for validation and type conversion. Valid values are: "string" for text values, "number" for integers or decimals, "date" for date/datetime values (ISO 8601 format expected), "boolean" for true/false values, and "array" for multiple values (typically used with IN clauses). The type determines which validation filters can be applied and how the parameter is processed.
     */
     get Type(): 'array' | 'boolean' | 'date' | 'number' | 'string' {
@@ -47243,11 +47384,11 @@ export class ScheduledJobRunEntity extends BaseEntity<ScheduledJobRunEntityType>
     * * Default Value: Running
     * * Value List Type: List
     * * Possible Values 
+    *   * Cancelled
+    *   * Completed
+    *   * Failed
     *   * Running
     *   * Timeout
-    *   * Completed
-    *   * Cancelled
-    *   * Failed
     * * Description: Current status of the job execution. Running=currently executing, Completed=finished (check Success for outcome), Failed=exception during execution, Cancelled=manually cancelled, Timeout=exceeded maximum execution time.
     */
     get Status(): 'Cancelled' | 'Completed' | 'Failed' | 'Running' | 'Timeout' {
@@ -47680,11 +47821,11 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Paused
+    *   * Active
     *   * Disabled
     *   * Expired
+    *   * Paused
     *   * Pending
-    *   * Active
     * * Description: Current status of the schedule. Pending=created but not yet active, Active=currently running on schedule, Paused=temporarily stopped, Disabled=manually disabled, Expired=past EndAt date.
     */
     get Status(): 'Active' | 'Disabled' | 'Expired' | 'Paused' | 'Pending' {
@@ -47918,8 +48059,8 @@ export class ScheduledJobEntity extends BaseEntity<ScheduledJobEntityType> {
     * * Default Value: Skip
     * * Value List Type: List
     * * Possible Values 
-    *   * Queue
     *   * Concurrent
+    *   * Queue
     *   * Skip
     * * Description: Controls behavior when a new execution is scheduled while a previous execution is still running. Skip=do not start new execution (default), Queue=wait for current to finish then execute, Concurrent=allow multiple simultaneous executions.
     */
@@ -48087,9 +48228,9 @@ export class TaskDependencyEntity extends BaseEntity<TaskDependencyEntityType> {
     * * Default Value: Prerequisite
     * * Value List Type: List
     * * Possible Values 
-    *   * Prerequisite
     *   * Corequisite
     *   * Optional
+    *   * Prerequisite
     * * Description: Type of dependency relationship (Prerequisite, Corequisite, Optional)
     */
     get DependencyType(): 'Corequisite' | 'Optional' | 'Prerequisite' {
@@ -48440,12 +48581,12 @@ export class TaskEntity extends BaseEntity<TaskEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Blocked
-    *   * Failed
-    *   * Deferred
-    *   * In Progress
-    *   * Pending
     *   * Cancelled
     *   * Complete
+    *   * Deferred
+    *   * Failed
+    *   * In Progress
+    *   * Pending
     * * Description: Current status of the task (Pending, In Progress, Complete, Cancelled, Failed, Blocked, Deferred)
     */
     get Status(): 'Blocked' | 'Cancelled' | 'Complete' | 'Deferred' | 'Failed' | 'In Progress' | 'Pending' {
@@ -49063,10 +49204,10 @@ export class QueryEntity extends BaseEntity<QueryEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
-    *   * Rejected
     *   * Approved
     *   * Expired
+    *   * Pending
+    *   * Rejected
     */
     get Status(): 'Approved' | 'Expired' | 'Pending' | 'Rejected' {
         return this.Get('Status');
@@ -49532,8 +49673,8 @@ export class QueryEntityEntity extends BaseEntity<QueryEntityEntityType> {
     * * Default Value: Manual
     * * Value List Type: List
     * * Possible Values 
-    *   * Manual
     *   * AI
+    *   * Manual
     * * Description: Indicates how this entity-query relationship was identified. "AI" means the QueryEntityServer used LLM analysis to parse the SQL/template and identify which MemberJunction entities are referenced (by analyzing table names, joins, and query structure). "Manual" means a user explicitly marked this entity as being used by the query. AI detection helps maintain accurate metadata automatically as queries evolve.
     */
     get DetectionMethod(): 'AI' | 'Manual' {
@@ -50018,8 +50159,8 @@ export class QueueTaskEntity extends BaseEntity<QueueTaskEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Failed
     *   * Completed
+    *   * Failed
     *   * In Progress
     */
     get Status(): 'Completed' | 'Failed' | 'In Progress' {
@@ -50889,11 +51030,11 @@ export class RecommendationRunEntity extends BaseEntity<RecommendationRunEntityT
     * * SQL Data Type: nvarchar(50)
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
+    *   * Canceled
     *   * Completed
     *   * Error
     *   * In Progress
-    *   * Canceled
+    *   * Pending
     * * Description: The status of the recommendation run
     */
     get Status(): 'Canceled' | 'Completed' | 'Error' | 'In Progress' | 'Pending' {
@@ -51157,9 +51298,9 @@ export class RecordChangeReplayRunEntity extends BaseEntity<RecordChangeReplayRu
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Pending
-    *   * In Progress
     *   * Error
+    *   * In Progress
+    *   * Pending
     * * Description: Status of the replay run (Pending, In Progress, Complete, Error)
     */
     get Status(): 'Complete' | 'Error' | 'In Progress' | 'Pending' {
@@ -51301,9 +51442,9 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Default Value: Create
     * * Value List Type: List
     * * Possible Values 
-    *   * Update
     *   * Create
     *   * Delete
+    *   * Update
     * * Description: Create, Update, or Delete
     */
     get Type(): 'Create' | 'Delete' | 'Update' {
@@ -51390,9 +51531,9 @@ export class RecordChangeEntity extends BaseEntity<RecordChangeEntityType> {
     * * Default Value: Complete
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Complete
     *   * Error
+    *   * Pending
     * * Description: For internal record changes generated within MJ, the status is immediately Complete. For external changes that are detected, the workflow starts off as Pending, then In Progress and finally either Complete or Error
     */
     get Status(): 'Complete' | 'Error' | 'Pending' {
@@ -51580,8 +51721,8 @@ export class RecordMergeDeletionLogEntity extends BaseEntity<RecordMergeDeletion
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Pending
     *   * Error
+    *   * Pending
     */
     get Status(): 'Complete' | 'Error' | 'Pending' {
         return this.Get('Status');
@@ -51714,8 +51855,8 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * Pending
     *   * Approved
+    *   * Pending
     *   * Rejected
     * * Description: Field ApprovalStatus for entity Record Merge Logs.
     */
@@ -51747,8 +51888,8 @@ export class RecordMergeLogEntity extends BaseEntity<RecordMergeLogEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Complete
-    *   * Started
     *   * Error
+    *   * Started
     * * Description: Field ProcessingStatus for entity Record Merge Logs.
     */
     get ProcessingStatus(): 'Complete' | 'Error' | 'Started' {
@@ -52258,9 +52399,9 @@ export class ReportEntity extends BaseEntity<ReportEntityType> {
     * * Default Value: Personal
     * * Value List Type: List
     * * Possible Values 
-    *   * Specific
-    *   * None
     *   * Everyone
+    *   * None
+    *   * Specific
     * * Description: Field SharingScope for entity Reports.
     */
     get SharingScope(): 'Everyone' | 'None' | 'Specific' {
@@ -52852,9 +52993,9 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
-    *   * View
     *   * Edit
     *   * Owner
+    *   * View
     * * Description: Permission level defining the type of access (View, Edit, Owner)
     */
     get PermissionLevel(): 'Edit' | 'Owner' | 'View' | null {
@@ -52891,9 +53032,9 @@ export class ResourcePermissionEntity extends BaseEntity<ResourcePermissionEntit
     * * Default Value: Requested
     * * Value List Type: List
     * * Possible Values 
-    *   * Requested
     *   * Approved
     *   * Rejected
+    *   * Requested
     *   * Revoked
     * * Description: Status of the resource permission request. Possible values are Requested, Approved, Rejected, or Revoked.
     */
@@ -53557,9 +53698,9 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
+    *   * Custom
     *   * Daily
     *   * Monthly
-    *   * Custom
     *   * Weekly
     *   * Yearly
     * * Description: Type of the scheduled action (Daily, Weekly, Monthly, Yearly, Custom)
@@ -53604,9 +53745,9 @@ export class ScheduledActionEntity extends BaseEntity<ScheduledActionEntityType>
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
+    *   * Active
     *   * Disabled
     *   * Expired
-    *   * Active
     *   * Pending
     * * Description: Status of the scheduled action (Pending, Active, Disabled, Expired)
     */
@@ -54463,14 +54604,14 @@ export class TemplateContentTypeEntity extends BaseEntity<TemplateContentTypeEnt
     * * Default Value: Other
     * * Value List Type: List
     * * Possible Values 
-    *   * HTML
     *   * CSS
+    *   * HTML
     *   * JSON
-    *   * Python
-    *   * Other
-    *   * TypeScript
     *   * JavaScript
     *   * Nunjucks
+    *   * Other
+    *   * Python
+    *   * TypeScript
     * * Description: Refers to the primary language or codetype of the templates of this type, HTML, JSON, JavaScript, etc
     */
     get CodeType(): 'CSS' | 'HTML' | 'JSON' | 'JavaScript' | 'Nunjucks' | 'Other' | 'Python' | 'TypeScript' {
@@ -54740,11 +54881,11 @@ export class TemplateParamEntity extends BaseEntity<TemplateParamEntityType> {
     * * Default Value: Scalar
     * * Value List Type: List
     * * Possible Values 
-    *   * Record
     *   * Array
-    *   * Object
-    *   * Scalar
     *   * Entity
+    *   * Object
+    *   * Record
+    *   * Scalar
     * * Description: Type of the parameter - Record is an individual record within the entity specified by EntityID. Entity means an entire Entity or an entity filtered by the LinkedParameterName/Field attributes and/or ExtraFilter. Object is any valid JSON object. Array and Scalar have their common meanings.
     */
     get Type(): 'Array' | 'Entity' | 'Object' | 'Record' | 'Scalar' {
@@ -56945,6 +57086,32 @@ export class UserEntity extends BaseEntity<UserEntityType> {
     }
 
     /**
+    * * Field Name: UserImageURL
+    * * Display Name: User Image URL
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: User avatar image. Can be a Base64 encoded data URI (e.g., "data:image/png;base64,...") or a URL to an image file. Preferred over UserImageIconClass when present. Recommended for small thumbnail images only to maintain performance.
+    */
+    get UserImageURL(): string | null {
+        return this.Get('UserImageURL');
+    }
+    set UserImageURL(value: string | null) {
+        this.Set('UserImageURL', value);
+    }
+
+    /**
+    * * Field Name: UserImageIconClass
+    * * Display Name: User Image Icon Class
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Font Awesome icon class for user avatar (e.g., "fa-solid fa-user-astronaut"). Used as fallback when UserImageURL is not provided. Example classes: "fa-solid fa-user", "fa-regular fa-circle-user", "fa-solid fa-user-tie".
+    */
+    get UserImageIconClass(): string | null {
+        return this.Get('UserImageIconClass');
+    }
+    set UserImageIconClass(value: string | null) {
+        this.Set('UserImageIconClass', value);
+    }
+
+    /**
     * * Field Name: FirstLast
     * * Display Name: First Last
     * * SQL Data Type: nvarchar(101)
@@ -57368,10 +57535,10 @@ export class VersionInstallationEntity extends BaseEntity<VersionInstallationEnt
     * * Default Value: Pending
     * * Value List Type: List
     * * Possible Values 
-    *   * In Progress
     *   * Complete
-    *   * Pending
     *   * Failed
+    *   * In Progress
+    *   * Pending
     * * Description: Pending, Complete, Failed
     */
     get Status(): 'Complete' | 'Failed' | 'In Progress' | 'Pending' {
@@ -57825,12 +57992,12 @@ export class WorkflowEntity extends BaseEntity<WorkflowEntityType> {
     * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
+    *   * Days
+    *   * Hours
+    *   * Minutes
+    *   * Months
     *   * Weeks
     *   * Years
-    *   * Hours
-    *   * Months
-    *   * Days
-    *   * Minutes
     * * Description: Minutes, Hours, Days, Weeks, Months, Years
     */
     get AutoRunIntervalUnits(): 'Days' | 'Hours' | 'Minutes' | 'Months' | 'Weeks' | 'Years' | null {

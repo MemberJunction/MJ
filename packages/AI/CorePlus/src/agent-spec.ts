@@ -6,27 +6,38 @@
  */
 export interface AgentSpec {
     /**
-     * Detailed markdown formatted requirements that explains the business goals of the agent but does
-     * not get into the specific technical implementation details.
+     * Detailed markdown formatted requirements that explain the business goals of the agent without
+     * specific technical implementation details.
      */
-    RequirementsDefinition?: string;
+    FunctionalRequirements?: string;
 
     /**
-     * Detailed markdown that explains the structure of the agent in great detail including all of the 
-     * attributes that will be necessary later to architect the metadata that is part of this AgentSpec.
-     * Information will include:
+     * Detailed markdown that explains the structure of the agent including agent architecture,
+     * actions, sub-agents, prompts, and payload structure. Information will include:
      * - Agent architecture overview - basic top level info like name, description, agent type
      * - Actions included in the agent
      * - Sub-agents included in the agent
      * - Prompt(s) for the agent
      * - Payload structure including input and output JSON example
      */
-    DetailedDesign?: string;
+    TechnicalDesign?: string;
 
     // Stuff below here is metadata that goes directly into the AI Agents entity
     ID: string;
     Name: string;
     Description?: string;
+
+    /**
+     * Agent type ID - references MJ: AI Agent Types entity. Common values:
+     * - Loop: for iterative, LLM-driven agents
+     * - Flow: for deterministic, graph-based workflows
+     */
+    TypeID?: string;
+
+    /**
+     * Agent status - Active, Inactive, or Pending
+     */
+    Status?: 'Active' | 'Inactive' | 'Pending';
 
     /**
     * Font Awesome icon class (e.g., fa-robot, fa-brain) for the agent. Used as fallback when LogoURL is not set or fails to load.
@@ -175,6 +186,11 @@ export interface AgentSpec {
 
     /**
      * For flow agents only, this defines the steps that make up the flow
+     */
+    Steps?: Array<AgentStep>;
+
+    /**
+     * For flow agents only, this defines the paths between steps
      */
     Paths?: Array<AgentStepPath>;
 }
