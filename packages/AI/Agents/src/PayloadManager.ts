@@ -900,10 +900,26 @@ export class PayloadManager {
 
     /**
      * Deep merges two objects, with source overriding destination.
-     * 
-     * @private
+     *
+     * This method preserves existing nested properties in the destination while
+     * adding or updating properties from the source. It handles nested objects
+     * recursively, ensuring that partial updates don't wipe out existing data.
+     *
+     * @example
+     * ```typescript
+     * const dest = { decision: { Y: 4, Z: 2 } };
+     * const src = { decision: { x: "string" } };
+     * const result = deepMerge(dest, src);
+     * // Returns: { decision: { x: "string", Y: 4, Z: 2 } }
+     * ```
+     *
+     * @param destination The target object to merge into
+     * @param source The source object to merge from
+     * @returns A new merged object with all properties from both objects
+     *
+     * @public
      */
-    private deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+    public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
         if (!source) return destination as T;
         if (!destination) return _.cloneDeep(source) as T;
         

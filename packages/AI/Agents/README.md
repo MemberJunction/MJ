@@ -1283,70 +1283,309 @@ export class DecisionTreeAgent extends BaseAgentType {
 }
 ```
 
-### Flow Agent Configuration
+## Flow Agent Type - Deterministic Workflows
 
-Flow agents enable deterministic workflow execution through graph-based step definitions:
+Flow agents execute **deterministic, graph-based workflows** where the execution path is determined by boolean conditions evaluated against the payload and step results. Unlike Loop agents that rely on LLM decision-making at each step, Flow agents follow predefined paths through a directed graph.
+
+### When to Use Flow Agents
+
+Flow agents are ideal for:
+- **Predictable workflows** with well-defined decision points
+- **Approval processes** with conditional routing
+- **Data pipelines** with validation and transformation steps
+- **Hybrid workflows** combining deterministic logic with AI prompts
+- **Multi-step processes** where you need guaranteed execution order
+
+### Core Concepts
+
+#### 1. Workflow Steps (AIAgentStep)
+
+Steps are the nodes in your workflow graph. Each step represents an action to perform:
 
 ```typescript
-// Database configuration for a Flow agent workflow
-// AIAgentStep records define the workflow nodes
-const approvalWorkflowSteps = [
+// Three types of steps:
+{
+    Name: 'ValidateInput',
+    StepType: 'Action',           // Execute a MJ Action
+    ActionID: 'validation-action-id',
+    StartingStep: true,           // Marks this as an entry point
+    Sequence: 0,                  // For parallel starting steps
+    Status: 'Active',             // Active, Disabled, or Pending
+    TimeoutSeconds: 30            // Optional timeout
+}
+
+{
+    Name: 'AnalyzeData',
+    StepType: 'Prompt',           // Execute an AI prompt
+    PromptID: 'analysis-prompt-id',
+    Description: 'Analyze data quality and completeness'
+}
+
+{
+    Name: 'ProcessWithSubAgent',
+    StepType: 'Sub-Agent',        // Invoke another agent
+    SubAgentID: 'processing-agent-id'
+}
+```
+
+#### 2. Workflow Paths (AIAgentStepPath)
+
+Paths are the edges connecting your workflow nodes. They determine the flow:
+
+```typescript
+{
+    OriginStepID: 'step-a-id',
+    DestinationStepID: 'step-b-id',
+    Condition: 'payload.amount > 1000 && payload.approved === true',
+    Priority: 10                  // Higher priority paths evaluated first
+}
+
+// Path without condition (always valid)
+{
+    OriginStepID: 'step-a-id',
+    DestinationStepID: 'default-step-id',
+    Condition: null,              // No condition = always valid
+    Priority: 0                   // Lower priority = fallback
+}
+```
+
+#### 3. Action Input/Output Mapping
+
+**Action Input Mapping** (`ActionInputMapping`) - Maps payload values to action parameters:
+
+```typescript
+// In AIAgentStep.ActionInputMapping
+{
+    "customerId": "payload.customer.id",              // Map from payload
+    "orderDate": "static:2024-01-01",                 // Static value
+    "includeDetails": true,                           // Boolean literal
+    "maxResults": 100,                                // Numeric literal
+    "filters": {                                      // Nested object
+        "status": "payload.filters.orderStatus",
+        "region": "static:US-WEST"
+    },
+    "itemIds": "payload.order.items"                  // Can map arrays
+}
+
+// Supports nested resolution
+{
+    "searchParams": {
+        "query": "payload.searchTerm",
+        "filters": {
+            "category": "payload.category",
+            "tags": "payload.selectedTags"
+        },
+        "options": {
+            "maxResults": 50,
+            "includeMetadata": true
+        }
+    }
+}
+```
+
+**Action Output Mapping** (`ActionOutputMapping`) - Maps action results back to payload:
+
+```typescript
+// In AIAgentStep.ActionOutputMapping
+{
+    "userId": "payload.customer.id",                  // Map specific output param
+    "orderTotal": "payload.order.total",              // Nested path in payload
+    "metadata": "payload.action.lastResult",          // Arbitrary nesting
+    "*": "payload.rawResults.fullData"                // Wildcard = entire result
+}
+
+// Case-insensitive output parameter matching
+// If action returns { UserId: "123" }, it matches "userId" in mapping
+```
+
+#### 4. Prompt Result Merging
+
+When a Prompt step executes, its JSON response is **deep merged** into the payload:
+
+```typescript
+// Before prompt execution
+payload = {
+    decision: {
+        status: "pending",
+        reviewerId: "user-123"
+    },
+    metadata: { startTime: "..." }
+};
+
+// Prompt returns
+promptResponse = {
+    decision: {
+        approved: true,
+        confidence: 0.95
+    }
+};
+
+// After deep merge (preserves existing keys!)
+payload = {
+    decision: {
+        approved: true,        // NEW from prompt
+        confidence: 0.95,      // NEW from prompt
+        status: "pending",     // PRESERVED from before
+        reviewerId: "user-123" // PRESERVED from before
+    },
+    metadata: { startTime: "..." }  // PRESERVED
+};
+```
+
+**Why Deep Merge?**
+- **Preserves context** - Existing payload data isn't lost
+- **Incremental updates** - Prompts can add fields without destroying structure
+- **Composable decisions** - Multiple prompts can build up complex objects
+
+**Special Prompt Response Handling**:
+```typescript
+// If prompt response contains Chat step request
+{
+    "nextStep": { "type": "Chat" },
+    "message": "I need more information from the user",
+    "taskComplete": false
+}
+// OR
+{
+    "taskComplete": true,
+    "message": "Here's the final result..."
+}
+
+// Flow agent returns Chat step to bubble message to user
+// This allows prompts within flows to communicate with users
+```
+
+### Complete Flow Agent Example
+
+```typescript
+// Database configuration for a complete approval workflow
+// 1. Define the workflow steps
+const steps = [
+    {
+        Name: 'ValidateRequest',
+        StepType: 'Action',
+        ActionID: validateActionId,
+        StartingStep: true,
+        Sequence: 0,
+        ActionInputMapping: JSON.stringify({
+            "requestData": "payload.request",
+            "validationRules": "payload.rules"
+        }),
+        ActionOutputMapping: JSON.stringify({
+            "isValid": "payload.validation.isValid",
+            "errors": "payload.validation.errors"
+        })
+    },
     {
         Name: 'CheckAmount',
-        StepType: 'Action',
-        ActionID: checkAmountActionId,
-        StartingStep: true,
-        Sequence: 0
+        StepType: 'Prompt',
+        PromptID: amountCheckPromptId,
+        Description: 'AI analyzes amount and risk factors'
+        // Prompt returns: { risk: "low"|"medium"|"high", reasoning: "..." }
+        // Deep merged into payload.risk and payload.reasoning
     },
     {
         Name: 'AutoApprove',
         StepType: 'Action',
         ActionID: approveActionId,
+        ActionInputMapping: JSON.stringify({
+            "requestId": "payload.request.id",
+            "approvedBy": "static:SYSTEM_AUTO"
+        }),
         ActionOutputMapping: JSON.stringify({
-            'approvalId': 'payload.approval.id',
-            'timestamp': 'payload.approval.approvedAt'
+            "approvalId": "payload.approval.id",
+            "timestamp": "payload.approval.timestamp"
         })
     },
     {
         Name: 'ManagerReview',
-        StepType: 'Prompt',
-        PromptID: managerReviewPromptId,
-        Description: 'Get manager approval decision'
+        StepType: 'Sub-Agent',
+        SubAgentID: managerReviewAgentId
+        // Sub-agent payload inherits and can modify parent payload
     },
     {
-        Name: 'NotifyRejection',
+        Name: 'NotifyUser',
         StepType: 'Action',
-        ActionID: sendNotificationActionId
+        ActionID: notificationActionId,
+        ActionInputMapping: JSON.stringify({
+            "userId": "payload.request.userId",
+            "message": "payload.approval.notificationMessage",
+            "channel": "static:email"
+        })
     }
 ];
 
-// AIAgentStepPath records define the workflow edges
-const approvalWorkflowPaths = [
+// 2. Define the workflow paths
+const paths = [
+    // From validation
     {
-        OriginStepID: checkAmountStep.ID,
-        DestinationStepID: autoApproveStep.ID,
-        Condition: 'payload.amount <= 1000',
+        OriginStepID: validateStepId,
+        DestinationStepID: checkAmountStepId,
+        Condition: 'payload.validation.isValid === true',
         Priority: 10
     },
     {
-        OriginStepID: checkAmountStep.ID,
-        DestinationStepID: managerReviewStep.ID,
-        Condition: 'payload.amount > 1000',
+        OriginStepID: validateStepId,
+        DestinationStepID: notifyUserStepId,
+        Condition: 'payload.validation.isValid === false',
+        Priority: 10
+    },
+
+    // From AI risk assessment
+    {
+        OriginStepID: checkAmountStepId,
+        DestinationStepID: autoApproveStepId,
+        Condition: 'payload.risk === "low" && payload.request.amount <= 1000',
         Priority: 10
     },
     {
-        OriginStepID: managerReviewStep.ID,
-        DestinationStepID: autoApproveStep.ID,
-        Condition: 'stepResult.approved === true',
+        OriginStepID: checkAmountStepId,
+        DestinationStepID: managerReviewStepId,
+        Condition: 'payload.risk === "medium" || payload.risk === "high"',
+        Priority: 10
+    },
+
+    // From manager review
+    {
+        OriginStepID: managerReviewStepId,
+        DestinationStepID: autoApproveStepId,
+        Condition: 'payload.managerDecision.approved === true',
         Priority: 10
     },
     {
-        OriginStepID: managerReviewStep.ID,
-        DestinationStepID: notifyRejectionStep.ID,
-        Condition: 'stepResult.approved === false',
-        Priority: 10
+        OriginStepID: managerReviewStepId,
+        DestinationStepID: notifyUserStepId,
+        Condition: 'payload.managerDecision.approved === false',
+        Priority: 5
+    },
+
+    // Final notification after approval
+    {
+        OriginStepID: autoApproveStepId,
+        DestinationStepID: notifyUserStepId,
+        Condition: null,  // Always execute
+        Priority: 0
     }
 ];
+
+// 3. Execute the flow agent
+const result = await runner.RunAgent({
+    agent: flowAgentEntity,
+    conversationMessages: messages,
+    contextUser: user,
+    payload: {
+        request: {
+            id: "req-123",
+            userId: "user-456",
+            amount: 5000,
+            description: "Equipment purchase"
+        },
+        rules: {
+            maxAutoApprove: 1000,
+            requiresManagerReview: true
+        }
+    }
+});
 ```
 
 ### Flow Agent Features

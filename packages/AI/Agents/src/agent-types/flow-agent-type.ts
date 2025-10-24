@@ -164,13 +164,14 @@ export class FlowAgentType extends BaseAgentType {
                             previousPayload: payload
                         });
                     }
-                    
-                    // Merge the prompt response into the current payload
-                    // Update the payload with the prompt result, iterate through each key in the prompt response and update/add
-                    // that key in the payload object
-                    for (const key of Object.keys(promptResponse)) {
-                        payload[key] = promptResponse[key];
-                    }
+
+                    // Deep merge the prompt response into the current payload
+                    // This preserves existing nested properties while adding/updating from the prompt
+                    // Example: If payload has {decision: {Y: 4, Z: 2}} and prompt returns {decision: {x: "string"}},
+                    // the result will be {decision: {x: "string", Y: 4, Z: 2}} instead of losing Y and Z
+                    const mergedPayload = this._payloadManager.deepMerge(payload, promptResponse);
+                    // Copy merged result back to payload reference (modifying in place for consistency)
+                    Object.assign(payload, mergedPayload);
                 }
             }
             
