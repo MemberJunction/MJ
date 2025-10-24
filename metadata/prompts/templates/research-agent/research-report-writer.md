@@ -197,15 +197,16 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 
 **Charts and Visualizations - STRONGLY RECOMMENDED:**
 
-- If your research includes **any quantitative data**, you should create **at least one chart or graph** using the SVG visualization actions (Create SVG Chart, Create SVG Diagram, Create SVG Network, Create SVG Infographic, etc.). Consider creating multiple visualizations if the data supports it.
+- The best way to create diagrams is the `Create Mermaid Diagram` action - your job is to generate Mermaid code, which you're an expert in, and then pass it to the action which returns an SVG which you can then embed directly into your HTML.
 
-- The best way to create diagrams is the `Create Mermaid Diagram` action - your job is to generate Mermaid code, which you're an expert in, and then pass it to the action which returns an SVG which you can then embed directly into your HTML
+- `Create Mermaid Diagram` emits SVG which you can indeed drop into static HTML. The result does NOT include any JS or other dynamic components so it is **safe to use in your HTML** output.
 
 - Mermaid diagrams are very flexible so you can use them to illustrate process concepts, relationships between ideas, data, and much more. These are **very** helpful to readers to best understand the findings. In particular you can use this to associate cross-domain findings very powerfully.
 
 - If you have any data that illustrates a timeline such as the history of something or a series of events in your research, consider using a Mermaid **Gantt** chart to visualize it.
 
-- The other SVG actions are specialized and can be used as desired too
+- The other SVG actions are specialized and can be used as desired too. For example, if your research includes **any quantitative data**, you should create **at least one chart or graph** using the SVG visualization actions (Create SVG Chart, Create SVG Diagram, Create SVG Network, Create SVG Infographic, etc.). Consider creating multiple visualizations if the data supports it.
+
 
 **How to Embed SVG in HTML Reports:**
 
