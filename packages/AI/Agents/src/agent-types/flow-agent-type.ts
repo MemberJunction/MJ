@@ -325,11 +325,12 @@ export class FlowAgentType extends BaseAgentType {
                 
                 
                 const evalResult = this._evaluator.evaluate(path.Condition, context);
-               
+
                 if (evalResult.success && evalResult.value) {
                     validPaths.push(path);
                 }
-                else {
+                else if (!evalResult.success) {
+                    // Only log errors when evaluation failed, not when condition is simply false
                     LogError(`Path condition failed: ${path.Condition}\n${evalResult.error}`);
                 }
             } catch (error) {
