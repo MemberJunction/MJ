@@ -134,26 +134,26 @@ import { ToastService } from '../../services/toast.service';
     </div>
   `,
   styles: [`
-    .conversation-list { display: flex; flex-direction: column; height: 100%; background: #092340; }
+    .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--gray-600); }
     .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .search-input {
       width: 100%;
       padding: 8px 12px;
-      background: rgba(255,255,255,0.1);
+      background: var(--gray-700);
       border: 1px solid rgba(255,255,255,0.2);
       border-radius: 6px;
-      color: white;
+      color: var(--gray-900);
       font-size: 13px;
       transition: all 0.2s;
     }
-    .search-input::placeholder { color: rgba(255,255,255,0.5); }
-    .search-input:focus { outline: none; background: rgba(255,255,255,0.15); border-color: #0076B6; }
+    .search-input::placeholder { color: var(--gray-800); }
+    .search-input:focus { outline: none; border-color: var(--mj-blue)}
     .btn-new-conversation {
       width: calc(100% - 16px);
       margin: 8px;
       padding: 10px;
-      background: #0076B6;
-      color: white;
+      background: var(--mj-blue);
+      color: #FFF;
       border: none;
       border-radius: 6px;
       cursor: pointer;
@@ -188,13 +188,13 @@ import { ToastService } from '../../services/toast.service';
       align-items: center;
       justify-content: space-between;
       cursor: pointer;
-      color: rgba(255, 255, 255, 0.7);
+      color: var(--mj-blue);
       font-size: 13px;
       font-weight: 500;
       transition: color 0.2s;
       user-select: none;
     }
-    .section-header:hover { color: white; }
+    .section-header:hover { color: var(--navy); }
     .section-title {
       display: flex;
       align-items: center;
@@ -219,19 +219,18 @@ import { ToastService } from '../../services/toast.service';
       align-items: center;
       transition: all 0.2s;
       position: relative;
-      color: rgba(255,255,255,0.7);
+      color: var(--gray-800);
       font-size: 14px;
       min-height: 45px;
     }
-    .conversation-item:hover { background: rgba(255,255,255,0.08); color: white; }
-    .conversation-item:hover .conversation-actions { opacity: 1; }
+    .conversation-item:hover { background: var(--gray-700); color: var(--gray-800); }
     .conversation-item.active { background: #0076B6; color: white; }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /*.conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }*/
     .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
@@ -284,7 +283,7 @@ import { ToastService } from '../../services/toast.service';
       justify-content: center;
       border-radius: 6px;
       color: rgba(255,255,255,0.7);
-      background: #092340 !important;
+      background: var(--gray-800) !important;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
@@ -305,7 +304,7 @@ import { ToastService } from '../../services/toast.service';
       right: 0;
       margin-top: 4px;
       min-width: 160px;
-      background: #0A2742;
+      background: #FFF;
       border: 1px solid rgba(255,255,255,0.15);
       border-radius: 8px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
@@ -322,7 +321,7 @@ import { ToastService } from '../../services/toast.service';
       padding: 10px 14px;
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.85);
+      color: var(--gray-800);
       font-size: 14px;
       text-align: left;
       cursor: pointer;
@@ -330,18 +329,18 @@ import { ToastService } from '../../services/toast.service';
     }
 
     .menu-item:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: var(--gray-600);
+      color: var(--mj-blue);
     }
 
     .menu-item i {
       width: 16px;
       font-size: 13px;
-      color: rgba(255,255,255,0.6);
+      color: var(--gray-800);
     }
 
     .menu-item:hover i {
-      color: white;
+      color: var(--mj-blue);
     }
 
     .menu-item.danger {
