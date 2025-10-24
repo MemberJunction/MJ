@@ -8,6 +8,12 @@ Your job is to transform the `FunctionalRequirement` into a complete **Technical
 - **Functional Requirement**: {{ FunctionalRequirement }}
 - **Available Actions**: Use "Find Best Action" action with semantic search
 
+## **IMPORTANT: Agent Design Philosophy**
+
+**Agent Type Selection is Critical**: Loop agents are for creative, analytical, or adaptive workflows where the LLM dynamically decides next steps based on results (research, content generation, complex orchestration). Flow agents are for deterministic, structured processes with clear sequential steps and decision points (onboarding, validation, approval workflows). **Never give Flow agents prompts at the agent level** - they execute predetermined steps; if LLM reasoning is needed, add a Prompt-type step or a Loop sub-agent within the flow. Loop agents **must have at least one prompt** defining their behavior and decision-making logic.
+
+**Payload Design Drives Everything**: Before designing anything, map the payload workflow: what fields come IN (user input), what gets ADDED by each action/sub-agent (validation results, API responses, analysis), and what goes OUT (final result). I'll show you some examples, these are just example payload fields & values they don't exist, you need to think about what payload fields the agent/subagent/ action/prompt needs. For Loop agents, prompts should explicitly reference payload fields (e.g. "Check `payload.userQuery` and call Web Search action, store results in `payload.searchResults`"). For Flow agents, every Action step needs `actionInputMapping` (how to set some payload object into action input param (query): `{"query": "payload.userInput"}`) and `actionOutputMapping` (where to write action output param(results) to payload: `{"results": "payload.apiResponse"}`). Use "Find Best Action" to discover existing actions with semantic search - **always use real action IDs from the search results, never make up placeholder IDs**. Consider sub-agents only when there's truly distinct expertise or parallel execution needed; avoid over-engineering simple workflows with unnecessary agent hierarchies.
+
 ## Decision Tree: Loop vs Flow
 
 ```

@@ -14,34 +14,46 @@ interface BuilderExecutionLog {
     agentName: string;
     agentType: 'Loop' | 'Flow';
 
-    // Detailed creation breakdown
+    // Detailed operation breakdown
     entities: {
         agents: Array<{
             id: string;
             name: string;
             type: 'parent' | 'subagent';
             level: number;
+            operation: 'created' | 'updated' | 'deleted';
         }>;
         prompts: Array<{
             id: string;              // PromptID (populated by AgentSpecSync)
             name: string;            // Prompt name
             associatedWith: string;  // AgentID
+            operation: 'created' | 'updated' | 'deleted';
+        }>;
+        promptJunctions: Array<{
+            id: string;              // AIAgentPrompt junction ID
+            promptId: string;        // PromptID
+            agentId: string;         // AgentID
+            executionOrder: number;
+            operation: 'created' | 'deleted';
         }>;
         actions: Array<{
             id: string;              // AgentActionID (junction record ID)
             actionId: string;        // ActionID (reference to actual action)
+            operation: 'created' | 'updated' | 'deleted';
         }>;
         steps: Array<{
             id: string;
             name: string;
             agentId: string;
             stepType: string;
+            operation: 'created' | 'updated' | 'deleted';
         }>;
         paths: Array<{
             id: string;
             sourceStepId: string;
             destStepId: string;
             agentId: string;
+            operation: 'created' | 'updated' | 'deleted';
         }>;
     };
 
@@ -53,6 +65,9 @@ interface BuilderExecutionLog {
         totalActions: number;
         totalSteps: number;
         totalPaths: number;
+        totalCreated: number;
+        totalUpdated: number;
+        totalDeleted: number;
     };
 
     // Errors and warnings
@@ -117,6 +132,7 @@ export class AgentBuilderAgent extends BaseAgent {
             entities: {
                 agents: [],
                 prompts: [],
+                promptJunctions: [],
                 actions: [],
                 steps: [],
                 paths: []
@@ -127,7 +143,10 @@ export class AgentBuilderAgent extends BaseAgent {
                 totalPrompts: 0,
                 totalActions: 0,
                 totalSteps: 0,
-                totalPaths: 0
+                totalPaths: 0,
+                totalCreated: 0,
+                totalUpdated: 0,
+                totalDeleted: 0
             },
             errors: [],
             warnings: [],
@@ -179,7 +198,7 @@ export class AgentBuilderAgent extends BaseAgent {
             executionLog.createdAgentId = agentId;
 
             // Extract created entity details from AgentSpecSync
-            await this.extractCreatedEntities(specSync, executionLog);
+            await this.extractCreatedEntities(agentSpec, specSync, executionLog);
 
             // Refresh metadata cache with timing
             console.log('🔄 Builder Agent: Refreshing metadata cache...');
@@ -299,71 +318,114 @@ export class AgentBuilderAgent extends BaseAgent {
     }
 
     /**
-     * Extracts details of created entities from AgentSpecSync
+     * Extracts details of created/updated entities from AgentSpecSync
+     * Compares original spec with saved spec to determine operation type
      */
     private async extractCreatedEntities(
+        originalSpec: AgentSpec,
         specSync: AgentSpecSync,
         log: BuilderExecutionLog
     ): Promise<void> {
         const spec = specSync.toJSON();
+
+        // Determine if agent was created or updated
+        const agentWasCreated = !originalSpec.ID || originalSpec.ID === '';
 
         // Track main agent
         log.entities.agents.push({
             id: spec.ID,
             name: spec.Name,
             type: 'parent',
-            level: 0
+            level: 0,
+            operation: agentWasCreated ? 'created' : 'updated'
         });
 
         // Track prompts - PromptID is populated by AgentSpecSync after save
         if (spec.Prompts && spec.Prompts.length > 0) {
-            for (const prompt of spec.Prompts) {
+            for (let i = 0; i < spec.Prompts.length; i++) {
+                const prompt = spec.Prompts[i];
+                const originalPrompt = originalSpec.Prompts?.[i];
+                const promptWasCreated = !originalPrompt || !(originalPrompt as any).PromptID;
+
                 log.entities.prompts.push({
                     id: (prompt as any).PromptID || 'unknown',
-                    name: prompt.PromptName || `Prompt for ${spec.Name}`,
-                    associatedWith: spec.ID
+                    name: `${spec.Name} - Prompt ${i + 1}`,
+                    associatedWith: spec.ID,
+                    operation: promptWasCreated ? 'created' : 'updated'
+                });
+            }
+        }
+
+        // Track prompt junctions - always recreated
+        if (spec.Prompts && spec.Prompts.length > 0) {
+            for (let i = 0; i < spec.Prompts.length; i++) {
+                const prompt = spec.Prompts[i];
+                // Note: We don't have junction IDs after save, but we know they were created
+                log.entities.promptJunctions.push({
+                    id: 'unknown',  // Junction ID not available from spec
+                    promptId: (prompt as any).PromptID || 'unknown',
+                    agentId: spec.ID,
+                    executionOrder: i,
+                    operation: 'created'
                 });
             }
         }
 
         // Track actions - AgentActionID is populated by AgentSpecSync after save
         if (spec.Actions && spec.Actions.length > 0) {
-            for (const action of spec.Actions) {
+            for (let i = 0; i < spec.Actions.length; i++) {
+                const action = spec.Actions[i];
+                const originalAction = originalSpec.Actions?.[i];
+                const actionWasCreated = !originalAction || !originalAction.AgentActionID;
+
                 log.entities.actions.push({
                     id: action.AgentActionID || 'unknown',
-                    actionId: action.ActionID
+                    actionId: action.ActionID,
+                    operation: actionWasCreated ? 'created' : 'updated'
                 });
             }
         }
 
         // Track steps (for Flow agents)
         if (spec.Steps && spec.Steps.length > 0) {
-            for (const step of spec.Steps) {
+            for (let i = 0; i < spec.Steps.length; i++) {
+                const step = spec.Steps[i];
+                const originalStep = originalSpec.Steps?.[i];
+                const stepWasCreated = !originalStep || !originalStep.ID;
+
                 log.entities.steps.push({
                     id: step.ID || 'unknown',
                     name: step.Name,
                     agentId: spec.ID,
-                    stepType: step.StepType
+                    stepType: step.StepType,
+                    operation: stepWasCreated ? 'created' : 'updated'
                 });
             }
         }
 
         // Track paths (for Flow agents)
         if (spec.Paths && spec.Paths.length > 0) {
-            for (const path of spec.Paths) {
+            for (let i = 0; i < spec.Paths.length; i++) {
+                const path = spec.Paths[i];
+                const originalPath = originalSpec.Paths?.[i];
+                const pathWasCreated = !originalPath || !originalPath.ID;
+
                 log.entities.paths.push({
                     id: path.ID || 'unknown',
                     sourceStepId: path.OriginStepID,
                     destStepId: path.DestinationStepID,
-                    agentId: spec.ID
+                    agentId: spec.ID,
+                    operation: pathWasCreated ? 'created' : 'updated'
                 });
             }
         }
 
         // Track sub-agents recursively
         if (spec.SubAgents && spec.SubAgents.length > 0) {
-            for (const subAgentSpec of spec.SubAgents) {
-                this.extractSubAgentEntities(subAgentSpec, log, 1);
+            for (let i = 0; i < spec.SubAgents.length; i++) {
+                const subAgentSpec = spec.SubAgents[i];
+                const originalSubAgent = originalSpec.SubAgents?.[i];
+                this.extractSubAgentEntities(originalSubAgent, subAgentSpec, log, 1);
             }
         }
     }
@@ -373,46 +435,64 @@ export class AgentBuilderAgent extends BaseAgent {
      * SubAgentSpec wraps an AgentSpec, so we need to extract from the .SubAgent property
      */
     private extractSubAgentEntities(
+        originalSubAgentSpec: SubAgentSpec | undefined,
         subAgentSpec: SubAgentSpec,
         log: BuilderExecutionLog,
         level: number
     ): void {
         // SubAgentSpec contains the actual AgentSpec in the SubAgent property
         const agent = subAgentSpec.SubAgent;
+        const originalAgent = originalSubAgentSpec?.SubAgent;
+
+        // Determine if sub-agent was created or updated
+        const agentWasCreated = !originalAgent || !originalAgent.ID || originalAgent.ID === '';
 
         // Track sub-agent
         log.entities.agents.push({
             id: agent.ID,
             name: agent.Name,
             type: 'subagent',
-            level
+            level,
+            operation: agentWasCreated ? 'created' : 'updated'
         });
 
         // Track sub-agent prompts - PromptID is populated by AgentSpecSync
         if (agent.Prompts && agent.Prompts.length > 0) {
-            for (const prompt of agent.Prompts) {
+            for (let i = 0; i < agent.Prompts.length; i++) {
+                const prompt = agent.Prompts[i];
+                const originalPrompt = originalAgent?.Prompts?.[i];
+                const promptWasCreated = !originalPrompt || !(originalPrompt as any).PromptID;
+
                 log.entities.prompts.push({
                     id: (prompt as any).PromptID || 'unknown',
                     name: prompt.PromptName || `Prompt for ${agent.Name}`,
-                    associatedWith: agent.ID
+                    associatedWith: agent.ID,
+                    operation: promptWasCreated ? 'created' : 'updated'
                 });
             }
         }
 
         // Track sub-agent actions - AgentActionID is populated by AgentSpecSync
         if (agent.Actions && agent.Actions.length > 0) {
-            for (const action of agent.Actions) {
+            for (let i = 0; i < agent.Actions.length; i++) {
+                const action = agent.Actions[i];
+                const originalAction = originalAgent?.Actions?.[i];
+                const actionWasCreated = !originalAction || !originalAction.AgentActionID;
+
                 log.entities.actions.push({
                     id: action.AgentActionID || 'unknown',
-                    actionId: action.ActionID
+                    actionId: action.ActionID,
+                    operation: actionWasCreated ? 'created' : 'updated'
                 });
             }
         }
 
         // Recursively track nested sub-agents
         if (agent.SubAgents && agent.SubAgents.length > 0) {
-            for (const nested of agent.SubAgents) {
-                this.extractSubAgentEntities(nested, log, level + 1);
+            for (let i = 0; i < agent.SubAgents.length; i++) {
+                const nested = agent.SubAgents[i];
+                const originalNested = originalAgent?.SubAgents?.[i];
+                this.extractSubAgentEntities(originalNested, nested, log, level + 1);
             }
         }
     }
@@ -427,5 +507,19 @@ export class AgentBuilderAgent extends BaseAgent {
         log.summary.totalActions = log.entities.actions.length;
         log.summary.totalSteps = log.entities.steps.length;
         log.summary.totalPaths = log.entities.paths.length;
+
+        // Count operations across all entity types
+        const allEntities = [
+            ...log.entities.agents,
+            ...log.entities.prompts,
+            ...log.entities.promptJunctions,
+            ...log.entities.actions,
+            ...log.entities.steps,
+            ...log.entities.paths
+        ];
+
+        log.summary.totalCreated = allEntities.filter(e => e.operation === 'created').length;
+        log.summary.totalUpdated = allEntities.filter(e => e.operation === 'updated').length;
+        log.summary.totalDeleted = allEntities.filter(e => e.operation === 'deleted').length;
     }
 }

@@ -1008,6 +1008,7 @@ export class AgentSpecSync {
         console.log(`💬 savePrompts: Processing ${this.spec.Prompts.length} prompt(s)...`);
         const md = new Metadata();
 
+        // Step 1: Create or update AIPrompt records
         for (let i = 0; i < this.spec.Prompts.length; i++) {
             const promptSpec = this.spec.Prompts[i];
 
@@ -1029,14 +1030,12 @@ export class AgentSpecSync {
                 }
             }
 
-            // Set required fields (will update if existing, create if new)
-            if (!isUpdate) {
-                promptEntity.Name = `${this.spec.Name} - Prompt ${i + 1}`;
-                promptEntity.Description = `Agent prompt ${i + 1} for ${this.spec.Name}`;
-                promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
-                promptEntity.Status = 'Active';
-                promptEntity.ResponseFormat = 'JSON';
-            }
+            // Set all required fields (both create and update)
+            promptEntity.Name = `${this.spec.Name} - Prompt ${i + 1}`;
+            promptEntity.Description = `Agent prompt ${i + 1} for ${this.spec.Name}`;
+            promptEntity.TypeID = 'a6da423e-f36b-1410-8dac-00021f8b792e'; // Chat type
+            promptEntity.Status = 'Active';
+            promptEntity.ResponseFormat = 'JSON';
 
             // Handle prompt text - supports both string and object formats
             if (typeof (promptSpec as any).PromptText === 'string') {
@@ -1069,7 +1068,7 @@ export class AgentSpecSync {
 
             console.log(`✅ savePrompts: ${isUpdate ? 'Updated' : 'Created'} AIPrompt with ID: ${promptEntity.ID}`);
 
-            // Create AIAgentPrompt junction
+            // Step 2: Create or update AIAgentPrompt junction
             const agentPromptEntity = await md.GetEntityObject<any>(
                 'MJ: AI Agent Prompts',
                 this._contextUser
@@ -1085,7 +1084,7 @@ export class AgentSpecSync {
                 throw new Error(`Failed to save agent-prompt junction for prompt ${i + 1}`);
             }
 
-            console.log(`✅ savePrompts: Created AIAgentPrompt junction with ID: ${agentPromptEntity.ID}`);
+            console.log(`✅ savePrompts: Saved AIAgentPrompt junction with ID: ${agentPromptEntity.ID}`);
         }
 
         console.log(`✅ savePrompts: Successfully saved all ${this.spec.Prompts.length} prompt(s)`);
