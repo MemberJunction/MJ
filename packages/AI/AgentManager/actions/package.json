@@ -21,9 +21,9 @@
   "dependencies": {
     "@memberjunction/actions": "2.110.0",
     "@memberjunction/actions-base": "2.110.0",
-    "@memberjunction/core": "2.110.0",
+    "@memberjunction/core": "2.100.3",
     "@memberjunction/core-entities": "2.110.0",
-    "@memberjunction/global": "2.110.0",
+    "@memberjunction/global": "2.100.3",
     "@memberjunction/ai-agent-manager": "2.110.0"
   },
   "devDependencies": {

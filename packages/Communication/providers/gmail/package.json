@@ -13,8 +13,8 @@
   },
   "dependencies": {
     "@memberjunction/communication-types": "2.110.0",
-    "@memberjunction/core": "2.110.0",
-    "@memberjunction/global": "2.110.0",
+    "@memberjunction/core": "2.100.3",
+    "@memberjunction/global": "2.100.3",
     "dotenv": "^16.3.1",
     "env-var": "^7.4.1",
     "googleapis": "^130.0.0"
