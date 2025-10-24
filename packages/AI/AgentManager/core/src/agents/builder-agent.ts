@@ -4,6 +4,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { Metadata } from '@memberjunction/core';
 import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
 import { AgentSpecSync } from '../agent-spec-sync';
+import { TemplateEngineServer } from '@memberjunction/templates';
 
 /**
  * Structure for tracking Builder agent execution details
@@ -200,13 +201,18 @@ export class AgentBuilderAgent extends BaseAgent {
             // Extract created entity details from AgentSpecSync
             await this.extractCreatedEntities(agentSpec, specSync, executionLog);
 
-            // Refresh metadata cache with timing
-            console.log('🔄 Builder Agent: Refreshing metadata cache...');
+            // Refresh metadata and template caches with timing
+            console.log('🔄 Builder Agent: Refreshing metadata and template caches...');
             const refreshStartTime = performance.now();
             const md = new Metadata();
             await md.Refresh();
+
+            // ALSO refresh template engine cache so newly created templates are available immediately
+            const templateEngine = new TemplateEngineServer();
+            await templateEngine.Config(true, params.contextUser); // force=true to reload templates
+
             executionLog.timing.metadataRefreshMs = performance.now() - refreshStartTime;
-            console.log('✅ Builder Agent: Metadata cache refreshed');
+            console.log('✅ Builder Agent: Metadata and template caches refreshed');
 
             console.log(`✅ Builder Agent: Successfully created agent with ID: ${agentId}`);
 
