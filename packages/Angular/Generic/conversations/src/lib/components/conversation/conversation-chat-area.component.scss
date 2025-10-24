@@ -396,6 +396,30 @@
 .artifact-modal-card.expanded {
     border-color: #3B82F6;
 }
+.artifact-modal-card.system-artifact {
+    opacity: 0.85;
+    border-color: #D1D5DB;
+    border-style: dashed;
+    position: relative;
+}
+.artifact-modal-card.system-artifact::before {
+    content: 'SYSTEM';
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 9px;
+    font-weight: 600;
+    color: #9CA3AF;
+    background: #F3F4F6;
+    padding: 2px 6px;
+    border-radius: 3px;
+    letter-spacing: 0.5px;
+    z-index: 10;
+}
+.artifact-modal-card.system-artifact:hover {
+    border-color: #9CA3AF;
+    box-shadow: 0 4px 12px rgba(156, 163, 175, 0.15);
+}
 .artifact-card-header {
     display: flex;
     align-items: center;

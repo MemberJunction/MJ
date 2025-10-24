@@ -60,13 +60,15 @@
 
         <!-- Artifact Message Card -->
         @if (hasArtifact && artifact && artifactVersion) {
-          <mj-artifact-message-card
-            [artifactId]="artifact.ID"
-            [artifact]="artifact"
-            [artifactVersion]="artifactVersion"
-            [currentUser]="currentUser"
-            (actionPerformed)="onArtifactActionPerformed($event)">
-          </mj-artifact-message-card>
+          <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact">
+            <mj-artifact-message-card
+              [artifactId]="artifact.ID"
+              [artifact]="artifact"
+              [artifactVersion]="artifactVersion"
+              [currentUser]="currentUser"
+              (actionPerformed)="onArtifactActionPerformed($event)">
+            </mj-artifact-message-card>
+          </div>
         }
 
         <!-- Suggested Responses (shown only for last message by owner) -->

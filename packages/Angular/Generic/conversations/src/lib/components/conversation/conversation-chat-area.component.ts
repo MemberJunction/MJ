@@ -762,6 +762,21 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   /**
    * Calculate count of unique artifacts (not versions)
    * Works with LazyArtifactInfo - uses artifactId from display data
+   * Respects showSystemArtifacts toggle to update count dynamically
+   */
+  public get artifactCountDisplay(): number {
+    const uniqueArtifactIds = new Set<string>();
+    for (const artifactList of this.effectiveArtifactsMap.values()) {
+      for (const info of artifactList) {
+        uniqueArtifactIds.add(info.artifactId);
+      }
+    }
+    return uniqueArtifactIds.size;
+  }
+
+  /**
+   * Calculate count of unique artifacts (not versions) - user-visible only
+   * Used for initial artifact count (doesn't change with toggle)
    */
   private calculateUniqueArtifactCount(): number {
     const uniqueArtifactIds = new Set<string>();
@@ -841,12 +856,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     versionId: string;
     name: string;
     versionCount: number;
+    visibility: string;
     versions: Array<{versionId: string; versionNumber: number}>
   }> {
     const artifactMap = new Map<string, {
       artifactId: string;
       versionId: string;
       name: string;
+      visibility: string;
       versions: Array<{versionId: string; versionNumber: number}>
     }>();
 
@@ -864,6 +881,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
             artifactId: artifactId,
             versionId: versionId, // Latest version ID
             name: name,
+            visibility: info.visibility,
             versions: [{versionId: versionId, versionNumber: versionNumber}]
           });
         } else {
@@ -883,6 +901,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       artifactId: item.artifactId,
       versionId: item.versionId,
       name: item.name,
+      visibility: item.visibility,
       versionCount: item.versions.length,
       versions: item.versions.sort((a, b) => b.versionNumber - a.versionNumber)
     }));

@@ -400,6 +400,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * Check if the artifact is a system-only artifact
+   */
+  public get isSystemArtifact(): boolean {
+    return this.artifact?.Visibility === 'System Only';
+  }
+
+  /**
    * Unified time pill text for all AI message states
    * Returns the appropriate time display based on message state:
    * - Temporary messages (in-progress): Live elapsed time
