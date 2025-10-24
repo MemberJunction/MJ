@@ -6,7 +6,8 @@
       [environmentId]="environmentId"
       (tabChanged)="onTabChanged($event)"
       (sidebarToggled)="toggleSidebar()"
-      (searchTriggered)="openSearch()">
+      (searchTriggered)="openSearch()"
+      (refreshTriggered)="onRefreshAgentCache()">
     </mj-conversation-navigation>
   </div>
 

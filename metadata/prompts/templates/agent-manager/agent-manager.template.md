@@ -108,7 +108,7 @@ Before starting any workflow, determine the user's intent:
    - NO need to ask user to confirm persistence - design was already approved
    - Builder uses AgentSpecSync to save AgentSpec including `FunctionalRequirements` and `TechnicalDesign` fields
    - If Builder fails, report error to user
-8. **Report**: Must send a chat response that must includes created agent name, agent id, and what this agent can do for the user.
+8. **Report**: After agent gets created, **Must send a chat response that includes created agent name, agent id, and what this agent can do for the user.**
 
 ---
 
