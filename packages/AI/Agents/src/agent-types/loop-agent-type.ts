@@ -175,7 +175,9 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'ForEach type specified but forEach details missing';
                     }
                     else {
-                        return await this.executeForEachOperation(response.nextStep.forEach, params);
+                        // Return ForEach decision for BaseAgent to execute in next iteration
+                        retVal.step = 'ForEach';
+                        retVal.forEach = response.nextStep.forEach;
                     }
                     break;
                 case 'While':
@@ -184,7 +186,9 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.errorMessage = 'While type specified but while details missing';
                     }
                     else {
-                        return await this.executeWhileOperation(response.nextStep.while, params);
+                        // Return While decision for BaseAgent to execute in next iteration
+                        retVal.step = 'While';
+                        retVal.while = response.nextStep.while;
                     }
                     break;
                 default:
@@ -273,7 +277,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'foreach', 'while'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -284,6 +288,12 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
                 response.nextStep.type = 'Actions'; // update the data structure to have the correct type
                 lcaseType = 'actions';
+            } else if (!lcaseType && (response.nextStep as any).forEach) {
+                response.nextStep.type = 'ForEach'; // update the data structure to have the correct type
+                lcaseType = 'foreach';
+            } else if (!lcaseType && (response.nextStep as any).while) {
+                response.nextStep.type = 'While'; // update the data structure to have the correct type
+                lcaseType = 'while';
             }
 
             if (!validStepTypes.includes(lcaseType)) {
@@ -315,6 +325,18 @@ export class LoopAgentType extends BaseAgentType {
                     // if we have reasoning, use that as the message
                     response.message = response.reasoning;
                 }
+            }
+
+            if (lcaseType === 'foreach' && !(response.nextStep as any).forEach) {
+                const message = 'LoopAgentResponse requires forEach object for ForEach type';
+                LogError(message);
+                return {success: false, message};
+            }
+
+            if (lcaseType === 'while' && !(response.nextStep as any).while) {
+                const message = 'LoopAgentResponse requires while object for While type';
+                LogError(message);
+                return {success: false, message};
             }
         }
 
@@ -404,262 +426,41 @@ export class LoopAgentType extends BaseAgentType {
     }
 
     /**
-     * Executes a ForEach operation requested by the LLM
+     * Loop agents need to resolve template variables before each iteration
+     * @override
      */
-    private async executeForEachOperation<P>(
-        forEach: ForEachOperation,
-        params: ExecuteAgentParams<P>
-    ): Promise<BaseAgentNextStep<P>> {
-        const payload = params.payload || {} as P;
+    public BeforeLoopIteration<P>(
+        context: {
+            item: any;
+            index: number;
+            payload: P;
+            loopType: 'ForEach' | 'While';
+            actionParams: Record<string, unknown>;
+            subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
+        },
+        agentTypeState: any
+    ): {
+        actionParams?: Record<string, unknown>;
+        subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
+        payload?: P;
+    } | null {
+        // Resolve templates in action params if present
+        if (context.actionParams) {
+            const resolvedParams = this.resolveTemplates(context.actionParams, {
+                item: context.item,
+                index: context.index,
+                payload: context.payload
+            });
 
-        // Get collection from payload
-        const collection = this.getValueFromPath(payload, forEach.collectionPath);
-        if (!Array.isArray(collection)) {
-            return this.createRetryStep(
-                `Collection path "${forEach.collectionPath}" did not resolve to an array`
-            );
+            return { actionParams: resolvedParams };
         }
 
-        // Determine limits
-        const maxIterations = forEach.maxIterations === undefined
-            ? 1000
-            : forEach.maxIterations === 0
-                ? Number.MAX_SAFE_INTEGER
-                : forEach.maxIterations;
+        // TODO: Handle subAgentRequest template resolution if needed
 
-        const itemVar = forEach.itemVariable || 'item';
-        const indexVar = forEach.indexVariable || 'index';
-
-        // Execute action or sub-agent for each item
-        const results = [];
-        const errors = [];
-
-        for (let i = 0; i < Math.min(collection.length, maxIterations); i++) {
-            const item = collection[i];
-
-            try {
-                let result;
-
-                if (forEach.action) {
-                    // Resolve templates in params
-                    const resolvedParams = this.resolveTemplates(forEach.action.params, {
-                        [itemVar]: item,
-                        [indexVar]: i,
-                        payload: payload
-                    });
-
-                    // Execute action
-                    const actionEntity = ActionEngineServer.Instance.Actions.find(a => a.Name === forEach.action!.name);
-                    if (!actionEntity) {
-                        throw new Error(`Action not found: ${forEach.action.name}`);
-                    }
-
-                    const actionResult = await ActionEngineServer.Instance.RunAction({
-                        Action: actionEntity,
-                        ContextUser: params.contextUser,
-                        Filters: [],
-                        Params: Object.entries(resolvedParams).map(([name, value]) => ({
-                            Name: name,
-                            Value: value,
-                            Type: 'Input' as const
-                        }))
-                    });
-
-                    if (!actionResult.Success) {
-                        throw new Error(actionResult.Message || 'Action execution failed');
-                    }
-
-                    result = actionResult;
-
-                } else if (forEach.subAgent) {
-                    // Resolve templates in message and params
-                    const resolvedMessage = this.resolveTemplateString(forEach.subAgent.message, {
-                        [itemVar]: item,
-                        [indexVar]: i,
-                        payload: payload
-                    });
-
-                    const resolvedParams = this.resolveTemplates(
-                        forEach.subAgent.templateParameters || {},
-                        {
-                            [itemVar]: item,
-                            [indexVar]: i,
-                            payload: payload
-                        }
-                    );
-
-                    // Create sub-agent next step
-                    // Note: This would need to be handled by BaseAgent's sub-agent execution logic
-                    // For now, we'll just collect the request
-                    result = {
-                        subAgentName: forEach.subAgent.name,
-                        message: resolvedMessage,
-                        params: resolvedParams
-                    };
-                }
-
-                results.push(result);
-
-            } catch (error) {
-                const errorInfo = { index: i, item, error: error.message };
-                errors.push(errorInfo);
-
-                if (!forEach.continueOnError) {
-                    return this.createNextStep('Failed', {
-                        errorMessage: `ForEach failed at index ${i}: ${error.message}`,
-                        newPayload: {
-                            ...payload,
-                            forEachResults: results,
-                            forEachErrors: errors
-                        } as P
-                    });
-                }
-            }
-        }
-
-        // Return success with aggregated results
-        return this.createNextStep('Retry', {
-            message: `Completed ForEach: processed ${collection.length} items`,
-            newPayload: {
-                ...payload,
-                forEachResults: results,
-                forEachErrors: errors
-            } as P
-        });
+        return null;
     }
 
-    /**
-     * Executes a While operation requested by the LLM
-     */
-    private async executeWhileOperation<P>(
-        whileOp: WhileOperation,
-        params: ExecuteAgentParams<P>
-    ): Promise<BaseAgentNextStep<P>> {
-        const payload = params.payload || {} as P;
-
-        const maxIterations = whileOp.maxIterations === undefined
-            ? 100
-            : whileOp.maxIterations === 0
-                ? Number.MAX_SAFE_INTEGER
-                : whileOp.maxIterations;
-
-        const itemVar = whileOp.itemVariable || 'attempt';
-        const results = [];
-        const errors = [];
-        let iterationCount = 0;
-        let currentPayload = payload;
-
-        while (iterationCount < maxIterations) {
-            // Delay between iterations if configured (except first iteration)
-            if (iterationCount > 0 && whileOp.delayBetweenIterationsMs) {
-                await new Promise(resolve => setTimeout(resolve, whileOp.delayBetweenIterationsMs));
-            }
-
-            // Evaluate condition
-            const evalContext = { payload: currentPayload, results, errors };
-            const evalResult = this._evaluator.evaluate(whileOp.condition, evalContext);
-
-            if (!evalResult.success || !evalResult.value) {
-                // Condition false or evaluation error - exit
-                break;
-            }
-
-            // Create attempt context
-            const attemptContext = {
-                attemptNumber: iterationCount + 1,
-                totalAttempts: iterationCount
-            };
-
-            try {
-                let result;
-
-                if (whileOp.action) {
-                    const resolvedParams = this.resolveTemplates(whileOp.action.params, {
-                        [itemVar]: attemptContext,
-                        index: iterationCount,
-                        payload: currentPayload
-                    });
-
-                    // Execute action
-                    const actionEntity = ActionEngineServer.Instance.Actions.find(a => a.Name === whileOp.action!.name);
-                    if (!actionEntity) {
-                        throw new Error(`Action not found: ${whileOp.action.name}`);
-                    }
-
-                    const actionResult = await ActionEngineServer.Instance.RunAction({
-                        Action: actionEntity,
-                        ContextUser: params.contextUser,
-                        Filters: [],
-                        Params: Object.entries(resolvedParams).map(([name, value]) => ({
-                            Name: name,
-                            Value: value,
-                            Type: 'Input' as const
-                        }))
-                    });
-
-                    if (!actionResult.Success) {
-                        throw new Error(actionResult.Message || 'Action execution failed');
-                    }
-
-                    result = actionResult;
-
-                } else if (whileOp.subAgent) {
-                    const resolvedMessage = this.resolveTemplateString(whileOp.subAgent.message, {
-                        [itemVar]: attemptContext,
-                        index: iterationCount,
-                        payload: currentPayload
-                    });
-
-                    const resolvedParams = this.resolveTemplates(
-                        whileOp.subAgent.templateParameters || {},
-                        {
-                            [itemVar]: attemptContext,
-                            index: iterationCount,
-                            payload: currentPayload
-                        }
-                    );
-
-                    result = {
-                        subAgentName: whileOp.subAgent.name,
-                        message: resolvedMessage,
-                        params: resolvedParams
-                    };
-                }
-
-                results.push(result);
-
-                // Update payload with result for next condition check
-                currentPayload = { ...currentPayload, whileLastResult: result } as P;
-
-            } catch (error) {
-                const errorInfo = { iteration: iterationCount, error: error.message };
-                errors.push(errorInfo);
-
-                if (!whileOp.continueOnError) {
-                    return this.createNextStep('Failed', {
-                        errorMessage: `While loop failed at iteration ${iterationCount}: ${error.message}`,
-                        newPayload: {
-                            ...currentPayload,
-                            whileResults: results,
-                            whileErrors: errors
-                        } as P
-                    });
-                }
-            }
-
-            iterationCount++;
-        }
-
-        return this.createNextStep('Retry', {
-            message: `Completed While loop after ${iterationCount} iterations`,
-            newPayload: {
-                ...currentPayload,
-                whileResults: results,
-                whileErrors: errors,
-                whileIterationCount: iterationCount
-            } as P
-        });
-    }
+    // AfterLoopIteration: Not needed - default behavior (collect results) is correct
 
     /**
      * Resolves template variables in an object recursively

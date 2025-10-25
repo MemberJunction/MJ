@@ -17,6 +17,74 @@ import { UserInfo } from '@memberjunction/core';
 import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
 
+/**
+ * Universal ForEach loop configuration used by all agent types.
+ * Flow agents convert AIAgentStep configuration to this format.
+ * Loop agents receive this from LLM responses.
+ * @since 2.112.0
+ */
+export interface ForEachOperation {
+    /** Path in payload to array to iterate over */
+    collectionPath: string;
+    /** Variable name for current item (default: "item") */
+    itemVariable?: string;
+    /** Variable name for loop index (default: "index") */
+    indexVariable?: string;
+    /** Maximum iterations (undefined=1000, 0=unlimited, >0=limit) */
+    maxIterations?: number;
+    /** Continue processing if an iteration fails (default: false) */
+    continueOnError?: boolean;
+    /** Delay between iterations in milliseconds (default: 0) */
+    delayBetweenIterationsMs?: number;
+
+    /** Execute action per iteration */
+    action?: {
+        name: string;
+        params: Record<string, unknown>;
+        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
+    };
+
+    /** Execute sub-agent per iteration */
+    subAgent?: {
+        name: string;
+        message: string;
+        templateParameters?: Record<string, string>;
+    };
+}
+
+/**
+ * Universal While loop configuration used by all agent types.
+ * Flow agents convert AIAgentStep configuration to this format.
+ * Loop agents receive this from LLM responses.
+ * @since 2.112.0
+ */
+export interface WhileOperation {
+    /** Boolean expression evaluated before each iteration */
+    condition: string;
+    /** Variable name for attempt context (default: "attempt") */
+    itemVariable?: string;
+    /** Maximum iterations (undefined=100, 0=unlimited, >0=limit) */
+    maxIterations?: number;
+    /** Continue processing if an iteration fails (default: false) */
+    continueOnError?: boolean;
+    /** Delay between iterations in milliseconds (default: 0) */
+    delayBetweenIterationsMs?: number;
+
+    /** Execute action per iteration */
+    action?: {
+        name: string;
+        params: Record<string, unknown>;
+        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
+    };
+
+    /** Execute sub-agent per iteration */
+    subAgent?: {
+        name: string;
+        message: string;
+        templateParameters?: Record<string, string>;
+    };
+}
+
 
 /**
  * Represents a single action to be executed.
@@ -26,6 +94,7 @@ export type AgentAction = {
     name: string;
     /** Parameters to pass to the action */
     params: Record<string, unknown>;
+        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
 }
 
 /**
@@ -151,6 +220,10 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     reasoning?: string;
     /** Optional confidence level in the decision (0.0 to 1.0) */
     confidence?: number;
+    /** ForEach operation details when step is 'ForEach' (v2.112+) */
+    forEach?: ForEachOperation;
+    /** While operation details when step is 'While' (v2.112+) */
+    while?: WhileOperation;
 }
 
 /**

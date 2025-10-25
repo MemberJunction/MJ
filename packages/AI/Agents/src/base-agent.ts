@@ -42,7 +42,45 @@ import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
 import { AgentDataPreloader } from './AgentDataPreloader';
+import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
+
+/**
+ * Base iteration context for tracking loop execution in BaseAgent.
+ * This is agent-type agnostic and handles both ForEach and While loops.
+ */
+interface BaseIterationContext {
+    loopType: 'ForEach' | 'While';
+
+    // ForEach specific
+    collection?: any[];
+
+    // While specific
+    condition?: string;
+
+    // Common (currentIndex used for both: array index for ForEach, iteration count for While)
+    currentIndex: number;
+    itemVariable: string;
+    indexVariable?: string;
+    maxIterations: number;
+    continueOnError: boolean;
+    delayBetweenIterationsMs?: number;
+    results: any[];
+    errors: any[];
+
+    // Store the forEach or while config for re-execution
+    loopConfig: ForEachOperation | WhileOperation;
+
+    // Parent step ID for creating child iteration steps with ParentID link
+    parentStepId?: string;
+
+    // Action output mapping to apply after each iteration (Flow agents)
+    actionOutputMapping?: string;
+
+
+    // Agent-type specific data (e.g., Flow stores stepId here)
+    agentTypeData?: any;
+}
 
 /**
  * Extended progress step that includes additional metadata for execution tracking
@@ -179,6 +217,13 @@ export class BaseAgent {
      * @private
      */
     private _agentHierarchy: string[] = [];
+
+    /**
+     * Current iteration context for ForEach/While loops.
+     * Only one active loop per BaseAgent instance (nested loops handled by sub-agent instances).
+     * @private
+     */
+    private _iterationContext: BaseIterationContext | null = null;
 
     /**
      * Current depth in the agent hierarchy (0 = root agent, 1 = first sub-agent, etc.).
@@ -1105,8 +1150,6 @@ export class BaseAgent {
         promptResult: AIPromptRunResult,
         currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
-        this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
-
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
         const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this._agentTypeState);
@@ -2726,7 +2769,7 @@ Please choose an alternative approach to complete your task.`
      * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
      * @returns {Promise<AIAgentRunStepEntityExtended>} - The created step entity
      */
-    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any): Promise<AIAgentRunStepEntityExtended> {
+    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any, parentId?: string): Promise<AIAgentRunStepEntityExtended> {
         const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
         
         stepEntity.AgentRunID = this._agentRun!.ID;
@@ -2744,6 +2787,7 @@ Please choose an alternative approach to complete your task.`
             stepEntity.TargetID = targetId || null;
         }
         stepEntity.TargetLogID = targetLogId || null;
+        stepEntity.ParentID = parentId || null;  // Link to parent step (e.g., loop step)
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
         stepEntity.PayloadAtStart = payloadAtStart ? JSON.stringify(payloadAtStart) : null;
@@ -2850,8 +2894,83 @@ Please choose an alternative approach to complete your task.`
     }
 
     /**
+     * Helper method to get a value from a nested object path
+     * Supports dot notation and array indexing
+     * @private
+     */
+    private getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+
+        for (const part of parts) {
+            if (!part) continue;
+
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
+            } else {
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
+            }
+        }
+
+        return current;
+    }
+
+    /**
+     * Default parameter resolution for loop body parameters (used by Flow agents)
+     * Resolves item.field, payload.field, item, index, or static values
+     * @private
+     */
+    private resolveLoopParams(
+        params: Record<string, unknown>,
+        item: any,
+        index: number,
+        payload: any
+    ): Record<string, unknown> {
+        const resolved: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(params)) {
+            if (typeof value === 'string') {
+                if (value.startsWith('item.')) {
+                    resolved[key] = this.getValueFromPath(item, value.substring(5));
+                } else if (value.startsWith('payload.')) {
+                    resolved[key] = this.getValueFromPath(payload, value.substring(8));
+                } else if (value === 'item') {
+                    resolved[key] = item;
+                } else if (value === 'index') {
+                    resolved[key] = index;
+                } else {
+                    resolved[key] = value;  // Static value
+                }
+            } else {
+                resolved[key] = value;
+            }
+        }
+
+        return resolved;
+    }
+
+    /**
      * Formats a message with agent hierarchy for streaming/progress updates.
-     * 
+     *
      * @private
      * @param {string} baseMessage - The base message to format
      * @returns {string} - The formatted message with hierarchy breadcrumb
@@ -2943,15 +3062,57 @@ Please choose an alternative approach to complete your task.`
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
+                // Check if this was a sub-agent loop iteration
+                if (this._iterationContext) {
+                    // Sub-agent completed in loop - continue loop
+                    const subAgentResult = previousDecision.newPayload;
+
+                    // Call AfterLoopIteration hook
+                    let processedPayload = subAgentResult;
+                    const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
+                        {
+                            subAgentResult,
+                            currentPayload: subAgentResult,
+                            item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
+                            index: this._iterationContext.currentIndex,
+                            loopContext: this._iterationContext
+                        },
+                        this.AgentTypeState
+                    );
+
+                    if (afterHook) {
+                        processedPayload = afterHook;
+                        params.payload = processedPayload;
+                    }
+
+                    // Store result and continue loop
+                    this._iterationContext.results.push(processedPayload);
+                    this._iterationContext.currentIndex++;
+
+                    if (this._iterationContext.loopType === 'ForEach') {
+                        const loopDecision = {
+                            ...previousDecision,
+                            forEach: this._iterationContext.loopConfig as ForEachOperation
+                        };
+                        return await this.executeForEachLoop(params, config, loopDecision);
+                    } else {
+                        const loopDecision = {
+                            ...previousDecision,
+                            while: this._iterationContext.loopConfig as WhileOperation
+                        };
+                        return await this.executeWhileLoop(params, config, loopDecision);
+                    }
+                }
+
                 const pd = previousDecision as BaseAgentNextStep<P> & { previousPayload?: { taskComplete?: boolean } };
                 if (previousDecision.terminate) {
                     // If parent agent previously requested to auto-terminate, after a successful
-                    // sub-agent run, we can finalize the agent run                    
-                    return { 
+                    // sub-agent run, we can finalize the agent run
+                    return {
                         terminate: true,
-                        step: 'Success', 
+                        step: 'Success',
                         previousPayload: previousDecision.previousPayload,
-                        newPayload: previousDecision.newPayload 
+                        newPayload: previousDecision.newPayload
                     };
                 }
                 else {
@@ -2961,9 +3122,9 @@ Please choose an alternative approach to complete your task.`
                 }
             case 'Failed':
                 if (previousDecision.terminate) {
-                    return { 
+                    return {
                         terminate: true,
-                        step: 'Failed', 
+                        step: 'Failed',
                         previousPayload: previousDecision.previousPayload,
                         newPayload: previousDecision.newPayload
                     };
@@ -2973,6 +3134,10 @@ Please choose an alternative approach to complete your task.`
                     // so we will retry the prompt step
                     return await this.executePromptStep(params, config, previousDecision);
                 }
+            case 'ForEach':
+                return await this.executeForEachLoop(params, config, previousDecision);
+            case 'While':
+                return await this.executeWhileLoop(params, config, previousDecision);
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
@@ -3083,6 +3248,12 @@ Please choose an alternative approach to complete your task.`
             
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
+
+            // Remove temporary loop results message if present
+            const loopMsgIndex = params.conversationMessages.findIndex(m => (m as any).metadata?._loopResults === true);
+            if (loopMsgIndex !== -1) {
+                params.conversationMessages.splice(loopMsgIndex, 1);
+            }
 
             // Update step entity with AIPromptRun ID if available
             if (promptResult.promptRun?.ID) {
@@ -4089,48 +4260,6 @@ Please choose an alternative approach to complete your task.`
      * Helper method to get a value from a nested object path.
      * Supports both dot notation (obj.prop) and array indexing (arr[0]).
      *
-     * @private
-     */
-    private getValueFromPath(obj: any, path: string): unknown {
-        const parts = path.split('.');
-        let current = obj;
-
-        for (const part of parts) {
-            if (!part) continue;
-
-            // Check if this part contains array indexing like "arrayName[0]"
-            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
-
-            if (arrayMatch) {
-                // Extract array name and index
-                const arrayName = arrayMatch[1];
-                const index = parseInt(arrayMatch[2], 10);
-
-                // Navigate to the array
-                if (current && typeof current === 'object' && arrayName in current) {
-                    current = current[arrayName];
-
-                    // Access the array element
-                    if (Array.isArray(current) && index >= 0 && index < current.length) {
-                        current = current[index];
-                    } else {
-                        return undefined;
-                    }
-                } else {
-                    return undefined;
-                }
-            } else {
-                // Regular property access
-                if (current && typeof current === 'object' && part in current) {
-                    current = current[part];
-                } else {
-                    return undefined;
-                }
-            }
-        }
-
-        return current;
-    }
 
     /**
      * Executes actions step and tracks it.
@@ -4282,7 +4411,7 @@ Please choose an alternative approach to complete your task.`
                     actionParams: aa.params
                 };
                 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, actionInputData, undefined, currentPayload, currentPayload);
+                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, actionInputData, undefined, currentPayload, currentPayload, this._iterationContext?.parentStepId);
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
@@ -4449,6 +4578,78 @@ Please choose an alternative approach to complete your task.`
                 LogError(`Error in PostProcessActionStep: ${error.message}`);
             }
             
+            // Check if this was a loop iteration
+            if (this._iterationContext) {
+                // Check if any actions failed
+                const hasFailures = actionResults.some(ar => !ar.success);
+
+                if (hasFailures && !this._iterationContext.continueOnError) {
+                    // Store error and abort loop
+                    this._iterationContext.errors.push({
+                        index: this._iterationContext.currentIndex,
+                        item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
+                        error: actionResults.find(ar => !ar.success)?.error || 'Action execution failed'
+                    });
+
+                    this._iterationContext = null;
+
+                    return {
+                        step: 'Failed',
+                        terminate: true,
+                        errorMessage: `Loop iteration ${this._iterationContext?.currentIndex || 'unknown'} failed and continueOnError is false`,
+                        previousPayload: params.payload,
+                        newPayload: params.payload
+                    };
+                }
+
+                // Call AfterLoopIteration hook to process result
+                let processedPayload = finalPayload;
+                const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
+                    {
+                        actionResults: actionResults.map(ar => ar.result),
+                        currentPayload: finalPayload,
+                        item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
+                        index: this._iterationContext.currentIndex,
+                        loopContext: this._iterationContext
+                    },
+                    this.AgentTypeState
+                );
+
+                if (afterHook) {
+                    processedPayload = afterHook;
+                    // Update params.payload so next iteration sees changes
+                    params.payload = processedPayload;
+                }
+
+                // Store result (or error if failed but continueOnError=true)
+                if (hasFailures) {
+                    this._iterationContext.errors.push({
+                        index: this._iterationContext.currentIndex,
+                        item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
+                        error: actionResults.find(ar => !ar.success)?.error || 'Action failed'
+                    });
+                }
+                this._iterationContext.results.push(processedPayload);
+
+                // Increment counter
+                this._iterationContext.currentIndex++;
+
+                // Re-execute loop to get next iteration or completion
+                if (this._iterationContext.loopType === 'ForEach') {
+                    const loopDecision = {
+                        ...previousDecision,
+                        forEach: this._iterationContext.loopConfig as ForEachOperation
+                    };
+                    return await this.executeForEachLoop(params, config, loopDecision);
+                } else {
+                    const loopDecision = {
+                        ...previousDecision,
+                        while: this._iterationContext.loopConfig as WhileOperation
+                    };
+                    return await this.executeWhileLoop(params, config, loopDecision);
+                }
+            }
+
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
@@ -4458,12 +4659,17 @@ Please choose an alternative approach to complete your task.`
                 previousPayload: previousDecision?.previousPayload || null,
                 newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
-                retryReason: failedActions.length > 0 
+                retryReason: failedActions.length > 0
                     ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
                     : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
             };
         }
         catch (e) {
+            // Clean up iteration context on error
+            if (this._iterationContext) {
+                this._iterationContext = null;
+            }
+
             return {
                 terminate: false,
                 step: 'Retry',
@@ -4504,8 +4710,408 @@ Please choose an alternative approach to complete your task.`
     }
 
     /**
+     * Executes a ForEach loop - universal implementation for all agent types
+     *
+     * @private
+     */
+    private async executeForEachLoop(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const forEach = previousDecision.forEach as ForEachOperation;
+
+        if (!forEach) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'ForEach step missing forEach configuration',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        // Initialize iteration context on first call
+        if (!this._iterationContext) {
+            // Wipe previous loop results from payload
+            const cleanPayload = { ...params.payload };
+            delete (cleanPayload as any).loopResults;
+            params.payload = cleanPayload;
+
+            const collection = this.getValueFromPath(params.payload, forEach.collectionPath);
+            if (!Array.isArray(collection)) {
+                return {
+                    step: 'Failed',
+                    terminate: true,
+                    errorMessage: `Collection path "${forEach.collectionPath}" did not resolve to an array`,
+                    previousPayload: params.payload,
+                    newPayload: params.payload
+                };
+            }
+
+            // Create parent step for the loop itself
+            const loopStepEntity = await this.createStepEntity(
+                'ForEach',
+                `ForEach loop over ${forEach.collectionPath} (${collection.length} items)`,
+                params.contextUser,
+                undefined,
+                { forEach, collectionSize: collection.length },
+                undefined,
+                params.payload
+            );
+            await this.finalizeStepEntity(loopStepEntity, true);
+
+            this._iterationContext = {
+                loopType: 'ForEach',
+                collection,
+                currentIndex: 0,
+                itemVariable: forEach.itemVariable || 'item',
+                indexVariable: forEach.indexVariable || 'index',
+                maxIterations: forEach.maxIterations ?? 1000,
+                continueOnError: forEach.continueOnError ?? false,
+                delayBetweenIterationsMs: forEach.delayBetweenIterationsMs,
+                results: [],
+                errors: [],
+                loopConfig: forEach,
+                parentStepId: loopStepEntity.ID,
+                actionOutputMapping: forEach.action?.outputMapping,
+                agentTypeData: (previousDecision as any).agentTypeData
+            };
+        }
+
+        // Check if loop complete
+        if (this._iterationContext.currentIndex >= this._iterationContext.collection!.length) {
+            const loopResults = {
+                results: this._iterationContext.results,
+                errors: this._iterationContext.errors,
+                totalIterations: this._iterationContext.currentIndex
+            };
+
+            const agentTypeData = this._iterationContext.agentTypeData;
+            this._iterationContext = null;  // Clean up
+
+            // Build unified loop results
+            const unifiedLoopResults = {
+                type: 'ForEach' as const,
+                results: loopResults.results,
+                errors: loopResults.errors,
+                totalIterations: loopResults.totalIterations,
+                collectionPath: forEach.collectionPath
+            };
+
+            // Check if agent type wants results injected as temporary message
+            if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: `## Loop Execution Completed\n\n` +
+                             `**Type:** ForEach\n` +
+                             `**Collection:** ${forEach.collectionPath}\n` +
+                             `**Items Processed:** ${unifiedLoopResults.totalIterations}\n` +
+                             `**Successful:** ${unifiedLoopResults.results.length}\n` +
+                             `**Errors:** ${unifiedLoopResults.errors.length}\n\n` +
+                             `**Results:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.results, null, 2)}\n\`\`\`${unifiedLoopResults.errors.length > 0 ? `\n\n**Errors:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.errors, null, 2)}\n\`\`\`` : ''}`,
+                    metadata: {
+                        _temporary: true,
+                        _loopResults: true
+                    }
+                } as any);
+            }
+
+            // Return Retry with clean payload (results in message if injected, not in payload)
+            return {
+                step: 'Retry',
+                terminate: false,
+                newPayload: params.payload,
+                previousPayload: params.payload,
+                agentTypeData
+            } as BaseAgentNextStep & { agentTypeData?: any };
+        }
+
+        // Safety check
+        if (this._iterationContext.currentIndex >= this._iterationContext.maxIterations) {
+            LogError(`ForEach loop exceeded maxIterations (${this._iterationContext.maxIterations})`);
+            this._iterationContext = null;
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: `Loop exceeded maximum iterations (${this._iterationContext.maxIterations})`,
+                previousPayload: params.payload,
+                newPayload: params.payload
+            };
+        }
+
+        // Get current item
+        const item = this._iterationContext.collection![this._iterationContext.currentIndex];
+        const index = this._iterationContext.currentIndex;
+
+        // Inject loop variables into payload
+        const enhancedPayload = {
+            ...params.payload,
+            [this._iterationContext.itemVariable]: item,
+            [this._iterationContext.indexVariable!]: index
+        };
+
+        // Call BeforeLoopIteration hook to resolve params
+        let resolvedParams = forEach.action?.params || {};
+        if (forEach.action) {
+            const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
+                {
+                    item,
+                    index,
+                    payload: params.payload,
+                    loopType: 'ForEach',
+                    actionParams: forEach.action.params
+                },
+                this.AgentTypeState
+            );
+
+            if (beforeHook?.actionParams) {
+                resolvedParams = beforeHook.actionParams;
+            }
+
+            // Return Actions step for THIS iteration
+            return {
+                step: 'Actions',
+                actions: [{
+                    name: forEach.action.name,
+                    params: resolvedParams
+                }],
+                
+                terminate: false,
+                newPayload: enhancedPayload,
+                previousPayload: params.payload
+            };
+        } else if (forEach.subAgent) {
+            // Sub-agent iteration
+            return {
+                step: 'Sub-Agent',
+                subAgent: {
+                    name: forEach.subAgent.name,
+                    message: forEach.subAgent.message,
+                    terminateAfter: false,
+                    templateParameters: forEach.subAgent.templateParameters
+                },
+                
+                terminate: false,
+                newPayload: enhancedPayload,
+                previousPayload: params.payload
+            };
+        }
+
+        // Should not reach here
+        return {
+            step: 'Failed',
+            terminate: true,
+            errorMessage: 'ForEach configuration missing action and subAgent',
+            previousPayload: params.payload,
+            newPayload: params.payload
+        };
+    }
+
+    /**
+     * Executes a While loop - universal implementation for all agent types
+     *
+     * @private
+     */
+    private async executeWhileLoop(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const whileOp = previousDecision.while as WhileOperation;
+
+        if (!whileOp) {
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: 'While step missing while configuration',
+                previousPayload: previousDecision.previousPayload,
+                newPayload: previousDecision.newPayload || previousDecision.previousPayload
+            };
+        }
+
+        // Initialize iteration context on first call
+        if (!this._iterationContext) {
+            // Wipe previous loop results from payload
+            const cleanPayload = { ...params.payload };
+            delete (cleanPayload as any).loopResults;
+            params.payload = cleanPayload;
+
+            const loopStepEntity = await this.createStepEntity(
+                'While',
+                `While loop: ${whileOp.condition}`,
+                params.contextUser,
+                undefined,
+                { while: whileOp },
+                undefined,
+                params.payload
+            );
+            await this.finalizeStepEntity(loopStepEntity, true);
+
+            this._iterationContext = {
+                loopType: 'While',
+                condition: whileOp.condition,
+                currentIndex: 0,
+                itemVariable: whileOp.itemVariable || 'attempt',
+                maxIterations: whileOp.maxIterations ?? 100,
+                continueOnError: whileOp.continueOnError ?? false,
+                delayBetweenIterationsMs: whileOp.delayBetweenIterationsMs,
+                results: [],
+                errors: [],
+                loopConfig: whileOp,
+                parentStepId: loopStepEntity.ID,
+                actionOutputMapping: whileOp.action?.outputMapping,
+                agentTypeData: (previousDecision as any).agentTypeData
+            };
+        }
+
+        // Delay between iterations if configured (except first iteration)
+        if (this._iterationContext.currentIndex > 0 && this._iterationContext.delayBetweenIterationsMs) {
+            await new Promise(resolve => setTimeout(resolve, this._iterationContext.delayBetweenIterationsMs));
+        }
+
+        // Evaluate condition
+        const { SafeExpressionEvaluator } = require('@memberjunction/global');
+        const evaluator = new SafeExpressionEvaluator();
+        const evalContext = {
+            payload: params.payload,
+            results: this._iterationContext.results,
+            errors: this._iterationContext.errors
+        };
+        const evalResult = evaluator.evaluate(whileOp.condition, evalContext);
+
+        // Check if loop should exit
+        if (!evalResult.success || !evalResult.value) {
+            const loopResults = {
+                results: this._iterationContext.results,
+                errors: this._iterationContext.errors,
+                totalIterations: this._iterationContext.currentIndex,
+                exitReason: evalResult.success ? 'condition_false' : 'evaluation_error'
+            };
+
+            const agentTypeData = this._iterationContext.agentTypeData;
+            this._iterationContext = null;
+
+            // Build unified loop results
+            const unifiedLoopResults = {
+                type: 'While' as const,
+                results: loopResults.results,
+                errors: loopResults.errors,
+                totalIterations: loopResults.totalIterations,
+                condition: whileOp.condition
+            };
+
+            // Check if agent type wants results injected as temporary message
+            if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: `## Loop Execution Completed\n\n` +
+                             `**Type:** While\n` +
+                             `**Condition:** ${whileOp.condition}\n` +
+                             `**Iterations:** ${unifiedLoopResults.totalIterations}\n` +
+                             `**Successful:** ${unifiedLoopResults.results.length}\n` +
+                             `**Errors:** ${unifiedLoopResults.errors.length}\n\n` +
+                             `**Results:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.results, null, 2)}\n\`\`\`${unifiedLoopResults.errors.length > 0 ? `\n\n**Errors:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.errors, null, 2)}\n\`\`\`` : ''}`,
+                    metadata: {
+                        _temporary: true,
+                        _loopResults: true
+                    }
+                } as any);
+            }
+
+            // Return Retry with clean payload (results in message if injected, not in payload)
+            return {
+                step: 'Retry',
+                terminate: false,
+                newPayload: params.payload,
+                previousPayload: params.payload,
+                agentTypeData
+            } as BaseAgentNextStep & { agentTypeData?: any };
+        }
+
+        // Safety check
+        if (this._iterationContext.currentIndex >= this._iterationContext.maxIterations) {
+            LogError(`While loop exceeded maxIterations (${this._iterationContext.maxIterations})`);
+            this._iterationContext = null;
+            return {
+                step: 'Failed',
+                terminate: true,
+                errorMessage: `Loop exceeded maximum iterations (${this._iterationContext.maxIterations})`,
+                previousPayload: params.payload,
+                newPayload: params.payload
+            };
+        }
+
+        // Create attempt context
+        const attemptContext = {
+            attemptNumber: this._iterationContext.currentIndex + 1,
+            totalAttempts: this._iterationContext.currentIndex
+        };
+
+        // Inject loop variables
+        const enhancedPayload = {
+            ...params.payload,
+            [this._iterationContext.itemVariable]: attemptContext,
+            index: this._iterationContext.currentIndex
+        };
+
+        // Call BeforeLoopIteration hook to resolve params
+        let resolvedParams = whileOp.action?.params || {};
+        if (whileOp.action) {
+            const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
+                {
+                    item: attemptContext,
+                    index: this._iterationContext.currentIndex,
+                    payload: params.payload,
+                    loopType: 'While',
+                    actionParams: whileOp.action.params
+                },
+                this.AgentTypeState
+            );
+
+            if (beforeHook?.actionParams) {
+                resolvedParams = beforeHook.actionParams;
+            }
+
+            return {
+                step: 'Actions',
+                actions: [{
+                    name: whileOp.action.name,
+                    params: resolvedParams
+                }],
+                
+                terminate: false,
+                newPayload: enhancedPayload,
+                previousPayload: params.payload
+            };
+        } else if (whileOp.subAgent) {
+            return {
+                step: 'Sub-Agent',
+                subAgent: {
+                    name: whileOp.subAgent.name,
+                    message: whileOp.subAgent.message,
+                    terminateAfter: false,
+                    templateParameters: whileOp.subAgent.templateParameters
+                },
+                
+                terminate: false,
+                newPayload: enhancedPayload,
+                previousPayload: params.payload
+            };
+        }
+
+        return {
+            step: 'Failed',
+            terminate: true,
+            errorMessage: 'While configuration missing action and subAgent',
+            previousPayload: params.payload,
+            newPayload: params.payload
+        };
+    }
+
+    /**
      * Creates a failure result with proper tracking.
-     * 
+     *
      * @private
      */
     private async createFailureResult(errorMessage: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {

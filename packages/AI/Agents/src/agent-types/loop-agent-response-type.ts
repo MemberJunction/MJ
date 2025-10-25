@@ -1,62 +1,7 @@
-import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse, ForEachOperation, WhileOperation } from "@memberjunction/ai-core-plus";
 
-/**
- * ForEach operation for Loop agents to request iteration over a collection
- */
-export interface ForEachOperation {
-    /** Path in payload to array to iterate over */
-    collectionPath: string;
-    /** Variable name for current item (default: "item") */
-    itemVariable?: string;
-    /** Variable name for loop index (default: "index") */
-    indexVariable?: string;
-    /** Maximum iterations (undefined=1000, 0=unlimited, >0=limit) */
-    maxIterations?: number;
-    /** Continue processing if an iteration fails (default: false) */
-    continueOnError?: boolean;
-
-    /** Execute action per iteration */
-    action?: {
-        name: string;
-        params: Record<string, unknown>;
-    };
-
-    /** Execute sub-agent per iteration */
-    subAgent?: {
-        name: string;
-        message: string;
-        templateParameters?: Record<string, unknown>;
-    };
-}
-
-/**
- * While operation for Loop agents to request conditional iteration
- */
-export interface WhileOperation {
-    /** Boolean expression evaluated before each iteration */
-    condition: string;
-    /** Variable name for attempt context (default: "attempt") */
-    itemVariable?: string;
-    /** Maximum iterations (undefined=100, 0=unlimited, >0=limit) */
-    maxIterations?: number;
-    /** Continue processing if an iteration fails (default: false) */
-    continueOnError?: boolean;
-    /** Delay between iterations in milliseconds (default: 0, useful for polling) */
-    delayBetweenIterationsMs?: number;
-
-    /** Execute action per iteration */
-    action?: {
-        name: string;
-        params: Record<string, unknown>;
-    };
-
-    /** Execute sub-agent per iteration */
-    subAgent?: {
-        name: string;
-        message: string;
-        templateParameters?: Record<string, unknown>;
-    };
-}
+// Re-export universal types for backward compatibility
+export type { ForEachOperation, WhileOperation };
 
 /**
  * Response structure for Loop Agent Type
