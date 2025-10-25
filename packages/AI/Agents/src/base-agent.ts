@@ -1190,6 +1190,12 @@ export class BaseAgent {
                 return this.validateRetryNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Failed':
                 return this.validateFailedNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            case 'ForEach':
+                // ForEach loops are valid - no additional validation needed
+                return nextStep;
+            case 'While':
+                // While loops are valid - no additional validation needed
+                return nextStep;
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -2736,7 +2742,7 @@ Please choose an alternative approach to complete your task.`
             
             if (validationResult) {
                 // Create validation step
-                const stepEntity = await this.createStepEntity('Validation', 'Agent Validation', contextUser);
+                const stepEntity = await this.createStepEntity({ stepType: 'Validation', stepName: 'Agent Validation', contextUser });
                 
                 
                 // Update step entity
@@ -2746,7 +2752,7 @@ Please choose an alternative approach to complete your task.`
             }
             
             // Validation successful - create success step
-            const stepEntity = await this.createStepEntity('Validation', 'Agent Validation', contextUser);
+            const stepEntity = await this.createStepEntity({ stepType: 'Validation', stepName: 'Agent Validation', contextUser });
             
             
             await this.finalizeStepEntity(stepEntity, true);
@@ -2759,44 +2765,49 @@ Please choose an alternative approach to complete your task.`
 
     /**
      * Creates a step entity for tracking.
-     * 
+     *
      * @private
-     * @param {string} stepType - The type of step
-     * @param {string} stepName - Human-readable name for the step
-     * @param {UserInfo} contextUser - User context for the operation
-     * @param {string} [targetId] - Optional ID of the target entity
-     * @param {any} [inputData] - Optional input data to capture for this step
-     * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
+     * @param params - Step creation parameters
      * @returns {Promise<AIAgentRunStepEntityExtended>} - The created step entity
      */
-    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any, parentId?: string): Promise<AIAgentRunStepEntityExtended> {
-        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
-        
+    private async createStepEntity(params: {
+        stepType: AIAgentRunStepEntityExtended["StepType"];
+        stepName: string;
+        contextUser: UserInfo;
+        targetId?: string;
+        inputData?: any;
+        targetLogId?: string;
+        payloadAtStart?: any;
+        payloadAtEnd?: any;
+        parentId?: string;
+    }): Promise<AIAgentRunStepEntityExtended> {
+        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
+
         stepEntity.AgentRunID = this._agentRun!.ID;
         // Step number is based on current count of steps + 1
         stepEntity.StepNumber = (this._agentRun!.Steps?.length || 0) + 1;
-        stepEntity.StepType = stepType;
+        stepEntity.StepType = params.stepType;
         // Include hierarchy breadcrumb in StepName for better logging
-        stepEntity.StepName = this.formatHierarchicalMessage(stepName);
+        stepEntity.StepName = this.formatHierarchicalMessage(params.stepName);
         // check to see if targetId is a valid UUID
-        if (targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+        if (params.targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.targetId)) {
             // If not valid, we can just ignore it, but console.warn
-            console.warn(`Invalid target ID format: ${targetId}`);
+            console.warn(`Invalid target ID format: ${params.targetId}`);
         }
         else {
-            stepEntity.TargetID = targetId || null;
+            stepEntity.TargetID = params.targetId || null;
         }
-        stepEntity.TargetLogID = targetLogId || null;
-        stepEntity.ParentID = parentId || null;  // Link to parent step (e.g., loop step)
+        stepEntity.TargetLogID = params.targetLogId || null;
+        stepEntity.ParentID = params.parentId || null;  // Link to parent step (e.g., loop step)
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
-        stepEntity.PayloadAtStart = payloadAtStart ? JSON.stringify(payloadAtStart) : null;
-        stepEntity.PayloadAtEnd = payloadAtEnd ? JSON.stringify(payloadAtEnd) : null;
+        stepEntity.PayloadAtStart = params.payloadAtStart ? JSON.stringify(params.payloadAtStart) : null;
+        stepEntity.PayloadAtEnd = params.payloadAtEnd ? JSON.stringify(params.payloadAtEnd) : null;
         
         // Populate InputData if provided
-        if (inputData) {
+        if (params.inputData) {
             stepEntity.InputData = JSON.stringify({
-                ...inputData,
+                ...params.inputData,
                 context: {
                     agentHierarchy: this._agentHierarchy,
                     depth: this._depth,
@@ -3172,7 +3183,7 @@ Please choose an alternative approach to complete your task.`
         
         // Prepare prompt parameters
         const payload = previousDecision?.newPayload || params.payload;
-        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, promptId, inputData, undefined, payload);
+        const stepEntity = await this.createStepEntity({ stepType: 'Prompt', stepName: 'Execute Agent Prompt', contextUser: params.contextUser, targetId: promptId, inputData, payloadAtStart: payload });
         
         try {
             // Report prompt execution progress with context
@@ -3492,7 +3503,7 @@ Please choose an alternative approach to complete your task.`
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
-        const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentEntity.ID, inputData, undefined, previousDecision.newPayload);
+        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload });
         
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
@@ -3903,15 +3914,14 @@ Please choose an alternative approach to complete your task.`
             relationshipType: 'related'
         };
 
-        const stepEntity = await this.createStepEntity(
-            'Sub-Agent',
-            `Execute Related Sub-Agent: ${subAgentRequest.name}`,
-            params.contextUser,
-            subAgentEntity.ID,
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Sub-Agent',
+            stepName: `Execute Related Sub-Agent: ${subAgentRequest.name}`,
+            contextUser: params.contextUser,
+            targetId: subAgentEntity.ID,
             inputData,
-            undefined,
-            previousDecision.newPayload
-        );
+            payloadAtStart: previousDecision.newPayload
+        });
 
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
@@ -4411,7 +4421,7 @@ Please choose an alternative approach to complete your task.`
                     actionParams: aa.params
                 };
                 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, actionInputData, undefined, currentPayload, currentPayload, this._iterationContext?.parentStepId);
+                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: this._iterationContext?.parentStepId });
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
@@ -4691,7 +4701,7 @@ Please choose an alternative approach to complete your task.`
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
-        const stepEntity = await this.createStepEntity('Chat', 'User Interaction', params.contextUser);
+        const stepEntity = await this.createStepEntity({ stepType: 'Chat', stepName: 'User Interaction', contextUser: params.contextUser });
         
         // Chat steps are successful - they indicate a need for user interaction
         await this.finalizeStepEntity(stepEntity, true);
@@ -4750,15 +4760,13 @@ Please choose an alternative approach to complete your task.`
             }
 
             // Create parent step for the loop itself
-            const loopStepEntity = await this.createStepEntity(
-                'ForEach',
-                `ForEach loop over ${forEach.collectionPath} (${collection.length} items)`,
-                params.contextUser,
-                undefined,
-                { forEach, collectionSize: collection.length },
-                undefined,
-                params.payload
-            );
+            const loopStepEntity = await this.createStepEntity({
+                stepType: 'ForEach',
+                stepName: `ForEach loop over ${forEach.collectionPath} (${collection.length} items)`,
+                contextUser: params.contextUser,
+                inputData: { forEach, collectionSize: collection.length },
+                payloadAtStart: params.payload
+            });
             await this.finalizeStepEntity(loopStepEntity, true);
 
             this._iterationContext = {
@@ -4937,15 +4945,13 @@ Please choose an alternative approach to complete your task.`
             delete (cleanPayload as any).loopResults;
             params.payload = cleanPayload;
 
-            const loopStepEntity = await this.createStepEntity(
-                'While',
-                `While loop: ${whileOp.condition}`,
-                params.contextUser,
-                undefined,
-                { while: whileOp },
-                undefined,
-                params.payload
-            );
+            const loopStepEntity = await this.createStepEntity({
+                stepType: 'While',
+                stepName: `While loop: ${whileOp.condition}`,
+                contextUser: params.contextUser,
+                inputData: { while: whileOp },
+                payloadAtStart: params.payload
+            });
             await this.finalizeStepEntity(loopStepEntity, true);
 
             this._iterationContext = {

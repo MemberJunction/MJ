@@ -288,10 +288,10 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
                 response.nextStep.type = 'Actions'; // update the data structure to have the correct type
                 lcaseType = 'actions';
-            } else if (!lcaseType && (response.nextStep as any).forEach) {
+            } else if (!lcaseType && response.nextStep.forEach) {
                 response.nextStep.type = 'ForEach'; // update the data structure to have the correct type
                 lcaseType = 'foreach';
-            } else if (!lcaseType && (response.nextStep as any).while) {
+            } else if (!lcaseType && response.nextStep.while) {
                 response.nextStep.type = 'While'; // update the data structure to have the correct type
                 lcaseType = 'while';
             }
@@ -327,13 +327,13 @@ export class LoopAgentType extends BaseAgentType {
                 }
             }
 
-            if (lcaseType === 'foreach' && !(response.nextStep as any).forEach) {
+            if (lcaseType === 'foreach' && !response.nextStep.forEach) {
                 const message = 'LoopAgentResponse requires forEach object for ForEach type';
                 LogError(message);
                 return {success: false, message};
             }
 
-            if (lcaseType === 'while' && !(response.nextStep as any).while) {
+            if (lcaseType === 'while' && !response.nextStep.while) {
                 const message = 'LoopAgentResponse requires while object for While type';
                 LogError(message);
                 return {success: false, message};

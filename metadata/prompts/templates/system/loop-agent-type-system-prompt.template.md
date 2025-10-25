@@ -118,7 +118,7 @@ When you have an array in the payload and need to perform the same operation on 
 
 **Benefits:** token efficient - you make ONE decision, action executes N times.
 
-**After completion:** Results appear in `payload.forEachResults` array for your next decision.
+**After completion:** Results appear in a temporary message for your next decision (not in payload).
 
 ### While: Polling and Conditional Loops
 
@@ -154,7 +154,7 @@ When you need to poll for status, retry operations, or loop while a condition is
 - Retry with limit: `"condition": "!payload.success && payload.attempts < 5"`
 - Pagination: `"condition": "payload.hasMorePages === true"`
 
-**After completion:** Results in `payload.whileResults`, loop count in `payload.whileIterationCount`.
+**After completion:** Results appear in a temporary message for your next decision (not in payload).
 
 ### Variable References in Params
 

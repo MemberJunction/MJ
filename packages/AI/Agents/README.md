@@ -35,7 +35,7 @@ Concrete implementation of BaseAgentType that:
 - Executes in a loop until task completion
 - Parses structured JSON responses from prompts
 - Supports actions, sub-agents, and conditional termination
-- **NEW:** ForEach and While iteration operations (v2.112+)
+- ForEach and While iteration operations (v2.112+)
   - LLM can request batch processing over collections
   - Conditional loops with While operations
   - 90% token reduction for iterative tasks
@@ -47,7 +47,7 @@ Deterministic workflow agent type that:
 - Supports parallel starting steps (Sequence=0)
 - Provides action output mapping to payload
 - Enables hybrid AI/deterministic workflows
-- **NEW:** ForEach and While loop step types (v2.112+)
+- ForEach and While loop step types (v2.112+)
   - Iterate over collections with ForEach steps
   - Conditional loops with While steps
   - Self-contained loop configuration
