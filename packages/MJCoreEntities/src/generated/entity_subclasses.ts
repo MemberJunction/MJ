@@ -8590,7 +8590,7 @@ export const AIAgentRunSchema = z.object({
     *   * Timeout
     *   * User Request
         * * Description: Reason for cancellation if the agent run was cancelled`),
-    FinalStep: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Failed'), z.literal('Retry'), z.literal('Sub-Agent'), z.literal('Success')]).nullable().describe(`
+    FinalStep: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Failed'), z.literal('ForEach'), z.literal('Retry'), z.literal('Sub-Agent'), z.literal('Success'), z.literal('While')]).nullable().describe(`
         * * Field Name: FinalStep
         * * Display Name: Final Step
         * * SQL Data Type: nvarchar(30)
@@ -8599,9 +8599,11 @@ export const AIAgentRunSchema = z.object({
     *   * Actions
     *   * Chat
     *   * Failed
+    *   * ForEach
     *   * Retry
     *   * Sub-Agent
     *   * Success
+    *   * While
         * * Description: The final step type that concluded the agent run`),
     FinalPayload: z.string().nullable().describe(`
         * * Field Name: FinalPayload
@@ -38379,15 +38381,17 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     *   * Actions
     *   * Chat
     *   * Failed
+    *   * ForEach
     *   * Retry
     *   * Sub-Agent
     *   * Success
+    *   * While
     * * Description: The final step type that concluded the agent run
     */
-    get FinalStep(): 'Actions' | 'Chat' | 'Failed' | 'Retry' | 'Sub-Agent' | 'Success' | null {
+    get FinalStep(): 'Actions' | 'Chat' | 'Failed' | 'ForEach' | 'Retry' | 'Sub-Agent' | 'Success' | 'While' | null {
         return this.Get('FinalStep');
     }
-    set FinalStep(value: 'Actions' | 'Chat' | 'Failed' | 'Retry' | 'Sub-Agent' | 'Success' | null) {
+    set FinalStep(value: 'Actions' | 'Chat' | 'Failed' | 'ForEach' | 'Retry' | 'Sub-Agent' | 'Success' | 'While' | null) {
         this.Set('FinalStep', value);
     }
 
