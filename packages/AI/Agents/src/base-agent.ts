@@ -1290,9 +1290,34 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified action
         const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
-        const missingActions = nextStep.actions?.filter(action => 
-            !curAgentActions.some(aa => aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase())
-        );
+        const missingActions = nextStep.actions?.filter(action => {
+            const actionName = action.name.trim().toLowerCase();
+
+            // Try exact match first
+            const exactMatch = curAgentActions.find(aa =>
+                aa.Action.trim().toLowerCase() === actionName
+            );
+            if (exactMatch) return false;  // Found exact match, not missing
+
+            // Fallback: Try CONTAINS search for partial matches
+            const containsMatches = curAgentActions.filter(aa =>
+                aa.Action.trim().toLowerCase().includes(actionName)
+            );
+
+            if (containsMatches.length === 1) {
+                // Exactly one partial match - use it and update action name
+                const correctedName = containsMatches[0].Action;
+                this.logStatus(`Action name fuzzy matched: '${action.name}' → '${correctedName}'`, true, params);
+                action.name = correctedName;  // Update to correct full name
+                return false;  // Found via contains, not missing
+            }
+
+            // No matches or ambiguous (multiple matches) - it's missing
+            if (containsMatches.length > 1) {
+                this.logStatus(`Ambiguous action name '${action.name}' matches ${containsMatches.length} actions: ${containsMatches.map(a => a.Action).join(', ')}`, true, params);
+            }
+            return true;
+        });
         // we should have zero missing actions, if we do, we need to log an error and return a retry step
         if (missingActions && missingActions.length > 0) {
             const missingActionNames = missingActions.map(a => a.name).join(', ');
