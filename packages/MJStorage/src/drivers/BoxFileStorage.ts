@@ -158,7 +158,7 @@ export class BoxFileStorage extends FileStorageBase {
    * Returns true if client credentials are present.
    */
   public get IsConfigured(): boolean {
-    return !!(this._clientId && this._clientSecret && this._accessToken);
+    return !!((this._clientId && this._clientSecret) || this._accessToken);
   }
 
   /**
@@ -179,7 +179,7 @@ export class BoxFileStorage extends FileStorageBase {
   public async initialize(): Promise<void> {
     // Get access token if not provided
     if (!this._accessToken) {
-      if (this._clientId && this._clientSecret && this._enterpriseId) {
+      if (this._clientId && this._clientSecret) {
         // Use client credentials to get token
         this._accessToken = await this._getAccessToken();
       } else if (this._refreshToken) {
@@ -1660,12 +1660,22 @@ export class BoxFileStorage extends FileStorageBase {
           // Reconstruct the full path from pathCollection
           const path = this._reconstructPath(fileItem);
 
+          // Parse lastModified date safely
+          let lastModified: Date;
+          const dateValue = fileItem.modifiedAt || fileItem.createdAt;
+          if (dateValue) {
+            const parsedDate = new Date(dateValue);
+            lastModified = isNaN(parsedDate.getTime()) ? new Date() : parsedDate;
+          } else {
+            lastModified = new Date();
+          }
+
           results.push({
             path,
             name: fileItem.name || '',
             size: fileItem.size || 0,
             contentType: mime.lookup(fileItem.name || '') || 'application/octet-stream',
-            lastModified: new Date(fileItem.modifiedAt || fileItem.createdAt || Date.now()),
+            lastModified,
             // Box search doesn't provide relevance scores in the standard API
             relevance: undefined,
             // Box search doesn't provide excerpts in the standard API
@@ -1750,6 +1760,7 @@ export class BoxFileStorage extends FileStorageBase {
     const pathParts: string[] = [];
 
     // Add parent folder names from pathCollection
+    // pathCollection.entries contains the full ancestor chain from root to immediate parent
     if (item.pathCollection?.entries) {
       for (const entry of item.pathCollection.entries) {
         // Skip the root folder (id '0' or 'All Files')
@@ -1757,11 +1768,6 @@ export class BoxFileStorage extends FileStorageBase {
           pathParts.push(entry.name);
         }
       }
-    }
-
-    // Add the parent folder if available
-    if (item.parent?.name && item.parent.name !== 'All Files') {
-      pathParts.push(item.parent.name);
     }
 
     // Add the item name itself

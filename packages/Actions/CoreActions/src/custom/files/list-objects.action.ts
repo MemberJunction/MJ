@@ -76,7 +76,7 @@ export class ListObjectsAction extends BaseFileStorageAction {
                 directoryCount: result.prefixes.length,
                 objects: result.objects,
                 prefixes: result.prefixes
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

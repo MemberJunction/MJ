@@ -58,7 +58,7 @@ export class DirectoryExistsAction extends BaseFileStorageAction {
                 operation: 'DirectoryExists',
                 directoryPath,
                 exists
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

@@ -58,7 +58,7 @@ export class ObjectExistsAction extends BaseFileStorageAction {
                 operation: 'ObjectExists',
                 objectName,
                 exists
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

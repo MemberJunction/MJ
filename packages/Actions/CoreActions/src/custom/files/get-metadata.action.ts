@@ -81,7 +81,7 @@ export class GetMetadataAction extends BaseFileStorageAction {
                 operation: 'GetMetadata',
                 objectName,
                 metadata
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

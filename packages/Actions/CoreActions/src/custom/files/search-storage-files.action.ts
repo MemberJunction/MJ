@@ -1,4 +1,4 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { MJGlobal } from "@memberjunction/global";
 import {
@@ -157,23 +157,40 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
                 ProviderData: file.providerData
             }));
 
-            // Create success result with detailed information
-            const resultData = {
-                SearchResults: formattedResults,
-                ResultCount: searchResults.results.length,
-                TotalMatches: searchResults.totalMatches,
-                HasMore: searchResults.hasMore,
-                NextPageToken: searchResults.nextPageToken,
-                Query: query,
-                SearchOptions: searchOptions
-            };
+            // Build output parameters array per ActionResultSimple spec
+            const outputParams: ActionParam[] = [
+                {
+                    Name: 'SearchResults',
+                    Value: formattedResults,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'ResultCount',
+                    Value: searchResults.results.length,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'TotalMatches',
+                    Value: searchResults.totalMatches,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'HasMore',
+                    Value: searchResults.hasMore,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'NextPageToken',
+                    Value: searchResults.nextPageToken,
+                    Type: 'Output'
+                }
+            ];
 
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
                 Message: `Found ${searchResults.results.length} file(s) matching query '${query}'`,
-                // Store detailed results in message as JSON for now (ActionResultSimple doesn't have Results property)
-                ...resultData
+                Params: outputParams
             } as ActionResultSimple;
 
         } catch (error) {

@@ -64,7 +64,7 @@ export class GetObjectAction extends BaseFileStorageAction {
                 objectName,
                 size: content.length,
                 contentBase64: base64Content
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(
