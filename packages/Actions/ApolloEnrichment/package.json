@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.100.3",
-    "@memberjunction/core": "2.100.3",
+    "@memberjunction/global": "2.110.1",
+    "@memberjunction/core": "2.110.1",
     "@memberjunction/core-entities": "2.110.1",
     "@memberjunction/actions": "2.110.1",
     "axios": "^1.7.2"

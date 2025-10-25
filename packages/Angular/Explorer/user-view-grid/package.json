@@ -25,8 +25,8 @@
     "@angular/router": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/global": "2.100.3",
-    "@memberjunction/core": "2.100.3",
+    "@memberjunction/global": "2.110.1",
+    "@memberjunction/core": "2.110.1",
     "@memberjunction/core-entities": "2.110.1",
     "@memberjunction/entity-communications-client": "2.110.1",
     "@memberjunction/communication-types": "2.110.1",
