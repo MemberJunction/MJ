@@ -37,6 +37,9 @@ import { NavigationTab } from '../../models/conversation-state.model';
         <button class="nav-btn search-btn" (click)="searchTriggered.emit()" title="Search (Ctrl+K)">
           <i class="fas fa-search"></i>
         </button>
+        <button class="nav-btn refresh-btn" (click)="refreshTriggered.emit()" title="Refresh agent cache">
+          <i class="fas fa-sync-alt"></i>
+        </button>
         <button class="nav-btn">
           <i class="fas fa-cog"></i>
         </button>
@@ -110,4 +113,5 @@ export class ConversationNavigationComponent {
   @Output() tabChanged = new EventEmitter<NavigationTab>();
   @Output() sidebarToggled = new EventEmitter<void>();
   @Output() searchTriggered = new EventEmitter<void>();
+  @Output() refreshTriggered = new EventEmitter<void>();
 }

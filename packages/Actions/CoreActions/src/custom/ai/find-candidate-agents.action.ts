@@ -14,7 +14,7 @@ import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
  * ```typescript
  * // Find agents for a research task
  * await runAction({
- *   ActionName: 'Find Best Agent',
+ *   ActionName: 'Find Candidate Agents',
  *   Params: [{
  *     Name: 'TaskDescription',
  *     Value: 'Research market trends and compile a comprehensive report'
@@ -28,18 +28,19 @@ import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Find Best Agent")
+@RegisterClass(BaseAction, "Find Candidate Agents")
 export class FindBestAgentAction extends BaseAction {
     // Singleton initialization removed - AIEngine handles embedding lifecycle
 
     /**
-     * Executes the Find Best Agent action.
+     * Executes the Find Candidate Agents action.
      *
      * @param params - The action parameters containing:
      *   - TaskDescription: Description of the task to find agents for (required)
      *   - MaxResults: Maximum number of agents to return (optional, default: 5)
      *   - MinimumSimilarityScore: Minimum similarity score 0-1 (optional, default: 0.5)
      *   - IncludeInactive: Include inactive agents (optional, default: false)
+     *   - ExcludeSubAgents: Exclude agents with invocation mode 'Sub-Agent' (optional, default: true)
      *
      * @returns Action result with matched agents
      */
@@ -50,6 +51,7 @@ export class FindBestAgentAction extends BaseAction {
             const maxResults = parseInt(this.getParamValue(params, 'maxresults') || '5');
             const minimumSimilarityScore = parseFloat(this.getParamValue(params, 'minimumsimilarityscore') || '0.5');
             const includeInactive = this.getBooleanParam(params, 'includeinactive', false);
+            const excludeSubAgents = this.getBooleanParam(params, 'excludesubagents', true);
 
             // Validate required input
             if (!taskDescription || taskDescription.trim().length === 0) {
@@ -111,11 +113,14 @@ export class FindBestAgentAction extends BaseAction {
                 permissionFilteredAgents = permissionFilteredAgents.filter(a => a.status === 'Active');
             }
 
-            // Filter by invocation mode - exclude Sub-Agent agents (only show Any or Top-Level)
-            // Sub-Agents are meant to be called by other agents, not discovered by users/tools
-            const invocationFilteredAgents = permissionFilteredAgents.filter(a =>
-                a.invocationMode !== 'Sub-Agent'
-            );
+            // Filter by invocation mode if excludeSubAgents is true
+            // Sub-Agents are meant to be called by other agents, not typically discovered by users/tools
+            let invocationFilteredAgents = permissionFilteredAgents;
+            if (excludeSubAgents) {
+                invocationFilteredAgents = permissionFilteredAgents.filter(a =>
+                    a.invocationMode !== 'Sub-Agent'
+                );
+            }
 
             // Limit to maxResults after all filtering
             const filteredAgents = invocationFilteredAgents.slice(0, maxResults);
@@ -175,7 +180,7 @@ export class FindBestAgentAction extends BaseAction {
             return {
                 Success: false,
                 ResultCode: 'EXECUTION_ERROR',
-                Message: `Failed to find best agent: ${error instanceof Error ? error.message : String(error)}`
+                Message: `Failed to Find Candidate Agents: ${error instanceof Error ? error.message : String(error)}`
             };
         }
     }

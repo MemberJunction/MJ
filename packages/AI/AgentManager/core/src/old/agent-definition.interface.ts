@@ -207,7 +207,7 @@ export interface AgentManagerPayload {
     changeSummary: string;
     /** Fields that will be updated (field name -> old/new values) */
     fieldsToUpdate?: Record<string, { old: any; new: any }>;
-    /** Actions to add (with action IDs from Find Best Action) */
+    /** Actions to add (with action IDs from Find Candidate Actions) */
     actionsToAdd?: Array<{ id: string; name: string; reason: string }>;
     /** Action IDs to remove from the agent */
     actionsToRemove?: string[];

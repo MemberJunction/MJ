@@ -1,9 +1,9 @@
 [
   {
     "fields": {
-      "Name": "Find Best Agent",
+      "Name": "Find Candidate Agents",
       "Description": "Finds the best-matching AI agents for a given task using embedding-based semantic search. Returns agents ranked by similarity score.",
-      "DriverClass": "Find Best Agent",
+      "DriverClass": "Find Candidate Agents",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active",
@@ -84,6 +84,25 @@
           "sync": {
             "lastModified": "2025-10-17T01:10:25.579Z",
             "checksum": "e539c29dd748c519220c875d238e5a6cd263ae8e2373c9492cb5493176c46cdd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeSubAgents",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to exclude agents with invocation mode 'Sub-Agent' from search results. Sub-agents are typically called by other agents. Defaults to true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4195795C-0613-453E-9688-CEE6CD390C46"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T18:24:15.019Z",
+            "checksum": "ca00df0e3c5c0d2f160a8e6da1073b741968e67064023d9ea285af975706d980"
           }
         },
         {
@@ -223,8 +242,8 @@
       "ID": "EF610103-E48D-4D9C-8DA2-1CF5B05F8AB6"
     },
     "sync": {
-      "lastModified": "2025-10-17T01:10:25.513Z",
-      "checksum": "398b2c608b348a6649b00fb3a08ad8b369eef82a4dc293442a6410da3c6ef223"
+      "lastModified": "2025-10-24T17:55:07.612Z",
+      "checksum": "f109aadaddd372dd5ab15055ce9db0a78e2943dba1dbd3cdd61ab7051f482406"
     }
   }
 ]

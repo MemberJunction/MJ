@@ -327,6 +327,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     this.isSearchPanelOpen = false;
   }
 
+  async onRefreshAgentCache(): Promise<void> {
+    console.log('🔄 Refreshing AI Engine cache...');
+    try {
+      await AIEngineBase.Instance.Config(true);
+      const agentCount = AIEngineBase.Instance.Agents?.length || 0;
+      console.log(`✅ AI Engine cache refreshed with ${agentCount} agents`);
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('❌ Failed to refresh AI Engine:', error);
+    }
+  }
+
   handleSearchResult(result: SearchResult): void {
     console.log('🔍 Navigating to search result:', result);
 
