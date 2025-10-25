@@ -301,16 +301,13 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 - The payload IS the current AgentSpec - all fields are at root level (`payload.ID`, `payload.Name`, `payload.Actions`, `payload.Prompts`, etc.)
 - `payload.modificationPlan` is a field in the payload (string) describing the changes to make
 - You read `payload.modificationPlan`, apply changes directly to the AgentSpec fields, and validate
-- Use `payloadChangeRequest.updateElements` to modify existing fields
-- Use `payloadChangeRequest.newElements` to add new items (e.g., new actions, new prompts, new sub-agents)
-- Use `payloadChangeRequest.removeElements` to remove items (e.g., delete an action, remove a prompt)
+- Use `payloadChangeRequest` to add / update / delete things.
 
 **Your job**:
 1. Read the modification plan from `payload.modificationPlan`
-2. Identify which AgentSpec fields need to change (e.g., add to `Actions` array, update `Description`, modify `Prompts`, add `Steps`, etc.)
+2. Identify which AgentSpec fields need to change (e.g., add to `Actions` array, update `Prompts`, delete a subagent in `Subagents`, etc.)
 3. Apply changes using `payloadChangeRequest`
 4. Validate the changes (Loop needs prompts, Flow needs steps, action IDs are valid, etc.)
-5. Return the changes via `payloadChangeRequest` (original `ID` is preserved automatically)
 
 **Key rules**:
 1. **Keep original `ID`**: The `payload.ID` field should NOT be modified (Builder uses it to detect updates)

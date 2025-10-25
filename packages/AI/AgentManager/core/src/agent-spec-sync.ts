@@ -672,6 +672,7 @@ export class AgentSpecSync {
         if (!fullPrompt) {
             // Fallback if prompt not found
             return {
+                ID: agentPrompt.ID,  // Junction record ID for orphan detection
                 PromptID: agentPrompt.PromptID || '',
                 PromptText: '',
                 PromptRole: 'System',
@@ -680,6 +681,7 @@ export class AgentSpecSync {
         }
 
         return {
+            ID: agentPrompt.ID,  // Junction record ID for orphan detection
             PromptID: fullPrompt.ID || '',
             PromptText: fullPrompt.TemplateText || '',
             PromptRole: fullPrompt.PromptRole || 'System',
@@ -1077,6 +1079,7 @@ export class AgentSpecSync {
             // This ensures all fields including FunctionalRequirements and TechnicalDesign are updated
             const childSync = new AgentSpecSync(childSpec, this._contextUser);
             childSync.markDirty();
+            childSync.markLoaded();  // Mark as loaded so delete logic runs for orphaned records
             await childSync.SaveToDatabase();
 
             console.log(`✅ saveChildSubAgent: Updated existing child sub-agent`);
@@ -1642,6 +1645,27 @@ export class AgentSpecSync {
         this._isDirty = true;
     }
 
+    /**
+     * Mark the spec as having been loaded from the database.
+     *
+     * This is used internally when updating existing child agents to ensure the delete
+     * logic runs correctly. When a child agent is updated via saveChildSubAgent(), we
+     * create a new AgentSpecSync instance from the spec data (not loaded from DB), but
+     * we need to mark it as loaded so orphaned records are properly deleted.
+     *
+     * @internal
+     * @example
+     * ```typescript
+     * const childSync = new AgentSpecSync(existingChildSpec, contextUser);
+     * childSync.markDirty();
+     * childSync.markLoaded();  // Ensure delete logic runs for existing agent
+     * await childSync.SaveToDatabase();
+     * ```
+     */
+    public markLoaded(): void {
+        this._isLoaded = true;
+    }
+
     // ===== DELETE/ORPHAN METHODS =====
 
     /**
@@ -1801,22 +1825,42 @@ export class AgentSpecSync {
         console.log(`🗑️ Phase 1: Deleting ${orphans.paths.length} paths and ${orphans.actions.length} actions...`);
 
         for (const path of orphans.paths) {
+            console.log(`🗑️ deleteOrphans: Deleting path ${path.ID}...`);
             const entity = await md.GetEntityObject<AIAgentStepPathEntity>(
                 'MJ: AI Agent Step Paths',
                 this._contextUser
             );
-            await entity.Load(path.ID);
-            await entity.Delete();
+            const loaded = await entity.Load(path.ID);
+            if (!loaded) {
+                console.error(`❌ deleteOrphans: Failed to load path ${path.ID} - skipping`);
+                continue;
+            }
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                console.error(`❌ deleteOrphans: Failed to delete path ${path.ID}`);
+                continue;
+            }
+            console.log(`✅ deleteOrphans: Deleted path ${path.ID}`);
             this.trackMutation('AI Agent Step Paths', 'Delete', path.ID, `Deleted orphaned path`);
         }
 
         for (const action of orphans.actions) {
+            console.log(`🗑️ deleteOrphans: Deleting action junction ${action.ID} (ActionID: ${action.ActionID})...`);
             const entity = await md.GetEntityObject<AIAgentActionEntity>(
                 'AI Agent Actions',
                 this._contextUser
             );
-            await entity.Load(action.ID);
-            await entity.Delete();
+            const loaded = await entity.Load(action.ID);
+            if (!loaded) {
+                console.error(`❌ deleteOrphans: Failed to load action junction ${action.ID} - skipping`);
+                continue;
+            }
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                console.error(`❌ deleteOrphans: Failed to delete action junction ${action.ID}`);
+                continue;
+            }
+            console.log(`✅ deleteOrphans: Deleted action junction ${action.ID}`);
             this.trackMutation('AI Agent Actions', 'Delete', action.ID, `Deleted orphaned action junction`);
         }
 
@@ -1824,33 +1868,63 @@ export class AgentSpecSync {
         console.log(`🗑️ Phase 2: Deleting ${orphans.steps.length} steps, ${orphans.prompts.length} prompt junctions, ${orphans.relationships.length} relationships...`);
 
         for (const step of orphans.steps) {
+            console.log(`🗑️ deleteOrphans: Deleting step ${step.ID} (${step.Name})...`);
             const entity = await md.GetEntityObject<AIAgentStepEntity>(
                 'MJ: AI Agent Steps',
                 this._contextUser
             );
-            await entity.Load(step.ID);
-            await entity.Delete();
+            const loaded = await entity.Load(step.ID);
+            if (!loaded) {
+                console.error(`❌ deleteOrphans: Failed to load step ${step.ID} - skipping`);
+                continue;
+            }
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                console.error(`❌ deleteOrphans: Failed to delete step ${step.ID}`);
+                continue;
+            }
+            console.log(`✅ deleteOrphans: Deleted step ${step.ID}`);
             this.trackMutation('AI Agent Steps', 'Delete', step.ID, `Deleted orphaned step`);
         }
 
         for (const promptJunction of orphans.prompts) {
+            console.log(`🗑️ deleteOrphans: Deleting prompt junction ${promptJunction.ID} (PromptID: ${promptJunction.PromptID})...`);
             const entity = await md.GetEntityObject<any>(
                 'MJ: AI Agent Prompts',
                 this._contextUser
             );
-            await entity.Load(promptJunction.ID);
-            await entity.Delete();
+            const loaded = await entity.Load(promptJunction.ID);
+            if (!loaded) {
+                console.error(`❌ deleteOrphans: Failed to load prompt junction ${promptJunction.ID} - skipping`);
+                continue;
+            }
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                console.error(`❌ deleteOrphans: Failed to delete prompt junction ${promptJunction.ID}`);
+                continue;
+            }
+            console.log(`✅ deleteOrphans: Deleted prompt junction ${promptJunction.ID}`);
             this.trackMutation('AI Agent Prompts', 'Delete', promptJunction.ID, `Deleted orphaned prompt junction`);
             // NOTE: We do NOT delete the AIPrompt itself - it's a shared resource
         }
 
         for (const relationship of orphans.relationships) {
+            console.log(`🗑️ deleteOrphans: Deleting relationship ${relationship.ID} (SubAgentID: ${relationship.SubAgentID})...`);
             const entity = await md.GetEntityObject<AIAgentRelationshipEntity>(
                 'MJ: AI Agent Relationships',
                 this._contextUser
             );
-            await entity.Load(relationship.ID);
-            await entity.Delete();
+            const loaded = await entity.Load(relationship.ID);
+            if (!loaded) {
+                console.error(`❌ deleteOrphans: Failed to load relationship ${relationship.ID} - skipping`);
+                continue;
+            }
+            const deleted = await entity.Delete();
+            if (!deleted) {
+                console.error(`❌ deleteOrphans: Failed to delete relationship ${relationship.ID}`);
+                continue;
+            }
+            console.log(`✅ deleteOrphans: Deleted relationship ${relationship.ID}`);
             this.trackMutation('AI Agent Relationships', 'Delete', relationship.ID, `Deleted orphaned relationship`);
         }
 
