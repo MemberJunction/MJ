@@ -44,6 +44,34 @@ export interface AgentSpecSyncResult {
 }
 
 /**
+ * Represents the current state of agent-related records in the database.
+ * Used for diffing against the AgentSpec to identify orphaned records.
+ * @private
+ */
+interface DatabaseState {
+    actions: AIAgentActionEntity[];
+    prompts: any[]; // AIAgentPromptEntity (junction records)
+    relationships: AIAgentRelationshipEntity[];
+    steps: AIAgentStepEntity[];
+    paths: AIAgentStepPathEntity[];
+    childAgents: AIAgentEntity[];
+}
+
+/**
+ * Represents records that exist in the database but not in the current AgentSpec.
+ * These orphaned records need to be deleted or orphaned.
+ * @private
+ */
+interface Orphans {
+    actions: AIAgentActionEntity[];
+    prompts: any[]; // AIAgentPromptEntity junctions (NOT the AIPrompt entities themselves)
+    relationships: AIAgentRelationshipEntity[];
+    steps: AIAgentStepEntity[];
+    paths: AIAgentStepPathEntity[];
+    childAgents: AIAgentEntity[]; // Will be orphaned (ParentID = NULL) not deleted
+}
+
+/**
  * AgentSpecSync provides a high-level interface for working with AI Agent metadata in MemberJunction.
  *
  * This class serves as a bi-directional bridge between the simple, serializable {@link AgentSpec}
@@ -740,6 +768,20 @@ export class AgentSpecSync {
         }
 
         try {
+            // Step 0: Delete orphaned records (if this is an update)
+            if (this._isLoaded && this.spec.ID) {
+                console.log(`🗑️ SaveToDatabase: Loading current database state for agent ${this.spec.ID}...`);
+                const dbState = await this.loadCurrentDatabaseState(this.spec.ID);
+
+                console.log(`🔍 SaveToDatabase: Identifying orphaned records...`);
+                const orphans = this.identifyOrphans(dbState, this.spec);
+
+                console.log(`🗑️ SaveToDatabase: Deleting ${orphans.paths.length} paths, ${orphans.actions.length} actions, ${orphans.steps.length} steps, ${orphans.prompts.length} prompts, ${orphans.relationships.length} relationships, orphaning ${orphans.childAgents.length} child agents...`);
+                await this.deleteOrphans(orphans);
+
+                console.log(`✅ SaveToDatabase: Orphan cleanup complete`);
+            }
+
             // Step 1: Save main agent entity
             const agentId = await this.saveAgentEntity(validate);
 
@@ -1598,5 +1640,261 @@ export class AgentSpecSync {
      */
     public markDirty(): void {
         this._isDirty = true;
+    }
+
+    // ===== DELETE/ORPHAN METHODS =====
+
+    /**
+     * Load the current state of all agent-related records from the database.
+     *
+     * This method efficiently batches all queries using RunViews for optimal performance.
+     * It loads all junction records and child agents for the specified agent.
+     *
+     * @private
+     * @param agentId - The agent ID to load database state for
+     * @returns Promise resolving to DatabaseState with all current records
+     * @throws {Error} If any query fails
+     */
+    private async loadCurrentDatabaseState(agentId: string): Promise<DatabaseState> {
+        const rv = new RunView();
+
+        // Batch load all related records for this agent
+        const [actions, prompts, relationships, steps, childAgents] = await rv.RunViews([
+            {
+                EntityName: 'AI Agent Actions',
+                ExtraFilter: `AgentID='${agentId}'`,
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: AI Agent Prompts',
+                ExtraFilter: `AgentID='${agentId}'`,
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: AI Agent Relationships',
+                ExtraFilter: `AgentID='${agentId}'`,
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'MJ: AI Agent Steps',
+                ExtraFilter: `AgentID='${agentId}'`,
+                ResultType: 'entity_object'
+            },
+            {
+                EntityName: 'AI Agents',
+                ExtraFilter: `ParentID='${agentId}'`,
+                ResultType: 'entity_object'
+            }
+        ], this._contextUser);
+
+        // Check for errors
+        if (!actions.Success || !prompts.Success || !relationships.Success ||
+            !steps.Success || !childAgents.Success) {
+            const errors = [actions, prompts, relationships, steps, childAgents]
+                .filter(r => !r.Success)
+                .map(r => r.ErrorMessage)
+                .join('; ');
+            throw new Error(`Failed to load database state: ${errors}`);
+        }
+
+        // Load paths separately after we have steps (to avoid subquery in ExtraFilter)
+        let pathsResult;
+        const stepRecords = steps.Results || [];
+        if (stepRecords.length > 0) {
+            const stepIds = stepRecords.map((s: AIAgentStepEntity) => `'${s.ID}'`).join(',');
+            pathsResult = await rv.RunView<AIAgentStepPathEntity>({
+                EntityName: 'MJ: AI Agent Step Paths',
+                ExtraFilter: `OriginStepID IN (${stepIds})`,
+                ResultType: 'entity_object'
+            }, this._contextUser);
+
+            if (!pathsResult.Success) {
+                throw new Error(`Failed to load step paths: ${pathsResult.ErrorMessage}`);
+            }
+        } else {
+            // No steps, so no paths
+            pathsResult = { Success: true, Results: [] };
+        }
+
+        return {
+            actions: actions.Results || [],
+            prompts: prompts.Results || [],
+            relationships: relationships.Results || [],
+            steps: stepRecords,
+            paths: pathsResult.Results || [],
+            childAgents: childAgents.Results || []
+        };
+    }
+
+    /**
+     * Identify orphaned records by comparing database state to AgentSpec.
+     *
+     * An "orphan" is a database record that exists but is not represented in the
+     * current AgentSpec. These records need to be deleted or orphaned.
+     *
+     * The diff logic matches by primary key ID:
+     * - If a DB record's ID is found in the spec → KEEP (may be updated)
+     * - If a DB record's ID is NOT in the spec → ORPHAN/DELETE
+     *
+     * @private
+     * @param dbState - Current database state loaded from loadCurrentDatabaseState
+     * @param spec - The new AgentSpec to compare against
+     * @returns Orphans object containing all orphaned records
+     */
+    private identifyOrphans(dbState: DatabaseState, spec: AgentSpec): Orphans {
+        return {
+            // Orphaned actions: DB actions not in spec.Actions
+            actions: dbState.actions.filter(dbAction =>
+                !spec.Actions?.some(specAction => specAction.AgentActionID === dbAction.ID)
+            ),
+
+            // Orphaned prompt junctions: DB prompts not in spec.Prompts
+            prompts: dbState.prompts.filter(dbPrompt =>
+                !spec.Prompts?.some(specPrompt => (specPrompt as any).ID === dbPrompt.ID)
+            ),
+
+            // Orphaned relationships: DB relationships not in spec.SubAgents (related type)
+            relationships: dbState.relationships.filter(dbRel =>
+                !spec.SubAgents?.some(specSub =>
+                    specSub.Type === 'related' && specSub.AgentRelationshipID === dbRel.ID
+                )
+            ),
+
+            // Orphaned steps: DB steps not in spec.Steps
+            steps: dbState.steps.filter(dbStep =>
+                !spec.Steps?.some(specStep => specStep.ID === dbStep.ID)
+            ),
+
+            // Orphaned paths: DB paths not in spec.Paths
+            paths: dbState.paths.filter(dbPath =>
+                !spec.Paths?.some(specPath => specPath.ID === dbPath.ID)
+            ),
+
+            // Orphaned child agents: DB children not in spec.SubAgents (child type)
+            childAgents: dbState.childAgents.filter(dbChild =>
+                !spec.SubAgents?.some(specSub =>
+                    specSub.Type === 'child' && specSub.SubAgent.ID === dbChild.ID
+                )
+            )
+        };
+    }
+
+    /**
+     * Delete or orphan all orphaned records in the correct order.
+     *
+     * This method executes deletions in phases to maintain referential integrity:
+     * - Phase 1: Leaf entities (paths, actions) - no other entities reference these
+     * - Phase 2: Mid-level entities (steps, prompt junctions, relationships)
+     * - Phase 3: Child agents (orphan by setting ParentID = NULL)
+     *
+     * IMPORTANT: We NEVER delete AIPrompt entities themselves, only AIAgentPrompt junctions.
+     * IMPORTANT: We ORPHAN child agents instead of deleting them to avoid foreign key violations from run history.
+     *
+     * @private
+     * @param orphans - The orphaned records identified by identifyOrphans
+     * @throws {Error} If any delete operation fails
+     */
+    private async deleteOrphans(orphans: Orphans): Promise<void> {
+        const md = new Metadata();
+
+        // Phase 1: Leaf entities (Paths, Actions)
+        console.log(`🗑️ Phase 1: Deleting ${orphans.paths.length} paths and ${orphans.actions.length} actions...`);
+
+        for (const path of orphans.paths) {
+            const entity = await md.GetEntityObject<AIAgentStepPathEntity>(
+                'MJ: AI Agent Step Paths',
+                this._contextUser
+            );
+            await entity.Load(path.ID);
+            await entity.Delete();
+            this.trackMutation('AI Agent Step Paths', 'Delete', path.ID, `Deleted orphaned path`);
+        }
+
+        for (const action of orphans.actions) {
+            const entity = await md.GetEntityObject<AIAgentActionEntity>(
+                'AI Agent Actions',
+                this._contextUser
+            );
+            await entity.Load(action.ID);
+            await entity.Delete();
+            this.trackMutation('AI Agent Actions', 'Delete', action.ID, `Deleted orphaned action junction`);
+        }
+
+        // Phase 2: Mid-level entities (Steps, Prompt Junctions, Relationships)
+        console.log(`🗑️ Phase 2: Deleting ${orphans.steps.length} steps, ${orphans.prompts.length} prompt junctions, ${orphans.relationships.length} relationships...`);
+
+        for (const step of orphans.steps) {
+            const entity = await md.GetEntityObject<AIAgentStepEntity>(
+                'MJ: AI Agent Steps',
+                this._contextUser
+            );
+            await entity.Load(step.ID);
+            await entity.Delete();
+            this.trackMutation('AI Agent Steps', 'Delete', step.ID, `Deleted orphaned step`);
+        }
+
+        for (const promptJunction of orphans.prompts) {
+            const entity = await md.GetEntityObject<any>(
+                'MJ: AI Agent Prompts',
+                this._contextUser
+            );
+            await entity.Load(promptJunction.ID);
+            await entity.Delete();
+            this.trackMutation('AI Agent Prompts', 'Delete', promptJunction.ID, `Deleted orphaned prompt junction`);
+            // NOTE: We do NOT delete the AIPrompt itself - it's a shared resource
+        }
+
+        for (const relationship of orphans.relationships) {
+            const entity = await md.GetEntityObject<AIAgentRelationshipEntity>(
+                'MJ: AI Agent Relationships',
+                this._contextUser
+            );
+            await entity.Load(relationship.ID);
+            await entity.Delete();
+            this.trackMutation('AI Agent Relationships', 'Delete', relationship.ID, `Deleted orphaned relationship`);
+        }
+
+        // Phase 3: Orphan child agents (set ParentID = NULL)
+        console.log(`🔗 Phase 3: Orphaning ${orphans.childAgents.length} child agents (set ParentID = NULL)...`);
+
+        for (const childAgent of orphans.childAgents) {
+            await this.orphanChildAgent(childAgent.ID);
+            this.trackMutation('AI Agents', 'Update', childAgent.ID, `Orphaned child agent: ${childAgent.Name} (set ParentID = NULL)`);
+        }
+    }
+
+    /**
+     * Orphan a child agent by setting its ParentID to NULL.
+     *
+     * This removes the child from the parent's hierarchy without deleting it.
+     * This approach is used instead of full deletion because:
+     * - Child agent may have AIAgentRun records (execution history)
+     * - AIAgentRun.AgentID is NOT NULL with NO CASCADE DELETE
+     * - Deleting child would cause foreign key violation
+     * - Orphaning preserves history and avoids violation
+     * - Child becomes a standalone agent
+     *
+     * @private
+     * @param childAgentId - The ID of the child agent to orphan
+     * @throws {Error} If orphaning fails
+     */
+    private async orphanChildAgent(childAgentId: string): Promise<void> {
+        console.log(`🔗 orphanChildAgent: Orphaning child agent ${childAgentId}...`);
+
+        const md = new Metadata();
+        const childAgent = await md.GetEntityObject<AIAgentEntity>('AI Agents', this._contextUser);
+
+        const loaded = await childAgent.Load(childAgentId);
+        if (!loaded) {
+            throw new Error(`Failed to load child agent ${childAgentId} for orphaning`);
+        }
+
+        childAgent.ParentID = null; // Orphan the child
+        const saved = await childAgent.Save();
+        if (!saved) {
+            throw new Error(`Failed to orphan child agent ${childAgentId}`);
+        }
+
+        console.log(`✅ orphanChildAgent: Orphaned child agent ${childAgentId} (ParentID = NULL)`);
     }
 }
