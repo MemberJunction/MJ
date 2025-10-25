@@ -8305,7 +8305,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
         * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Decision'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Validation')]).describe(`
+    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Decision'), z.literal('ForEach'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Validation'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
@@ -8315,9 +8315,11 @@ export const AIAgentRunStepSchema = z.object({
     *   * Actions
     *   * Chat
     *   * Decision
+    *   * ForEach
     *   * Prompt
     *   * Sub-Agent
     *   * Validation
+    *   * While
         * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation`),
     StepName: z.string().describe(`
         * * Field Name: StepName
@@ -37700,15 +37702,17 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     *   * Actions
     *   * Chat
     *   * Decision
+    *   * ForEach
     *   * Prompt
     *   * Sub-Agent
     *   * Validation
+    *   * While
     * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation
     */
-    get StepType(): 'Actions' | 'Chat' | 'Decision' | 'Prompt' | 'Sub-Agent' | 'Validation' {
+    get StepType(): 'Actions' | 'Chat' | 'Decision' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'Validation' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Actions' | 'Chat' | 'Decision' | 'Prompt' | 'Sub-Agent' | 'Validation') {
+    set StepType(value: 'Actions' | 'Chat' | 'Decision' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'Validation' | 'While') {
         this.Set('StepType', value);
     }
 
