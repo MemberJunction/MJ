@@ -550,6 +550,11 @@ export class LoopAgentType extends BaseAgentType {
         let currentPayload = payload;
 
         while (iterationCount < maxIterations) {
+            // Delay between iterations if configured (except first iteration)
+            if (iterationCount > 0 && whileOp.delayBetweenIterationsMs) {
+                await new Promise(resolve => setTimeout(resolve, whileOp.delayBetweenIterationsMs));
+            }
+
             // Evaluate condition
             const evalContext = { payload: currentPayload, results, errors };
             const evalResult = this._evaluator.evaluate(whileOp.condition, evalContext);

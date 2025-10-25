@@ -74,6 +74,7 @@ export interface WhileConfig {
     itemVariable?: string;
     maxIterations?: number;
     continueOnError?: boolean;
+    delayBetweenIterationsMs?: number;  // Delay between iterations in milliseconds (default: 0)
 }
 
 /**
@@ -1330,6 +1331,11 @@ export class FlowAgentType extends BaseAgentType {
                 newPayload: payload,
                 previousPayload: payload
             });
+        }
+
+        // Delay between iterations if configured (except first iteration)
+        if (iterContext.iterationCount > 0 && config.delayBetweenIterationsMs) {
+            await new Promise(resolve => setTimeout(resolve, config.delayBetweenIterationsMs));
         }
 
         // Inject attempt context into payload

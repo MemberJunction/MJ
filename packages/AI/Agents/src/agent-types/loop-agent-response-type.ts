@@ -41,6 +41,8 @@ export interface WhileOperation {
     maxIterations?: number;
     /** Continue processing if an iteration fails (default: false) */
     continueOnError?: boolean;
+    /** Delay between iterations in milliseconds (default: 0, useful for polling) */
+    delayBetweenIterationsMs?: number;
 
     /** Execute action per iteration */
     action?: {

@@ -337,6 +337,7 @@ The LLM can then process these results in the next step.
 | `itemVariable` | string | No | "attempt" | Variable name for attempt context |
 | `maxIterations` | number | No | 100 | Max iterations (undefined=100, 0=unlimited, >0=limit) |
 | `continueOnError` | boolean | No | false | Continue if an iteration fails |
+| `delayBetweenIterationsMs` | number | No | 0 | Delay in milliseconds between iterations (useful for polling) |
 
 ### MaxIterations Behavior
 
@@ -513,6 +514,31 @@ When resolving a mapping value like `"customer.email"`:
 }
 ```
 
+### 6. Use Delays for Polling and Rate Limiting
+
+```json
+// Polling: Check status every N seconds
+{
+    "type": "While",
+    "condition": "payload.jobStatus === 'running'",
+    "delayBetweenIterationsMs": 5000  // 5 seconds between checks
+}
+
+// Rate limiting: Respect API limits
+{
+    "type": "While",
+    "condition": "payload.hasMorePages === true",
+    "delayBetweenIterationsMs": 1000  // 1 second between API calls
+}
+
+// No delay: Immediate retries (use cautiously)
+{
+    "type": "While",
+    "condition": "payload.validationPassed === false",
+    "delayBetweenIterationsMs": 0  // No delay, immediate retry
+}
+```
+
 ---
 
 ## Examples
@@ -588,51 +614,55 @@ const processDocsStep = {
 // 4. Store results
 ```
 
-### Example 3: API Retry Logic (While with Action)
+### Example 3: Polling for Job Completion (While with Delay)
 
-**Scenario:** Keep calling external API until success or max retries
+**Scenario:** Wait for background export job to complete, checking every 3 seconds
 
 ```typescript
-// Step 1: Initialize retry state
-const initStep = {
+// Step 1: Start export job
+const startExportStep = {
     StepType: 'Action',
-    ActionID: 'initialize-retry-state',
+    ActionID: 'start-data-export-action',
+    ActionInputMapping: JSON.stringify({
+        dataType: 'payload.exportDataType',
+        format: 'CSV'
+    }),
     ActionOutputMapping: JSON.stringify({
-        '*': 'payload.apiSuccess',  // Sets to false initially
-        retries: 'payload.retries'  // Sets to 0
+        jobId: 'payload.exportJobId',
+        status: 'payload.exportStatus'  // Initially 'processing'
     })
 };
 
-// Step 2: While not successful, retry
-const retryStep = {
+// Step 2: Poll for completion
+const pollStatusStep = {
     StepType: 'While',
     LoopBodyType: 'Action',
-    ActionID: 'call-external-api-action',
+    ActionID: 'check-export-status-action',
     Configuration: JSON.stringify({
         type: 'While',
-        condition: 'payload.apiSuccess === false && payload.retries < 5',
-        itemVariable: 'attempt',
-        maxIterations: 5
+        condition: 'payload.exportStatus === "processing"',
+        itemVariable: 'checkAttempt',
+        delayBetweenIterationsMs: 3000,  // Check every 3 seconds
+        maxIterations: 20  // Max 1 minute of polling
     }),
     ActionInputMapping: JSON.stringify({
-        url: 'payload.apiEndpoint',
-        attemptNumber: 'attempt.attemptNumber',
-        timeout: 'payload.timeoutMs'
+        jobId: 'payload.exportJobId',
+        attemptNumber: 'checkAttempt.attemptNumber'
     }),
     ActionOutputMapping: JSON.stringify({
-        success: 'payload.apiSuccess',
-        data: 'payload.apiResponse',
-        error: 'payload.apiError'
+        status: 'payload.exportStatus',
+        downloadUrl: 'payload.exportDownloadUrl',
+        error: 'payload.exportError'
     })
 };
 
-// Step 3: Process results (only runs if successful OR max retries reached)
-const processStep = {
+// Step 3: Process completed export (only runs when status != 'processing')
+const processExportStep = {
     StepType: 'Action',
-    ActionID: 'process-api-response',
+    ActionID: 'process-export-results',
     ActionInputMapping: JSON.stringify({
-        data: 'payload.apiResponse',
-        wasSuccessful: 'payload.apiSuccess'
+        downloadUrl: 'payload.exportDownloadUrl',
+        wasSuccessful: 'payload.exportStatus'
     })
 };
 ```

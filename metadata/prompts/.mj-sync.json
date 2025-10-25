@@ -2,7 +2,8 @@
   "entity": "AI Prompts",
   "filePattern": ".*.json",
   "defaults": {
-    "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types"
+    "CategoryID": "@lookup:AI Prompt Categories.Name=Agent Type System Prompts?create&Description=System Prompts for Agent Types",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat"
   },
   "ignoreDirectories": [
     "output",
