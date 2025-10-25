@@ -150,6 +150,7 @@ export class SearchStorageFilesAction extends BaseFileStorageAction {
                 Size: file.size,
                 ContentType: file.contentType,
                 LastModified: file.lastModified.toISOString(),
+                ObjectID: file.objectId,  // Provider-specific ID for fast direct access
                 Relevance: file.relevance,
                 Excerpt: file.excerpt,
                 MatchInFilename: file.matchInFilename,

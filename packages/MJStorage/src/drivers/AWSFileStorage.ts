@@ -17,6 +17,8 @@ import {
   FileSearchOptions,
   FileSearchResultSet,
   FileStorageBase,
+  GetObjectParams,
+  GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -492,19 +494,23 @@ export class AWSFileStorage extends FileStorageBase {
 
   /**
    * Retrieves metadata for a specific object in S3.
-   * 
+   *
    * This method fetches the properties of an object using the HeadObject API,
-   * which doesn't download the object content. This is more efficient for 
+   * which doesn't download the object content. This is more efficient for
    * checking file attributes like size, content type, and last modified date.
-   * 
-   * @param objectName - The name of the object to get metadata for
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for S3)
    * @returns A Promise resolving to a StorageObjectMetadata object
    * @throws Error if the object doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const metadata = await s3Storage.GetObjectMetadata('documents/report.pdf');
+   *   // For S3, objectId and fullPath are the same (both are the S3 key)
+   *   const metadata = await s3Storage.GetObjectMetadata({ fullPath: 'documents/report.pdf' });
+   *   // Or equivalently:
+   *   const metadata2 = await s3Storage.GetObjectMetadata({ objectId: 'documents/report.pdf' });
+   *
    *   console.log(`File: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Last modified: ${metadata.lastModified}`);
@@ -513,7 +519,14 @@ export class AWSFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For S3, objectId and fullPath are the same (both are the key/path)
+    const objectName = params.objectId || params.fullPath!;
     const key = this._normalizeKey(objectName);
     const command = new HeadObjectCommand({
       Bucket: this._bucket,
@@ -522,12 +535,12 @@ export class AWSFileStorage extends FileStorageBase {
 
     try {
       const response = await this._client.send(command);
-      
+
       const relativePath = this._removePrefix(key);
       const pathParts = relativePath.split('/');
       const name = pathParts[pathParts.length - 1];
       const path = pathParts.slice(0, -1).join('/');
-      
+
       return {
         name,
         path,
@@ -543,24 +556,28 @@ export class AWSFileStorage extends FileStorageBase {
     } catch (e) {
       console.error('Error getting object metadata from S3 storage', { key, bucket: this._bucket });
       console.error(e);
-      throw new Error(`Object not found: ${objectName}`);
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
 
   /**
    * Downloads an object's content from S3.
-   * 
+   *
    * This method retrieves the full content of an object using the GetObject API
    * and returns it as a Buffer for processing in memory.
-   * 
-   * @param objectName - The name of the object to download
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for S3)
    * @returns A Promise resolving to a Buffer containing the object's data
    * @throws Error if the object doesn't exist or cannot be downloaded
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const content = await s3Storage.GetObject('documents/config.json');
+   *   // For S3, objectId and fullPath are the same (both are the S3 key)
+   *   const content = await s3Storage.GetObject({ fullPath: 'documents/config.json' });
+   *   // Or equivalently:
+   *   const content2 = await s3Storage.GetObject({ objectId: 'documents/config.json' });
+   *
    *   // Parse the JSON content
    *   const config = JSON.parse(content.toString('utf8'));
    *   console.log('Configuration loaded:', config);
@@ -569,7 +586,14 @@ export class AWSFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For S3, objectId and fullPath are the same (both are the key/path)
+    const objectName = params.objectId || params.fullPath!;
     const key = this._normalizeKey(objectName);
     const command = new GetObjectCommand({
       Bucket: this._bucket,
@@ -578,17 +602,17 @@ export class AWSFileStorage extends FileStorageBase {
 
     try {
       const response = await this._client.send(command);
-      
+
       if (!response.Body) {
         throw new Error(`Empty response body for object: ${objectName}`);
       }
-      
+
       // Convert readable stream to buffer
       return Buffer.from(await response.Body.transformToByteArray());
     } catch (e) {
       console.error('Error getting object from S3 storage', { key, bucket: this._bucket });
       console.error(e);
-      throw new Error(`Failed to get object: ${objectName}`);
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
 

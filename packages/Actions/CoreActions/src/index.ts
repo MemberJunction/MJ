@@ -56,6 +56,7 @@ export * from './custom/files/file-compress.action';
 
 // File Storage Actions - Granular operations for cloud storage
 export * from './custom/files';
+export * from './custom/files/get-file-content.action';
 
 // Integration Actions
 export * from './custom/integration/http-request.action';
@@ -144,6 +145,7 @@ import { LoadFileCompressAction } from './custom/files/file-compress.action';
 import { LoadListObjectsAction } from './custom/files/list-objects.action';
 import { LoadGetMetadataAction } from './custom/files/get-metadata.action';
 import { LoadGetObjectAction } from './custom/files/get-object.action';
+import { LoadGetFileContentAction } from './custom/files/get-file-content.action';
 import { LoadGetDownloadUrlAction } from './custom/files/get-download-url.action';
 import { LoadGetUploadUrlAction } from './custom/files/get-upload-url.action';
 import { LoadObjectExistsAction } from './custom/files/object-exists.action';
@@ -232,6 +234,7 @@ export function LoadAllCoreActions() {
     LoadListObjectsAction();
     LoadGetMetadataAction();
     LoadGetObjectAction();
+    LoadGetFileContentAction();
     LoadGetDownloadUrlAction();
     LoadGetUploadUrlAction();
     LoadObjectExistsAction();

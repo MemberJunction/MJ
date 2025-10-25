@@ -124,6 +124,39 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
+            "Name": "Step 3: ForEach Loop Demo",
+            "Description": "Simple ForEach loop demonstration - searches for 'number X fun fact' 5 times to show iteration",
+            "StartingStep": 0,
+            "StepType": "ForEach",
+            "LoopBodyType": "Action",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "Configuration": {
+              "type": "ForEach",
+              "collectionPath": "payload.countArray",
+              "itemVariable": "number",
+              "indexVariable": "i",
+              "maxIterations": 5,
+              "continueOnError": true
+            },
+            "ActionInputMapping": {
+              "SearchTerms": "number fun fact"
+            },
+            "ActionOutputMapping": {
+              "SearchResults": "loopResults[index]"
+            },
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DBA4B3D9-19A3-4ECE-9F35-BC1B127CD045"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T00:40:52.889Z",
+            "checksum": "c5a0d403a04ecd4cdb41146bf3c41b297b29ff127371a93167f7ebdd252b2de5"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
             "Name": "Step 2(a): Get Weather",
             "Description": "Fetch the current weather conditions as the next step in the flow.",
             "StartingStep": 0,
@@ -268,39 +301,6 @@
           "sync": {
             "lastModified": "2025-08-12T19:54:43.157Z",
             "checksum": "b0db792796cc21534e45208ed2e077d687d7bcfb861eb6d50f56523423bf1aec"
-          }
-        },
-        {
-          "fields": {
-            "AgentID": "@parent:ID",
-            "Name": "Step 3: ForEach Loop Demo",
-            "Description": "Simple ForEach loop demonstration - searches for 'number X fun fact' 5 times to show iteration",
-            "StartingStep": 0,
-            "StepType": "ForEach",
-            "LoopBodyType": "Action",
-            "ActionID": "@lookup:Actions.Name=Web Search",
-            "Configuration": {
-              "type": "ForEach",
-              "collectionPath": "payload.countArray",
-              "itemVariable": "number",
-              "indexVariable": "i",
-              "maxIterations": 5,
-              "continueOnError": true
-            },
-            "ActionInputMapping": {
-              "SearchTerms": "number fun fact"
-            },
-            "ActionOutputMapping": {
-              "SearchResults": "loopResults[index]"
-            },
-            "Status": "Active"
-          },
-          "primaryKey": {
-            "ID": "DBA4B3D9-19A3-4ECE-9F35-BC1B127CD045"
-          },
-          "sync": {
-            "lastModified": "2025-10-25T00:40:52.889Z",
-            "checksum": "c5a0d403a04ecd4cdb41146bf3c41b297b29ff127371a93167f7ebdd252b2de5"
           }
         }
       ],

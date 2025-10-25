@@ -28,7 +28,8 @@ export class GetObjectAction extends BaseFileStorageAction {
      *
      * @param params - The action parameters:
      *   - StorageProvider: Required - Name of the storage provider
-     *   - ObjectName: Required - Name/path of the object
+     *   - ObjectName: Required if ObjectID not provided - Name/path of the object
+     *   - ObjectID: Optional - Provider-specific object ID (bypasses path resolution for faster access)
      *
      * @returns Operation result with:
      *   - Content: Base64-encoded file content
@@ -40,17 +41,22 @@ export class GetObjectAction extends BaseFileStorageAction {
             const { driver, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
-            // Get required parameter
+            // Get identifier (prefer ObjectID if provided for performance)
+            const objectId = this.getStringParam(params, 'objectid');
             const objectName = this.getStringParam(params, 'objectname');
-            if (!objectName) {
+
+            if (!objectId && !objectName) {
                 return this.createErrorResult(
-                    "ObjectName parameter is required",
-                    "MISSING_OBJECTNAME"
+                    "Either ObjectName or ObjectID parameter is required",
+                    "MISSING_IDENTIFIER"
                 );
             }
 
-            // Execute the get object operation
-            const content: Buffer = await driver!.GetObject(objectName);
+            // Execute the get object operation with new params structure
+            const content: Buffer = await driver!.GetObject({
+                objectId: objectId || undefined,
+                fullPath: objectName || undefined
+            });
 
             // Convert buffer to base64 for transport
             const base64Content = content.toString('base64');

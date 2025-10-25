@@ -155,15 +155,15 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=File Storage: Get Object",
+            "ActionID": "@lookup:Actions.Name=File Storage: Get File Content",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "1A53B7ED-BCF4-4656-AF5C-277E21E12F36"
           },
           "sync": {
-            "lastModified": "2025-10-25T00:40:53.264Z",
-            "checksum": "b18f49635d72354c6fb68896dc3854b57f78a8b8ea99ddfce5d7eb81cb4d5465"
+            "lastModified": "2025-10-25T12:47:41.050Z",
+            "checksum": "7ef6f0eb8f8090090edd92742a0cd683e0e5eba8752194c1928685f22a6f19ce"
           }
         },
         {

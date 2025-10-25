@@ -1,7 +1,7 @@
 /**
  * Represents the payload returned by the CreatePreAuthUploadUrl method.
  * This type contains the necessary information for uploading a file to a storage provider.
- * 
+ *
  * @property UploadUrl - The pre-authenticated URL to which the file should be uploaded
  * @property ProviderKey - Optional. Some storage providers assign their own unique key to the object
  *                         that should be used for future operations instead of the original object name
@@ -9,6 +9,32 @@
 export type CreatePreAuthUploadUrlPayload = {
   UploadUrl: string;
   ProviderKey?: string | undefined;
+};
+
+/**
+ * Parameters for GetObject operation.
+ * Either objectId or fullPath must be provided (objectId is preferred for performance).
+ *
+ * @property objectId - Provider-specific object ID (Box: file ID, Google Drive: file ID, etc.)
+ *                      Bypasses path resolution for significantly faster access
+ * @property fullPath - Full path to the object (e.g., 'documents/report.pdf')
+ *                      Requires path resolution which may involve multiple API calls
+ */
+export type GetObjectParams = {
+  objectId?: string;
+  fullPath?: string;
+};
+
+/**
+ * Parameters for GetObjectMetadata operation.
+ * Either objectId or fullPath must be provided (objectId is preferred for performance).
+ *
+ * @property objectId - Provider-specific object ID
+ * @property fullPath - Full path to the object
+ */
+export type GetObjectMetadataParams = {
+  objectId?: string;
+  fullPath?: string;
 };
 
 /**
@@ -150,6 +176,14 @@ export type FileSearchResult = {
    * Undefined if this information is not available from the provider.
    */
   matchInFilename?: boolean;
+
+  /**
+   * Provider-specific object ID that can be used for direct access.
+   * This ID can be passed to GetObject/GetMetadata to bypass path resolution.
+   * Examples: Box file ID, Google Drive file ID, SharePoint item ID, Dropbox id.
+   * Provides significant performance improvement by avoiding path traversal.
+   */
+  objectId?: string;
 
   /**
    * Custom metadata associated with the file.
@@ -483,11 +517,11 @@ export abstract class FileStorageBase {
    * }
    * ```
    * 
-   * @param objectName - The name of the object to retrieve metadata for.
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a StorageObjectMetadata object containing the metadata.
    *          If the object does not exist, the promise will be rejected.
    */
-  public abstract GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata>;
+  public abstract GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata>;
 
   /**
    * Downloads an object's content as a Buffer.
@@ -507,11 +541,11 @@ export abstract class FileStorageBase {
    * }
    * ```
    * 
-   * @param objectName - The name of the object to download.
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a Buffer containing the object's data.
    *          If the object does not exist, the promise will be rejected.
    */
-  public abstract GetObject(objectName: string): Promise<Buffer>;
+  public abstract GetObject(params: GetObjectParams): Promise<Buffer>;
 
   /**
    * Uploads object data to the storage provider.

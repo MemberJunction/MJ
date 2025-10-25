@@ -7,6 +7,8 @@ import {
   FileSearchResult,
   FileSearchResultSet,
   FileStorageBase,
+  GetObjectParams,
+  GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -218,7 +220,7 @@ export class BoxFileStorage extends FileStorageBase {
           client_secret: this._clientSecret,
           grant_type: 'client_credentials',
           box_subject_type: 'enterprise',
-          box_subject_id: this._enterpriseId
+          box_subject_id: this._enterpriseId,
         })
       });
 
@@ -1080,12 +1082,41 @@ export class BoxFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
     try {
-      const itemInfo = await this._getItemInfoFromPath(objectName);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      let itemInfo: { id: string; type: string } | null;
+      let parentPath = '';
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        console.log(`⚡ Fast path: Using Object ID directly: ${params.objectId}`);
+        // Try as file first, then folder
+        try {
+          const fileInfo = await this._client.files.getFileById(params.objectId, {
+            queryParams: { fields: ['id', 'type'] }
+          });
+          itemInfo = { id: fileInfo.id, type: fileInfo.type };
+        } catch {
+          const folderInfo = await this._client.folders.getFolderById(params.objectId, {
+            queryParams: { fields: ['id', 'type'] }
+          });
+          itemInfo = { id: folderInfo.id, type: folderInfo.type };
+        }
+      } else {
+        // Slow path: Resolve path to ID
+        console.log(`🐌 Slow path: Resolving path "${params.fullPath}" to ID`);
+        itemInfo = await this._getItemInfoFromPath(params.fullPath!);
+        const parsedPath = this._parsePath(params.fullPath!);
+        parentPath = parsedPath.parent;
+      }
 
       if (!itemInfo) {
-        throw new Error(`Object not found: ${objectName}`);
+        throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
       }
 
       // Get full metadata using the SDK based on type
@@ -1099,13 +1130,10 @@ export class BoxFileStorage extends FileStorageBase {
         ? await this._client.folders.getFolderById(itemInfo.id, options)
         : await this._client.files.getFileById(itemInfo.id, options);
 
-      // Parse path to get parent path
-      const parsedPath = this._parsePath(objectName);
-
-      return this._convertToMetadata(metadata, parsedPath.parent);
+      return this._convertToMetadata(metadata, parentPath);
     } catch (error) {
-      console.error('Error getting object metadata', { objectName, error });
-      throw new Error(`Object not found: ${objectName}`);
+      console.error('Error getting object metadata', { params, error });
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
   
@@ -1140,22 +1168,34 @@ export class BoxFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
-      // Get file ID using path resolution
-      const fileId = await this._getIdFromPath(objectName);
-
-      if (!fileId) {
-        throw new Error(`File not found: ${objectName}`);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
       }
 
-      console.log(`✅ File found with ID: ${fileId}`);
+      let fileId: string;
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        fileId = params.objectId;
+        console.log(`⚡ Fast path: Using Object ID directly: ${fileId}`);
+      } else {
+        // Slow path: Resolve path to ID
+        fileId = await this._getIdFromPath(params.fullPath!);
+        console.log(`🐌 Slow path: Resolved path "${params.fullPath}" to ID: ${fileId}`);
+      }
+
+      if (!fileId) {
+        throw new Error(`File not found: ${params.objectId || params.fullPath}`);
+      }
 
       // Use SDK to download file content as a stream
       const stream = await this._client.downloads.downloadFile(fileId);
 
       if (!stream) {
-        throw new Error(`Failed to download file: ${objectName}`);
+        throw new Error(`Failed to download file: ${params.objectId || params.fullPath}`);
       }
 
       // Convert stream to buffer
@@ -1166,8 +1206,8 @@ export class BoxFileStorage extends FileStorageBase {
         stream.on('end', () => resolve(Buffer.concat(chunks)));
       });
     } catch (error) {
-      console.error('Error getting object', { objectName, error });
-      throw new Error(`Failed to get object: ${objectName}`);
+      console.error('Error getting object', { params, error });
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
   
@@ -1634,6 +1674,19 @@ export class BoxFileStorage extends FileStorageBase {
         } catch (error) {
           console.warn(`Could not resolve pathPrefix "${options.pathPrefix}", searching all folders`);
         }
+      } else if (this._rootFolderId && this._rootFolderId !== '0') {
+        // If we have a configured root folder (not account root), scope search to it
+        // First verify the folder is accessible to avoid 404 errors with enterprise auth
+        try {
+          await this._client.folders.getFolderById(this._rootFolderId, {
+            queryParams: { fields: ['id'] }
+          });
+          console.log(`✅ Scoping search to configured root folder: ${this._rootFolderId}`);
+          searchParams.ancestorFolderIds = [this._rootFolderId];
+        } catch (error) {
+          console.warn(`⚠️  Configured root folder ${this._rootFolderId} not accessible to current user. Searching entire account instead.`);
+          // Don't set ancestorFolderIds - search entire accessible account
+        }
       }
 
       // Perform the search using Box SDK
@@ -1676,6 +1729,7 @@ export class BoxFileStorage extends FileStorageBase {
             size: fileItem.size || 0,
             contentType: mime.lookup(fileItem.name || '') || 'application/octet-stream',
             lastModified,
+            objectId: fileItem.id || '',  // Box file ID for direct access (bypasses path resolution)
             // Box search doesn't provide relevance scores in the standard API
             relevance: undefined,
             // Box search doesn't provide excerpts in the standard API
@@ -1707,12 +1761,8 @@ export class BoxFileStorage extends FileStorageBase {
       };
     } catch (error) {
       console.error('Error searching files in Box', { query, options, error });
-      // Return empty result set on error rather than throwing
-      return {
-        results: [],
-        totalMatches: 0,
-        hasMore: false
-      };
+      // Throw error so caller knows search failed
+      throw new Error(`Box search failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1763,10 +1813,18 @@ export class BoxFileStorage extends FileStorageBase {
     // pathCollection.entries contains the full ancestor chain from root to immediate parent
     if (item.pathCollection?.entries) {
       for (const entry of item.pathCollection.entries) {
-        // Skip the root folder (id '0' or 'All Files')
-        if (entry.id !== '0' && entry.name !== 'All Files') {
-          pathParts.push(entry.name);
+        // Skip the system root (id '0' or 'All Files')
+        if (entry.id === '0' || entry.name === 'All Files') {
+          continue;
         }
+
+        // Skip the configured root folder (if we have a custom root)
+        // This makes paths relative to the configured root, not the account root
+        if (entry.id === this._rootFolderId) {
+          continue;
+        }
+
+        pathParts.push(entry.name);
       }
     }
 
@@ -1776,5 +1834,16 @@ export class BoxFileStorage extends FileStorageBase {
     }
 
     return pathParts.join('/');
+  }
+
+  /**
+   * Checks if a string is a Box Object ID (numeric) vs a path (contains /)
+   *
+   * @param identifier - String to check
+   * @returns True if it's a Box file/folder ID, false if it's a path
+   */
+  private _isObjectId(identifier: string): boolean {
+    // Box IDs are purely numeric strings
+    return /^\d+$/.test(identifier);
   }
 }

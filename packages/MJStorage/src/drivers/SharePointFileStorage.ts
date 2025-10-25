@@ -9,6 +9,8 @@ import {
   FileSearchResult,
   FileSearchResultSet,
   FileStorageBase,
+  GetObjectParams,
+  GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata,
   UnsupportedOperationError
@@ -699,20 +701,23 @@ export class SharePointFileStorage extends FileStorageBase {
   
   /**
    * Gets metadata for a file or folder
-   * 
+   *
    * This method retrieves metadata information about a file or folder, such as
    * its name, size, content type, and last modified date.
-   * 
-   * @param objectName - Path to the object to get metadata for (e.g., 'documents/report.pdf')
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a StorageObjectMetadata object
    * @throws Error if the object doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   // Get metadata for a file
-   *   const metadata = await storage.GetObjectMetadata('presentations/quarterly-update.pptx');
-   *   
+   *   // Fast path: Use objectId (SharePoint item ID)
+   *   const metadata = await storage.GetObjectMetadata({ objectId: '01BYE5RZ6QN3VYRVNHHFDK2QJODWDDFR4E' });
+   *
+   *   // Slow path: Use path
+   *   const metadata2 = await storage.GetObjectMetadata({ fullPath: 'presentations/quarterly-update.pptx' });
+   *
    *   console.log(`Name: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Content Type: ${metadata.contentType}`);
@@ -723,40 +728,59 @@ export class SharePointFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
     try {
-      const item = await this._getItemByPath(objectName);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      let item: any;
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        console.log(`⚡ Fast path: Using Object ID directly: ${params.objectId}`);
+        item = await this._client.api(`/drives/${this._driveId}/items/${params.objectId}`).get();
+      } else {
+        // Slow path: Resolve path to item
+        console.log(`🐌 Slow path: Resolving path "${params.fullPath}" to ID`);
+        item = await this._getItemByPath(params.fullPath!);
+      }
+
       return this._itemToMetadata(item);
     } catch (error) {
-      console.error('Error getting object metadata', { objectName, error });
-      throw new Error(`Object not found: ${objectName}`);
+      console.error('Error getting object metadata', { params, error });
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
   
   /**
    * Downloads a file's contents
-   * 
+   *
    * This method retrieves the raw content of a file as a Buffer.
-   * 
-   * @param objectName - Path to the file to download (e.g., 'documents/report.pdf')
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a Buffer containing the file's contents
    * @throws Error if the file doesn't exist or cannot be downloaded
-   * 
+   *
    * @remarks
    * - This method uses the Graph API's download URL to retrieve the file contents
    * - The method will throw an error if the object is a folder
    * - For large files, consider using CreatePreAuthDownloadUrl instead
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   // Download a text file
-   *   const fileContent = await storage.GetObject('documents/notes.txt');
-   *   
+   *   // Fast path: Use objectId (SharePoint item ID)
+   *   const fileContent = await storage.GetObject({ objectId: '01BYE5RZ6QN3VYRVNHHFDK2QJODWDDFR4E' });
+   *
+   *   // Slow path: Use path
+   *   const fileContent2 = await storage.GetObject({ fullPath: 'documents/notes.txt' });
+   *
    *   // Convert Buffer to string for text files
    *   const textContent = fileContent.toString('utf8');
    *   console.log('File content:', textContent);
-   *   
+   *
    *   // For binary files, you can write the buffer to a local file
    *   // or process it as needed
    * } catch (error) {
@@ -764,23 +788,38 @@ export class SharePointFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
-      const item = await this._getItemByPath(objectName);
-      
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      let item: any;
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        console.log(`⚡ Fast path: Using Object ID directly: ${params.objectId}`);
+        item = await this._client.api(`/drives/${this._driveId}/items/${params.objectId}`).get();
+      } else {
+        // Slow path: Resolve path to item
+        console.log(`🐌 Slow path: Resolving path "${params.fullPath}" to ID`);
+        item = await this._getItemByPath(params.fullPath!);
+      }
+
       // Get the content
       const response = await fetch(item['@microsoft.graph.downloadUrl']);
-      
+
       if (!response.ok) {
         throw new Error(`Failed to download item: ${response.statusText}`);
       }
-      
+
       // Convert response to buffer
       const arrayBuffer = await response.arrayBuffer();
       return Buffer.from(arrayBuffer);
     } catch (error) {
-      console.error('Error getting object', { objectName, error });
-      throw new Error(`Failed to get object: ${objectName}`);
+      console.error('Error getting object', { params, error });
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
   
@@ -1127,13 +1166,8 @@ export class SharePointFileStorage extends FileStorageBase {
       return this.transformSearchResults(response, maxResults);
     } catch (error) {
       console.error('Error searching files in SharePoint', { query, options, error });
-
-      // Return empty result set on error
-      return {
-        results: [],
-        hasMore: false,
-        totalMatches: 0
-      };
+      // Throw error so caller knows search failed
+      throw new Error(`SharePoint search failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 
@@ -1251,6 +1285,7 @@ export class SharePointFileStorage extends FileStorageBase {
               lastModified: resource.lastModifiedDateTime
                 ? new Date(resource.lastModifiedDateTime)
                 : new Date(),
+              objectId: resource.id || '',  // SharePoint item ID for direct access
               relevance: hit.rank ? (hit.rank / 100.0) : undefined,
               excerpt: hit.summary || undefined,
               matchInFilename: this.determineMatchLocation(hit),
