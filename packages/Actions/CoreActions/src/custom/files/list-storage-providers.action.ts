@@ -5,6 +5,7 @@ import { RunView } from "@memberjunction/core";
 import { FileStorageProviderEntity } from "@memberjunction/core-entities";
 import { FileStorageBase } from "@memberjunction/storage";
 import { BaseFileStorageAction } from "./base-file-storage.action";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Action that retrieves a list of active and available file storage providers.
@@ -43,7 +44,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * });
  * ```
  */
-@RegisterClass(BaseFileStorageAction, "List Storage Providers")
+@RegisterClass(BaseAction, "List Storage Providers")
 export class ListStorageProvidersAction extends BaseFileStorageAction {
 
     /**

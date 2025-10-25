@@ -7,6 +7,7 @@ import {
     UnsupportedOperationError
 } from "@memberjunction/storage";
 import { BaseFileStorageAction } from "./base-file-storage.action";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Action that searches for files across configured storage providers
@@ -59,7 +60,7 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * });
  * ```
  */
-@RegisterClass(BaseFileStorageAction, "Search Storage Files")
+@RegisterClass(BaseAction, "Search Storage Files")
 export class SearchStorageFilesAction extends BaseFileStorageAction {
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
