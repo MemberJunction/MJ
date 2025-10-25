@@ -29001,6 +29001,9 @@ export class MJFileStorageProvider_ {
     @MaxLength(10)
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`}) 
+    SupportsSearch: boolean;
+        
     @Field(() => [MJFile_])
     Files_ProviderIDArray: MJFile_[]; // Link to Files
     
@@ -29031,6 +29034,9 @@ export class CreateMJFileStorageProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsSearch?: boolean;
 }
     
 
@@ -29059,6 +29065,9 @@ export class UpdateMJFileStorageProviderInput {
 
     @Field(() => Boolean, { nullable: true })
     IsActive?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    SupportsSearch?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

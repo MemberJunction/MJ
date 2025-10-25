@@ -65,6 +65,13 @@ import { FileStorageProviderEntity } from '@memberjunction/core-entities';
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
+            FieldName="SupportsSearch"
+            Type="checkbox"
+            [EditMode]="EditMode"
+        ></mj-form-field>
 
     </div>
 </div>

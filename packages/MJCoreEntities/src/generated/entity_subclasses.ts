@@ -7125,6 +7125,12 @@ export const FileStorageProviderSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SupportsSearch: z.boolean().describe(`
+        * * Field Name: SupportsSearch
+        * * Display Name: Supports Search
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`),
 });
 
 export type FileStorageProviderEntityType = z.infer<typeof FileStorageProviderSchema>;
@@ -34581,6 +34587,20 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: SupportsSearch
+    * * Display Name: Supports Search
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.
+    */
+    get SupportsSearch(): boolean {
+        return this.Get('SupportsSearch');
+    }
+    set SupportsSearch(value: boolean) {
+        this.Set('SupportsSearch', value);
     }
 }
 
