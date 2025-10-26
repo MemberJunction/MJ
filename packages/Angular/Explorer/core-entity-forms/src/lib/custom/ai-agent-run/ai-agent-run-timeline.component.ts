@@ -168,20 +168,56 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
     actionLogs: ActionExecutionLogEntity[],
     promptRuns: AIPromptRunEntity[]
   ): TimelineItem[] {
-    const items: TimelineItem[] = [];
-    
-    
-    // Build main timeline from steps
+    return this.buildHierarchicalItems(steps, 0, promptRuns);
+  }
+
+  private buildHierarchicalItems(
+    steps: AIAgentRunStepEntity[],
+    baseLevel: number,
+    promptRuns?: AIPromptRunEntity[]
+  ): TimelineItem[] {
+    // Create a map of all timeline items by step ID
+    const itemMap = new Map<string, TimelineItem>();
+
+    // First pass: create all timeline items
     steps.forEach(step => {
-      const item = this.createTimelineItemFromStep(step, 0, promptRuns);
-      
-      // Don't load children immediately for sub-agents
-      // They will be loaded on demand when expanded
-      
-      items.push(item);
+      const item = this.createTimelineItemFromStep(step, baseLevel, promptRuns);
+      itemMap.set(step.ID, item);
     });
-    
-    return items;
+
+    // Second pass: build parent-child relationships based on ParentID
+    steps.forEach(step => {
+      if (step.ParentID) {
+        const parentItem = itemMap.get(step.ParentID);
+        const childItem = itemMap.get(step.ID);
+
+        if (parentItem && childItem) {
+          // Initialize children array if needed
+          if (!parentItem.children) {
+            parentItem.children = [];
+          }
+
+          // Set child's level based on parent's level
+          childItem.level = parentItem.level + 1;
+
+          // Add child to parent's children array
+          parentItem.children.push(childItem);
+        }
+      }
+    });
+
+    // Return only root-level items (those without a ParentID)
+    const rootItems: TimelineItem[] = [];
+    steps.forEach(step => {
+      if (!step.ParentID) {
+        const item = itemMap.get(step.ID);
+        if (item) {
+          rootItems.push(item);
+        }
+      }
+    });
+
+    return rootItems;
   }
   
   private createTimelineItemFromStep(step: AIAgentRunStepEntity, level: number, promptRuns?: AIPromptRunEntity[]): TimelineItem {
@@ -250,7 +286,9 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
       'Sub-Agent': 'fa-robot',
       'Decision': 'fa-code-branch',
       'Actions': 'fa-wrench',
-      'Validation': 'fa-square-check'
+      'Validation': 'fa-square-check',
+      'ForEach': 'fa-repeat',
+      'While': 'fa-rotate'
     };
     return iconMap[stepType] || 'fa-circle';
   }
@@ -286,42 +324,45 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   async toggleItemExpansion(item: TimelineItem, event: Event) {
     event.stopPropagation();
-    
+
     // Toggle expansion state
     item.isExpanded = !item.isExpanded;
-    
-    // If expanding and children not loaded yet, load them
+
+    // For Sub-Agent steps, load their run data on demand (requires DB query)
     if (item.isExpanded && !item.childrenLoaded && item.type === 'step' && item.data?.StepType === 'Sub-Agent') {
       await this.loadSubAgentChildren(item);
     }
+
+    // For parent steps (loop containers like ForEach/While), children are already loaded via ParentID
+    // Just toggle - no additional loading needed since we already have all steps from the run
+    // The children were already attached in buildTimelineItems()
   }
   
   private async loadSubAgentChildren(item: TimelineItem) {
     try {
       const subAgentRunId = item.data?.TargetLogID;
-      
+
       if (!subAgentRunId) {
         item.hasNoChildren = true;
         item.children = [];
         item.childrenLoaded = true;
         return;
       }
-      
+
       // Load sub-agent data through service
       const data = await this.dataHelper.loadSubAgentData(subAgentRunId);
-      
+
       if (!data.steps || data.steps.length === 0) {
         item.hasNoChildren = true;
         item.children = [];
         item.childrenLoaded = true;
         return;
       }
-      
-      // Create timeline items
-      item.children = data.steps.map(step => 
-        this.createTimelineItemFromStep(step, item.level + 1, data.promptRuns)
-      );
-      
+
+      // Build hierarchical timeline items with ParentID relationships
+      // This ensures that loop steps (ForEach/While) within sub-agents also show their children
+      item.children = this.buildHierarchicalItems(data.steps, item.level + 1, data.promptRuns);
+
       item.childrenLoaded = true;
       // Trigger change detection after updating the data
       this.cdr.markForCheck();

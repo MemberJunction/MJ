@@ -4795,7 +4795,11 @@ Please choose an alternative approach to complete your task.`
         params: ExecuteAgentParams
     ): Promise<BaseAgentNextStep> {
         // Finalize the loop step now that loop is complete
-        await this.finalizeStepEntity(loopStepEntity, loopResults.errors.length === 0);
+        loopStepEntity.PayloadAtEnd = JSON.stringify(loopResults.finalPayload);
+        await this.finalizeStepEntity(loopStepEntity, 
+                                      loopResults.errors.length === 0, 
+                                      loopResults.errors.join('\n\n'),
+                                      loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
             this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params);
@@ -5036,7 +5040,12 @@ Please choose an alternative approach to complete your task.`
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
     ): Promise<BaseAgentNextStep> {
-        await this.finalizeStepEntity(loopStepEntity, loopResults.errors.length === 0);
+        loopStepEntity.PayloadAtEnd = JSON.stringify(loopResults.finalPayload);
+
+        await this.finalizeStepEntity(loopStepEntity, 
+                                      loopResults.errors.length === 0,
+                                      loopResults.errors.join('\n\n'),
+                                      loopResults);
 
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
             this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params);
