@@ -71,7 +71,7 @@ export class MoveObjectAction extends BaseFileStorageAction {
                 sourceObjectName,
                 destinationObjectName,
                 success
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

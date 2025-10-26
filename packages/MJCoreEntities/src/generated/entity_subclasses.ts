@@ -1372,8 +1372,8 @@ if this limit is exceeded.`),
         * * Default Value: Always
     * * Value List Type: List
     * * Possible Values 
-    *   * Never
     *   * Always
+    *   * Never
     *   * System Only
         * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.`),
     FunctionalRequirements: z.string().nullable().describe(`
@@ -7125,6 +7125,12 @@ export const FileStorageProviderSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SupportsSearch: z.boolean().describe(`
+        * * Field Name: SupportsSearch
+        * * Display Name: Supports Search
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.`),
 });
 
 export type FileStorageProviderEntityType = z.infer<typeof FileStorageProviderSchema>;
@@ -8299,7 +8305,7 @@ export const AIAgentRunStepSchema = z.object({
         * * Display Name: Step Number
         * * SQL Data Type: int
         * * Description: Sequential number of this step within the agent run, starting from 1`),
-    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Decision'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Validation')]).describe(`
+    StepType: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Decision'), z.literal('ForEach'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('Validation'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(50)
@@ -8309,9 +8315,11 @@ export const AIAgentRunStepSchema = z.object({
     *   * Actions
     *   * Chat
     *   * Decision
+    *   * ForEach
     *   * Prompt
     *   * Sub-Agent
     *   * Validation
+    *   * While
         * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation`),
     StepName: z.string().describe(`
         * * Field Name: StepName
@@ -8584,7 +8592,7 @@ export const AIAgentRunSchema = z.object({
     *   * Timeout
     *   * User Request
         * * Description: Reason for cancellation if the agent run was cancelled`),
-    FinalStep: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Failed'), z.literal('Retry'), z.literal('Sub-Agent'), z.literal('Success')]).nullable().describe(`
+    FinalStep: z.union([z.literal('Actions'), z.literal('Chat'), z.literal('Failed'), z.literal('ForEach'), z.literal('Retry'), z.literal('Sub-Agent'), z.literal('Success'), z.literal('While')]).nullable().describe(`
         * * Field Name: FinalStep
         * * Display Name: Final Step
         * * SQL Data Type: nvarchar(30)
@@ -8593,9 +8601,11 @@ export const AIAgentRunSchema = z.object({
     *   * Actions
     *   * Chat
     *   * Failed
+    *   * ForEach
     *   * Retry
     *   * Sub-Agent
     *   * Success
+    *   * While
         * * Description: The final step type that concluded the agent run`),
     FinalPayload: z.string().nullable().describe(`
         * * Field Name: FinalPayload
@@ -8793,15 +8803,17 @@ export const AIAgentStepSchema = z.object({
         * * Field Name: Description
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
-    StepType: z.union([z.literal('Action'), z.literal('Prompt'), z.literal('Sub-Agent')]).describe(`
+    StepType: z.union([z.literal('Action'), z.literal('ForEach'), z.literal('Prompt'), z.literal('Sub-Agent'), z.literal('While')]).describe(`
         * * Field Name: StepType
         * * Display Name: Step Type
         * * SQL Data Type: nvarchar(20)
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * ForEach
     *   * Prompt
     *   * Sub-Agent
+    *   * While
         * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)`),
     StartingStep: z.boolean().describe(`
         * * Field Name: StartingStep
@@ -8895,6 +8907,21 @@ export const AIAgentStepSchema = z.object({
         * * Display Name: Action Input Mapping
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for mapping static values or payload paths to action input parameters. Example: {"param1": "staticValue", "param2": "payload.dynamicValue"}`),
+    LoopBodyType: z.union([z.literal('Action'), z.literal('Prompt'), z.literal('Sub-Agent')]).nullable().describe(`
+        * * Field Name: LoopBodyType
+        * * Display Name: Loop Body Type
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Prompt
+    *   * Sub-Agent
+        * * Description: Specifies what type of operation executes in the loop body. Values: Action, Sub-Agent, Prompt. Only used when StepType is ForEach or While.`),
+    Configuration: z.string().nullable().describe(`
+        * * Field Name: Configuration
+        * * Display Name: Configuration
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -10488,8 +10515,8 @@ export const ArtifactSchema = z.object({
         * * Default Value: Always
     * * Value List Type: List
     * * Possible Values 
-    *   * System Only
     *   * Always
+    *   * System Only
         * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).`),
     Environment: z.string().describe(`
         * * Field Name: Environment
@@ -19720,8 +19747,8 @@ if this limit is exceeded.
     * * Default Value: Always
     * * Value List Type: List
     * * Possible Values 
-    *   * Never
     *   * Always
+    *   * Never
     *   * System Only
     * * Description: Controls how artifacts are created from this agent's payloads. "Always" creates visible artifacts, "Never" skips artifact creation, "System Only" creates hidden system artifacts.
     */
@@ -34565,6 +34592,20 @@ export class FileStorageProviderEntity extends BaseEntity<FileStorageProviderEnt
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
     }
+
+    /**
+    * * Field Name: SupportsSearch
+    * * Display Name: Supports Search
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this storage provider supports native full-text search across file names and content. Providers with native search APIs (Google Drive, SharePoint, Dropbox, Box) have this set to true.
+    */
+    get SupportsSearch(): boolean {
+        return this.Get('SupportsSearch');
+    }
+    set SupportsSearch(value: boolean) {
+        this.Set('SupportsSearch', value);
+    }
 }
 
 
@@ -37661,15 +37702,17 @@ export class AIAgentRunStepEntity extends BaseEntity<AIAgentRunStepEntityType> {
     *   * Actions
     *   * Chat
     *   * Decision
+    *   * ForEach
     *   * Prompt
     *   * Sub-Agent
     *   * Validation
+    *   * While
     * * Description: Type of execution step: Prompt, Actions, Sub-Agent, Decision, Chat, Validation
     */
-    get StepType(): 'Actions' | 'Chat' | 'Decision' | 'Prompt' | 'Sub-Agent' | 'Validation' {
+    get StepType(): 'Actions' | 'Chat' | 'Decision' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'Validation' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Actions' | 'Chat' | 'Decision' | 'Prompt' | 'Sub-Agent' | 'Validation') {
+    set StepType(value: 'Actions' | 'Chat' | 'Decision' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'Validation' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -38342,15 +38385,17 @@ export class AIAgentRunEntity extends BaseEntity<AIAgentRunEntityType> {
     *   * Actions
     *   * Chat
     *   * Failed
+    *   * ForEach
     *   * Retry
     *   * Sub-Agent
     *   * Success
+    *   * While
     * * Description: The final step type that concluded the agent run
     */
-    get FinalStep(): 'Actions' | 'Chat' | 'Failed' | 'Retry' | 'Sub-Agent' | 'Success' | null {
+    get FinalStep(): 'Actions' | 'Chat' | 'Failed' | 'ForEach' | 'Retry' | 'Sub-Agent' | 'Success' | 'While' | null {
         return this.Get('FinalStep');
     }
-    set FinalStep(value: 'Actions' | 'Chat' | 'Failed' | 'Retry' | 'Sub-Agent' | 'Success' | null) {
+    set FinalStep(value: 'Actions' | 'Chat' | 'Failed' | 'ForEach' | 'Retry' | 'Sub-Agent' | 'Success' | 'While' | null) {
         this.Set('FinalStep', value);
     }
 
@@ -38933,14 +38978,16 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     * * Value List Type: List
     * * Possible Values 
     *   * Action
+    *   * ForEach
     *   * Prompt
     *   * Sub-Agent
+    *   * While
     * * Description: Type of step: Action (execute an action), Sub-Agent (delegate to another agent), or Prompt (run an AI prompt)
     */
-    get StepType(): 'Action' | 'Prompt' | 'Sub-Agent' {
+    get StepType(): 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While' {
         return this.Get('StepType');
     }
-    set StepType(value: 'Action' | 'Prompt' | 'Sub-Agent') {
+    set StepType(value: 'Action' | 'ForEach' | 'Prompt' | 'Sub-Agent' | 'While') {
         this.Set('StepType', value);
     }
 
@@ -39156,6 +39203,37 @@ export class AIAgentStepEntity extends BaseEntity<AIAgentStepEntityType> {
     }
     set ActionInputMapping(value: string | null) {
         this.Set('ActionInputMapping', value);
+    }
+
+    /**
+    * * Field Name: LoopBodyType
+    * * Display Name: Loop Body Type
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Action
+    *   * Prompt
+    *   * Sub-Agent
+    * * Description: Specifies what type of operation executes in the loop body. Values: Action, Sub-Agent, Prompt. Only used when StepType is ForEach or While.
+    */
+    get LoopBodyType(): 'Action' | 'Prompt' | 'Sub-Agent' | null {
+        return this.Get('LoopBodyType');
+    }
+    set LoopBodyType(value: 'Action' | 'Prompt' | 'Sub-Agent' | null) {
+        this.Set('LoopBodyType', value);
+    }
+
+    /**
+    * * Field Name: Configuration
+    * * Display Name: Configuration
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON configuration object for step-specific settings. For loop steps: { type: "ForEach"|"While", collectionPath?, itemVariable?, indexVariable?, maxIterations?, continueOnError?, condition? }. For other step types: reserved for future use.
+    */
+    get Configuration(): string | null {
+        return this.Get('Configuration');
+    }
+    set Configuration(value: string | null) {
+        this.Set('Configuration', value);
     }
 
     /**
@@ -43479,8 +43557,8 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
     * * Default Value: Always
     * * Value List Type: List
     * * Possible Values 
-    *   * System Only
     *   * Always
+    *   * System Only
     * * Description: Controls artifact visibility in user-facing lists. "Always" shows in all lists, "System Only" hides from normal views (for system-generated artifacts like agent routing payloads).
     */
     get Visibility(): 'Always' | 'System Only' {

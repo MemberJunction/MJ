@@ -58,7 +58,7 @@ export class DeleteObjectAction extends BaseFileStorageAction {
                 operation: 'DeleteObject',
                 objectName,
                 success
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

@@ -5,12 +5,12 @@
      [style.margin-left.px]="item.level * 24"
      (click)="handleClick()">
   
-  <!-- Expand/Collapse Button for Sub-Agents -->
-  <button class="expand-toggle" 
-          *ngIf="isSubAgent"
+  <!-- Expand/Collapse Button for Sub-Agents and Parent Steps -->
+  <button class="expand-toggle"
+          *ngIf="canExpand"
           (click)="handleExpandToggle($event)"
           [attr.aria-expanded]="item.isExpanded">
-    <i class="fas" 
+    <i class="fas"
        [class.fa-chevron-right]="!item.isExpanded"
        [class.fa-chevron-down]="item.isExpanded"></i>
   </button>

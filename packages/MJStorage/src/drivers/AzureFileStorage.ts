@@ -20,6 +20,8 @@ import {
   FileSearchOptions,
   FileSearchResultSet,
   FileStorageBase,
+  GetObjectParams,
+  GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -479,19 +481,23 @@ export class AzureFileStorage extends FileStorageBase {
 
   /**
    * Retrieves metadata for a specific blob in Azure Blob Storage.
-   * 
+   *
    * This method fetches the properties of a blob without downloading its content,
    * which is more efficient for checking file attributes like size, content type,
    * and last modified date.
-   * 
-   * @param objectName - The name of the blob to get metadata for
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for Azure Blob)
    * @returns A Promise resolving to a StorageObjectMetadata object
    * @throws Error if the blob doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const metadata = await azureStorage.GetObjectMetadata('documents/report.pdf');
+   *   // For Azure Blob, objectId and fullPath are the same (both are the blob name)
+   *   const metadata = await azureStorage.GetObjectMetadata({ fullPath: 'documents/report.pdf' });
+   *   // Or equivalently:
+   *   const metadata2 = await azureStorage.GetObjectMetadata({ objectId: 'documents/report.pdf' });
+   *
    *   console.log(`File: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Last modified: ${metadata.lastModified}`);
@@ -500,15 +506,23 @@ export class AzureFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For Azure Blob, objectId and fullPath are the same (both are the blob name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const blobClient = this._getBlobClient(objectName);
       const properties = await blobClient.getProperties();
-      
+
       const pathParts = objectName.split('/');
       const name = pathParts[pathParts.length - 1];
       const path = pathParts.slice(0, -1).join('/');
-      
+
       return {
         name,
         path,
@@ -524,24 +538,28 @@ export class AzureFileStorage extends FileStorageBase {
     } catch (error) {
       console.error('Error getting object metadata from Azure Blob Storage', { objectName });
       console.error(error);
-      throw new Error(`Object not found: ${objectName}`);
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
 
   /**
    * Downloads a blob's content from Azure Blob Storage.
-   * 
+   *
    * This method retrieves the full content of a blob and returns it as a Buffer
    * for processing in memory.
-   * 
-   * @param objectName - The name of the blob to download
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for Azure Blob)
    * @returns A Promise resolving to a Buffer containing the blob's data
    * @throws Error if the blob doesn't exist or cannot be downloaded
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const content = await azureStorage.GetObject('documents/config.json');
+   *   // For Azure Blob, objectId and fullPath are the same (both are the blob name)
+   *   const content = await azureStorage.GetObject({ fullPath: 'documents/config.json' });
+   *   // Or equivalently:
+   *   const content2 = await azureStorage.GetObject({ objectId: 'documents/config.json' });
+   *
    *   // Parse the JSON content
    *   const config = JSON.parse(content.toString('utf8'));
    *   console.log('Configuration loaded:', config);
@@ -550,15 +568,23 @@ export class AzureFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For Azure Blob, objectId and fullPath are the same (both are the blob name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const blobClient = this._getBlobClient(objectName);
       const downloadResponse = await blobClient.download();
-      
+
       if (!downloadResponse.readableStreamBody) {
         throw new Error(`Empty response body for object: ${objectName}`);
       }
-      
+
       // Read the stream into a buffer
       const chunks: Buffer[] = [];
       for await (const chunk of downloadResponse.readableStreamBody) {
@@ -568,12 +594,12 @@ export class AzureFileStorage extends FileStorageBase {
           chunks.push(chunk); // already a Buffer
         }
       }
-      
+
       return Buffer.concat(chunks as Uint8Array[]);
     } catch (error) {
       console.error('Error getting object from Azure Blob Storage', { objectName });
       console.error(error);
-      throw new Error(`Failed to get object: ${objectName}`);
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
 

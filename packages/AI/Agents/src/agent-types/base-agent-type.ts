@@ -457,4 +457,72 @@ export abstract class BaseAgentType {
         // Subclasses can override to implement custom logic
         return null;
     }
+
+    /**
+     * Determines if loop results should be injected as a temporary user message
+     * before the next prompt execution (for LLM reasoning).
+     *
+     * Default: true (most agent types benefit from seeing loop results)
+     * Flow agents override to false (deterministic path navigation, no LLM)
+     *
+     * @returns true to inject results as message, false to skip
+     * @since 2.112.0
+     */
+    public get InjectLoopResultsAsMessage(): boolean {
+        return true;  // Default: Inject results for LLM reasoning
+    }
+
+    /**
+     * Called before each loop iteration to prepare parameters and payload.
+     *
+     * Loop agents use this to resolve template variables ("item.email").
+     * Flow agents typically don't need this (params already resolved).
+     *
+     * @param context - Current iteration context
+     * @param agentTypeState - Agent type's state
+     * @returns Modified context or null for default behavior
+     * @since 2.112.0
+     */
+    public BeforeLoopIteration?<P>(
+        context: {
+            item: any;
+            index: number;
+            payload: P;
+            loopType: 'ForEach' | 'While';
+            itemVariable: string;
+            actionParams: Record<string, unknown>;
+            subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
+        } 
+    ): {
+        actionParams?: Record<string, unknown>;
+        subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
+        payload?: P;
+    } | null {
+        return null;  // Default: No transformation
+    }
+
+    /**
+     * Called after each loop iteration completes to process results.
+     *
+     * Flow agents use this to apply ActionOutputMapping and update payload.
+     * Loop agents typically don't need this (just collect results).
+     *
+     * @param iterationResult - Results from this iteration
+     * @param agentTypeState - Agent type's state
+     * @returns Modified payload or null for default behavior (just collect result)
+     * @since 2.112.0
+     */
+    public AfterLoopIteration?<P>(
+        iterationResult: {
+            actionResults?: ActionResult[];
+            subAgentResult?: any;
+            currentPayload: P;
+            itemVariable: string;
+            item: any;
+            index: number;
+            loopContext: any;  // BaseIterationContext (can't import due to circular dependency)
+        } 
+    ): P | null {
+        return null;  // Default: No transformation
+    }
 }

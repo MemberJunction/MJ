@@ -1,0 +1,263 @@
+[
+  {
+    "fields": {
+      "Name": "File Storage: Get File Content",
+      "Description": "Smart file content retrieval with automatic extraction based on file type. Returns LLM-ready content: plain text for documents (PDF/Word/Excel extraction), base64 for images, decoded text for text formats. Optimized for AI agent consumption.",
+      "DriverClass": "File Storage: Get File Content",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-arrow-down"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0EB1A6E1-3F2E-402A-A3A6-B4131C9054A1"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.075Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object. Required if ObjectID not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "533DEA1B-3DBC-4770-950E-4B3A6DE20AD8"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.088Z",
+            "checksum": "f8643ff7c94d75aadc22b285a96b910f8ee4e003464338529eec4f87331a8828"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider-specific object ID (Box: file ID, Google Drive: file ID, SharePoint: item ID, Dropbox: id). If provided, bypasses path resolution for faster access. Obtain from search results ObjectID field.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4F98DB0A-B791-476C-A845-72031685A9B0"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.102Z",
+            "checksum": "2f6363d6dade6911589478699a06f55a2acb56c97da9c3f46f987c0c92d10138"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContentType",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Original MIME type of the file",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2FFF11FB-28A8-4909-8D87-A6B375F593A6"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.115Z",
+            "checksum": "08efeecc3e4a4339f450cf21e0b8036b575dd0a07ed2e5581761d8814138e811"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Format",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Content format returned: 'text' (extracted/decoded text), 'image' (base64 for vision), 'structured' (JSON data), 'binary' (base64 for unsupported)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BB4A7590-5B6C-4244-9FEF-B731C00A8684"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.126Z",
+            "checksum": "ba9ba86b3b713d2105be0df8fd78bde994a46d0de04b542017c7dd97fc617c49"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "File content in LLM-ready format. Text for documents/PDFs/Word/Excel, base64 for images, structured JSON for spreadsheets.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6EB73A0F-24D7-4BD4-BD11-63FA3B51624D"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.137Z",
+            "checksum": "938c889362e0b6638153ec4e6dea595dc8707e91b18906035167dc716522272a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Size",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Original file size in bytes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F2BA7F34-4184-4A06-B3D8-D1E5B01FE7E2"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.150Z",
+            "checksum": "15a0aef86cfb26f63e6109166c88e98e9e39925ea40f54bac9a31b8e3e2616b9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExtractionMethod",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Method used for content extraction: 'none' (no extraction needed), 'pdf-parse' (PDF text extraction), 'excel-parse' (Excel to JSON), 'word-extract' (Word to text)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "23C34F01-5AAE-4CBE-81BD-566B83E65A07"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.161Z",
+            "checksum": "029aebae3c2fd211ea0e7178a7371513c350db408ad68236b896eb632a77b543"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Warning",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional warning message for unsupported file formats or extraction issues",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D925C3CB-2936-43FB-8177-71E15E11BC26"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.172Z",
+            "checksum": "b67b83c7e725ebb23a4775e114b872ed44ecdae561d04a1f381de439fa231079"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "File content retrieved and extracted successfully"
+          },
+          "primaryKey": {
+            "ID": "978670A5-A032-4653-8DBA-EEF084A412D2"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.189Z",
+            "checksum": "212675ad8af48574ffeef844604af6edd3dac1102b6e5badc2ba7d3eb6a674ff"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "4F19C3E9-A138-4367-9098-522922791613"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.214Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "80385C7A-4681-49D3-BE05-25F213542D7B"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.225Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_IDENTIFIER",
+            "IsSuccess": false,
+            "Description": "Either ObjectName or ObjectID parameter is required"
+          },
+          "primaryKey": {
+            "ID": "653FE598-4231-45DA-BE72-7159EE7AC4B6"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.236Z",
+            "checksum": "b29979169816835f92a86849722e630792ea2e9e6b89e4d575e031688d841683"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to retrieve or extract file content. Check error message for details."
+          },
+          "primaryKey": {
+            "ID": "7F3B85DC-B624-478A-B852-648F40E0AC96"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T12:47:33.246Z",
+            "checksum": "fc73ab39a9cd591b1453c0c6ca4819c3c7267dbd599e34c33d71fffcb573956d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "84DEB03C-B730-415B-8828-F301EE282970"
+    },
+    "sync": {
+      "lastModified": "2025-10-25T12:47:33.029Z",
+      "checksum": "8d0935fe423efe15988d2a57de5a2ee0ff01c8e7ff416fe22c18a38e67e5e107"
+    }
+  }
+]

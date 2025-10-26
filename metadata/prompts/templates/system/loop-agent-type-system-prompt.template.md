@@ -84,11 +84,119 @@ Some action results may be **compacted** to save tokens. Compacted messages show
 
 **After expansion:** The message is restored to full content and you can access all details.
 
+## Iterative Operations
+
+**When processing multiple items or retrying operations, use ForEach/While instead of manual iteration.**
+
+### ForEach: Process Collections Efficiently
+
+When you have an array in the payload and need to perform the same operation on each item:
+
+```json
+{
+  "taskComplete": false,
+  "message": "Processing all 15 customer records",
+  "reasoning": "Found customers array, using ForEach for efficient batch processing",
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "customers",
+      "itemVariable": "customer",
+      "action": {
+        "name": "Send Welcome Email",
+        "params": {
+          "to": "customer.email",
+          "name": "customer.firstName",
+          "data": "customer"
+        }
+      },
+      "maxIterations": 500
+    }
+  }
+}
+```
+
+**Benefits:** token efficient - you make ONE decision, action executes N times.
+
+**After completion:** Results appear in a temporary message for your next decision (not in payload).
+
+### While: Polling and Conditional Loops
+
+When you need to poll for status, retry operations, or loop while a condition is true:
+
+**Example: Polling for Job Completion**
+```json
+{
+  "taskComplete": false,
+  "message": "Waiting for data export job to complete",
+  "reasoning": "Export job submitted, polling status every 3 seconds until ready",
+  "nextStep": {
+    "type": "While",
+    "while": {
+      "condition": "payload.exportStatus === 'processing'",
+      "itemVariable": "checkAttempt",
+      "delayBetweenIterationsMs": 3000,
+      "action": {
+        "name": "Check Export Status",
+        "params": {
+          "jobId": "payload.exportJobId",
+          "attemptNumber": "checkAttempt.attemptNumber"
+        }
+      },
+      "maxIterations": 20
+    }
+  }
+}
+```
+
+**Common patterns:**
+- Polling: `"condition": "payload.status === 'pending'"` + `delayBetweenIterationsMs`
+- Retry with limit: `"condition": "!payload.success && payload.attempts < 5"`
+- Pagination: `"condition": "payload.hasMorePages === true"`
+
+**After completion:** Results appear in a temporary message for your next decision (not in payload).
+
+### Variable References in Params
+
+- `"item.field"` - Current item's property (ForEach)
+- `"attempt.attemptNumber"` - Current attempt number (While)
+- `"payload.field"` - Value from payload
+- `"index"` - Loop counter (0-based)
+- Static values need no prefix: `"Welcome!"`
+
+### When to Use ForEach vs Manual Processing
+
+❌ **Don't do this (inefficient):**
+```json
+// Iteration 1
+{ "nextStep": { "type": "Actions", "actions": [{ "name": "Process Item", "params": { "id": 1 } }] }}
+// Iteration 2
+{ "nextStep": { "type": "Actions", "actions": [{ "name": "Process Item", "params": { "id": 2 } }] }}
+// ... repeat 10 times = 10 LLM calls
+```
+
+✅ **Do this (efficient):**
+```json
+// Single LLM call
+{
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "items",
+      "action": { "name": "Process Item", "params": { "id": "item.id" } }
+    }
+  }
+}
+// All 10 items processed, results in payload.forEachResults
+```
+
 **Next step types:**
 - `"Actions"`: Execute one or more actions
 - `"Sub-Agent"`: Invoke a sub-agent
 - `"Chat"`: Send message to user
 - `"Retry"`: Continue processing (set `messageIndex` to expand a compacted message first)
+- `"ForEach"`: Iterate over a collection, executing action/sub-agent per item
+- `"While"`: Loop while condition is true, executing action/sub-agent per iteration
 
 ## Current State
 **Payload:** Represents your work state. Request changes via `payloadChangeRequest`

@@ -29,7 +29,8 @@ export class GetMetadataAction extends BaseFileStorageAction {
      *
      * @param params - The action parameters:
      *   - StorageProvider: Required - Name of the storage provider
-     *   - ObjectName: Required - Name/path of the object
+     *   - ObjectName: Required if ObjectID not provided - Name/path of the object
+     *   - ObjectID: Optional - Provider-specific object ID (bypasses path resolution for faster access)
      *
      * @returns Operation result with metadata fields:
      *   - Name: File name
@@ -48,17 +49,22 @@ export class GetMetadataAction extends BaseFileStorageAction {
             const { driver, error } = await this.getDriverFromParams(params);
             if (error) return error;
 
-            // Get required parameter
+            // Get identifier (prefer ObjectID if provided for performance)
+            const objectId = this.getStringParam(params, 'objectid');
             const objectName = this.getStringParam(params, 'objectname');
-            if (!objectName) {
+
+            if (!objectId && !objectName) {
                 return this.createErrorResult(
-                    "ObjectName parameter is required",
-                    "MISSING_OBJECTNAME"
+                    "Either ObjectName or ObjectID parameter is required",
+                    "MISSING_IDENTIFIER"
                 );
             }
 
-            // Execute the get metadata operation
-            const metadata: StorageObjectMetadata = await driver!.GetObjectMetadata(objectName);
+            // Execute the get metadata operation with new params structure
+            const metadata: StorageObjectMetadata = await driver!.GetObjectMetadata({
+                objectId: objectId || undefined,
+                fullPath: objectName || undefined
+            });
 
             // Add output parameters
             this.addOutputParam(params, 'Name', metadata.name);
@@ -81,7 +87,7 @@ export class GetMetadataAction extends BaseFileStorageAction {
                 operation: 'GetMetadata',
                 objectName,
                 metadata
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

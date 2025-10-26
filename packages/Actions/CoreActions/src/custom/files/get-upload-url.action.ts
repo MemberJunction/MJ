@@ -64,7 +64,7 @@ export class GetUploadUrlAction extends BaseFileStorageAction {
                 objectName,
                 uploadUrl: result.UploadUrl,
                 providerKey: result.ProviderKey
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

@@ -779,7 +779,9 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       'Actions': '⚙️',
       'Sub-Agent': '🤖',
       'Tool': '🔧',
-      'Decision': '🔀'
+      'Decision': '🔀',
+      'ForEach': '🔁',
+      'While': '🔄'
     };
     return emojiMap[stepType] || '⚪';
   }
@@ -840,7 +842,9 @@ export class AIAgentRunVisualizationComponent implements OnInit, OnDestroy, Afte
       'Tool': 'fa-tools',
       'Sub-Agent': 'fa-robot',
       'Decision': 'fa-code-branch',
-      'Actions': 'fa-cog'
+      'Actions': 'fa-cog',
+      'ForEach': 'fa-repeat',
+      'While': 'fa-rotate'
     };
     return iconMap[stepType] || 'fa-circle';
   }
