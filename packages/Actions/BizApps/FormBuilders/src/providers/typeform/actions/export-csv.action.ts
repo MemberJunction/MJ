@@ -1,0 +1,193 @@
+import { RegisterClass } from '@memberjunction/global';
+import { TypeformBaseAction } from '../typeform-base.action';
+import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
+
+/**
+ * Action to export Typeform responses as CSV format
+ *
+ * @example
+ * ```typescript
+ * await runAction({
+ *   ActionName: 'Export Typeform Responses to CSV',
+ *   Params: [{
+ *     Name: 'FormID',
+ *     Value: 'abc123'
+ *   }, {
+ *     Name: 'APIToken',
+ *     Value: 'tfp_...'
+ *   }, {
+ *     Name: 'IncludeMetadata',
+ *     Value: true
+ *   }]
+ * });
+ * ```
+ */
+@RegisterClass(BaseAction, 'Export Typeform Responses to CSV')
+export class ExportTypeformCSVAction extends TypeformBaseAction {
+
+    public get Description(): string {
+        return 'Exports Typeform responses to CSV format for use in spreadsheets, data analysis tools, or archival. Supports custom delimiters and optional metadata columns.';
+    }
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        try {
+            const contextUser = params.ContextUser;
+            if (!contextUser) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_CONTEXT_USER',
+                    Message: 'Context user is required for Typeform API calls'
+                };
+            }
+
+            const formId = this.getParamValue(params.Params, 'FormID');
+            if (!formId) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_FORM_ID',
+                    Message: 'FormID parameter is required'
+                };
+            }
+
+            const apiToken = this.getParamValue(params.Params, 'APIToken');
+            if (!apiToken) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_API_TOKEN',
+                    Message: 'APIToken parameter is required'
+                };
+            }
+
+            const since = this.getParamValue(params.Params, 'Since');
+            const until = this.getParamValue(params.Params, 'Until');
+            const completed = this.getParamValue(params.Params, 'Completed');
+            const includeMetadata = this.getParamValue(params.Params, 'IncludeMetadata') !== false;
+            const delimiter = this.getParamValue(params.Params, 'Delimiter') || ',';
+            const maxResponses = this.getParamValue(params.Params, 'MaxResponses') || 10000;
+
+            const tfResponses = await this.getAllTypeformResponses(formId, apiToken, {
+                since,
+                until,
+                completed,
+                maxResponses
+            });
+
+            if (tfResponses.length === 0) {
+                return {
+                    Success: true,
+                    ResultCode: 'NO_DATA',
+                    Message: 'No responses found matching the criteria'
+                };
+            }
+
+            const responses = tfResponses.map(r => this.normalizeTypeformResponse(r));
+
+            const { csv, headers } = this.convertToCSV(responses, includeMetadata, delimiter);
+
+            const outputParams = [
+                {
+                    Name: 'CSVData',
+                    Type: 'Output',
+                    Value: csv
+                },
+                {
+                    Name: 'RowCount',
+                    Type: 'Output',
+                    Value: responses.length
+                },
+                {
+                    Name: 'Headers',
+                    Type: 'Output',
+                    Value: headers
+                },
+                {
+                    Name: 'ColumnCount',
+                    Type: 'Output',
+                    Value: headers.length
+                },
+                {
+                    Name: 'FileSize',
+                    Type: 'Output',
+                    Value: Buffer.byteLength(csv, 'utf8')
+                }
+            ];
+
+            for (const outputParam of outputParams) {
+                const existingParam = params.Params.find(p => p.Name === outputParam.Name);
+                if (existingParam) {
+                    existingParam.Value = outputParam.Value;
+                } else {
+                    params.Params.push(outputParam);
+                }
+            }
+
+            return {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Message: `Successfully exported ${responses.length} responses to CSV (${headers.length} columns, ${Buffer.byteLength(csv, 'utf8')} bytes)`
+            };
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            return {
+                Success: false,
+                ResultCode: 'ERROR',
+                Message: this.buildFormErrorMessage('Export Typeform to CSV', errorMessage, error)
+            };
+        }
+    }
+
+    public get Params(): ActionParam[] {
+        return [
+            {
+                Name: 'FormID',
+                Type: 'Input',
+                Value: null,
+                Description: 'The Typeform form ID'
+            },
+            {
+                Name: 'APIToken',
+                Type: 'Input',
+                Value: null,
+                Description: 'Typeform API access token'
+            },
+            {
+                Name: 'Since',
+                Type: 'Input',
+                Value: null,
+                Description: 'Start date for responses to export (ISO 8601 format)'
+            },
+            {
+                Name: 'Until',
+                Type: 'Input',
+                Value: null,
+                Description: 'End date for responses to export (ISO 8601 format)'
+            },
+            {
+                Name: 'Completed',
+                Type: 'Input',
+                Value: null,
+                Description: 'Filter by completion status (true=completed only, false=partial only, null=all)'
+            },
+            {
+                Name: 'IncludeMetadata',
+                Type: 'Input',
+                Value: true,
+                Description: 'Include metadata columns (browser, platform, referer, user agent)'
+            },
+            {
+                Name: 'Delimiter',
+                Type: 'Input',
+                Value: ',',
+                Description: 'CSV delimiter character (default: comma)'
+            },
+            {
+                Name: 'MaxResponses',
+                Type: 'Input',
+                Value: 10000,
+                Description: 'Maximum responses to export (default 10000)'
+            }
+        ];
+    }
+}
