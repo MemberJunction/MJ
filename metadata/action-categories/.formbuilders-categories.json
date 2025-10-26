@@ -14,5 +14,29 @@
       "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
       "Status": "Active"
     }
+  },
+  {
+    "fields": {
+      "Name": "JotForm",
+      "Description": "JotForm integration for managing forms, retrieving submissions, generating statistics, and automating workflows with regional endpoint support",
+      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "SurveyMonkey",
+      "Description": "SurveyMonkey integration for enterprise surveys, advanced analytics, audience management, and professional research workflows",
+      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Google Forms",
+      "Description": "Google Forms integration for retrieving form responses, generating statistics, and exporting data. Read-only API integration with Google Workspace.",
+      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "Status": "Active"
+    }
   }
 ]

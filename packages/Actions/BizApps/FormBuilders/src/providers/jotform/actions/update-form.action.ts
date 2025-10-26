@@ -1,0 +1,263 @@
+import { RegisterClass } from '@memberjunction/global';
+import { JotFormBaseAction } from '../jotform-base.action';
+import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
+
+/**
+ * Action to update an existing JotForm
+ *
+ * IMPORTANT: JotForm uses separate endpoints for properties and questions.
+ * Use the MergeWithExisting parameter to safely update only specified properties
+ * while preserving existing ones.
+ *
+ * @example
+ * ```typescript
+ * await runAction({
+ *   ActionName: 'Update JotForm',
+ *   Params: [{
+ *     Name: 'FormID',
+ *     Value: '123456789'
+ *   }, {
+ *     Name: 'APIToken',
+ *     Value: 'your_api_key_here'
+ *   }, {
+ *     Name: 'Title',
+ *     Value: 'Updated Survey Title'
+ *   }, {
+ *     Name: 'MergeWithExisting',
+ *     Value: true
+ *   }]
+ * });
+ * ```
+ */
+@RegisterClass(BaseAction, 'Update JotForm')
+export class UpdateJotFormAction extends JotFormBaseAction {
+
+    public get Description(): string {
+        return 'Updates an existing JotForm. Set MergeWithExisting=true (default) to safely update only specified properties while preserving others. Set to false to replace entire form data (not recommended).';
+    }
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        try {
+            const contextUser = params.ContextUser;
+            if (!contextUser) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_CONTEXT_USER',
+                    Message: 'Context user is required for JotForm API calls'
+                };
+            }
+
+            const formId = this.getParamValue(params.Params, 'FormID');
+            if (!formId) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_FORM_ID',
+                    Message: 'FormID parameter is required'
+                };
+            }
+
+            const apiToken = this.getParamValue(params.Params, 'APIToken');
+            if (!apiToken) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_API_TOKEN',
+                    Message: 'APIToken parameter is required. Get your API key from https://www.jotform.com/myaccount/api'
+                };
+            }
+
+            const mergeWithExisting = this.getParamValue(params.Params, 'MergeWithExisting') !== false;
+            const region = this.getParamValue(params.Params, 'Region') as 'us' | 'eu' | 'hipaa' | undefined;
+
+            const title = this.getParamValue(params.Params, 'Title');
+            const questions = this.getParamValue(params.Params, 'Questions');
+            const properties = this.getParamValue(params.Params, 'Properties');
+
+            // Check if any updates are provided
+            if (!title && !questions && !properties) {
+                return {
+                    Success: false,
+                    ResultCode: 'NO_CHANGES_PROVIDED',
+                    Message: 'At least one of Title, Questions, or Properties must be provided'
+                };
+            }
+
+            const updatedFields: string[] = [];
+            let existingForm: any = null;
+
+            // Get existing form if merging
+            if (mergeWithExisting) {
+                existingForm = await this.getJotFormDetails(formId, apiToken, region);
+            }
+
+            const axiosInstance = this.getAxiosInstance(apiToken, region);
+
+            // Update properties (including title)
+            if (title || properties) {
+                let propertiesToUpdate: Record<string, any> = {};
+
+                // Start with existing properties if merging
+                if (mergeWithExisting && existingForm?.properties) {
+                    propertiesToUpdate = { ...existingForm.properties };
+                }
+
+                // Add title if provided
+                if (title) {
+                    propertiesToUpdate.title = title;
+                    updatedFields.push('title');
+                }
+
+                // Merge additional properties if provided
+                if (properties) {
+                    const propsToMerge = typeof properties === 'string' ? JSON.parse(properties) : properties;
+                    propertiesToUpdate = { ...propertiesToUpdate, ...propsToMerge };
+                    updatedFields.push('properties');
+                }
+
+                // Update properties via PUT endpoint
+                await axiosInstance.put(
+                    `/form/${formId}/properties`,
+                    { properties: propertiesToUpdate }
+                );
+            }
+
+            // Update questions if provided
+            if (questions) {
+                let questionsToUpdate = Array.isArray(questions) ? questions :
+                                       typeof questions === 'string' ? JSON.parse(questions) : questions;
+
+                // If merging, get existing questions and merge
+                if (mergeWithExisting) {
+                    const existingQuestions = await this.getJotFormQuestions(formId, apiToken, region);
+
+                    // Merge questions by ID or order
+                    const mergedQuestions: Record<string, any> = { ...existingQuestions };
+
+                    if (Array.isArray(questionsToUpdate)) {
+                        // If questions array is provided, update by index/ID
+                        questionsToUpdate.forEach((question: any, index: number) => {
+                            const questionId = question.qid || Object.keys(existingQuestions)[index];
+                            if (questionId) {
+                                mergedQuestions[questionId] = { ...mergedQuestions[questionId], ...question };
+                            }
+                        });
+                    } else {
+                        // If questions object is provided, merge directly
+                        Object.assign(mergedQuestions, questionsToUpdate);
+                    }
+
+                    questionsToUpdate = mergedQuestions;
+                }
+
+                // Update questions via POST endpoint
+                await axiosInstance.post(
+                    `/form/${formId}/questions`,
+                    { questions: questionsToUpdate }
+                );
+
+                updatedFields.push('questions');
+            }
+
+            // Get updated form details
+            const updatedForm = await this.getJotFormDetails(formId, apiToken, region);
+
+            // Construct form URL
+            const formUrl = updatedForm.url || `https://form.jotform.com/${formId}`;
+
+            // Build output parameters
+            const outputParams = [
+                {
+                    Name: 'FormID',
+                    Type: 'Output',
+                    Value: formId
+                },
+                {
+                    Name: 'FormURL',
+                    Type: 'Output',
+                    Value: formUrl
+                },
+                {
+                    Name: 'UpdatedFields',
+                    Type: 'Output',
+                    Value: updatedFields
+                },
+                {
+                    Name: 'FormDetails',
+                    Type: 'Output',
+                    Value: updatedForm
+                }
+            ];
+
+            // Add output params to result
+            for (const outputParam of outputParams) {
+                const existingParam = params.Params.find(p => p.Name === outputParam.Name);
+                if (existingParam) {
+                    existingParam.Value = outputParam.Value;
+                } else {
+                    params.Params.push(outputParam);
+                }
+            }
+
+            return {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Message: `Successfully updated JotForm "${updatedForm.title || formId}". Updated fields: ${updatedFields.join(', ')}`
+            };
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            return {
+                Success: false,
+                ResultCode: 'ERROR',
+                Message: this.buildFormErrorMessage('Update JotForm', errorMessage, error)
+            };
+        }
+    }
+
+    public get Params(): ActionParam[] {
+        return [
+            {
+                Name: 'FormID',
+                Type: 'Input',
+                Value: null,
+                Description: 'The JotForm form ID to update (found in the form URL or dashboard)'
+            },
+            {
+                Name: 'APIToken',
+                Type: 'Input',
+                Value: null,
+                Description: 'JotForm API key with write permissions (get from https://www.jotform.com/myaccount/api)'
+            },
+            {
+                Name: 'MergeWithExisting',
+                Type: 'Input',
+                Value: true,
+                Description: 'If true (default), fetches existing form and merges your changes. If false, replaces form data with your data (DANGEROUS - may lose existing configuration)'
+            },
+            {
+                Name: 'Title',
+                Type: 'Input',
+                Value: null,
+                Description: 'New title for the form (optional)'
+            },
+            {
+                Name: 'Questions',
+                Type: 'Input',
+                Value: null,
+                Description: 'Questions/fields to update. Can be array of question objects or object keyed by question ID (merged with existing if MergeWithExisting=true)'
+            },
+            {
+                Name: 'Properties',
+                Type: 'Input',
+                Value: null,
+                Description: 'Form properties to update as JSON object (e.g., {"height":"600","thankurl":"https://example.com/thanks"}). Merged with existing if MergeWithExisting=true'
+            },
+            {
+                Name: 'Region',
+                Type: 'Input',
+                Value: 'us',
+                Description: 'JotForm region: "us" (default), "eu", or "hipaa"'
+            }
+        ];
+    }
+}

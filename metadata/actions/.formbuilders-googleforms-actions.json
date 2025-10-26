@@ -1,0 +1,1022 @@
+[
+  {
+    "fields": {
+      "Name": "Get Google Forms Responses",
+      "Description": "Retrieves responses from a Google Form with filtering, pagination, and search capabilities. Requires Google OAuth 2.0 authentication with forms.responses.readonly scope. Supports date ranges, completion status filters, and automatic pagination through all responses.",
+      "CategoryID": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
+      "DriverClass": "GetGoogleFormsResponsesAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-inbox"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Google Form ID (found in the form URL)",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccessToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google OAuth 2.0 access token with forms.responses.readonly scope",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of responses per page (1-1000, default 100)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Token for pagination - get next page using this token from previous response",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Filter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter expression for responses (e.g., 'timestamp > \"2023-01-01T00:00:00Z\"')",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GetAllPages",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, automatically fetch all pages of responses (up to MaxResponses)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResponses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of responses to retrieve when GetAllPages is true (default 10000)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Responses",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of response objects with all answers, metadata, and submission details"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of responses available for the form"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of responses returned in this request"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NextPageToken",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Token to use for retrieving the next page of responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasMore",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if more pages are available"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Responses retrieved successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ACCESS_TOKEN",
+            "IsSuccess": false,
+            "Description": "AccessToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "IsSuccess": false,
+            "Description": "Context user is required for Google Forms API calls"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "OAuth access token is invalid or expired"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INSUFFICIENT_PERMISSIONS",
+            "IsSuccess": false,
+            "Description": "Access token does not have required forms.responses.readonly scope"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Single Google Forms Response",
+      "Description": "Retrieves details of a specific Google Form response by its unique response ID. Requires Google OAuth 2.0 authentication with forms.responses.readonly scope. Includes all answers, metadata, and submission timestamps.",
+      "CategoryID": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
+      "DriverClass": "GetSingleGoogleFormsResponseAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-lines"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Google Form ID",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponseID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The unique response ID to retrieve",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccessToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google OAuth 2.0 access token with forms.responses.readonly scope",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Response",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete response object with all answers and metadata"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponseID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The response ID"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubmittedAt",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Timestamp when response was submitted"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastSubmittedAt",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Timestamp when response was last updated (if edited)"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answers",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object mapping question IDs to answer objects with values and text"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RespondentEmail",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Email address of respondent (if form collects email)"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Response retrieved successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_RESPONSE_ID",
+            "IsSuccess": false,
+            "Description": "ResponseID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ACCESS_TOKEN",
+            "IsSuccess": false,
+            "Description": "AccessToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "OAuth access token is invalid or expired"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INSUFFICIENT_PERMISSIONS",
+            "IsSuccess": false,
+            "Description": "Access token does not have required forms.responses.readonly scope"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Response not found or you don't have access to it"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Google Forms Response Statistics",
+      "Description": "Calculates comprehensive statistics from Google Form responses including completion rates, response trends, popular answers, and time-based analytics. Requires Google OAuth 2.0 authentication with forms.responses.readonly scope. Useful for dashboards and reporting.",
+      "CategoryID": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
+      "DriverClass": "GetGoogleFormsStatisticsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-chart-line"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Google Form ID",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccessToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google OAuth 2.0 access token with forms.responses.readonly scope",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Filter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter expression for responses (e.g., 'timestamp > \"2023-01-01T00:00:00Z\"')",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResponses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum responses to analyze (default 10000)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeTopAnswers",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Calculate most popular answers for each question (default true)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopAnswersLimit",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of top answers to return per question (default 10)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Statistics",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete statistics object with all calculated metrics"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompletedResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of completed responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PartialResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of partial/incomplete responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompletionRate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Percentage of responses that were completed"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AverageResponseTime",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Average time to complete in seconds (if available)"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponsesByDate",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Daily breakdown of response counts"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DailyBreakdown",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of daily statistics with date, count, completed, and partial counts"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HourlyDistribution",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array showing response distribution by hour of day (0-23)"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopAnswers",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Most popular answers by question ID"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponseRate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Average responses per day"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Statistics calculated successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ACCESS_TOKEN",
+            "IsSuccess": false,
+            "Description": "AccessToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "OAuth access token is invalid or expired"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INSUFFICIENT_PERMISSIONS",
+            "IsSuccess": false,
+            "Description": "Access token does not have required forms.responses.readonly scope"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Export Google Forms Responses to CSV",
+      "Description": "Exports Google Form responses to CSV format for use in spreadsheets, data analysis tools, or archival. Requires Google OAuth 2.0 authentication with forms.responses.readonly scope. Supports custom delimiters and optional metadata columns.",
+      "CategoryID": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
+      "DriverClass": "ExportGoogleFormsCSVAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-csv"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Google Form ID",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccessToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google OAuth 2.0 access token with forms.responses.readonly scope",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Filter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter expression for responses to export (e.g., 'timestamp > \"2023-01-01T00:00:00Z\"')",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeMetadata",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include metadata columns (timestamp, respondent email, edit URL) - default true",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Delimiter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "CSV delimiter character (default: comma)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResponses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum responses to export (default 10000)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeQuestionText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Use question text as column headers instead of question IDs (default true)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CSVData",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "CSV formatted string ready for export or storage"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RowCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of data rows in the CSV"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Headers",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of column headers"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ColumnCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of columns in the CSV"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileSize",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Size of CSV data in bytes"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "CSV export completed successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_DATA",
+            "IsSuccess": true,
+            "Description": "No responses found matching the criteria"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ACCESS_TOKEN",
+            "IsSuccess": false,
+            "Description": "AccessToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "OAuth access token is invalid or expired"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INSUFFICIENT_PERMISSIONS",
+            "IsSuccess": false,
+            "Description": "Access token does not have required forms.responses.readonly scope"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Google Forms Details",
+      "Description": "Retrieves complete details of a Google Form including title, questions, settings, and metadata. Requires Google OAuth 2.0 authentication with forms.readonly scope. Use this to inspect or backup form configurations.",
+      "CategoryID": "@lookup:Action Categories.Name=Google Forms&Parent=Form Builders",
+      "DriverClass": "GetGoogleFormsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clipboard-list"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Google Form ID to retrieve",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AccessToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google OAuth 2.0 access token with forms.readonly scope",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Form",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete form object with all configuration"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The form ID"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Form title"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Description",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Form description"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Questions",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of all form questions with types and properties"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QuestionCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of questions in the form"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Settings",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Form settings like accepting responses, quiz mode, email collection"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "QuizSettings",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Quiz-specific settings if form is a quiz (grading options, feedback)"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LinkedSheetID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Google Sheets ID if responses are linked to a spreadsheet"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponderURI",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Public URL where users can respond to the form"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "High-level summary with key metrics and information"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Form details retrieved successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ACCESS_TOKEN",
+            "IsSuccess": false,
+            "Description": "AccessToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_TOKEN",
+            "IsSuccess": false,
+            "Description": "OAuth access token is invalid or expired"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INSUFFICIENT_PERMISSIONS",
+            "IsSuccess": false,
+            "Description": "Access token does not have required forms.readonly scope"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Form not found or you don't have access to it"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  }
+]

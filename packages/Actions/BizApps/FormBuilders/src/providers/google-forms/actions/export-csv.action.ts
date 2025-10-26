@@ -1,0 +1,174 @@
+import { RegisterClass } from '@memberjunction/global';
+import { GoogleFormsBaseAction } from '../googleforms-base.action';
+import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
+import { BaseAction } from '@memberjunction/actions';
+
+/**
+ * Action to export Google Forms responses as CSV format
+ *
+ * @example
+ * ```typescript
+ * await runAction({
+ *   ActionName: 'Export Google Forms Responses to CSV',
+ *   Params: [{
+ *     Name: 'FormID',
+ *     Value: '1a2b3c4d5e6f7g8h9i0j'
+ *   }, {
+ *     Name: 'AccessToken',
+ *     Value: 'ya29.a0AfH6...'
+ *   }, {
+ *     Name: 'IncludeMetadata',
+ *     Value: true
+ *   }]
+ * });
+ * ```
+ */
+@RegisterClass(BaseAction, 'Export Google Forms Responses to CSV')
+export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
+
+    public get Description(): string {
+        return 'Exports Google Forms responses to CSV format for use in spreadsheets, data analysis tools, or archival. Supports custom delimiters and optional metadata columns. Requires OAuth 2.0 access token with forms.responses.readonly scope.';
+    }
+
+    protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        try {
+            const contextUser = params.ContextUser;
+            if (!contextUser) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_CONTEXT_USER',
+                    Message: 'Context user is required for Google Forms API calls'
+                };
+            }
+
+            const formId = this.getParamValue(params.Params, 'FormID');
+            if (!formId) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_FORM_ID',
+                    Message: 'FormID parameter is required'
+                };
+            }
+
+            const accessToken = this.getParamValue(params.Params, 'AccessToken');
+            if (!accessToken) {
+                return {
+                    Success: false,
+                    ResultCode: 'MISSING_ACCESS_TOKEN',
+                    Message: 'AccessToken parameter is required. Please provide a valid OAuth 2.0 access token.'
+                };
+            }
+
+            const includeMetadata = this.getParamValue(params.Params, 'IncludeMetadata') !== false;
+            const delimiter = this.getParamValue(params.Params, 'Delimiter') || ',';
+            const maxResponses = this.getParamValue(params.Params, 'MaxResponses') || 10000;
+
+            const gfResponses = await this.getAllGoogleFormsResponses(formId, accessToken, {
+                maxResponses
+            });
+
+            if (gfResponses.length === 0) {
+                return {
+                    Success: true,
+                    ResultCode: 'NO_DATA',
+                    Message: 'No responses found for this form'
+                };
+            }
+
+            const responses = gfResponses.map(r => {
+                const normalized = this.normalizeGoogleFormsResponse(r);
+                // Set the formId since it's not included in the response object
+                normalized.formId = formId;
+                return normalized;
+            });
+
+            const { csv, headers } = this.convertToCSV(responses, includeMetadata, delimiter);
+
+            const outputParams = [
+                {
+                    Name: 'CSVData',
+                    Type: 'Output',
+                    Value: csv
+                },
+                {
+                    Name: 'RowCount',
+                    Type: 'Output',
+                    Value: responses.length
+                },
+                {
+                    Name: 'Headers',
+                    Type: 'Output',
+                    Value: headers
+                },
+                {
+                    Name: 'ColumnCount',
+                    Type: 'Output',
+                    Value: headers.length
+                },
+                {
+                    Name: 'FileSize',
+                    Type: 'Output',
+                    Value: Buffer.byteLength(csv, 'utf8')
+                }
+            ];
+
+            for (const outputParam of outputParams) {
+                const existingParam = params.Params.find(p => p.Name === outputParam.Name);
+                if (existingParam) {
+                    existingParam.Value = outputParam.Value;
+                } else {
+                    params.Params.push(outputParam);
+                }
+            }
+
+            return {
+                Success: true,
+                ResultCode: 'SUCCESS',
+                Message: `Successfully exported ${responses.length} responses to CSV (${headers.length} columns, ${Buffer.byteLength(csv, 'utf8')} bytes)`
+            };
+
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            return {
+                Success: false,
+                ResultCode: 'ERROR',
+                Message: this.buildFormErrorMessage('Export Google Forms to CSV', errorMessage, error)
+            };
+        }
+    }
+
+    public get Params(): ActionParam[] {
+        return [
+            {
+                Name: 'FormID',
+                Type: 'Input',
+                Value: null,
+                Description: 'The Google Forms form ID (can be extracted from form URL)'
+            },
+            {
+                Name: 'AccessToken',
+                Type: 'Input',
+                Value: null,
+                Description: 'OAuth 2.0 access token with forms.responses.readonly or forms.readonly scope'
+            },
+            {
+                Name: 'IncludeMetadata',
+                Type: 'Input',
+                Value: true,
+                Description: 'Include metadata columns (respondent email, platform, user agent)'
+            },
+            {
+                Name: 'Delimiter',
+                Type: 'Input',
+                Value: ',',
+                Description: 'CSV delimiter character (default: comma)'
+            },
+            {
+                Name: 'MaxResponses',
+                Type: 'Input',
+                Value: 10000,
+                Description: 'Maximum responses to export (default 10000)'
+            }
+        ];
+    }
+}

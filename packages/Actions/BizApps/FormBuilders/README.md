@@ -6,22 +6,31 @@ This package provides integration actions for popular form builder and survey pl
 
 ### ✅ Typeform (Implemented)
 Complete integration with Typeform's Responses API and Create API.
+- **8 Actions**: Get responses, get single response, get statistics, export CSV, watch new responses, get form details, create form, update form
+- **Authentication**: Personal access token (Bearer)
+- **Capabilities**: Full CRUD - read responses and manage forms
+
+### ✅ JotForm (Implemented)
+Complete integration with JotForm's Submissions API and Form API.
+- **8 Actions**: Get submissions, get single submission, get statistics, export CSV, watch new submissions, get form details, create form, update form
+- **Authentication**: API key (query parameter)
+- **Regional Support**: US, EU, and HIPAA endpoints
+- **Capabilities**: Full CRUD - read submissions and manage forms
+
+### ✅ SurveyMonkey (Implemented)
+Complete integration with SurveyMonkey's Responses API and Surveys API.
+- **8 Actions**: Get responses, get single response, get statistics, export CSV, watch new responses, get survey details, create survey, update survey
+- **Authentication**: OAuth 2.0 access token
+- **Capabilities**: Full CRUD - read responses and manage surveys
+
+### ✅ Google Forms (Implemented)
+Read-only integration with Google Forms API.
+- **5 Actions**: Get responses, get single response, get statistics, export CSV, get form details
+- **Authentication**: OAuth 2.0 access token with Google Cloud credentials
+- **Capabilities**: Read-only - retrieve responses and form configuration (no create/update API available)
+- **Integration**: Works seamlessly with Google Workspace
 
 ### 🔜 Future Platforms
-
-#### Google Forms
-**Why**: Widely used free form builder integrated with Google Workspace
-- Get form responses
-- Export to Sheets
-- Create forms programmatically
-- Real-time response notifications
-
-#### JotForm
-**Why**: Popular enterprise form builder with advanced features
-- Response management
-- Conditional logic
-- Payment integration
-- Form templates
 
 #### Microsoft Forms
 **Why**: Seamless Microsoft 365 integration
@@ -29,13 +38,7 @@ Complete integration with Typeform's Responses API and Create API.
 - Excel export
 - Teams integration
 - Education features
-
-#### SurveyMonkey
-**Why**: Industry-leading survey platform
-- Advanced analytics
-- Survey templates
-- Audience management
-- Response analysis
+- **Note**: No official public API currently available
 
 #### Formstack
 **Why**: Enterprise workflow automation
