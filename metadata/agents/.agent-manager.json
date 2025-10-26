@@ -11,6 +11,37 @@
       "IconClass": "fa-solid fa-robot"
     },
     "relatedEntities": {
+      "MJ: AI Agent Data Sources": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "ARTIFACT_TYPES",
+            "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Artifact Types",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": [
+              "ID",
+              "Name",
+              "Description"
+            ],
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 1,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "2EA061FE-A424-4D7C-AFD5-B33B48E1F01C"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T23:20:13.911Z",
+            "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+          }
+        }
+      ],
       "MJ: AI Agent Prompts": [
         {
           "fields": {
@@ -209,6 +240,37 @@
             "IconClass": "fa-solid fa-sitemap"
           },
           "relatedEntities": {
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ARTIFACT_TYPES",
+                  "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Artifact Types",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Description"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "11766FF5-2079-439C-B36F-5BB6CAB74B80"
+                },
+                "sync": {
+                  "lastModified": "2025-10-25T23:20:13.989Z",
+                  "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+                }
+              }
+            ],
             "MJ: AI Agent Prompts": [
               {
                 "fields": {
@@ -320,6 +382,37 @@
             "IconClass": "fa-solid fa-drafting-compass"
           },
           "relatedEntities": {
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ARTIFACT_TYPES",
+                  "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Artifact Types",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Description"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "25107FD1-8086-4EA6-B75B-E2F7BFE01D5B"
+                },
+                "sync": {
+                  "lastModified": "2025-10-25T23:20:14.039Z",
+                  "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+                }
+              }
+            ],
             "MJ: AI Agent Prompts": [
               {
                 "fields": {

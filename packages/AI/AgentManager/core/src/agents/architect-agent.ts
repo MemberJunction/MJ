@@ -420,14 +420,6 @@ export class AgentArchitectAgent extends BaseAgent {
                 }
             }
 
-            // Validate child-specific fields
-            if (subAgent.Type === 'child') {
-                // Child agents should have empty ID (will be created)
-                if (subAgent.SubAgent.ID && subAgent.SubAgent.ID !== '') {
-                    errors.push(`❌ Child SubAgent[${i}] "${subAgent.SubAgent.Name}" should have empty ID (leave as ""). AgentSpecSync will create it.`);
-                }
-            }
-
             // Recursively validate nested sub-agents
             if (subAgent.SubAgent.SubAgents && subAgent.SubAgent.SubAgents.length > 0) {
                 const nestedValidation = this.validateSubAgents(subAgent.SubAgent.SubAgents);

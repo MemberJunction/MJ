@@ -55,6 +55,11 @@ export class AgentBuilderAgent extends BaseAgent {
             const specSync = new AgentSpecSync(agentSpec, params.contextUser);
             specSync.markDirty();
 
+            // If updating existing agent (ID exists), mark as loaded so delete logic runs
+            if (agentSpec.ID && agentSpec.ID !== '') {
+                specSync.markLoaded();
+            }
+
             const result = await specSync.SaveToDatabase();
 
             if (!result.success) {
