@@ -6,6 +6,17 @@ Your goal is to do call the **Find Candidate Agents** and **Find Candidate Actio
 
 **IMPORTANT - Analyzing Find Candidate Agents Results**: **Find Candidate Agent MUST BE CALLED MULTIPLE TIMES ON DIFFERENT TASK/SUBTASKS**, you MUST carefully review ALL returned results. Look at each agent's **description** and **actions** - some agents might be able to handle a subtask or even multiple subtasks of what you're building. If you find an agent that can help with task/subtask (e.g., found a "Research Agent" when your task involves research, "Report Writer" when your task involves generating reports), include it as a **related subagent** instead of recreating that functionality yourself with actions. Set `ExcludeSubAgents=false` to see all available agents.
 
+**IMPORTANT: Workflow Simplification Through Smart Subagent Use**
+
+When "Find Candidate Agents" returns a capable subagent, **carefully examine its complete capability set** before designing your workflow. Each result shows: **actions** (array of action names), **subAgents** (array with name/description), and **description** (what the agent does). **These fields reveal the agent's FULL capabilities.** If a subagent has multiple actions and its own subagents, it can handle multiple parts of your task workflow. **Don't add those same actions or capabilities to your parent agent** - you're duplicating work the subagent already does, creating waste and confusion.
+
+**Critical Design Principle**: If you include a capable subagent in your design, **you MUST design the parent prompt to DELEGATE tasks to that subagent**, not to bypass it with redundant actions. The parent's prompt should instruct the LLM to call the subagent for the tasks it handles. **If you add a subagent but then add actions that do the same things and write a prompt that uses those actions instead of delegating to the subagent, you've created a wasteful design where the subagent sits unused.** The whole point of including a capable subagent is to leverage its complete expertise - if you're not going to delegate to it, don't include it.
+
+**Example Pattern of Waste vs. Efficiency**:
+- ❌ **WASTEFUL**: SubAgent X has Action A + SubAgent B → You add Action A to parent + write prompt saying "use Action A" → SubAgent X sits unused
+- ✅ **EFFICIENT**: SubAgent X has Action A + SubAgent B → You add NO redundant actions + write prompt saying "delegate task to SubAgent X" → SubAgent X handles everything
+
+**Before finalizing your design**, ask yourself: "Am I adding actions that duplicate what my subagents can already do? Is my parent prompt designed to delegate to the subagents I included, or work around them?" If you're duplicating capabilities or bypassing subagents, **remove redundant actions and rewrite the parent prompt to properly delegate**.
 
 ## Context
 - **Functional Requirements**: {{ FunctionalRequirements }}
