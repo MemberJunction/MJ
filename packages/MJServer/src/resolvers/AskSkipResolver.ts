@@ -565,228 +565,228 @@ export class AskSkipResolver {
     return this.handleSimpleSkipChatPostRequest(input, convoEntity, convoDetailEntity, true, user, userPayload);
   }
 
-  /**
-   * Executes a Skip learning cycle
-   * Learning cycles allow Skip to analyze conversations and improve its knowledge and capabilities
-   * 
-   * @param dataSource Database connection
-   * @param userPayload Information about the authenticated user
-   * @param ForceEntityRefresh Whether to force a refresh of entity metadata
-   * @returns Result of the learning cycle execution
-   */
-  @Mutation(() => AskSkipResultType)
-  async ExecuteAskSkipLearningCycle(
-    @Ctx() { dataSource, userPayload, providers }: AppContext,
-    @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
-  ) {
-      const skipConfigInfo = configInfo.askSkip;
-      // First check if learning cycles are enabled in configuration
-      if (!skipConfigInfo.learningCycleEnabled) {
-        return {
-          success: false,
-          error: 'Learning cycles are not enabled in configuration',
-          elapsedTime: 0,
-          noteChanges: [],
-          queryChanges: [],
-          requestChanges: []
-        };
-      }
+  // /**
+  //  * Executes a Skip learning cycle
+  //  * Learning cycles allow Skip to analyze conversations and improve its knowledge and capabilities
+  //  * 
+  //  * @param dataSource Database connection
+  //  * @param userPayload Information about the authenticated user
+  //  * @param ForceEntityRefresh Whether to force a refresh of entity metadata
+  //  * @returns Result of the learning cycle execution
+  //  */
+  // @Mutation(() => AskSkipResultType)
+  // async ExecuteAskSkipLearningCycle(
+  //   @Ctx() { dataSource, userPayload, providers }: AppContext,
+  //   @Arg('ForceEntityRefresh', () => Boolean, { nullable: true }) ForceEntityRefresh?: boolean
+  // ) {
+  //     const skipConfigInfo = configInfo.askSkip;
+  //     // First check if learning cycles are enabled in configuration
+  //     if (!skipConfigInfo.learningCycleEnabled) {
+  //       return {
+  //         success: false,
+  //         error: 'Learning cycles are not enabled in configuration',
+  //         elapsedTime: 0,
+  //         noteChanges: [],
+  //         queryChanges: [],
+  //         requestChanges: []
+  //       };
+  //     }
       
-      // Check if we have a valid endpoint when cycles are enabled
-      const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
-                                  (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
-      if (!hasLearningEndpoint) {
-        return {
-          success: false,
-          error: 'Learning cycle API endpoint is not configured',
-          elapsedTime: 0,
-          noteChanges: [],
-          queryChanges: [],
-          requestChanges: []
-        };
-      }
+  //     // Check if we have a valid endpoint when cycles are enabled
+  //     const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+  //                                 (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+  //     if (!hasLearningEndpoint) {
+  //       return {
+  //         success: false,
+  //         error: 'Learning cycle API endpoint is not configured',
+  //         elapsedTime: 0,
+  //         noteChanges: [],
+  //         queryChanges: [],
+  //         requestChanges: []
+  //       };
+  //     }
       
-      const startTime = new Date();
-      // First, get the user from the cache
-      const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
-      if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
+  //     const startTime = new Date();
+  //     // First, get the user from the cache
+  //     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
+  //     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
-      // if already configured this does nothing, just makes sure we're configured
-      await AIEngine.Instance.Config(false, user); 
+  //     // if already configured this does nothing, just makes sure we're configured
+  //     await AIEngine.Instance.Config(false, user); 
 
-      // Check if this organization is already running a learning cycle using their organization ID
-      const organizationId = skipConfigInfo.orgID;
-      const scheduler = LearningCycleScheduler.Instance;
-      const runningStatus = scheduler.isOrganizationRunningCycle(organizationId);
+  //     // Check if this organization is already running a learning cycle using their organization ID
+  //     const organizationId = skipConfigInfo.orgID;
+  //     const scheduler = LearningCycleScheduler.Instance;
+  //     const runningStatus = scheduler.isOrganizationRunningCycle(organizationId);
       
-      if (runningStatus.isRunning) {
-        LogStatus(`Learning cycle already in progress for organization ${organizationId}, started at ${runningStatus.startTime.toISOString()}`);
-        return {
-          success: false,
-          error: `Learning cycle already in progress for this organization (started ${Math.round(runningStatus.runningForMinutes)} minutes ago)`,
-          elapsedTime: 0,
-          noteChanges: [],
-          queryChanges: [],
-          requestChanges: []
-        };
-      }
+  //     if (runningStatus.isRunning) {
+  //       LogStatus(`Learning cycle already in progress for organization ${organizationId}, started at ${runningStatus.startTime.toISOString()}`);
+  //       return {
+  //         success: false,
+  //         error: `Learning cycle already in progress for this organization (started ${Math.round(runningStatus.runningForMinutes)} minutes ago)`,
+  //         elapsedTime: 0,
+  //         noteChanges: [],
+  //         queryChanges: [],
+  //         requestChanges: []
+  //       };
+  //     }
 
-      // Get the Skip agent ID
-      const md = GetReadWriteProvider(providers);
-      const skipAgent = AIEngine.Instance.GetAgentByName('Skip');
-      if (!skipAgent) {
-        throw new Error("Skip agent not found in AIEngine");
-      }
+  //     // Get the Skip agent ID
+  //     const md = GetReadWriteProvider(providers);
+  //     const skipAgent = AIEngine.Instance.GetAgentByName('Skip');
+  //     if (!skipAgent) {
+  //       throw new Error("Skip agent not found in AIEngine");
+  //     }
 
-      const agentID = skipAgent.ID;
+  //     const agentID = skipAgent.ID;
 
-      // Get last complete learning cycle start date for this agent
-      const lastCompleteLearningCycleDate = await this.GetLastCompleteLearningCycleDate(agentID, user);
+  //     // Get last complete learning cycle start date for this agent
+  //     const lastCompleteLearningCycleDate = await this.GetLastCompleteLearningCycleDate(agentID, user);
 
-      // Create a new learning cycle record for this run
-      const learningCycleEntity = await md.GetEntityObject<AIAgentLearningCycleEntity>('AI Agent Learning Cycles', user);
-      learningCycleEntity.NewRecord();
-      learningCycleEntity.AgentID = skipAgent.ID;
-      learningCycleEntity.Status = 'In-Progress';
-      learningCycleEntity.StartedAt = startTime;
+  //     // Create a new learning cycle record for this run
+  //     const learningCycleEntity = await md.GetEntityObject<AIAgentLearningCycleEntity>('AI Agent Learning Cycles', user);
+  //     learningCycleEntity.NewRecord();
+  //     learningCycleEntity.AgentID = skipAgent.ID;
+  //     learningCycleEntity.Status = 'In-Progress';
+  //     learningCycleEntity.StartedAt = startTime;
 
-      if (!(await learningCycleEntity.Save())) {
-        throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
-      }
+  //     if (!(await learningCycleEntity.Save())) {
+  //       throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //     }
 
-      const learningCycleId = learningCycleEntity.ID;
-      LogStatus(`Created new learning cycle with ID: ${learningCycleId}`);
+  //     const learningCycleId = learningCycleEntity.ID;
+  //     LogStatus(`Created new learning cycle with ID: ${learningCycleId}`);
 
-      // Register this organization as running a learning cycle
-      scheduler.registerRunningCycle(organizationId, learningCycleId);
+  //     // Register this organization as running a learning cycle
+  //     scheduler.registerRunningCycle(organizationId, learningCycleId);
       
-      try {
-        // Build the request to Skip learning API
-        LogStatus(`Building Skip Learning API request`);
-        const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastCompleteLearningCycleDate, true, true, true, false, dataSource, user, ForceEntityRefresh || false);
-        if (input.newConversations.length === 0) {
-          // no new conversations to process
-          LogStatus(`  Skip Learning Cycles: No new conversations to process for learning cycle`);
-          learningCycleEntity.Status = 'Complete';
-          learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
-          learningCycleEntity.EndedAt = new Date();
-          if (!(await learningCycleEntity.Save())) {
-            LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
-          }
-          const result: SkipAPILearningCycleResponse = {
-            success: true,
-            learningCycleSkipped: true,
-            elapsedTime: 0,
-            noteChanges: [],
-            queryChanges: [],
-            requestChanges: [],
-          }
-          return result;
-        }
-        else {
-          // Make the API request
-          const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID, userPayload);
+  //     try {
+  //       // Build the request to Skip learning API
+  //       LogStatus(`Building Skip Learning API request`);
+  //       const input = await this.buildSkipLearningAPIRequest(learningCycleId, lastCompleteLearningCycleDate, true, true, true, false, dataSource, user, ForceEntityRefresh || false);
+  //       if (input.newConversations.length === 0) {
+  //         // no new conversations to process
+  //         LogStatus(`  Skip Learning Cycles: No new conversations to process for learning cycle`);
+  //         learningCycleEntity.Status = 'Complete';
+  //         learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
+  //         learningCycleEntity.EndedAt = new Date();
+  //         if (!(await learningCycleEntity.Save())) {
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //         }
+  //         const result: SkipAPILearningCycleResponse = {
+  //           success: true,
+  //           learningCycleSkipped: true,
+  //           elapsedTime: 0,
+  //           noteChanges: [],
+  //           queryChanges: [],
+  //           requestChanges: [],
+  //         }
+  //         return result;
+  //       }
+  //       else {
+  //         // Make the API request
+  //         const response = await this.handleSimpleSkipLearningPostRequest(input, user, learningCycleId, agentID, userPayload);
 
-          // Update learning cycle to completed
-          const endTime = new Date();
-          const elapsedTimeMs = endTime.getTime() - startTime.getTime();
+  //         // Update learning cycle to completed
+  //         const endTime = new Date();
+  //         const elapsedTimeMs = endTime.getTime() - startTime.getTime();
 
-          LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
+  //         LogStatus(`Learning cycle finished with status: ${response.success ? 'Success' : 'Failed'} in ${elapsedTimeMs / 1000} seconds`);
 
-          learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
-          learningCycleEntity.EndedAt = endTime;
+  //         learningCycleEntity.Status = response.success ? 'Complete' : 'Failed';
+  //         learningCycleEntity.EndedAt = endTime;
 
-          if (!(await learningCycleEntity.Save())) {
-            LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
-          }
+  //         if (!(await learningCycleEntity.Save())) {
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //         }
           
-          return response;
-        }
-      } 
-      catch (error) {
-        // Make sure to update the learning cycle record as failed
-        learningCycleEntity.Status = 'Failed';
-        learningCycleEntity.EndedAt = new Date();
+  //         return response;
+  //       }
+  //     } 
+  //     catch (error) {
+  //       // Make sure to update the learning cycle record as failed
+  //       learningCycleEntity.Status = 'Failed';
+  //       learningCycleEntity.EndedAt = new Date();
         
-        try {
-          await learningCycleEntity.Save();
-        } 
-        catch (saveError) {
-          LogError(`Failed to update learning cycle record after error: ${saveError}`);
-        }
+  //       try {
+  //         await learningCycleEntity.Save();
+  //       } 
+  //       catch (saveError) {
+  //         LogError(`Failed to update learning cycle record after error: ${saveError}`);
+  //       }
         
-        // Re-throw the original error
-        throw error;
-      }
-      finally {
-        // Unregister the cycle/organizationId safely
-        try {
-          scheduler.unregisterRunningCycle(organizationId);          
-        }
-        catch (error) {
-          LogError(`Failed to unregister organization ${organizationId} from running cycles: ${error}`);
-        }
-      }
-  }
+  //       // Re-throw the original error
+  //       throw error;
+  //     }
+  //     finally {
+  //       // Unregister the cycle/organizationId safely
+  //       try {
+  //         scheduler.unregisterRunningCycle(organizationId);          
+  //       }
+  //       catch (error) {
+  //         LogError(`Failed to unregister organization ${organizationId} from running cycles: ${error}`);
+  //       }
+  //     }
+  // }
 
-  /**
-   * Handles the HTTP POST request to the Skip learning cycle API
-   * Sends the learning cycle request and processes the response
-   * 
-   * @param input The learning cycle request payload
-   * @param user User context for the request
-   * @param learningCycleId ID of the current learning cycle
-   * @param agentID ID of the Skip agent
-   * @returns Response from the Skip learning cycle API
-   */
-  protected async handleSimpleSkipLearningPostRequest(
-    input: SkipAPILearningCycleRequest, 
-    user: UserInfo, 
-    learningCycleId: string,
-    agentID: string,
-    userPayload: UserPayload
-  ): Promise<SkipAPILearningCycleResponse> {
-    const skipConfigInfo = configInfo.askSkip;
-    const learningURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.LEARNING}` : skipConfigInfo.learningCycleURL;
-    LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${learningURL}`);
+  // /**
+  //  * Handles the HTTP POST request to the Skip learning cycle API
+  //  * Sends the learning cycle request and processes the response
+  //  * 
+  //  * @param input The learning cycle request payload
+  //  * @param user User context for the request
+  //  * @param learningCycleId ID of the current learning cycle
+  //  * @param agentID ID of the Skip agent
+  //  * @returns Response from the Skip learning cycle API
+  //  */
+  // protected async handleSimpleSkipLearningPostRequest(
+  //   input: SkipAPILearningCycleRequest, 
+  //   user: UserInfo, 
+  //   learningCycleId: string,
+  //   agentID: string,
+  //   userPayload: UserPayload
+  // ): Promise<SkipAPILearningCycleResponse> {
+  //   const skipConfigInfo = configInfo.askSkip;
+  //   const learningURL = skipConfigInfo.url ? `${skipConfigInfo.url}${SKIP_API_ENDPOINTS.LEARNING}` : skipConfigInfo.learningCycleURL;
+  //   LogStatus(`   >>> HandleSimpleSkipLearningPostRequest Sending request to Skip API: ${learningURL}`);
 
-    const response = await sendPostRequest(learningURL, input, true, this.buildSkipPostHeaders());
+  //   const response = await sendPostRequest(learningURL, input, true, this.buildSkipPostHeaders());
 
-    if (response && response.length > 0) {
-      // the last object in the response array is the final response from the Skip API
-      const apiResponse = <SkipAPILearningCycleResponse>response[response.length - 1].value;
-      LogStatus(`  Skip API response: ${apiResponse.success}`);
+  //   if (response && response.length > 0) {
+  //     // the last object in the response array is the final response from the Skip API
+  //     const apiResponse = <SkipAPILearningCycleResponse>response[response.length - 1].value;
+  //     LogStatus(`  Skip API response: ${apiResponse.success}`);
 
-      // Process any note changes, if any
-      if (apiResponse.noteChanges && apiResponse.noteChanges.length > 0) {
-        await this.processLearningCycleNoteChanges(apiResponse.noteChanges, agentID, user, userPayload);
-      }
+  //     // Process any note changes, if any
+  //     if (apiResponse.noteChanges && apiResponse.noteChanges.length > 0) {
+  //       await this.processLearningCycleNoteChanges(apiResponse.noteChanges, agentID, user, userPayload);
+  //     }
 
-      // Not yet implemented
+  //     // Not yet implemented
 
-      // // Process any query changes, if any
-      // if (apiResponse.queryChanges && apiResponse.queryChanges.length > 0) {
-      //   await this.processLearningCycleQueryChanges(apiResponse.queryChanges, user);
-      // }
+  //     // // Process any query changes, if any
+  //     // if (apiResponse.queryChanges && apiResponse.queryChanges.length > 0) {
+  //     //   await this.processLearningCycleQueryChanges(apiResponse.queryChanges, user);
+  //     // }
 
-      // // Process any request changes, if any
-      // if (apiResponse.requestChanges && apiResponse.requestChanges.length > 0) {
-      //   await this.processLearningCycleRequestChanges(apiResponse.requestChanges, user);
-      // }
+  //     // // Process any request changes, if any
+  //     // if (apiResponse.requestChanges && apiResponse.requestChanges.length > 0) {
+  //     //   await this.processLearningCycleRequestChanges(apiResponse.requestChanges, user);
+  //     // }
       
-      return apiResponse;
-    } else {
-      return {
-        success: false,
-        error: 'Error',
-        elapsedTime: 0,
-        noteChanges: [],
-        queryChanges: [],
-        requestChanges: [],
-      };
+  //     return apiResponse;
+  //   } else {
+  //     return {
+  //       success: false,
+  //       error: 'Error',
+  //       elapsedTime: 0,
+  //       noteChanges: [],
+  //       queryChanges: [],
+  //       requestChanges: [],
+  //     };
 
-    }
-  }
+  //   }
+  // }
 
   /**
    * Handles the HTTP POST request to the Skip chat API
@@ -861,132 +861,132 @@ export class AskSkipResolver {
     }
   }
 
-  /**
-   * Processes note changes received from the Skip API learning cycle
-   * Applies changes to agent notes based on the learning cycle response
-   * 
-   * @param noteChanges Changes to agent notes
-   * @param agentID ID of the Skip agent
-   * @param user User context for the request
-   * @returns Promise that resolves when processing is complete
-   */
-  protected async processLearningCycleNoteChanges(
-    noteChanges: SkipLearningCycleNoteChange[], 
-    agentID: string,
-    user: UserInfo,
-    userPayload: UserPayload
-    ): Promise<void> {
-      const md = new Metadata();
+//   /**
+//    * Processes note changes received from the Skip API learning cycle
+//    * Applies changes to agent notes based on the learning cycle response
+//    * 
+//    * @param noteChanges Changes to agent notes
+//    * @param agentID ID of the Skip agent
+//    * @param user User context for the request
+//    * @returns Promise that resolves when processing is complete
+//    */
+//   protected async processLearningCycleNoteChanges(
+//     noteChanges: SkipLearningCycleNoteChange[], 
+//     agentID: string,
+//     user: UserInfo,
+//     userPayload: UserPayload
+//     ): Promise<void> {
+//       const md = new Metadata();
 
-      // Filter out any operations on "Human" notes
-      const validNoteChanges = noteChanges.filter(change => {
-        // Check if the note is of type "Human"
-        if (change.note.agentNoteType === "Human") {
-          LogStatus(`WARNING: Ignoring ${change.changeType} operation on Human note with ID ${change.note.id}. Human notes cannot be modified by the
-    learning cycle.`);
-          return false;
-        }
-        return true;
-      });
+//       // Filter out any operations on "Human" notes
+//       const validNoteChanges = noteChanges.filter(change => {
+//         // Check if the note is of type "Human"
+//         if (change.note.agentNoteType === "Human") {
+//           LogStatus(`WARNING: Ignoring ${change.changeType} operation on Human note with ID ${change.note.id}. Human notes cannot be modified by the
+//     learning cycle.`);
+//           return false;
+//         }
+//         return true;
+//       });
       
-      // Process all valid note changes in parallel
-      await Promise.all(validNoteChanges.map(async (change) => {
-        try {
-          if (change.changeType === 'add' || change.changeType === 'update') {
-            await this.processAddOrUpdateSkipNote(change, agentID, user, userPayload);
-          } else if (change.changeType === 'delete') {
-            await this.processDeleteSkipNote(change, user, userPayload);
-          }
-        } catch (e) {
-          LogError(`Error processing note change: ${e}`);
-        }
-      }));
-  }
+//       // Process all valid note changes in parallel
+//       await Promise.all(validNoteChanges.map(async (change) => {
+//         try {
+//           if (change.changeType === 'add' || change.changeType === 'update') {
+//             await this.processAddOrUpdateSkipNote(change, agentID, user, userPayload);
+//           } else if (change.changeType === 'delete') {
+//             await this.processDeleteSkipNote(change, user, userPayload);
+//           }
+//         } catch (e) {
+//           LogError(`Error processing note change: ${e}`);
+//         }
+//       }));
+//   }
 
-  /**
-   * Processes an add or update operation for a Skip agent note
-   * Creates a new note or updates an existing one based on the change type
-   * 
-   * @param change The note change information
-   * @param agentID ID of the Skip agent
-   * @param user User context for the operation
-   * @returns Whether the operation was successful
-   */
-  protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
-    try {  
-      // Get the note entity object
-      const md = new Metadata();
-      const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
+//   /**
+//    * Processes an add or update operation for a Skip agent note
+//    * Creates a new note or updates an existing one based on the change type
+//    * 
+//    * @param change The note change information
+//    * @param agentID ID of the Skip agent
+//    * @param user User context for the operation
+//    * @returns Whether the operation was successful
+//    */
+//   protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+//     try {  
+//       // Get the note entity object
+//       const md = new Metadata();
+//       const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
       
-      if (change.changeType === 'update') {
-        // Load existing note
-        const loadResult = await noteEntity.Load(change.note.id);
-        if (!loadResult) {
-          LogError(`Could not load note with ID ${change.note.id}`);
-          return false;
-        }
-      } else {
-        // Create a new note
-        noteEntity.NewRecord();
-        noteEntity.AgentID = agentID;
-      }
-      noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI'); // always set to AI
-      noteEntity.Note = change.note.note;
-      noteEntity.Type = change.note.type;
+//       if (change.changeType === 'update') {
+//         // Load existing note
+//         const loadResult = await noteEntity.Load(change.note.id);
+//         if (!loadResult) {
+//           LogError(`Could not load note with ID ${change.note.id}`);
+//           return false;
+//         }
+//       } else {
+//         // Create a new note
+//         noteEntity.NewRecord();
+//         noteEntity.AgentID = agentID;
+//       }
+//       noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI'); // always set to AI
+//       noteEntity.Note = change.note.note;
+//       noteEntity.Type = change.note.type;
 
-      if (change.note.type === 'User') {
-        noteEntity.UserID = change.note.userId;
-      }
+//       if (change.note.type === 'User') {
+//         noteEntity.UserID = change.note.userId;
+//       }
 
-      // Save the note
-      if (!(await noteEntity.Save())) {
-        LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
-        return false;
-      }
+//       // Save the note
+//       if (!(await noteEntity.Save())) {
+//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//         return false;
+//       }
 
-      return true;
-    } catch (e) {
-      LogError(`Error processing note change: ${e}`);
-      return false;
-    }
-  }
+//       return true;
+//     } catch (e) {
+//       LogError(`Error processing note change: ${e}`);
+//       return false;
+//     }
+//   }
 
-  /**
-   * Processes a delete operation for a Skip agent note
-   * Removes the specified note from the database
-   * 
-   * @param change The note change information
-   * @param user User context for the operation
-   * @returns Whether the deletion was successful
-   */
-  protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
-    // Get the note entity object
-    const md = new Metadata();
-    const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
+//   /**
+//    * Processes a delete operation for a Skip agent note
+//    * Removes the specified note from the database
+//    * 
+//    * @param change The note change information
+//    * @param user User context for the operation
+//    * @returns Whether the deletion was successful
+//    */
+//   protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+//     // Get the note entity object
+//     const md = new Metadata();
+//     const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
 
-    // Load the note first
-    const loadResult = await noteEntity.Load(change.note.id);
+//     // Load the note first
+//     const loadResult = await noteEntity.Load(change.note.id);
 
-    if (!loadResult) {
-      LogError(`Could not load note with ID ${change.note.id} for deletion`);
-      return false;
-    }
+//     if (!loadResult) {
+//       LogError(`Could not load note with ID ${change.note.id} for deletion`);
+//       return false;
+//     }
 
-    // Double-check if the loaded note is of type "Human"
-    if (change.note.agentNoteType === "Human") {
-      LogStatus(`WARNING: Ignoring delete operation on Human note with ID ${change.note.id}. Human notes cannot be deleted by the learning
-cycle.`);
-      return false;
-    }
+//     // Double-check if the loaded note is of type "Human"
+//     if (change.note.agentNoteType === "Human") {
+//       LogStatus(`WARNING: Ignoring delete operation on Human note with ID ${change.note.id}. Human notes cannot be deleted by the learning
+// cycle.`);
+//       return false;
+//     }
 
-    // Proceed with deletion
-    if (!(await noteEntity.Delete())) {
-      LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
-      return false;
-    }
+//     // Proceed with deletion
+//     if (!(await noteEntity.Delete())) {
+//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//       return false;
+//     }
 
-    return true;
-  }
+//     return true;
+//   }
 
   /**
    * Creates a conversation detail entry for an AI message
@@ -1050,7 +1050,7 @@ cycle.`);
     const skipConfigInfo = configInfo.askSkip;
     const entities = includeEntities ? await this.BuildSkipEntities(dataSource, forceEntitiesRefresh) : [];
     const queries = includeQueries ? this.BuildSkipQueries() : [];
-    const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser, filterUserNotesToContextUser) : {notes: [], noteTypes: []};
+    //const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser, filterUserNotesToContextUser) : {notes: [], noteTypes: []};
     const requests = includeRequests ? await this.BuildSkipRequests(contextUser) : [];
     
     // Setup access token if needed
@@ -1074,8 +1074,8 @@ cycle.`);
     return {
       entities,
       queries,
-      notes,
-      noteTypes,
+      notes: undefined,
+      noteTypes: undefined,
       userEmail: contextUser.Email,
       requests, 
       accessToken,
@@ -1748,64 +1748,64 @@ cycle.`);
     });
   }
 
-  /**
-   * Builds up the array of notes and note types for Skip
-   * These notes are used to provide Skip with domain knowledge and context
-   * 
-   * @param contextUser User context for the request
-   * @returns Object containing arrays of notes and note types
-   */
-  protected async BuildSkipAgentNotes(contextUser: UserInfo, filterUserNotesToContextUser: boolean): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
-    try {
-      // if already configured this does nothing, just makes sure we're configured
-      await AIEngine.Instance.Config(false, contextUser); 
+  // /**
+  //  * Builds up the array of notes and note types for Skip
+  //  * These notes are used to provide Skip with domain knowledge and context
+  //  * 
+  //  * @param contextUser User context for the request
+  //  * @returns Object containing arrays of notes and note types
+  //  */
+  // protected async BuildSkipAgentNotes(contextUser: UserInfo, filterUserNotesToContextUser: boolean): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
+  //   try {
+  //     // if already configured this does nothing, just makes sure we're configured
+  //     await AIEngine.Instance.Config(false, contextUser); 
 
-      const agent: AIAgentEntityExtended = AIEngine.Instance.GetAgentByName('Skip');
-      if (agent) {
-        let notes: SkipAPIAgentNote[] = [];
-        let noteTypes: SkipAPIAgentNoteType[] = [];
+  //     const agent: AIAgentEntityExtended = AIEngine.Instance.GetAgentByName('Skip');
+  //     if (agent) {
+  //       let notes: SkipAPIAgentNote[] = [];
+  //       let noteTypes: SkipAPIAgentNoteType[] = [];
         
-        notes = agent.Notes.map((r) => {
-          return {
-            id: r.ID,
-            agentNoteTypeId: r.AgentNoteTypeID,
-            agentNoteType: r.AgentNoteType, 
-            note: r.Note,
-            type: r.Type,
-            userId: r.UserID,
-            user: r.User,
-            createdAt: r.__mj_CreatedAt,
-            updatedAt: r.__mj_UpdatedAt,
-          }
-        });
+  //       notes = agent.Notes.map((r) => {
+  //         return {
+  //           id: r.ID,
+  //           agentNoteTypeId: r.AgentNoteTypeID,
+  //           agentNoteType: r.AgentNoteType, 
+  //           note: r.Note,
+  //           type: r.Type,
+  //           userId: r.UserID,
+  //           user: r.User,
+  //           createdAt: r.__mj_CreatedAt,
+  //           updatedAt: r.__mj_UpdatedAt,
+  //         }
+  //       });
 
-        if (filterUserNotesToContextUser){
-          // filter out any notes that are not for this user
-          notes = notes.filter((n) => n.type === 'Global' || 
-                                      (n.type === 'User' && n.userId === contextUser.ID));
-        }
+  //       if (filterUserNotesToContextUser){
+  //         // filter out any notes that are not for this user
+  //         notes = notes.filter((n) => n.type === 'Global' || 
+  //                                     (n.type === 'User' && n.userId === contextUser.ID));
+  //       }
 
-        noteTypes = AIEngine.Instance.AgentNoteTypes.map((r) => {
-          return {
-            id: r.ID,
-            name: r.Name,
-            description: r.Description
-          }
-        });
+  //       noteTypes = AIEngine.Instance.AgentNoteTypes.map((r) => {
+  //         return {
+  //           id: r.ID,
+  //           name: r.Name,
+  //           description: r.Description
+  //         }
+  //       });
 
-        // now return the notes and note types
-        return {notes, noteTypes};
-      }
-      else {
-        console.warn(`No AI Agent found with the name 'Skip' in the AI Engine, so no notes will be sent to Skip`);
-        return {notes: [], noteTypes: []}; // no agent found, so nothing to do
-      }
-    }
-    catch (e) {
-      LogError(`AskSkipResolver::BuildSkipAgentNotes: ${e}`);
-      return {notes: [], noteTypes: []}; // non- fatal error just return empty arrays
-    }
-  }
+  //       // now return the notes and note types
+  //       return {notes, noteTypes};
+  //     }
+  //     else {
+  //       console.warn(`No AI Agent found with the name 'Skip' in the AI Engine, so no notes will be sent to Skip`);
+  //       return {notes: [], noteTypes: []}; // no agent found, so nothing to do
+  //     }
+  //   }
+  //   catch (e) {
+  //     LogError(`AskSkipResolver::BuildSkipAgentNotes: ${e}`);
+  //     return {notes: [], noteTypes: []}; // non- fatal error just return empty arrays
+  //   }
+  // }
 
   /**
    * Packs entity rows for inclusion in Skip requests

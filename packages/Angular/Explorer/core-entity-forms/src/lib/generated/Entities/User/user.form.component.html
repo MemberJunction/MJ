@@ -705,19 +705,6 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
-                    <mj-tab Name="MJ: Collection Permissions" [Visible]="record.IsSaved"> 
-                        MJ: Collection Permissions
-                    </mj-tab>
-                    <mj-tab-body>
-                        <mj-user-view-grid 
-                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','UserID')"  
-                            [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
-                            [AllowLoad]="IsCurrentTab('MJ: Collection Permissions')"  
-                            [EditMode]="GridEditMode()"  
-                            >
-                        </mj-user-view-grid>                    
-                    </mj-tab-body>
-
                     <mj-tab Name="MJ: Collections" [Visible]="record.IsSaved"> 
                         MJ: Collections
                     </mj-tab>
@@ -731,6 +718,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Collection Permissions" [Visible]="record.IsSaved"> 
+                        MJ: Collection Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collection Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: Tasks" [Visible]="record.IsSaved"> 
                         MJ: Tasks
                     </mj-tab>
@@ -739,6 +739,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tasks','UserID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Tasks')"
                             [AllowLoad]="IsCurrentTab('MJ: Tasks')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: AI Agent Examples" [Visible]="record.IsSaved"> 
+                        MJ: AI Agent Examples
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','UserID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Examples')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

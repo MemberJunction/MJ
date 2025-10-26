@@ -4701,6 +4701,27 @@ Please choose an alternative approach to complete your task.`
         params: ExecuteAgentParams,
         config: AgentConfiguration
     ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
+        const executionMode = forEach.executionMode || 'sequential';
+
+        if (executionMode === 'parallel') {
+            return this.executeForEachIterationsParallel(forEach, collection, initialPayload, parentStepId, params, config);
+        } else {
+            return this.executeForEachIterationsSequential(forEach, collection, initialPayload, parentStepId, params, config);
+        }
+    }
+
+    /**
+     * Execute ForEach iterations sequentially (one at a time).
+     * This is the original implementation - safe for state accumulation and maintaining order.
+     */
+    private async executeForEachIterationsSequential(
+        forEach: ForEachOperation,
+        collection: any[],
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
         let currentPayload = initialPayload;
         const maxIterations = forEach.maxIterations ?? 1000;
         const results: Array<BaseAgentNextStep> = [];
@@ -4728,6 +4749,122 @@ Please choose an alternative approach to complete your task.`
             } else {
                 results.push(iterResult.result);
                 currentPayload = iterResult.payload;
+            }
+        }
+
+        return { results, errors, finalPayload: currentPayload };
+    }
+
+    /**
+     * Execute ForEach iterations in parallel batches.
+     * Processes multiple iterations concurrently for better performance when iterations are independent.
+     * Results are collected in parallel but applied to payload sequentially to maintain order.
+     */
+    private async executeForEachIterationsParallel(
+        forEach: ForEachOperation,
+        collection: any[],
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
+        const maxIterations = forEach.maxIterations ?? 1000;
+        const maxConcurrency = forEach.maxConcurrency ?? 10;
+        const itemsToProcess = Math.min(collection.length, maxIterations);
+
+        // Create batches for parallel processing
+        const batches = this.createBatches(collection.slice(0, itemsToProcess), maxConcurrency);
+
+        const allResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }> = [];
+
+        // Process each batch in parallel
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+
+            // Execute all items in this batch concurrently
+            const batchPromises = batch.map(({ item, index }) =>
+                this.executeSingleForEachIteration(
+                    forEach,
+                    item,
+                    index,
+                    initialPayload, // Pass initial payload (read-only) to all parallel iterations
+                    parentStepId,
+                    params,
+                    config
+                ).then(iterResult => ({
+                    index,
+                    result: iterResult.result,
+                    error: iterResult.error,
+                    payload: iterResult.payload
+                }))
+            );
+
+            const batchResults = await Promise.all(batchPromises);
+            allResults.push(...batchResults);
+
+            // Optional: Inter-batch delay
+            if (forEach.delayBetweenIterationsMs && batchIndex < batches.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, forEach.delayBetweenIterationsMs));
+            }
+
+            // Check for errors that should stop processing
+            const hasFailure = batchResults.some(r => r.error);
+            if (hasFailure && !forEach.continueOnError) {
+                break;
+            }
+        }
+
+        // Sort results by original index to maintain order
+        allResults.sort((a, b) => a.index - b.index);
+
+        // Apply results sequentially to build final payload
+        return this.applyForEachResultsSequentially(allResults, initialPayload, forEach.continueOnError || false);
+    }
+
+    /**
+     * Create batches of items for parallel processing.
+     * Each batch contains up to maxConcurrency items with their original indices.
+     */
+    private createBatches<T>(
+        items: T[],
+        maxConcurrency: number
+    ): Array<Array<{ item: T; index: number }>> {
+        const batches: Array<Array<{ item: T; index: number }>> = [];
+
+        for (let i = 0; i < items.length; i += maxConcurrency) {
+            const batch = items.slice(i, i + maxConcurrency).map((item, batchOffset) => ({
+                item,
+                index: i + batchOffset
+            }));
+            batches.push(batch);
+        }
+
+        return batches;
+    }
+
+    /**
+     * Apply ForEach results sequentially to build final payload.
+     * This ensures payload changes are applied in order even when iterations ran in parallel.
+     */
+    private applyForEachResultsSequentially(
+        sortedResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }>,
+        initialPayload: any,
+        continueOnError: boolean
+    ): { results: BaseAgentNextStep[], errors: any[], finalPayload: any } {
+        let currentPayload = initialPayload;
+        const results: BaseAgentNextStep[] = [];
+        const errors: any[] = [];
+
+        for (const { result, error, payload } of sortedResults) {
+            if (error) {
+                errors.push(error);
+                if (!continueOnError) {
+                    break;
+                }
+            } else if (result) {
+                results.push(result);
+                // Apply payload change from this iteration
+                currentPayload = payload || currentPayload;
             }
         }
 

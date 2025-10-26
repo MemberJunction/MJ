@@ -120,6 +120,56 @@ When you have an array in the payload and need to perform the same operation on 
 
 **After completion:** Results appear in a temporary message for your next decision (not in payload).
 
+#### Parallel Execution for Independent Operations
+
+When iterations are **independent** (don't depend on each other), use parallel execution for 5-10x speedup:
+
+```json
+{
+  "taskComplete": false,
+  "message": "Fetching content from 50 search results in parallel",
+  "reasoning": "Using parallel execution for faster web scraping - iterations are independent",
+  "nextStep": {
+    "type": "ForEach",
+    "forEach": {
+      "collectionPath": "searchResults",
+      "itemVariable": "result",
+      "executionMode": "parallel",
+      "maxConcurrency": 15,
+      "continueOnError": true,
+      "action": {
+        "name": "Get Web Page Content",
+        "params": {
+          "url": "result.url",
+          "timeout": 10000
+        }
+      }
+    }
+  }
+}
+```
+
+**Execution modes:**
+- `"sequential"` (default): Process one at a time, good for state accumulation
+- `"parallel"`: Process multiple concurrently, good for independent I/O operations
+
+**Use parallel when:**
+- ✅ Fetching data from multiple URLs
+- ✅ Processing independent files/documents
+- ✅ Making multiple API calls
+- ✅ Running independent actions per item
+
+**Use sequential when:**
+- ⚠️ Iterations update shared state incrementally
+- ⚠️ Each iteration depends on previous results
+- ⚠️ Order of execution matters
+
+**Recommended maxConcurrency:**
+- I/O-bound (API calls, web scraping): 10-20
+- CPU-bound (data processing): 2-8
+- Sub-agent spawning: 2-5
+- Database operations: 5-10
+
 ### While: Polling and Conditional Loops
 
 When you need to poll for status, retry operations, or loop while a condition is true:
