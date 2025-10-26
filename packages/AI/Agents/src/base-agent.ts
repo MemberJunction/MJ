@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
@@ -3094,7 +3094,7 @@ Please choose an alternative approach to complete your task.`
             case 'Sub-Agent':
                 return await this.processSubAgentStep<P, P>(params, previousDecision!);
             case 'Actions':
-                return await this.executeActionsStep(params, config, previousDecision, undefined);
+                return await this.executeActionsStep(params, previousDecision, undefined);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
@@ -4260,7 +4260,6 @@ Please choose an alternative approach to complete your task.`
      */
     private async executeActionsStep(
         params: ExecuteAgentParams,
-        config: AgentConfiguration,
         previousDecision: BaseAgentNextStep,
         parentStepId: string
     ): Promise<BaseAgentNextStep> {
@@ -4654,9 +4653,15 @@ Please choose an alternative approach to complete your task.`
 
     /**
      * Helper: Validate and extract collection from payload
+     * Strips "payload." prefix if present (for LLM convenience)
      */
     private getCollectionFromPayload(payload: any, path: string): any[] | null {
-        const value = this.getValueFromPath(payload, path);
+        // Remove "payload." prefix if present
+        const cleanPath = path.toLowerCase().startsWith('payload.')
+            ? path.substring(8)
+            : path;
+
+        const value = this.getValueFromPath(payload, cleanPath);
         return Array.isArray(value) ? value : null;
     }
 
@@ -4747,11 +4752,17 @@ Please choose an alternative approach to complete your task.`
             // Execute action, sub-agent, or prompt
             let result;
             if (forEach.action) {
-                const actionStep = { step: 'Actions' as const, actions: [{ name: forEach.action.name, params: resolvedParams }], newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.executeActionsStep(params, config, actionStep as any, parentStepId);
+                // Find the AgentAction with fuzzy matching
+                const matchedAction = this.findAgentActionForLoop(forEach.action.name, params.agent.ID, params.agent.Name, params);
+                const resolvedAction = {
+                    ...matchedAction,
+                    params: resolvedParams
+                }
+                const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId);
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as any);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
             } else {
                 throw new Error('ForEach missing action/subAgent');
             }
@@ -4813,6 +4824,43 @@ Please choose an alternative approach to complete your task.`
                      `**Results:**\n\`\`\`json\n${JSON.stringify(results, null, 2)}\n\`\`\``,
             metadata: { _temporary: true, _loopResults: true }
         } as any);
+    }
+
+    /**
+     * Helper: Find AgentAction with fuzzy matching for loops
+     */
+    private findAgentActionForLoop(
+        actionName: string,
+        agentId: string,
+        agentName: string,
+        params: ExecuteAgentParams
+    ): AIAgentActionEntity {
+        const agentActions = AIEngine.Instance.AgentActions.filter(aa =>
+            aa.AgentID === agentId && aa.Status === 'Active'
+        );
+
+        // Try exact match first
+        let matched = agentActions.find(aa =>
+            aa.Action.trim().toLowerCase() === actionName.trim().toLowerCase()
+        );
+
+        // Fallback: CONTAINS search
+        if (!matched) {
+            const containsMatches = agentActions.filter(aa =>
+                aa.Action.trim().toLowerCase().includes(actionName.trim().toLowerCase())
+            );
+
+            if (containsMatches.length === 1) {
+                matched = containsMatches[0];
+                this.logStatus(`Action fuzzy matched: '${actionName}' → '${matched.Action}'`, true, params);
+            } else if (containsMatches.length > 1) {
+                throw new Error(`Ambiguous action '${actionName}'. Matches: ${containsMatches.map(a => a.Action).join(', ')}`);
+            } else {
+                throw new Error(`Action '${actionName}' not found for agent '${agentName}'`);
+            }
+        }
+
+        return matched;
     }
 
     /**
@@ -4945,11 +4993,17 @@ Please choose an alternative approach to complete your task.`
             // Execute action or sub-agent
             let result;
             if (whileOp.action) {
-                const actionStep = { step: 'Actions' as const, actions: [{ name: whileOp.action.name, params: resolvedParams }], newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.executeActionsStep(params, config, actionStep as any, parentStepId);
+                // Find the AgentAction with fuzzy matching
+                const matchedAction = this.findAgentActionForLoop(whileOp.action.name, params.agent.ID, params.agent.Name, params);
+                const resolvedAction = {
+                    ...matchedAction,
+                    params: resolvedParams
+                };
+                const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId);
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as any);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
             } else {
                 throw new Error('While missing action/subAgent');
             }

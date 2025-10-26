@@ -100,14 +100,14 @@ When you have an array in the payload and need to perform the same operation on 
   "nextStep": {
     "type": "ForEach",
     "forEach": {
-      "collectionPath": "payload.customers",
+      "collectionPath": "customers",
       "itemVariable": "customer",
       "action": {
         "name": "Send Welcome Email",
         "params": {
           "to": "customer.email",
           "name": "customer.firstName",
-          "data": "customer" // pass entire customer object
+          "data": "customer"
         }
       },
       "maxIterations": 500
@@ -182,7 +182,7 @@ When you need to poll for status, retry operations, or loop while a condition is
   "nextStep": {
     "type": "ForEach",
     "forEach": {
-      "collectionPath": "payload.items",
+      "collectionPath": "items",
       "action": { "name": "Process Item", "params": { "id": "item.id" } }
     }
   }

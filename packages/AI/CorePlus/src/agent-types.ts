@@ -94,7 +94,8 @@ export type AgentAction = {
     name: string;
     /** Parameters to pass to the action */
     params: Record<string, unknown>;
-        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
+    /** Mapping of action outputs to payload fields */
+    outputMapping?: string;   
 }
 
 /**

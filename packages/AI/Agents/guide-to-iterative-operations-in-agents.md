@@ -59,7 +59,7 @@ A ForEach step iterates over a collection in the payload, executing a loop body 
 ```json
 {
     "type": "ForEach",
-    "collectionPath": "payload.customers",
+    "collectionPath": "customers",
     "itemVariable": "customer",
     "indexVariable": "i",
     "maxIterations": 1000,
@@ -230,7 +230,7 @@ Loop agents can **request** ForEach/While operations in their LLM response, elim
     "nextStep": {
         "type": "ForEach",
         "forEach": {
-            "collectionPath": "payload.documents",
+            "collectionPath": "documents",
             "itemVariable": "doc",
             "indexVariable": "i",
             "action": {
@@ -255,7 +255,7 @@ Loop agents can **request** ForEach/While operations in their LLM response, elim
     "nextStep": {
         "type": "ForEach",
         "forEach": {
-            "collectionPath": "payload.orders",
+            "collectionPath": "orders",
             "itemVariable": "order",
             "subAgent": {
                 "name": "Order Processor",
@@ -428,7 +428,7 @@ When resolving a mapping value like `"customer.email"`:
 // Good: Use defaults for common cases
 {
     "type": "ForEach",
-    "collectionPath": "payload.customers"
+    "collectionPath": "customers"
     // itemVariable defaults to "item"
     // indexVariable defaults to "index"
 }
@@ -436,7 +436,7 @@ When resolving a mapping value like `"customer.email"`:
 // Only specify when you need custom names
 {
     "type": "ForEach",
-    "collectionPath": "payload.orders",
+    "collectionPath": "orders",
     "itemVariable": "order",  // Custom: more descriptive
     "indexVariable": "orderNum"
 }
@@ -448,14 +448,14 @@ When resolving a mapping value like `"customer.email"`:
 // Good: Reasonable limit for known data
 {
     "type": "ForEach",
-    "collectionPath": "payload.employees",
+    "collectionPath": "employees",
     "maxIterations": 1000  // Explicit limit
 }
 
 // Dangerous: Unlimited
 {
     "type": "ForEach",
-    "collectionPath": "payload.records",
+    "collectionPath": "records",
     "maxIterations": 0  // ⚠️ No limit - use only if you're certain
 }
 ```
@@ -466,14 +466,14 @@ When resolving a mapping value like `"customer.email"`:
 // Fail fast (default): Stop on first error
 {
     "type": "ForEach",
-    "collectionPath": "payload.criticalUpdates",
+    "collectionPath": "criticalUpdates",
     "continueOnError": false  // Stop if any update fails
 }
 
 // Continue on error: Process all items
 {
     "type": "ForEach",
-    "collectionPath": "payload.emailRecipients",
+    "collectionPath": "emailRecipients",
     "continueOnError": true  // Send to all, even if some fail
 }
 ```
@@ -484,7 +484,7 @@ When resolving a mapping value like `"customer.email"`:
 // Simple: Direct action
 {
     "type": "ForEach",
-    "collectionPath": "payload.items",
+    "collectionPath": "items",
     "LoopBodyType": "Action",
     "ActionID": "simple-update-action"
 }
@@ -492,7 +492,7 @@ When resolving a mapping value like `"customer.email"`:
 // Complex: Multi-step processing per item
 {
     "type": "ForEach",
-    "collectionPath": "payload.orders",
+    "collectionPath": "orders",
     "LoopBodyType": "Sub-Agent",
     "SubAgentID": "order-fulfillment-agent"  // Has its own workflow
 }
@@ -504,7 +504,7 @@ When resolving a mapping value like `"customer.email"`:
 // Bad: Using ForEach for retry logic
 {
     "type": "ForEach",
-    "collectionPath": "payload.retryAttempts"  // Array of [1,2,3,4,5]
+    "collectionPath": "retryAttempts"  // Array of [1,2,3,4,5]
 }
 
 // Good: Using While with actual condition
@@ -682,7 +682,7 @@ const processExportStep = {
     "nextStep": {
         "type": "ForEach",
         "forEach": {
-            "collectionPath": "payload.discoveredFiles",
+            "collectionPath": "discoveredFiles",
             "itemVariable": "file",
             "action": {
                 "name": "Analyze Markdown File",
@@ -900,7 +900,7 @@ Use when:
     "nextStep": {
         "type": "ForEach",
         "forEach": {
-            "collectionPath": "payload.customers",
+            "collectionPath": "customers",
             "action": {
                 "name": "Send Email",
                 "params": { "to": "item.email" }
