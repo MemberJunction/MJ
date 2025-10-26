@@ -4646,10 +4646,10 @@ Please choose an alternative approach to complete your task.`
             return this.createFailedStep(`Collection path "${forEach.collectionPath}" not an array`, previousDecision);
         }
 
-        const loopStepId = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
-        const loopResults = await this.executeForEachIterations(forEach, collection, currentPayload, loopStepId, params, config);
+        const loopStepEntity = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
+        const loopResults = await this.executeForEachIterations(forEach, collection, currentPayload, loopStepEntity.ID, params, config);
 
-        return this.completeForEachLoop(forEach, loopResults, previousDecision, params);
+        return this.completeForEachLoop(forEach, loopStepEntity, loopResults, previousDecision, params);
     }
 
     /**
@@ -4661,14 +4661,14 @@ Please choose an alternative approach to complete your task.`
     }
 
     /**
-     * Helper: Create parent ForEach loop step
+     * Helper: Create parent ForEach loop step (not finalized until loop completes)
      */
     private async createForEachLoopStep(
         forEach: ForEachOperation,
         collection: any[],
         payload: any,
         params: ExecuteAgentParams
-    ): Promise<string> {
+    ): Promise<AIAgentRunStepEntityExtended> {
         const stepEntity = await this.createStepEntity({
             stepType: 'ForEach',
             stepName: `ForEach: ${forEach.collectionPath} (${collection.length} items)`,
@@ -4676,8 +4676,8 @@ Please choose an alternative approach to complete your task.`
             inputData: { forEach, count: collection.length },
             payloadAtStart: payload
         });
-        await this.finalizeStepEntity(stepEntity, true);
-        return stepEntity.ID;
+        // Don't finalize yet - will finalize after loop completes
+        return stepEntity;
     }
 
     /**
@@ -4773,12 +4773,16 @@ Please choose an alternative approach to complete your task.`
     /**
      * Helper: Complete ForEach and return result
      */
-    private completeForEachLoop(
+    private async completeForEachLoop(
         forEach: ForEachOperation,
+        loopStepEntity: AIAgentRunStepEntityExtended,
         loopResults: { results: any[], errors: any[], finalPayload: any },
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
-    ): BaseAgentNextStep {
+    ): Promise<BaseAgentNextStep> {
+        // Finalize the loop step now that loop is complete
+        await this.finalizeStepEntity(loopStepEntity, loopResults.errors.length === 0);
+
         if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
             this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params);
         }
@@ -4787,7 +4791,7 @@ Please choose an alternative approach to complete your task.`
             step: 'Retry',
             terminate: false,
             newPayload: loopResults.finalPayload,
-            previousPayload: previousDecision.previousPayload 
+            previousPayload: previousDecision.previousPayload
         };
     }
 
@@ -4825,204 +4829,169 @@ Please choose an alternative approach to complete your task.`
     }
  
     /**
-     * Executes a While loop - universal implementation for all agent types
-     *
+     * Executes a While loop with actual while loop
      * @private
      */
-    private async executeWhileLoop_OLD(
+    private async executeWhileLoop(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
         const whileOp = previousDecision.while as WhileOperation;
-
         if (!whileOp) {
-            return {
-                step: 'Failed',
-                terminate: true,
-                errorMessage: 'While step missing while configuration',
-                previousPayload: previousDecision.previousPayload,
-                newPayload: previousDecision.newPayload || previousDecision.previousPayload
-            };
+            return this.createFailedStep('While configuration missing', previousDecision);
         }
 
-        // Initialize iteration context on first call
-        if (!this._iterationContext) {
-            // Wipe previous loop results from payload
-            const cleanPayload = { ...params.payload };
-            delete (cleanPayload as any).loopResults;
-            params.payload = cleanPayload;
+        const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
+        const loopStepEntity = await this.createWhileLoopStep(whileOp, currentPayload, params);
+        const loopResults = await this.executeWhileIterations(whileOp, currentPayload, loopStepEntity.ID, params, config);
 
-            const loopStepEntity = await this.createStepEntity({
-                stepType: 'While',
-                stepName: `While loop: ${whileOp.condition}`,
-                contextUser: params.contextUser,
-                inputData: { while: whileOp },
-                payloadAtStart: params.payload
-            });
-            await this.finalizeStepEntity(loopStepEntity, true);
+        return this.completeWhileLoop(whileOp, loopStepEntity, loopResults, previousDecision, params);
+    }
 
-            this._iterationContext = {
-                loopType: 'While',
-                condition: whileOp.condition,
-                currentIndex: 0,
-                itemVariable: whileOp.itemVariable || 'attempt',
-                maxIterations: whileOp.maxIterations ?? 100,
-                continueOnError: whileOp.continueOnError ?? false,
-                delayBetweenIterationsMs: whileOp.delayBetweenIterationsMs,
-                results: [],
-                errors: [],
-                loopConfig: whileOp,
-                parentStepId: loopStepEntity.ID,
-                actionOutputMapping: whileOp.action?.outputMapping,
-                agentTypeData: (previousDecision as any).agentTypeData
-            };
-        }
+    /**
+     * Helper: Create parent While loop step
+     */
+    private async createWhileLoopStep(
+        whileOp: WhileOperation,
+        payload: any,
+        params: ExecuteAgentParams
+    ): Promise<AIAgentRunStepEntityExtended> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'While',
+            stepName: `While: ${whileOp.condition}`,
+            contextUser: params.contextUser,
+            inputData: { while: whileOp },
+            payloadAtStart: payload
+        });
+        return stepEntity;
+    }
 
-        // Delay between iterations if configured (except first iteration)
-        if (this._iterationContext.currentIndex > 0 && this._iterationContext.delayBetweenIterationsMs) {
-            await new Promise(resolve => setTimeout(resolve, this._iterationContext.delayBetweenIterationsMs));
-        }
+    /**
+     * Helper: Execute While iterations with actual while loop
+     */
+    private async executeWhileIterations(
+        whileOp: WhileOperation,
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: any[], errors: any[], finalPayload: any, iterations: number }> {
+        let currentPayload = initialPayload;
+        const maxIterations = whileOp.maxIterations ?? 100;
+        const results = [];
+        const errors = [];
+        let iterationCount = 0;
 
-        // Evaluate condition
         const { SafeExpressionEvaluator } = require('@memberjunction/global');
         const evaluator = new SafeExpressionEvaluator();
-        const evalContext = {
-            payload: params.payload,
-            results: this._iterationContext.results,
-            errors: this._iterationContext.errors
-        };
-        const evalResult = evaluator.evaluate(whileOp.condition, evalContext);
 
-        // Check if loop should exit
-        if (!evalResult.success || !evalResult.value) {
-            const loopResults = {
-                results: this._iterationContext.results,
-                errors: this._iterationContext.errors,
-                totalIterations: this._iterationContext.currentIndex,
-                exitReason: evalResult.success ? 'condition_false' : 'evaluation_error'
-            };
-
-            const agentTypeData = this._iterationContext.agentTypeData;
-            this._iterationContext = null;
-
-            // Build unified loop results
-            const unifiedLoopResults = {
-                type: 'While' as const,
-                results: loopResults.results,
-                errors: loopResults.errors,
-                totalIterations: loopResults.totalIterations,
-                condition: whileOp.condition
-            };
-
-            // Check if agent type wants results injected as temporary message
-            if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: `## Loop Execution Completed\n\n` +
-                             `**Type:** While\n` +
-                             `**Condition:** ${whileOp.condition}\n` +
-                             `**Iterations:** ${unifiedLoopResults.totalIterations}\n` +
-                             `**Successful:** ${unifiedLoopResults.results.length}\n` +
-                             `**Errors:** ${unifiedLoopResults.errors.length}\n\n` +
-                             `**Results:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.results, null, 2)}\n\`\`\`${unifiedLoopResults.errors.length > 0 ? `\n\n**Errors:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.errors, null, 2)}\n\`\`\`` : ''}`,
-                    metadata: {
-                        _temporary: true,
-                        _loopResults: true
-                    }
-                } as any);
+        // ACTUAL WHILE LOOP - simple and clear!
+        while (iterationCount < maxIterations) {
+            if (iterationCount > 0 && whileOp.delayBetweenIterationsMs) {
+                await new Promise(resolve => setTimeout(resolve, whileOp.delayBetweenIterationsMs));
             }
 
-            // Return Retry with clean payload (results in message if injected, not in payload)
-            return {
-                step: 'Retry',
-                terminate: false,
-                newPayload: params.payload,
-                previousPayload: params.payload,
-                agentTypeData
-            } as BaseAgentNextStep & { agentTypeData?: any };
+            const evalResult = evaluator.evaluate(whileOp.condition, { payload: currentPayload, results, errors });
+            if (!evalResult.success || !evalResult.value) {
+                break;
+            }
+
+            const attemptContext = { attemptNumber: iterationCount + 1, totalAttempts: iterationCount };
+            const iterResult = await this.executeSingleWhileIteration(
+                whileOp,
+                attemptContext,
+                iterationCount,
+                currentPayload,
+                parentStepId,
+                params,
+                config
+            );
+
+            if (iterResult.error) {
+                errors.push(iterResult.error);
+                if (!whileOp.continueOnError) break;
+            } else {
+                results.push(iterResult.payload);
+                currentPayload = iterResult.payload;
+            }
+
+            iterationCount++;
         }
 
-        // Safety check
-        if (this._iterationContext.currentIndex >= this._iterationContext.maxIterations) {
-            LogError(`While loop exceeded maxIterations (${this._iterationContext.maxIterations})`);
-            this._iterationContext = null;
-            return {
-                step: 'Failed',
-                terminate: true,
-                errorMessage: `Loop exceeded maximum iterations (${this._iterationContext.maxIterations})`,
-                previousPayload: params.payload,
-                newPayload: params.payload
-            };
-        }
+        return { results, errors, finalPayload: currentPayload, iterations: iterationCount };
+    }
 
-        // Create attempt context
-        const attemptContext = {
-            attemptNumber: this._iterationContext.currentIndex + 1,
-            totalAttempts: this._iterationContext.currentIndex
-        };
-
-        // Inject loop variables
-        const enhancedPayload = {
-            ...params.payload,
-            [this._iterationContext.itemVariable]: attemptContext,
-            index: this._iterationContext.currentIndex
-        };
-
-        // Call BeforeLoopIteration hook to resolve params
-        let resolvedParams = whileOp.action?.params || {};
-        if (whileOp.action) {
+    /**
+     * Helper: Execute single While iteration
+     */
+    private async executeSingleWhileIteration(
+        whileOp: WhileOperation,
+        attemptContext: any,
+        index: number,
+        currentPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ payload?: any, error?: any }> {
+        try {
+            // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
-                {
-                    item: attemptContext,
-                    index: this._iterationContext.currentIndex,
-                    payload: params.payload,
-                    loopType: 'While',
-                    actionParams: whileOp.action.params
-                },
+                { item: attemptContext, index, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} },
+                this.AgentTypeState
+            );
+            const resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
+
+            // Execute action or sub-agent
+            let result;
+            if (whileOp.action) {
+                const actionStep = { step: 'Actions' as const, actions: [{ name: whileOp.action.name, params: resolvedParams }], newPayload: currentPayload, previousPayload: currentPayload };
+                result = await this.executeActionsStep(params, config, actionStep as any, parentStepId);
+            } else if (whileOp.subAgent) {
+                const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
+                result = await this.processSubAgentStep(params, subAgentStep as any);
+            } else {
+                throw new Error('While missing action/subAgent');
+            }
+
+            // Apply AfterLoopIteration hook
+            const iterPayload = result.newPayload || currentPayload;
+            const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
+                { currentPayload: iterPayload, item: attemptContext, index, loopContext: { actionOutputMapping: whileOp.action?.outputMapping } },
                 this.AgentTypeState
             );
 
-            if (beforeHook?.actionParams) {
-                resolvedParams = beforeHook.actionParams;
-            }
+            return { payload: afterHook || iterPayload };
 
-            return {
-                step: 'Actions',
-                actions: [{
-                    name: whileOp.action.name,
-                    params: resolvedParams
-                }],
-                
-                terminate: false,
-                newPayload: enhancedPayload,
-                previousPayload: params.payload
-            };
-        } else if (whileOp.subAgent) {
-            return {
-                step: 'Sub-Agent',
-                subAgent: {
-                    name: whileOp.subAgent.name,
-                    message: whileOp.subAgent.message,
-                    terminateAfter: false,
-                    templateParameters: whileOp.subAgent.templateParameters
-                },
-                
-                terminate: false,
-                newPayload: enhancedPayload,
-                previousPayload: params.payload
-            };
+        } catch (error) {
+            return { error: { index, item: attemptContext, message: error.message } };
+        }
+    }
+
+    /**
+     * Helper: Complete While and return result
+     */
+    private async completeWhileLoop(
+        whileOp: WhileOperation,
+        loopStepEntity: AIAgentRunStepEntityExtended,
+        loopResults: { results: any[], errors: any[], finalPayload: any, iterations: number },
+        previousDecision: BaseAgentNextStep,
+        params: ExecuteAgentParams
+    ): Promise<BaseAgentNextStep> {
+        await this.finalizeStepEntity(loopStepEntity, loopResults.errors.length === 0);
+
+        if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params);
         }
 
         return {
-            step: 'Failed',
-            terminate: true,
-            errorMessage: 'While configuration missing action and subAgent',
-            previousPayload: params.payload,
-            newPayload: params.payload
+            step: 'Retry',
+            terminate: false,
+            newPayload: loopResults.finalPayload,
+            previousPayload: previousDecision.previousPayload
         };
     }
-
+ 
     /**
      * Creates a failure result with proper tracking.
      *
