@@ -358,77 +358,77 @@ export class StopLearningCycleResultType {
   CycleDetails: CycleDetailsType;
 }
 
-/**
- * This function initializes the Skip learning cycle scheduler. It sets up an event listener for the server's setup complete event and starts the scheduler if learning cycles are enabled and a valid API endpoint is configured.
- */
-function initializeSkipLearningCycleScheduler() {
-  try {
-    // Set up event listener for server initialization
-    const eventListener = MJGlobal.Instance.GetEventListener(true);
-    eventListener.subscribe(event => {
-      // Filter for our server's setup complete event
-      if (event.eventCode === MJ_SERVER_EVENT_CODE && event.args?.type === 'setupComplete') {
-        try {
-          const skipConfigInfo = configInfo.askSkip;
-          if (!skipConfigInfo) {
-            LogStatus('Skip AI Learning Cycle Scheduler not started: Skip configuration not found');
-            return;
-          }
-          if (!skipConfigInfo.learningCycleEnabled) {
-            // Skip AI Learning Cycles not enabled - disabled logging to reduce startup noise
-            // LogStatus('Skip AI Learning Cycles not enabled in configuration');
-            return;
-          }
+// /**
+//  * This function initializes the Skip learning cycle scheduler. It sets up an event listener for the server's setup complete event and starts the scheduler if learning cycles are enabled and a valid API endpoint is configured.
+//  */
+// function initializeSkipLearningCycleScheduler() {
+//   try {
+//     // Set up event listener for server initialization
+//     const eventListener = MJGlobal.Instance.GetEventListener(true);
+//     eventListener.subscribe(event => {
+//       // Filter for our server's setup complete event
+//       if (event.eventCode === MJ_SERVER_EVENT_CODE && event.args?.type === 'setupComplete') {
+//         try {
+//           const skipConfigInfo = configInfo.askSkip;
+//           if (!skipConfigInfo) {
+//             LogStatus('Skip AI Learning Cycle Scheduler not started: Skip configuration not found');
+//             return;
+//           }
+//           if (!skipConfigInfo.learningCycleEnabled) {
+//             // Skip AI Learning Cycles not enabled - disabled logging to reduce startup noise
+//             // LogStatus('Skip AI Learning Cycles not enabled in configuration');
+//             return;
+//           }
           
-          // Check if we have a valid endpoint when cycles are enabled
-          const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
-                                      (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
-          if (!hasLearningEndpoint) {
-            LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no Learning Cycle API endpoint is configured');
-            return;
-          }
+//           // Check if we have a valid endpoint when cycles are enabled
+//           const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+//                                       (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+//           if (!hasLearningEndpoint) {
+//             LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no Learning Cycle API endpoint is configured');
+//             return;
+//           }
           
-          const dataSources = event.args.dataSources;
-          if (dataSources && dataSources.length > 0) {
-            // Initialize the scheduler
-            const scheduler = LearningCycleScheduler.Instance;
+//           const dataSources = event.args.dataSources;
+//           if (dataSources && dataSources.length > 0) {
+//             // Initialize the scheduler
+//             const scheduler = LearningCycleScheduler.Instance;
             
-            // Set the data sources for the scheduler
-            scheduler.setDataSources(dataSources);
+//             // Set the data sources for the scheduler
+//             scheduler.setDataSources(dataSources);
             
-            // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
-            const interval = skipConfigInfo.learningCycleIntervalInMinutes ?? 60;
+//             // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
+//             const interval = skipConfigInfo.learningCycleIntervalInMinutes ?? 60;
 
 
-            if (skipConfigInfo.learningCycleRunUponStartup) {
-              // If configured to run immediately, run the learning cycle
-              LogStatus('Skip API Learning Cycle: Run Upon Startup is enabled, running learning cycle immediately');
-              // Start the scheduler
-              scheduler.start(interval);
-            }
-            else {
-              // not asked to start right away, just start the scheduler after the interval
-              LogStatus(`Skip API Learning Cycle: Scheduler first run will start after interval of ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
+//             if (skipConfigInfo.learningCycleRunUponStartup) {
+//               // If configured to run immediately, run the learning cycle
+//               LogStatus('Skip API Learning Cycle: Run Upon Startup is enabled, running learning cycle immediately');
+//               // Start the scheduler
+//               scheduler.start(interval);
+//             }
+//             else {
+//               // not asked to start right away, just start the scheduler after the interval
+//               LogStatus(`Skip API Learning Cycle: Scheduler first run will start after interval of ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
 
-              // create a one time timer to start the scheduler
-              setTimeout(() => {
-                LogStatus(`Skip API Learning Cycle: Starting scheduler after ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
-                scheduler.start(interval);
-              }, interval * 60 * 1000); // convert minutes to milliseconds
-            }
-          } else {
-            LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
-          }
-        } catch (error) {
-          LogError(`Error initializing Skip learning cycle scheduler: ${error}`);
-        }
-      }
-    });
-  } catch (error) {
-    // Handle any errors from the static initializer
-    LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
-  }
-}
+//               // create a one time timer to start the scheduler
+//               setTimeout(() => {
+//                 LogStatus(`Skip API Learning Cycle: Starting scheduler after ${interval} minutes. If you want a learing cycle to run immediately, set the learningCycleRunUponStartup property in the config file to true.`);
+//                 scheduler.start(interval);
+//               }, interval * 60 * 1000); // convert minutes to milliseconds
+//             }
+//           } else {
+//             LogError('Cannot initialize Skip learning cycle scheduler: No data sources available');
+//           }
+//         } catch (error) {
+//           LogError(`Error initializing Skip learning cycle scheduler: ${error}`);
+//         }
+//       }
+//     });
+//   } catch (error) {
+//     // Handle any errors from the static initializer
+//     LogError(`Failed to initialize Skip learning cycle scheduler: ${error}`);
+//   }
+// }
 // Disabled: Skip AI Learning Cycles no longer used - commented out to prevent startup initialization
 // If needed in the future, uncomment the line below:
 // initializeSkipLearningCycleScheduler();
@@ -3257,166 +3257,166 @@ export class AskSkipResolver {
     else throw new Error(`Error running view ${ViewId}`);
   }
 
-  /**
-   * Manually executes the Skip AI learning cycle
-   * Allows triggering a learning cycle on demand rather than waiting for scheduled execution
-   * 
-   * @param OrganizationId Optional organization ID to register for this run
-   * @returns Result of the manual learning cycle execution
-   */
-  @Mutation(() => ManualLearningCycleResultType)
-  async ManuallyExecuteSkipLearningCycle(
-    @Arg('OrganizationId', () => String, { nullable: true }) OrganizationId?: string
-  ): Promise<ManualLearningCycleResultType> {
-    try {
-      LogStatus('Manual execution of Skip learning cycle requested via API');
-      const skipConfigInfo = configInfo.askSkip;
-      // First check if learning cycles are enabled in configuration
-      if (!skipConfigInfo.learningCycleEnabled) {
-        return {
-          Success: false,
-          Message: 'Learning cycles are not enabled in configuration'
-        };
-      }
+  // /**
+  //  * Manually executes the Skip AI learning cycle
+  //  * Allows triggering a learning cycle on demand rather than waiting for scheduled execution
+  //  * 
+  //  * @param OrganizationId Optional organization ID to register for this run
+  //  * @returns Result of the manual learning cycle execution
+  //  */
+  // @Mutation(() => ManualLearningCycleResultType)
+  // async ManuallyExecuteSkipLearningCycle(
+  //   @Arg('OrganizationId', () => String, { nullable: true }) OrganizationId?: string
+  // ): Promise<ManualLearningCycleResultType> {
+  //   try {
+  //     LogStatus('Manual execution of Skip learning cycle requested via API');
+  //     const skipConfigInfo = configInfo.askSkip;
+  //     // First check if learning cycles are enabled in configuration
+  //     if (!skipConfigInfo.learningCycleEnabled) {
+  //       return {
+  //         Success: false,
+  //         Message: 'Learning cycles are not enabled in configuration'
+  //       };
+  //     }
       
-      // Check if we have a valid endpoint when cycles are enabled
-      const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
-                                  (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
-      if (!hasLearningEndpoint) {
-        return {
-          Success: false,
-          Message: 'Learning cycle API endpoint is not configured'
-        };
-      }
+  //     // Check if we have a valid endpoint when cycles are enabled
+  //     const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
+  //                                 (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
+  //     if (!hasLearningEndpoint) {
+  //       return {
+  //         Success: false,
+  //         Message: 'Learning cycle API endpoint is not configured'
+  //       };
+  //     }
       
-      // Use the organization ID from config if not provided
-      const orgId = OrganizationId || skipConfigInfo.orgID;
+  //     // Use the organization ID from config if not provided
+  //     const orgId = OrganizationId || skipConfigInfo.orgID;
       
-      // Call the scheduler's manual execution method with org ID
-      const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle(orgId);
+  //     // Call the scheduler's manual execution method with org ID
+  //     const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle(orgId);
       
-      return {
-        Success: result,
-        Message: result 
-          ? `Learning cycle was successfully executed manually for organization ${orgId}` 
-          : `Learning cycle execution failed for organization ${orgId}. Check server logs for details.`
-      };
-    }
-    catch (e) {
-      LogError(`Error in ManuallyExecuteSkipLearningCycle: ${e}`);
-      return {
-        Success: false,
-        Message: `Error executing learning cycle: ${e}`
-      };
-    }
-  }
+  //     return {
+  //       Success: result,
+  //       Message: result 
+  //         ? `Learning cycle was successfully executed manually for organization ${orgId}` 
+  //         : `Learning cycle execution failed for organization ${orgId}. Check server logs for details.`
+  //     };
+  //   }
+  //   catch (e) {
+  //     LogError(`Error in ManuallyExecuteSkipLearningCycle: ${e}`);
+  //     return {
+  //       Success: false,
+  //       Message: `Error executing learning cycle: ${e}`
+  //     };
+  //   }
+  // }
   
-  /**
-   * Gets the current status of the learning cycle scheduler
-   * Provides information about the scheduler state and any running cycles
-   * 
-   * @returns Status information about the learning cycle scheduler
-   */
-  @Query(() => LearningCycleStatusType)
-  async GetLearningCycleStatus(): Promise<LearningCycleStatusType> {
-    try {
-      const status = LearningCycleScheduler.Instance.getStatus();
+  // /**
+  //  * Gets the current status of the learning cycle scheduler
+  //  * Provides information about the scheduler state and any running cycles
+  //  * 
+  //  * @returns Status information about the learning cycle scheduler
+  //  */
+  // @Query(() => LearningCycleStatusType)
+  // async GetLearningCycleStatus(): Promise<LearningCycleStatusType> {
+  //   try {
+  //     const status = LearningCycleScheduler.Instance.getStatus();
       
-      return {
-        IsSchedulerRunning: status.isSchedulerRunning,
-        LastRunTime: status.lastRunTime ? status.lastRunTime.toISOString() : null,
-        RunningOrganizations: status.runningOrganizations ? status.runningOrganizations.map(org => ({
-          OrganizationId: org.organizationId,
-          LearningCycleId: org.learningCycleId,
-          StartTime: org.startTime.toISOString(),
-          RunningForMinutes: org.runningForMinutes
-        })) : []
-      };
-    }
-    catch (e) {
-      LogError(`Error in GetLearningCycleStatus: ${e}`);
-      return {
-        IsSchedulerRunning: false,
-        LastRunTime: null,
-        RunningOrganizations: []
-      };
-    }
-  }
+  //     return {
+  //       IsSchedulerRunning: status.isSchedulerRunning,
+  //       LastRunTime: status.lastRunTime ? status.lastRunTime.toISOString() : null,
+  //       RunningOrganizations: status.runningOrganizations ? status.runningOrganizations.map(org => ({
+  //         OrganizationId: org.organizationId,
+  //         LearningCycleId: org.learningCycleId,
+  //         StartTime: org.startTime.toISOString(),
+  //         RunningForMinutes: org.runningForMinutes
+  //       })) : []
+  //     };
+  //   }
+  //   catch (e) {
+  //     LogError(`Error in GetLearningCycleStatus: ${e}`);
+  //     return {
+  //       IsSchedulerRunning: false,
+  //       LastRunTime: null,
+  //       RunningOrganizations: []
+  //     };
+  //   }
+  // }
   
-  /**
-   * Checks if a specific organization is running a learning cycle
-   * Used to determine if a new learning cycle can be started for an organization
-   * 
-   * @param OrganizationId The organization ID to check
-   * @returns Information about the running cycle, or null if no cycle is running
-   */
-  @Query(() => RunningOrganizationType, { nullable: true })
-  async IsOrganizationRunningLearningCycle(
-    @Arg('OrganizationId', () => String) OrganizationId: string
-  ): Promise<RunningOrganizationType | null> {
-    try {
-      const skipConfigInfo = configInfo.askSkip;
-      // Use the organization ID from config if not provided
-      const orgId = OrganizationId || skipConfigInfo.orgID;
+  // /**
+  //  * Checks if a specific organization is running a learning cycle
+  //  * Used to determine if a new learning cycle can be started for an organization
+  //  * 
+  //  * @param OrganizationId The organization ID to check
+  //  * @returns Information about the running cycle, or null if no cycle is running
+  //  */
+  // @Query(() => RunningOrganizationType, { nullable: true })
+  // async IsOrganizationRunningLearningCycle(
+  //   @Arg('OrganizationId', () => String) OrganizationId: string
+  // ): Promise<RunningOrganizationType | null> {
+  //   try {
+  //     const skipConfigInfo = configInfo.askSkip;
+  //     // Use the organization ID from config if not provided
+  //     const orgId = OrganizationId || skipConfigInfo.orgID;
       
-      const status = LearningCycleScheduler.Instance.isOrganizationRunningCycle(orgId);
+  //     const status = LearningCycleScheduler.Instance.isOrganizationRunningCycle(orgId);
       
-      if (!status.isRunning) {
-        return null;
-      }
+  //     if (!status.isRunning) {
+  //       return null;
+  //     }
       
-      return {
-        OrganizationId: orgId,
-        LearningCycleId: status.learningCycleId,
-        StartTime: status.startTime.toISOString(),
-        RunningForMinutes: status.runningForMinutes
-      };
-    }
-    catch (e) {
-      LogError(`Error in IsOrganizationRunningLearningCycle: ${e}`);
-      return null;
-    }
-  }
+  //     return {
+  //       OrganizationId: orgId,
+  //       LearningCycleId: status.learningCycleId,
+  //       StartTime: status.startTime.toISOString(),
+  //       RunningForMinutes: status.runningForMinutes
+  //     };
+  //   }
+  //   catch (e) {
+  //     LogError(`Error in IsOrganizationRunningLearningCycle: ${e}`);
+  //     return null;
+  //   }
+  // }
   
-  /**
-   * Stops a running learning cycle for a specific organization
-   * Allows manual intervention to stop a learning cycle that is taking too long or causing issues
-   * 
-   * @param OrganizationId The organization ID to stop the cycle for
-   * @returns Result of the stop operation, including details about the stopped cycle
-   */
-  @Mutation(() => StopLearningCycleResultType)
-  async StopLearningCycleForOrganization(
-    @Arg('OrganizationId', () => String) OrganizationId: string
-  ): Promise<StopLearningCycleResultType> {
-    try {
-      // Use the organization ID from config if not provided
-      const orgId = OrganizationId || configInfo.askSkip.orgID;
+  // /**
+  //  * Stops a running learning cycle for a specific organization
+  //  * Allows manual intervention to stop a learning cycle that is taking too long or causing issues
+  //  * 
+  //  * @param OrganizationId The organization ID to stop the cycle for
+  //  * @returns Result of the stop operation, including details about the stopped cycle
+  //  */
+  // @Mutation(() => StopLearningCycleResultType)
+  // async StopLearningCycleForOrganization(
+  //   @Arg('OrganizationId', () => String) OrganizationId: string
+  // ): Promise<StopLearningCycleResultType> {
+  //   try {
+  //     // Use the organization ID from config if not provided
+  //     const orgId = OrganizationId || configInfo.askSkip.orgID;
       
-      const result = LearningCycleScheduler.Instance.stopLearningCycleForOrganization(orgId);
+  //     const result = LearningCycleScheduler.Instance.stopLearningCycleForOrganization(orgId);
       
-      // Transform the result to match our GraphQL type
-      return {
-        Success: result.success,
-        Message: result.message,
-        WasRunning: result.wasRunning,
-        CycleDetails: result.cycleDetails ? {
-          LearningCycleId: result.cycleDetails.learningCycleId,
-          StartTime: result.cycleDetails.startTime.toISOString(),
-          RunningForMinutes: result.cycleDetails.runningForMinutes
-        } : null
-      };
-    }
-    catch (e) {
-      LogError(`Error in StopLearningCycleForOrganization: ${e}`);
-      return {
-        Success: false,
-        Message: `Error stopping learning cycle: ${e}`,
-        WasRunning: false,
-        CycleDetails: null
-      };
-    }
-  }
+  //     // Transform the result to match our GraphQL type
+  //     return {
+  //       Success: result.success,
+  //       Message: result.message,
+  //       WasRunning: result.wasRunning,
+  //       CycleDetails: result.cycleDetails ? {
+  //         LearningCycleId: result.cycleDetails.learningCycleId,
+  //         StartTime: result.cycleDetails.startTime.toISOString(),
+  //         RunningForMinutes: result.cycleDetails.runningForMinutes
+  //       } : null
+  //     };
+  //   }
+  //   catch (e) {
+  //     LogError(`Error in StopLearningCycleForOrganization: ${e}`);
+  //     return {
+  //       Success: false,
+  //       Message: `Error stopping learning cycle: ${e}`,
+  //       WasRunning: false,
+  //       CycleDetails: null
+  //     };
+  //   }
+  // }
 
 }
 
