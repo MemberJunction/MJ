@@ -1,0 +1,1638 @@
+[
+  {
+    "fields": {
+      "Name": "Get Typeform Responses",
+      "Description": "Retrieves responses from a Typeform with filtering, pagination, and search capabilities. Supports date ranges, completion status filters, and automatic pagination through all responses.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "GetTypeformResponsesAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-inbox"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform form ID (found in the form URL)",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token (get from https://admin.typeform.com/account#/section/tokens)",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of responses per page (1-1000, default 25)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Since",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter responses submitted since this date (ISO 8601 format or Unix timestamp)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Until",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter responses submitted until this date (ISO 8601 format or Unix timestamp)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "After",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Response token for pagination - get next page after this token",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Before",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Response token for pagination - get page before this token",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Completed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by completion status (true=completed only, false=partial only, null=all)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Sort",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Sort order: 'submitted_at,asc' or 'submitted_at,desc' (default: submitted_at,desc)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Text search across all response answers",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Comma-separated list of field IDs to include (returns only these fields)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GetAllPages",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true, automatically fetch all pages of responses (up to MaxResponses)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResponses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of responses to retrieve when GetAllPages is true (default 10000)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Responses",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of response objects with all answers, metadata, and submission details"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalItems",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of responses available matching the criteria"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PageCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of pages available"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponseTokens",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Object with 'before' and 'after' tokens for pagination"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Count",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of responses returned in this request"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Responses retrieved successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_CONTEXT_USER",
+            "IsSuccess": false,
+            "Description": "Context user is required for Typeform API calls"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Single Typeform Response",
+      "Description": "Retrieves details of a specific Typeform response by its unique response token. Includes all answers, metadata, hidden fields, and calculated values.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "GetSingleTypeformResponseAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-lines"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform form ID",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponseToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The unique response token to retrieve",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Response",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete response object with all answers and metadata"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponseID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The response token/ID"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SubmittedAt",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Timestamp when response was submitted"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Completed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether the response is complete or partial"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answers",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of all answers with field IDs, questions, and values"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Metadata",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Browser, platform, referer, and user agent information"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HiddenFields",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Hidden field values passed via URL parameters"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CalculatedFields",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Calculated values like scores and completion time"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Response retrieved successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_RESPONSE_TOKEN",
+            "IsSuccess": false,
+            "Description": "ResponseToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Typeform Response Statistics",
+      "Description": "Calculates comprehensive statistics from Typeform responses including completion rates, response trends, popular answers, and time-based analytics. Useful for dashboards and reporting.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "GetTypeformStatisticsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-chart-line"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform form ID",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Since",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Start date for analysis (ISO 8601 format)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Until",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "End date for analysis (ISO 8601 format)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResponses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum responses to analyze (default 10000)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeTopAnswers",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Calculate most popular answers for each field (default true)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopAnswersLimit",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of top answers to return per field (default 10)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Statistics",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete statistics object with all calculated metrics"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TotalResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompletedResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of completed responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PartialResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of partial/incomplete responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompletionRate",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Percentage of responses that were completed"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AverageCompletionTime",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Average time to complete in seconds"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponsesByDate",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Daily breakdown of response counts"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DailyBreakdown",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of daily statistics with date, count, completed, and partial counts"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HourlyDistribution",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array showing response distribution by hour of day (0-23)"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopAnswers",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Most popular answers by field ID"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Statistics calculated successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Export Typeform Responses to CSV",
+      "Description": "Exports Typeform responses to CSV format for use in spreadsheets, data analysis tools, or archival. Supports custom delimiters and optional metadata columns.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "ExportTypeformCSVAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-csv"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform form ID",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Since",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Start date for responses to export (ISO 8601 format)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Until",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "End date for responses to export (ISO 8601 format)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Completed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Filter by completion status (true=completed only, false=partial only, null=all)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeMetadata",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Include metadata columns (browser, platform, referer, user agent) - default true",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Delimiter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "CSV delimiter character (default: comma)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResponses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum responses to export (default 10000)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CSVData",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "CSV formatted string ready for export or storage"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RowCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of data rows in the CSV"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Headers",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of column headers"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ColumnCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of columns in the CSV"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileSize",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Size of CSV data in bytes"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "CSV export completed successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_DATA",
+            "IsSuccess": true,
+            "Description": "No responses found matching the criteria"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Watch for New Typeform Responses",
+      "Description": "Polls Typeform for new responses since the last check. Returns only new submissions and updates the last checked timestamp. Perfect for triggering workflows, sending notifications, or syncing data to other systems.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "WatchNewTypeformResponsesAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-eye"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform form ID to monitor",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastCheckedTimestamp",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "ISO 8601 timestamp of last check. If not provided, uses DefaultLookbackMinutes.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DefaultLookbackMinutes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If LastCheckedTimestamp not provided, look back this many minutes (default 60)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OnlyCompleted",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Only return completed responses (default false)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxResponses",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum new responses to return (default 1000)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NewResponses",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of new responses since last check"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NewResponseCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of new responses found"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompletedCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of completed responses in the new set"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PartialCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of partial responses in the new set"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastChecked",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Updated timestamp to use for next check"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PreviouslyChecked",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The timestamp that was used for this check"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponsesByType",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Responses grouped by field type"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExtractedEmails",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Email addresses extracted from responses"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HasNewResponses",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if any new responses were found"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NEW_RESPONSES",
+            "IsSuccess": true,
+            "Description": "New responses found and returned"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NO_NEW_RESPONSES",
+            "IsSuccess": true,
+            "Description": "No new responses since last check"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Get Typeform Details",
+      "Description": "Retrieves complete details of a Typeform including title, fields, logic jumps, settings, theme, and metadata. Use this to inspect or backup form configurations.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "GetTypeformAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-clipboard-list"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform form ID to retrieve",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Form",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete form object with all configuration"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The form ID"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Form title"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of all form fields with types and properties"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FieldCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of fields in the form"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Settings",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Form settings like public status, progress bar, branding"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Logic",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Logic jump rules for conditional field display"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Theme",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Theme configuration for visual appearance"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HiddenFields",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Hidden field definitions for URL parameters"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Summary",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "High-level summary with key metrics and information"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Form details retrieved successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Typeform",
+      "Description": "Creates a new Typeform with specified title, fields, and settings. Supports all field types including text, email, multiple choice, rating, and more. Returns the new form ID and shareable link.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "CreateTypeformAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-plus-circle"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token with create permissions",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Title of the form",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of field objects. Each field needs: type, title, and optional ref. Types: short_text, long_text, email, number, dropdown, multiple_choice, yes_no, rating, opinion_scale, date, phone_number, website, file_upload, payment, legal, matrix, ranking, picture_choice",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Settings",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Optional form settings object (e.g., {is_public: true, show_progress_bar: true})",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Logic",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Optional array of logic jump rules for conditional field display",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HiddenFields",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Optional array of hidden field names for URL parameters",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ThemeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional theme ID to apply to the form",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WorkspaceID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional workspace ID where form should be created",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Form",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete created form object"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The new form's ID"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormURL",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Shareable URL for the form"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The form's title"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FieldCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of fields in the created form"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Form created successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_TITLE",
+            "IsSuccess": false,
+            "Description": "Title parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FIELDS",
+            "IsSuccess": false,
+            "Description": "Fields parameter is required and must be a non-empty array"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Update Typeform",
+      "Description": "Updates an existing Typeform. WARNING: Uses PUT which replaces all form data - fields not included will be deleted. Set MergeWithExisting=true to safely update only specified properties while preserving others.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "UpdateTypeformAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-pen-to-square"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform form ID to update",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "APIToken",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Typeform API access token with write permissions",
+            "IsRequired": true
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MergeWithExisting",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "If true (default), fetches existing form and merges your changes. If false, replaces entire form with your data (DANGEROUS - will delete unspecified fields)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "New title for the form (optional if MergeWithExisting=true)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Fields",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of field objects to replace all fields (required if MergeWithExisting=false)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Settings",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Form settings to update (merged with existing if MergeWithExisting=true)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Logic",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of logic jump rules (replaces existing logic)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "HiddenFields",
+            "Type": "Input",
+            "ValueType": "Object",
+            "IsArray": true,
+            "Description": "Array of hidden field names (replaces existing hidden fields)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ThemeID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Theme ID to apply to the form",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Form",
+            "Type": "Output",
+            "ValueType": "Object",
+            "IsArray": false,
+            "Description": "Complete updated form object"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The form's ID"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FormURL",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Shareable URL for the form"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The form's title"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FieldCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of fields in the updated form"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastUpdated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Timestamp of last update"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Form updated successfully"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FORM_ID",
+            "IsSuccess": false,
+            "Description": "FormID parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_TOKEN",
+            "IsSuccess": false,
+            "Description": "APIToken parameter is required"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_FIELDS",
+            "IsSuccess": false,
+            "Description": "Fields parameter is required when MergeWithExisting is false"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ERROR",
+            "IsSuccess": false,
+            "Description": "Unexpected error occurred"
+          }
+        }
+      ]
+    }
+  }
+]

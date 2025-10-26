@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "Form Builders",
+      "Description": "Integration actions for form builder and survey platforms including Typeform, Google Forms, and JotForm",
+      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "Status": "Active"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Typeform",
+      "Description": "Typeform integration for managing forms, retrieving responses, generating statistics, and automating workflows",
+      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
+      "Status": "Active"
+    }
+  }
+]
