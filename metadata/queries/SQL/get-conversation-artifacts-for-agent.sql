@@ -6,16 +6,17 @@
 --   ConversationID (required): The conversation to get artifacts from
 --   AgentID (optional): Filter to only artifacts created by this specific agent ID
 --
--- This query is optimized for building artifact context for AI agent API requests,
--- particularly for modification workflows where the agent needs to know what components exist.
+-- This query returns a flat result set with one row per artifact version, including the
+-- ConversationDetailID that created each version. The SDK groups these into artifacts with versions.
 
-SELECT DISTINCT
+SELECT
+    -- Artifact fields
     a.ID as ArtifactID,
     a.Name as ArtifactName,
     a.Description as ArtifactDescription,
     a.Type as ArtifactType,
     a.Visibility as SharingScope,
-    a.Comments,
+    a.Comments as ArtifactComments,
     a.__mj_CreatedAt as ArtifactCreatedAt,
     a.__mj_UpdatedAt as ArtifactUpdatedAt,
 
@@ -27,22 +28,17 @@ SELECT DISTINCT
     at.__mj_CreatedAt as ArtifactTypeCreatedAt,
     at.__mj_UpdatedAt as ArtifactTypeUpdatedAt,
 
-    -- All versions for this artifact as JSON array (sorted by version number)
-    -- INCLUDES Configuration field for component spec extraction
-    (
-        SELECT
-            av.ID,
-            av.ArtifactID,
-            av.VersionNumber as Version,
-            av.Configuration,  -- Contains SkipAPIAnalysisCompleteResponse for Skip artifacts
-            av.Content,        -- Contains the actual component/report content
-            av.__mj_CreatedAt as CreatedAt,
-            av.__mj_UpdatedAt as UpdatedAt
-        FROM [__mj].[vwArtifactVersions] av
-        WHERE av.ArtifactID = a.ID
-        ORDER BY av.VersionNumber ASC
-        FOR JSON PATH
-    ) as VersionsJSON
+    -- Version fields
+    av.ID as VersionID,
+    av.VersionNumber as Version,
+    av.Configuration,
+    av.Content,
+    av.Comments as VersionComments,
+    av.__mj_CreatedAt as VersionCreatedAt,
+    av.__mj_UpdatedAt as VersionUpdatedAt,
+
+    -- ConversationDetailID that created this version (from join table)
+    cda.ConversationDetailID
 
 FROM [__mj].[vwConversationDetailArtifacts] cda
 INNER JOIN [__mj].[vwArtifactVersions] av ON cda.ArtifactVersionID = av.ID
@@ -56,10 +52,4 @@ WHERE cd.ConversationID = {{ ConversationID | sqlString }}
   AND cd.AgentID = {{ AgentID | sqlString }}  -- Optional: filter by specific agent ID
   {% endif %}
 
--- Group by artifact to avoid duplicates (same artifact might be linked to multiple conversation details)
-GROUP BY
-    a.ID, a.Name, a.Description, a.Type, a.Visibility, a.Comments,
-    a.__mj_CreatedAt, a.__mj_UpdatedAt,
-    at.ID, at.Name, at.Description, at.ContentType, at.__mj_CreatedAt, at.__mj_UpdatedAt
-
-ORDER BY a.__mj_CreatedAt ASC
+ORDER BY a.__mj_CreatedAt ASC, av.VersionNumber ASC

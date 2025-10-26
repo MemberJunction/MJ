@@ -486,69 +486,76 @@ export class SkipSDK {
                 return [];
             }
 
-            // Parse results and build SkipAPIArtifact objects with proper type safety
-            const artifacts: SkipAPIArtifact[] = result.Results.map((row: any): SkipAPIArtifact => {
-                // Parse VersionsJSON field (contains all versions for this artifact)
-                let versions: any[] = [];
-                if (row.VersionsJSON) {
-                    try {
-                        versions = typeof row.VersionsJSON === 'string'
-                            ? JSON.parse(row.VersionsJSON)
-                            : row.VersionsJSON;
-                    } catch (parseError) {
-                        LogError(`Failed to parse VersionsJSON for artifact ${row.ArtifactID}: ${parseError}`);
+            // Query returns flat result set: one row per artifact version
+            // Group by ArtifactID to build SkipAPIArtifact objects with their versions
+            const artifactMap = new Map<string, {
+                artifact: any,
+                artifactType: SkipAPIArtifactType,
+                versions: SkipAPIArtifactVersion[]
+            }>();
+
+            // Process each row (represents one version)
+            for (const row of result.Results) {
+                const artifactId = row.ArtifactID;
+
+                // Initialize artifact entry if not exists
+                if (!artifactMap.has(artifactId)) {
+                    // Map database sharingScope values to SkipAPIArtifact expected values
+                    let sharingScope: 'None' | 'SpecificUsers' | 'Everyone' | 'Public' = 'None';
+                    const dbSharingScope = (row.SharingScope || '').toLowerCase();
+                    if (dbSharingScope === 'always' || dbSharingScope === 'everyone') {
+                        sharingScope = 'Everyone';
+                    } else if (dbSharingScope === 'public') {
+                        sharingScope = 'Public';
+                    } else if (dbSharingScope === 'specific users' || dbSharingScope === 'specificusers') {
+                        sharingScope = 'SpecificUsers';
                     }
+
+                    artifactMap.set(artifactId, {
+                        artifact: {
+                            id: artifactId,
+                            conversationId: conversationId,
+                            name: row.ArtifactName,
+                            description: row.ArtifactDescription || '',
+                            sharingScope: sharingScope,
+                            comments: row.ArtifactComments || '',
+                            createdAt: new Date(row.ArtifactCreatedAt),
+                            updatedAt: new Date(row.ArtifactUpdatedAt)
+                        },
+                        artifactType: {
+                            id: row.ArtifactTypeID,
+                            name: row.ArtifactTypeName,
+                            description: row.ArtifactTypeDescription,
+                            contentType: row.ArtifactTypeContentType,
+                            enabled: true,
+                            createdAt: new Date(row.ArtifactTypeCreatedAt),
+                            updatedAt: new Date(row.ArtifactTypeUpdatedAt)
+                        },
+                        versions: []
+                    });
                 }
 
-                // Map versions to SkipAPIArtifactVersion format with proper type safety
-                const mappedVersions: SkipAPIArtifactVersion[] = versions.map((v: any): SkipAPIArtifactVersion => ({
-                    id: v.ID,
-                    artifactId: v.ArtifactID,
-                    version: v.Version,
-                    configuration: v.Configuration || '', // Ensure string type (may be null in DB)
-                    content: v.Content || '', // Ensure string type
-                    comments: v.Comments || '', // Ensure string type (not optional in SkipAPIArtifactVersion)
-                    createdAt: new Date(v.CreatedAt), // Convert to Date object
-                    updatedAt: new Date(v.UpdatedAt)  // Convert to Date object
-                }));
+                // Add this version to the artifact
+                const entry = artifactMap.get(artifactId)!;
+                entry.versions.push({
+                    id: row.VersionID,
+                    artifactId: artifactId,
+                    conversationDetailID: row.ConversationDetailID, // Direct from join table!
+                    version: row.Version,
+                    configuration: row.Configuration || '',
+                    content: row.Content || '',
+                    comments: row.VersionComments || '',
+                    createdAt: new Date(row.VersionCreatedAt),
+                    updatedAt: new Date(row.VersionUpdatedAt)
+                });
+            }
 
-                // Build artifact type object with proper typing
-                const artifactType: SkipAPIArtifactType = {
-                    id: row.ArtifactTypeID,
-                    name: row.ArtifactTypeName,
-                    description: row.ArtifactTypeDescription,
-                    contentType: row.ArtifactTypeContentType,
-                    enabled: true, // Assume enabled if in results
-                    createdAt: new Date(row.ArtifactTypeCreatedAt), // Convert to Date object
-                    updatedAt: new Date(row.ArtifactTypeUpdatedAt)  // Convert to Date object
-                };
-
-                // Map database sharingScope values to SkipAPIArtifact expected values
-                // Database uses: 'Always', 'System Only', etc.
-                // Type expects: 'None', 'SpecificUsers', 'Everyone', 'Public'
-                let sharingScope: 'None' | 'SpecificUsers' | 'Everyone' | 'Public' = 'None';
-                const dbSharingScope = (row.SharingScope || '').toLowerCase();
-                if (dbSharingScope === 'always' || dbSharingScope === 'everyone') {
-                    sharingScope = 'Everyone';
-                } else if (dbSharingScope === 'public') {
-                    sharingScope = 'Public';
-                } else if (dbSharingScope === 'specific users' || dbSharingScope === 'specificusers') {
-                    sharingScope = 'SpecificUsers';
-                }
-
-                return {
-                    id: row.ArtifactID,
-                    conversationId: conversationId,
-                    name: row.ArtifactName,
-                    description: row.ArtifactDescription || '', // Ensure string (not optional in type)
-                    artifactType: artifactType,
-                    sharingScope: sharingScope,
-                    versions: mappedVersions,
-                    comments: row.Comments || '',
-                    createdAt: new Date(row.ArtifactCreatedAt), // Convert to Date object
-                    updatedAt: new Date(row.ArtifactUpdatedAt)  // Convert to Date object
-                } as SkipAPIArtifact; // Note: currentVersion field not in type definition but was being set
-            });
+            // Convert map to SkipAPIArtifact array
+            const artifacts: SkipAPIArtifact[] = Array.from(artifactMap.values()).map(entry => ({
+                ...entry.artifact,
+                artifactType: entry.artifactType,
+                versions: entry.versions
+            }));
 
             return artifacts;
         } catch (error) {
