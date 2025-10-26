@@ -260,7 +260,8 @@
 .chat-input-container {
     flex-shrink: 0;
     background: #FFF;
-    border-top: 1px solid #E5E7EB;
+    padding: 0 1.25rem 1.25rem 1.25rem; // Increased padding to prevent clipping rounded corners
+    overflow: visible; // Allow box shadow and rounded corners to show fully
 }
 
 // Loading placeholder - replaces input while loading
@@ -491,7 +492,7 @@
 .artifact-versions-list {
     display: flex;
     flex-direction: column;
-    border-top: 1px solid #E5E7EB;
+    padding: 0 1rem 1rem 1rem;
     background: #F9FAFB;
 }
 .artifact-version-item {

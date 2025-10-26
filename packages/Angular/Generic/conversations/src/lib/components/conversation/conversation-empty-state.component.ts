@@ -1,4 +1,4 @@
-import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 
 @Component({
@@ -6,13 +6,11 @@ import { UserInfo } from '@memberjunction/core';
   templateUrl: './conversation-empty-state.component.html',
   styleUrls: ['./conversation-empty-state.component.scss']
 })
-export class ConversationEmptyStateComponent implements AfterViewInit {
+export class ConversationEmptyStateComponent {
   @Input() currentUser!: UserInfo;
   @Input() disabled: boolean = false;
 
   @Output() messageSent = new EventEmitter<string>();
-
-  @ViewChild('messageTextarea') messageTextarea?: ElementRef;
 
   public messageText: string = '';
 
@@ -39,31 +37,8 @@ export class ConversationEmptyStateComponent implements AfterViewInit {
     }
   ];
 
-  ngAfterViewInit() {
-    // Auto-focus the textarea
-    setTimeout(() => {
-      this.messageTextarea?.nativeElement?.focus();
-    }, 100);
-  }
-
-  get canSend(): boolean {
-    return !this.disabled && this.messageText.trim().length > 0;
-  }
-
-  onKeyDown(event: KeyboardEvent): void {
-    // Enter alone: Send message
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      this.onSendClick();
-    }
-    // Shift+Enter: Allow default behavior (add newline)
-  }
-
-  onSendClick(): void {
-    if (this.canSend) {
-      this.messageSent.emit(this.messageText.trim());
-      this.messageText = ''; // Clear input after sending
-    }
+  onTextSubmitted(text: string): void {
+    this.messageSent.emit(text);
   }
 
   onSuggestedPromptClicked(prompt: string): void {

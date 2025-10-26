@@ -33,31 +33,16 @@
 
     <!-- Message Input (Centered) -->
     <div class="message-input-wrapper">
-      <div class="empty-state-input-container">
-        <textarea
-          #messageTextarea
-          class="empty-state-textarea"
-          [(ngModel)]="messageText"
-          [disabled]="disabled"
-          placeholder="Type your message to start a new conversation..."
-          (keydown)="onKeyDown($event)"
-          rows="3"
-        ></textarea>
-        <div class="empty-state-input-footer">
-          <div class="character-count" *ngIf="messageText.length > 0">
-            {{ messageText.length }} characters
-          </div>
-          <button
-            class="send-button"
-            [disabled]="!canSend"
-            (click)="onSendClick()"
-            title="Send message (Enter)"
-          >
-            <i class="fa-solid fa-paper-plane"></i>
-            Send
-          </button>
-        </div>
-      </div>
+      <mj-message-input-box
+        [placeholder]="'Type your message to start a new conversation...'"
+        [disabled]="disabled"
+        [showCharacterCount]="true"
+        [enableMentions]="true"
+        [currentUser]="currentUser"
+        [rows]="3"
+        [(value)]="messageText"
+        (textSubmitted)="onTextSubmitted($event)">
+      </mj-message-input-box>
     </div>
 
     <!-- Footer Tips -->
