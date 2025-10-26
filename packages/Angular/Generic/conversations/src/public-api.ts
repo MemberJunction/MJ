@@ -32,6 +32,7 @@ export * from './lib/components/navigation/conversation-navigation.component';
 export * from './lib/components/sidebar/conversation-sidebar.component';
 export * from './lib/components/conversation/conversation-list.component';
 export * from './lib/components/conversation/conversation-chat-area.component';
+export * from './lib/components/conversation/conversation-empty-state.component';
 export * from './lib/components/message/message-item.component';
 export * from './lib/components/message/message-list.component';
 export * from './lib/components/message/message-input.component';

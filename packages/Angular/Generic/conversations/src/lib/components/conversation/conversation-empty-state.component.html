@@ -1,0 +1,75 @@
+<div class="conversation-empty-state">
+  <div class="empty-state-container">
+    <!-- Greeting Header -->
+    <div class="greeting-section">
+      <div class="greeting-icon">
+        <i class="fa-solid fa-comments fa-3x"></i>
+      </div>
+      <h1 class="greeting-title">Welcome to Conversations</h1>
+      <p class="greeting-subtitle">
+        Start a new conversation by typing a message below, or choose a suggested prompt to get started.
+      </p>
+    </div>
+
+    <!-- Suggested Prompts -->
+    <div class="suggested-prompts">
+      <div class="prompt-grid">
+        <div
+          *ngFor="let prompt of suggestedPrompts"
+          class="prompt-card"
+          (click)="onSuggestedPromptClicked(prompt.prompt)"
+          [class.disabled]="disabled"
+        >
+          <div class="prompt-icon">
+            <i class="fa-solid {{prompt.icon}}"></i>
+          </div>
+          <div class="prompt-content">
+            <div class="prompt-title">{{prompt.title}}</div>
+            <div class="prompt-text">{{prompt.prompt}}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Message Input (Centered) -->
+    <div class="message-input-wrapper">
+      <div class="empty-state-input-container">
+        <textarea
+          #messageTextarea
+          class="empty-state-textarea"
+          [(ngModel)]="messageText"
+          [disabled]="disabled"
+          placeholder="Type your message to start a new conversation..."
+          (keydown)="onKeyDown($event)"
+          rows="3"
+        ></textarea>
+        <div class="empty-state-input-footer">
+          <div class="character-count" *ngIf="messageText.length > 0">
+            {{ messageText.length }} characters
+          </div>
+          <button
+            class="send-button"
+            [disabled]="!canSend"
+            (click)="onSendClick()"
+            title="Send message (Enter)"
+          >
+            <i class="fa-solid fa-paper-plane"></i>
+            Send
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer Tips -->
+    <div class="tips-section">
+      <div class="tip-item">
+        <i class="fa-solid fa-at"></i>
+        <span>Use <strong>&#64;AgentName</strong> to directly invoke a specific agent</span>
+      </div>
+      <div class="tip-item">
+        <i class="fa-solid fa-keyboard"></i>
+        <span>Press <strong>Enter</strong> to send, <strong>Shift+Enter</strong> for new line</span>
+      </div>
+    </div>
+  </div>
+</div>

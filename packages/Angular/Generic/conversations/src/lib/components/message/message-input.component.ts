@@ -30,6 +30,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() conversationHistory: ConversationDetailEntity[] = []; // For agent context
+  @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
 
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
@@ -95,6 +96,14 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   ngAfterViewInit() {
     // Focus input on initial load
     this.focusInput();
+
+    // If there's an initial message to send (from empty state), send it automatically
+    if (this.initialMessage) {
+      console.log('📨 MessageInputComponent received initialMessage:', this.initialMessage);
+      setTimeout(() => {
+        this.sendMessageWithText(this.initialMessage!);
+      }, 100);
+    }
   }
 
   ngOnDestroy() {
