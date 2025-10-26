@@ -143,6 +143,37 @@ export class FindBestAgentAction extends BaseAction {
                 agentActionsMap.set(agent.agentId, agentActions);
             }
 
+            // Create map of agentId -> sub-agents (name and description)
+            const agentSubAgentsMap = new Map<string, Array<{name: string, description: string}>>();
+            for (const agent of filteredAgents) {
+                const subAgents: Array<{name: string, description: string}> = [];
+
+                // Find child agents (ParentID = this agent)
+                const childAgents = AIEngine.Instance.Agents.filter(a =>
+                    a.ParentID === agent.agentId && a.Status === 'Active'
+                );
+                subAgents.push(...childAgents.map(a => ({
+                    name: a.Name,
+                    description: a.Description || ''
+                })));
+
+                // Find related agents (via AgentRelationships)
+                const relationships = AIEngine.Instance.AgentRelationships.filter(r =>
+                    r.AgentID === agent.agentId && r.Status === 'Active'
+                );
+                for (const rel of relationships) {
+                    const relatedAgent = AIEngine.Instance.Agents.find(a => a.ID === rel.SubAgentID);
+                    if (relatedAgent && relatedAgent.Status === 'Active') {
+                        subAgents.push({
+                            name: relatedAgent.Name,
+                            description: relatedAgent.Description || ''
+                        });
+                    }
+                }
+
+                agentSubAgentsMap.set(agent.agentId, subAgents);
+            }
+
             // Add output parameters
             params.Params.push({
                 Name: 'MatchedAgents',
@@ -156,7 +187,7 @@ export class FindBestAgentAction extends BaseAction {
                 Value: filteredAgents.length
             });
 
-            // Build response message with full descriptions and actions
+            // Build response message with full descriptions, actions, and sub-agents
             const responseData = {
                 message: `Found ${filteredAgents.length} accessible agent(s)`,
                 taskDescription: taskDescription,
@@ -166,7 +197,9 @@ export class FindBestAgentAction extends BaseAction {
                     agentName: a.agentName,
                     similarityScore: Math.round(a.similarityScore * 100) / 100, // Round to 2 decimal places
                     description: a.description,  // Full description, no truncation
-                    actions: agentActionsMap.get(a.agentId) || []
+                    actions: agentActionsMap.get(a.agentId) || [],
+                    subAgents: agentSubAgentsMap.get(a.agentId) || [],  // Sub-agents with name and description
+                    defaultArtifactType: a.defaultArtifactType || null  // Artifact type this agent produces
                 }))
             };
 

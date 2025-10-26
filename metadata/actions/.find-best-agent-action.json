@@ -112,15 +112,15 @@
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of agents matching the criteria, sorted by similarity score (highest first). Each agent includes: agentId, agentName, description, similarityScore, systemPrompt, typeName, status.",
+            "Description": "Array of agents matching the criteria, sorted by similarity score (highest first). Each agent includes: agentId, agentName, description, similarityScore, systemPrompt, typeName, status, actions (array of action names), subAgents (array of {name, description} for each sub-agent), defaultArtifactType (name of artifact type the agent produces, or null if none).",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B8C943F4-C9B4-4CF0-A9C0-49443CE42DF0"
           },
           "sync": {
-            "lastModified": "2025-10-17T01:10:25.592Z",
-            "checksum": "477efe051085b9d74cf2f0df7e9c23c513f999fa1fcdeb4279f3944cd45db523"
+            "lastModified": "2025-10-26T02:30:37.113Z",
+            "checksum": "8d82610ca094fae0630b0fa466d911ecb3029bd369097c63cb304d3b9af055b4"
           }
         },
         {

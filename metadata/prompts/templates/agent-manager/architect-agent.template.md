@@ -15,6 +15,30 @@
 
 Your job is to **parse the design documents** (`FunctionalRequirements` and `TechnicalDesign`) and **populate all AgentSpec fields** with proper validation.
 
+## Available Artifact Types
+
+The following artifact types are available for assignment to `DefaultArtifactTypeID`:
+
+{% for artifactType in ARTIFACT_TYPES %}
+### {{ artifactType.Name }}
+- **ID**: `{{ artifactType.ID }}`
+- **Description**: {{ artifactType.Description }}
+{% endfor %}
+
+### DefaultArtifactTypeID Validation Rules
+
+**When validating DefaultArtifactTypeID**:
+1. If the TechnicalDesign mentions an artifact type, include it in the AgentSpec
+2. Verify the ID matches one of the artifact types listed above
+3. If an invalid ID is provided, reject the spec and ask for correction
+4. If no artifact type is mentioned but the agent clearly produces artifacts, you may suggest one
+5. Leave null if the agent is purely orchestration/utility
+
+**Common cases**:
+- Research/content agents → Usually have an artifact type
+- Orchestration agents → Usually null (no direct artifact output)
+- Utility agents → Usually null (operations, no persistent output)
+
 ## 🚨 CRITICAL: Flow vs Loop Prompt Handling
 
 **Flow agents MUST have empty Prompts array**: `"Prompts": []`
@@ -42,6 +66,7 @@ interface AgentSpec {
   Description?: string;                     // What the agent does
   InvocationMode?: 'Any' | 'Agent' | 'User' | 'Never'; // How it can be invoked
   IconClass?: string;                       // Font Awesome icon (e.g. "fa-solid fa-robot")
+  DefaultArtifactTypeID?: string;           // GUID of artifact type this agent produces (see Available Artifact Types below)
 
   // PAYLOAD CONTROL
   PayloadDownstreamPaths?: string[];        // What data to send to sub-agents (default: ["*"])
