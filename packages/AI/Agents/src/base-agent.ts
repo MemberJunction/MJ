@@ -4643,6 +4643,11 @@ Please choose an alternative approach to complete your task.`
             return this.createFailedStep('ForEach configuration missing', previousDecision);
         }
 
+        const validationMessage = this.validateForEachOperation(forEach);
+        if (validationMessage) {
+            return this.createFailedStep(`ForEach configuration invalid: ${validationMessage}`, previousDecision);
+        }
+
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
         const collection = this.getCollectionFromPayload(currentPayload, forEach.collectionPath);
 
@@ -4654,6 +4659,101 @@ Please choose an alternative approach to complete your task.`
         const loopResults = await this.executeForEachIterations(forEach, collection, currentPayload, loopStepEntity.ID, params, config);
 
         return this.completeForEachLoop(forEach, loopStepEntity, loopResults, previousDecision, params);
+    }
+
+    private validateWhileOperation(whileOp: WhileOperation): string | null {
+        if (!whileOp.condition || whileOp.condition.trim() === '') {
+            return 'Condition is required';
+        }
+        if (!whileOp.itemVariable || whileOp.itemVariable.trim() === '') {
+            return 'Item variable is required';
+        }
+
+        // now validate the action or sub-agent
+        if (whileOp.action) {
+            return this.validateActionInAgent(whileOp.action.name);
+        }
+        else if (whileOp.subAgent) {
+            // check to make sure sub-agent is valid
+            return this.validateSubAgentInAgent(whileOp.subAgent.name);
+        }
+
+        // if we get here, all good
+        return null;
+    }
+
+    private validateForEachOperation(forEach: ForEachOperation): string | null {
+        // make sure that for actions it is valid action and for sub-agents it is valid sub-agent
+        if (!forEach.itemVariable || forEach.itemVariable.trim() === '') {
+            return 'Item variable is required';
+        }
+        if (!forEach.collectionPath || forEach.collectionPath.trim() === '') {
+            return 'Collection path is required';
+        }
+
+        if (forEach.action) {
+            return this.validateActionInAgent(forEach.action.name);
+        }
+        else if (forEach.subAgent) {
+            // check to make sure sub-agent is valid
+            return this.validateSubAgentInAgent(forEach.subAgent.name);
+        }
+
+        // if we get here, all good
+        return null;
+    }
+
+    protected validateActionInAgent(actionName: string): string | null {
+        // check to make sure action is valid
+        const aa = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === this._agentRun!.AgentID);
+        let action = aa.filter(a => a.Agent?.trim().toLowerCase() === actionName.trim().toLowerCase());
+        if (!action) {
+            // try to do a search contains without exact match and if we have exactly 1 it is ok, if more than 1 different error
+            // message and if no match still not good
+            const partialAction = aa.filter(a => a.Agent?.trim().toLowerCase().includes(actionName.trim().toLowerCase() || ''));
+            if (partialAction.length > 1) {
+                return `Ambiguous action '${actionName}' specified`;
+            }
+            else if (partialAction.length === 0) {
+                return `No action '${actionName}' found`;
+            }
+        }
+        return null;
+    }
+
+    protected validateSubAgentInAgent(subAgentName: string): string | null {
+        // check to make sure sub-agent is valid
+        const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => ar.AgentID === this._agentRun!.AgentID);
+        const childAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === this._agentRun!.AgentID);
+
+        // now check to make sure that subAgentName is either in relatedAgents or childAgents
+        let subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+        if (subAgent.length === 0) {
+            // no exact match, try for partial match
+            subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+            if (subAgent.length > 1) {
+                return `Ambiguous sub-agent '${subAgentName}' specified`;
+            } 
+            else if (subAgent.length === 0) {
+                // try child agents now
+                let childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+                if (childAgent.length === 0) {
+                    // no exact match, try for partial match
+                    childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+                    if (childAgent.length > 1) {
+                        return `Ambiguous child agent '${subAgentName}' specified`;
+                    } else if (childAgent.length === 0) {
+                        return `No child agent '${subAgentName}' found`;
+                    }
+                } 
+                else {
+                    // we have one match, so we're good here
+                }
+            }
+        }
+
+        // if we get here, all good
+        return null;
     }
 
     /**
@@ -5016,7 +5116,7 @@ Please choose an alternative approach to complete your task.`
     private createFailedStep(errorMessage: string, previousDecision: BaseAgentNextStep): BaseAgentNextStep {
         return {
             step: 'Failed',
-            terminate: true,
+            terminate: false,
             errorMessage,
             previousPayload: previousDecision.previousPayload,
             newPayload: previousDecision.newPayload || previousDecision.previousPayload
@@ -5035,6 +5135,11 @@ Please choose an alternative approach to complete your task.`
         const whileOp = previousDecision.while as WhileOperation;
         if (!whileOp) {
             return this.createFailedStep('While configuration missing', previousDecision);
+        }
+
+        const validationMessage = this.validateWhileOperation(whileOp);
+        if (validationMessage) {
+            return this.createFailedStep(`While configuration invalid: ${validationMessage}`, previousDecision);
         }
 
         const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
