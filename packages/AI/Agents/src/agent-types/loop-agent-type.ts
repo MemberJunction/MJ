@@ -487,28 +487,37 @@ export class LoopAgentType extends BaseAgentType {
         return result;
     }
 
-    /**
-     * Resolves template string with variable interpolation
-     */
-    private resolveTemplateString(template: string, context: Record<string, any>): string {
-        let result = template;
+    // /**
+    //  * Resolves template string with variable interpolation
+    //  */
+    // private resolveTemplateString(template: string, context: Record<string, any>): string {
+    //     let result = template;
 
-        // Simple variable replacement for now
-        for (const [varName, varValue] of Object.entries(context)) {
-            const placeholder = `{{${varName}}}`;
-            if (result.includes(placeholder)) {
-                result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
-                    typeof varValue === 'string' ? varValue : JSON.stringify(varValue));
-            }
-        }
+    //     // Simple variable replacement for now
+    //     for (const [varName, varValue] of Object.entries(context)) {
+    //         const placeholder = `{{${varName}}}`;
+    //         if (result.includes(placeholder)) {
+    //             result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+    //                 typeof varValue === 'string' ? varValue : JSON.stringify(varValue));
+    //         }
+    //     }
 
-        return result;
-    }
+    //     return result;
+    // }
 
     /**
      * Resolves a value from context using variable references
      */
     private resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
+        // check to see if value is wrapped in a nunjucks style template like {{variable}} and
+        // if so, remove that wrapping to get the actual variable name.
+        // we only do this if the string starts and ends with the {{ }} pattern
+        // and we trim whitespace first
+        const trimmedValue = value.trim();
+        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
+            value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
+        }
+
         // first check itemVariable name
         const ivToLower = itemVariable?.trim().toLowerCase();
         if (value?.toLowerCase().startsWith(`${ivToLower}.`)) {
