@@ -64,7 +64,8 @@ export class AgentEmbeddingService {
                         systemPrompt: '',  // SystemPrompt not available on extended class
                         typeName: agent.Type || '',
                         status: agent.Status || 'Active',
-                        invocationMode: agent.InvocationMode || 'Any'
+                        invocationMode: agent.InvocationMode || 'Any',
+                        defaultArtifactType: agent.DefaultArtifactType || undefined
                     }
                 });
             } catch (error) {
@@ -132,7 +133,8 @@ export class AgentEmbeddingService {
                 systemPrompt: r.metadata?.systemPrompt,
                 typeName: r.metadata?.typeName,
                 status: r.metadata?.status,
-                invocationMode: r.metadata?.invocationMode
+                invocationMode: r.metadata?.invocationMode,
+                defaultArtifactType: r.metadata?.defaultArtifactType
             }));
 
         } catch (error) {

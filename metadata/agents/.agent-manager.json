@@ -11,6 +11,37 @@
       "IconClass": "fa-solid fa-robot"
     },
     "relatedEntities": {
+      "MJ: AI Agent Data Sources": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "ARTIFACT_TYPES",
+            "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Artifact Types",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": [
+              "ID",
+              "Name",
+              "Description"
+            ],
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 1,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "2EA061FE-A424-4D7C-AFD5-B33B48E1F01C"
+          },
+          "sync": {
+            "lastModified": "2025-10-25T23:20:13.911Z",
+            "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+          }
+        }
+      ],
       "MJ: AI Agent Prompts": [
         {
           "fields": {
@@ -32,29 +63,29 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Find Best Action",
+            "ActionID": "@lookup:Actions.Name=Find Candidate Actions",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "9E6E5CA6-F357-45E0-B8FA-05A4E1967EA2"
           },
           "sync": {
-            "lastModified": "2025-10-21T19:26:53.830Z",
-            "checksum": "f9a42f722410c74b44bc0e15a23aede71eec88f8bc488f7a691e688ba499769d"
+            "lastModified": "2025-10-24T17:55:18.795Z",
+            "checksum": "34297e20fe57eaf4a7c0de8d2bca82255ff52fcc237b0c79d15bd95765bb1ba3"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:Actions.Name=Find Best Agent",
+            "ActionID": "@lookup:Actions.Name=Find Candidate Agents",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "CDAEFBEC-310B-488C-86E8-27426D584626"
           },
           "sync": {
-            "lastModified": "2025-10-24T03:18:40.600Z",
-            "checksum": "013a61aa9218828673d1bd2907e4c57adfc2aad354a0be2812cac4a5007ff758"
+            "lastModified": "2025-10-24T17:55:18.796Z",
+            "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
           }
         },
         {
@@ -148,15 +179,15 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Find Best Action",
+                  "ActionID": "@lookup:Actions.Name=Find Candidate Actions",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "2EA67FAD-E5F5-45B7-9CB0-574F2084AD55"
                 },
                 "sync": {
-                  "lastModified": "2025-10-21T19:26:53.965Z",
-                  "checksum": "f9a42f722410c74b44bc0e15a23aede71eec88f8bc488f7a691e688ba499769d"
+                  "lastModified": "2025-10-24T17:55:18.954Z",
+                  "checksum": "34297e20fe57eaf4a7c0de8d2bca82255ff52fcc237b0c79d15bd95765bb1ba3"
                 }
               },
               {
@@ -209,6 +240,37 @@
             "IconClass": "fa-solid fa-sitemap"
           },
           "relatedEntities": {
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ARTIFACT_TYPES",
+                  "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Artifact Types",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Description"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "11766FF5-2079-439C-B36F-5BB6CAB74B80"
+                },
+                "sync": {
+                  "lastModified": "2025-10-25T23:20:13.989Z",
+                  "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+                }
+              }
+            ],
             "MJ: AI Agent Prompts": [
               {
                 "fields": {
@@ -230,15 +292,29 @@
               {
                 "fields": {
                   "AgentID": "@parent:ID",
-                  "ActionID": "@lookup:Actions.Name=Find Best Action",
+                  "ActionID": "@lookup:Actions.Name=Find Candidate Actions",
                   "Status": "Active"
                 },
                 "primaryKey": {
                   "ID": "33CE2DC3-A8B7-436A-8257-A6EC028C6DD1"
                 },
                 "sync": {
-                  "lastModified": "2025-10-21T19:26:53.985Z",
-                  "checksum": "f9a42f722410c74b44bc0e15a23aede71eec88f8bc488f7a691e688ba499769d"
+                  "lastModified": "2025-10-24T17:55:18.959Z",
+                  "checksum": "34297e20fe57eaf4a7c0de8d2bca82255ff52fcc237b0c79d15bd95765bb1ba3"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Find Candidate Agents",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B2D9B34B-891A-4C66-8450-D135BDE05F26"
+                },
+                "sync": {
+                  "lastModified": "2025-10-24T19:08:54.276Z",
+                  "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
                 }
               },
               {
@@ -306,6 +382,37 @@
             "IconClass": "fa-solid fa-drafting-compass"
           },
           "relatedEntities": {
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ARTIFACT_TYPES",
+                  "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Artifact Types",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Description"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "25107FD1-8086-4EA6-B75B-E2F7BFE01D5B"
+                },
+                "sync": {
+                  "lastModified": "2025-10-25T23:20:14.039Z",
+                  "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+                }
+              }
+            ],
             "MJ: AI Agent Prompts": [
               {
                 "fields": {

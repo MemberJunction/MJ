@@ -1700,24 +1700,38 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           agentResponseMessage.AgentID = result.agentRun.AgentID;
         }
 
-        await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
-
-        // Server created artifacts - emit event to trigger UI reload
-        if (result.payload && Object.keys(result.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
-          this.messageSent.emit(agentResponseMessage);
+        // Multi-stage response handling (same logic as ambient Sage)
+        // Stage 1: Check for task graph (multi-step orchestration)
+        if (result.payload?.taskGraph) {
+          console.log('📋 Task graph detected from @mention, starting task orchestration');
+          await this.handleTaskGraphExecution(userMessage, result, conversationId, agentResponseMessage);
         }
+        // Stage 2: Check for sub-agent invocation (single-step delegation)
+        else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
+          console.log('🎯 Sub-agent invocation detected from @mention');
+          await this.handleSubAgentInvocation(userMessage, result, conversationId, agentResponseMessage);
+        }
+        // Stage 3: Normal chat response
+        else {
+          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
 
-        // Mark user message as complete
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+          // Server created artifacts - emit event to trigger UI reload
+          if (result.payload && Object.keys(result.payload).length > 0) {
+            this.artifactCreated.emit({
+              artifactId: '',
+              versionId: '',
+              versionNumber: 0,
+              conversationDetailId: agentResponseMessage.ID,
+              name: ''
+            });
+            this.messageSent.emit(agentResponseMessage);
+          }
+
+          // Mark user message as complete
+          userMessage.Status = 'Complete';
+          await userMessage.Save();
+          this.messageSent.emit(userMessage);
+        }
       } else {
         // Agent failed - create error message
         const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);

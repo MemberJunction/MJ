@@ -1,9 +1,9 @@
 [
   {
     "fields": {
-      "Name": "Find Best Action",
+      "Name": "Find Candidate Actions",
       "Description": "Finds the most relevant actions for a given task using semantic search with embeddings. Returns top N most similar actions based on task description. Used by Planning Designer Agent to discover relevant actions without searching through hundreds of options.",
-      "DriverClass": "Find Best Action",
+      "DriverClass": "Find Candidate Actions",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active",
@@ -128,8 +128,8 @@
       "ID": "FD932133-CB1D-4C96-8EFC-14F0C8CE045B"
     },
     "sync": {
-      "lastModified": "2025-10-21T19:26:32.943Z",
-      "checksum": "0ba7e7e317a46398c63a7f88d6369369ec9aad9fe3de4293b4f0d7eee3987eef"
+      "lastModified": "2025-10-24T17:54:51.470Z",
+      "checksum": "3712e754a22ebaa5bdced0a715ac331ebbffd9a4b02b4daf8f94d6aa43bd61fb"
     }
   },
   {

@@ -15,7 +15,7 @@ import { ActionParamEntity } from "@memberjunction/core-entities";
  * ```typescript
  * // Find actions for a web search task
  * await runAction({
- *   ActionName: 'Find Best Action',
+ *   ActionName: 'Find Candidate Actions',
  *   Params: [{
  *     Name: 'TaskDescription',
  *     Value: 'Search the internet for information on a topic'
@@ -29,10 +29,10 @@ import { ActionParamEntity } from "@memberjunction/core-entities";
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Find Best Action")
+@RegisterClass(BaseAction, "Find Candidate Actions")
 export class FindBestActionAction extends BaseAction {
     /**
-     * Executes the Find Best Action action.
+     * Executes the Find Candidate Actions action.
      *
      * @param params - The action parameters containing:
      *   - TaskDescription: Description of the task to find actions for (required)
@@ -187,7 +187,7 @@ export class FindBestActionAction extends BaseAction {
             return {
                 Success: false,
                 ResultCode: 'EXECUTION_ERROR',
-                Message: `Failed to find best action: ${error instanceof Error ? error.message : String(error)}`
+                Message: `Failed to Find Candidate Actions: ${error instanceof Error ? error.message : String(error)}`
             };
         }
     }

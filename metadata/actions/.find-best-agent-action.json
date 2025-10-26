@@ -1,9 +1,9 @@
 [
   {
     "fields": {
-      "Name": "Find Best Agent",
+      "Name": "Find Candidate Agents",
       "Description": "Finds the best-matching AI agents for a given task using embedding-based semantic search. Returns agents ranked by similarity score.",
-      "DriverClass": "Find Best Agent",
+      "DriverClass": "Find Candidate Agents",
       "Type": "Custom",
       "CategoryID": "@lookup:Action Categories.Name=Agent Management",
       "Status": "Active",
@@ -89,19 +89,38 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "ExcludeSubAgents",
+            "DefaultValue": "true",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Whether to exclude agents with invocation mode 'Sub-Agent' from search results. Sub-agents are typically called by other agents. Defaults to true.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4195795C-0613-453E-9688-CEE6CD390C46"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T18:24:15.019Z",
+            "checksum": "ca00df0e3c5c0d2f160a8e6da1073b741968e67064023d9ea285af975706d980"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "MatchedAgents",
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of agents matching the criteria, sorted by similarity score (highest first). Each agent includes: agentId, agentName, description, similarityScore, systemPrompt, typeName, status.",
+            "Description": "Array of agents matching the criteria, sorted by similarity score (highest first). Each agent includes: agentId, agentName, description, similarityScore, systemPrompt, typeName, status, actions (array of action names), subAgents (array of {name, description} for each sub-agent), defaultArtifactType (name of artifact type the agent produces, or null if none).",
             "IsRequired": false
           },
           "primaryKey": {
             "ID": "B8C943F4-C9B4-4CF0-A9C0-49443CE42DF0"
           },
           "sync": {
-            "lastModified": "2025-10-17T01:10:25.592Z",
-            "checksum": "477efe051085b9d74cf2f0df7e9c23c513f999fa1fcdeb4279f3944cd45db523"
+            "lastModified": "2025-10-26T02:30:37.113Z",
+            "checksum": "8d82610ca094fae0630b0fa466d911ecb3029bd369097c63cb304d3b9af055b4"
           }
         },
         {
@@ -223,8 +242,8 @@
       "ID": "EF610103-E48D-4D9C-8DA2-1CF5B05F8AB6"
     },
     "sync": {
-      "lastModified": "2025-10-17T01:10:25.513Z",
-      "checksum": "398b2c608b348a6649b00fb3a08ad8b369eef82a4dc293442a6410da3c6ef223"
+      "lastModified": "2025-10-24T17:55:07.612Z",
+      "checksum": "f109aadaddd372dd5ab15055ce9db0a78e2943dba1dbd3cdd61ab7051f482406"
     }
   }
 ]

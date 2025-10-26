@@ -15,6 +15,30 @@
 
 Your job is to **parse the design documents** (`FunctionalRequirements` and `TechnicalDesign`) and **populate all AgentSpec fields** with proper validation.
 
+## Available Artifact Types
+
+The following artifact types are available for assignment to `DefaultArtifactTypeID`:
+
+{% for artifactType in ARTIFACT_TYPES %}
+### {{ artifactType.Name }}
+- **ID**: `{{ artifactType.ID }}`
+- **Description**: {{ artifactType.Description }}
+{% endfor %}
+
+### DefaultArtifactTypeID Validation Rules
+
+**When validating DefaultArtifactTypeID**:
+1. If the TechnicalDesign mentions an artifact type, include it in the AgentSpec
+2. Verify the ID matches one of the artifact types listed above
+3. If an invalid ID is provided, reject the spec and ask for correction
+4. If no artifact type is mentioned but the agent clearly produces artifacts, you may suggest one
+5. Leave null if the agent is purely orchestration/utility
+
+**Common cases**:
+- Research/content agents → Usually have an artifact type
+- Orchestration agents → Usually null (no direct artifact output)
+- Utility agents → Usually null (operations, no persistent output)
+
 ## 🚨 CRITICAL: Flow vs Loop Prompt Handling
 
 **Flow agents MUST have empty Prompts array**: `"Prompts": []`
@@ -42,6 +66,7 @@ interface AgentSpec {
   Description?: string;                     // What the agent does
   InvocationMode?: 'Any' | 'Agent' | 'User' | 'Never'; // How it can be invoked
   IconClass?: string;                       // Font Awesome icon (e.g. "fa-solid fa-robot")
+  DefaultArtifactTypeID?: string;           // GUID of artifact type this agent produces (see Available Artifact Types below)
 
   // PAYLOAD CONTROL
   PayloadDownstreamPaths?: string[];        // What data to send to sub-agents (default: ["*"])
@@ -55,7 +80,7 @@ interface AgentSpec {
 
   // ACTIONS - Array of actions this agent can use
   Actions?: Array<{
-    ActionID: string;                       // ID from "Find Best Action" results
+    ActionID: string;                       // ID from "Find Candidate Actions" results
     Status?: 'Active' | 'Inactive';         // Default: 'Active'
     ResultExpirationMode?: 'None' | 'Time' | 'RunEnd';
   }>;
@@ -63,12 +88,13 @@ interface AgentSpec {
   // SUB-AGENTS - Child or related agents
   SubAgents?: Array<{
     Type: 'child' | 'related';             // REQUIRED for each sub-agent
-    SubAgent: AgentSpec;                    // REQUIRED - Full nested AgentSpec with ALL fields
-                                           // SubAgent.ID should be "" for NEW sub-agents
-                                           // SubAgent can have its own Actions, Prompts, etc.
-    AgentRelationshipID?: string;           // For 'related' type (optional, auto-created)
-    SubAgentInputMapping?: Record<string, string>;  // For 'related' type
-    SubAgentOutputMapping?: Record<string, string>; // For 'related' type
+    SubAgent: AgentSpec;                    // REQUIRED - Full nested AgentSpec
+                                           // For child: SubAgent.ID should be "" (new agent)
+                                           // For related: SubAgent.ID should be existing agent GUID
+    AgentRelationshipID?: string;           // For 'related' type (leave "" for new, auto-created)
+    SubAgentInputMapping?: Record<string, string>;  // For 'related' type - parent payload → subagent
+    SubAgentOutputMapping?: Record<string, string>; // For 'related' type - subagent → parent payload
+    SubAgentContextPaths?: string[];        // For 'related' type - additional context (array of paths)
   }>;
 
   // PROMPTS - Simplified format for prompts (Builder creates AIPrompt records)
@@ -129,6 +155,39 @@ Example:
 ```
 
 **Both object and JSON string formats work** - object format is easier
+
+## IMPORTANT: Child vs Related SubAgents
+
+**Child SubAgents** (`Type: "child"`):
+- SubAgent.ID must be `""` (empty string) - AgentSpecSync creates new agent
+- Same payload structure as parent
+- No mapping fields needed (uses PayloadDownstreamPaths/PayloadUpstreamPaths)
+
+**Related SubAgents** (`Type: "related"`):
+- SubAgent.ID must be existing agent GUID (from Find Candidate Agents results)
+- SubAgent only needs: ID, Name, StartingPayloadValidationMode (minimal spec)
+- **REQUIRED**: SubAgentInputMapping, SubAgentOutputMapping, SubAgentContextPaths
+- AgentRelationshipID should be `""` (empty) - AgentSpecSync creates the relationship
+
+**Validation Rules**:
+- Child: SubAgent.ID = "" AND no mapping fields
+- Related: SubAgent.ID = GUID AND has mapping fields (Input/Output/Context)
+
+**Example (Related)**:
+```json
+{
+  "Type": "related",
+  "SubAgent": {
+    "ID": "5ddf4f5d-b977-42b0-bed5-4a2f0021bc58",
+    "Name": "Web Research Agent",
+    "StartingPayloadValidationMode": "Fail"
+  },
+  "AgentRelationshipID": "",
+  "SubAgentInputMapping": {"*": "searchQuery"},
+  "SubAgentOutputMapping": {"*": "webResults"},
+  "SubAgentContextPaths": ["userContext.*"]
+}
+```
 
 ## Your Workflow
 
@@ -267,16 +326,13 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 - The payload IS the current AgentSpec - all fields are at root level (`payload.ID`, `payload.Name`, `payload.Actions`, `payload.Prompts`, etc.)
 - `payload.modificationPlan` is a field in the payload (string) describing the changes to make
 - You read `payload.modificationPlan`, apply changes directly to the AgentSpec fields, and validate
-- Use `payloadChangeRequest.updateElements` to modify existing fields
-- Use `payloadChangeRequest.newElements` to add new items (e.g., new actions, new prompts, new sub-agents)
-- Use `payloadChangeRequest.removeElements` to remove items (e.g., delete an action, remove a prompt)
+- Use `payloadChangeRequest` to add / update / delete things.
 
 **Your job**:
 1. Read the modification plan from `payload.modificationPlan`
-2. Identify which AgentSpec fields need to change (e.g., add to `Actions` array, update `Description`, modify `Prompts`, add `Steps`, etc.)
+2. Identify which AgentSpec fields need to change (e.g., add to `Actions` array, update `Prompts`, delete a subagent in `Subagents`, etc.)
 3. Apply changes using `payloadChangeRequest`
 4. Validate the changes (Loop needs prompts, Flow needs steps, action IDs are valid, etc.)
-5. Return the changes via `payloadChangeRequest` (original `ID` is preserved automatically)
 
 **Key rules**:
 1. **Keep original `ID`**: The `payload.ID` field should NOT be modified (Builder uses it to detect updates)
