@@ -1152,7 +1152,7 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this._agentTypeState);
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this.AgentTypeState);
         return nextStep;
     }
 
@@ -4261,7 +4261,8 @@ Please choose an alternative approach to complete your task.`
     private async executeActionsStep(
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep,
-        parentStepId: string
+        parentStepId: string,
+        addConversationMessage: boolean = true
     ): Promise<BaseAgentNextStep> {
         
         try {
@@ -4359,11 +4360,13 @@ Please choose an alternative approach to complete your task.`
                 }).join('\n\n');
             }
 
-            // Add assistant message (no metadata - this is a permanent record)
-            params.conversationMessages.push({
-                role: 'assistant',
-                content: actionMessage
-            });
+            if (addConversationMessage) {
+                // Add assistant message (no metadata - this is a permanent record)
+                params.conversationMessages.push({
+                    role: 'assistant',
+                    content: actionMessage
+                });
+            }
 
             const actionEngine = ActionEngineServer.Instance;
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
@@ -4515,12 +4518,14 @@ Please choose an alternative approach to complete your task.`
                 }
             }
 
-            // Add user message with results and optional metadata
-            params.conversationMessages.push({
-                role: 'user',
-                content: resultsMessage,
-                metadata: metadata
-            } as AgentChatMessage);
+            if (addConversationMessage) {
+                // Add user message with results and optional metadata
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: resultsMessage,
+                    metadata: metadata
+                } as AgentChatMessage);
+            }
             
             // Call agent type's post-processing for actions
             let finalPayload = currentPayload;
@@ -4695,10 +4700,10 @@ Please choose an alternative approach to complete your task.`
         parentStepId: string,
         params: ExecuteAgentParams,
         config: AgentConfiguration
-    ): Promise<{ results: any[], errors: any[], finalPayload: any }> {
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
         let currentPayload = initialPayload;
         const maxIterations = forEach.maxIterations ?? 1000;
-        const results = [];
+        const results: Array<BaseAgentNextStep> = [];
         const errors = [];
 
         // ACTUAL FOR LOOP - simple and clear!
@@ -4721,7 +4726,7 @@ Please choose an alternative approach to complete your task.`
                 errors.push(iterResult.error);
                 if (!forEach.continueOnError) break;
             } else {
-                results.push(iterResult.payload);
+                results.push(iterResult.result);
                 currentPayload = iterResult.payload;
             }
         }
@@ -4740,12 +4745,11 @@ Please choose an alternative approach to complete your task.`
         parentStepId: string,
         params: ExecuteAgentParams,
         config: AgentConfiguration
-    ): Promise<{ payload?: any, error?: any }> {
+    ): Promise<{ payload?: any, error?: any, result?: BaseAgentNextStep }> {
         try {
             // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
-                { item, index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} },
-                this.AgentTypeState
+                { item, itemVariable: forEach.itemVariable,index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
             );
             const resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
 
@@ -4755,11 +4759,11 @@ Please choose an alternative approach to complete your task.`
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(forEach.action.name, params.agent.ID, params.agent.Name, params);
                 const resolvedAction = {
-                    ...matchedAction,
+                    name: matchedAction.Action,
                     params: resolvedParams
                 }
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
-                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId);
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
@@ -4770,11 +4774,10 @@ Please choose an alternative approach to complete your task.`
             // Apply AfterLoopIteration hook
             const iterPayload = result.newPayload || currentPayload;
             const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
-                { currentPayload: iterPayload, item, index, loopContext: { actionOutputMapping: forEach.action?.outputMapping } },
-                this.AgentTypeState
+                { currentPayload: iterPayload, item, itemVariable: forEach.itemVariable, index, loopContext: { actionOutputMapping: forEach.action?.outputMapping } }
             );
 
-            return { payload: afterHook || iterPayload };
+            return { payload: afterHook || iterPayload, result };
 
         } catch (error) {
             return { error: { index, item, message: error.message } };
@@ -4787,7 +4790,7 @@ Please choose an alternative approach to complete your task.`
     private async completeForEachLoop(
         forEach: ForEachOperation,
         loopStepEntity: AIAgentRunStepEntityExtended,
-        loopResults: { results: any[], errors: any[], finalPayload: any },
+        loopResults: { results: BaseAgentNextStep[], errors: any[], finalPayload: any },
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
     ): Promise<BaseAgentNextStep> {
@@ -4800,6 +4803,7 @@ Please choose an alternative approach to complete your task.`
 
         return {
             step: 'Retry',
+            retryInstructions: `Completed ForEach loop request using collection at '${forEach.collectionPath}'`,
             terminate: false,
             newPayload: loopResults.finalPayload,
             previousPayload: previousDecision.previousPayload
@@ -4812,16 +4816,18 @@ Please choose an alternative approach to complete your task.`
     private injectLoopResultsMessage(
         loopType: 'ForEach' | 'While',
         collectionOrCondition: string,
-        results: any[],
+        results: BaseAgentNextStep[],
         errors: any[],
         params: ExecuteAgentParams
     ) {
+        // grab the priorStepResult from within each result item and put that into a new array
+        const extractedResults = results.map(r => r.priorStepResult);
         const label = loopType === 'ForEach' ? 'Collection' : 'Condition';
         params.conversationMessages.push({
             role: 'user',
             content: `## Loop Completed\n**Type:** ${loopType}\n**${label}:** ${collectionOrCondition}\n` +
                      `**Processed:** ${results.length}, **Errors:** ${errors.length}\n\n` +
-                     `**Results:**\n\`\`\`json\n${JSON.stringify(results, null, 2)}\n\`\`\``,
+                     `**Results:**\n\`\`\`json\n${JSON.stringify(extractedResults, null, 2)}\n\`\`\``,
             metadata: { _temporary: true, _loopResults: true }
         } as any);
     }
@@ -4924,10 +4930,10 @@ Please choose an alternative approach to complete your task.`
         parentStepId: string,
         params: ExecuteAgentParams,
         config: AgentConfiguration
-    ): Promise<{ results: any[], errors: any[], finalPayload: any, iterations: number }> {
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any, iterations: number }> {
         let currentPayload = initialPayload;
         const maxIterations = whileOp.maxIterations ?? 100;
-        const results = [];
+        const results: BaseAgentNextStep[] = [];
         const errors = [];
         let iterationCount = 0;
 
@@ -4960,7 +4966,7 @@ Please choose an alternative approach to complete your task.`
                 errors.push(iterResult.error);
                 if (!whileOp.continueOnError) break;
             } else {
-                results.push(iterResult.payload);
+                results.push(iterResult.result);
                 currentPayload = iterResult.payload;
             }
 
@@ -4981,12 +4987,11 @@ Please choose an alternative approach to complete your task.`
         parentStepId: string,
         params: ExecuteAgentParams,
         config: AgentConfiguration
-    ): Promise<{ payload?: any, error?: any }> {
+    ): Promise<{ payload?: any, error?: any, result?: BaseAgentNextStep }> {
         try {
             // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
-                { item: attemptContext, index, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} },
-                this.AgentTypeState
+                { item: attemptContext, index, itemVariable: whileOp.itemVariable, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} }
             );
             const resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
 
@@ -4996,11 +5001,11 @@ Please choose an alternative approach to complete your task.`
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(whileOp.action.name, params.agent.ID, params.agent.Name, params);
                 const resolvedAction = {
-                    ...matchedAction,
+                    name: matchedAction.Action,
                     params: resolvedParams
                 };
                 const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
-                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId);
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
                 result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
@@ -5011,11 +5016,10 @@ Please choose an alternative approach to complete your task.`
             // Apply AfterLoopIteration hook
             const iterPayload = result.newPayload || currentPayload;
             const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
-                { currentPayload: iterPayload, item: attemptContext, index, loopContext: { actionOutputMapping: whileOp.action?.outputMapping } },
-                this.AgentTypeState
+                { currentPayload: iterPayload, item: attemptContext, itemVariable: whileOp.itemVariable, index, loopContext: { actionOutputMapping: whileOp.action?.outputMapping } }
             );
 
-            return { payload: afterHook || iterPayload };
+            return { payload: afterHook || iterPayload, result };
 
         } catch (error) {
             return { error: { index, item: attemptContext, message: error.message } };
@@ -5028,7 +5032,7 @@ Please choose an alternative approach to complete your task.`
     private async completeWhileLoop(
         whileOp: WhileOperation,
         loopStepEntity: AIAgentRunStepEntityExtended,
-        loopResults: { results: any[], errors: any[], finalPayload: any, iterations: number },
+        loopResults: { results: BaseAgentNextStep[], errors: any[], finalPayload: any, iterations: number },
         previousDecision: BaseAgentNextStep,
         params: ExecuteAgentParams
     ): Promise<BaseAgentNextStep> {
@@ -5040,6 +5044,7 @@ Please choose an alternative approach to complete your task.`
 
         return {
             step: 'Retry',
+            retryInstructions: `Completed While loop request using condition '${whileOp.condition}' after ${loopResults.iterations} iteration(s)`,
             terminate: false,
             newPayload: loopResults.finalPayload,
             previousPayload: previousDecision.previousPayload

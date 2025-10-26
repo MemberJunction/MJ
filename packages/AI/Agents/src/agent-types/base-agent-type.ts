@@ -489,10 +489,10 @@ export abstract class BaseAgentType {
             index: number;
             payload: P;
             loopType: 'ForEach' | 'While';
+            itemVariable: string;
             actionParams: Record<string, unknown>;
             subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
-        },
-        agentTypeState: any
+        } 
     ): {
         actionParams?: Record<string, unknown>;
         subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
@@ -517,11 +517,11 @@ export abstract class BaseAgentType {
             actionResults?: ActionResult[];
             subAgentResult?: any;
             currentPayload: P;
+            itemVariable: string;
             item: any;
             index: number;
             loopContext: any;  // BaseIterationContext (can't import due to circular dependency)
-        },
-        agentTypeState: any
+        } 
     ): P | null {
         return null;  // Default: No transformation
     }

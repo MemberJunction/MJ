@@ -1203,11 +1203,11 @@ export class FlowAgentType extends BaseAgentType {
             actionResults?: ActionResult[];
             subAgentResult?: any;
             currentPayload: P;
+            itemVariable: string;
             item: any;
             index: number;
             loopContext: any;
-        },
-        agentTypeState: any
+        } 
     ): P | null {
         const loopContext = iterationResult.loopContext;
 
@@ -1254,8 +1254,6 @@ export class FlowAgentType extends BaseAgentType {
 
         return null;
     }
-
-    // BeforeLoopIteration: Not needed - Flow uses static params from ActionInputMapping
 }
 
 /**

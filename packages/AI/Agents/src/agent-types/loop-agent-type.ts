@@ -15,9 +15,7 @@ import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { LoopAgentResponse, ForEachOperation, WhileOperation } from './loop-agent-response-type';
-import { ActionEngineServer } from '@memberjunction/actions';
-import { AIEngine } from '@memberjunction/aiengine';
+import { LoopAgentResponse } from './loop-agent-response-type'; 
 
 /**
  * Implementation of the Loop Agent Type pattern.
@@ -435,10 +433,10 @@ export class LoopAgentType extends BaseAgentType {
             index: number;
             payload: P;
             loopType: 'ForEach' | 'While';
+            itemVariable: string;
             actionParams: Record<string, unknown>;
             subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
-        },
-        agentTypeState: any
+        } 
     ): {
         actionParams?: Record<string, unknown>;
         subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
@@ -450,7 +448,7 @@ export class LoopAgentType extends BaseAgentType {
                 item: context.item,
                 index: context.index,
                 payload: context.payload
-            });
+            }, context.itemVariable);
 
             return { actionParams: resolvedParams };
         }
@@ -467,19 +465,20 @@ export class LoopAgentType extends BaseAgentType {
      */
     private resolveTemplates(
         obj: Record<string, unknown>,
-        context: Record<string, any>
+        context: Record<string, any>,
+        itemVariable: string
     ): Record<string, unknown> {
         const result: Record<string, unknown> = {};
 
         for (const [key, value] of Object.entries(obj)) {
             if (typeof value === 'string') {
-                result[key] = this.resolveValueFromContext(value, context);
+                result[key] = this.resolveValueFromContext(value, context, itemVariable);
             } else if (Array.isArray(value)) {
                 result[key] = value.map(v =>
-                    typeof v === 'string' ? this.resolveValueFromContext(v, context) : v
+                    typeof v === 'string' ? this.resolveValueFromContext(v, context, itemVariable) : v
                 );
             } else if (typeof value === 'object' && value !== null) {
-                result[key] = this.resolveTemplates(value as Record<string, unknown>, context);
+                result[key] = this.resolveTemplates(value as Record<string, unknown>, context, itemVariable);
             } else {
                 result[key] = value;
             }
@@ -509,14 +508,21 @@ export class LoopAgentType extends BaseAgentType {
     /**
      * Resolves a value from context using variable references
      */
-    private resolveValueFromContext(value: string, context: Record<string, any>): any {
+    private resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
+        // first check itemVariable name
+        const ivToLower = itemVariable?.trim().toLowerCase();
+        if (value?.toLowerCase().startsWith(`${ivToLower}.`)) {
+            const path = value.substring(ivToLower.length + 1);
+            return this.getValueFromPath(context.item, path);
+        }
+
         // Check for direct context variable references
         for (const [varName, varValue] of Object.entries(context)) {
             if (value === varName) {
                 return varValue;
             }
 
-            if (value.startsWith(`${varName}.`)) {
+            if (value?.trim().toLowerCase().startsWith(`${varName}.`)) {
                 const path = value.substring(varName.length + 1);
                 return this.getValueFromPath(varValue, path);
             }
