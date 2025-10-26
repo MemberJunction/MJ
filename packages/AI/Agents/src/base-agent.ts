@@ -4626,8 +4626,7 @@ Please choose an alternative approach to complete your task.`
     }
 
     /**
-     * Executes a ForEach loop - universal implementation for all agent types
-     *
+     * Executes a ForEach loop with actual for loop
      * @private
      */
     private async executeForEachLoop(
@@ -4636,185 +4635,201 @@ Please choose an alternative approach to complete your task.`
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
         const forEach = previousDecision.forEach as ForEachOperation;
-
         if (!forEach) {
-            return {
-                step: 'Failed',
-                terminate: true,
-                errorMessage: 'ForEach step missing forEach configuration',
-                previousPayload: previousDecision.previousPayload,
-                newPayload: previousDecision.newPayload || previousDecision.previousPayload
-            };
+            return this.createFailedStep('ForEach configuration missing', previousDecision);
         }
 
-        const payload = previousDecision.newPayload || previousDecision.previousPayload || params.payload;
+        const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
+        const collection = this.getCollectionFromPayload(currentPayload, forEach.collectionPath);
 
-        // Initialize iteration context on first call
-        if (!this._iterationContext) {
-            const collection = this.getValueFromPath(payload, forEach.collectionPath);
-            if (!Array.isArray(collection)) {
-                return {
-                    step: 'Failed',
-                    terminate: true,
-                    errorMessage: `Collection path "${forEach.collectionPath}" did not resolve to an array`,
-                    previousPayload: previousDecision.previousPayload,
-                    newPayload: payload
-                };
+        if (!collection) {
+            return this.createFailedStep(`Collection path "${forEach.collectionPath}" not an array`, previousDecision);
+        }
+
+        const loopStepId = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
+        const loopResults = await this.executeForEachIterations(forEach, collection, currentPayload, loopStepId, params, config);
+
+        return this.completeForEachLoop(forEach, loopResults, previousDecision, params);
+    }
+
+    /**
+     * Helper: Validate and extract collection from payload
+     */
+    private getCollectionFromPayload(payload: any, path: string): any[] | null {
+        const value = this.getValueFromPath(payload, path);
+        return Array.isArray(value) ? value : null;
+    }
+
+    /**
+     * Helper: Create parent ForEach loop step
+     */
+    private async createForEachLoopStep(
+        forEach: ForEachOperation,
+        collection: any[],
+        payload: any,
+        params: ExecuteAgentParams
+    ): Promise<string> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'ForEach',
+            stepName: `ForEach: ${forEach.collectionPath} (${collection.length} items)`,
+            contextUser: params.contextUser,
+            inputData: { forEach, count: collection.length },
+            payloadAtStart: payload
+        });
+        await this.finalizeStepEntity(stepEntity, true);
+        return stepEntity.ID;
+    }
+
+    /**
+     * Helper: Execute all iterations with actual for loop
+     */
+    private async executeForEachIterations(
+        forEach: ForEachOperation,
+        collection: any[],
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: any[], errors: any[], finalPayload: any }> {
+        let currentPayload = initialPayload;
+        const maxIterations = forEach.maxIterations ?? 1000;
+        const results = [];
+        const errors = [];
+
+        // ACTUAL FOR LOOP - simple and clear!
+        for (let i = 0; i < Math.min(collection.length, maxIterations); i++) {
+            if (i > 0 && forEach.delayBetweenIterationsMs) {
+                await new Promise(resolve => setTimeout(resolve, forEach.delayBetweenIterationsMs));
             }
 
-            // Create parent step for the loop itself
-            const loopStepEntity = await this.createStepEntity({
-                stepType: 'ForEach',
-                stepName: `ForEach loop over ${forEach.collectionPath} (${collection.length} items)`,
-                contextUser: params.contextUser,
-                inputData: { forEach, collectionSize: collection.length },
-                payloadAtStart: payload
-            });
-            await this.finalizeStepEntity(loopStepEntity, true);
+            const iterResult = await this.executeSingleForEachIteration(
+                forEach,
+                collection[i],
+                i,
+                currentPayload,
+                parentStepId,
+                params,
+                config
+            );
 
-            this._iterationContext = {
-                loopType: 'ForEach',
-                collection,
-                currentIndex: 0,
-                itemVariable: forEach.itemVariable || 'item',
-                indexVariable: forEach.indexVariable || 'index',
-                maxIterations: forEach.maxIterations ?? 1000,
-                continueOnError: forEach.continueOnError ?? false,
-                delayBetweenIterationsMs: forEach.delayBetweenIterationsMs,
-                results: [],
-                errors: [],
-                loopConfig: forEach,
-                parentStepId: loopStepEntity.ID,
-                actionOutputMapping: forEach.action?.outputMapping 
-            };
-        }
-
-        // Check if loop complete
-        if (this._iterationContext.currentIndex >= this._iterationContext.collection!.length) {
-            const loopResults = {
-                results: this._iterationContext.results,
-                errors: this._iterationContext.errors,
-                totalIterations: this._iterationContext.currentIndex
-            };
-
-            this._iterationContext = null;  // Clean up
-
-            // Build unified loop results
-            const unifiedLoopResults = {
-                type: 'ForEach' as const,
-                results: loopResults.results,
-                errors: loopResults.errors,
-                totalIterations: loopResults.totalIterations,
-                collectionPath: forEach.collectionPath
-            };
-
-            // Check if agent type wants results injected as temporary message
-            if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
-                params.conversationMessages.push({
-                    role: 'user',
-                    content: `## Loop Execution Completed\n\n` +
-                             `**Type:** ForEach\n` +
-                             `**Collection:** ${forEach.collectionPath}\n` +
-                             `**Items Processed:** ${unifiedLoopResults.totalIterations}\n` +
-                             `**Successful:** ${unifiedLoopResults.results.length}\n` +
-                             `**Errors:** ${unifiedLoopResults.errors.length}\n\n` +
-                             `**Results:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.results, null, 2)}\n\`\`\`${unifiedLoopResults.errors.length > 0 ? `\n\n**Errors:**\n\`\`\`json\n${JSON.stringify(unifiedLoopResults.errors, null, 2)}\n\`\`\`` : ''}`,
-                    metadata: {
-                        _temporary: true,
-                        _loopResults: true
-                    }
-                } as any);
+            if (iterResult.error) {
+                errors.push(iterResult.error);
+                if (!forEach.continueOnError) break;
+            } else {
+                results.push(iterResult.payload);
+                currentPayload = iterResult.payload;
             }
-
-            return {
-                step: 'Retry',
-                retryInstructions: `Here are the results from ForEach loop over "${forEach.collectionPath}"`,
-                terminate: false,
-                newPayload: payload,
-                previousPayload: previousDecision.previousPayload
-            } as BaseAgentNextStep;
         }
 
-        // Safety check
-        if (this._iterationContext.currentIndex >= this._iterationContext.maxIterations) {
-            LogError(`ForEach loop exceeded maxIterations (${this._iterationContext.maxIterations})`);
-            this._iterationContext = null;
-            return {
-                step: 'Failed',
-                terminate: true,
-                errorMessage: `Loop exceeded maximum iterations (${this._iterationContext.maxIterations})`,
-                previousPayload: previousDecision.previousPayload,
-                newPayload: payload
-            };
-        }
+        return { results, errors, finalPayload: currentPayload };
+    }
 
-        // Get current item
-        const item = this._iterationContext.collection![this._iterationContext.currentIndex];
-        const index = this._iterationContext.currentIndex;
-
-        // Call BeforeLoopIteration hook to resolve params
-        let resolvedParams = forEach.action?.params || {};
-        if (forEach.action) {
+    /**
+     * Helper: Execute single ForEach iteration
+     */
+    private async executeSingleForEachIteration(
+        forEach: ForEachOperation,
+        item: any,
+        index: number,
+        currentPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ payload?: any, error?: any }> {
+        try {
+            // Resolve params via BeforeLoopIteration hook
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
-                {
-                    item,
-                    index,
-                    payload: payload,
-                    loopType: 'ForEach',
-                    actionParams: forEach.action.params
-                },
+                { item, index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} },
+                this.AgentTypeState
+            );
+            const resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
+
+            // Execute action, sub-agent, or prompt
+            let result;
+            if (forEach.action) {
+                const actionStep = { step: 'Actions' as const, actions: [{ name: forEach.action.name, params: resolvedParams }], newPayload: currentPayload, previousPayload: currentPayload };
+                result = await this.executeActionsStep(params, config, actionStep as any, parentStepId);
+            } else if (forEach.subAgent) {
+                const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
+                result = await this.processSubAgentStep(params, subAgentStep as any);
+            } else {
+                throw new Error('ForEach missing action/subAgent');
+            }
+
+            // Apply AfterLoopIteration hook
+            const iterPayload = result.newPayload || currentPayload;
+            const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
+                { currentPayload: iterPayload, item, index, loopContext: { actionOutputMapping: forEach.action?.outputMapping } },
                 this.AgentTypeState
             );
 
-            if (beforeHook?.actionParams) {
-                resolvedParams = beforeHook.actionParams;
-            }
+            return { payload: afterHook || iterPayload };
 
-            // Return Actions step for THIS iteration
-            return {
-                step: 'Actions',
-                actions: [{
-                    name: forEach.action.name,
-                    params: resolvedParams
-                }],
-                
-                terminate: false,
-                newPayload: payload,
-                previousPayload: previousDecision.previousPayload
-            };
-        } else if (forEach.subAgent) {
-            // Sub-agent iteration
-            return {
-                step: 'Sub-Agent',
-                subAgent: {
-                    name: forEach.subAgent.name,
-                    message: forEach.subAgent.message,
-                    terminateAfter: false,
-                    templateParameters: forEach.subAgent.templateParameters
-                },
-                
-                terminate: false,
-                newPayload: payload,
-                previousPayload: previousDecision.previousPayload
-            };
+        } catch (error) {
+            return { error: { index, item, message: error.message } };
+        }
+    }
+
+    /**
+     * Helper: Complete ForEach and return result
+     */
+    private completeForEachLoop(
+        forEach: ForEachOperation,
+        loopResults: { results: any[], errors: any[], finalPayload: any },
+        previousDecision: BaseAgentNextStep,
+        params: ExecuteAgentParams
+    ): BaseAgentNextStep {
+        if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params);
         }
 
-        // Should not reach here
         return {
-            step: 'Failed',
-            terminate: true,
-            errorMessage: 'ForEach configuration missing action and subAgent',
-            previousPayload: previousDecision.previousPayload,
-            newPayload: previousDecision.newPayload
+            step: 'Retry',
+            terminate: false,
+            newPayload: loopResults.finalPayload,
+            previousPayload: previousDecision.previousPayload 
         };
     }
 
+    /**
+     * Helper: Inject loop results as temporary message
+     */
+    private injectLoopResultsMessage(
+        loopType: 'ForEach' | 'While',
+        collectionOrCondition: string,
+        results: any[],
+        errors: any[],
+        params: ExecuteAgentParams
+    ) {
+        const label = loopType === 'ForEach' ? 'Collection' : 'Condition';
+        params.conversationMessages.push({
+            role: 'user',
+            content: `## Loop Completed\n**Type:** ${loopType}\n**${label}:** ${collectionOrCondition}\n` +
+                     `**Processed:** ${results.length}, **Errors:** ${errors.length}\n\n` +
+                     `**Results:**\n\`\`\`json\n${JSON.stringify(results, null, 2)}\n\`\`\``,
+            metadata: { _temporary: true, _loopResults: true }
+        } as any);
+    }
+
+    /**
+     * Helper: Create failed step
+     */
+    private createFailedStep(errorMessage: string, previousDecision: BaseAgentNextStep): BaseAgentNextStep {
+        return {
+            step: 'Failed',
+            terminate: true,
+            errorMessage,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+ 
     /**
      * Executes a While loop - universal implementation for all agent types
      *
      * @private
      */
-    private async executeWhileLoop(
+    private async executeWhileLoop_OLD(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
         previousDecision: BaseAgentNextStep
