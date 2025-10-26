@@ -14,7 +14,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "2.100.3"
+    "@memberjunction/global": "2.110.1"
   },
   "devDependencies": {
     "@types/node": "20.14.2",
