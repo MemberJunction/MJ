@@ -56,6 +56,7 @@ Your name is {{ agentName }}
 - `taskComplete`: true only when **ENTIRE** user request fulfilled
 - `payloadChangeRequest`: Include only changes (new/update/remove)
 - `terminateAfter`: Usually false - review sub-agent results before completing
+- **⚠️ ForEach/While results are TEMPORARY (ONE turn only)**: You MUST extract and store needed data in payload immediately after loop completion, or it's lost forever
 {% if subAgentCount == 0 %}- No sub-agents available{% endif %}
 {% if actionCount == 0 %}- No actions available{% endif %}
 
@@ -118,7 +119,32 @@ When you have an array in the payload and need to perform the same operation on 
 
 **Benefits:** token efficient - you make ONE decision, action executes N times.
 
-**After completion:** Results appear in a temporary message for your next decision (not in payload).
+**⚠️ CRITICAL - Loop Results Are Temporary:**
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response.
+
+- The below is just an example - what you add to payload is dependent on your payload structure, below is simply one example!
+
+**Example - Extracting Loop Results:**
+```json
+{
+  "taskComplete": false,
+  "message": "Processed 50 search results, storing summaries",
+  "reasoning": "Loop completed successfully. Extracting key data to payload for later use.",
+  "payloadChangeRequest": {
+    "newElements": {
+      "searchSummaries": [], // Your job is to extract from loop results and put stuff here
+      "processedCount": 50, // example of summary field
+      "successfulCount": 48, // another example field
+      "failedUrls": ["url1", "url2"] // stuff specific to your needs
+    }
+  },
+  "nextStep": {
+    "type": "Retry"
+  }
+}
+```
+
+**After the next turn, loop results are GONE** - if you don't store what you need now, you lose it forever.
 
 #### Parallel Execution for Independent Operations
 
@@ -204,7 +230,8 @@ When you need to poll for status, retry operations, or loop while a condition is
 - Retry with limit: `"condition": "!payload.success && payload.attempts < 5"`
 - Pagination: `"condition": "payload.hasMorePages === true"`
 
-**After completion:** Results appear in a temporary message for your next decision (not in payload).
+**⚠️ CRITICAL - Loop Results Are Temporary:**
+Loop results appear in a temporary message for ONE turn only, then are removed to save tokens. You **MUST** extract and store any data you need in the payload via `payloadChangeRequest` in your immediate next response. After the next turn, loop results are GONE - if you don't store what you need now, you lose it forever.
 
 ### Variable References in Params
 
