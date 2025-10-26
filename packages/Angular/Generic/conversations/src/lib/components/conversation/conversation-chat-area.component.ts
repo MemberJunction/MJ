@@ -26,7 +26,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   @Output() taskClicked = new EventEmitter<TaskEntity>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
-  @ViewChild(MessageInputComponent) private messageInputComponent!: MessageInputComponent;
+  @ViewChild('messageInput', { static: false }) private messageInputComponent?: MessageInputComponent;
   @ViewChild(ArtifactViewerPanelComponent) private artifactViewerComponent?: ArtifactViewerPanelComponent;
 
   public messages: ConversationDetailEntity[] = [];
@@ -192,10 +192,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         // Hide loading state
         this.isLoadingConversation = false;
         this.cdr.detectChanges();
+
+        // Pending message will be passed to message-input component via [initialMessage] Input
+        // The component will handle sending it when it initializes
       }
     } else {
+      // No active conversation - show empty state
       this.messages = [];
       this.isLoadingConversation = false;
+      this.agentStateService.stopPolling();
     }
   }
 
@@ -236,10 +241,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
         // Process peripheral data (agent runs & artifacts) in background
         this.isLoadingPeripheralData = true;
-        this.loadPeripheralData(conversationId).finally(() => {
-          this.isLoadingPeripheralData = false;
-          this.cdr.detectChanges();
-        });
+        await this.loadPeripheralData(conversationId);
+        this.isLoadingPeripheralData = false;
+        this.cdr.detectChanges();
       }
 
       // After loading messages, check for in-progress runs and ensure we're receiving updates
@@ -445,6 +449,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   onMessageSent(message: ConversationDetailEntity): void {
+    // Clear pending message if it was sent
+    if (this.conversationState.pendingMessageToSend) {
+      this.conversationState.pendingMessageToSend = null;
+    }
+
     // Check if message already exists in the array (by ID) to prevent duplicates
     // Messages can be emitted multiple times as they're updated (e.g., status changes)
     const existingIndex = this.messages.findIndex(m => m.ID === message.ID);
@@ -1210,6 +1219,51 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     console.log('🎉 Conversation renamed:', event);
     // Pass the event up to workspace component for animation
     this.conversationRenamed.emit(event);
+  }
+
+  /**
+   * Handle message sent from empty state component
+   * Creates a new conversation and sends the message
+   */
+  async onEmptyStateMessageSent(messageText: string): Promise<void> {
+    if (!messageText || !messageText.trim()) {
+      return;
+    }
+
+    console.log('📨 Empty state message received:', messageText);
+
+    try {
+      this.isProcessing = true;
+
+      // Store the message to send after conversation loads (in service to persist across component lifecycle)
+      this.conversationState.pendingMessageToSend = messageText.trim();
+      console.log('💾 Stored pending message in service:', this.conversationState.pendingMessageToSend);
+
+      // Create a new conversation
+      const newConversation = await this.conversationState.createConversation(
+        'New Conversation', // Temporary name - will be auto-named after first message
+        this.environmentId,
+        this.currentUser
+      );
+
+      if (!newConversation) {
+        console.error('❌ Failed to create new conversation');
+        this.conversationState.pendingMessageToSend = null;
+        this.isProcessing = false;
+        return;
+      }
+
+      console.log('✅ Created new conversation:', newConversation.ID);
+
+      // Set as active conversation (this will trigger onConversationChanged which will send the message)
+      this.conversationState.activeConversationId = newConversation.ID;
+
+    } catch (error) {
+      console.error('❌ Error creating conversation from empty state:', error);
+      this.conversationState.pendingMessageToSend = null;
+    } finally {
+      this.isProcessing = false;
+    }
   }
 
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {

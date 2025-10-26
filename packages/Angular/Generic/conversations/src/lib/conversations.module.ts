@@ -26,6 +26,7 @@ import { MarkdownModule } from 'ngx-markdown';
 import { MessageItemComponent } from './components/message/message-item.component';
 import { MessageListComponent } from './components/message/message-list.component';
 import { MessageInputComponent } from './components/message/message-input.component';
+import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { SuggestedResponsesComponent } from './components/message/suggested-responses.component';
 import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
@@ -33,6 +34,7 @@ import { ConversationNavigationComponent } from './components/navigation/convers
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
 import { ConversationListComponent } from './components/conversation/conversation-list.component';
 import { ConversationChatAreaComponent } from './components/conversation/conversation-chat-area.component';
+import { ConversationEmptyStateComponent } from './components/conversation/conversation-empty-state.component';
 import { ThreadPanelComponent } from './components/thread/thread-panel.component';
 import { CollectionTreeComponent } from './components/collection/collection-tree.component';
 import { CollectionViewComponent } from './components/collection/collection-view.component';
@@ -69,6 +71,7 @@ const COMPONENTS = [
   MessageItemComponent,
   MessageListComponent,
   MessageInputComponent,
+  MessageInputBoxComponent,
   SuggestedResponsesComponent,
   MentionDropdownComponent,
   ConversationWorkspaceComponent,
@@ -76,6 +79,7 @@ const COMPONENTS = [
   ConversationSidebarComponent,
   ConversationListComponent,
   ConversationChatAreaComponent,
+  ConversationEmptyStateComponent,
   ThreadPanelComponent,
   CollectionTreeComponent,
   CollectionViewComponent,

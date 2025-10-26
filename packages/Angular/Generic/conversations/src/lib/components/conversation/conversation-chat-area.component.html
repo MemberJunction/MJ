@@ -45,7 +45,14 @@
     <div class="chat-content-area">
     <!-- Messages Pane -->
     <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
-        @if (isLoadingConversation && conversationState.activeConversation) {
+        @if (!conversationState.activeConversation) {
+          <!-- Empty State - No conversation selected -->
+          <mj-conversation-empty-state
+            [currentUser]="currentUser"
+            [disabled]="isProcessing"
+            (messageSent)="onEmptyStateMessageSent($event)">
+          </mj-conversation-empty-state>
+        } @else if (isLoadingConversation) {
           <!-- Loading State - Show centered spinner while conversation loads -->
           <div class="conversation-loading-state">
             <div class="loading-content">
@@ -53,7 +60,7 @@
               <span>Loading conversation...</span>
             </div>
           </div>
-        } @else if (conversationState.activeConversation) {
+        } @else {
           <!-- Normal Message View -->
           <div class="chat-messages-wrapper">
           <div class="chat-messages-container" #scrollContainer (scroll)="checkScroll()">
@@ -95,11 +102,13 @@
               } @else {
                 <!-- Input Component -->
                 <mj-message-input
+                #messageInput
                 *ngIf="conversationState.activeConversation"
                 [conversationId]="conversationState.activeConversation.ID"
                 [currentUser]="currentUser"
                 [conversationHistory]="messages"
                 [disabled]="isProcessing"
+                [initialMessage]="conversationState.pendingMessageToSend"
                 (messageSent)="onMessageSent($event)"
                 (agentResponse)="onAgentResponse($event)"
                 (agentRunDetected)="onAgentRunDetected($event)"
