@@ -3094,53 +3094,10 @@ Please choose an alternative approach to complete your task.`
             case 'Sub-Agent':
                 return await this.processSubAgentStep<P, P>(params, previousDecision!);
             case 'Actions':
-                return await this.executeActionsStep(params, config, previousDecision);
+                return await this.executeActionsStep(params, config, previousDecision, undefined);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
-                // Check if this was a sub-agent loop iteration
-                if (this._iterationContext) {
-                    // Sub-agent completed in loop - continue loop
-                    const subAgentResult = previousDecision.newPayload;
-
-                    // Call AfterLoopIteration hook
-                    let processedPayload = subAgentResult;
-                    const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
-                        {
-                            subAgentResult,
-                            currentPayload: subAgentResult,
-                            item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
-                            index: this._iterationContext.currentIndex,
-                            loopContext: this._iterationContext
-                        },
-                        this.AgentTypeState
-                    );
-
-                    if (afterHook) {
-                        processedPayload = afterHook;
-                        params.payload = processedPayload;
-                    }
-
-                    // Store result and continue loop
-                    this._iterationContext.results.push(processedPayload);
-                    this._iterationContext.currentIndex++;
-
-                    if (this._iterationContext.loopType === 'ForEach') {
-                        const loopDecision = {
-                            ...previousDecision,
-                            forEach: this._iterationContext.loopConfig as ForEachOperation
-                        };
-                        return await this.executeForEachLoop(params, config, loopDecision);
-                    } else {
-                        const loopDecision = {
-                            ...previousDecision,
-                            while: this._iterationContext.loopConfig as WhileOperation
-                        };
-                        return await this.executeWhileLoop(params, config, loopDecision);
-                    }
-                }
-
-                const pd = previousDecision as BaseAgentNextStep<P> & { previousPayload?: { taskComplete?: boolean } };
                 if (previousDecision.terminate) {
                     // If parent agent previously requested to auto-terminate, after a successful
                     // sub-agent run, we can finalize the agent run
@@ -4304,7 +4261,8 @@ Please choose an alternative approach to complete your task.`
     private async executeActionsStep(
         params: ExecuteAgentParams,
         config: AgentConfiguration,
-        previousDecision: BaseAgentNextStep
+        previousDecision: BaseAgentNextStep,
+        parentStepId: string
     ): Promise<BaseAgentNextStep> {
         
         try {
@@ -4446,7 +4404,7 @@ Please choose an alternative approach to complete your task.`
                     actionParams: aa.params
                 };
                 
-                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: this._iterationContext?.parentStepId });
+                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId });
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
@@ -4613,78 +4571,6 @@ Please choose an alternative approach to complete your task.`
                 LogError(`Error in PostProcessActionStep: ${error.message}`);
             }
             
-            // Check if this was a loop iteration
-            if (this._iterationContext) {
-                // Check if any actions failed
-                const hasFailures = actionResults.some(ar => !ar.success);
-
-                if (hasFailures && !this._iterationContext.continueOnError) {
-                    // Store error and abort loop
-                    this._iterationContext.errors.push({
-                        index: this._iterationContext.currentIndex,
-                        item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
-                        error: actionResults.find(ar => !ar.success)?.error || 'Action execution failed'
-                    });
-
-                    this._iterationContext = null;
-
-                    return {
-                        step: 'Failed',
-                        terminate: true,
-                        errorMessage: `Loop iteration ${this._iterationContext?.currentIndex || 'unknown'} failed and continueOnError is false`,
-                        previousPayload: params.payload,
-                        newPayload: params.payload
-                    };
-                }
-
-                // Call AfterLoopIteration hook to process result
-                let processedPayload = finalPayload;
-                const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
-                    {
-                        actionResults: actionResults.map(ar => ar.result),
-                        currentPayload: finalPayload,
-                        item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
-                        index: this._iterationContext.currentIndex,
-                        loopContext: this._iterationContext
-                    },
-                    this.AgentTypeState
-                );
-
-                if (afterHook) {
-                    processedPayload = afterHook;
-                    // Update params.payload so next iteration sees changes
-                    params.payload = processedPayload;
-                }
-
-                // Store result (or error if failed but continueOnError=true)
-                if (hasFailures) {
-                    this._iterationContext.errors.push({
-                        index: this._iterationContext.currentIndex,
-                        item: this._iterationContext.collection?.[this._iterationContext.currentIndex],
-                        error: actionResults.find(ar => !ar.success)?.error || 'Action failed'
-                    });
-                }
-                this._iterationContext.results.push(processedPayload);
-
-                // Increment counter
-                this._iterationContext.currentIndex++;
-
-                // Re-execute loop to get next iteration or completion
-                if (this._iterationContext.loopType === 'ForEach') {
-                    const loopDecision = {
-                        ...previousDecision,
-                        forEach: this._iterationContext.loopConfig as ForEachOperation
-                    };
-                    return await this.executeForEachLoop(params, config, loopDecision);
-                } else {
-                    const loopDecision = {
-                        ...previousDecision,
-                        while: this._iterationContext.loopConfig as WhileOperation
-                    };
-                    return await this.executeWhileLoop(params, config, loopDecision);
-                }
-            }
-
             // After actions complete, we need to process the results
             // The retry step is used to re-execute the prompt with the action results
             // This allows the agent to analyze the results and determine what to do next
@@ -4700,11 +4586,6 @@ Please choose an alternative approach to complete your task.`
             };
         }
         catch (e) {
-            // Clean up iteration context on error
-            if (this._iterationContext) {
-                this._iterationContext = null;
-            }
-
             return {
                 terminate: false,
                 step: 'Retry',
