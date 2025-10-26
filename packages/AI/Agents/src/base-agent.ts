@@ -4766,21 +4766,18 @@ Please choose an alternative approach to complete your task.`
             };
         }
 
+        const payload = previousDecision.newPayload || previousDecision.previousPayload || params.payload;
+
         // Initialize iteration context on first call
         if (!this._iterationContext) {
-            // Wipe previous loop results from payload
-            const cleanPayload = { ...params.payload };
-            delete (cleanPayload as any).loopResults;
-            params.payload = cleanPayload;
-
-            const collection = this.getValueFromPath(params.payload, forEach.collectionPath);
+            const collection = this.getValueFromPath(payload, forEach.collectionPath);
             if (!Array.isArray(collection)) {
                 return {
                     step: 'Failed',
                     terminate: true,
                     errorMessage: `Collection path "${forEach.collectionPath}" did not resolve to an array`,
-                    previousPayload: params.payload,
-                    newPayload: params.payload
+                    previousPayload: previousDecision.previousPayload,
+                    newPayload: payload
                 };
             }
 
@@ -4790,7 +4787,7 @@ Please choose an alternative approach to complete your task.`
                 stepName: `ForEach loop over ${forEach.collectionPath} (${collection.length} items)`,
                 contextUser: params.contextUser,
                 inputData: { forEach, collectionSize: collection.length },
-                payloadAtStart: params.payload
+                payloadAtStart: payload
             });
             await this.finalizeStepEntity(loopStepEntity, true);
 
@@ -4807,8 +4804,7 @@ Please choose an alternative approach to complete your task.`
                 errors: [],
                 loopConfig: forEach,
                 parentStepId: loopStepEntity.ID,
-                actionOutputMapping: forEach.action?.outputMapping,
-                agentTypeData: (previousDecision as any).agentTypeData
+                actionOutputMapping: forEach.action?.outputMapping 
             };
         }
 
@@ -4820,7 +4816,6 @@ Please choose an alternative approach to complete your task.`
                 totalIterations: this._iterationContext.currentIndex
             };
 
-            const agentTypeData = this._iterationContext.agentTypeData;
             this._iterationContext = null;  // Clean up
 
             // Build unified loop results
@@ -4850,14 +4845,13 @@ Please choose an alternative approach to complete your task.`
                 } as any);
             }
 
-            // Return Retry with clean payload (results in message if injected, not in payload)
             return {
                 step: 'Retry',
+                retryInstructions: `Here are the results from ForEach loop over "${forEach.collectionPath}"`,
                 terminate: false,
-                newPayload: params.payload,
-                previousPayload: params.payload,
-                agentTypeData
-            } as BaseAgentNextStep & { agentTypeData?: any };
+                newPayload: payload,
+                previousPayload: previousDecision.previousPayload
+            } as BaseAgentNextStep;
         }
 
         // Safety check
@@ -4868,21 +4862,14 @@ Please choose an alternative approach to complete your task.`
                 step: 'Failed',
                 terminate: true,
                 errorMessage: `Loop exceeded maximum iterations (${this._iterationContext.maxIterations})`,
-                previousPayload: params.payload,
-                newPayload: params.payload
+                previousPayload: previousDecision.previousPayload,
+                newPayload: payload
             };
         }
 
         // Get current item
         const item = this._iterationContext.collection![this._iterationContext.currentIndex];
         const index = this._iterationContext.currentIndex;
-
-        // Inject loop variables into payload
-        const enhancedPayload = {
-            ...params.payload,
-            [this._iterationContext.itemVariable]: item,
-            [this._iterationContext.indexVariable!]: index
-        };
 
         // Call BeforeLoopIteration hook to resolve params
         let resolvedParams = forEach.action?.params || {};
@@ -4891,7 +4878,7 @@ Please choose an alternative approach to complete your task.`
                 {
                     item,
                     index,
-                    payload: params.payload,
+                    payload: payload,
                     loopType: 'ForEach',
                     actionParams: forEach.action.params
                 },
@@ -4911,8 +4898,8 @@ Please choose an alternative approach to complete your task.`
                 }],
                 
                 terminate: false,
-                newPayload: enhancedPayload,
-                previousPayload: params.payload
+                newPayload: payload,
+                previousPayload: previousDecision.previousPayload
             };
         } else if (forEach.subAgent) {
             // Sub-agent iteration
@@ -4926,8 +4913,8 @@ Please choose an alternative approach to complete your task.`
                 },
                 
                 terminate: false,
-                newPayload: enhancedPayload,
-                previousPayload: params.payload
+                newPayload: payload,
+                previousPayload: previousDecision.previousPayload
             };
         }
 
@@ -4936,8 +4923,8 @@ Please choose an alternative approach to complete your task.`
             step: 'Failed',
             terminate: true,
             errorMessage: 'ForEach configuration missing action and subAgent',
-            previousPayload: params.payload,
-            newPayload: params.payload
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload
         };
     }
 
