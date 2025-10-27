@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-provider-bundle",
-  "version": "2.110.1",
+  "version": "2.111.0",
   "description": "MemberJunction AI Provider Bundle - Loads all standard AI providers to prevent tree shaking",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -17,16 +17,16 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai-anthropic": "2.110.1",
-    "@memberjunction/ai-cerebras": "2.110.1",
-    "@memberjunction/ai-groq": "2.110.1",
-    "@memberjunction/ai-lmstudio": "2.110.1",
-    "@memberjunction/ai-local-embeddings": "2.110.1",
-    "@memberjunction/ai-mistral": "2.110.1",
-    "@memberjunction/ai-ollama": "2.110.1",
-    "@memberjunction/ai-openai": "2.110.1",
-    "@memberjunction/ai-openrouter": "2.110.1",
-    "@memberjunction/ai-xai": "2.110.1"
+    "@memberjunction/ai-anthropic": "2.111.0",
+    "@memberjunction/ai-cerebras": "2.111.0",
+    "@memberjunction/ai-groq": "2.111.0",
+    "@memberjunction/ai-lmstudio": "2.111.0",
+    "@memberjunction/ai-local-embeddings": "2.111.0",
+    "@memberjunction/ai-mistral": "2.111.0",
+    "@memberjunction/ai-ollama": "2.111.0",
+    "@memberjunction/ai-openai": "2.111.0",
+    "@memberjunction/ai-openrouter": "2.111.0",
+    "@memberjunction/ai-xai": "2.111.0"
   },
   "repository": {
     "type": "git",
