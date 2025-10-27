@@ -177,7 +177,7 @@ export class ConversationMessageRatingComponent implements OnInit {
         try {
             const rv = new RunView();
             const result = await rv.RunView<ConversationDetailRatingEntity>({
-                EntityName: 'Conversation Detail Ratings',
+                EntityName: 'MJ: Conversation Detail Ratings',
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}'`,
                 ResultType: 'entity_object'
             });
@@ -218,7 +218,7 @@ export class ConversationMessageRatingComponent implements OnInit {
             // Try to load existing rating
             const rv = new RunView();
             const existing = await rv.RunView<ConversationDetailRatingEntity>({
-                EntityName: 'Conversation Detail Ratings',
+                EntityName: 'MJ: Conversation Detail Ratings',
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}' AND UserID='${this.currentUserId}'`,
                 MaxRows: 1,
                 ResultType: 'entity_object'
@@ -238,7 +238,7 @@ export class ConversationMessageRatingComponent implements OnInit {
                 ratingEntity.Rating = rating;
             } else {
                 // Create new
-                ratingEntity = await md.GetEntityObject<ConversationDetailRatingEntity>('Conversation Detail Ratings');
+                ratingEntity = await md.GetEntityObject<ConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
                 ratingEntity.ConversationDetailID = this.conversationDetailId;
                 ratingEntity.UserID = this.currentUserId;
                 ratingEntity.Rating = rating;
