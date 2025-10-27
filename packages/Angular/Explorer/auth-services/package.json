@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-auth-services",
-  "version": "2.111.0",
+  "version": "2.111.1",
   "description": "MemberJunction Explorer: Authentication Services",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
