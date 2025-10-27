@@ -52,7 +52,8 @@
         [currentUser]="currentUser"
         (conversationRenamed)="onConversationRenamed($event)"
         (openEntityRecord)="onOpenEntityRecord($event)"
-        (taskClicked)="onTaskClicked($event)">
+        (taskClicked)="onTaskClicked($event)"
+        (artifactLinkClicked)="onArtifactLinkNavigation($event)">
       </mj-conversation-chat-area>
     </div>
 
@@ -68,8 +69,11 @@
           [showSaveToCollection]="activeTab !== 'collections'"
           [viewContext]="activeTab === 'collections' ? 'collection' : 'conversation'"
           [contextCollectionId]="collectionState.activeCollectionId ?? undefined"
+          [canShare]="canShareActiveArtifact"
+          [canEdit]="canEditActiveArtifact"
           (closed)="closeArtifactPanel()"
-          (navigateToLink)="onArtifactLinkNavigation($event)">
+          (navigateToLink)="onArtifactLinkNavigation($event)"
+          (shareRequested)="onArtifactShareRequested($event)">
         </mj-artifact-viewer-panel>
       </div>
     }
@@ -86,4 +90,13 @@
 
   <!-- Toast Notifications -->
   <mj-toast></mj-toast>
+
+  <!-- Artifact Share Modal -->
+  <mj-artifact-share-modal
+    [isOpen]="isArtifactShareModalOpen"
+    [artifact]="artifactToShare"
+    [currentUser]="currentUser"
+    (saved)="onArtifactShared()"
+    (cancelled)="onArtifactShareModalClose()">
+  </mj-artifact-share-modal>
 </div>

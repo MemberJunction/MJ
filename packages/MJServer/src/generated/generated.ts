@@ -42705,11 +42705,11 @@ export class MJConversationArtifact_ {
     @MaxLength(200)
     ArtifactType: string;
         
-    @Field(() => [MJConversationArtifactVersion_])
-    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: MJConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
-    
     @Field(() => [MJConversationArtifactPermission_])
     MJ_ConversationArtifactPermissions_ConversationArtifactIDArray: MJConversationArtifactPermission_[]; // Link to MJ_ConversationArtifactPermissions
+    
+    @Field(() => [MJConversationArtifactVersion_])
+    MJ_ConversationArtifactVersions_ConversationArtifactIDArray: MJConversationArtifactVersion_[]; // Link to MJ_ConversationArtifactVersions
     
     @Field(() => [MJConversationDetail_])
     ConversationDetails_ArtifactIDArray: MJConversationDetail_[]; // Link to ConversationDetails
@@ -42832,17 +42832,6 @@ export class MJConversationArtifactResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJConversationArtifactVersion_])
-    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${mjconversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
-        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
-        return result;
-    }
-        
     @FieldResolver(() => [MJConversationArtifactPermission_])
     async MJ_ConversationArtifactPermissions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Conversation Artifact Permissions', userPayload);
@@ -42851,6 +42840,17 @@ export class MJConversationArtifactResolver extends ResolverBase {
         const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactPermissions] WHERE [ConversationArtifactID]='${mjconversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
         const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Permissions', rows);
+        return result;
+    }
+        
+    @FieldResolver(() => [MJConversationArtifactVersion_])
+    async MJ_ConversationArtifactVersions_ConversationArtifactIDArray(@Root() mjconversationartifact_: MJConversationArtifact_, @Ctx() { dataSources, userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Conversation Artifact Versions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const connPool = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM [${Metadata.Provider.ConfigData.MJCoreSchemaName}].[vwConversationArtifactVersions] WHERE [ConversationArtifactID]='${mjconversationartifact_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Conversation Artifact Versions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await SQLServerDataProvider.ExecuteSQLWithPool(connPool, sSQL, undefined, this.GetUserFromPayload(userPayload));
+        const result = this.ArrayMapFieldNamesToCodeNames('MJ: Conversation Artifact Versions', rows);
         return result;
     }
         

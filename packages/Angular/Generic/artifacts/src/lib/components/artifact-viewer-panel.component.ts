@@ -24,9 +24,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Input() viewContext: 'conversation' | 'collection' | null = null; // Where artifact is being viewed
   @Input() contextCollectionId?: string; // If viewing in collection, which collection
+  @Input() canShare?: boolean; // Whether user can share this artifact
+  @Input() canEdit?: boolean; // Whether user can edit this artifact
   @Output() closed = new EventEmitter<void>();
   @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
   @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
+  @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
 
@@ -79,8 +82,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       tabs.push('Details');
     }
 
-    // Conditionally add Links tab if has links AND not removed by plugin
-    if (this.hasLinksTab && !removalsLower.includes('links')) {
+    // Always add Links tab (unless plugin explicitly removes it)
+    if (!removalsLower.includes('links')) {
       tabs.push('Links');
     }
 
@@ -688,26 +691,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         }
       }
 
-      console.log(`🔗 Loaded links: ${this.allCollections.length} collections, origin conversation: ${this.originConversation?.Name || 'none'}`);
+      console.log(`🔗 Loaded links: ${this.allCollections.length} collections, origin conversation: ${this.originConversation?.Name || 'none'}, viewContext: ${this.viewContext}`);
     } catch (error) {
       console.error('Error loading links data:', error);
     }
-  }
-
-  get hasLinksTab(): boolean {
-    // Show links tab if:
-    // 1. Viewing in collection and there's an origin conversation OR other collections
-    // 2. Viewing in conversation and there are any collections
-
-    if (this.viewContext === 'collection') {
-      // Show if there's an origin conversation, or more than 1 collection (current + others)
-      return !!this.originConversation || this.allCollections.length > 1;
-    } else if (this.viewContext === 'conversation') {
-      // Show if there are any collections
-      return this.allCollections.length > 0;
-    }
-
-    return false;
   }
 
   get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
@@ -757,6 +744,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   onClose(): void {
     this.closed.emit();
+  }
+
+  onShare(): void {
+    this.shareRequested.emit(this.artifactId);
   }
 
   /**

@@ -134,12 +134,26 @@
             [currentUser]="currentUser"
             [environmentId]="environmentId"
             [versionNumber]="selectedVersionNumber"
+            [viewContext]="'conversation'"
+            [canShare]="canShareSelectedArtifact"
+            [canEdit]="canEditSelectedArtifact"
             [refreshTrigger]="artifactViewerRefresh$"
             (closed)="onCloseArtifactPanel()"
-            (saveToCollectionRequested)="onSaveToCollectionRequested($event)">
+            (saveToCollectionRequested)="onSaveToCollectionRequested($event)"
+            (navigateToLink)="onArtifactLinkNavigation($event)"
+            (shareRequested)="onArtifactShareRequested($event)">
         </mj-artifact-viewer-panel>
         </div>
     }
+
+    <!-- Artifact Share Modal -->
+    <mj-artifact-share-modal
+      [isOpen]="isArtifactShareModalOpen"
+      [artifact]="artifactToShare"
+      [currentUser]="currentUser"
+      (saved)="onArtifactShared()"
+      (cancelled)="onArtifactShareModalClose()">
+    </mj-artifact-share-modal>
     </div>
 </div>
 

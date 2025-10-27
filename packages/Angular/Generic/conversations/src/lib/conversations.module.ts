@@ -62,6 +62,7 @@ import { InputDialogComponent } from './components/dialogs/input-dialog.componen
 import { CollectionShareModalComponent } from './components/collection/collection-share-modal.component';
 import { UserPickerComponent } from './components/shared/user-picker.component';
 import { ArtifactCollectionPickerModalComponent } from './components/collection/artifact-collection-picker-modal.component';
+import { ArtifactShareModalComponent } from './components/artifact/artifact-share-modal.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -134,7 +135,8 @@ const COMPONENTS = [
     TasksFullViewComponent,
     CollectionShareModalComponent,
     UserPickerComponent,
-    ArtifactCollectionPickerModalComponent
+    ArtifactCollectionPickerModalComponent,
+    ArtifactShareModalComponent
   ],
   exports: [
     ...COMPONENTS,

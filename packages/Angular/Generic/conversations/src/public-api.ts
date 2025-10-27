@@ -25,6 +25,7 @@ export * from './lib/services/toast.service';
 export * from './lib/services/mention-parser.service';
 export * from './lib/services/mention-autocomplete.service';
 export * from './lib/services/collection-permission.service';
+export * from './lib/services/artifact-permission.service';
 
 // Components
 export * from './lib/components/workspace/conversation-workspace.component';
@@ -42,6 +43,8 @@ export * from './lib/components/collection/collection-tree.component';
 export * from './lib/components/collection/collection-view.component';
 export * from './lib/components/collection/collection-artifact-card.component';
 export * from './lib/components/collection/artifact-collection-picker-modal.component';
+export * from './lib/components/collection/collection-share-modal.component';
+export * from './lib/components/artifact/artifact-share-modal.component';
 export * from './lib/components/project/project-selector.component';
 export * from './lib/components/project/project-form-modal.component';
 export * from './lib/components/task/tasks-full-view.component';
