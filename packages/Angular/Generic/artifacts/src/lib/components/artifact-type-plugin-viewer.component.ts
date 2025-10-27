@@ -1,16 +1,6 @@
-import {
-  Component,
-  Input,
-  OnInit,
-  OnChanges,
-  SimpleChanges,
-  ViewChild,
-  ViewContainerRef,
-  ComponentRef,
-  Type
-} from '@angular/core';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type } from '@angular/core';
 import { ArtifactVersionEntity, ArtifactTypeEntity } from '@memberjunction/core-entities';
-import { Metadata, LogError, RunView } from '@memberjunction/core';
+import { Metadata, LogError, RunView } from '@memberjunction/global';
 import { MJGlobal } from '@memberjunction/global';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.component';
@@ -38,7 +28,8 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
       <ng-container #viewerContainer></ng-container>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .artifact-type-plugin-viewer {
       width: 100%;
       height: 100%;
@@ -73,7 +64,8 @@ import { BaseArtifactViewerPluginComponent } from './base-artifact-viewer.compon
     .error-state i {
       font-size: 32px;
     }
-  `]
+  `,
+  ],
 })
 export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   @Input() artifactVersion!: ArtifactVersionEntity;
@@ -95,7 +87,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
    * Get the loaded plugin instance (if available)
    */
   public get pluginInstance(): BaseArtifactViewerPluginComponent | null {
-    return this.componentRef?.instance as BaseArtifactViewerPluginComponent || null;
+    return (this.componentRef?.instance as BaseArtifactViewerPluginComponent) || null;
   }
 
   async ngOnInit(): Promise<void> {
@@ -103,8 +95,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
   }
 
   async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    if ((changes['artifactVersion'] || changes['artifactTypeName']) &&
-        !changes['artifactVersion']?.firstChange) {
+    if ((changes['artifactVersion'] || changes['artifactTypeName']) && !changes['artifactVersion']?.firstChange) {
       await this.loadViewer();
     }
   }
@@ -208,7 +199,7 @@ export class ArtifactTypePluginViewerComponent implements OnInit, OnChanges {
       const result = await rv.RunView<ArtifactTypeEntity>({
         EntityName: 'MJ: Artifact Types',
         ExtraFilter: `Name='${this.artifactTypeName}'`,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success && result.Results && result.Results.length > 0) {

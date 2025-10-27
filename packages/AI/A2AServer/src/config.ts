@@ -4,7 +4,7 @@ dotenv.config();
 
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError } from '@memberjunction/core';
+import { LogError } from '@memberjunction/global';
 
 const explorer = cosmiconfigSync('mj');
 
@@ -38,10 +38,10 @@ const a2aServerInfoSchema = z.object({
   entityCapabilities: z.array(a2aServerEntityCapabilitySchema).optional(),
   agentCapabilities: z.array(a2aServerAgentCapabilitySchema).optional(),
   enableA2AServer: z.boolean().optional().default(false),
-  agentName: z.string().optional().default("MemberJunction"),
-  agentDescription: z.string().optional().default("MemberJunction A2A Agent"),
+  agentName: z.string().optional().default('MemberJunction'),
+  agentDescription: z.string().optional().default('MemberJunction A2A Agent'),
   streamingEnabled: z.boolean().optional().default(true),
-  userEmail: z.string().optional().describe("Email address of the user to use for entity operations"),
+  userEmail: z.string().optional().describe('Email address of the user to use for entity operations'),
 });
 
 const configInfoSchema = z.object({

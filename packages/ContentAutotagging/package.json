@@ -18,7 +18,6 @@
     "@memberjunction/ai": "2.111.0",
     "@memberjunction/ai-provider-bundle": "2.111.0",
     "@memberjunction/aiengine": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/global": "2.111.0",
     "axios": "^1.7.2",

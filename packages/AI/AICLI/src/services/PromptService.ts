@@ -1,4 +1,4 @@
-import { UserInfo, Metadata } from '@memberjunction/core';
+import { UserInfo, Metadata } from '@memberjunction/global';
 import { AIModelEntity } from '@memberjunction/core-entities';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { initializeMJProvider } from '../lib/mj-provider';
@@ -50,18 +50,15 @@ export class PromptService {
           name: 'Direct Prompt Execution',
           model: 'Default model from configuration',
           temperature: 0.7,
-          maxTokens: 4000
-        }
+          maxTokens: 4000,
+        },
       ];
     } catch (error: any) {
       throw new Error(`Failed to list prompts: ${error?.message || 'Unknown error'}`);
     }
   }
 
-  async executePrompt(
-    prompt: string,
-    options: PromptExecutionOptions = {}
-  ): Promise<ExecutionResult> {
+  async executePrompt(prompt: string, options: PromptExecutionOptions = {}): Promise<ExecutionResult> {
     await this.ensureInitialized();
 
     const startTime = Date.now();
@@ -71,36 +68,36 @@ export class PromptService {
       logger.logStep('INFO', 'SYSTEM', 'Initializing prompt runner', {
         model: options.model,
         temperature: options.temperature,
-        maxTokens: options.maxTokens
+        maxTokens: options.maxTokens,
       });
 
       // For direct prompt execution, we'll use the AI module directly
       const aiModule = await import('@memberjunction/ai');
       const AIEngine = (aiModule as any).AIEngine;
-      
+
       // Build the messages array
-      const messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [];
-      
+      const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [];
+
       if (options.systemPrompt) {
         messages.push({ role: 'system', content: options.systemPrompt });
       }
-      
+
       messages.push({ role: 'user', content: prompt });
 
       logger.logStep('INFO', 'AI_MODEL', 'Executing prompt', {
         messageCount: messages.length,
-        promptLength: prompt.length
+        promptLength: prompt.length,
       });
 
       // Get the LLM instance
       const llm = AIEngine.Instance.LLM;
-      
+
       // Execute the prompt using the LLM directly
       const result = await llm.ChatCompletion({
         messages,
         model: options.model,
         temperature: options.temperature,
-        max_tokens: options.maxTokens
+        max_tokens: options.maxTokens,
       });
 
       const duration = Date.now() - startTime;
@@ -109,7 +106,7 @@ export class PromptService {
         logger.logStep('SUCCESS', 'AI_MODEL', 'Prompt execution completed', {
           modelUsed: result.model,
           tokensUsed: result.usage?.total_tokens,
-          duration
+          duration,
         });
 
         const executionResult: ExecutionResult = {
@@ -119,7 +116,7 @@ export class PromptService {
           result: result.result,
           duration,
           executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath()
+          logFilePath: logger.getLogFilePath(),
         };
 
         // Include model and usage info in the result
@@ -128,14 +125,13 @@ export class PromptService {
           modelSelection: {
             modelUsed: result.model,
             vendorUsed: 'OpenAI', // Default for now
-            configurationUsed: options.configurationId
+            configurationUsed: options.configurationId,
           },
-          usage: result.usage
+          usage: result.usage,
         };
 
         logger.finalize('SUCCESS', executionResult.result);
         return executionResult;
-
       } else {
         const errorMessage = result.errorMessage || 'Unknown execution error';
         logger.logError(errorMessage, 'AI_MODEL');
@@ -147,17 +143,16 @@ export class PromptService {
           error: errorMessage,
           duration,
           executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath()
+          logFilePath: logger.getLogFilePath(),
         };
 
         logger.finalize('FAILED', undefined, errorMessage);
         return executionResult;
       }
-
     } catch (error: any) {
       const duration = Date.now() - startTime;
       const errorMessage = error?.message || 'Unknown error';
-      
+
       logger.logError(error, 'SYSTEM');
 
       const executionResult: ExecutionResult = {
@@ -167,7 +162,7 @@ export class PromptService {
         error: errorMessage,
         duration,
         executionId: logger.getExecutionId(),
-        logFilePath: logger.getLogFilePath()
+        logFilePath: logger.getLogFilePath(),
       };
 
       logger.finalize('FAILED', undefined, errorMessage);
@@ -192,18 +187,18 @@ Log file: ${logger.getLogFilePath()}`);
     }
   }
 
-  async listAvailableModels(): Promise<Array<{name: string, vendor: string, description?: string}>> {
+  async listAvailableModels(): Promise<Array<{ name: string; vendor: string; description?: string }>> {
     await this.ensureInitialized();
 
     try {
       const aiModule = await import('@memberjunction/ai');
       const AIEngine = (aiModule as any).AIEngine;
       const models = AIEngine.Instance.Models;
-      
+
       return models.map((model: AIModelEntity) => ({
         name: model.Name,
         vendor: model.Vendor,
-        description: model.Description
+        description: model.Description,
       }));
     } catch (error: any) {
       throw new Error(`Failed to list available models: ${error?.message || 'Unknown error'}`);
@@ -212,7 +207,7 @@ Log file: ${logger.getLogFilePath()}`);
 
   private async getContextUser(): Promise<UserInfo> {
     const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
-    
+
     if (!UserCache.Users || UserCache.Users.length === 0) {
       throw new Error(`❌ No users found in UserCache
 
@@ -229,7 +224,7 @@ This is typically a configuration or database setup issue.`);
 
     // For CLI usage, we'll use the first available user
     const user = UserCache.Users[0];
-    
+
     if (!user) {
       throw new Error('No valid user found for execution context');
     }

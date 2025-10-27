@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
-import { RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/global';
 import { ActionEntity, ActionCategoryEntity, ActionParamEntity, ActionResultCodeEntity } from '@memberjunction/core-entities';
 
 export interface ActionGalleryConfig {
@@ -34,7 +34,7 @@ export interface ActionWithDetails extends ActionEntity {
 @Component({
   selector: 'mj-action-gallery',
   templateUrl: './action-gallery.component.html',
-  styleUrls: ['./action-gallery.component.scss']
+  styleUrls: ['./action-gallery.component.scss'],
 })
 export class ActionGalleryComponent implements OnInit, OnDestroy {
   @Input() config: ActionGalleryConfig = {
@@ -45,16 +45,16 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     defaultView: 'grid',
     gridColumns: 3,
     enableQuickTest: true,
-    theme: 'light'
+    theme: 'light',
   };
-  
+
   @Input() preSelectedActions: string[] = [];
   @Output() actionSelected = new EventEmitter<ActionEntity>();
   @Output() actionsSelected = new EventEmitter<ActionEntity[]>();
   @Output() actionTestRequested = new EventEmitter<ActionEntity>();
-  
+
   @ViewChild('searchInput', { static: false }) searchInput: ElementRef<HTMLInputElement>;
-  
+
   // State management
   private destroy$ = new Subject<void>();
   actions$ = new BehaviorSubject<ActionWithDetails[]>([]);
@@ -65,98 +65,94 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
   viewMode$ = new BehaviorSubject<'grid' | 'list'>('grid');
   isLoading$ = new BehaviorSubject<boolean>(false);
   selectedActions$ = new BehaviorSubject<Set<string>>(new Set());
-  
+
   // Form controls
   searchControl = new FormControl('');
-  
+
   // UI state
   expandedCategories = new Set<string>();
   hoveredAction: string | null = null;
   animateCards = false;
-  
+
   // Statistics
   totalActions = 0;
   categoryCounts = new Map<string, number>();
-  
+
   constructor() {}
-  
+
   ngOnInit() {
     // Set initial view mode
     this.viewMode$.next(this.config.defaultView || 'grid');
-    
+
     // Load data
     this.loadData();
-    
+
     // Set up filtering
-    combineLatest([
-      this.actions$,
-      this.searchControl.valueChanges.pipe(
-        debounceTime(300),
-        distinctUntilChanged()
-      ),
-      this.selectedCategory$
-    ]).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe(([actions, searchTerm, category]) => {
-      this.filterActions(actions, searchTerm || '', category);
-    });
-    
+    combineLatest([this.actions$, this.searchControl.valueChanges.pipe(debounceTime(300), distinctUntilChanged()), this.selectedCategory$])
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(([actions, searchTerm, category]) => {
+        this.filterActions(actions, searchTerm || '', category);
+      });
+
     // Initialize with pre-selected actions
     if (this.preSelectedActions.length > 0) {
       this.selectedActions$.next(new Set(this.preSelectedActions));
     }
-    
+
     // Enable animations after initial load
     setTimeout(() => {
       this.animateCards = true;
     }, 100);
   }
-  
+
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
   }
-  
+
   async loadData() {
     this.isLoading$.next(true);
-    
+
     try {
       const rv = new RunView();
-      
+
       // Load actions and categories in parallel
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'Actions',
           ResultType: 'entity_object',
           OrderBy: 'Category, Name',
-          MaxRows: 5000
+          MaxRows: 5000,
         },
         {
           EntityName: 'Action Categories',
           ResultType: 'entity_object',
           OrderBy: 'Name',
-          MaxRows: 1000
-        }
+          MaxRows: 1000,
+        },
       ]);
-      
+
       if (actionsResult.Success && categoriesResult.Success) {
-        const actions = actionsResult.Results as ActionEntity[] || [];
-        const categories = categoriesResult.Results as ActionCategoryEntity[] || [];
-        
+        const actions = (actionsResult.Results as ActionEntity[]) || [];
+        const categories = (categoriesResult.Results as ActionCategoryEntity[]) || [];
+
         // Process actions
-        const actionsWithDetails = actions.map(action => ({
-          ...action,
-          expanded: false,
-          selected: this.preSelectedActions.includes(action.ID)
-        } as ActionWithDetails));
-        
+        const actionsWithDetails = actions.map(
+          (action) =>
+            ({
+              ...action,
+              expanded: false,
+              selected: this.preSelectedActions.includes(action.ID),
+            }) as ActionWithDetails
+        );
+
         this.actions$.next(actionsWithDetails);
         this.totalActions = actions.length;
-        
+
         // Process categories
         this.categories$.next(categories);
         this.buildCategoryTree(categories, actions);
-        
+
         // Initial filter
         this.filterActions(actionsWithDetails, '', 'all');
       }
@@ -166,34 +162,34 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
       this.isLoading$.next(false);
     }
   }
-  
+
   private buildCategoryTree(categories: ActionCategoryEntity[], actions: ActionEntity[]) {
     // Count actions per category
     this.categoryCounts.clear();
-    actions.forEach(action => {
+    actions.forEach((action) => {
       const count = this.categoryCounts.get(action.Category || 'Uncategorized') || 0;
       this.categoryCounts.set(action.Category || 'Uncategorized', count + 1);
     });
-    
+
     // Build tree structure
     const nodeMap = new Map<string, CategoryNode>();
     const rootNodes: CategoryNode[] = [];
-    
+
     // Create nodes
-    categories.forEach(cat => {
+    categories.forEach((cat) => {
       const node: CategoryNode = {
         id: cat.ID,
         name: cat.Name,
         parent: cat.ParentID || undefined,
         children: [],
         count: this.categoryCounts.get(cat.Name) || 0,
-        icon: this.getCategoryIcon(cat.Name)
+        icon: this.getCategoryIcon(cat.Name),
       };
       nodeMap.set(cat.ID, node);
     });
-    
+
     // Build hierarchy
-    nodeMap.forEach(node => {
+    nodeMap.forEach((node) => {
       if (node.parent && nodeMap.has(node.parent)) {
         const parent = nodeMap.get(node.parent)!;
         parent.children!.push(node);
@@ -203,15 +199,15 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
         rootNodes.push(node);
       }
     });
-    
+
     // Add "All" category at the top
     const allNode: CategoryNode = {
       id: 'all',
       name: 'All Actions',
       count: this.totalActions,
-      icon: 'fa-th'
+      icon: 'fa-th',
     };
-    
+
     // Add "Uncategorized" if needed
     const uncategorizedCount = this.categoryCounts.get('Uncategorized') || 0;
     if (uncategorizedCount > 0) {
@@ -219,31 +215,31 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
         id: 'uncategorized',
         name: 'Uncategorized',
         count: uncategorizedCount,
-        icon: 'fa-question-circle'
+        icon: 'fa-question-circle',
       };
       rootNodes.push(uncategorizedNode);
     }
-    
+
     this.categoryTree$.next([allNode, ...rootNodes]);
   }
-  
+
   private getCategoryIcon(categoryName: string): string {
     const iconMap: { [key: string]: string } = {
-      'Data': 'fa-database',
-      'Communication': 'fa-envelope',
-      'Integration': 'fa-plug',
-      'Security': 'fa-shield',
-      'Workflow': 'fa-project-diagram',
-      'AI': 'fa-brain',
-      'Files': 'fa-file',
-      'Utilities': 'fa-tools',
-      'System': 'fa-cog',
-      'Analytics': 'fa-chart-line'
+      Data: 'fa-database',
+      Communication: 'fa-envelope',
+      Integration: 'fa-plug',
+      Security: 'fa-shield',
+      Workflow: 'fa-project-diagram',
+      AI: 'fa-brain',
+      Files: 'fa-file',
+      Utilities: 'fa-tools',
+      System: 'fa-cog',
+      Analytics: 'fa-chart-line',
     };
-    
+
     return iconMap[categoryName] || 'fa-folder';
   }
-  
+
   getCategoryIconClass(category: CategoryNode): string {
     // Ensure we have a valid icon
     if (!category.icon) {
@@ -251,42 +247,43 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
     }
     return `fa-solid ${category.icon} category-icon`;
   }
-  
+
   private filterActions(actions: ActionWithDetails[], searchTerm: string, category: string) {
     let filtered = [...actions];
-    
+
     // Category filter
     if (category && category !== 'all') {
       if (category === 'uncategorized') {
-        filtered = filtered.filter(a => !a.Category);
+        filtered = filtered.filter((a) => !a.Category);
       } else {
         const categoryName = this.getCategoryName(category);
-        filtered = filtered.filter(a => a.Category === categoryName);
+        filtered = filtered.filter((a) => a.Category === categoryName);
       }
     }
-    
+
     // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(action => 
-        action.Name.toLowerCase().includes(term) ||
-        action.Description?.toLowerCase().includes(term) ||
-        action.Category?.toLowerCase().includes(term)
+      filtered = filtered.filter(
+        (action) =>
+          action.Name.toLowerCase().includes(term) ||
+          action.Description?.toLowerCase().includes(term) ||
+          action.Category?.toLowerCase().includes(term)
       );
     }
-    
+
     this.filteredActions$.next(filtered);
   }
-  
+
   private getCategoryName(categoryId: string): string {
-    const category = this.categories$.value.find(c => c.ID === categoryId);
+    const category = this.categories$.value.find((c) => c.ID === categoryId);
     return category?.Name || '';
   }
-  
+
   selectCategory(categoryId: string) {
     this.selectedCategory$.next(categoryId);
   }
-  
+
   toggleCategoryExpanded(categoryId: string) {
     if (this.expandedCategories.has(categoryId)) {
       this.expandedCategories.delete(categoryId);
@@ -294,24 +291,24 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
       this.expandedCategories.add(categoryId);
     }
   }
-  
+
   toggleViewMode() {
     const currentMode = this.viewMode$.value;
     this.viewMode$.next(currentMode === 'grid' ? 'list' : 'grid');
   }
-  
+
   async toggleActionExpanded(action: ActionWithDetails) {
     action.expanded = !action.expanded;
-    
+
     // Load details if expanding and not already loaded
     if (action.expanded && !action.parameters) {
       await this.loadActionDetails(action);
     }
   }
-  
+
   async loadActionDetails(action: ActionWithDetails) {
     const rv = new RunView();
-    
+
     try {
       const [paramsResult, resultCodesResult] = await rv.RunViews([
         {
@@ -319,34 +316,34 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
           ExtraFilter: `ActionID='${action.ID}'`,
           OrderBy: 'Sequence',
           ResultType: 'entity_object',
-          MaxRows: 100
+          MaxRows: 100,
         },
         {
           EntityName: 'Action Result Codes',
           ExtraFilter: `ActionID='${action.ID}'`,
           OrderBy: 'ResultCode',
           ResultType: 'entity_object',
-          MaxRows: 100
-        }
+          MaxRows: 100,
+        },
       ]);
-      
+
       if (paramsResult.Success) {
-        action.parameters = paramsResult.Results as ActionParamEntity[] || [];
+        action.parameters = (paramsResult.Results as ActionParamEntity[]) || [];
       }
-      
+
       if (resultCodesResult.Success) {
-        action.resultCodes = resultCodesResult.Results as ActionResultCodeEntity[] || [];
+        action.resultCodes = (resultCodesResult.Results as ActionResultCodeEntity[]) || [];
       }
     } catch (error) {
       console.error('Error loading action details:', error);
     }
   }
-  
+
   toggleActionSelection(action: ActionWithDetails) {
     if (!this.config.selectionMode) return;
-    
+
     const selected = this.selectedActions$.value;
-    
+
     if (!this.config.multiSelect) {
       // Single select mode
       selected.clear();
@@ -365,60 +362,59 @@ export class ActionGalleryComponent implements OnInit, OnDestroy {
         action.selected = true;
       }
     }
-    
+
     this.selectedActions$.next(new Set(selected));
-    
+
     if (this.config.multiSelect) {
-      const selectedActions = this.actions$.value.filter(a => selected.has(a.ID));
+      const selectedActions = this.actions$.value.filter((a) => selected.has(a.ID));
       this.actionsSelected.emit(selectedActions);
     }
   }
-  
+
   testAction(action: ActionEntity, event: Event) {
     event.stopPropagation();
-    
+
     if (this.config.enableQuickTest) {
       // TODO: Implement test harness integration
       console.log('Test action:', action.Name);
     }
-    
+
     this.actionTestRequested.emit(action);
   }
-  
+
   clearSearch() {
     this.searchControl.reset();
     if (this.searchInput) {
       this.searchInput.nativeElement.focus();
     }
   }
-  
+
   getSelectedActions(): ActionEntity[] {
     const selected = this.selectedActions$.value;
-    return this.actions$.value.filter(a => selected.has(a.ID));
+    return this.actions$.value.filter((a) => selected.has(a.ID));
   }
-  
+
   getActionIcon(action: ActionEntity): string {
     const typeIcons: { [key: string]: string } = {
-      'Create': 'fa-plus-circle',
-      'Update': 'fa-edit',
-      'Delete': 'fa-trash',
-      'Query': 'fa-search',
-      'Process': 'fa-cogs',
-      'Email': 'fa-envelope',
-      'Report': 'fa-file-alt',
-      'Export': 'fa-file-export',
-      'Import': 'fa-file-import',
-      'API': 'fa-plug',
-      'Script': 'fa-code'
+      Create: 'fa-plus-circle',
+      Update: 'fa-edit',
+      Delete: 'fa-trash',
+      Query: 'fa-search',
+      Process: 'fa-cogs',
+      Email: 'fa-envelope',
+      Report: 'fa-file-alt',
+      Export: 'fa-file-export',
+      Import: 'fa-file-import',
+      API: 'fa-plug',
+      Script: 'fa-code',
     };
-    
+
     for (const [key, icon] of Object.entries(typeIcons)) {
-      if (action.Name.toLowerCase().includes(key.toLowerCase()) || 
-          action.Type?.toLowerCase().includes(key.toLowerCase())) {
+      if (action.Name.toLowerCase().includes(key.toLowerCase()) || action.Type?.toLowerCase().includes(key.toLowerCase())) {
         return icon;
       }
     }
-    
+
     return 'fa-bolt';
   }
 }

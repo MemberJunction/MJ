@@ -1,34 +1,33 @@
-import { BaseEntity, LogError, Metadata } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-import { DashboardEntity } from "../generated/entity_subclasses";
+import { BaseEntity, LogError, Metadata } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
+import { DashboardEntity } from '../generated/entity_subclasses';
 
-@RegisterClass(BaseEntity, 'Dashboards') 
-export class DashboardEntityExtended extends DashboardEntity  {
-    public NewRecord(): boolean {
-        try{
-            super.NewRecord();
-            let defaultConfigDetails = {
-                columns: 4,
-                rowHeight: 150,
-                resizable: true,
-                reorderable: true,
-                items: []
-            }
-    
-            const configJSON = JSON.stringify(defaultConfigDetails);
-            this.Set("UIConfigDetails", configJSON);
+@RegisterClass(BaseEntity, 'Dashboards')
+export class DashboardEntityExtended extends DashboardEntity {
+  public NewRecord(): boolean {
+    try {
+      super.NewRecord();
+      let defaultConfigDetails = {
+        columns: 4,
+        rowHeight: 150,
+        resizable: true,
+        reorderable: true,
+        items: [],
+      };
 
-            const md: Metadata = new Metadata();
-            if(md.CurrentUser){
-                this.Set("UserID", md.CurrentUser.ID);
-            }
+      const configJSON = JSON.stringify(defaultConfigDetails);
+      this.Set('UIConfigDetails', configJSON);
 
-            return true;
-        }
-        catch(error) {
-            LogError("Error in NewRecord: ");
-            LogError(error);
-            return false;
-        }
+      const md: Metadata = new Metadata();
+      if (md.CurrentUser) {
+        this.Set('UserID', md.CurrentUser.ID);
+      }
+
+      return true;
+    } catch (error) {
+      LogError('Error in NewRecord: ');
+      LogError(error);
+      return false;
     }
+  }
 }

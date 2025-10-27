@@ -4,7 +4,7 @@
  * @module @memberjunction/react-runtime/types
  */
 
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 import { ComponentLibraryDependency, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 
@@ -43,7 +43,7 @@ export interface CompileOptions {
 
   /** Library dependencies that the component requires */
   libraries?: ComponentLibraryDependency[];
-  
+
   /** Child component dependencies that the component requires */
   dependencies?: Array<{ name: string; code?: string }>;
 
@@ -52,7 +52,6 @@ export interface CompileOptions {
    */
   allLibraries: ComponentLibraryEntity[];
 }
-
 
 /**
  * Registry entry for a compiled component

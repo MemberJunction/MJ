@@ -143,7 +143,7 @@ Create a custom queue by extending `QueueBase`:
 ```typescript
 import { QueueBase, TaskBase, TaskResult } from '@memberjunction/queue';
 import { RegisterClass } from '@memberjunction/global';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Register your queue with a specific queue type name
 @RegisterClass(QueueBase, 'Email Notification')
@@ -191,7 +191,7 @@ export class EmailNotificationQueue extends QueueBase {
 
 ```typescript
 import { QueueManager } from '@memberjunction/queue';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Initialize queue manager (typically done once at app startup)
 await QueueManager.Config(contextUser);

@@ -1,12 +1,12 @@
-import { Component,  EventEmitter,  Input, OnDestroy, OnInit, Output } from '@angular/core';
-import { BaseEntity, EntityFieldInfo, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
+import { Component, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
+import { BaseEntity, EntityFieldInfo, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
- 
+
 @Component({
   selector: 'mj-find-record',
   templateUrl: './find-record.component.html',
-  styleUrls: ['./find-record.component.css']
+  styleUrls: ['./find-record.component.css'],
 })
 export class FindRecordComponent implements OnInit, OnDestroy {
   /**
@@ -24,7 +24,6 @@ export class FindRecordComponent implements OnInit, OnDestroy {
    */
   @Input() public SearchDebounceTime: number = 300; // Debounce time for search
 
-
   /**
    * When a record is selected, this event is emitted with the selected record
    */
@@ -40,7 +39,6 @@ export class FindRecordComponent implements OnInit, OnDestroy {
   private searchSubject = new Subject<string>(); // Subject to emit search term changes
   private searchSubscription: any;
 
- 
   ngOnInit() {
     // Fetch the entity metadata based on EntityName
     const md = new Metadata();
@@ -58,25 +56,27 @@ export class FindRecordComponent implements OnInit, OnDestroy {
     }
 
     // Subscribe to the searchSubject with debounce
-    this.searchSubscription = this.searchSubject.pipe(
-      debounceTime(this.SearchDebounceTime), // Delay search execution by 300ms
-      distinctUntilChanged(), // Only proceed if the search term has changed
-      switchMap(term => {
-        this.loading = true;
-        return this.doSearch(term);
-      })
-    ).subscribe({
-      next: (results: any[]) => {
-        this.records = results;
-        this.loading = false;
-        this.searchHasRun = true;
-      },
-      error: (error) => {
-        LogError(error.message);
-        this.loading = false;
-        this.searchHasRun = true;
-      }
-    });    
+    this.searchSubscription = this.searchSubject
+      .pipe(
+        debounceTime(this.SearchDebounceTime), // Delay search execution by 300ms
+        distinctUntilChanged(), // Only proceed if the search term has changed
+        switchMap((term) => {
+          this.loading = true;
+          return this.doSearch(term);
+        })
+      )
+      .subscribe({
+        next: (results: any[]) => {
+          this.records = results;
+          this.loading = false;
+          this.searchHasRun = true;
+        },
+        error: (error) => {
+          LogError(error.message);
+          this.loading = false;
+          this.searchHasRun = true;
+        },
+      });
   }
 
   ngOnDestroy() {
@@ -86,10 +86,9 @@ export class FindRecordComponent implements OnInit, OnDestroy {
     }
   }
 
-
   onFind() {
     this.searchSubject.next(this.searchTerm); // Trigger the debounced search
-  }  
+  }
 
   onSearchTermChange(term: string) {
     this.searchTerm = term;
@@ -105,18 +104,17 @@ export class FindRecordComponent implements OnInit, OnDestroy {
   protected async doSearch(searchTerm: string): Promise<BaseEntity[]> {
     const rv = new RunView();
     const result = await rv.RunView({
-      EntityName: this.EntityName, 
-      UserSearchString: searchTerm, 
-      ResultType: 'entity_object'
+      EntityName: this.EntityName,
+      UserSearchString: searchTerm,
+      ResultType: 'entity_object',
     });
     if (result && result.Success) {
       return result.Results;
       this.searchHasRun = true;
-    }
-    else  {
+    } else {
       const errorMessage = `Error searching for ${this.EntityName}: ${result.ErrorMessage}`;
       LogError(errorMessage);
       throw new Error(errorMessage);
     }
-  }  
+  }
 }

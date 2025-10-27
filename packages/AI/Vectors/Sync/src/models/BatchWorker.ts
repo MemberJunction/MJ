@@ -1,4 +1,4 @@
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 import { Transform } from 'node:stream';
 import { Worker } from 'node:worker_threads';
 

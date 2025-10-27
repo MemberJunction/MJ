@@ -1,5 +1,5 @@
 import { AfterViewInit, Component, Input } from '@angular/core';
-import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RoleInfo, RunView } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RoleInfo, RunView } from '@memberjunction/global';
 import { ResourcePermissionEngine, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -11,7 +11,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 @Component({
   selector: 'mj-resource-permissions',
   templateUrl: './resource-permissions.component.html',
-  styleUrls: ['./resource-permissions.component.css']
+  styleUrls: ['./resource-permissions.component.css'],
 })
 export class ResourcePermissionsComponent extends BaseAngularComponent implements AfterViewInit {
   /**
@@ -20,21 +20,21 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
   @Input() ResourceTypeID!: string;
   /**
    * Required: the record ID of the resource that the permissions are being set for.
-   */ 
+   */
   @Input() ResourceRecordID!: string;
   /**
-   * If set to true, the component will show a Save button to the user and persist the changes to the 
+   * If set to true, the component will show a Save button to the user and persist the changes to the
    * database when the user clicks the Save button. By default this is off to allow users of the component
    * to wrap the component as desired, and handle the save themselves.
    */
   @Input() ShowSaveButton: boolean = false;
   /**
-   * If set to true, the component will show the permission levels to the user. By default this is on. If you have 
+   * If set to true, the component will show the permission levels to the user. By default this is on. If you have
    * a Resource Type or run-time use case where levels are not relevant, you can turn this off.
    */
   @Input() ShowPermissionLevels: boolean = true;
   /**
-   * By default, this component will not show any error messages to the user. 
+   * By default, this component will not show any error messages to the user.
    * If you want to show error messages to the user, set this to true. The component will always throw exceptions when error occur internally.
    */
   @Input() ShowUserErrorMessages: boolean = false;
@@ -62,13 +62,13 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
   @Input() PermissionTypes = ['User', 'Role'];
 
   /**
-   * This optional input allows you to exclude certain roles from the list of roles that can be selected for permissions. If existing permissions have been created with roles that are in this list they will still be displayed, 
+   * This optional input allows you to exclude certain roles from the list of roles that can be selected for permissions. If existing permissions have been created with roles that are in this list they will still be displayed,
    * but the user will not be able to add new permissions with these roles. This is an array of strings with the NAMES of the roles.
    */
   @Input() ExcludedRoleNames: string[] = [];
 
   /**
-   * This optional input allows you to exclude certain users from the list of users that can be selected for permissions. If existing permissions have been created with users that are in this list they will still be displayed, 
+   * This optional input allows you to exclude certain users from the list of users that can be selected for permissions. If existing permissions have been created with users that are in this list they will still be displayed,
    * but the user will not be able to add new permissions with these users. This is an array of strings with EMAILS.
    */
   @Input() ExcludedUserEmails: string[] = [];
@@ -87,7 +87,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     this.ResourceRecordID = ResourceRecordID;
     // now go through all of our permissions and update the ResourceRecordID
     for (const permission of this.resourcePermissions) {
-      permission.ResourceRecordID = ResourceRecordID
+      permission.ResourceRecordID = ResourceRecordID;
     }
   }
 
@@ -104,24 +104,22 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     // now we can get the permissions for the specified resource
     const allResourcePermissions = engine.GetResourcePermissions(this.ResourceTypeID, this.ResourceRecordID);
     this.resourcePermissions = allResourcePermissions.filter((p) => p.Status === 'Approved'); // only include approved permissions in the UI, we don't show requested, rejected, revoked permissions here, just suppress them.
-    
+
     const p = this.ProviderToUse;
-    const rv = new RunView(<IRunViewProvider><any>p)
+    const rv = new RunView(<IRunViewProvider>(<any>p));
     const result = await rv.RunView<UserEntity>({
-      EntityName: "Users",
-      ResultType: "entity_object",
-      OrderBy: "Name",
-      ExtraFilter: "IsActive=1"
+      EntityName: 'Users',
+      ResultType: 'entity_object',
+      OrderBy: 'Name',
+      ExtraFilter: 'IsActive=1',
     });
     // filter out any users that are in the ExcludedUserEmails list
     this.AllUsers = result.Results.filter((u) => !this.ExcludedUserEmails.includes(u.Email));
     // filter out any roles that are in the ExcludedRoleNames list
     this.AllRoles = p.Roles.filter((r) => !this.ExcludedRoleNames.includes(r.Name));
 
-    if (this.AllUsers.length > 0)
-      this.SelectedUser = this.AllUsers[0];
-    if (this.AllRoles.length > 0)
-      this.SelectedRole = this.AllRoles[0];
+    if (this.AllUsers.length > 0) this.SelectedUser = this.AllUsers[0];
+    if (this.AllRoles.length > 0) this.SelectedRole = this.AllRoles[0];
 
     this._Loading = false;
   }
@@ -135,7 +133,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
   private _pendingAdds: ResourcePermissionEntity[] = [];
   public async addPermission() {
     const p = this.ProviderToUse;
-    const permission = await p.GetEntityObject<ResourcePermissionEntity>("Resource Permissions", p.CurrentUser);
+    const permission = await p.GetEntityObject<ResourcePermissionEntity>('Resource Permissions', p.CurrentUser);
     permission.ResourceTypeID = this.ResourceTypeID;
     permission.ResourceRecordID = this.ResourceRecordID;
     permission.Type = this.SelectedType;
@@ -143,13 +141,11 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
     permission.PermissionLevel = this.SelectedPermissionLevel;
     if (this.SelectedType === 'User' && this.SelectedUser) {
       permission.UserID = this.SelectedUser.ID;
-      permission.Set("User", this.SelectedUser.Name);// set the virtual field for display purposes
-    }
-    else if (this.SelectedType === 'Role' && this.SelectedRole) { 
+      permission.Set('User', this.SelectedUser.Name); // set the virtual field for display purposes
+    } else if (this.SelectedType === 'Role' && this.SelectedRole) {
       permission.RoleID = this.SelectedRole.ID;
-      permission.Set("Role", this.SelectedRole.Name); // set the virtual field for display purposes
-    }
-    else {
+      permission.Set('Role', this.SelectedRole.Name); // set the virtual field for display purposes
+    } else {
       LogError('Invalid permission type or missing user/role');
       return;
     }
@@ -163,8 +159,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       if (permission.Type === this.SelectedType) {
         if (this.SelectedType === 'User' && permission.UserID === this.SelectedUser?.ID) {
           return true;
-        }
-        else if (this.SelectedType === 'Role' && permission.RoleID === this.SelectedRole?.ID) {
+        } else if (this.SelectedType === 'Role' && permission.RoleID === this.SelectedRole?.ID) {
           return true;
         }
       }
@@ -183,15 +178,16 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       if (permission.IsSaved) {
         // only delete records previously saved, sometimes a user adds a new permission and deletes it before saving it
         permission.TransactionGroup = tg;
-        if (!await permission.Delete()) { // we use await here because the promise will resolve before the actual save occurs --- the internals will not call the network until tg.Submit() below
+        if (!(await permission.Delete())) {
+          // we use await here because the promise will resolve before the actual save occurs --- the internals will not call the network until tg.Submit() below
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
 
           LogError('Error deleting permission record in the transaction group: ' + permission.LatestResult.Error);
           return false;
-        }  
-      }      
+        }
+      }
     }
 
     // next add new permissions by saving them in the transaction group
@@ -199,12 +195,12 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       if (this._pendingDeletes.includes(permission)) {
         // don't save a permission record that is new, if it was also marked for deletion
         permission.TransactionGroup = tg;
-        if (!await permission.Save()) { 
+        if (!(await permission.Save())) {
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
 
-          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.Error);          
+          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.Error);
           return false;
         }
       }
@@ -215,7 +211,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       // make sure not in the delete array
       if (!this._pendingDeletes.includes(permission)) {
         permission.TransactionGroup = tg;
-        if (!await permission.Save()) {  
+        if (!(await permission.Save())) {
           // validation errors come back here
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
@@ -234,13 +230,11 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
       const engine = this.GetEngine();
       await engine.RefreshAllItems(); // refresh the permissions cache
       return true;
-    }
-    else {
+    } else {
       // we had an error, show the user via SharedService
       this._Loading = false;
-      if (this.ShowUserErrorMessages)
-        MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', );
-  
+      if (this.ShowUserErrorMessages) MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error');
+
       LogError('Error saving permissions in the transaction group');
       return false;
     }

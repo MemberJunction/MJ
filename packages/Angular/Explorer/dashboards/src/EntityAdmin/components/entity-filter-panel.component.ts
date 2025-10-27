@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/global';
 
 interface EntityFilter {
   schemaName: string | null;
@@ -13,7 +13,7 @@ interface EntityFilter {
 @Component({
   selector: 'mj-entity-filter-panel',
   templateUrl: './entity-filter-panel.component.html',
-  styleUrls: ['./entity-filter-panel.component.scss']
+  styleUrls: ['./entity-filter-panel.component.scss'],
 })
 export class EntityFilterPanelComponent implements OnInit {
   @Input() entities: EntityInfo[] = [];
@@ -51,7 +51,7 @@ export class EntityFilterPanelComponent implements OnInit {
 
   private updateDistinctSchemas(): void {
     const schemas = new Set<string>();
-    this.entities.forEach(entity => {
+    this.entities.forEach((entity) => {
       if (entity.SchemaName) {
         schemas.add(entity.SchemaName);
       }
@@ -59,6 +59,6 @@ export class EntityFilterPanelComponent implements OnInit {
 
     this.distinctSchemas = Array.from(schemas)
       .sort()
-      .map(schema => ({ text: schema, value: schema }));
+      .map((schema) => ({ text: schema, value: schema }));
   }
 }

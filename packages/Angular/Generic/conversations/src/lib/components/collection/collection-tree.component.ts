@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/global';
 import { CollectionPermission, CollectionPermissionService } from '../../services/collection-permission.service';
 
 interface TreeNode {
@@ -127,7 +127,8 @@ interface DragData {
       </div>
     </ng-template>
   `,
-  styles: [`
+  styles: [
+    `
     .collection-tree { display: flex; flex-direction: column; height: 100%; }
     .tree-header { padding: 16px; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }
     .tree-header h3 { margin: 0; font-size: 16px; }
@@ -163,7 +164,8 @@ interface DragData {
     .tree-node:hover .node-actions { display: flex; }
     .node-action-btn { padding: 4px 6px; background: transparent; border: none; cursor: pointer; border-radius: 3px; color: #666; }
     .node-action-btn:hover { background: rgba(0,0,0,0.1); }
-  `]
+  `,
+  ],
 })
 export class CollectionTreeComponent implements OnInit {
   @Input() environmentId!: string;
@@ -189,12 +191,15 @@ export class CollectionTreeComponent implements OnInit {
   private async loadCollections(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>({
-        EntityName: 'MJ: Collections',
-        ExtraFilter: `EnvironmentID='${this.environmentId}'`,
-        OrderBy: 'Sequence ASC, Name ASC',
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      const result = await rv.RunView<CollectionEntity>(
+        {
+          EntityName: 'MJ: Collections',
+          ExtraFilter: `EnvironmentID='${this.environmentId}'`,
+          OrderBy: 'Sequence ASC, Name ASC',
+          ResultType: 'entity_object',
+        },
+        this.currentUser
+      );
 
       if (result.Success) {
         this.collections = result.Results || [];
@@ -206,17 +211,17 @@ export class CollectionTreeComponent implements OnInit {
   }
 
   private buildTree(): void {
-    const rootCollections = this.collections.filter(c => !c.ParentID);
-    this.treeNodes = rootCollections.map(c => this.buildNode(c, 0));
+    const rootCollections = this.collections.filter((c) => !c.ParentID);
+    this.treeNodes = rootCollections.map((c) => this.buildNode(c, 0));
   }
 
   private buildNode(collection: CollectionEntity, level: number): TreeNode {
-    const children = this.collections.filter(c => c.ParentID === collection.ID);
+    const children = this.collections.filter((c) => c.ParentID === collection.ID);
     return {
       collection,
-      children: children.map(c => this.buildNode(c, level + 1)),
+      children: children.map((c) => this.buildNode(c, level + 1)),
       expanded: level === 0,
-      level
+      level,
     };
   }
 
@@ -233,15 +238,11 @@ export class CollectionTreeComponent implements OnInit {
   async onCreateCollection(parentId: string | null): Promise<void> {
     // Validate permission if creating child collection
     if (parentId) {
-      const parentCollection = this.collections.find(c => c.ID === parentId);
+      const parentCollection = this.collections.find((c) => c.ID === parentId);
       if (parentCollection) {
         // Check if user has Edit permission on parent
         if (parentCollection.OwnerID && parentCollection.OwnerID !== this.currentUser.ID) {
-          const permission = await this.permissionService.checkPermission(
-            parentId,
-            this.currentUser.ID,
-            this.currentUser
-          );
+          const permission = await this.permissionService.checkPermission(parentId, this.currentUser.ID, this.currentUser);
 
           if (!permission?.canEdit) {
             alert('You do not have Edit permission to create a sub-collection.');
@@ -263,7 +264,7 @@ export class CollectionTreeComponent implements OnInit {
 
       if (parentId) {
         // Child collection - inherit parent's owner and set parent
-        const parentCollection = this.collections.find(c => c.ID === parentId);
+        const parentCollection = this.collections.find((c) => c.ID === parentId);
         collection.ParentID = parentId;
         collection.OwnerID = parentCollection?.OwnerID || this.currentUser.ID;
       } else {
@@ -285,11 +286,7 @@ export class CollectionTreeComponent implements OnInit {
   async onDeleteCollection(collection: CollectionEntity): Promise<void> {
     // Validate Delete permission
     if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
-      const permission = await this.permissionService.checkPermission(
-        collection.ID,
-        this.currentUser.ID,
-        this.currentUser
-      );
+      const permission = await this.permissionService.checkPermission(collection.ID, this.currentUser.ID, this.currentUser);
 
       if (!permission?.canDelete) {
         alert('You do not have Delete permission for this collection.');
@@ -315,7 +312,7 @@ export class CollectionTreeComponent implements OnInit {
     this.draggedNode = node;
     const dragData: DragData = {
       collectionId: node.collection.ID,
-      parentId: node.collection.ParentID || null
+      parentId: node.collection.ParentID || null,
     };
     event.dataTransfer!.effectAllowed = 'move';
     event.dataTransfer!.setData('application/json', JSON.stringify(dragData));

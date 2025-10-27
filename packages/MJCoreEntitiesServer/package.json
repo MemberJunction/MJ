@@ -20,7 +20,6 @@
   },
   "dependencies": {
     "@memberjunction/ai-provider-bundle": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/global": "2.111.0",
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/ai-vector-dupe": "2.111.0",

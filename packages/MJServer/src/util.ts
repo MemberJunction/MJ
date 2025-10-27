@@ -6,7 +6,7 @@ import { URL } from 'url';
 import { z } from 'zod';
 import { DataSourceInfo, ProviderInfo } from './types';
 import sql from 'mssql';
-import { DatabaseProviderBase } from '@memberjunction/core';
+import { DatabaseProviderBase } from '@memberjunction/global';
 
 const gzip = promisify(gzipCallback);
 
@@ -15,7 +15,7 @@ type StreamCallback = (jsonObject: any) => void;
 /**
  * Utility function to handle HTTP/HTTPS requests with optional compression, custom headers, and streaming response callback for JSON objects.
  * This function accumulates data chunks and parses complete JSON objects, assuming newline-delimited JSON in the stream.
- * 
+ *
  * @param {string} url - The URL to which the request is sent.
  * @param {any} payload - The payload to be sent with the request.
  * @param {boolean} useCompression - Flag to determine if payload compression should be used.
@@ -23,7 +23,13 @@ type StreamCallback = (jsonObject: any) => void;
  * @param {StreamCallback} [streamCallback] - Optional callback for handling streaming JSON objects.
  * @returns {Promise<any[]>} - A promise that resolves to an array of all JSON objects received during the streaming process.
  */
-export async function sendPostRequest(url: string, payload: any, useCompression: boolean, headers: Record<string, string> | null, streamCallback?: StreamCallback): Promise<any[]> {
+export async function sendPostRequest(
+  url: string,
+  payload: any,
+  useCompression: boolean,
+  headers: Record<string, string> | null,
+  streamCallback?: StreamCallback
+): Promise<any[]> {
   return new Promise(async (resolve, reject) => {
     try {
       const { protocol, hostname, port, pathname } = new URL(url);
@@ -41,7 +47,7 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
       } else {
         data = Buffer.from(JSON.stringify(payload));
       }
-  
+
       const options = {
         hostname,
         port: port || (protocol === 'https:' ? 443 : 80),
@@ -49,18 +55,18 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...headers
-        }
+          ...headers,
+        },
       };
-  
+
       const request = protocol === 'https:' ? httpsRequest : httpRequest;
       const jsonObjects: any[] = [];
       let buffer = '';
-  
+
       const req = request(options, (res) => {
         const gunzip = createGunzip();
         const stream = res.headers['content-encoding'] === 'gzip' ? res.pipe(gunzip) : res;
-  
+
         stream.on('data', (chunk) => {
           buffer += chunk;
           let boundary;
@@ -78,7 +84,7 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
             }
           }
         });
-  
+
         stream.on('end', () => {
           // Attempt to parse any remaining data in buffer in case it's a complete JSON object
           if (buffer.trim()) {
@@ -95,124 +101,121 @@ export async function sendPostRequest(url: string, payload: any, useCompression:
           resolve(jsonObjects);
         });
       });
-  
+
       req.on('error', (e) => {
         const err = z.object({ message: z.string() }).safeParse(e);
         console.error(`Error in sendPostRequest().req.on(error): ${err.success ? err.data.message : e}`);
         reject(e);
       });
-  
+
       req.write(data);
       req.end();
-    }
-    catch (e) {
+    } catch (e) {
       const err = z.object({ message: z.string() }).safeParse(e);
-      console.error(`Error in sendPostRequest: ${err.success ? err.data.message : e}`)
+      console.error(`Error in sendPostRequest: ${err.success ? err.data.message : e}`);
       reject(e);
     }
-  }
-  );
+  });
 }
 
-
-  /**
-   * Returns the read-only data source if it exists, otherwise returns the read-write data source if options is not provided or if options.allowFallbackToReadWrite is true.
-   * @param dataSources 
-   * @param options 
-   * @returns 
-   */
-  export function GetReadOnlyDataSource(dataSources: DataSourceInfo[], options?: {allowFallbackToReadWrite: boolean}): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
-    const readOnlyDataSource = dataSources.find((ds) => ds.type === 'Read-Only');
-    if (readOnlyDataSource) {
-      return extendConnectionPoolWithQuery(readOnlyDataSource.dataSource);
-    } 
-    else if (!options || options.allowFallbackToReadWrite) {
-      // default behavior for backward compatibility prior to MJ 2.22.3 where we introduced this functionality was to have a single
-      // connection, so for back-compatability, if we don't have a read-only data source, we'll fall back to the read-write data source
-      const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
-      if (readWriteDataSource) {
-        return extendConnectionPoolWithQuery(readWriteDataSource.dataSource);
-      }
-    }
-    throw new Error('No suitable data source found');
-  }
-
-  /**
-   * Returns the read-only provider if it exists, otherwise returns the original provider if options is not provided or if options.allowFallbackToReadWrite is true.
-   * @param options 
-   * @returns 
-   */
-  export function GetReadOnlyProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadWrite: boolean}): DatabaseProviderBase {
-    if (!providers || providers.length === 0) 
-      return null; // no providers available
-
-    const readOnlyProvider = providers.find((p) => p.type === 'Read-Only');
-    if (readOnlyProvider) {
-      return readOnlyProvider.provider;
-    }
-    else if (options?.allowFallbackToReadWrite) {
-      return providers[0].provider; // if no read-only provider is provided, use the original provider since we are allowed to fallback to read-write
-    }
-    else {
-      return null; // no read only provider available and we are not allowed to fallback to read-write
-    }
-  }
-
-  /**
-   * Returns the read-write provider if it exists, otherwise returns the original provider if options is not provided or if options.allowFallbackToReadOnly is true.
-   * @param options 
-   * @returns 
-   */
-  export function GetReadWriteProvider(providers: Array<ProviderInfo>, options?: {allowFallbackToReadOnly: boolean}): DatabaseProviderBase {
-    if (!providers || providers.length === 0) 
-      return null; // no providers available
-
-    const readWriteProvider = providers.find((p) => p.type === 'Read-Write');
-    if (readWriteProvider) {
-      return readWriteProvider.provider;
-    }
-    else if (options?.allowFallbackToReadOnly) {
-      return GetReadOnlyProvider(providers, { allowFallbackToReadWrite: false }); // if no read-write provider is provided, use the read-only provider since we are allowed to fallback to read-only
-    }
-    else {
-      return null; // no read-write provider available and we are not allowed to fallback to read-only
-    }
-  }
-
-  /**
-   * Returns the read-write data source if it exists, otherwise throws an error.
-   * @param dataSources 
-   * @returns 
-   */
-  export function GetReadWriteDataSource(dataSources: DataSourceInfo[]): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
+/**
+ * Returns the read-only data source if it exists, otherwise returns the read-write data source if options is not provided or if options.allowFallbackToReadWrite is true.
+ * @param dataSources
+ * @param options
+ * @returns
+ */
+export function GetReadOnlyDataSource(
+  dataSources: DataSourceInfo[],
+  options?: { allowFallbackToReadWrite: boolean }
+): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
+  const readOnlyDataSource = dataSources.find((ds) => ds.type === 'Read-Only');
+  if (readOnlyDataSource) {
+    return extendConnectionPoolWithQuery(readOnlyDataSource.dataSource);
+  } else if (!options || options.allowFallbackToReadWrite) {
+    // default behavior for backward compatibility prior to MJ 2.22.3 where we introduced this functionality was to have a single
+    // connection, so for back-compatability, if we don't have a read-only data source, we'll fall back to the read-write data source
     const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
     if (readWriteDataSource) {
       return extendConnectionPoolWithQuery(readWriteDataSource.dataSource);
     }
-    throw new Error('No suitable read-write data source found');
   }
+  throw new Error('No suitable data source found');
+}
 
-  /**
-   * Extends a ConnectionPool with a query method that returns results in the format expected by generated code
-   * This provides backwards compatibility with code that expects TypeORM-style query results
-   */
-  export function extendConnectionPoolWithQuery(pool: sql.ConnectionPool): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
-    const extendedPool = pool as any;
-    extendedPool.query = async (sqlQuery: string, parameters?: any): Promise<any[]> => {
-      const request = new sql.Request(pool);
-      // Add parameters if provided
-      if (parameters) {
-        if (Array.isArray(parameters)) {
-          parameters.forEach((value, index) => {
-            request.input(`p${index}`, value);
-          });
-          // Replace ? with @p0, @p1, etc. in the query
-          let paramIndex = 0;
-          sqlQuery = sqlQuery.replace(/\?/g, () => `@p${paramIndex++}`);
-        }
-      }
-      const result = await request.query(sqlQuery);
-      return result.recordset || [];
-    };
-    return extendedPool;
+/**
+ * Returns the read-only provider if it exists, otherwise returns the original provider if options is not provided or if options.allowFallbackToReadWrite is true.
+ * @param options
+ * @returns
+ */
+export function GetReadOnlyProvider(providers: Array<ProviderInfo>, options?: { allowFallbackToReadWrite: boolean }): DatabaseProviderBase {
+  if (!providers || providers.length === 0) return null; // no providers available
+
+  const readOnlyProvider = providers.find((p) => p.type === 'Read-Only');
+  if (readOnlyProvider) {
+    return readOnlyProvider.provider;
+  } else if (options?.allowFallbackToReadWrite) {
+    return providers[0].provider; // if no read-only provider is provided, use the original provider since we are allowed to fallback to read-write
+  } else {
+    return null; // no read only provider available and we are not allowed to fallback to read-write
   }
+}
+
+/**
+ * Returns the read-write provider if it exists, otherwise returns the original provider if options is not provided or if options.allowFallbackToReadOnly is true.
+ * @param options
+ * @returns
+ */
+export function GetReadWriteProvider(providers: Array<ProviderInfo>, options?: { allowFallbackToReadOnly: boolean }): DatabaseProviderBase {
+  if (!providers || providers.length === 0) return null; // no providers available
+
+  const readWriteProvider = providers.find((p) => p.type === 'Read-Write');
+  if (readWriteProvider) {
+    return readWriteProvider.provider;
+  } else if (options?.allowFallbackToReadOnly) {
+    return GetReadOnlyProvider(providers, { allowFallbackToReadWrite: false }); // if no read-write provider is provided, use the read-only provider since we are allowed to fallback to read-only
+  } else {
+    return null; // no read-write provider available and we are not allowed to fallback to read-only
+  }
+}
+
+/**
+ * Returns the read-write data source if it exists, otherwise throws an error.
+ * @param dataSources
+ * @returns
+ */
+export function GetReadWriteDataSource(
+  dataSources: DataSourceInfo[]
+): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
+  const readWriteDataSource = dataSources.find((ds) => ds.type === 'Read-Write');
+  if (readWriteDataSource) {
+    return extendConnectionPoolWithQuery(readWriteDataSource.dataSource);
+  }
+  throw new Error('No suitable read-write data source found');
+}
+
+/**
+ * Extends a ConnectionPool with a query method that returns results in the format expected by generated code
+ * This provides backwards compatibility with code that expects TypeORM-style query results
+ */
+export function extendConnectionPoolWithQuery(
+  pool: sql.ConnectionPool
+): sql.ConnectionPool & { query: (sql: string, params?: any) => Promise<any[]> } {
+  const extendedPool = pool as any;
+  extendedPool.query = async (sqlQuery: string, parameters?: any): Promise<any[]> => {
+    const request = new sql.Request(pool);
+    // Add parameters if provided
+    if (parameters) {
+      if (Array.isArray(parameters)) {
+        parameters.forEach((value, index) => {
+          request.input(`p${index}`, value);
+        });
+        // Replace ? with @p0, @p1, etc. in the query
+        let paramIndex = 0;
+        sqlQuery = sqlQuery.replace(/\?/g, () => `@p${paramIndex++}`);
+      }
+    }
+    const result = await request.query(sqlQuery);
+    return result.recordset || [];
+  };
+  return extendedPool;
+}

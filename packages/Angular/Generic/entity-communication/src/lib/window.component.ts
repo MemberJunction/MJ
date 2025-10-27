@@ -1,14 +1,14 @@
 import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, AfterViewChecked } from '@angular/core';
 
-import { Metadata, BaseEntity, LogError, KeyValuePair, RunQueryParams, RunQuery, EntityInfo, RunViewParams } from '@memberjunction/core';
-  
+import { Metadata, BaseEntity, LogError, KeyValuePair, RunQueryParams, RunQuery, EntityInfo, RunViewParams } from '@memberjunction/global';
+
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
- 
+
 @Component({
   selector: 'mj-entity-communications-preview-window',
   templateUrl: './window.component.html',
-  styleUrls: ['./window.component.css']
+  styleUrls: ['./window.component.css'],
 })
 export class EntityCommunicationsPreviewWindowComponent {
   @Input() Title: string = 'Communications Preview';
@@ -36,30 +36,27 @@ export class EntityCommunicationsPreviewWindowComponent {
    * Emits when the dialog is closed, the parameter is true if the dialog was closed with the OK button, false if it was closed with the Cancel button
    */
   @Output() DialogClosed = new EventEmitter<boolean>();
- 
- 
 
   /**
    * Configurable settings for the toolbar
    */
   @Input() public ToolbarSettings: ListBoxToolbarConfig = {
-    position: "right",
-    tools: ["moveUp", "transferFrom", "transferAllFrom", "transferAllTo", "transferTo", "moveDown"],
+    position: 'right',
+    tools: ['moveUp', 'transferFrom', 'transferAllFrom', 'transferAllTo', 'transferTo', 'moveDown'],
   };
 
   @Output() RecordSelected = new EventEmitter<BaseEntity[]>();
   @Output() RecordUnselected = new EventEmitter<BaseEntity[]>();
 
   protected _initialSelected: BaseEntity[] = [];
-  protected _initialUnselected: BaseEntity[] = []; 
-    
+  protected _initialUnselected: BaseEntity[] = [];
 
-  public OnCancel() { 
+  public OnCancel() {
     this.DialogVisible = false;
     this.DialogClosed.emit(false);
   }
 
-  public OnOK() { 
+  public OnOK() {
     this.DialogVisible = false;
     this.DialogClosed.emit(true);
   }

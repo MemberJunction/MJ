@@ -1,24 +1,8 @@
-import {
-  Component,
-  OnInit,
-  OnDestroy,
-  Output,
-  EventEmitter,
-  Input,
-  HostListener,
-  ViewChild,
-  ElementRef
-} from '@angular/core';
+import { Component, OnInit, OnDestroy, Output, EventEmitter, Input, HostListener, ViewChild, ElementRef } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { UserInfo } from '@memberjunction/core';
-import {
-  SearchService,
-  SearchResult,
-  SearchFilter,
-  GroupedSearchResults,
-  DateRange
-} from '../../services/search.service';
+import { UserInfo } from '@memberjunction/global';
+import { SearchService, SearchResult, SearchFilter, GroupedSearchResults, DateRange } from '../../services/search.service';
 
 /**
  * Search panel component providing global search UI
@@ -28,7 +12,7 @@ import {
 @Component({
   selector: 'mj-search-panel',
   templateUrl: './search-panel.component.html',
-  styleUrls: ['./search-panel.component.css']
+  styleUrls: ['./search-panel.component.css'],
 })
 export class SearchPanelComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
@@ -50,7 +34,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
     artifacts: [],
     collections: [],
     tasks: [],
-    total: 0
+    total: 0,
   };
   public recentSearches: string[] = [];
   public selectedIndex: number = -1;
@@ -73,30 +57,22 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    * Subscribe to search service state
    */
   private subscribeToSearchState(): void {
-    this.searchService.isSearching$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(isSearching => {
-        this.isSearching = isSearching;
-      });
+    this.searchService.isSearching$.pipe(takeUntil(this.destroy$)).subscribe((isSearching) => {
+      this.isSearching = isSearching;
+    });
 
-    this.searchService.searchResults$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(results => {
-        this.results = results;
-        this.selectedIndex = -1;
-      });
+    this.searchService.searchResults$.pipe(takeUntil(this.destroy$)).subscribe((results) => {
+      this.results = results;
+      this.selectedIndex = -1;
+    });
 
-    this.searchService.searchFilter$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(filter => {
-        this.activeFilter = filter;
-      });
+    this.searchService.searchFilter$.pipe(takeUntil(this.destroy$)).subscribe((filter) => {
+      this.activeFilter = filter;
+    });
 
-    this.searchService.dateRange$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(range => {
-        this.dateRange = range;
-      });
+    this.searchService.dateRange$.pipe(takeUntil(this.destroy$)).subscribe((range) => {
+      this.dateRange = range;
+    });
   }
 
   /**
@@ -121,11 +97,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    * Perform search
    */
   private async performSearch(): Promise<void> {
-    await this.searchService.search(
-      this.searchQuery,
-      this.environmentId,
-      this.currentUser
-    );
+    await this.searchService.search(this.searchQuery, this.environmentId, this.currentUser);
   }
 
   /**
@@ -236,7 +208,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
       ...this.results.messages,
       ...this.results.artifacts,
       ...this.results.collections,
-      ...this.results.tasks
+      ...this.results.tasks,
     ];
   }
 
@@ -245,7 +217,7 @@ export class SearchPanelComponent implements OnInit, OnDestroy {
    */
   public isResultSelected(result: SearchResult): boolean {
     const allResults = this.getAllResultsFlat();
-    const index = allResults.findIndex(r => r.id === result.id && r.type === result.type);
+    const index = allResults.findIndex((r) => r.id === result.id && r.type === result.type);
     return index === this.selectedIndex;
   }
 

@@ -4,15 +4,8 @@
  * @module @memberjunction/react-runtime/compiler
  */
 
-import { UserInfo } from '@memberjunction/core';
-import { 
-  CompileOptions, 
-  CompiledComponent, 
-  CompilationResult,
-  CompilerConfig,
-  ComponentError,
-  RuntimeContext
-} from '../types';
+import { UserInfo } from '@memberjunction/global';
+import { CompileOptions, CompiledComponent, CompilationResult, CompilerConfig, ComponentError, RuntimeContext } from '../types';
 import { ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { LibraryRegistry } from '../utilities/library-registry';
 import { LibraryLoader } from '../utilities/library-loader';
@@ -25,13 +18,13 @@ import { ComponentLibraryEntity } from '@memberjunction/core-entities';
 const DEFAULT_COMPILER_CONFIG: CompilerConfig = {
   babel: {
     presets: ['react'],
-    plugins: []
+    plugins: [],
   },
   minify: false,
   sourceMaps: false,
   cache: true,
   maxCacheSize: 100,
-  debug: false
+  debug: false,
 };
 
 /**
@@ -77,7 +70,7 @@ export class ComponentCompiler {
           return {
             success: true,
             component: cached,
-            duration: Date.now() - startTime
+            duration: Date.now() - startTime,
           };
         }
       }
@@ -89,19 +82,10 @@ export class ComponentCompiler {
       const loadedLibraries = await this.loadRequiredLibraries(options.libraries!, options.allLibraries);
 
       // Transpile the component code
-      const transpiledCode = this.transpileComponent(
-        options.componentCode,
-        options.componentName,
-        options
-      );
+      const transpiledCode = this.transpileComponent(options.componentCode, options.componentName, options);
 
       // Create the component factory with loaded libraries
-      const componentFactory = this.createComponentFactory(
-        transpiledCode,
-        options.componentName,
-        loadedLibraries,
-        options
-      );
+      const componentFactory = this.createComponentFactory(transpiledCode, options.componentName, loadedLibraries, options);
 
       // Build the compiled component
       const compiledComponent: CompiledComponent = {
@@ -109,7 +93,7 @@ export class ComponentCompiler {
         id: this.generateComponentId(options.componentName),
         name: options.componentName,
         compiledAt: new Date(),
-        warnings: []
+        warnings: [],
       };
 
       // Cache if enabled
@@ -122,14 +106,13 @@ export class ComponentCompiler {
         component: compiledComponent,
         duration: Date.now() - startTime,
         size: transpiledCode.length,
-        loadedLibraries: loadedLibraries
+        loadedLibraries: loadedLibraries,
       };
-
     } catch (error) {
       return {
         success: false,
         error: this.createCompilationError(error, options.componentName),
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       };
     }
   }
@@ -141,11 +124,7 @@ export class ComponentCompiler {
    * @param options - Compilation options
    * @returns Transpiled JavaScript code
    */
-  private transpileComponent(
-    code: string,
-    componentName: string,
-    options: CompileOptions
-  ): string {
+  private transpileComponent(code: string, componentName: string, options: CompileOptions): string {
     if (!this.babelInstance) {
       throw new Error('Babel instance not set. Call setBabelInstance() first.');
     }
@@ -158,7 +137,7 @@ export class ComponentCompiler {
         plugins: options.babelPlugins || this.config.babel.plugins,
         filename: `${componentName}.jsx`,
         sourceMaps: this.config.sourceMaps,
-        minified: this.config.minify
+        minified: this.config.minify,
       });
 
       return result.code;
@@ -178,22 +157,32 @@ export class ComponentCompiler {
   // Core libraries that are passed as parameters to createComponent and should not be destructured
   private readonly CORE_LIBRARIES = new Set(['React', 'ReactDOM']);
 
-  private wrapComponentCode(componentCode: string, componentName: string, libraries?: any[], dependencies?: Array<{ name: string }>): string {
+  private wrapComponentCode(
+    componentCode: string,
+    componentName: string,
+    libraries?: any[],
+    dependencies?: Array<{ name: string }>
+  ): string {
     const debug = this.config.debug;
     // Generate library declarations if libraries are provided
     // Skip core libraries as they're passed as parameters to createComponent
-    const libraryDeclarations = libraries && libraries.length > 0
-      ? libraries
-          .filter(lib => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
-          .map(lib => `const ${lib.globalVariable} = libraries['${lib.globalVariable}'];`)
-          .join('\n        ')
-      : '';
-    const libraryLogChecks = libraries && libraries.length > 0  
-      ? libraries
-          .filter(lib => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
-          .map(lib => `\nif (!${lib.globalVariable}) { console.error('[React-Runtime-JS] Library "${lib.globalVariable}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Library "${lib.globalVariable}" is defined');` : ''} }`)
-          .join('\n        ')
-      : '';
+    const libraryDeclarations =
+      libraries && libraries.length > 0
+        ? libraries
+            .filter((lib) => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
+            .map((lib) => `const ${lib.globalVariable} = libraries['${lib.globalVariable}'];`)
+            .join('\n        ')
+        : '';
+    const libraryLogChecks =
+      libraries && libraries.length > 0
+        ? libraries
+            .filter((lib) => lib.globalVariable && !this.CORE_LIBRARIES.has(lib.globalVariable)) // Skip core libraries
+            .map(
+              (lib) =>
+                `\nif (!${lib.globalVariable}) { console.error('[React-Runtime-JS] Library "${lib.globalVariable}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Library "${lib.globalVariable}" is defined');` : ''} }`
+            )
+            .join('\n        ')
+        : '';
 
     // Generate component declarations if dependencies are provided
     // Filter out the component being compiled to avoid naming conflicts
@@ -201,7 +190,7 @@ export class ComponentCompiler {
     const seenDependencies = new Set<string>();
     const uniqueDependencies: Array<{ name: string; code?: string }> = [];
     const duplicates: string[] = [];
-    
+
     if (dependencies && dependencies.length > 0) {
       for (const dep of dependencies) {
         if (dep.name === componentName) {
@@ -216,40 +205,58 @@ export class ComponentCompiler {
         }
       }
     }
-    
+
     // Generate warning for duplicates
-    const duplicateWarnings = duplicates.length > 0
-      ? duplicates
-          .map(name => `console.warn('[React-Runtime-JS] WARNING: Component "${name}" is registered multiple times as a dependency. Using first occurrence only.');`)
-          .join('\n        ')
-      : '';
-    
-    const componentDeclarations = uniqueDependencies.length > 0
-      ? uniqueDependencies
-          .map(dep => `const ${dep.name}Raw = componentsOuter['${dep.name}'];
-        ${debug ? `console.log('[React-Runtime-JS] Extracting ${dep.name}:');
+    const duplicateWarnings =
+      duplicates.length > 0
+        ? duplicates
+            .map(
+              (name) =>
+                `console.warn('[React-Runtime-JS] WARNING: Component "${name}" is registered multiple times as a dependency. Using first occurrence only.');`
+            )
+            .join('\n        ')
+        : '';
+
+    const componentDeclarations =
+      uniqueDependencies.length > 0
+        ? uniqueDependencies
+            .map(
+              (dep) => `const ${dep.name}Raw = componentsOuter['${dep.name}'];
+        ${
+          debug
+            ? `console.log('[React-Runtime-JS] Extracting ${dep.name}:');
         console.log('  - Raw value type:', typeof ${dep.name}Raw);
         console.log('  - Raw value:', ${dep.name}Raw);
         if (${dep.name}Raw && typeof ${dep.name}Raw === 'object') {
           console.log('  - Has .component property:', 'component' in ${dep.name}Raw);
           console.log('  - .component type:', typeof ${dep.name}Raw.component);
-        }` : ''}
+        }`
+            : ''
+        }
         const ${dep.name} = ${dep.name}Raw?.component || ${dep.name}Raw;
-        ${debug ? `console.log('  - Final ${dep.name} type:', typeof ${dep.name});
-        console.log('  - Final ${dep.name} is function:', typeof ${dep.name} === 'function');` : ''}`)
-          .join('\n        ')
-      : '';
-    
-    const componentLogChecks = uniqueDependencies.length > 0
-      ? uniqueDependencies
-          .map(dep => `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined');` : ''} }`)
-          .join('\n        ')
-      : '';
- 
+        ${
+          debug
+            ? `console.log('  - Final ${dep.name} type:', typeof ${dep.name});
+        console.log('  - Final ${dep.name} is function:', typeof ${dep.name} === 'function');`
+            : ''
+        }`
+            )
+            .join('\n        ')
+        : '';
+
+    const componentLogChecks =
+      uniqueDependencies.length > 0
+        ? uniqueDependencies
+            .map(
+              (dep) =>
+                `if (!${dep.name}) { console.error('[React-Runtime-JS] Dependency "${dep.name}" is not defined'); } else { ${debug ? `console.log('[React-Runtime-JS] Dependency "${dep.name}" is defined');` : ''} }`
+            )
+            .join('\n        ')
+        : '';
 
     const wrappedCode = `
       function createComponent(
-        React, ReactDOM, 
+        React, ReactDOM,
         useState, useEffect, useCallback, useMemo, useRef, useContext, useReducer, useLayoutEffect,
         libraries, styles, console, components,
         unwrapLibraryComponent, unwrapLibraryComponents, unwrapAllLibraryComponents
@@ -263,10 +270,10 @@ export class ComponentCompiler {
         const unwrapComponent = unwrapLibraryComponent;
         const unwrapComponents = unwrapLibraryComponents;
         const unwrapAllComponents = unwrapAllLibraryComponents;
-        
+
         // Code for ${componentName}
         ${componentCode}
-        
+
         // Ensure the component exists
         if (typeof ${componentName} === 'undefined') {
           throw new Error('Component "${componentName}" is not defined in the provided code');
@@ -274,7 +281,7 @@ export class ComponentCompiler {
         else {
           ${debug ? `console.log('[React-Runtime-JS] Component "${componentName}" is defined');` : ''}
         }
-        
+
         // Store the component in a variable so we don't lose it
         const UserComponent = ${componentName};
 
@@ -283,9 +290,11 @@ export class ComponentCompiler {
         const ActualComponent = (typeof UserComponent === 'object' && UserComponent !== null && 'component' in UserComponent)
           ? UserComponent.component
           : UserComponent;
-        
+
         // Debug logging to understand what we're getting
-        ${debug ? `
+        ${
+          debug
+            ? `
         console.log('[React-Runtime-JS]Component ${componentName} type:', typeof UserComponent);
         if (typeof UserComponent === 'object' && UserComponent !== null) {
           console.log('[React-Runtime-JS]Component ${componentName} keys:', Object.keys(UserComponent));
@@ -293,8 +302,10 @@ export class ComponentCompiler {
           if ('component' in UserComponent) {
             console.log('[React-Runtime-JS]Component ${componentName}.component type:', typeof UserComponent.component);
           }
-        }` : ''}
-        
+        }`
+            : ''
+        }
+
         // Validate that we have a function (React component)
         if (typeof ActualComponent !== 'function') {
           console.error('[React-Runtime-JS] Invalid component type for ${componentName}:', typeof ActualComponent);
@@ -311,7 +322,9 @@ export class ComponentCompiler {
           if (!utilitiesOuter) {
             utilitiesOuter = props?.utilities;
           }
-          ${debug ? `
+          ${
+            debug
+              ? `
           console.log('[React-Runtime-JS] DestructureWrapperUserComponent for ${componentName}:');
           console.log('  - Props:', props);
           console.log('  - componentsOuter type:', typeof componentsOuter);
@@ -329,42 +342,44 @@ export class ComponentCompiler {
           }
           console.log('  - styles:', styles);
           console.log('  - utilities:', utilitiesOuter);
-          console.log('  - libraries:', libraries);` : ''}
+          console.log('  - libraries:', libraries);`
+              : ''
+          }
           ${duplicateWarnings ? '// Duplicate dependency warnings\n        ' + duplicateWarnings + '\n        ' : ''}
           ${libraryDeclarations ? '// Destructure Libraries\n' + libraryDeclarations + '\n        ' : ''}
           ${componentDeclarations ? '// Destructure Dependencies\n' + componentDeclarations + '\n        ' : ''}
           ${libraryLogChecks}
-          ${componentLogChecks}          
+          ${componentLogChecks}
 
           const newProps = {
             ...props,
             components: componentsOuter,
-            utilities: utilitiesOuter 
+            utilities: utilitiesOuter
           }
           return ActualComponent(newProps);
         };
-        
+
         // Create a fresh method registry for each factory call
         const methodRegistry = new Map();
-        
+
         // Create a wrapper component that provides RegisterMethod in callbacks
         const ComponentWithMethodRegistry = (props) => {
           // Register methods on mount
           React.useEffect(() => {
             // Clear previous methods
             methodRegistry.clear();
-            
+
             // Provide RegisterMethod callback if callbacks exist
             if (props.callbacks && typeof props.callbacks.RegisterMethod === 'function') {
               // Component can now register its methods
               // This will be called from within the component
             }
           }, [props.callbacks]);
-          
+
           // Create enhanced callbacks with RegisterMethod
           const enhancedCallbacks = React.useMemo(() => {
             if (!props.callbacks) return {};
-            
+
             return {
               ...props.callbacks,
               RegisterMethod: (methodName, handler) => {
@@ -374,36 +389,36 @@ export class ComponentCompiler {
               }
             };
           }, [props.callbacks]);
-          
+
           // Render the original component with enhanced callbacks
           return React.createElement(DestructureWrapperUserComponent, {
             ...props,
             callbacks: enhancedCallbacks
           });
         };
-        
+
         ComponentWithMethodRegistry.displayName = '${componentName}WithMethods';
-        
+
         // Return the component object with method access
         return {
           component: ComponentWithMethodRegistry,
-          
-          print: function() { 
+
+          print: function() {
             const printMethod = methodRegistry.get('print');
             if (printMethod) {
               printMethod();
             } else if (typeof window !== 'undefined' && window.print) {
-              window.print(); 
+              window.print();
             }
           },
-          refresh: function(data) { 
+          refresh: function(data) {
             const refreshMethod = methodRegistry.get('refresh');
             if (refreshMethod) {
               refreshMethod(data);
             }
             // Refresh functionality is handled by the host environment
           },
-          
+
           // Standard method accessors with type safety
           getCurrentDataState: function() {
             const method = methodRegistry.get('getCurrentDataState');
@@ -433,7 +448,7 @@ export class ComponentCompiler {
             const method = methodRegistry.get('focus');
             if (method) method(target);
           },
-          
+
           // Generic method invoker for custom methods
           invokeMethod: function(methodName, ...args) {
             const method = methodRegistry.get(methodName);
@@ -443,7 +458,7 @@ export class ComponentCompiler {
             console.warn(\`[React-Runtime-JS] Method '\${methodName}' is not registered on component ${componentName}\`);
             return undefined;
           },
-          
+
           // Check if a method exists
           hasMethod: function(methodName) {
             return methodRegistry.has(methodName);
@@ -463,14 +478,14 @@ export class ComponentCompiler {
    */
   private async loadRequiredLibraries(libraries: any[], componentLibraries: ComponentLibraryEntity[]): Promise<Map<string, any>> {
     const loadedLibraries = new Map<string, any>();
-    
+
     if (this.config.debug) {
       console.log('🔍 loadRequiredLibraries called with:', {
         librariesCount: libraries?.length || 0,
-        libraries: libraries?.map(l => ({ name: l.name, version: l.version, globalVariable: l.globalVariable }))
+        libraries: libraries?.map((l) => ({ name: l.name, version: l.version, globalVariable: l.globalVariable })),
       });
     }
-    
+
     if (!libraries || libraries.length === 0) {
       if (this.config.debug) {
         console.log('📚 No libraries to load, returning empty map');
@@ -492,25 +507,25 @@ export class ComponentCompiler {
     }
 
     // Filter out React, ReactDOM, and invalid library entries
-    const filteredLibraries = libraries.filter(lib => {
+    const filteredLibraries = libraries.filter((lib) => {
       // Check if library object is valid
       if (!lib || typeof lib !== 'object' || !lib.name) {
         console.warn(`⚠️ Invalid library entry detected (missing name):`, lib);
         return false;
       }
-      
+
       // Filter out entries with 'unknown' name or missing globalVariable
       if (lib.name === 'unknown' || lib.name === 'null' || lib.name === 'undefined') {
         console.warn(`⚠️ Filtering out invalid library with name '${lib.name}':`, lib);
         return false;
       }
-      
+
       // Check for missing or invalid globalVariable
       if (!lib.globalVariable || lib.globalVariable === 'undefined' || lib.globalVariable === 'null') {
         console.warn(`⚠️ Filtering out library '${lib.name}' with invalid globalVariable:`, lib.globalVariable);
         return false;
       }
-      
+
       const libNameLower = lib.name.toLowerCase();
       if (libNameLower === 'react' || libNameLower === 'reactdom') {
         console.warn(`⚠️ Library '${lib.name}' is automatically loaded by the React runtime and should not be requested separately`);
@@ -518,16 +533,14 @@ export class ComponentCompiler {
       }
       return true;
     });
-    
+
     // Extract library names from the filtered libraries (with extra safety)
-    const libraryNames = filteredLibraries
-      .map(lib => lib.name)
-      .filter(name => name && typeof name === 'string');
-    
+    const libraryNames = filteredLibraries.map((lib) => lib.name).filter((name) => name && typeof name === 'string');
+
     if (this.config.debug) {
       console.log('📦 Using dependency-aware loading for libraries:', libraryNames);
     }
-    
+
     // If all libraries were filtered out, return empty map
     if (filteredLibraries.length === 0) {
       if (this.config.debug) {
@@ -538,12 +551,9 @@ export class ComponentCompiler {
 
     try {
       // Use the new dependency-aware loading
-      const loadedLibraryMap = await LibraryLoader.loadLibrariesWithDependencies(
-        libraryNames,
-        componentLibraries,
-        'component-compiler',
-        { debug: this.config.debug }
-      );
+      const loadedLibraryMap = await LibraryLoader.loadLibrariesWithDependencies(libraryNames, componentLibraries, 'component-compiler', {
+        debug: this.config.debug,
+      });
 
       // Map the results to match the expected format
       // We need to map from library name to global variable
@@ -557,7 +567,7 @@ export class ComponentCompiler {
 
         // Get the loaded library from the map
         const loadedValue = loadedLibraryMap.get(lib.name);
-        
+
         if (loadedValue) {
           // Store by global variable name for component access
           loadedLibraries.set(lib.globalVariable, loadedValue);
@@ -580,12 +590,12 @@ export class ComponentCompiler {
       }
     } catch (error: any) {
       console.error('Failed to load libraries with dependencies:', error);
-      
+
       // Fallback to old loading method if dependency resolution fails
       if (this.config.debug) {
         console.warn('⚠️ Falling back to non-dependency-aware loading due to error');
       }
-      
+
       // Load each library independently (old method)
       for (const lib of libraries) {
         if ((window as any)[lib.globalVariable]) {
@@ -596,7 +606,7 @@ export class ComponentCompiler {
           if (libraryDef) {
             const resolvedVersion = LibraryRegistry.resolveVersion(lib.name, lib.version);
             const cdnUrl = LibraryRegistry.getCdnUrl(lib.name, resolvedVersion);
-            
+
             if (cdnUrl) {
               await this.loadScript(cdnUrl, lib.globalVariable);
               const libraryValue = (window as any)[lib.globalVariable];
@@ -608,12 +618,12 @@ export class ComponentCompiler {
         }
       }
     }
-    
+
     if (this.config.debug) {
       console.log(`✅ All libraries loaded successfully. Total: ${loadedLibraries.size}`);
       console.log('📚 Loaded libraries map:', Array.from(loadedLibraries.keys()));
     }
-    
+
     return loadedLibraries;
   }
 
@@ -623,7 +633,7 @@ export class ComponentCompiler {
    * @returns Promise that resolves when all stylesheets are loaded
    */
   private async loadStyles(urls: string[]): Promise<void> {
-    const loadPromises = urls.map(url => {
+    const loadPromises = urls.map((url) => {
       return new Promise<void>((resolve) => {
         // Check if stylesheet already exists
         const existingLink = document.querySelector(`link[href="${url}"]`);
@@ -636,7 +646,7 @@ export class ComponentCompiler {
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = url;
-        
+
         // CSS load events are not reliable cross-browser, so resolve immediately
         // The CSS will load asynchronously but won't block component rendering
         document.head.appendChild(link);
@@ -679,13 +689,13 @@ export class ComponentCompiler {
       const script = document.createElement('script');
       script.src = url;
       script.async = true;
-      
+
       script.onload = () => {
         // More robust checking with multiple attempts
         let attempts = 0;
         const maxAttempts = 20; // 2 seconds total
         const checkInterval = 100; // Check every 100ms
-        
+
         const checkGlobal = () => {
           if ((window as any)[globalName]) {
             if (this.config.debug) {
@@ -697,7 +707,7 @@ export class ComponentCompiler {
             if (this.config.debug) {
               console.error(`  ❌ ${globalName} not found after ${attempts * checkInterval}ms`);
               // Only log matching property names, not the entire window object
-              const matchingKeys = Object.keys(window).filter(k => k.toLowerCase().includes(globalName.toLowerCase()));
+              const matchingKeys = Object.keys(window).filter((k) => k.toLowerCase().includes(globalName.toLowerCase()));
               console.log(`  ℹ️ Matching window properties: ${matchingKeys.join(', ') || 'none'}`);
             }
             reject(new Error(`${globalName} not found after loading script from ${url}`));
@@ -706,15 +716,15 @@ export class ComponentCompiler {
             setTimeout(checkGlobal, checkInterval);
           }
         };
-        
+
         // Start checking immediately (don't wait 100ms first)
         checkGlobal();
       };
-      
+
       script.onerror = () => {
         reject(new Error(`Failed to load script: ${url}`));
       };
-      
+
       document.head.appendChild(script);
     });
   }
@@ -728,7 +738,7 @@ export class ComponentCompiler {
    * @returns Component factory function
    */
   private createComponentFactory(
-    transpiledCode: string, 
+    transpiledCode: string,
     componentName: string,
     loadedLibraries: Map<string, any>,
     options: CompileOptions
@@ -736,17 +746,30 @@ export class ComponentCompiler {
     try {
       // Create the factory function with all React hooks and utility functions
       const factoryCreator = new Function(
-        'React', 'ReactDOM',
-        'useState', 'useEffect', 'useCallback', 'useMemo', 'useRef', 'useContext', 'useReducer', 'useLayoutEffect',
-        'libraries', 'styles', 'console', 'components',
-        'unwrapLibraryComponent', 'unwrapLibraryComponents', 'unwrapAllLibraryComponents',
+        'React',
+        'ReactDOM',
+        'useState',
+        'useEffect',
+        'useCallback',
+        'useMemo',
+        'useRef',
+        'useContext',
+        'useReducer',
+        'useLayoutEffect',
+        'libraries',
+        'styles',
+        'console',
+        'components',
+        'unwrapLibraryComponent',
+        'unwrapLibraryComponents',
+        'unwrapAllLibraryComponents',
         `${transpiledCode}; return createComponent;`
       );
 
       // Return a function that executes the factory with runtime context
       return (context: RuntimeContext, styles: any = {}, components: Record<string, any> = {}) => {
         const { React, ReactDOM, libraries = {} } = context;
-        
+
         // Diagnostic: Check if React is null when creating component
         if (!React) {
           console.error('🔴 CRITICAL: React is NULL in createComponentFactory!');
@@ -754,7 +777,7 @@ export class ComponentCompiler {
           console.error('Context keys:', Object.keys(context));
           throw new Error('React is null in runtime context when creating component factory');
         }
-        
+
         // Additional diagnostic for React hooks
         if (!React.useState || !React.useEffect) {
           console.error('🔴 CRITICAL: React hooks are missing!');
@@ -762,18 +785,16 @@ export class ComponentCompiler {
           console.error('useState:', typeof React?.useState);
           console.error('useEffect:', typeof React?.useEffect);
         }
-        
+
         // Merge loaded libraries with context libraries
         // IMPORTANT: Only include libraries that are NOT dependency-only
         // We need to filter based on the libraries array from options
         const mergedLibraries = { ...libraries };
-        
+
         // Only add libraries that are explicitly requested in the component
         // This prevents dependency-only libraries from being accessible
-        const specLibraryNames = new Set(
-          (options.libraries || []).map((lib: any) => lib.globalVariable).filter(Boolean)
-        );
-        
+        const specLibraryNames = new Set((options.libraries || []).map((lib: any) => lib.globalVariable).filter(Boolean));
+
         loadedLibraries.forEach((value, key) => {
           // Only add if this library is in the spec (not just a dependency)
           if (specLibraryNames.has(key)) {
@@ -785,7 +806,8 @@ export class ComponentCompiler {
 
         // Create bound versions of unwrap functions with debug flag
         const boundUnwrapLibraryComponent = (lib: any, name: string) => unwrapLibraryComponent(lib, name, this.config.debug);
-        const boundUnwrapLibraryComponents = (lib: any, ...names: string[]) => unwrapLibraryComponents(lib, ...names, this.config.debug as any);
+        const boundUnwrapLibraryComponents = (lib: any, ...names: string[]) =>
+          unwrapLibraryComponents(lib, ...names, this.config.debug as any);
         const boundUnwrapAllLibraryComponents = (lib: any) => unwrapAllLibraryComponents(lib, this.config.debug);
 
         // Execute the factory creator to get the createComponent function
@@ -851,7 +873,6 @@ export class ComponentCompiler {
     }
   }
 
-
   /**
    * Validates compilation options
    * @param options - Options to validate
@@ -862,8 +883,8 @@ export class ComponentCompiler {
     if (!options) {
       throw new Error(
         'Component compilation failed: No options provided.\n' +
-        'Expected an object with componentName and componentCode properties.\n' +
-        'Example: { componentName: "MyComponent", componentCode: "function MyComponent() { ... }" }'
+          'Expected an object with componentName and componentCode properties.\n' +
+          'Example: { componentName: "MyComponent", componentCode: "function MyComponent() { ... }" }'
       );
     }
 
@@ -872,9 +893,9 @@ export class ComponentCompiler {
       const providedKeys = Object.keys(options).join(', ');
       throw new Error(
         'Component compilation failed: Component name is required.\n' +
-        `Received options with keys: [${providedKeys}]\n` +
-        'Please ensure your component spec includes a "name" property.\n' +
-        'Example: { name: "MyComponent", code: "..." }'
+          `Received options with keys: [${providedKeys}]\n` +
+          'Please ensure your component spec includes a "name" property.\n' +
+          'Example: { name: "MyComponent", code: "..." }'
       );
     }
 
@@ -882,8 +903,8 @@ export class ComponentCompiler {
     if (!options.componentCode) {
       throw new Error(
         `Component compilation failed: Component code is required for "${options.componentName}".\n` +
-        'Please ensure your component spec includes a "code" property with the component source code.\n' +
-        'Example: { name: "MyComponent", code: "function MyComponent() { return <div>Hello</div>; }" }'
+          'Please ensure your component spec includes a "code" property with the component source code.\n' +
+          'Example: { name: "MyComponent", code: "function MyComponent() { return <div>Hello</div>; }" }'
       );
     }
 
@@ -892,9 +913,9 @@ export class ComponentCompiler {
       const actualType = typeof options.componentCode;
       throw new Error(
         `Component compilation failed: Component code must be a string for "${options.componentName}".\n` +
-        `Received type: ${actualType}\n` +
-        `Received value: ${JSON.stringify(options.componentCode).substring(0, 100)}...\n` +
-        'Please ensure the code property contains a string of JavaScript/JSX code.'
+          `Received type: ${actualType}\n` +
+          `Received value: ${JSON.stringify(options.componentCode).substring(0, 100)}...\n` +
+          'Please ensure the code property contains a string of JavaScript/JSX code.'
       );
     }
 
@@ -902,7 +923,7 @@ export class ComponentCompiler {
     if (options.componentCode.trim().length === 0) {
       throw new Error(
         `Component compilation failed: Component code is empty for "${options.componentName}".\n` +
-        'The code property must contain valid JavaScript/JSX code defining a React component.'
+          'The code property must contain valid JavaScript/JSX code defining a React component.'
       );
     }
 
@@ -910,9 +931,11 @@ export class ComponentCompiler {
     if (!options.componentCode.includes(options.componentName)) {
       throw new Error(
         `Component compilation failed: Component code must define a component named "${options.componentName}".\n` +
-        'The function/component name in the code must match the componentName property.\n' +
-        `Expected to find: function ${options.componentName}(...) or const ${options.componentName} = ...\n` +
-        'Code preview: ' + options.componentCode.substring(0, 200) + '...'
+          'The function/component name in the code must match the componentName property.\n' +
+          `Expected to find: function ${options.componentName}(...) or const ${options.componentName} = ...\n` +
+          'Code preview: ' +
+          options.componentCode.substring(0, 200) +
+          '...'
       );
     }
   }
@@ -949,7 +972,7 @@ export class ComponentCompiler {
     let hash = 0;
     for (let i = 0; i < code.length; i++) {
       const char = code.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return `${componentName}_${hash.toString(36)}`;
@@ -965,8 +988,7 @@ export class ComponentCompiler {
     if (this.compilationCache.size >= this.config.maxCacheSize) {
       // Remove oldest entry (first in map)
       const firstKey = this.compilationCache.keys().next().value;
-      if (firstKey)
-        this.compilationCache.delete(firstKey);
+      if (firstKey) this.compilationCache.delete(firstKey);
     }
 
     const cacheKey = this.createCacheKey(component.name, code);
@@ -985,7 +1007,7 @@ export class ComponentCompiler {
       stack: error.stack,
       componentName,
       phase: 'compilation',
-      details: error
+      details: error,
     };
   }
 

@@ -166,22 +166,22 @@ selector: 'mj-files-category-tree'
 
 #### Outputs
 
-| Output | Type | Description |
-|--------|------|-------------|
+| Output             | Type                                | Description                                     |
+| ------------------ | ----------------------------------- | ----------------------------------------------- |
 | `categorySelected` | `EventEmitter<string \| undefined>` | Emitted when a category is selected in the tree |
 
 #### Public Methods
 
-| Method | Description | Parameters | Returns |
-|--------|-------------|------------|----------|
-| `createNewCategory()` | Opens dialog to create a new category | None | `Promise<void>` |
-| `deleteCategory(fileCategory: FileCategoryEntity)` | Deletes a category with error handling | `fileCategory: FileCategoryEntity` | `Promise<void>` |
-| `handleDrop(e: TreeItemAddRemoveArgs)` | Handles drag and drop to move categories | `e: TreeItemAddRemoveArgs` | `Promise<void>` |
-| `Refresh()` | Refreshes the category tree data | None | `Promise<void>` |
-| `clearSelection()` | Clears the current selection | None | `void` |
-| `saveNewCategory()` | Saves a new category | None | `Promise<void>` |
-| `saveRename()` | Saves category rename | None | `Promise<void>` |
-| `cancelRename()` | Cancels category rename | None | `void` |
+| Method                                             | Description                              | Parameters                         | Returns         |
+| -------------------------------------------------- | ---------------------------------------- | ---------------------------------- | --------------- |
+| `createNewCategory()`                              | Opens dialog to create a new category    | None                               | `Promise<void>` |
+| `deleteCategory(fileCategory: FileCategoryEntity)` | Deletes a category with error handling   | `fileCategory: FileCategoryEntity` | `Promise<void>` |
+| `handleDrop(e: TreeItemAddRemoveArgs)`             | Handles drag and drop to move categories | `e: TreeItemAddRemoveArgs`         | `Promise<void>` |
+| `Refresh()`                                        | Refreshes the category tree data         | None                               | `Promise<void>` |
+| `clearSelection()`                                 | Clears the current selection             | None                               | `void`          |
+| `saveNewCategory()`                                | Saves a new category                     | None                               | `Promise<void>` |
+| `saveRename()`                                     | Saves category rename                    | None                               | `Promise<void>` |
+| `cancelRename()`                                   | Cancels category rename                  | None                               | `void`          |
 
 ### FilesGridComponent (`mj-files-grid`)
 
@@ -194,21 +194,21 @@ selector: 'mj-files-grid'
 
 #### Inputs
 
-| Input | Type | Description | Default |
-|-------|------|-------------|----------|
+| Input        | Type                  | Description                               | Default     |
+| ------------ | --------------------- | ----------------------------------------- | ----------- |
 | `CategoryID` | `string \| undefined` | The ID of the category to filter files by | `undefined` |
 
 #### Public Methods
 
-| Method | Description | Parameters | Returns |
-|--------|-------------|------------|----------|
-| `downloadFile(file: FileEntity)` | Downloads file using provider's download URL | `file: FileEntity` | `Promise<void>` |
-| `deleteFile(file: FileEntity)` | Deletes file with confirmation | `file: FileEntity` | `Promise<void>` |
-| `saveEditFile()` | Saves changes to file metadata | None | `Promise<void>` |
-| `resetEditFile()` | Cancels editing file metadata | None | `void` |
-| `handleFileUpload(e: FileUploadEvent)` | Handles file upload events | `e: FileUploadEvent` | `void` |
-| `canBeDeleted(file: FileEntity)` | Checks if file can be deleted | `file: FileEntity` | `boolean` |
-| `Refresh()` | Refreshes the files grid data | None | `Promise<void>` |
+| Method                                 | Description                                  | Parameters           | Returns         |
+| -------------------------------------- | -------------------------------------------- | -------------------- | --------------- |
+| `downloadFile(file: FileEntity)`       | Downloads file using provider's download URL | `file: FileEntity`   | `Promise<void>` |
+| `deleteFile(file: FileEntity)`         | Deletes file with confirmation               | `file: FileEntity`   | `Promise<void>` |
+| `saveEditFile()`                       | Saves changes to file metadata               | None                 | `Promise<void>` |
+| `resetEditFile()`                      | Cancels editing file metadata                | None                 | `void`          |
+| `handleFileUpload(e: FileUploadEvent)` | Handles file upload events                   | `e: FileUploadEvent` | `void`          |
+| `canBeDeleted(file: FileEntity)`       | Checks if file can be deleted                | `file: FileEntity`   | `boolean`       |
+| `Refresh()`                            | Refreshes the files grid data                | None                 | `Promise<void>` |
 
 ### FileUploadComponent (`mj-files-file-upload`)
 
@@ -221,31 +221,31 @@ selector: 'mj-files-file-upload'
 
 #### Inputs
 
-| Input | Type | Description | Default |
-|-------|------|-------------|----------|
-| `disabled` | `boolean` | Whether the upload component is disabled | `false` |
+| Input        | Type                  | Description                                 | Default     |
+| ------------ | --------------------- | ------------------------------------------- | ----------- |
+| `disabled`   | `boolean`             | Whether the upload component is disabled    | `false`     |
 | `CategoryID` | `string \| undefined` | The category ID to assign to uploaded files | `undefined` |
 
 #### Outputs
 
-| Output | Type | Description |
-|--------|------|-------------|
-| `uploadStarted` | `EventEmitter<void>` | Emitted when file upload starts |
-| `fileUpload` | `EventEmitter<FileUploadEvent>` | Emitted when a file is uploaded (success or failure) |
+| Output          | Type                            | Description                                          |
+| --------------- | ------------------------------- | ---------------------------------------------------- |
+| `uploadStarted` | `EventEmitter<void>`            | Emitted when file upload starts                      |
+| `fileUpload`    | `EventEmitter<FileUploadEvent>` | Emitted when a file is uploaded (success or failure) |
 
 #### Public Methods
 
-| Method | Description | Parameters | Returns |
-|--------|-------------|------------|----------|
-| `Confirm()` | Confirms file overwrite and proceeds with upload | None | `void` |
-| `CancelConfirm()` | Cancels file overwrite and deletes pending record | None | `Promise<void>` |
-| `Refresh()` | Loads default file storage provider | None | `Promise<void>` |
-| `SelectEventHandler(e: SelectEvent)` | Handles file selection | `e: SelectEvent` | `Promise<void>` |
+| Method                               | Description                                       | Parameters       | Returns         |
+| ------------------------------------ | ------------------------------------------------- | ---------------- | --------------- |
+| `Confirm()`                          | Confirms file overwrite and proceeds with upload  | None             | `void`          |
+| `CancelConfirm()`                    | Cancels file overwrite and deletes pending record | None             | `Promise<void>` |
+| `Refresh()`                          | Loads default file storage provider               | None             | `Promise<void>` |
+| `SelectEventHandler(e: SelectEvent)` | Handles file selection                            | `e: SelectEvent` | `Promise<void>` |
 
 #### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
+| Property      | Type      | Description                                     |
+| ------------- | --------- | ----------------------------------------------- |
 | `IsUploading` | `boolean` | Indicates if files are currently being uploaded |
 
 ## Types
@@ -321,7 +321,7 @@ export class CustomFileManagerComponent {
 ```typescript
 import { Component, ViewChild } from '@angular/core';
 import { CategoryTreeComponent } from '@memberjunction/ng-file-storage';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 import { FileCategoryEntity } from '@memberjunction/core-entities';
 
 @Component({

@@ -46,7 +46,7 @@ This package is designed to be used through the [MemberJunction Recommendation E
 ```typescript
 import { RexRecommendationsProvider } from '@memberjunction/ai-recommendations-rex';
 import { RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // The provider is typically instantiated by the MJ framework
 const provider = new RexRecommendationsProvider();

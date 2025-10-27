@@ -16,7 +16,6 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/aiengine": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/global": "2.111.0",
     "@memberjunction/ai-vectors": "2.111.0",
     "@memberjunction/ai-vectordb": "2.111.0",

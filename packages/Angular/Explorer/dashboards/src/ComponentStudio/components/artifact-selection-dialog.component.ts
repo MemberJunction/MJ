@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
-import { RunView, Metadata, UserInfo } from '@memberjunction/core';
+import { RunView, Metadata, UserInfo } from '@memberjunction/global';
 import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -15,7 +15,7 @@ export interface ArtifactSelectionResult {
 @Component({
   selector: 'app-artifact-selection-dialog',
   templateUrl: './artifact-selection-dialog.component.html',
-  styleUrl: './artifact-selection-dialog.component.css'
+  styleUrl: './artifact-selection-dialog.component.css',
 })
 export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   // Data
@@ -36,16 +36,15 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
   showNewArtifactForm = false;
   isFilterPanelCollapsed = false;
 
-
   // Selection State
   selectedArtifact: ArtifactEntity | null = null;
   selectedVersion: ArtifactVersionEntity | null = null;
   versionAction: 'new' | 'update' = 'new';
-  
+
   // New Artifact Form
   newArtifactName = '';
   newArtifactDescription = '';
-  
+
   private metadata = new Metadata();
   private currentUser: UserInfo | null = null;
   private destroy$ = new Subject<void>();
@@ -58,14 +57,10 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     // Setup search debouncing
-    this.searchSubject.pipe(
-      debounceTime(300),
-      distinctUntilChanged(),
-      takeUntil(this.destroy$)
-    ).subscribe(() => {
+    this.searchSubject.pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$)).subscribe(() => {
       this.filterArtifacts();
     });
-    
+
     await this.filterArtifacts();
   }
 
@@ -89,7 +84,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: this.pageSize,
         StartRow: startRow,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success && result.Results) {
@@ -107,32 +102,32 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     }
   }
 
-  private _artifactFilter: string | undefined= undefined;
+  private _artifactFilter: string | undefined = undefined;
   public async filterArtifacts() {
     // Reset to first page when filters change
     this.currentPage = 0;
-    
+
     const filters: string[] = [];
-    
+
     // Filter by search term
     if (this.searchTerm?.trim()) {
       const term = this.searchTerm.toLowerCase();
       filters.push(`(Name LIKE '%${term}%' OR Description LIKE '%${term}%')`);
     }
-    
+
     // Filter by artifact type
     if (this.selectedArtifactType) {
       filters.push(`ArtifactTypeID IN (SELECT ID FROM __mj.vwArtifactTypes WHERE Name = '${this.selectedArtifactType}')`);
     }
-    
+
     // Filter by user email if provided
     if (this.userEmail?.trim()) {
       const md = new Metadata();
-      const schemaName = md.EntityByName("Users")?.SchemaName || "__mj";
+      const schemaName = md.EntityByName('Users')?.SchemaName || '__mj';
       const userFilter = `UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`;
       filters.push(userFilter);
     }
-    
+
     // Combine all filters
     this._artifactFilter = filters.length > 0 ? filters.join(' AND ') : undefined;
 
@@ -162,7 +157,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,
         OrderBy: 'VersionNumber DESC',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success && result.Results) {
@@ -176,7 +171,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
   getNextVersionNumber(): number {
     if (this.artifactVersions.length === 0) return 1;
-    return Math.max(...this.artifactVersions.map(v => v.VersionNumber)) + 1;
+    return Math.max(...this.artifactVersions.map((v) => v.VersionNumber)) + 1;
   }
 
   // Paging methods
@@ -234,13 +229,13 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
     if (this.showNewArtifactForm) {
       return this.newArtifactName.trim().length > 0;
     }
-    
+
     if (!this.selectedArtifact) return false;
-    
+
     if (this.versionAction === 'update') {
       return this.selectedVersion !== null;
     }
-    
+
     return true;
   }
 
@@ -262,28 +257,28 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
   async save() {
     if (!this.canSave()) return;
-    
+
     // Handle new artifact creation
     if (this.showNewArtifactForm) {
       const newArtifact = await this.createNewArtifact();
       if (newArtifact) {
         const result: ArtifactSelectionResult = {
           artifact: newArtifact,
-          action: 'new-version'
+          action: 'new-version',
         };
         this.dialog.close(result);
       }
       return;
     }
-    
+
     // Handle existing artifact selection
     if (this.selectedArtifact) {
       const result: ArtifactSelectionResult = {
         artifact: this.selectedArtifact,
         action: this.versionAction === 'update' ? 'update-version' : 'new-version',
-        versionToUpdate: this.versionAction === 'update' ? this.selectedVersion! : undefined
+        versionToUpdate: this.versionAction === 'update' ? this.selectedVersion! : undefined,
       };
-      
+
       // If updating, show confirmation
       if (this.versionAction === 'update') {
         const confirm = window.confirm(
@@ -308,7 +303,7 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
       const typeResult = await rv.RunView({
         EntityName: 'MJ: Artifact Types',
         ExtraFilter: `Name = 'Component'`,
-        MaxRows: 1
+        MaxRows: 1,
       });
 
       if (typeResult.Success && typeResult.Results?.length > 0) {
@@ -326,26 +321,16 @@ export class ArtifactSelectionDialogComponent implements OnInit, OnDestroy {
 
       const saveResult = await artifact.Save();
       if (saveResult) {
-        this.notificationService.CreateSimpleNotification(
-          `Artifact "${artifact.Name}" created successfully`,
-          'success',
-          3000
-        );
+        this.notificationService.CreateSimpleNotification(`Artifact "${artifact.Name}" created successfully`, 'success', 3000);
         return artifact;
       } else {
         console.error('Failed to create artifact - Full LatestResult:', artifact.LatestResult);
-        this.notificationService.CreateSimpleNotification(
-          'Failed to create artifact',
-          'error'
-        );
+        this.notificationService.CreateSimpleNotification('Failed to create artifact', 'error');
         return null;
       }
     } catch (error) {
       console.error('Error creating artifact:', error);
-      this.notificationService.CreateSimpleNotification(
-        'Error creating artifact',
-        'error'
-      );
+      this.notificationService.CreateSimpleNotification('Error creating artifact', 'error');
       return null;
     }
   }

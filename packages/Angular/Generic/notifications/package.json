@@ -24,7 +24,6 @@
     "@progress/kendo-angular-notification": "16.2.0"
   },
   "dependencies": {
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/global": "2.111.0",
     "@memberjunction/graphql-dataprovider": "2.111.0",

@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/global';
 import { logError, logMessage, logStatus, logWarning } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -58,13 +58,13 @@ export class SQLCodeGenBase {
             const step2StartTime: Date = new Date();
 
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                pool, 
-                entities: includedEntities, 
-                directory, 
-                onlyPermissions: false, 
+                pool,
+                entities: includedEntities,
+                directory,
+                onlyPermissions: false,
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
-                writeFiles: true, 
-                batchSize: 5, 
+                writeFiles: true,
+                batchSize: 5,
                 enableSQLLoggingForNewOrModifiedEntities: true
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
@@ -74,9 +74,9 @@ export class SQLCodeGenBase {
 
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
             const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                pool, 
-                entities: excludedEntities, 
-                directory, 
+                pool,
+                entities: excludedEntities,
+                directory,
                 onlyPermissions: true,
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
                 batchSize: 5,
@@ -116,7 +116,7 @@ export class SQLCodeGenBase {
                 return false;
             }
             logStatus(`   Time to Apply Permissions: ${(new Date().getTime() - step4StartTime.getTime())/1000} seconds`);
-            
+
             // STEP 5 - execute any custom SQL scripts that should run afterwards
             const step5StartTime: Date = new Date();
             if (! await this.runCustomSQLScripts(pool, 'after-sql'))
@@ -178,7 +178,7 @@ export class SQLCodeGenBase {
                             const fileBuffer = fs.readFileSync(fullPath);
                             const fileContents = fileBuffer.toString();
                             try {
-                                await pool.request().query(fileContents);                            
+                                await pool.request().query(fileContents);
                             }
                             catch (e: any) {
                                 logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${e}`);
@@ -218,13 +218,13 @@ export class SQLCodeGenBase {
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
     public async generateAndExecuteEntitySQLToSeparateFiles(options: {
-        pool: sql.ConnectionPool, 
-        entities: EntityInfo[], 
-        directory: string, 
-        onlyPermissions: boolean, 
-        writeFiles: boolean, 
-        skipExecution: boolean, 
-        batchSize?: number, 
+        pool: sql.ConnectionPool,
+        entities: EntityInfo[],
+        directory: string,
+        onlyPermissions: boolean,
+        writeFiles: boolean,
+        skipExecution: boolean,
+        batchSize?: number,
         enableSQLLoggingForNewOrModifiedEntities?: boolean
     }): Promise<{Success: boolean, Files: string[]}> {
         if (!options.batchSize)
@@ -319,12 +319,12 @@ export class SQLCodeGenBase {
 
 
     public async generateAndExecuteSingleEntitySQLToSeparateFiles(options: {
-        pool: sql.ConnectionPool, 
-        entity: EntityInfo, 
-        directory: string, 
-        onlyPermissions: boolean, 
-        writeFiles: boolean, 
-        skipExecution: boolean, 
+        pool: sql.ConnectionPool,
+        entity: EntityInfo,
+        directory: string,
+        onlyPermissions: boolean,
+        writeFiles: boolean,
+        skipExecution: boolean,
         enableSQLLoggingForNewOrModifiedEntities?: boolean
     }): Promise<{Success: boolean, Files: string[]}> {
         try {
@@ -345,7 +345,7 @@ export class SQLCodeGenBase {
     }
 
     protected logSQLForNewOrModifiedEntity(entity: EntityInfo, sql: string, description: string, logSql: boolean = false) {
-        if (logSql && 
+        if (logSql &&
             (ManageMetadataBase.newEntityList.find(e => e === entity.Name) || ManageMetadataBase.modifiedEntityList.find(e => e === entity.Name))  ) {
             // per above only do this if (a) logSql is true and (b) the entity is in the newEntityList OR modifiedEntityList
             SQLLogging.appendToSQLLogFile(sql, description);
@@ -354,12 +354,12 @@ export class SQLCodeGenBase {
     }
 
     public async generateSingleEntitySQLToSeparateFiles(options: {
-        pool: sql.ConnectionPool, 
-        entity: EntityInfo, 
-        directory: string, 
-        onlyPermissions: boolean, 
-        writeFiles: boolean, 
-        skipExecution: boolean, 
+        pool: sql.ConnectionPool,
+        entity: EntityInfo,
+        directory: string,
+        onlyPermissions: boolean,
+        writeFiles: boolean,
+        skipExecution: boolean,
         enableSQLLoggingForNewOrModifiedEntities?: boolean
     }): Promise<{sql: string, permissionsSQL: string, files: string[]}> {
         const files: string[] = [];
@@ -378,7 +378,7 @@ export class SQLCodeGenBase {
             // Indexes for Fkeys for the table
             if (!options.onlyPermissions){
                 const indexSQL = autoIndexForeignKeys() ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // if autoIndexForeignKeys is true, generate the indexes, otherwise, just add a blank string to the header
-                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
+                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL;
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     this.logSQLForNewOrModifiedEntity(options.entity, s, 'Index for Foreign Keys for ' + options.entity.BaseTable, options.enableSQLLoggingForNewOrModifiedEntities);
@@ -597,9 +597,9 @@ export class SQLCodeGenBase {
     /**
      * Deprecated - do not use
      * @deprecated
-     * @param ds 
-     * @param entity 
-     * @returns 
+     * @param ds
+     * @param entity
+     * @returns
      */
     public async generateEntitySQL(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         let sOutput: string = ''
@@ -787,12 +787,12 @@ export class SQLCodeGenBase {
 
     /**
      * Generates the SQL for creating indexes for the foreign keys in the entity
-     * @param pool 
-     * @param entity 
+     * @param pool
+     * @param entity
      */
     generateIndexesForForeignKeys(pool: sql.ConnectionPool, entity: EntityInfo): string {
         // iterate through all of the fields in the entity that are foreign keys and generate an index for each one
-        let sOutput: string = ''; 
+        let sOutput: string = '';
         for (const f of entity.Fields) {
             if (f.RelatedEntity && f.RelatedEntity.length > 0) {
                 // we have an fkey, so generate the create index
@@ -807,7 +807,7 @@ export class SQLCodeGenBase {
 IF NOT EXISTS (
     SELECT 1
     FROM sys.indexes
-    WHERE name = '${indexName}' 
+    WHERE name = '${indexName}'
     AND object_id = OBJECT_ID('[${entity.SchemaName}].[${entity.BaseTable}]')
 )
 CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.Name}]);`
@@ -1163,7 +1163,7 @@ ${updatedAtTrigger}
             const ef: EntityFieldInfo = entityFields[i];
             const quotes: string = ef.NeedsQuotes ? "'" : "";
             // we only want fields that are (a) not primary keys, or if a pkey, not an auto-increment pkey and (b) not virtual fields and (c) updateable fields and (d) not auto-increment fields if they're not pkeys)
-            if ( (!ef.IsPrimaryKey || !autoGeneratedPrimaryKey) && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement) { 
+            if ( (!ef.IsPrimaryKey || !autoGeneratedPrimaryKey) && !ef.IsVirtual && ef.AllowUpdateAPI && !ef.AutoIncrement) {
                 if (!isFirst)
                     sOutput += ',\n            '
                 else

@@ -1,4 +1,4 @@
-import { AuthProviderConfig } from '@memberjunction/core';
+import { AuthProviderConfig } from '@memberjunction/global';
 import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
 import { MJGlobal } from '@memberjunction/global';
@@ -40,16 +40,12 @@ export class AuthProviderFactory {
       // Use MJGlobal ClassFactory to create the provider instance
       // The provider type in config should match the key used in @RegisterClass
       // The config is passed as a constructor parameter via the spread operator
-      const provider = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAuthProvider>(
-        BaseAuthProvider,
-        config.type.toLowerCase(),
-        config
-      );
-      
+      const provider = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAuthProvider>(BaseAuthProvider, config.type.toLowerCase(), config);
+
       if (!provider) {
         throw new Error(`No provider registered for type: ${config.type}`);
       }
-      
+
       return provider;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -66,10 +62,10 @@ export class AuthProviderFactory {
     }
 
     this.providers.set(provider.name, provider);
-    
+
     // Clear issuer cache when registering new provider
     this.issuerCache.clear();
-    
+
     console.log(`Registered auth provider: ${provider.name} with issuer: ${provider.issuer}`);
   }
 
@@ -130,9 +126,7 @@ export class AuthProviderFactory {
     // Get all registrations for BaseAuthProvider from ClassFactory
     const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseAuthProvider);
     // Extract unique keys (provider types) from registrations
-    const providerTypes = registrations
-      .map(reg => reg.Key)
-      .filter((key): key is string => key !== null && key !== undefined);
+    const providerTypes = registrations.map((reg) => reg.Key).filter((key): key is string => key !== null && key !== undefined);
     // Return unique provider types
     return Array.from(new Set(providerTypes));
   }

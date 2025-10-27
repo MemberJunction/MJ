@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { SplitterModule } from '@progress/kendo-angular-layout';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/global';
 
 import { EntityFilterPanelComponent } from './entity-filter-panel.component';
 import { ERDDiagramComponent } from './erd-diagram.component';
@@ -30,11 +30,11 @@ interface DashboardState {
 @Component({
   selector: 'mj-erd-composite',
   templateUrl: './erd-composite.component.html',
-  styleUrls: ['./erd-composite.component.scss']
+  styleUrls: ['./erd-composite.component.scss'],
 })
 export class ERDCompositeComponent implements OnInit, OnDestroy {
   @ViewChild(ERDDiagramComponent) erdDiagram!: ERDDiagramComponent;
-  
+
   @Input() isRefreshingERD = false;
 
   // Data loaded internally
@@ -44,7 +44,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   @Output() stateChange = new EventEmitter<DashboardState>();
   @Output() userStateChange = new EventEmitter<DashboardState>();
   @Output() entityOpened = new EventEmitter<EntityInfo>();
-  @Output() openRecord = new EventEmitter<{EntityName: string, RecordID: string}>();
+  @Output() openRecord = new EventEmitter<{ EntityName: string; RecordID: string }>();
 
   // Panel visibility and configuration
   public filterPanelVisible = true;
@@ -55,7 +55,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
   public selectedEntity: EntityInfo | null = null;
   public filteredEntities: EntityInfo[] = [];
   public isDataLoaded = false;
-  
+
   // Filters
   public filters: EntityFilter = {
     schemaName: null,
@@ -75,7 +75,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
     this.filteredEntities = [...this.entities];
     this.applyFilters();
     this.isDataLoaded = true;
-    
+
     // Notify parent that data is loaded and ready for state loading
     this.emitStateChange();
   }
@@ -101,22 +101,16 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
   private setupStateManagement(): void {
     // State change emissions with debouncing
-    this.stateChangeSubject.pipe(
-      debounceTime(50)
-    ).subscribe(state => {
+    this.stateChangeSubject.pipe(debounceTime(50)).subscribe((state) => {
       this.stateChange.emit(state);
     });
 
-    this.userStateChangeSubject.pipe(
-      debounceTime(1000)
-    ).subscribe(state => {
+    this.userStateChangeSubject.pipe(debounceTime(1000)).subscribe((state) => {
       this.userStateChange.emit(state);
     });
 
     // Filter changes with debouncing
-    this.filterChangeSubject.pipe(
-      debounceTime(300)
-    ).subscribe(() => {
+    this.filterChangeSubject.pipe(debounceTime(300)).subscribe(() => {
       this.applyFilters();
       this.emitStateChange();
       this.emitUserStateChange();
@@ -144,26 +138,26 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
   public onToggleFilterPanel(): void {
     this.filterPanelVisible = !this.filterPanelVisible;
-    
+
     // Trigger ERD resize when filter panel is toggled
     if (this.erdDiagram) {
       this.erdDiagram.triggerResize();
     }
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
 
   public onEntityDeselected(): void {
     this.selectedEntity = null;
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
 
   public onEntitySelected(entity: EntityInfo): void {
     this.selectedEntity = entity;
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
@@ -182,7 +176,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
     this.emitUserStateChange();
   }
 
-  public onOpenRecord(event: {EntityName: string, RecordID: string}): void {
+  public onOpenRecord(event: { EntityName: string; RecordID: string }): void {
     this.openRecord.emit(event);
   }
 
@@ -191,13 +185,13 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
     if (this.erdDiagram) {
       this.erdDiagram.triggerResize();
     }
-    
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
 
   private applyFilters(): void {
-    this.filteredEntities = this.entities.filter(entity => {
+    this.filteredEntities = this.entities.filter((entity) => {
       // Schema filter
       if (this.filters.schemaName && entity.SchemaName !== this.filters.schemaName) {
         return false;
@@ -275,14 +269,14 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
       this.relationshipsSectionExpanded = state.relationshipsSectionExpanded;
     }
     if (state.selectedEntityId && this.entities.length > 0) {
-      const entity = this.entities.find(e => e.ID === state.selectedEntityId);
+      const entity = this.entities.find((e) => e.ID === state.selectedEntityId);
       if (entity) {
         this.selectedEntity = entity;
       }
     } else {
       this.selectedEntity = null;
     }
-    
+
     this.applyFilters();
   }
 

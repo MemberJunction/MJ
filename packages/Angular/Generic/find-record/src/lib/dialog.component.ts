@@ -1,12 +1,11 @@
-import { Component, Output, EventEmitter, Input  } from '@angular/core';
+import { Component, Output, EventEmitter, Input } from '@angular/core';
 
-import { BaseEntity, EntityFieldInfo } from '@memberjunction/core';
-   
- 
+import { BaseEntity, EntityFieldInfo } from '@memberjunction/global';
+
 @Component({
   selector: 'mj-find-record-dialog',
   templateUrl: './dialog.component.html',
-  styleUrls: ['./dialog.component.css']
+  styleUrls: ['./dialog.component.css'],
 })
 export class FindRecordDialogComponent {
   @Input() DialogTitle: string = 'Find Record';
@@ -44,11 +43,9 @@ export class FindRecordDialogComponent {
    */
   @Input() DisplayFields: EntityFieldInfo[] = []; // Fields to display in the grid
 
-
-
-   /**
-    * When a record is selected, this event is emitted with the selected record
-    */
+  /**
+   * When a record is selected, this event is emitted with the selected record
+   */
   @Output() OnRecordSelected = new EventEmitter<BaseEntity>();
 
   public OnCancel() {

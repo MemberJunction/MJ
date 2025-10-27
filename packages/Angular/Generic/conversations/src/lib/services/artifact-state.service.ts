@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 import { ArtifactEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo } from '@memberjunction/global';
 import { ArtifactPermissionService } from './artifact-permission.service';
 
 /**
@@ -10,7 +10,7 @@ import { ArtifactPermissionService } from './artifact-permission.service';
  * Handles artifact CRUD operations and caching with permission enforcement
  */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ArtifactStateService {
   private _activeArtifactId$ = new BehaviorSubject<string | null>(null);
@@ -26,11 +26,8 @@ export class ArtifactStateService {
   public readonly panelMode$ = this._panelMode$.asObservable();
 
   // Derived observable for active artifact
-  public readonly activeArtifact$: Observable<ArtifactEntity | null> = combineLatest([
-    this.activeArtifactId$,
-    this._artifacts$
-  ]).pipe(
-    map(([id, artifacts]) => id ? artifacts.get(id) || null : null),
+  public readonly activeArtifact$: Observable<ArtifactEntity | null> = combineLatest([this.activeArtifactId$, this._artifacts$]).pipe(
+    map(([id, artifacts]) => (id ? artifacts.get(id) || null : null)),
     shareReplay(1)
   );
 
@@ -144,14 +141,14 @@ export class ArtifactStateService {
           ExtraFilter: `ConversationID='${conversationId}'`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1000,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
         },
         currentUser
       );
 
       if (result.Success && result.Results) {
         // Cache all artifacts
-        result.Results.forEach(artifact => this.cacheArtifact(artifact));
+        result.Results.forEach((artifact) => this.cacheArtifact(artifact));
         return result.Results;
       }
       return [];
@@ -177,7 +174,7 @@ export class ArtifactStateService {
           ExtraFilter: `CollectionID='${collectionId}'`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1000,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
         },
         currentUser
       );
@@ -192,13 +189,13 @@ export class ArtifactStateService {
             EntityName: 'MJ: Artifacts',
             ExtraFilter: `ID IN ('${artifactIds.join("','")}')`,
             OrderBy: '__mj_CreatedAt DESC',
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
           },
           currentUser
         );
 
         if (artifactsResult.Success && artifactsResult.Results) {
-          artifactsResult.Results.forEach(artifact => this.cacheArtifact(artifact));
+          artifactsResult.Results.forEach((artifact) => this.cacheArtifact(artifact));
           return artifactsResult.Results;
         }
       }
@@ -363,7 +360,7 @@ export class ArtifactStateService {
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${artifactId}'`,
         MaxRows: 1,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       },
       currentUser
     );

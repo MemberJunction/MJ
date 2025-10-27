@@ -1,4 +1,4 @@
-import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, UserInfo } from '@memberjunction/global';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
 import { GraphQLSchema } from 'graphql';
 import sql from 'mssql';
@@ -29,7 +29,7 @@ export type AppContext = {
   dataSources: DataSourceInfo[];
 
   /**
-   * Per-request DatabaseProviderBase instances  
+   * Per-request DatabaseProviderBase instances
    */
   providers: Array<ProviderInfo>;
 };
@@ -39,16 +39,23 @@ export class ProviderInfo {
   type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';
 }
 
-export class DataSourceInfo  {
+export class DataSourceInfo {
   dataSource: sql.ConnectionPool;
   host: string;
   port: number;
   instance?: string;
   database: string;
   userName: string;
-  type: "Admin" | "Read-Write" | "Read-Only" | "Other";
+  type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';
 
-  constructor(init: {dataSource: sql.ConnectionPool, type: "Admin" | "Read-Write" | "Read-Only" | "Other", host: string, port: number, database: string, userName: string} ) {
+  constructor(init: {
+    dataSource: sql.ConnectionPool;
+    type: 'Admin' | 'Read-Write' | 'Read-Only' | 'Other';
+    host: string;
+    port: number;
+    database: string;
+    userName: string;
+  }) {
     this.dataSource = init.dataSource;
     this.host = init.host;
     this.port = init.port;
@@ -56,7 +63,7 @@ export class DataSourceInfo  {
     this.userName = init.userName;
     this.type = init.type;
   }
-};
+}
 
 export type DirectiveBuilder = {
   typeDefs: string;
@@ -80,9 +87,8 @@ export type RunViewGenericParams = {
   forceAuditLog?: boolean;
   auditLogDescription?: string;
   resultType?: string;
-  userPayload?: UserPayload; 
+  userPayload?: UserPayload;
 };
-
 
 export class MJServerEvent {
   type: 'setupComplete' | 'requestReceived' | 'requestCompleted' | 'requestFailed';

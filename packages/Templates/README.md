@@ -70,55 +70,55 @@ The Templates system uses four core database entities:
 ### Templates
 The main template definition containing metadata and configuration.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `ID` | uniqueidentifier | Primary key |
-| `Name` | nvarchar(255) | Template name (used for lookups) |
-| `Description` | nvarchar(MAX) | Template description |
-| `CategoryID` | uniqueidentifier | Optional categorization |
-| `UserPrompt` | nvarchar(MAX) | AI prompt for content generation |
-| `UserID` | uniqueidentifier | Template owner |
-| `IsActive` | bit | Enable/disable flag |
-| `ActiveAt` | datetime | Optional activation date |
-| `DisabledAt` | datetime | Optional expiration date |
+| Field         | Type             | Description                      |
+| ------------- | ---------------- | -------------------------------- |
+| `ID`          | uniqueidentifier | Primary key                      |
+| `Name`        | nvarchar(255)    | Template name (used for lookups) |
+| `Description` | nvarchar(MAX)    | Template description             |
+| `CategoryID`  | uniqueidentifier | Optional categorization          |
+| `UserPrompt`  | nvarchar(MAX)    | AI prompt for content generation |
+| `UserID`      | uniqueidentifier | Template owner                   |
+| `IsActive`    | bit              | Enable/disable flag              |
+| `ActiveAt`    | datetime         | Optional activation date         |
+| `DisabledAt`  | datetime         | Optional expiration date         |
 
 ### Template Contents
 Multiple content variations per template, each with a specific type and priority.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `ID` | uniqueidentifier | Primary key |
-| `TemplateID` | uniqueidentifier | Parent template reference |
-| `TypeID` | uniqueidentifier | Content type reference |
-| `TemplateText` | nvarchar(MAX) | Actual template content (Nunjucks) |
-| `Priority` | int | Priority for content selection |
-| `IsActive` | bit | Enable/disable flag |
+| Field          | Type             | Description                        |
+| -------------- | ---------------- | ---------------------------------- |
+| `ID`           | uniqueidentifier | Primary key                        |
+| `TemplateID`   | uniqueidentifier | Parent template reference          |
+| `TypeID`       | uniqueidentifier | Content type reference             |
+| `TemplateText` | nvarchar(MAX)    | Actual template content (Nunjucks) |
+| `Priority`     | int              | Priority for content selection     |
+| `IsActive`     | bit              | Enable/disable flag                |
 
 ### Template Content Types
 Defines available content output formats.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `ID` | uniqueidentifier | Primary key |
-| `Name` | nvarchar(255) | Type name (HTML, PlainText, Email, etc.) |
-| `Description` | nvarchar(MAX) | Type description |
-| `CodeType` | nvarchar(25) | Language/format (Nunjucks, HTML, JSON, etc.) |
+| Field         | Type             | Description                                  |
+| ------------- | ---------------- | -------------------------------------------- |
+| `ID`          | uniqueidentifier | Primary key                                  |
+| `Name`        | nvarchar(255)    | Type name (HTML, PlainText, Email, etc.)     |
+| `Description` | nvarchar(MAX)    | Type description                             |
+| `CodeType`    | nvarchar(25)     | Language/format (Nunjucks, HTML, JSON, etc.) |
 
 ### Template Params
 Parameter definitions for template input validation and documentation.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `ID` | uniqueidentifier | Primary key |
-| `TemplateID` | uniqueidentifier | Parent template reference |
-| `TemplateContentID` | uniqueidentifier | Optional: Specific content reference |
-| `Name` | nvarchar(255) | Parameter name |
-| `Type` | nvarchar(20) | Scalar, Array, Object, Record, Entity |
-| `IsRequired` | bit | Required parameter flag |
-| `DefaultValue` | nvarchar(MAX) | Optional default value |
-| `EntityID` | uniqueidentifier | For Entity/Record type params |
-| `LinkedParameterName` | nvarchar(255) | For Entity filtering |
-| `ExtraFilter` | nvarchar(MAX) | Additional Entity constraints |
+| Field                 | Type             | Description                           |
+| --------------------- | ---------------- | ------------------------------------- |
+| `ID`                  | uniqueidentifier | Primary key                           |
+| `TemplateID`          | uniqueidentifier | Parent template reference             |
+| `TemplateContentID`   | uniqueidentifier | Optional: Specific content reference  |
+| `Name`                | nvarchar(255)    | Parameter name                        |
+| `Type`                | nvarchar(20)     | Scalar, Array, Object, Record, Entity |
+| `IsRequired`          | bit              | Required parameter flag               |
+| `DefaultValue`        | nvarchar(MAX)    | Optional default value                |
+| `EntityID`            | uniqueidentifier | For Entity/Record type params         |
+| `LinkedParameterName` | nvarchar(255)    | For Entity filtering                  |
+| `ExtraFilter`         | nvarchar(MAX)    | Additional Entity constraints         |
 
 **Content-Specific Parameters (NEW in v2.52.0)**:
 - When `TemplateContentID` is NULL: Parameter applies to all content variations (default)
@@ -137,7 +137,7 @@ npm install @memberjunction/templates-base-types @memberjunction/templates-engin
 
 ```typescript
 import { TemplateEngineServer } from '@memberjunction/templates-engine';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Initialize the template engine
 const engine = TemplateEngineServer.Instance;
@@ -400,7 +400,7 @@ Enables recursive template embedding for modular template composition.
 ```typescript
 import { TemplateExtensionBase, NunjucksCallback } from '@memberjunction/templates-engine';
 import { RegisterClass } from '@memberjunction/global';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 @RegisterClass(TemplateExtensionBase, 'MyCustomExtension')
 export class MyCustomExtension extends TemplateExtensionBase {

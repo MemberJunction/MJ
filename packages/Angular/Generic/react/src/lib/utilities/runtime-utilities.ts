@@ -3,28 +3,28 @@
  * @module @memberjunction/ng-react/utilities
  */
 
-import { 
-  Metadata, 
-  RunView, 
-  RunQuery, 
-  RunViewParams, 
+import {
+  Metadata,
+  RunView,
+  RunQuery,
+  RunViewParams,
   RunQueryParams,
   LogError,
   BaseEntity,
-  IEntityDataProvider
-} from '@memberjunction/core';
+  IEntityDataProvider,
+} from '@memberjunction/global';
 
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { 
-  ComponentUtilities, 
-  SimpleAITools, 
-  SimpleMetadata, 
-  SimpleRunQuery, 
+import {
+  ComponentUtilities,
+  SimpleAITools,
+  SimpleMetadata,
+  SimpleRunQuery,
   SimpleRunView,
   SimpleExecutePromptParams,
   SimpleExecutePromptResult,
   SimpleEmbedTextParams,
-  SimpleEmbedTextResult
+  SimpleEmbedTextResult,
 } from '@memberjunction/interactive-component-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
@@ -37,7 +37,7 @@ import { SimpleVectorService } from '@memberjunction/ai-vectors-memory';
 @RegisterClass(RuntimeUtilities, 'RuntimeUtilities')
 export class RuntimeUtilities {
   private debug: boolean = false;
-  
+
   /**
    * Builds the complete utilities object for React components
    * This is the main method that components will use
@@ -58,22 +58,22 @@ export class RuntimeUtilities {
       md: this.CreateSimpleMetadata(md),
       rv: this.CreateSimpleRunView(rv),
       rq: this.CreateSimpleRunQuery(rq),
-      ai: this.CreateSimpleAITools()
-    };            
+      ai: this.CreateSimpleAITools(),
+    };
     return u;
   }
 
   private CreateSimpleAITools(): SimpleAITools {
     // Get the GraphQL provider - it's the same as the BaseEntity provider
     const provider = BaseEntity.Provider;
-    
+
     // Check if it's a GraphQLDataProvider
     if (!(provider instanceof GraphQLDataProvider)) {
       throw new Error('Current data provider is not a GraphQLDataProvider. AI tools require GraphQL provider.');
     }
 
     const graphQLProvider = provider as GraphQLDataProvider;
-    
+
     return {
       ExecutePrompt: async (params: SimpleExecutePromptParams): Promise<SimpleExecutePromptResult> => {
         try {
@@ -82,7 +82,7 @@ export class RuntimeUtilities {
             systemPrompt: params.systemPrompt,
             messages: params.messages,
             preferredModels: params.preferredModels,
-            modelPower: params.modelPower
+            modelPower: params.modelPower,
           });
 
           console.log(`🤖  ExecutePrompt succeeded!`);
@@ -95,26 +95,26 @@ export class RuntimeUtilities {
             success: result.success,
             result: result.result || '',
             resultObject: result.resultObject,
-            modelName: result.modelName || ''
+            modelName: result.modelName || '',
           };
         } catch (error) {
           LogError(error);
           return {
             success: false,
             result: 'Failed to execute prompt: ' + (error instanceof Error ? error.message : String(error)),
-            modelName: ''
+            modelName: '',
           };
         }
       },
-      
+
       EmbedText: async (params: SimpleEmbedTextParams): Promise<SimpleEmbedTextResult> => {
         try {
           // Use the AI client from GraphQLDataProvider to generate embeddings
           const result = await graphQLProvider.AI.EmbedText({
             textToEmbed: params.textToEmbed,
-            modelSize: params.modelSize
+            modelSize: params.modelSize,
           });
-          
+
           if (result.error) {
             throw new Error(result.error || 'Failed to generate embeddings');
           }
@@ -128,15 +128,15 @@ export class RuntimeUtilities {
           return {
             result: result.embeddings,
             modelName: result.modelName,
-            vectorDimensions: result.vectorDimensions
+            vectorDimensions: result.vectorDimensions,
           };
         } catch (error) {
           LogError(error);
           throw error; // Re-throw for embeddings as they're critical
         }
       },
-      
-      VectorService: new SimpleVectorService()
+
+      VectorService: new SimpleVectorService(),
     };
   }
 
@@ -144,9 +144,9 @@ export class RuntimeUtilities {
     return {
       Entities: md.Entities,
       GetEntityObject: (entityName: string) => {
-        return md.GetEntityObject(entityName)
-      }
-    }
+        return md.GetEntityObject(entityName);
+      },
+    };
   }
 
   private CreateSimpleRunQuery(rq: RunQuery): SimpleRunQuery {
@@ -170,8 +170,8 @@ export class RuntimeUtilities {
           LogError(error);
           throw error; // Re-throw to handle it in the caller
         }
-      }
-    }
+      },
+    };
   }
 
   private CreateSimpleRunView(rv: RunView): SimpleRunView {
@@ -200,7 +200,7 @@ export class RuntimeUtilities {
         // Runs multiple views and returns the results
         try {
           const results = await rv.RunViews(params);
-          const entityNames = params.map(p => p.EntityName).join(', ');
+          const entityNames = params.map((p) => p.EntityName).join(', ');
           const totalRows = results.reduce((sum, r) => sum + (r.TotalRowCount || 0), 0);
           console.log(`✅ RunViews succeeded for [${entityNames}]: ${totalRows} total rows returned`);
           if (this.debug) {
@@ -213,8 +213,8 @@ export class RuntimeUtilities {
           LogError(error);
           throw error; // Re-throw to handle it in the caller
         }
-      }
-    }
+      },
+    };
   }
 }
 
@@ -239,7 +239,7 @@ export function createRuntimeUtilities(): RuntimeUtilities {
       // Fall through to default
     }
   }
-  
+
   // Default: just use the base class
   return new RuntimeUtilities();
 }

@@ -17,7 +17,7 @@ import {
 } from './public-api';
 import { StyleGuideTestComponent } from './lib/style-guide-test/style-guide-test.component';
 import { SettingsComponent } from '@memberjunction/ng-explorer-settings';
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/global';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { EventCodes, SharedService, BaseNavigationComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -35,7 +35,7 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
 
   // Stores the detached route
   store(route: ActivatedRouteSnapshot, handle: DetachedRouteHandleExt | null): void {
-    if(!handle){
+    if (!handle) {
       return;
     }
 
@@ -50,19 +50,16 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     // Reattach if we have a stored route for the incoming route
     if (route.routeConfig?.path) {
       return !!route.routeConfig && !!this.storedRoutes[route.routeConfig.path];
-    }
-
-    else return false;
+    } else return false;
   }
 
   // Retrieves the stored route; null means no stored route for this path
   retrieve(route: ActivatedRouteSnapshot): DetachedRouteHandle | null {
     if (!route.routeConfig || (route.routeConfig.path && !this.storedRoutes[route.routeConfig.path])) {
       return null;
-    } 
-    else if (route.routeConfig.path) {
+    } else if (route.routeConfig.path) {
       const path = this.storedRoutes[route.routeConfig.path];
-      if(path){
+      if (path) {
         this.callHook(path, 'ngOnAttach');
         return path;
       }
@@ -82,9 +79,11 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
     const currQueryParams = curr.queryParams;
 
     // only reuse (e.g. return true) when all of these comparisons are the same
-    return this.objectContentsEqual(futureParams, currParams) &&  // route params are the same
-           this.objectContentsEqual(futureQueryParams, currQueryParams) &&  // query params are the same
-           future.routeConfig === curr.routeConfig; // route config object is the same
+    return (
+      this.objectContentsEqual(futureParams, currParams) && // route params are the same
+      this.objectContentsEqual(futureQueryParams, currQueryParams) && // query params are the same
+      future.routeConfig === curr.routeConfig
+    ); // route config object is the same
   }
 
   objectContentsEqual(obj1: any, obj2: any): boolean {
@@ -104,26 +103,25 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
       if (Object.keys(obj1).length !== Object.keys(obj2).length) {
         return false; // different number of keys
       }
-  
+
       for (const key in obj1) {
-        // check to see the type of the key, if it is an object, then we call this function recursively 
+        // check to see the type of the key, if it is an object, then we call this function recursively
         // otherwise we do simple comparison
         if (typeof obj1[key] === 'object' && typeof obj2[key] === 'object') {
           if (!this.objectContentsEqual(obj1[key], obj2[key])) {
             return false; // any individual key not matching means the objects are different
           }
-        }
-        else if (obj1[key] !== obj2[key]) {
+        } else if (obj1[key] !== obj2[key]) {
           return false; // any individual key not matching means the objects are different
         }
-      }  
+      }
     }
 
     return true;
   }
 
   private callHook(detachedTree: DetachedRouteHandleExt, hookName: 'ngOnDetach' | 'ngOnAttach'): void {
-    if(!detachedTree || !hookName){
+    if (!detachedTree || !hookName) {
       return;
     }
 
@@ -138,9 +136,12 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
   providedIn: 'root',
 })
 export class ResourceResolver implements Resolve<void> {
-  constructor(private sharedService: SharedService, private router: Router) {
+  constructor(
+    private sharedService: SharedService,
+    private router: Router
+  ) {
     // Subscribe to router events
-    this.router.events.subscribe(event => {
+    this.router.events.subscribe((event) => {
       // if (event instanceof NavigationEnd) {
       //   LogStatus('NavigationEnd:', event.url);
       // }
@@ -150,7 +151,7 @@ export class ResourceResolver implements Resolve<void> {
       // if (event instanceof NavigationCancel) {
       //   LogError(`NavigationCancel: ${event.reason}`);
       // }
-    });    
+    });
   }
 
   resolve(route: ActivatedRouteSnapshot, state: RouterStateSnapshot): void {
@@ -171,7 +172,7 @@ export class ResourceResolver implements Resolve<void> {
       const md = new Metadata();
       switch (resourceType.trim().toLowerCase()) {
         case 'lists':
-          code = EventCodes.ListClicked
+          code = EventCodes.ListClicked;
           break;
         case 'user views':
           code = EventCodes.ViewClicked;
@@ -190,15 +191,14 @@ export class ResourceResolver implements Resolve<void> {
           data.Configuration.Entity = entityNameDecoded; // Entity or entity is specified for this resource type since resource record id isn't good enough
           const newRecordVals = route.queryParams['NewRecordValues'] || route.queryParams['newRecordValues'];
           if (newRecordVals) {
-            data.Configuration.NewRecordValues = decodeURIComponent(newRecordVals);  
+            data.Configuration.NewRecordValues = decodeURIComponent(newRecordVals);
           }
           data.Configuration.___rawQueryParams = route.queryParams;
           if (data.Configuration.Entity === undefined || data.Configuration.Entity === null) {
             LogError('No Entity provided in the URL, must have Entity as a query parameter for this resource type');
-            return;  
-          }
-          else {
-            const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+            return;
+          } else {
+            const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
             if (!entityInfo) {
               LogError(`Entity ${data.Configuration.Entity} not found in metadata`);
               return;
@@ -214,7 +214,7 @@ export class ResourceResolver implements Resolve<void> {
         default:
           LogError(`Unsupported resource type: ${resourceType}`);
           // Handle the unsupported resource type error appropriately
-          return;           
+          return;
       }
       MJGlobal.Instance.RaiseEvent({
         component: this,
@@ -295,42 +295,44 @@ export class AppRoutingModule {
   loadDynamicRoutes() {
     MJGlobal.Instance.GetEventListener(true) // true gets us replay of past events so we can "catch up" as needed
       .subscribe((event: MJEvent) => {
-          // event handler
-          switch (event.event) {
-            case MJEventType.LoggedIn:
-              this.innerLoadDynamicRoutes();
-          }
+        // event handler
+        switch (event.event) {
+          case MJEventType.LoggedIn:
+            this.innerLoadDynamicRoutes();
+        }
       });
   }
 
   protected async innerLoadDynamicRoutes() {
     // gets called after we're logged in
     const md = new Metadata();
-    const dynamicRoutes: Routes = md.VisibleExplorerNavigationItems.map(item => {
-      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseNavigationComponent, item.Name)
+    const dynamicRoutes: Routes = md.VisibleExplorerNavigationItems.map((item) => {
+      const registration = MJGlobal.Instance.ClassFactory.GetRegistration(BaseNavigationComponent, item.Name);
       if (registration) {
         // remove the leading slash from the route if it exists
         const route = item.Route.startsWith('/') ? item.Route.substring(1) : item.Route;
         return {
           path: route,
           component: registration.SubClass,
-          canActivate: [AuthGuard],  
-        }
-      }
-      else {
+          canActivate: [AuthGuard],
+        };
+      } else {
         throw new Error(`No registration found for Explorer Navigation Item: ${item.Name}`);
       }
     });
 
     // Find and remove the wildcard route
-    const wildcardRouteIndex = routes.findIndex(route => route.path?.trim() === '**');
+    const wildcardRouteIndex = routes.findIndex((route) => route.path?.trim() === '**');
     const wildcardRoute = routes[wildcardRouteIndex];
     if (wildcardRouteIndex > -1) {
       routes.splice(wildcardRouteIndex, 1);
     }
 
     // create a combined routes array and make sure that we filter out any dynamic routes that are ALREADY in the router config
-    const newCombinedRoutes = [...routes, ...dynamicRoutes.filter(route => !routes.some(r => r.path?.trim().toLowerCase() === route.path?.trim().toLowerCase()))];
+    const newCombinedRoutes = [
+      ...routes,
+      ...dynamicRoutes.filter((route) => !routes.some((r) => r.path?.trim().toLowerCase() === route.path?.trim().toLowerCase())),
+    ];
 
     // Re-add the wildcard route at the end
     if (wildcardRoute) {

@@ -48,7 +48,7 @@ npm install @memberjunction/templates
 
 ```typescript
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Get the template engine instance
 const templateEngine = TemplateEngineServer.Instance;

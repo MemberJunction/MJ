@@ -1,7 +1,19 @@
-import { Component, EventEmitter, Input, OnInit, Output, Renderer2, ElementRef, AfterViewInit, OnDestroy, ViewChild, ViewEncapsulation } from '@angular/core';
+import {
+  Component,
+  EventEmitter,
+  Input,
+  OnInit,
+  Output,
+  Renderer2,
+  ElementRef,
+  AfterViewInit,
+  OnDestroy,
+  ViewChild,
+  ViewEncapsulation,
+} from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { SortDescriptor } from '@progress/kendo-data-query';
-import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityFieldInfo, EntityFieldTSType, Metadata } from '@memberjunction/global';
 import { RecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { diffChars, diffWords, Change } from 'diff';
@@ -10,7 +22,7 @@ import { diffChars, diffWords, Change } from 'diff';
   selector: 'mj-record-changes',
   templateUrl: './ng-record-changes.component.html',
   styleUrls: ['./ng-record-changes.component.css'],
-  encapsulation: ViewEncapsulation.None
+  encapsulation: ViewEncapsulation.None,
 })
 export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy {
   public showloader: boolean = false;
@@ -22,24 +34,27 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   viewData: RecordChangeEntity[] = [];
   filteredData: RecordChangeEntity[] = [];
   expandedItems: Set<string> = new Set();
-  
+
   // Filter properties
   searchTerm: string = '';
   selectedType: string = '';
   selectedSource: string = '';
-  
+
   sortSettings: SortDescriptor[] = [
     {
-      field: "ChangedAt",
-      dir: "desc",
+      field: 'ChangedAt',
+      dir: 'desc',
     },
   ];
 
-
-  constructor(private renderer: Renderer2, private mjNotificationService: MJNotificationService, private sanitizer: DomSanitizer) { }
+  constructor(
+    private renderer: Renderer2,
+    private mjNotificationService: MJNotificationService,
+    private sanitizer: DomSanitizer
+  ) {}
 
   ngOnInit(): void {
-    if(this.record){
+    if (this.record) {
       this.showloader = true;
       this.LoadRecordChanges(this.record.PrimaryKey, '', this.record.EntityInfo.Name);
     }
@@ -47,32 +62,33 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
 
   ngAfterViewInit(): void {
     // Move the wrapper to the body when the component is initialized
-    if (this.renderer && this.wrapper && this.wrapper.nativeElement)
-      this.renderer.appendChild(document.body, this.wrapper.nativeElement);
+    if (this.renderer && this.wrapper && this.wrapper.nativeElement) this.renderer.appendChild(document.body, this.wrapper.nativeElement);
   }
 
   ngOnDestroy(): void {
     // Remove the wrapper from the body when the component is destroyed
-    if (this.renderer && this.wrapper && this.wrapper.nativeElement)
-      this.renderer.removeChild(document.body, this.wrapper.nativeElement);
+    if (this.renderer && this.wrapper && this.wrapper.nativeElement) this.renderer.removeChild(document.body, this.wrapper.nativeElement);
   }
 
   public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string) {
     if (pkey && entityName) {
       const md = new Metadata();
       const changes = await md.GetRecordChanges<RecordChangeEntity>(entityName, pkey);
-      if(changes){
+      if (changes) {
         this.viewData = changes.sort((a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime());
         this.filteredData = [...this.viewData];
         this.showloader = false;
       } else {
-        this.mjNotificationService.CreateSimpleNotification(`Error loading record changes for ${entityName} with primary key ${pkey.ToString()}.`, 'error');
+        this.mjNotificationService.CreateSimpleNotification(
+          `Error loading record changes for ${entityName} with primary key ${pkey.ToString()}.`,
+          'error'
+        );
         this.showloader = false;
       }
     }
   }
 
-  closePropertiesDialog(){
+  closePropertiesDialog() {
     this.dialogClosed.emit();
   }
 
@@ -91,21 +107,22 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     // Apply search filter
     if (this.searchTerm.trim()) {
       const search = this.searchTerm.toLowerCase();
-      filtered = filtered.filter(change => 
-        change.ChangesDescription?.toLowerCase().includes(search) ||
-        change.User?.toLowerCase().includes(search) ||
-        change.Comments?.toLowerCase().includes(search)
+      filtered = filtered.filter(
+        (change) =>
+          change.ChangesDescription?.toLowerCase().includes(search) ||
+          change.User?.toLowerCase().includes(search) ||
+          change.Comments?.toLowerCase().includes(search)
       );
     }
 
     // Apply type filter
     if (this.selectedType) {
-      filtered = filtered.filter(change => change.Type === this.selectedType);
+      filtered = filtered.filter((change) => change.Type === this.selectedType);
     }
 
     // Apply source filter
     if (this.selectedSource) {
-      filtered = filtered.filter(change => change.Source === this.selectedSource);
+      filtered = filtered.filter((change) => change.Source === this.selectedSource);
     }
 
     this.filteredData = filtered;
@@ -130,28 +147,40 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
   // Utility methods for timeline display
   getChangeTypeClass(type: string): string {
     switch (type) {
-      case 'Create': return 'change-create';
-      case 'Update': return 'change-update';
-      case 'Delete': return 'change-delete';
-      default: return 'change-unknown';
+      case 'Create':
+        return 'change-create';
+      case 'Update':
+        return 'change-update';
+      case 'Delete':
+        return 'change-delete';
+      default:
+        return 'change-unknown';
     }
   }
 
   getChangeTypeIcon(type: string): string {
     switch (type) {
-      case 'Create': return 'fa-solid fa-plus';
-      case 'Update': return 'fa-solid fa-edit';
-      case 'Delete': return 'fa-solid fa-trash';
-      default: return 'fa-solid fa-question';
+      case 'Create':
+        return 'fa-solid fa-plus';
+      case 'Update':
+        return 'fa-solid fa-edit';
+      case 'Delete':
+        return 'fa-solid fa-trash';
+      default:
+        return 'fa-solid fa-question';
     }
   }
 
   getChangeTypeBadgeClass(type: string): string {
     switch (type) {
-      case 'Create': return 'badge-create';
-      case 'Update': return 'badge-update';
-      case 'Delete': return 'badge-delete';
-      default: return 'badge-unknown';
+      case 'Create':
+        return 'badge-create';
+      case 'Update':
+        return 'badge-update';
+      case 'Delete':
+        return 'badge-delete';
+      default:
+        return 'badge-unknown';
     }
   }
 
@@ -161,10 +190,14 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
 
   getStatusClass(status: string): string {
     switch (status) {
-      case 'Complete': return 'status-complete';
-      case 'Pending': return 'status-pending';
-      case 'Error': return 'status-error';
-      default: return 'status-unknown';
+      case 'Complete':
+        return 'status-complete';
+      case 'Pending':
+        return 'status-pending';
+      case 'Error':
+        return 'status-error';
+      default:
+        return 'status-unknown';
     }
   }
 
@@ -183,11 +216,11 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     if (diffMins < 60) return `${diffMins} min${diffMins > 1 ? 's' : ''} ago`;
     if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
     if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
-    
+
     return new Intl.DateTimeFormat('en-US', {
       month: 'short',
       day: 'numeric',
-      year: diffDays > 365 ? 'numeric' : undefined
+      year: diffDays > 365 ? 'numeric' : undefined,
     }).format(new Date(date));
   }
 
@@ -199,7 +232,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
       hour: 'numeric',
       minute: 'numeric',
       hour12: true,
-      timeZoneName: 'short'
+      timeZoneName: 'short',
     }).format(new Date(date));
   }
 
@@ -210,21 +243,21 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     if (change.Type === 'Delete') {
       return 'Record was deleted';
     }
-    
+
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
       const fields = Object.keys(changesJson);
       if (fields.length === 0) return 'No field changes detected';
-      
+
       // Get field display names
-      const fieldNames = fields.map(fieldKey => {
+      const fieldNames = fields.map((fieldKey) => {
         const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) => 
-          f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
+        const field = this.record.EntityInfo.Fields.find(
+          (f: EntityFieldInfo) => f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
         );
         return field?.DisplayNameOrName || changeInfo.field;
       });
-      
+
       if (fieldNames.length === 1) {
         return `${fieldNames[0]} changed`;
       }
@@ -235,7 +268,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
         const lastField = fieldNames.pop();
         return `${fieldNames.join(', ')}, and ${lastField} changed`;
       }
-      
+
       // For more than 4 fields, show first 3 and count
       return `${fieldNames.slice(0, 3).join(', ')}, and ${fieldNames.length - 3} other field${fieldNames.length - 3 > 1 ? 's' : ''} changed`;
     } catch {
@@ -243,25 +276,27 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     }
   }
 
-  getFieldChanges(change: RecordChangeEntity): Array<{field: string, displayName: string, oldValue: any, newValue: any, isBooleanField: boolean, diffHtml?: SafeHtml}> {
+  getFieldChanges(
+    change: RecordChangeEntity
+  ): Array<{ field: string; displayName: string; oldValue: any; newValue: any; isBooleanField: boolean; diffHtml?: SafeHtml }> {
     try {
       const changesJson = JSON.parse(change.ChangesJSON || '{}');
       const fields = Object.keys(changesJson);
-      
-      return fields.map(fieldKey => {
+
+      return fields.map((fieldKey) => {
         const changeInfo = changesJson[fieldKey];
-        const field = this.record.EntityInfo.Fields.find((f: EntityFieldInfo) => 
-          f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
+        const field = this.record.EntityInfo.Fields.find(
+          (f: EntityFieldInfo) => f.Name.trim().toLowerCase() === changeInfo.field?.trim().toLowerCase()
         );
-        
+
         const isBooleanField = field?.TSType === EntityFieldTSType.Boolean;
         let diffHtml: SafeHtml | undefined;
-        
+
         // Generate diff HTML for non-boolean text fields
         if (!isBooleanField) {
           const oldStr = String(changeInfo.oldValue ?? '');
           const newStr = String(changeInfo.newValue ?? '');
-          
+
           // Always show diff if values are different, even if one is empty
           if (oldStr !== newStr) {
             diffHtml = this.generateDiffHtml(oldStr, newStr);
@@ -274,7 +309,7 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
           oldValue: changeInfo.oldValue,
           newValue: changeInfo.newValue,
           isBooleanField,
-          diffHtml
+          diffHtml,
         };
       });
     } catch {
@@ -282,19 +317,19 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     }
   }
 
-  getCreatedFields(change: RecordChangeEntity): Array<{name: string, displayName: string, value: any}> {
+  getCreatedFields(change: RecordChangeEntity): Array<{ name: string; displayName: string; value: any }> {
     try {
       if (!change.FullRecordJSON) return [];
-      
+
       const record = JSON.parse(change.FullRecordJSON);
       const fields = this.record.EntityInfo.Fields;
-      
+
       return fields
         .filter((field: EntityFieldInfo) => record[field.Name] !== null && record[field.Name] !== undefined && record[field.Name] !== '')
         .map((field: EntityFieldInfo) => ({
           name: field.Name,
           displayName: field.DisplayNameOrName,
-          value: record[field.Name]
+          value: record[field.Name],
         }));
     } catch {
       return [];
@@ -306,21 +341,25 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     if (!oldValue && !newValue) {
       return this.sanitizer.bypassSecurityTrustHtml('<div class="diff-container"><span class="diff-unchanged">(no change)</span></div>');
     }
-    
+
     if (!oldValue) {
-      return this.sanitizer.bypassSecurityTrustHtml(`<div class="diff-container"><span class="diff-added">${this.escapeHtml(newValue)}</span></div>`);
+      return this.sanitizer.bypassSecurityTrustHtml(
+        `<div class="diff-container"><span class="diff-added">${this.escapeHtml(newValue)}</span></div>`
+      );
     }
-    
+
     if (!newValue) {
-      return this.sanitizer.bypassSecurityTrustHtml(`<div class="diff-container"><span class="diff-removed">${this.escapeHtml(oldValue)}</span></div>`);
+      return this.sanitizer.bypassSecurityTrustHtml(
+        `<div class="diff-container"><span class="diff-removed">${this.escapeHtml(oldValue)}</span></div>`
+      );
     }
-    
+
     // Decide between character and word diff based on content length and type
     const useWordDiff = this.shouldUseWordDiff(oldValue, newValue);
     const diffs = useWordDiff ? diffWords(oldValue, newValue) : diffChars(oldValue, newValue);
-    
+
     let html = '<div class="diff-container">';
-    
+
     diffs.forEach((part: Change) => {
       const escapedValue = this.escapeHtml(part.value);
       if (part.added) {
@@ -331,9 +370,9 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
         html += `<span class="diff-unchanged">${escapedValue}</span>`;
       }
     });
-    
+
     html += '</div>';
-    
+
     return this.sanitizer.bypassSecurityTrustHtml(html);
   }
 
@@ -342,9 +381,8 @@ export class RecordChangesComponent implements OnInit, AfterViewInit, OnDestroy 
     // Use character diff for shorter text, codes, IDs, etc.
     const hasMultipleWords = (text: string) => text.includes(' ') && text.split(' ').length > 3;
     const isLongText = (text: string) => text.length > 50;
-    
-    return (hasMultipleWords(oldValue) || hasMultipleWords(newValue)) && 
-           (isLongText(oldValue) || isLongText(newValue));
+
+    return (hasMultipleWords(oldValue) || hasMultipleWords(newValue)) && (isLongText(oldValue) || isLongText(newValue));
   }
 
   private escapeHtml(text: string): string {

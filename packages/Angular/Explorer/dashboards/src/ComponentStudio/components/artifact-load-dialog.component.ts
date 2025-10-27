@@ -1,12 +1,7 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
-import { RunView, Metadata } from '@memberjunction/core';
-import {
-  ArtifactEntity,
-  ArtifactVersionEntity,
-  CollectionEntity,
-  CollectionArtifactEntity
-} from '@memberjunction/core-entities';
+import { RunView, Metadata } from '@memberjunction/global';
+import { ArtifactEntity, ArtifactVersionEntity, CollectionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
@@ -23,7 +18,7 @@ export interface ArtifactLoadResult {
 @Component({
   selector: 'app-artifact-load-dialog',
   templateUrl: './artifact-load-dialog.component.html',
-  styleUrl: './artifact-load-dialog.component.css'
+  styleUrl: './artifact-load-dialog.component.css',
 })
 export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   // Tab state
@@ -70,18 +65,11 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
 
   async ngOnInit() {
     // Setup search debouncing
-    this.searchSubject.pipe(
-      debounceTime(300),
-      distinctUntilChanged(),
-      takeUntil(this.destroy$)
-    ).subscribe(() => {
+    this.searchSubject.pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$)).subscribe(() => {
       this.filterArtifacts();
     });
 
-    await Promise.all([
-      this.loadArtifacts(),
-      this.loadCollections()
-    ]);
+    await Promise.all([this.loadArtifacts(), this.loadCollections()]);
   }
 
   ngOnDestroy() {
@@ -101,7 +89,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: this.pageSize,
         StartRow: startRow,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success && result.Results) {
@@ -134,7 +122,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
           WHERE UserID = '${currentUserId}' AND CanRead = 1
         )`,
         OrderBy: 'Name',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success) {
@@ -164,7 +152,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
           WHERE CollectionID = '${collection.ID}'
         )`,
         OrderBy: 'Name',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success) {
@@ -195,7 +183,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
     // User email filter
     if (this.userEmail?.trim()) {
       const md = new Metadata();
-      const schemaName = md.EntityByName("Users")?.SchemaName || "__mj";
+      const schemaName = md.EntityByName('Users')?.SchemaName || '__mj';
       filters.push(`UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`);
     }
 
@@ -219,7 +207,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,
         OrderBy: 'VersionNumber DESC',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success && result.Results) {
@@ -261,8 +249,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
         } else {
           this.previewSpec = config;
         }
-      }
-      else {
+      } else {
         this.previewError = 'No content found in this version';
       }
     } catch (error) {
@@ -326,9 +313,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   }
 
   canLoad(): boolean {
-    return this.selectedArtifact !== null &&
-           this.selectedVersion !== null &&
-           this.previewSpec !== null;
+    return this.selectedArtifact !== null && this.selectedVersion !== null && this.previewSpec !== null;
   }
 
   cancel() {
@@ -343,7 +328,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       artifactID: this.selectedArtifact!.ID,
       versionID: this.selectedVersion!.ID,
       versionNumber: this.selectedVersion!.VersionNumber,
-      artifactName: this.selectedArtifact!.Name
+      artifactName: this.selectedArtifact!.Name,
     };
 
     this.dialog.close(result);

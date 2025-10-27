@@ -59,7 +59,7 @@ A sophisticated permission system for managing access to various resources:
 ### Basic Entity Usage
 
 ```typescript
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 import { UserEntity, ApplicationEntity } from '@memberjunction/core-entities';
 
 // Always use Metadata to create entity instances
@@ -120,13 +120,13 @@ Extract rules are defined in the `ArtifactType.ExtractRules` JSON field:
 
 ### Extract Rule Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `name` | string | Unique identifier for this rule |
-| `description` | string | Human-readable description |
-| `type` | string | TypeScript type (e.g., `'string'`, `'Array<{x: number}>'`) |
+| Property           | Type    | Description                                                              |
+| ------------------ | ------- | ------------------------------------------------------------------------ |
+| `name`             | string  | Unique identifier for this rule                                          |
+| `description`      | string  | Human-readable description                                               |
+| `type`             | string  | TypeScript type (e.g., `'string'`, `'Array<{x: number}>'`)               |
 | `standardProperty` | string? | Maps to: `'name'`, `'description'`, `'displayMarkdown'`, `'displayHtml'` |
-| `extractor` | string | JavaScript code that receives `content` and returns value |
+| `extractor`        | string  | JavaScript code that receives `content` and returns value                |
 
 ### Using the ArtifactExtractor
 
@@ -153,7 +153,7 @@ const description = ArtifactExtractor.GetStandardProperty(result.attributes, 'de
 
 ```typescript
 import { ArtifactVersionExtended } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 
 const md = new Metadata();
 const version = await md.GetEntityObject<ArtifactVersionExtended>('MJ: Artifact Versions');

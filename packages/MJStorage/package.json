@@ -25,7 +25,6 @@
     "@azure/identity": "^4.0.1",
     "@azure/storage-blob": "^12.17.0",
     "@google-cloud/storage": "^7.9.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/global": "2.111.0",
     "@microsoft/mgt-element": "^3.1.3",

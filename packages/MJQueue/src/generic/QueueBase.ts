@@ -1,14 +1,13 @@
-import { UserInfo, BaseEntity } from '@memberjunction/core';
+import { UserInfo, BaseEntity } from '@memberjunction/global';
 import { QueueEntity, QueueTaskEntity } from '@memberjunction/core-entities';
 //import { QueueTaskEntity, QueueEntity } from 'mj_generatedentities';
 
 export class TaskResult {
-  success: boolean
-  userMessage: string
-  output: any
-  exception: any
+  success: boolean;
+  userMessage: string;
+  output: any;
+  exception: any;
 }
- 
 
 export interface TaskOptions {
   priority?: number;
@@ -22,27 +21,24 @@ export const TaskStatus = {
   Cancelled: 'Cancelled',
 } as const;
 
-export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
-
+export type TaskStatus = (typeof TaskStatus)[keyof typeof TaskStatus];
 
 export class TaskBase {
   private _options: TaskOptions;
-  private _data: any; 
-  private _taskRecord: QueueTaskEntity
+  private _data: any;
+  private _taskRecord: QueueTaskEntity;
   private _status: TaskStatus = TaskStatus.Pending;
 
-  public get Options(): TaskOptions 
-  {
+  public get Options(): TaskOptions {
     return this._options;
   }
-  public get Data(): any 
-  {
+  public get Data(): any {
     return this._data;
-  } 
+  }
   public get ID(): string {
     return this._taskRecord.ID;
   }
-  constructor (taskRecord: QueueTaskEntity, data: any, options: TaskOptions) {
+  constructor(taskRecord: QueueTaskEntity, data: any, options: TaskOptions) {
     this._taskRecord = taskRecord;
     this._options = options;
     this._data = data;
@@ -50,7 +46,7 @@ export class TaskBase {
 
   public get TaskRecord(): QueueTaskEntity {
     return this._taskRecord;
-  }   
+  }
 
   public get Status(): TaskStatus {
     return this._status;
@@ -58,24 +54,22 @@ export class TaskBase {
   public set Status(value: TaskStatus) {
     this._status = value;
   }
-
 }
 
-
-export abstract class QueueBase  {  
+export abstract class QueueBase {
   private _queue: TaskBase[] = [];
   private _queueTypeId: string;
-  protected _contextUser: UserInfo
+  protected _contextUser: UserInfo;
   private _maxTasks: number = 3; // move to metadata or config param
   private _checkInterval: number = 250; // move to metadata or config param
-  private _queueRecord: QueueEntity
+  private _queueRecord: QueueEntity;
 
   constructor(QueueRecord: QueueEntity, QueueTypeID: string, ContextUser: UserInfo) {
     this._queueRecord = QueueRecord;
     this._queueTypeId = QueueTypeID;
     this._contextUser = ContextUser;
   }
- 
+
   public get QueueID(): string {
     return this._queueRecord.ID;
   }
@@ -93,23 +87,21 @@ export abstract class QueueBase  {
         // it will re-run itself with a timer to check for new tasks
         // this will be the main loop for the queue
         if (this._queue.length > 0) {
-          let processing: TaskBase[] = this._queue.filter(t => t.Status === TaskStatus.InProgress);
-          let pending: TaskBase[] = this._queue.filter(t => t.Status === TaskStatus.Pending);
+          let processing: TaskBase[] = this._queue.filter((t) => t.Status === TaskStatus.InProgress);
+          let pending: TaskBase[] = this._queue.filter((t) => t.Status === TaskStatus.Pending);
 
           // we have room to process one or more additional tasks now
           while (processing.length < this._maxTasks && pending.length > 0) {
             let task = pending.shift();
             this.StartTask(task, this._contextUser); // INTENTIONAL - do not await as we want to fire off all the tasks we can do, and then move on
           }
-        }  
-      }
-      catch (e) {
+        }
+      } catch (e) {
         console.log(e);
-      }
-      finally {
+      } finally {
         this._processing = false;
         setTimeout(() => {
-          this.ProcessTasks()
+          this.ProcessTasks();
         }, this._checkInterval); // setup the next check
       }
     }
@@ -124,8 +116,7 @@ export abstract class QueueBase  {
       this.ProcessTasks();
 
       return true;
-    }
-    catch (e) { 
+    } catch (e) {
       return false;
     }
   }
@@ -141,28 +132,27 @@ export abstract class QueueBase  {
       let result = await this.ProcessTask(task, contextUser);
 
       // now set the record data for the DB
-      task.TaskRecord.Status = result.success ? "Completed" : "Failed";
+      task.TaskRecord.Status = result.success ? 'Completed' : 'Failed';
       task.TaskRecord.Output = result.output;
       task.TaskRecord.ErrorMessage = result.exception ? JSON.stringify(result.exception) : null;
       await task.TaskRecord.Save();
 
       // update the task status
-      task.Status = result.success ? TaskStatus.Complete : TaskStatus.Failed; 
+      task.Status = result.success ? TaskStatus.Complete : TaskStatus.Failed;
 
       return result;
-    }
-    catch (e) {
+    } catch (e) {
       console.log(e);
       return {
         success: false,
         output: null,
         userMessage: 'Execution Error: ' + e.message,
-        exception: e
-      }
+        exception: e,
+      };
     }
   }
 
   public FindTask(ID: string): TaskBase {
-    return this._queue.find(t => t.ID === ID);
+    return this._queue.find((t) => t.ID === ID);
   }
 }

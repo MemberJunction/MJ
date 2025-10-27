@@ -35,7 +35,7 @@ This package depends on the following MemberJunction packages:
 ```typescript
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Get the singleton instance
 const engine = EntityCommunicationsEngine.Instance;

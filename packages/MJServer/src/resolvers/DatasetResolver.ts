@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, Metadata } from '@memberjunction/core';
+import { LogError, Metadata } from '@memberjunction/global';
 import { GetReadOnlyProvider } from '../util.js';
 
 @ObjectType()
@@ -33,17 +33,16 @@ export class DatasetItemFilterTypeGQL {
   Filter: string;
 }
 
-
 @Resolver(DatasetResultType)
 export class DatasetResolverExtended {
   @Query(() => DatasetResultType)
   async GetDatasetByName(
     @Arg('DatasetName', () => String) DatasetName: string,
-    @Ctx() {providers}: AppContext,
+    @Ctx() { providers }: AppContext,
     @Arg('ItemFilters', () => [DatasetItemFilterTypeGQL], { nullable: 'itemsAndList' }) ItemFilters?: DatasetItemFilterTypeGQL[]
   ) {
     try {
-      const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+      const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const result = await md.GetDatasetByName(DatasetName, ItemFilters);
       if (result) {
         return {
@@ -90,11 +89,11 @@ export class DatasetStatusResolver {
   @Query(() => DatasetStatusResultType)
   async GetDatasetStatusByName(
     @Arg('DatasetName', () => String) DatasetName: string,
-    @Ctx() {providers}: AppContext,
+    @Ctx() { providers }: AppContext,
     @Arg('ItemFilters', () => [DatasetItemFilterTypeGQL], { nullable: 'itemsAndList' }) ItemFilters?: DatasetItemFilterTypeGQL[]
   ) {
     try {
-      const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+      const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const result = await md.GetDatasetStatusByName(DatasetName, ItemFilters);
       if (result) {
         return {

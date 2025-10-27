@@ -72,7 +72,7 @@ if (result.Success) {
 ```typescript
 import { CommunicationEngine } from '@memberjunction/communication-engine';
 import { Message } from '@memberjunction/communication-types';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 
 // Get template from metadata
 const md = new Metadata();

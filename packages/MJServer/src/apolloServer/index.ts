@@ -4,7 +4,7 @@ import { Disposable } from 'graphql-ws';
 import { Server } from 'http';
 import { enableIntrospection } from '../config.js';
 import { AppContext } from '../types.js';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 const buildApolloServer = (
@@ -24,7 +24,7 @@ const buildApolloServer = (
             },
           };
         },
-      } 
+      },
     ],
     introspection: enableIntrospection,
     ...configOverride,

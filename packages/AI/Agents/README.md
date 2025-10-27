@@ -79,7 +79,7 @@ npm install @memberjunction/ai-agents
 
 ```typescript
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Using AgentRunner (recommended) which uses `ClassFactory` to pick the highest priority sub-class of BaseAgent that matches your Agent (and falls back to just using `BaseAgent` if there's no custom sub-class)
 const runner = new AgentRunner();

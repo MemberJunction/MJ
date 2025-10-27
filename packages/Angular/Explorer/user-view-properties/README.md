@@ -91,33 +91,33 @@ Extends `BaseFormComponent` from @memberjunction/ng-base-forms.
 
 ### Inputs
 
-| Input                 | Type               | Description                                            |
-|-----------------------|--------------------|--------------------------------------------------------|
-| ViewID                | string \| undefined | ID of the view to edit or undefined for a new view     |
-| EntityName            | string \| undefined | Entity name when creating a new view                   |
-| CategoryID            | string \| null     | Optional category ID for the view                      |
-| ShowPropertiesButton  | boolean            | Whether to show the properties button (default: true)  |
+| Input                | Type                | Description                                           |
+| -------------------- | ------------------- | ----------------------------------------------------- |
+| ViewID               | string \| undefined | ID of the view to edit or undefined for a new view    |
+| EntityName           | string \| undefined | Entity name when creating a new view                  |
+| CategoryID           | string \| null      | Optional category ID for the view                     |
+| ShowPropertiesButton | boolean             | Whether to show the properties button (default: true) |
 
 ### Outputs
 
-| Output        | Type           | Description                                               |
-|---------------|----------------|-----------------------------------------------------------|
-| dialogClosed  | EventEmitter   | Emits when dialog is closed with save status and view data |
+| Output       | Type         | Description                                                |
+| ------------ | ------------ | ---------------------------------------------------------- |
+| dialogClosed | EventEmitter | Emits when dialog is closed with save status and view data |
 
 ### Methods
 
-| Method                 | Parameters                       | Returns   | Description                                     |
-|------------------------|----------------------------------|-----------|------------------------------------------------|
-| CreateView             | entityName: string               | void      | Opens dialog to create a new view               |
-| CreateViewInCategory   | entityName: string, viewCategoryID: string | void | Creates a view in a specific category     |
-| Open                   | ViewID?: string                  | void      | Opens the dialog for editing an existing view   |
-| saveProperties         | -                                | Promise<void> | Saves the current view properties           |
-| closePropertiesDialog  | -                                | void      | Closes the dialog and emits dialogClosed event |
-| Load                   | -                                | Promise<void> | Loads view data from database or creates new record |
-| toggleColumn           | column: any                      | Promise<void> | Toggles visibility of a column in the view |
-| onDragEnd              | e: DragEndEvent                  | void      | Handles field reordering via drag and drop     |
-| addSort                | -                                | void      | Adds a new sort field to the view              |
-| removeSort             | item: any                        | void      | Removes a sort field from the view             |
+| Method                | Parameters                                 | Returns       | Description                                         |
+| --------------------- | ------------------------------------------ | ------------- | --------------------------------------------------- |
+| CreateView            | entityName: string                         | void          | Opens dialog to create a new view                   |
+| CreateViewInCategory  | entityName: string, viewCategoryID: string | void          | Creates a view in a specific category               |
+| Open                  | ViewID?: string                            | void          | Opens the dialog for editing an existing view       |
+| saveProperties        | -                                          | Promise<void> | Saves the current view properties                   |
+| closePropertiesDialog | -                                          | void          | Closes the dialog and emits dialogClosed event      |
+| Load                  | -                                          | Promise<void> | Loads view data from database or creates new record |
+| toggleColumn          | column: any                                | Promise<void> | Toggles visibility of a column in the view          |
+| onDragEnd             | e: DragEndEvent                            | void          | Handles field reordering via drag and drop          |
+| addSort               | -                                          | void          | Adds a new sort field to the view                   |
+| removeSort            | item: any                                  | void          | Removes a sort field from the view                  |
 
 ## Component Structure
 
@@ -146,7 +146,7 @@ The dialog consists of six tabbed sections:
 ```typescript
 import { Component, ViewChild } from '@angular/core';
 import { UserViewPropertiesDialogComponent } from '@memberjunction/ng-user-view-properties';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 
 @Component({
   selector: 'app-my-component',

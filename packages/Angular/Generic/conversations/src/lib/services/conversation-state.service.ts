@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo } from '@memberjunction/global';
 
 /**
  * Simplified state management for conversations
@@ -8,7 +8,7 @@ import { Metadata, RunView, UserInfo } from '@memberjunction/core';
  * This prevents synchronization issues when updating conversation properties
  */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ConversationStateService {
   // Simple properties - Angular change detection will handle updates
@@ -28,7 +28,7 @@ export class ConversationStateService {
    */
   get activeConversation(): ConversationEntity | null {
     if (!this.activeConversationId) return null;
-    return this.conversations.find(c => c.ID === this.activeConversationId) || null;
+    return this.conversations.find((c) => c.ID === this.activeConversationId) || null;
   }
 
   /**
@@ -39,9 +39,8 @@ export class ConversationStateService {
       return this.conversations;
     }
     const lowerQuery = this.searchQuery.toLowerCase();
-    return this.conversations.filter(c =>
-      (c.Name?.toLowerCase().includes(lowerQuery)) ||
-      (c.Description?.toLowerCase().includes(lowerQuery))
+    return this.conversations.filter(
+      (c) => c.Name?.toLowerCase().includes(lowerQuery) || c.Description?.toLowerCase().includes(lowerQuery)
     );
   }
 
@@ -49,7 +48,7 @@ export class ConversationStateService {
    * Gets pinned conversations
    */
   get pinnedConversations(): ConversationEntity[] {
-    return this.conversations.filter(c => c.IsPinned);
+    return this.conversations.filter((c) => c.IsPinned);
   }
 
   /**
@@ -83,7 +82,7 @@ export class ConversationStateService {
    * @param updates The fields to update
    */
   updateConversationInPlace(id: string, updates: Partial<ConversationEntity>): void {
-    const conversation = this.conversations.find(c => c.ID === id);
+    const conversation = this.conversations.find((c) => c.ID === id);
     if (conversation) {
       Object.assign(conversation, updates);
       console.log('📝 Updated conversation in-place:', { id, updates });
@@ -95,7 +94,7 @@ export class ConversationStateService {
    * @param id The conversation ID to remove
    */
   removeConversation(id: string): void {
-    this.conversations = this.conversations.filter(c => c.ID !== id);
+    this.conversations = this.conversations.filter((c) => c.ID !== id);
   }
 
   /**
@@ -130,7 +129,7 @@ export class ConversationStateService {
           ExtraFilter: filter,
           OrderBy: 'IsPinned DESC, __mj_UpdatedAt DESC',
           MaxRows: 1000,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
         },
         currentUser
       );
@@ -217,11 +216,7 @@ export class ConversationStateService {
    * @param currentUser The current user context
    * @returns True if successful
    */
-  async saveConversation(
-    id: string,
-    updates: Partial<ConversationEntity>,
-    currentUser: UserInfo
-  ): Promise<boolean> {
+  async saveConversation(id: string, updates: Partial<ConversationEntity>, currentUser: UserInfo): Promise<boolean> {
     const md = new Metadata();
     const conversation = await md.GetEntityObject<ConversationEntity>('Conversations', currentUser);
 
@@ -249,7 +244,7 @@ export class ConversationStateService {
    * @param currentUser The current user context
    */
   async togglePin(id: string, currentUser: UserInfo): Promise<void> {
-    const conversation = this.conversations.find(c => c.ID === id);
+    const conversation = this.conversations.find((c) => c.ID === id);
     if (conversation) {
       await this.saveConversation(id, { IsPinned: !conversation.IsPinned }, currentUser);
     }

@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 import { UserEntity } from '@memberjunction/core-entities';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -17,7 +17,7 @@ interface IconCategory {
   standalone: true,
   imports: [CommonModule, FormsModule],
   templateUrl: './user-profile-settings.component.html',
-  styleUrls: ['./user-profile-settings.component.css']
+  styleUrls: ['./user-profile-settings.component.css'],
 })
 export class UserProfileSettingsComponent implements OnInit {
   currentUser!: UserEntity;
@@ -55,8 +55,8 @@ export class UserProfileSettingsComponent implements OnInit {
         'fa-solid fa-user-crown',
         'fa-solid fa-user-pilot',
         'fa-solid fa-user-cowboy',
-        'fa-solid fa-user-chef'
-      ]
+        'fa-solid fa-user-chef',
+      ],
     },
     {
       name: 'Business',
@@ -70,8 +70,8 @@ export class UserProfileSettingsComponent implements OnInit {
         'fa-solid fa-award',
         'fa-solid fa-lightbulb',
         'fa-solid fa-rocket',
-        'fa-solid fa-star'
-      ]
+        'fa-solid fa-star',
+      ],
     },
     {
       name: 'Tech',
@@ -85,8 +85,8 @@ export class UserProfileSettingsComponent implements OnInit {
         'fa-solid fa-server',
         'fa-solid fa-database',
         'fa-solid fa-network-wired',
-        'fa-solid fa-bug'
-      ]
+        'fa-solid fa-bug',
+      ],
     },
     {
       name: 'Fun',
@@ -100,19 +100,13 @@ export class UserProfileSettingsComponent implements OnInit {
         'fa-solid fa-bolt',
         'fa-solid fa-gem',
         'fa-solid fa-crown',
-        'fa-solid fa-hat-wizard'
-      ]
+        'fa-solid fa-hat-wizard',
+      ],
     },
     {
       name: 'Animals',
-      icons: [
-        'fa-solid fa-cat',
-        'fa-solid fa-dog',
-        'fa-solid fa-dragon',
-        'fa-solid fa-dove',
-        'fa-solid fa-fish'
-      ]
-    }
+      icons: ['fa-solid fa-cat', 'fa-solid fa-dog', 'fa-solid fa-dragon', 'fa-solid fa-dove', 'fa-solid fa-fish'],
+    },
   ];
 
   constructor(
@@ -264,7 +258,8 @@ export class UserProfileSettingsComponent implements OnInit {
    * in the calling application which has access to auth services
    */
   async syncFromProvider(): Promise<void> {
-    this.errorMessage = 'Avatar sync from provider is not yet implemented in settings. Please use the automatic sync on login or manually upload an image.';
+    this.errorMessage =
+      'Avatar sync from provider is not yet implemented in settings. Please use the automatic sync on login or manually upload an image.';
     // TODO: Implement auth provider integration
     // The calling application should provide a way to get auth claims
     // and call userAvatarService.syncFromImageUrl() with the appropriate URL and headers
@@ -305,8 +300,8 @@ export class UserProfileSettingsComponent implements OnInit {
           component: this,
           args: {
             imageUrl: null,
-            iconClass: null
-          }
+            iconClass: null,
+          },
         });
       } else {
         this.errorMessage = 'Failed to revert avatar. Please try again.';
@@ -400,8 +395,8 @@ export class UserProfileSettingsComponent implements OnInit {
           component: this,
           args: {
             imageUrl: this.currentUser.UserImageURL,
-            iconClass: this.currentUser.UserImageIconClass
-          }
+            iconClass: this.currentUser.UserImageIconClass,
+          },
         });
       } else {
         this.errorMessage = 'Failed to save avatar. Please try again.';

@@ -4,7 +4,7 @@
  * This module provides the actual implementation functions for RunQuery SQL filters.
  * This is separate from the filter definitions to keep AI prompts token-efficient.
  * 
- * @module @memberjunction/core/runQuerySQLFilterImplementations
+ * @module @memberjunction/global/runQuerySQLFilterImplementations
  */
 
 import { RUN_QUERY_SQL_FILTERS, RunQuerySQLFilter } from './querySQLFilters';

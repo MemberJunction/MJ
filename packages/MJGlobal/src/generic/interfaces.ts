@@ -721,7 +721,7 @@ export class AllMetadata {
 
 /**
  * Represents the result of a simple text embedding operation. Not 
- * implemented in @memberjunction/core package but defined here and
+ * implemented in @memberjunction/global package but defined here and
  * implemented in sub-classes that live exclusively on the server-side
  */
 export interface SimpleEmbeddingResult {

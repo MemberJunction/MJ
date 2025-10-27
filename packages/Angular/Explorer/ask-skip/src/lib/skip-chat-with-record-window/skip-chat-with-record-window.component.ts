@@ -1,21 +1,20 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { CompositeKey, KeyValuePair } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
- 
 
 @Component({
   selector: 'mj-skip-chat-with-record-window',
   templateUrl: './skip-chat-with-record-window.component.html',
-  styleUrls: ['./skip-chat-with-record-window.component.css']
+  styleUrls: ['./skip-chat-with-record-window.component.css'],
 })
-export class SkipChatWithRecordWindowComponent  {  
+export class SkipChatWithRecordWindowComponent {
   @Input() public Width: number = 850;
   @Input() public Height: number = 800;
 
   // Pass through properties to the chat component
   @Input() AllowSend: boolean = true;
-  @Input() public Title: string = "Chat with Record"
-  @Input() public LinkedEntityID: string = ""; 
+  @Input() public Title: string = 'Chat with Record';
+  @Input() public LinkedEntityID: string = '';
   @Input() public LinkedEntityPrimaryKey: CompositeKey = new CompositeKey();
 
   @Input() public WindowOpened: boolean = true;

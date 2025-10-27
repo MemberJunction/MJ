@@ -187,7 +187,7 @@ type CreateDraftResult<T = Record<string, any>> = {
 
 ```typescript
 import { CommunicationEngineBase } from '@memberjunction/communication-types';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 async function initializeCommunications(user: UserInfo) {
     const engine = CommunicationEngineBase.Instance;

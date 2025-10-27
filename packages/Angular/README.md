@@ -166,7 +166,7 @@ Follow the guidelines in [CLAUDE.md](./CLAUDE.md):
 ### Working with Entities
 
 ```typescript
-import { BaseEntity, Metadata } from '@memberjunction/core';
+import { BaseEntity, Metadata } from '@memberjunction/global';
 
 // Load entity using metadata
 const md = new Metadata();

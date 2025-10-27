@@ -1,4 +1,4 @@
-import { CompositeKey, Metadata, UserInfo } from '@memberjunction/core';
+import { CompositeKey, Metadata, UserInfo } from '@memberjunction/global';
 
 /**
  * This is an abstract base class, use the EntityDocumentTemplateParser class or a sub-class thereof.

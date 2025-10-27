@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
+import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions } from '@memberjunction/global';
 import { FileEntity, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import {
   AppContext,
@@ -52,7 +52,7 @@ export class FileResolver extends FileResolverBase {
     @PubSub() pubSub: PubSubEngine
   ) {
     // Check to see if there's already an object with that name
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await provider.GetEntityObject<FileEntity>('Files', user);
     const providerEntity = await provider.GetEntityObject<FileStorageProviderEntity>('File Storage Providers', user);
@@ -107,7 +107,7 @@ export class FileResolver extends FileResolverBase {
     @PubSub() pubSub: PubSubEngine
   ) {
     // if the name is changing, rename the target object as well
-    const md = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Update, true);
@@ -135,7 +135,7 @@ export class FileResolver extends FileResolverBase {
     @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
-    const md = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const userInfo = this.GetUserFromPayload(context.userPayload);
 
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', userInfo);

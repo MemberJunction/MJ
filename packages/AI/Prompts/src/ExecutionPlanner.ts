@@ -1,4 +1,4 @@
-import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/global';
 import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended, AIModelVendorEntity } from '@memberjunction/core-entities';
 import { ExecutionTask, ParallelizationStrategy } from './ParallelExecution';
 import { ChatMessage } from '@memberjunction/ai';
@@ -39,7 +39,7 @@ export class ExecutionPlanner {
     contextUser?: UserInfo,
     configurationId?: string,
     conversationMessages?: ChatMessage[],
-    templateMessageRole: TemplateMessageRole = 'system',
+    templateMessageRole: TemplateMessageRole = 'system'
   ): ExecutionTask[] {
     LogStatus(`Creating execution plan for prompt "${prompt.Name}" with parallelization mode: ${prompt.ParallelizationMode}`);
 
@@ -55,7 +55,7 @@ export class ExecutionPlanner {
           contextUser,
           configurationId,
           conversationMessages,
-          templateMessageRole,
+          templateMessageRole
         );
 
       case 'StaticCount':
@@ -67,7 +67,7 @@ export class ExecutionPlanner {
           contextUser,
           configurationId,
           conversationMessages,
-          templateMessageRole,
+          templateMessageRole
         );
 
       case 'ConfigParam':
@@ -79,7 +79,7 @@ export class ExecutionPlanner {
           contextUser,
           configurationId,
           conversationMessages,
-          templateMessageRole,
+          templateMessageRole
         );
 
       case 'ModelSpecific':
@@ -91,7 +91,7 @@ export class ExecutionPlanner {
           contextUser,
           configurationId,
           conversationMessages,
-          templateMessageRole,
+          templateMessageRole
         );
 
       default:
@@ -104,7 +104,7 @@ export class ExecutionPlanner {
           contextUser,
           configurationId,
           conversationMessages,
-          templateMessageRole,
+          templateMessageRole
         );
     }
   }
@@ -130,7 +130,7 @@ export class ExecutionPlanner {
     contextUser?: UserInfo,
     configurationId?: string,
     conversationMessages?: ChatMessage[],
-    templateMessageRole: TemplateMessageRole = 'system',
+    templateMessageRole: TemplateMessageRole = 'system'
   ): ExecutionTask[] {
     const selectedModel = this.selectBestModel(prompt, promptModels, allModels, configurationId);
 
@@ -185,13 +185,22 @@ export class ExecutionPlanner {
     contextUser?: UserInfo,
     configurationId?: string,
     conversationMessages?: ChatMessage[],
-    templateMessageRole: TemplateMessageRole = 'system',
+    templateMessageRole: TemplateMessageRole = 'system'
   ): ExecutionTask[] {
     const parallelCount = prompt.ParallelCount || 1;
 
     if (parallelCount <= 1) {
       LogStatus(`StaticCount parallelization with count ${parallelCount}, falling back to single execution`);
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
+      return this.createSingleExecutionPlan(
+        prompt,
+        promptModels,
+        allModels,
+        renderedPrompt,
+        contextUser,
+        configurationId,
+        conversationMessages,
+        templateMessageRole
+      );
     }
 
     const tasks: ExecutionTask[] = [];
@@ -256,13 +265,22 @@ export class ExecutionPlanner {
     contextUser?: UserInfo,
     configurationId?: string,
     conversationMessages?: ChatMessage[],
-    templateMessageRole: TemplateMessageRole = 'system',
+    templateMessageRole: TemplateMessageRole = 'system'
   ): ExecutionTask[] {
     const configParamName = prompt.ParallelConfigParam;
 
     if (!configParamName) {
       LogError(`ConfigParam parallelization specified but ParallelConfigParam is not set for prompt "${prompt.Name}"`);
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
+      return this.createSingleExecutionPlan(
+        prompt,
+        promptModels,
+        allModels,
+        renderedPrompt,
+        contextUser,
+        configurationId,
+        conversationMessages,
+        templateMessageRole
+      );
     }
 
     // Look up the configuration parameter to get the parallel count
@@ -272,7 +290,16 @@ export class ExecutionPlanner {
 
     // Create tasks using the resolved parallel count
     if (parallelCount <= 1) {
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
+      return this.createSingleExecutionPlan(
+        prompt,
+        promptModels,
+        allModels,
+        renderedPrompt,
+        contextUser,
+        configurationId,
+        conversationMessages,
+        templateMessageRole
+      );
     }
 
     const tasks: ExecutionTask[] = [];
@@ -337,14 +364,23 @@ export class ExecutionPlanner {
     contextUser?: UserInfo,
     configurationId?: string,
     conversationMessages?: ChatMessage[],
-    templateMessageRole: TemplateMessageRole = 'system',
+    templateMessageRole: TemplateMessageRole = 'system'
   ): ExecutionTask[] {
     const tasks: ExecutionTask[] = [];
     const activePromptModels = promptModels.filter((pm) => pm.Status === 'Active' || pm.Status === 'Preview');
 
     if (activePromptModels.length === 0) {
       LogError(`No active prompt models found for ModelSpecific parallelization of prompt "${prompt.Name}"`);
-      return this.createSingleExecutionPlan(prompt, promptModels, allModels, renderedPrompt, contextUser, configurationId, conversationMessages, templateMessageRole);
+      return this.createSingleExecutionPlan(
+        prompt,
+        promptModels,
+        allModels,
+        renderedPrompt,
+        contextUser,
+        configurationId,
+        conversationMessages,
+        templateMessageRole
+      );
     }
 
     // Create tasks based on each prompt model's configuration
@@ -384,7 +420,9 @@ export class ExecutionPlanner {
       }
     }
 
-    LogStatus(`Created ModelSpecific execution plan with ${tasks.length} tasks across ${new Set(tasks.map((t) => t.executionGroup)).size} execution groups`);
+    LogStatus(
+      `Created ModelSpecific execution plan with ${tasks.length} tasks across ${new Set(tasks.map((t) => t.executionGroup)).size} execution groups`
+    );
     return tasks;
   }
 
@@ -401,11 +439,13 @@ export class ExecutionPlanner {
     prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
-    configurationId?: string,
+    configurationId?: string
   ): AIModelEntityExtended | null {
     // First try to use prompt-specific models
     const availablePromptModels = promptModels.filter(
-      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
+      (pm) =>
+        (pm.Status === 'Active' || pm.Status === 'Preview') &&
+        (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
     );
 
     if (availablePromptModels.length > 0) {
@@ -421,7 +461,7 @@ export class ExecutionPlanner {
 
     // Fall back to automatic model selection
     const candidateModels = allModels.filter(
-      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID),
+      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
     );
 
     if (candidateModels.length === 0) {
@@ -458,10 +498,12 @@ export class ExecutionPlanner {
     prompt: AIPromptEntityExtended,
     promptModels: AIPromptModelEntity[],
     allModels: AIModelEntityExtended[],
-    configurationId?: string,
+    configurationId?: string
   ): AIModelEntityExtended[] {
     const availablePromptModels = promptModels.filter(
-      (pm) => (pm.Status === 'Active' || pm.Status === 'Preview') && (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId),
+      (pm) =>
+        (pm.Status === 'Active' || pm.Status === 'Preview') &&
+        (!configurationId || !pm.ConfigurationID || pm.ConfigurationID === configurationId)
     );
 
     if (availablePromptModels.length > 0) {
@@ -482,7 +524,7 @@ export class ExecutionPlanner {
 
     // Fall back to all suitable models
     return allModels.filter(
-      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID),
+      (m) => m.IsActive && m.PowerRank >= (prompt.MinPowerRank || 0) && (!prompt.AIModelTypeID || m.AIModelTypeID === prompt.AIModelTypeID)
     );
   }
 
@@ -528,7 +570,7 @@ export class ExecutionPlanner {
     try {
       const aiEngine = AIEngineBase.Instance;
       const configParam = aiEngine.GetConfigurationParam(configurationId, paramName);
-      
+
       if (!configParam) {
         LogStatus(`Configuration parameter "${paramName}" not found in configuration "${configurationId}"`);
         return null;
@@ -536,7 +578,7 @@ export class ExecutionPlanner {
 
       // Parse the value based on the Type
       let value: number | null = null;
-      
+
       switch (configParam.Type) {
         case 'number':
           value = parseFloat(configParam.Value);
@@ -545,7 +587,7 @@ export class ExecutionPlanner {
             return null;
           }
           break;
-          
+
         case 'string':
           // Try to parse string as number
           value = parseFloat(configParam.Value);
@@ -554,7 +596,7 @@ export class ExecutionPlanner {
             return null;
           }
           break;
-          
+
         default:
           LogError(`Unsupported data type for parallel count configuration parameter "${paramName}": ${configParam.Type}`);
           return null;
@@ -562,7 +604,6 @@ export class ExecutionPlanner {
 
       LogStatus(`Retrieved configuration parameter "${paramName}" = ${value} from configuration "${configurationId}"`);
       return value;
-      
     } catch (error) {
       LogError(`Error retrieving configuration parameter "${paramName}": ${error.message}`);
       return null;
@@ -593,32 +634,26 @@ export class ExecutionPlanner {
    */
   private selectVendorForModel(model: AIModelEntityExtended): { vendorId?: string; vendorDriverClass?: string; vendorApiName?: string } {
     // Find the inference provider type from vendor type definitions
-    const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find(
-      vt => vt.Name === 'Inference Provider'
-    );
-    
+    const inferenceProviderType = AIEngine.Instance.VendorTypeDefinitions.find((vt) => vt.Name === 'Inference Provider');
+
     if (!inferenceProviderType) {
       // Fallback to model defaults if we can't find the inference provider type
       return {
         vendorDriverClass: model.DriverClass,
-        vendorApiName: model.APIName
+        vendorApiName: model.APIName,
       };
     }
 
     // Get active model vendors for this model that are inference providers
-    const modelVendors = AIEngine.Instance.ModelVendors
-      .filter(mv => 
-        mv.ModelID === model.ID && 
-        mv.Status === 'Active' && 
-        mv.TypeID === inferenceProviderType.ID
-      )
-      .sort((a, b) => b.Priority - a.Priority);
+    const modelVendors = AIEngine.Instance.ModelVendors.filter(
+      (mv) => mv.ModelID === model.ID && mv.Status === 'Active' && mv.TypeID === inferenceProviderType.ID
+    ).sort((a, b) => b.Priority - a.Priority);
 
     if (modelVendors.length === 0) {
       // No vendors found, use model defaults
       return {
         vendorDriverClass: model.DriverClass,
-        vendorApiName: model.APIName
+        vendorApiName: model.APIName,
       };
     }
 
@@ -628,7 +663,7 @@ export class ExecutionPlanner {
     return {
       vendorId: selectedVendor.VendorID,
       vendorDriverClass: selectedVendor.DriverClass || model.DriverClass,
-      vendorApiName: selectedVendor.APIName || model.APIName
+      vendorApiName: selectedVendor.APIName || model.APIName,
     };
   }
 }

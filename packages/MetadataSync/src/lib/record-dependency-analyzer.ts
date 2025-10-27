@@ -1,4 +1,4 @@
-import { Metadata, EntityInfo } from '@memberjunction/core';
+import { Metadata, EntityInfo } from '@memberjunction/global';
 import { RecordData } from './sync-engine';
 
 /**
@@ -46,10 +46,7 @@ export class RecordDependencyAnalyzer {
   /**
    * Main entry point: analyzes all records in a file and returns them in dependency order
    */
-  public async analyzeFileRecords(
-    records: RecordData[],
-    entityName: string
-  ): Promise<DependencyAnalysisResult> {
+  public async analyzeFileRecords(records: RecordData[], entityName: string): Promise<DependencyAnalysisResult> {
     // Reset state
     this.flattenedRecords = [];
     this.recordIdMap.clear();
@@ -80,7 +77,7 @@ export class RecordDependencyAnalyzer {
       sortedRecords,
       circularDependencies: circularDeps,
       dependencyGraph,
-      dependencyLevels
+      dependencyLevels,
     };
   }
 
@@ -108,7 +105,7 @@ export class RecordDependencyAnalyzer {
         path,
         dependencies: new Set(),
         id: recordId,
-        originalIndex: i
+        originalIndex: i,
       };
 
       // If this has a parent, add dependency on the parent
@@ -128,11 +125,11 @@ export class RecordDependencyAnalyzer {
             {
               entityName,
               record,
-              recordIndex: i
+              recordIndex: i,
             },
             depth + 1,
             path,
-            recordId  // Pass current record ID as parent for children
+            recordId // Pass current record ID as parent for children
           );
         }
       }
@@ -189,11 +186,7 @@ export class RecordDependencyAnalyzer {
         // This is a direct foreign key value, find the referenced record
         const relatedEntityInfo = this.getEntityInfo(field.RelatedEntity);
         if (relatedEntityInfo) {
-          const dependency = this.findRecordByPrimaryKey(
-            field.RelatedEntity,
-            fieldValue,
-            relatedEntityInfo
-          );
+          const dependency = this.findRecordByPrimaryKey(field.RelatedEntity, fieldValue, relatedEntityInfo);
           if (dependency) {
             record.dependencies.add(dependency);
           }
@@ -208,14 +201,14 @@ export class RecordDependencyAnalyzer {
   private findLookupDependency(lookupValue: string, currentRecord: FlattenedRecord): string | null {
     // Parse lookup format: @lookup:EntityName.Field=Value or @lookup:Field=Value
     const lookupStr = lookupValue.substring(8); // Remove '@lookup:'
-    
+
     // Handle the ?create syntax by removing it
     const cleanLookup = lookupStr.split('?')[0];
-    
+
     // Parse entity name if present
     let targetEntity: string;
     let criteria: string;
-    
+
     if (cleanLookup.includes('.')) {
       const parts = cleanLookup.split('.');
       targetEntity = parts[0];
@@ -232,7 +225,7 @@ export class RecordDependencyAnalyzer {
       const [field, value] = pair.split('=');
       if (field && value) {
         let resolvedValue = value.trim();
-        
+
         // Special handling for nested @lookup references in lookup criteria
         // This creates a dependency on the looked-up record
         if (resolvedValue.startsWith('@lookup:')) {
@@ -257,24 +250,24 @@ export class RecordDependencyAnalyzer {
         // If the value is @parent:field, we need to resolve it from the parent context
         else if (resolvedValue.startsWith('@parent:') && currentRecord.parentContext) {
           const parentField = resolvedValue.substring(8);
-          
+
           // Try to resolve from parent context
-          const parentValue = currentRecord.parentContext.record.fields?.[parentField] ||
-                             currentRecord.parentContext.record.primaryKey?.[parentField];
-          
+          const parentValue =
+            currentRecord.parentContext.record.fields?.[parentField] || currentRecord.parentContext.record.primaryKey?.[parentField];
+
           if (parentValue && typeof parentValue === 'string') {
             // Check if parent value is also a @parent reference (nested parent refs)
             if (parentValue.startsWith('@parent:')) {
               // Find the parent record to get its parent context
-              const parentRecord = this.flattenedRecords.find(r => 
-                r.record === currentRecord.parentContext!.record && 
-                r.entityName === currentRecord.parentContext!.entityName
+              const parentRecord = this.flattenedRecords.find(
+                (r) => r.record === currentRecord.parentContext!.record && r.entityName === currentRecord.parentContext!.entityName
               );
-              
+
               if (parentRecord && parentRecord.parentContext) {
                 const grandParentField = parentValue.substring(8);
-                const grandParentValue = parentRecord.parentContext.record.fields?.[grandParentField] ||
-                                        parentRecord.parentContext.record.primaryKey?.[grandParentField];
+                const grandParentValue =
+                  parentRecord.parentContext.record.fields?.[grandParentField] ||
+                  parentRecord.parentContext.record.primaryKey?.[grandParentField];
                 if (grandParentValue && typeof grandParentValue === 'string' && !grandParentValue.startsWith('@')) {
                   resolvedValue = grandParentValue;
                 }
@@ -284,7 +277,7 @@ export class RecordDependencyAnalyzer {
             }
           }
         }
-        
+
         criteriaMap.set(field.trim(), resolvedValue);
       }
     }
@@ -297,65 +290,63 @@ export class RecordDependencyAnalyzer {
       // Check if all criteria match
       let allMatch = true;
       for (const [field, value] of criteriaMap) {
-        let candidateValue = candidate.record.fields?.[field] || 
-                             candidate.record.primaryKey?.[field];
+        let candidateValue = candidate.record.fields?.[field] || candidate.record.primaryKey?.[field];
         let lookupValue = value;
-        
+
         // Resolve candidate value if it's a @parent reference
         if (typeof candidateValue === 'string' && candidateValue.startsWith('@parent:') && candidate.parentContext) {
           const parentField = candidateValue.substring(8);
           const parentRecord = candidate.parentContext.record;
           candidateValue = parentRecord.fields?.[parentField] || parentRecord.primaryKey?.[parentField];
-          
+
           // If the parent field is also a @parent reference, resolve it recursively
           if (typeof candidateValue === 'string' && candidateValue.startsWith('@parent:')) {
             // Find the candidate's parent in our flattened list
-            const candidateParent = this.flattenedRecords.find(r => 
-              r.record === candidate.parentContext!.record && 
-              r.entityName === candidate.parentContext!.entityName
+            const candidateParent = this.flattenedRecords.find(
+              (r) => r.record === candidate.parentContext!.record && r.entityName === candidate.parentContext!.entityName
             );
             if (candidateParent?.parentContext) {
               const grandParentField = candidateValue.substring(8);
-              candidateValue = candidateParent.parentContext.record.fields?.[grandParentField] || 
-                              candidateParent.parentContext.record.primaryKey?.[grandParentField];
+              candidateValue =
+                candidateParent.parentContext.record.fields?.[grandParentField] ||
+                candidateParent.parentContext.record.primaryKey?.[grandParentField];
             }
           }
         }
-        
+
         // Resolve lookup value if it contains @parent reference
         if (typeof lookupValue === 'string' && lookupValue.includes('@parent:')) {
           // Handle cases like "@parent:AgentID" or embedded references
           if (lookupValue.startsWith('@parent:') && currentRecord.parentContext) {
             const parentField = lookupValue.substring(8);
-            lookupValue = currentRecord.parentContext.record.fields?.[parentField] || 
-                         currentRecord.parentContext.record.primaryKey?.[parentField];
-            
+            lookupValue =
+              currentRecord.parentContext.record.fields?.[parentField] || currentRecord.parentContext.record.primaryKey?.[parentField];
+
             // If still a reference, try to resolve from the parent's parent
             if (typeof lookupValue === 'string' && lookupValue.startsWith('@parent:')) {
-              const currentParent = this.flattenedRecords.find(r => 
-                r.record === currentRecord.parentContext!.record && 
-                r.entityName === currentRecord.parentContext!.entityName
+              const currentParent = this.flattenedRecords.find(
+                (r) => r.record === currentRecord.parentContext!.record && r.entityName === currentRecord.parentContext!.entityName
               );
               if (currentParent?.parentContext) {
                 const grandParentField = lookupValue.substring(8);
-                lookupValue = currentParent.parentContext.record.fields?.[grandParentField] || 
-                             currentParent.parentContext.record.primaryKey?.[grandParentField];
+                lookupValue =
+                  currentParent.parentContext.record.fields?.[grandParentField] ||
+                  currentParent.parentContext.record.primaryKey?.[grandParentField];
               }
             }
           }
         }
-        
+
         // Special case: if both values are @parent references pointing to the same parent field,
         // and they have the same parent context, they match
-        if (value.startsWith('@parent:') && candidateValue === value && 
-            currentRecord.parentContext && candidate.parentContext) {
+        if (value.startsWith('@parent:') && candidateValue === value && currentRecord.parentContext && candidate.parentContext) {
           // Check if they share the same parent
           if (currentRecord.parentContext.record === candidate.parentContext.record) {
             // Same parent, same reference - they will resolve to the same value
             continue; // This criterion matches
           }
         }
-        
+
         if (candidateValue !== lookupValue) {
           allMatch = false;
           break;
@@ -378,40 +369,35 @@ export class RecordDependencyAnalyzer {
     if (!record.parentContext) {
       return null;
     }
-    
+
     // Walk up the parent chain to find the root
     let current = record;
     while (current.parentContext) {
       // Try to find the parent record in our flattened list
-      const parentRecord = this.flattenedRecords.find(r => 
-        r.record === current.parentContext!.record && 
-        r.entityName === current.parentContext!.entityName
+      const parentRecord = this.flattenedRecords.find(
+        (r) => r.record === current.parentContext!.record && r.entityName === current.parentContext!.entityName
       );
-      
+
       if (!parentRecord) {
         // Parent not found, something is wrong
         return null;
       }
-      
+
       // If this parent has no parent, it's the root
       if (!parentRecord.parentContext) {
         return parentRecord.id;
       }
-      
+
       current = parentRecord;
     }
-    
+
     return null;
   }
 
   /**
    * Finds a record by its primary key value
    */
-  private findRecordByPrimaryKey(
-    entityName: string,
-    primaryKeyValue: string,
-    entityInfo: EntityInfo
-  ): string | null {
+  private findRecordByPrimaryKey(entityName: string, primaryKeyValue: string, entityInfo: EntityInfo): string | null {
     // Get primary key field name
     const primaryKeyField = entityInfo.PrimaryKeys[0]?.Name;
     if (!primaryKeyField) return null;
@@ -419,8 +405,7 @@ export class RecordDependencyAnalyzer {
     for (const candidate of this.flattenedRecords) {
       if (candidate.entityName !== entityName) continue;
 
-      const candidateValue = candidate.record.primaryKey?.[primaryKeyField] ||
-                            candidate.record.fields?.[primaryKeyField];
+      const candidateValue = candidate.record.primaryKey?.[primaryKeyField] || candidate.record.fields?.[primaryKeyField];
       if (candidateValue === primaryKeyValue) {
         return candidate.id;
       }
@@ -517,7 +502,7 @@ export class RecordDependencyAnalyzer {
 
       tempStack.delete(recordId);
       visited.add(recordId);
-      
+
       if (record) {
         result.push(record);
       }
@@ -547,17 +532,14 @@ export class RecordDependencyAnalyzer {
    * Groups sorted records into dependency levels for parallel processing
    * Records in the same level have no dependencies on each other and can be processed in parallel
    */
-  private groupByDependencyLevels(
-    sortedRecords: FlattenedRecord[],
-    dependencyGraph: Map<string, Set<string>>
-  ): FlattenedRecord[][] {
+  private groupByDependencyLevels(sortedRecords: FlattenedRecord[], dependencyGraph: Map<string, Set<string>>): FlattenedRecord[][] {
     const levels: FlattenedRecord[][] = [];
     const recordLevels = new Map<string, number>();
-    
+
     // Calculate the level for each record
     for (const record of sortedRecords) {
       let maxDependencyLevel = -1;
-      
+
       // Find the maximum level of all dependencies
       for (const depId of record.dependencies) {
         const depLevel = recordLevels.get(depId);
@@ -565,18 +547,18 @@ export class RecordDependencyAnalyzer {
           maxDependencyLevel = depLevel;
         }
       }
-      
+
       // This record's level is one more than its highest dependency
       const recordLevel = maxDependencyLevel + 1;
       recordLevels.set(record.id, recordLevel);
-      
+
       // Add to the appropriate level array
       if (!levels[recordLevel]) {
         levels[recordLevel] = [];
       }
       levels[recordLevel].push(record);
     }
-    
+
     return levels;
   }
 }

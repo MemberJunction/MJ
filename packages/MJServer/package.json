@@ -38,7 +38,6 @@
     "@memberjunction/ai-vectors-pinecone": "2.111.0",
     "@memberjunction/aiengine": "2.111.0",
     "@memberjunction/component-registry-client-sdk": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/core-actions": "2.111.0",
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/core-entities-server": "2.111.0",

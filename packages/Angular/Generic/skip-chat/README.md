@@ -73,7 +73,7 @@ export class YourModule { }
 ```typescript
 import { Component, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({

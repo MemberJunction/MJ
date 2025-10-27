@@ -1,5 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView } from '@memberjunction/global';
 import { CollectionEntity } from '@memberjunction/core-entities';
 
 /**
@@ -68,7 +68,8 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       </div>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .collections-view {
       display: flex;
       flex-direction: column;
@@ -270,7 +271,8 @@ import { CollectionEntity } from '@memberjunction/core-entities';
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
-  `]
+  `,
+  ],
 })
 export class LibraryFullViewComponent implements OnInit {
   @Input() environmentId!: string;
@@ -293,8 +295,9 @@ export class LibraryFullViewComponent implements OnInit {
     this.isLoading = true;
     try {
       const rv = new RunView();
-      const filter = `EnvironmentID='${this.environmentId}'` +
-                     (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
+      const filter =
+        `EnvironmentID='${this.environmentId}'` +
+        (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
 
       const result = await rv.RunView<CollectionEntity>(
         {
@@ -302,7 +305,7 @@ export class LibraryFullViewComponent implements OnInit {
           ExtraFilter: filter,
           OrderBy: 'Name ASC',
           MaxRows: 1000,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
         },
         this.currentUser
       );
@@ -327,9 +330,8 @@ export class LibraryFullViewComponent implements OnInit {
       this.filteredCollections = [...this.collections];
     } else {
       const query = this.searchQuery.toLowerCase();
-      this.filteredCollections = this.collections.filter(c =>
-        c.Name.toLowerCase().includes(query) ||
-        (c.Description && c.Description.toLowerCase().includes(query))
+      this.filteredCollections = this.collections.filter(
+        (c) => c.Name.toLowerCase().includes(query) || (c.Description && c.Description.toLowerCase().includes(query))
       );
     }
   }
@@ -342,7 +344,7 @@ export class LibraryFullViewComponent implements OnInit {
   }
 
   navigateTo(crumb: { id: string; name: string }): void {
-    const index = this.breadcrumbs.findIndex(b => b.id === crumb.id);
+    const index = this.breadcrumbs.findIndex((b) => b.id === crumb.id);
     if (index !== -1) {
       this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
       this.currentCollectionId = crumb.id;

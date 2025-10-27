@@ -1,29 +1,39 @@
 import express, { Request, Response, NextFunction, Router } from 'express';
 import cors from 'cors';
 import { createHash } from 'crypto';
-import { 
-  Metadata, 
-  RunView, 
-  LogStatus,
-  LogError
-} from '@memberjunction/core';
+import { Metadata, RunView, LogStatus, LogError } from '@memberjunction/global';
 import { ComponentEntity, ComponentRegistryEntity } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
-import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
+import {
+  configInfo,
+  componentRegistrySettings,
+  dbDatabase,
+  dbHost,
+  dbPort,
+  dbUsername,
+  dbReadOnlyUsername,
+  dbReadOnlyPassword,
+} from './config.js';
 import createMSSQLConfig from './orm.js';
-import { DataSourceInfo, ComponentRegistryServerOptions, ComponentFeedbackParams, ComponentFeedbackResponse, FeedbackHandler } from './types.js';
+import {
+  DataSourceInfo,
+  ComponentRegistryServerOptions,
+  ComponentFeedbackParams,
+  ComponentFeedbackResponse,
+  FeedbackHandler,
+} from './types.js';
 
 /**
  * Base class for the Component Registry API Server.
  * This class provides a complete implementation of the Component Registry API v1 specification.
- * 
+ *
  * To customize the server behavior, extend this class and override the appropriate methods.
  * Common customization points include:
  * - Authentication: Override `checkAPIKey()` to implement custom authentication
  * - Component filtering: Override `getComponentFilter()` to customize which components are served
  * - Response formatting: Override the route handler methods to customize response formats
- * 
+ *
  * @example
  * ```typescript
  * class MyCustomRegistryServer extends ComponentRegistryAPIServer {
@@ -50,7 +60,7 @@ export class ComponentRegistryAPIServer {
       mode: 'standalone',
       basePath: '/api/v1',
       skipDatabaseSetup: false,
-      ...options
+      ...options,
     };
 
     // Create app or router based on mode
@@ -64,7 +74,7 @@ export class ComponentRegistryAPIServer {
 
     this.metadata = new Metadata();
   }
-  
+
   /**
    * Get the Express Router for mounting on an existing app.
    * Only available in 'router' mode.
@@ -104,7 +114,7 @@ export class ComponentRegistryAPIServer {
     this.setupMiddleware();
     this.setupRoutes();
   }
-  
+
   /**
    * Start the Express server on the configured port.
    * Must be called after `initialize()`.
@@ -130,11 +140,11 @@ export class ComponentRegistryAPIServer {
       });
     });
   }
-  
+
   /**
    * Set up the database connection using MemberJunction's SQL Server provider.
    * Follows the same pattern as MJServer for consistency.
-   * 
+   *
    * @protected
    * @virtual
    */
@@ -142,28 +152,30 @@ export class ComponentRegistryAPIServer {
     // Create the main connection pool using the same config pattern as MJServer
     this.pool = new sql.ConnectionPool(createMSSQLConfig());
     await this.pool.connect();
-    
+
     // Get cache refresh interval from config (default to 0 if not set)
     const cacheRefreshInterval = configInfo.databaseSettings?.metadataCacheRefreshInterval || 0;
-    
+
     // Setup MemberJunction SQL Server client with cache refresh interval
     const config = new SQLServerProviderConfigData(this.pool, configInfo.mjCoreSchema, cacheRefreshInterval);
     await setupSQLServerClient(config);
-    
+
     // Initialize metadata and log entity count like MJServer does
     const md = new Metadata();
     LogStatus(`Database connection established. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
-    
+
     // Create data sources array
-    this.dataSources = [new DataSourceInfo({
-      dataSource: this.pool, 
-      type: 'Read-Write', 
-      host: dbHost, 
-      port: dbPort, 
-      database: dbDatabase, 
-      userName: dbUsername
-    })];
-    
+    this.dataSources = [
+      new DataSourceInfo({
+        dataSource: this.pool,
+        type: 'Read-Write',
+        host: dbHost,
+        port: dbPort,
+        database: dbDatabase,
+        userName: dbUsername,
+      }),
+    ];
+
     // Establish a second read-only connection if credentials are provided
     if (dbReadOnlyUsername && dbReadOnlyPassword) {
       const readOnlyConfig = {
@@ -173,24 +185,26 @@ export class ComponentRegistryAPIServer {
       };
       this.readOnlyPool = new sql.ConnectionPool(readOnlyConfig);
       await this.readOnlyPool.connect();
-      
+
       // Add read-only pool to data sources
-      this.dataSources.push(new DataSourceInfo({
-        dataSource: this.readOnlyPool, 
-        type: 'Read-Only', 
-        host: dbHost, 
-        port: dbPort, 
-        database: dbDatabase, 
-        userName: dbReadOnlyUsername
-      }));
+      this.dataSources.push(
+        new DataSourceInfo({
+          dataSource: this.readOnlyPool,
+          type: 'Read-Only',
+          host: dbHost,
+          port: dbPort,
+          database: dbDatabase,
+          userName: dbReadOnlyUsername,
+        })
+      );
       LogStatus('Read-only connection pool has been initialized.');
     }
   }
-  
+
   /**
    * Load the registry metadata from the database.
    * This is called automatically if a registryId is provided in the configuration.
-   * 
+   *
    * @protected
    * @virtual
    */
@@ -198,17 +212,17 @@ export class ComponentRegistryAPIServer {
     if (!componentRegistrySettings?.registryId) {
       return;
     }
-    
+
     this.registry = await this.metadata.GetEntityObject<ComponentRegistryEntity>('MJ: Component Registries');
     const loaded = await this.registry.Load(componentRegistrySettings.registryId);
-    
+
     if (!loaded) {
       throw new Error(`Failed to load registry with ID: ${componentRegistrySettings.registryId}`);
     }
-    
+
     LogStatus(`Loaded registry: ${this.registry.Name}`);
   }
-  
+
   /**
    * Set up Express middleware.
    * Override this method to add custom middleware or modify the middleware stack.
@@ -228,9 +242,11 @@ export class ComponentRegistryAPIServer {
     // In router mode, assume parent app handles these
     if (this.options.mode === 'standalone') {
       // CORS
-      target.use(cors({
-        origin: componentRegistrySettings?.corsOrigins || ['*']
-      }));
+      target.use(
+        cors({
+          origin: componentRegistrySettings?.corsOrigins || ['*'],
+        })
+      );
 
       // JSON parsing
       target.use(express.json());
@@ -249,11 +265,11 @@ export class ComponentRegistryAPIServer {
       }
     }
   }
-  
+
   /**
    * Authentication middleware that calls the checkAPIKey method.
    * This middleware is automatically applied to /api/v1/components routes when requireAuth is true.
-   * 
+   *
    * @protected
    */
   protected async authMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -269,30 +285,30 @@ export class ComponentRegistryAPIServer {
       res.status(500).json({ error: 'Authentication error' });
     }
   }
-  
+
   /**
    * Check if the API key in the request is valid.
    * By default, this method always returns true (no authentication).
-   * 
+   *
    * Override this method to implement custom authentication logic.
    * Common patterns include:
    * - Checking Bearer tokens in Authorization header
    * - Validating API keys in custom headers
    * - Verifying JWT tokens
    * - Checking against a database of valid keys
-   * 
+   *
    * @param req - The Express request object
    * @returns Promise<boolean> - True if the request is authenticated, false otherwise
-   * 
+   *
    * @protected
    * @virtual
-   * 
+   *
    * @example
    * ```typescript
    * protected async checkAPIKey(req: Request): Promise<boolean> {
    *   const apiKey = req.headers['x-api-key'] as string;
    *   if (!apiKey) return false;
-   *   
+   *
    *   // Check against database, cache, or external service
    *   return await this.validateKeyInDatabase(apiKey);
    * }
@@ -303,7 +319,7 @@ export class ComponentRegistryAPIServer {
     // Override this method in a subclass to implement custom authentication
     return true;
   }
-  
+
   /**
    * Set up the API routes.
    * Override this method to add custom routes or modify existing ones.
@@ -338,18 +354,18 @@ export class ComponentRegistryAPIServer {
       target.post(`${basePath}/feedback`, this.submitFeedback.bind(this));
     }
   }
-  
+
   /**
    * Get the base filter for component queries.
    * By default, this returns components where SourceRegistryID IS NULL (local components only).
-   * 
+   *
    * Override this method to customize which components are served by the registry.
-   * 
+   *
    * @returns The SQL filter string to apply to all component queries
-   * 
+   *
    * @protected
    * @virtual
-   * 
+   *
    * @example
    * ```typescript
    * protected getComponentFilter(): string {
@@ -361,11 +377,11 @@ export class ComponentRegistryAPIServer {
   protected getComponentFilter(): string {
     return 'SourceRegistryID IS NULL';
   }
-  
+
   /**
    * Handler for GET /api/v1/registry
    * Returns basic information about the registry.
-   * 
+   *
    * @protected
    * @virtual
    */
@@ -374,14 +390,14 @@ export class ComponentRegistryAPIServer {
       name: this.registry?.Name || 'Local Component Registry',
       description: this.registry?.Description || 'MemberJunction Component Registry',
       version: 'v1',
-      requiresAuth: componentRegistrySettings?.requireAuth || false
+      requiresAuth: componentRegistrySettings?.requireAuth || false,
     });
   }
-  
+
   /**
    * Handler for GET /api/v1/health
    * Returns the health status of the registry server.
-   * 
+   *
    * @protected
    * @virtual
    */
@@ -391,29 +407,29 @@ export class ComponentRegistryAPIServer {
       const result = await rv.RunView({
         EntityName: 'MJ: Components',
         ExtraFilter: this.getComponentFilter(),
-        MaxRows: 1
+        MaxRows: 1,
       });
-      
+
       res.json({
         status: 'healthy',
         timestamp: new Date().toISOString(),
         version: 'v1',
-        componentCount: result.TotalRowCount
+        componentCount: result.TotalRowCount,
       });
     } catch (error) {
       res.status(503).json({
         status: 'unhealthy',
         timestamp: new Date().toISOString(),
         version: 'v1',
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
   }
-  
+
   /**
    * Handler for GET /api/v1/components
    * Lists all published components in the registry, showing only the latest version of each.
-   * 
+   *
    * @protected
    * @virtual
    */
@@ -421,102 +437,102 @@ export class ComponentRegistryAPIServer {
     try {
       const baseFilter = this.getComponentFilter();
       const filter = `${baseFilter} AND Status = 'Published'`;
-      
+
       const rv = new RunView();
       const result = await rv.RunView<ComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
-        OrderBy: 'Namespace, Name, VersionSequence DESC' 
+        OrderBy: 'Namespace, Name, VersionSequence DESC',
       });
-      
+
       if (!result.Success) {
         res.status(500).json({ error: result.ErrorMessage });
         return;
       }
-      
+
       // Group by namespace/name and take latest version
       const latestComponents = this.getLatestVersions(result.Results || []);
-      
-      const components = latestComponents.map(c => ({
+
+      const components = latestComponents.map((c) => ({
         namespace: c.Namespace,
         name: c.Name,
         version: c.Version,
         title: c.Title,
         description: c.Description,
         type: c.Type,
-        status: c.Status
+        status: c.Status,
       }));
-      
+
       res.json({
         components,
-        total: components.length
+        total: components.length,
       });
     } catch (error) {
       LogError(`Failed to list components: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ error: 'Failed to list components' });
     }
   }
-  
+
   /**
    * Handler for GET /api/v1/components/search
    * Search for components by query string and optional type filter.
-   * 
+   *
    * @protected
    * @virtual
    */
   protected async searchComponents(req: Request, res: Response): Promise<void> {
     try {
       const { q, type } = req.query;
-      
+
       let filter = `${this.getComponentFilter()} AND Status = 'Published'`;
-      
+
       if (q && typeof q === 'string') {
         // Escape single quotes in the search query
         const escapedQuery = q.replace(/'/g, "''");
         filter += ` AND (Name LIKE '%${escapedQuery}%' OR Title LIKE '%${escapedQuery}%' OR Description LIKE '%${escapedQuery}%')`;
       }
-      
+
       if (type && typeof type === 'string') {
         const escapedType = type.replace(/'/g, "''");
         filter += ` AND Type = '${escapedType}'`;
       }
-      
+
       const rv = new RunView();
       const result = await rv.RunView<ComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
-        OrderBy: 'Namespace, Name, VersionSequence DESC' 
+        OrderBy: 'Namespace, Name, VersionSequence DESC',
       });
-      
+
       if (!result.Success) {
         res.status(500).json({ error: result.ErrorMessage });
         return;
       }
-      
+
       // Group by namespace/name and take latest version
       const latestComponents = this.getLatestVersions(result.Results || []);
-      
-      const results = latestComponents.map(c => ({
+
+      const results = latestComponents.map((c) => ({
         namespace: c.Namespace,
         name: c.Name,
         version: c.Version,
         title: c.Title,
         description: c.Description,
         type: c.Type,
-        status: c.Status
+        status: c.Status,
       }));
-      
+
       res.json({
         results,
         total: results.length,
-        query: q || ''
+        query: q || '',
       });
     } catch (error) {
       LogError(`Search failed: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ error: 'Search failed' });
     }
   }
-  
+
   /**
    * Generate SHA-256 hash of component specification
    * @param specification - The component specification JSON string
@@ -531,7 +547,7 @@ export class ComponentRegistryAPIServer {
    * Get a specific component by namespace and name.
    * Optionally specify a version with ?version=x.x.x query parameter.
    * Optionally specify a hash with ?hash=abc123 to enable caching (returns 304 if unchanged).
-   * 
+   *
    * @protected
    * @virtual
    */
@@ -539,36 +555,36 @@ export class ComponentRegistryAPIServer {
     try {
       const { namespace, name } = req.params;
       const { version, hash } = req.query;
-      
+
       // Escape single quotes in parameters
       const escapedNamespace = namespace.replace(/'/g, "''");
       const escapedName = name.replace(/'/g, "''");
-      
+
       let filter = `Namespace = '${escapedNamespace}' AND Name = '${escapedName}' AND ${this.getComponentFilter()}`;
-      
+
       if (version && typeof version === 'string') {
         const escapedVersion = version.replace(/'/g, "''");
         filter += ` AND Version = '${escapedVersion}'`;
       }
-      
+
       const rv = new RunView();
       const result = await rv.RunView<ComponentEntity>({
         EntityName: 'MJ: Components',
         ExtraFilter: filter,
         OrderBy: 'VersionSequence DESC',
-        MaxRows: 1
+        MaxRows: 1,
       });
-      
+
       if (!result.Success || !result.Results?.length) {
         res.status(404).json({ error: 'Component not found' });
         return;
       }
-      
+
       const component = result.Results[0];
-      
+
       // Generate hash of the current specification
       const currentHash = this.generateSpecificationHash(component.Specification);
-      
+
       // If client provided a hash and it matches, return 304 Not Modified
       if (hash && typeof hash === 'string' && hash === currentHash) {
         res.status(304).json({
@@ -577,11 +593,11 @@ export class ComponentRegistryAPIServer {
           id: component.ID,
           namespace: component.Namespace,
           name: component.Name,
-          version: component.Version
+          version: component.Version,
         });
         return;
       }
-      
+
       // Return full specification with hash
       res.json({
         id: component.ID,
@@ -589,33 +605,33 @@ export class ComponentRegistryAPIServer {
         name: component.Name,
         version: component.Version,
         specification: JSON.parse(component.Specification),
-        hash: currentHash
+        hash: currentHash,
       });
     } catch (error) {
       LogError(`Failed to fetch component: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({ error: 'Failed to fetch component' });
     }
   }
-  
+
   /**
    * Helper method to get the latest version of each component from a list.
    * Components are grouped by namespace/name and the highest version is selected.
-   * 
+   *
    * @param components - Array of components potentially containing multiple versions
    * @returns Array of components with only the latest version of each
-   * 
+   *
    * @protected
    */
   protected getLatestVersions(components: ComponentEntity[]): ComponentEntity[] {
     const latestComponents = new Map<string, ComponentEntity>();
-    
+
     for (const component of components) {
       const key = `${component.Namespace}/${component.Name}`;
       if (!latestComponents.has(key)) {
         latestComponents.set(key, component);
       }
     }
-    
+
     return Array.from(latestComponents.values());
   }
 
@@ -632,14 +648,14 @@ export class ComponentRegistryAPIServer {
         component: `${params.componentNamespace}/${params.componentName}`,
         version: params.componentVersion,
         rating: params.rating,
-        feedbackType: params.feedbackType
+        feedbackType: params.feedbackType,
       });
 
       return {
         success: true,
-        feedbackID: undefined
+        feedbackID: undefined,
       };
-    }
+    },
   };
 
   /**
@@ -678,7 +694,7 @@ export class ComponentRegistryAPIServer {
       if (!params.componentName || !params.componentNamespace) {
         res.status(400).json({
           success: false,
-          error: 'componentName and componentNamespace are required'
+          error: 'componentName and componentNamespace are required',
         });
         return;
       }
@@ -686,7 +702,7 @@ export class ComponentRegistryAPIServer {
       if (params.rating === undefined || params.rating < 0 || params.rating > 5) {
         res.status(400).json({
           success: false,
-          error: 'rating must be between 0 and 5'
+          error: 'rating must be between 0 and 5',
         });
         return;
       }
@@ -699,7 +715,7 @@ export class ComponentRegistryAPIServer {
       LogError(`Failed to submit feedback: ${error instanceof Error ? error.message : String(error)}`);
       res.status(500).json({
         success: false,
-        error: 'Failed to submit feedback'
+        error: 'Failed to submit feedback',
       });
     }
   }
@@ -708,7 +724,7 @@ export class ComponentRegistryAPIServer {
 /**
  * Start the Component Registry Server using the default implementation.
  * This function checks if the registry is enabled in configuration before starting.
- * 
+ *
  * @returns Promise that resolves when the server is running
  * @throws Error if initialization or startup fails
  */
@@ -717,7 +733,7 @@ export async function startComponentRegistryServer(): Promise<void> {
     LogStatus('Component Registry Server is disabled in configuration');
     return;
   }
-  
+
   const server = new ComponentRegistryAPIServer();
   await server.initialize();
   await server.start();

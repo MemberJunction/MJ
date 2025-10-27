@@ -143,7 +143,7 @@ async function deleteUser(userId: number) {
 
 ```typescript
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { RunViewParams } from '@memberjunction/core';
+import { RunViewParams } from '@memberjunction/global';
 
 const dataProvider = new GraphQLDataProvider();
 
@@ -202,7 +202,7 @@ async function runCustomQuery(queryId: string, parameters: any) {
 
 ```typescript
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { TransactionGroupBase } from '@memberjunction/core';
+import { TransactionGroupBase } from '@memberjunction/global';
 
 const dataProvider = new GraphQLDataProvider({
   graphQLEndpoint: 'https://api.example.com/graphql',
@@ -542,16 +542,16 @@ const syncResult = await systemClient.SyncRolesAndUsers({
 
 ## Key Classes and Types
 
-| Class/Type | Description |
-|-------|-------------|
-| `GraphQLDataProvider` | Main class implementing IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, and IRunQueryProvider interfaces |
-| `GraphQLProviderConfigData` | Configuration class for setting up the GraphQL provider with authentication and connection details |
-| `GraphQLActionClient` | Client for executing actions and entity actions through GraphQL |
-| `GraphQLAIClient` | Client for AI operations including prompts, agents, and embeddings |
-| `GraphQLSystemUserClient` | Specialized client for server-to-server communication using API keys |
-| `GraphQLTransactionGroup` | Manages complex multi-entity transactions with variable support |
-| `FieldMapper` | Handles automatic field name mapping between client and server |
-| `setupGraphQLClient` | Helper function to quickly setup and configure the GraphQL client |
+| Class/Type                  | Description                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `GraphQLDataProvider`       | Main class implementing IEntityDataProvider, IMetadataProvider, IRunViewProvider, IRunReportProvider, and IRunQueryProvider interfaces |
+| `GraphQLProviderConfigData` | Configuration class for setting up the GraphQL provider with authentication and connection details                                     |
+| `GraphQLActionClient`       | Client for executing actions and entity actions through GraphQL                                                                        |
+| `GraphQLAIClient`           | Client for AI operations including prompts, agents, and embeddings                                                                     |
+| `GraphQLSystemUserClient`   | Specialized client for server-to-server communication using API keys                                                                   |
+| `GraphQLTransactionGroup`   | Manages complex multi-entity transactions with variable support                                                                        |
+| `FieldMapper`               | Handles automatic field name mapping between client and server                                                                         |
+| `setupGraphQLClient`        | Helper function to quickly setup and configure the GraphQL client                                                                      |
 
 ## API Documentation
 

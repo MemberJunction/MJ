@@ -1,6 +1,6 @@
 import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
 
-import { RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/global';
 import { FileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 import { SharedService } from '@memberjunction/ng-shared';

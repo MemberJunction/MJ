@@ -51,12 +51,12 @@ The dynamic viewer uses `MJGlobal` which should be imported from `@memberjunctio
 
 Change:
 ```typescript
-import { MJGlobal, Metadata, LogError } from '@memberjunction/core';
+import { MJGlobal, Metadata, LogError } from '@memberjunction/global';
 ```
 
 To:
 ```typescript
-import { Metadata, LogError } from '@memberjunction/core';
+import { Metadata, LogError } from '@memberjunction/global';
 import { MJGlobal } from '@memberjunction/global';
 ```
 

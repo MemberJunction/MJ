@@ -31,7 +31,6 @@
   "dependencies": {
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/global": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/communication-types": "2.111.0",
     "@memberjunction/entity-communications-base": "2.111.0",
     "@memberjunction/entity-communications-client": "2.111.0",

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus } from '@memberjunction/global';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -22,14 +22,17 @@ const databaseSettingsInfoSchema = z.object({
   metadataCacheRefreshInterval: z.number(),
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
-  connectionPool: z.object({
-    max: z.number().optional().default(50),
-    min: z.number().optional().default(5),
-    idleTimeoutMillis: z.number().optional().default(30000),
-    acquireTimeoutMillis: z.number().optional().default(30000),
-  }).optional().default({}),
+  connectionPool: z
+    .object({
+      max: z.number().optional().default(50),
+      min: z.number().optional().default(5),
+      idleTimeoutMillis: z.number().optional().default(30000),
+      acquireTimeoutMillis: z.number().optional().default(30000),
+    })
+    .optional()
+    .default({}),
 });
- 
+
 const viewingSystemInfoSchema = z.object({
   enableSmartFilters: z.boolean().optional(),
 });
@@ -44,28 +47,25 @@ const restApiOptionsSchema = z.object({
 
 /**
  * Returns a new Zod object that accepts boolean, string, or number values and transforms them to boolean.
- * @returns 
+ * @returns
  */
 const zodBooleanWithTransforms = () => {
   return z
-      .union([z.boolean(), z.string(), z.number()])
-          .optional()
-          .default(false)
-          .transform((v) => {
-            if (typeof v === 'string') {
-              return v === '1' || v.toLowerCase() === 'true';
-            }
-            else if (typeof v === 'number') {
-              return v === 1;
-            }
-            else if (typeof v === 'boolean') {
-              return v;
-            }
-            else {
-              return false;
-            }
-          })
-}
+    .union([z.boolean(), z.string(), z.number()])
+    .optional()
+    .default(false)
+    .transform((v) => {
+      if (typeof v === 'string') {
+        return v === '1' || v.toLowerCase() === 'true';
+      } else if (typeof v === 'number') {
+        return v === 1;
+      } else if (typeof v === 'boolean') {
+        return v;
+      } else {
+        return false;
+      }
+    });
+};
 
 const askSkipInfoSchema = z.object({
   url: z.string().optional(), // Base URL for Skip API
@@ -103,32 +103,38 @@ const sqlLoggingSchema = z.object({
   sessionTimeout: z.number().optional().default(3600000), // 1 hour
 });
 
-const authProviderSchema = z.object({
-  name: z.string(),
-  type: z.string(),
-  issuer: z.string(),
-  audience: z.string(),
-  jwksUri: z.string(),
-  clientId: z.string().optional(),
-  clientSecret: z.string().optional(),
-  tenantId: z.string().optional(),
-  domain: z.string().optional(),
-}).passthrough(); // Allow additional provider-specific fields
+const authProviderSchema = z
+  .object({
+    name: z.string(),
+    type: z.string(),
+    issuer: z.string(),
+    audience: z.string(),
+    jwksUri: z.string(),
+    clientId: z.string().optional(),
+    clientSecret: z.string().optional(),
+    tenantId: z.string().optional(),
+    domain: z.string().optional(),
+  })
+  .passthrough(); // Allow additional provider-specific fields
 
-const componentRegistrySchema = z.object({
-  id: z.string().optional(),
-  name: z.string().optional(),
-  apiKey: z.string().optional(),
-  cache: z.boolean().optional().default(true),
-  timeout: z.number().optional(),
-  retryPolicy: z.object({
-    maxRetries: z.number().optional(),
-    initialDelay: z.number().optional(),
-    maxDelay: z.number().optional(),
-    backoffMultiplier: z.number().optional(),
-  }).optional(),
-  headers: z.record(z.string()).optional(),
-}).passthrough(); // Allow additional fields
+const componentRegistrySchema = z
+  .object({
+    id: z.string().optional(),
+    name: z.string().optional(),
+    apiKey: z.string().optional(),
+    cache: z.boolean().optional().default(true),
+    timeout: z.number().optional(),
+    retryPolicy: z
+      .object({
+        maxRetries: z.number().optional(),
+        initialDelay: z.number().optional(),
+        maxDelay: z.number().optional(),
+        backoffMultiplier: z.number().optional(),
+      })
+      .optional(),
+    headers: z.record(z.string()).optional(),
+  })
+  .passthrough(); // Allow additional fields
 
 const scheduledJobsSchema = z.object({
   enabled: z.boolean().optional().default(false),
@@ -151,7 +157,10 @@ const configInfoSchema = z.object({
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
-  publicUrl: z.string().optional().default(process.env.MJAPI_PUBLIC_URL || ''), // Public URL for callbacks (e.g., ngrok URL when developing)
+  publicUrl: z
+    .string()
+    .optional()
+    .default(process.env.MJAPI_PUBLIC_URL || ''), // Public URL for callbacks (e.g., ngrok URL when developing)
 
   dbHost: z.string().default('localhost'),
   dbDatabase: z.string(),

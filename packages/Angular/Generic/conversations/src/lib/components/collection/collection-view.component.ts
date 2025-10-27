@@ -1,6 +1,6 @@
 import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CollectionEntity, ArtifactEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 type ViewMode = 'grid' | 'list';
@@ -78,7 +78,8 @@ type SortBy = 'name' | 'date' | 'type';
       </div>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .collection-view { display: flex; flex-direction: column; height: 100%; background: white; }
 
     .view-header { padding: 20px 24px; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }
@@ -107,7 +108,8 @@ type SortBy = 'name' | 'date' | 'type';
 
     .artifact-viewer-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 10000; }
     .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); }
-  `]
+  `,
+  ],
 })
 export class CollectionViewComponent implements OnInit, OnChanges {
   @Input() collection!: CollectionEntity;
@@ -124,7 +126,7 @@ export class CollectionViewComponent implements OnInit, OnChanges {
   public sortOptions = [
     { label: 'Name', value: 'name' },
     { label: 'Date Modified', value: 'date' },
-    { label: 'Type', value: 'type' }
+    { label: 'Type', value: 'type' },
   ];
 
   ngOnInit() {
@@ -145,12 +147,15 @@ export class CollectionViewComponent implements OnInit, OnChanges {
 
       // Load artifacts through the CollectionArtifacts join table
       // Filter out System Only artifacts
-      const result = await rv.RunView<ArtifactEntity>({
-        EntityName: 'MJ: Artifacts',
-        ExtraFilter: `ID IN (SELECT ArtifactID FROM [__mj].[MJ: Collection Artifacts] WHERE CollectionID='${this.collection.ID}') AND (Visibility IS NULL OR Visibility='Always')`,
-        OrderBy: this.getOrderBy(),
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      const result = await rv.RunView<ArtifactEntity>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID IN (SELECT ArtifactID FROM [__mj].[MJ: Collection Artifacts] WHERE CollectionID='${this.collection.ID}') AND (Visibility IS NULL OR Visibility='Always')`,
+          OrderBy: this.getOrderBy(),
+          ResultType: 'entity_object',
+        },
+        this.currentUser
+      );
 
       if (result.Success) {
         this.artifacts = result.Results || [];
@@ -203,28 +208,24 @@ export class CollectionViewComponent implements OnInit, OnChanges {
     try {
       // Find and delete the CollectionArtifact join record
       const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${this.collection.ID}' AND ArtifactID='${artifact.ID}'`,
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      const result = await rv.RunView(
+        {
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${this.collection.ID}' AND ArtifactID='${artifact.ID}'`,
+          ResultType: 'entity_object',
+        },
+        this.currentUser
+      );
 
       if (result.Success && result.Results && result.Results.length > 0) {
         const joinRecord = result.Results[0];
         await joinRecord.Delete();
         await this.loadArtifacts();
-        MJNotificationService.Instance.CreateSimpleNotification(
-          `Removed "${artifact.Name}" from collection`,
-          'success',
-          3000
-        );
+        MJNotificationService.Instance.CreateSimpleNotification(`Removed "${artifact.Name}" from collection`, 'success', 3000);
       }
     } catch (error) {
       console.error('Failed to remove artifact from collection:', error);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'Failed to remove artifact from collection',
-        'error'
-      );
+      MJNotificationService.Instance.CreateSimpleNotification('Failed to remove artifact from collection', 'error');
     }
   }
 

@@ -1,12 +1,17 @@
 import { DestroyRef, Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import {
+  AIAgentEntityExtended,
+  ConversationDetailEntity,
+  ConversationDetailArtifactEntity,
+  ArtifactVersionEntity,
+} from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 /**
@@ -14,7 +19,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
  * Handles communication with the ambient Sage Agent and other agents.
  */
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ConversationAgentService {
   private _aiClient: GraphQLAIClient | null = null;
@@ -61,9 +66,7 @@ export class ConversationAgentService {
 
       // Find the Sage Agent
       const agents = AIEngineBase.Instance.Agents;
-      this._conversationManagerAgent = agents.find(
-        (agent: AIAgentEntityExtended) => agent.Name === 'Sage'
-      ) || null;
+      this._conversationManagerAgent = agents.find((agent: AIAgentEntityExtended) => agent.Name === 'Sage') || null;
 
       if (!this._conversationManagerAgent) {
         const errorMsg = 'Sage Agent not found in AIEngineBase.Agents';
@@ -79,7 +82,6 @@ export class ConversationAgentService {
       return null;
     }
   }
-
 
   /**
    * Process a message through the ambient Sage Agent.
@@ -133,16 +135,11 @@ export class ConversationAgentService {
 
       // Filter agents by status and hierarchy first
       const candidateAgents = AIEngineBase.Instance.Agents.filter(
-        a => a.ID !== agent.ID && 
-             !a.ParentID && 
-             a.Status === 'Active' && 
-             a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
+        (a) => a.ID !== agent.ID && !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent' // ensure that the agent is intended to run as top-level
       );
 
       // Filter by user permissions if user context available
-      const availAgents = currentUser
-        ? await this.filterAgentsByPermissions(candidateAgents, currentUser)
-        : candidateAgents;
+      const availAgents = currentUser ? await this.filterAgentsByPermissions(candidateAgents, currentUser) : candidateAgents;
 
       console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
 
@@ -152,17 +149,17 @@ export class ConversationAgentService {
         conversationMessages: conversationMessages,
         conversationDetailId: conversationDetailId,
         data: {
-          ALL_AVAILABLE_AGENTS: availAgents.map(a => {
+          ALL_AVAILABLE_AGENTS: availAgents.map((a) => {
             return {
               ID: a.ID,
               Name: a.Name,
-              Description: a.Description
-            }
+              Description: a.Description,
+            };
           }),
           conversationId: conversationId,
-          latestMessageId: message.ID
+          latestMessageId: message.ID,
         },
-        onProgress: onProgress
+        onProgress: onProgress,
       };
 
       // Run the agent
@@ -185,9 +182,7 @@ export class ConversationAgentService {
    * Note: conversationHistory already includes the current message, so we don't add it separately
    * IMPORTANT: This method loads artifacts for each message and appends them to the content
    */
-  private async buildAgentMessages(
-    history: ConversationDetailEntity[]
-  ): Promise<ChatMessage[]> {
+  private async buildAgentMessages(history: ConversationDetailEntity[]): Promise<ChatMessage[]> {
     const messages: ChatMessage[] = [];
 
     // Add historical messages (limit to recent context, e.g., last 20 messages)
@@ -195,7 +190,7 @@ export class ConversationAgentService {
     const recentHistory = history.slice(-20);
 
     // Get IDs of all messages in history
-    const messageIds = recentHistory.map(msg => msg.ID).filter(id => id); // Filter out any undefined IDs
+    const messageIds = recentHistory.map((msg) => msg.ID).filter((id) => id); // Filter out any undefined IDs
 
     // Create lookup map for artifacts by conversation detail ID
     const artifactsByDetailId = new Map<string, string[]>(); // DetailID -> array of artifact JSON strings
@@ -207,7 +202,7 @@ export class ConversationAgentService {
         const junctionResult = await rv.RunView<ConversationDetailArtifactEntity>({
           EntityName: 'MJ: Conversation Detail Artifacts',
           ExtraFilter: `ConversationDetailID IN ('${messageIds.join("','")}') AND Direction='Output'`,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
         });
 
         if (junctionResult.Success && junctionResult.Results && junctionResult.Results.length > 0) {
@@ -221,12 +216,12 @@ export class ConversationAgentService {
           const versionResult = await rv.RunView<ArtifactVersionEntity>({
             EntityName: 'MJ: Artifact Versions',
             ExtraFilter: `ID IN ('${Array.from(versionIds).join("','")}')`,
-            ResultType: 'entity_object'
+            ResultType: 'entity_object',
           });
 
           if (versionResult.Success && versionResult.Results) {
             // Create lookup map for O(1) access
-            const versionMap = new Map(versionResult.Results.map(v => [v.ID, v]));
+            const versionMap = new Map(versionResult.Results.map((v) => [v.ID, v]));
 
             // Group artifacts by conversation detail ID
             for (const junction of junctionResult.Results) {
@@ -262,7 +257,7 @@ export class ConversationAgentService {
 
       messages.push({
         role: this.mapRoleToAgentRole(msg.Role) as 'system' | 'user' | 'assistant',
-        content: content
+        content: content,
       });
     }
 
@@ -328,7 +323,7 @@ export class ConversationAgentService {
       await AIEngineBase.Instance.Config(false);
 
       // Find the agent by name
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
+      const agent = AIEngineBase.Instance.Agents.find((a) => a.Name === agentName);
 
       if (!agent || !agent.ID) {
         const errorMsg = `Sub-agent "${agentName}" not found`;
@@ -351,10 +346,10 @@ export class ConversationAgentService {
         data: {
           conversationId: conversationId,
           latestMessageId: message.ID,
-          invocationReason: reasoning
+          invocationReason: reasoning,
         },
         ...(payload ? { payload } : {}),
-        onProgress: onProgress
+        onProgress: onProgress,
       };
 
       // Run the sub-agent with optional source artifact info for versioning (GraphQL layer only)
@@ -391,14 +386,14 @@ export class ConversationAgentService {
     try {
       // Load the Check Sage Intent prompt
       await AIEngineBase.Instance.Config(false);
-      const prompt = AIEngineBase.Instance.Prompts.find(p => p.Name === 'Check Sage Intent');
+      const prompt = AIEngineBase.Instance.Prompts.find((p) => p.Name === 'Check Sage Intent');
       if (!prompt) {
         console.warn('⚠️ Check Sage Intent prompt not found, defaulting to UNSURE');
         return 'UNSURE';
       }
 
       // Get agent details
-      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+      const agent = AIEngineBase.Instance.Agents.find((a) => a.ID === agentId);
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
         return 'UNSURE';
@@ -406,11 +401,13 @@ export class ConversationAgentService {
 
       // Build compact conversation history (last 10 messages)
       const recentHistory = conversationHistory.slice(-10);
-      const compactHistory = recentHistory.map((msg, idx) => {
-        const role = msg.Role === 'User' ? 'User' : agent.Name || 'Agent';
-        const content = msg.Message || '';
-        return `${idx + 1}. ${role}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}`;
-      }).join('\n');
+      const compactHistory = recentHistory
+        .map((msg, idx) => {
+          const role = msg.Role === 'User' ? 'User' : agent.Name || 'Agent';
+          const content = msg.Message || '';
+          return `${idx + 1}. ${role}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}`;
+        })
+        .join('\n');
 
       // Build user message with context
       const userMessage = `**Previous Agent**: ${agent.Name} - ${agent.Description || 'No description'}
@@ -422,18 +419,17 @@ ${compactHistory}
 
       console.log('🔍 Checking agent continuity intent...', {
         agentName: agent.Name,
-        messagePreview: latestMessage.substring(0, 50)
+        messagePreview: latestMessage.substring(0, 50),
       });
 
       // Run the prompt
       const result = await this._aiClient.RunAIPrompt({
         promptId: prompt.ID,
-        messages: [{ role: 'user', content: userMessage }]
+        messages: [{ role: 'user', content: userMessage }],
       });
 
       if (result && result.success && (result.parsedResult || result.output)) {
-        const parsed = result.parsedResult ||
-          (result.output ? JSON.parse(result.output) : null);
+        const parsed = result.parsedResult || (result.output ? JSON.parse(result.output) : null);
 
         if (parsed && parsed.continuesWith) {
           const decision = parsed.continuesWith.toUpperCase();
@@ -441,7 +437,7 @@ ${compactHistory}
 
           console.log(`✅ Intent check result: ${decision}`, {
             reasoning,
-            latency: result.executionTimeMs || 'unknown'
+            latency: result.executionTimeMs || 'unknown',
           });
 
           // Validate the response
@@ -475,19 +471,12 @@ ${compactHistory}
    * @param user User to check permissions for
    * @returns Filtered list of agents the user can run
    */
-  private async filterAgentsByPermissions(
-    agents: AIAgentEntityExtended[],
-    user: any
-  ): Promise<AIAgentEntityExtended[]> {
+  private async filterAgentsByPermissions(agents: AIAgentEntityExtended[], user: any): Promise<AIAgentEntityExtended[]> {
     const permittedAgents: AIAgentEntityExtended[] = [];
 
     for (const agent of agents) {
       try {
-        const hasPermission = await AIAgentPermissionHelper.HasPermission(
-          agent.ID,
-          user,
-          'run'
-        );
+        const hasPermission = await AIAgentPermissionHelper.HasPermission(agent.ID, user, 'run');
         if (hasPermission) {
           permittedAgents.push(agent);
         }

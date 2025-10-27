@@ -1,5 +1,5 @@
 import { Directive, EventEmitter, Input, OnDestroy, OnInit, Output } from '@angular/core';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/global';
 import { DashboardEntityExtended } from '@memberjunction/core-entities';
 
 export interface DashboardConfig {
@@ -8,7 +8,7 @@ export interface DashboardConfig {
 }
 
 /**
- * Make the base class a directive so we can use Angular functionality and sub-classes can be @Component 
+ * Make the base class a directive so we can use Angular functionality and sub-classes can be @Component
  */
 @Directive()
 export abstract class BaseDashboard implements OnInit, OnDestroy {
@@ -29,7 +29,7 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
   @Output() LoadingComplete = new EventEmitter<void>();
 
   /**
-   * Subclasses can emit anytime an error occurs.  
+   * Subclasses can emit anytime an error occurs.
    */
   @Output() Error = new EventEmitter<Error>();
 
@@ -46,7 +46,7 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
   /**
    * Subclasses can emit this event anytime they want to open a record within a particular entity. The container should handle this event and open the record.
    */
-  @Output() OpenEntityRecord = new EventEmitter<{EntityName: string, RecordPKey: CompositeKey}>();
+  @Output() OpenEntityRecord = new EventEmitter<{ EntityName: string; RecordPKey: CompositeKey }>();
 
   protected _config: DashboardConfig | null = null;
 
@@ -83,4 +83,4 @@ export abstract class BaseDashboard implements OnInit, OnDestroy {
    * Subclasses should override this method to load their data. This method is called when the dashboard is created and when Refresh() is called.
    */
   protected abstract loadData(): void;
-} 
+}

@@ -30,7 +30,7 @@ A powerful component that automatically generates UI for any field in a BaseEnti
 
 ```typescript
 import { Component } from '@angular/core';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity } from '@memberjunction/global';
 
 @Component({
   template: `

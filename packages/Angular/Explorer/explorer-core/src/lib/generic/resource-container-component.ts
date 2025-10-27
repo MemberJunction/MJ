@@ -1,7 +1,7 @@
 import { Component, ComponentRef, EventEmitter, Input, OnChanges, OnDestroy, Output, SimpleChanges, ViewChild } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { Container } from '@memberjunction/ng-container-directives';
-import { BaseEntity, LogError } from '@memberjunction/core';
+import { BaseEntity, LogError } from '@memberjunction/global';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
@@ -30,11 +30,11 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
   @ViewChild(Container, { static: true }) resourceContainer!: Container;
 
   private _loaded: boolean = false;
-  private _componentRef: ComponentRef<any> | null = null; 
+  private _componentRef: ComponentRef<any> | null = null;
 
-  constructor(public sharedService: SharedService) { }
+  constructor(public sharedService: SharedService) {}
 
-   ngOnChanges(changes: SimpleChanges): void {
+  ngOnChanges(changes: SimpleChanges): void {
     if (changes['isVisible']) {
       const previousValue = changes['isVisible'].previousValue;
       const currentValue = changes['isVisible'].currentValue;
@@ -52,7 +52,7 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
   loadComponent() {
     try {
       this._loaded = true;
-      const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType); 
+      const resourceReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseResourceComponent, this.Data.ResourceType);
       if (!resourceReg) {
         throw new Error(`Unable to find resource registration for ${this.Data.ResourceType}`);
       }
@@ -64,19 +64,19 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
 
       viewContainerRef.clear();
       const componentRef = viewContainerRef.createComponent<typeof resourceReg.SubClass>(resourceReg.SubClass);
-      
+
       // Track the component reference for cleanup
       this._componentRef = componentRef;
 
       componentRef.instance.LoadCompleteEvent = () => {
         this._loadComplete = true;
         this.ContentLoadingComplete.emit(this);
-      }
+      };
 
       componentRef.instance.ResourceRecordSavedEvent = (resourceRecordEntity: BaseEntity) => {
         // bubble up the event
         this.ResourceRecordSaved.emit(resourceRecordEntity);
-      }
+      };
 
       componentRef.instance.Data = this.Data;
 
@@ -86,9 +86,8 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
       componentRef.instance.LoadStartedEvent = () => {
         this._loadStarted = true;
         this.ContentLoadingStarted.emit(this);
-      }
-    }
-    catch (e) {
+      };
+    } catch (e) {
       LogError(e);
     }
   }
@@ -99,12 +98,12 @@ export class ResourceContainerComponent implements OnChanges, OnDestroy {
       this._componentRef.destroy();
       this._componentRef = null;
     }
-    
+
     // Clear the view container to ensure no lingering references
     if (this.resourceContainer?.viewContainerRef) {
       this.resourceContainer.viewContainerRef.clear();
     }
-    
+
     // Reset state
     this._loaded = false;
     this._loadStarted = false;

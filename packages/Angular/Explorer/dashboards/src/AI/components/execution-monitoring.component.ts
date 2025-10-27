@@ -1,19 +1,25 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter, Input, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
 import { Observable, Subject, combineLatest } from 'rxjs';
 import { map, takeUntil, startWith, debounceTime, take } from 'rxjs/operators';
-import { 
-  AIInstrumentationService, 
-  DashboardKPIs, 
-  TrendData, 
-  LiveExecution, 
+import {
+  AIInstrumentationService,
+  DashboardKPIs,
+  TrendData,
+  LiveExecution,
   ChartData,
-  ExecutionDetails 
+  ExecutionDetails,
 } from '../services/ai-instrumentation.service';
 import { DataPointClickEvent } from './charts/time-series-chart.component';
 import { KPICardData } from './widgets/kpi-card.component';
 import { HeatmapData } from './charts/performance-heatmap.component';
-import { RunView } from '@memberjunction/core';
-import { AIPromptRunEntityExtended, AIAgentRunEntityExtended, AIModelEntityExtended, AIPromptEntityExtended, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { RunView } from '@memberjunction/global';
+import {
+  AIPromptRunEntityExtended,
+  AIAgentRunEntityExtended,
+  AIModelEntityExtended,
+  AIPromptEntityExtended,
+  AIAgentEntityExtended,
+} from '@memberjunction/core-entities';
 
 export interface DrillDownTab {
   id: string;
@@ -587,7 +593,8 @@ export interface ExecutionMonitoringState {
       }
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .execution-monitoring {
       padding: 20px;
       background: #f8f9fa;
@@ -1767,13 +1774,14 @@ export interface ExecutionMonitoringState {
         font-size: 13px;
       }
     }
-  `]
+  `,
+  ],
 })
 export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   @Input() initialState?: Partial<ExecutionMonitoringState>;
-  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
   @Output() stateChange = new EventEmitter<ExecutionMonitoringState>();
-  
+
   private destroy$ = new Subject<void>();
   private stateChangeSubject$ = new Subject<ExecutionMonitoringState>();
 
@@ -1786,13 +1794,13 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     showGrid: true,
     showTooltip: true,
     animationDuration: 500,
-    useDualAxis: true
+    useDualAxis: true,
   };
 
   heatmapConfig = {
     height: 350,
     showTooltip: true,
-    animationDuration: 300
+    animationDuration: 300,
   };
 
   // Data streams
@@ -1820,12 +1828,12 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   // Panel state for collapsible sections
   panelStates = {
     cost: true,
-    efficiency: true,  // Expanded by default
-    executions: false
+    efficiency: true, // Expanded by default
+    executions: false,
   };
 
   get activeTab(): DrillDownTab | undefined {
-    return this.drillDownTabs.find(tab => tab.id === this.activeTabId);
+    return this.drillDownTabs.find((tab) => tab.id === this.activeTabId);
   }
 
   constructor(
@@ -1839,66 +1847,61 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     this.chartData$ = this.instrumentationService.chartData$;
 
     // Subscribe to loading state from service
-    this.instrumentationService.isLoading$.pipe(
-      takeUntil(this.destroy$)
-    ).subscribe(loading => {
+    this.instrumentationService.isLoading$.pipe(takeUntil(this.destroy$)).subscribe((loading) => {
       this.isLoading = loading;
       this.cdr.markForCheck();
     });
 
     // Derived streams
-    this.kpiCards$ = this.kpis$.pipe(
-      map(kpis => this.createKPICards(kpis))
-    );
+    this.kpiCards$ = this.kpis$.pipe(map((kpis) => this.createKPICards(kpis)));
 
     this.performanceMatrix$ = this.chartData$.pipe(
-      map(data => data.performanceMatrix.map(item => ({
-        agent: item.agent,
-        model: item.model,
-        avgTime: item.avgTime,
-        successRate: item.successRate
-      })))
+      map((data) =>
+        data.performanceMatrix.map((item) => ({
+          agent: item.agent,
+          model: item.model,
+          avgTime: item.avgTime,
+          successRate: item.successRate,
+        }))
+      )
     );
 
-    this.costData$ = this.chartData$.pipe(
-      map(data => data.costByModel)
-    );
+    this.costData$ = this.chartData$.pipe(map((data) => data.costByModel));
 
-    this.tokenEfficiency$ = this.chartData$.pipe(
-      map(data => data.tokenEfficiency)
-    );
+    this.tokenEfficiency$ = this.chartData$.pipe(map((data) => data.tokenEfficiency));
   }
 
   ngOnInit() {
-    
     // Load initial state if provided
     if (this.initialState) {
       this.loadUserState(this.initialState);
     } else {
       // Default initialization
       this.setTimeRange(this.selectedTimeRange);
-      
+
       // Initialize with main chart tab
       this.drillDownTabs = [
         {
           id: 'main-chart',
           title: 'Execution Trends',
           type: 'chart',
-          closeable: false
-        }
+          closeable: false,
+        },
       ];
-    
+
       // Trigger initial data load
       this.instrumentationService.refresh();
     }
-    
+
     // Set up debounced state change emission
-    this.stateChangeSubject$.pipe(
-      debounceTime(2000), // 2 second debounce
-      takeUntil(this.destroy$)
-    ).subscribe(state => {
-      this.stateChange.emit(state);
-    });
+    this.stateChangeSubject$
+      .pipe(
+        debounceTime(2000), // 2 second debounce
+        takeUntil(this.destroy$)
+      )
+      .subscribe((state) => {
+        this.stateChange.emit(state);
+      });
   }
 
   ngOnDestroy() {
@@ -1912,14 +1915,14 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       selectedTimeRange: this.selectedTimeRange,
       refreshInterval: 0, // Always manual refresh now
       panelStates: { ...this.panelStates },
-      drillDownTabs: this.drillDownTabs.map(tab => ({
+      drillDownTabs: this.drillDownTabs.map((tab) => ({
         id: tab.id,
         title: tab.title,
         type: tab.type,
         timestamp: tab.timestamp?.toISOString(),
-        metric: tab.metric
+        metric: tab.metric,
       })),
-      activeTabId: this.activeTabId
+      activeTabId: this.activeTabId,
     };
   }
 
@@ -1929,25 +1932,24 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   public loadUserState(state: Partial<ExecutionMonitoringState>): void {
-    
     if (state.selectedTimeRange) {
       this.selectedTimeRange = state.selectedTimeRange;
       this.setTimeRange(state.selectedTimeRange);
     }
-    
+
     // No longer need to handle refreshInterval since we removed auto-refresh
-    
+
     if (state.panelStates) {
       // Only override if state has explicit panel states, otherwise keep defaults
       this.panelStates = { ...this.panelStates, ...state.panelStates };
     }
-    
+
     if (state.drillDownTabs && state.drillDownTabs.length > 0) {
-      this.drillDownTabs = state.drillDownTabs.map(tab => ({
+      this.drillDownTabs = state.drillDownTabs.map((tab) => ({
         ...tab,
         type: tab.type as 'chart' | 'executions' | 'model-detail',
         timestamp: tab.timestamp ? new Date(tab.timestamp) : undefined,
-        closeable: tab.id !== 'main-chart'
+        closeable: tab.id !== 'main-chart',
       }));
     } else {
       // Initialize with default tab if not provided
@@ -1956,11 +1958,11 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
           id: 'main-chart',
           title: 'Execution Trends',
           type: 'chart',
-          closeable: false
-        }
+          closeable: false,
+        },
       ];
     }
-    
+
     if (state.activeTabId) {
       this.activeTabId = state.activeTabId;
     }
@@ -1973,46 +1975,45 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         value: kpis.totalExecutions,
         icon: 'fa-chart-bar',
         color: 'primary',
-        subtitle: `${kpis.activeExecutions} active`
+        subtitle: `${kpis.activeExecutions} active`,
       },
       {
         title: 'Total Cost',
         value: `$${kpis.totalCost.toFixed(4)}`,
         icon: 'fa-dollar-sign',
         color: 'warning',
-        subtitle: `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day`
+        subtitle: `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day`,
       },
       {
         title: 'Success Rate',
         value: `${(kpis.successRate * 100).toFixed(1)}%`,
         icon: 'fa-check-circle',
         color: 'success',
-        subtitle: `${(kpis.errorRate * 100).toFixed(1)}% errors`
+        subtitle: `${(kpis.errorRate * 100).toFixed(1)}% errors`,
       },
       {
         title: 'Avg Response Time',
         value: `${(kpis.avgExecutionTime / 1000).toFixed(2)}s`,
         icon: 'fa-clock',
         color: 'info',
-        subtitle: 'All models average'
+        subtitle: 'All models average',
       },
       {
         title: 'Token Usage',
         value: this.formatTokens(kpis.totalTokens),
         icon: 'fa-coins',
         color: 'primary',
-        subtitle: `$${kpis.costPerToken.toFixed(6)}/token`
+        subtitle: `$${kpis.costPerToken.toFixed(6)}/token`,
       },
       {
         title: 'Top Model',
         value: kpis.topModel,
         icon: 'fa-microchip',
         color: 'info',
-        subtitle: 'Most used'
-      }
+        subtitle: 'Most used',
+      },
     ];
   }
-
 
   onTimeRangeChange(): void {
     // Simply change time range - loading state is managed by the service
@@ -2024,7 +2025,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     const { start, end } = this.getTimeRangeFromSelection(range);
     this.instrumentationService.setDateRange(start, end);
   }
-  
+
   private getTimeRangeFromSelection(range?: string): { start: Date; end: Date } {
     const now = new Date();
     const selectedRange = range || this.selectedTimeRange;
@@ -2066,30 +2067,30 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   onDataPointClick(event: DataPointClickEvent): void {
     const timestamp = event.data.timestamp;
     const metric = event.metric;
-    
+
     // Create new drill-down tab
     const tabId = `drill-down-${timestamp.getTime()}-${metric}`;
     const tabTitle = `${this.getMetricDisplayLabel(metric)} - ${this.formatTimestamp(timestamp)}`;
-    
+
     const newTab: DrillDownTab = {
       id: tabId,
       title: tabTitle,
       type: 'executions',
       timestamp: timestamp,
       metric: metric,
-      closeable: true
+      closeable: true,
     };
-    
+
     // Add tab if it doesn't exist
-    if (!this.drillDownTabs.find(tab => tab.id === tabId)) {
+    if (!this.drillDownTabs.find((tab) => tab.id === tabId)) {
       this.drillDownTabs.push(newTab);
       this.emitStateChange(); // Emit state when new tab is added
       this.cdr.markForCheck();
     }
-    
+
     // Switch to the new tab
     this.selectTab(tabId);
-    
+
     // Load drill-down data
     this.loadDrillDownData(newTab);
   }
@@ -2101,23 +2102,35 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   private getMetricValue(data: TrendData, metric: string): number {
     switch (metric) {
-      case 'executions': return data.executions;
-      case 'cost': return data.cost;
-      case 'tokens': return data.tokens;
-      case 'avgTime': return data.avgTime;
-      case 'errors': return data.errors;
-      default: return 0;
+      case 'executions':
+        return data.executions;
+      case 'cost':
+        return data.cost;
+      case 'tokens':
+        return data.tokens;
+      case 'avgTime':
+        return data.avgTime;
+      case 'errors':
+        return data.errors;
+      default:
+        return 0;
     }
   }
 
   private formatMetricValue(metric: string, value: number): string {
     switch (metric) {
-      case 'executions': return value.toLocaleString();
-      case 'cost': return `$${value.toFixed(4)}`;
-      case 'tokens': return value.toLocaleString();
-      case 'avgTime': return `${(value / 1000).toFixed(1)}s`;
-      case 'errors': return value.toString();
-      default: return value.toString();
+      case 'executions':
+        return value.toLocaleString();
+      case 'cost':
+        return `$${value.toFixed(4)}`;
+      case 'tokens':
+        return value.toLocaleString();
+      case 'avgTime':
+        return `${(value / 1000).toFixed(1)}s`;
+      case 'errors':
+        return value.toString();
+      default:
+        return value.toString();
     }
   }
 
@@ -2126,10 +2139,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     this.executionDetails = null;
 
     try {
-      const details = await this.instrumentationService.getExecutionDetails(
-        execution.id,
-        execution.type
-      );
+      const details = await this.instrumentationService.getExecutionDetails(execution.id, execution.type);
       this.executionDetails = details;
     } catch (error) {
       console.error('Error loading execution details:', error);
@@ -2147,16 +2157,14 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   openFullRecord(): void {
     if (this.selectedExecution) {
       // Determine the entity name based on the execution type
-      const entityName = this.selectedExecution.type === 'prompt' 
-        ? 'MJ: AI Prompt Runs' 
-        : 'MJ: AI Agent Runs';
-      
+      const entityName = this.selectedExecution.type === 'prompt' ? 'MJ: AI Prompt Runs' : 'MJ: AI Agent Runs';
+
       // Emit the event to open the full record
       this.openEntityRecord.emit({
         entityName: entityName,
-        recordId: this.selectedExecution.id
+        recordId: this.selectedExecution.id,
       });
-      
+
       // Close the modal
       this.closeExecutionModal();
     }
@@ -2198,7 +2206,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   }
 
   getMaxCost(costData: { cost: number }[]): number {
-    return Math.max(...costData.map(item => item.cost));
+    return Math.max(...costData.map((item) => item.cost));
   }
 
   getTokenRatio(input: number, output: number): string {
@@ -2230,13 +2238,13 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   closeTab(event: MouseEvent, tabId: string): void {
     event.stopPropagation();
-    
-    const tabIndex = this.drillDownTabs.findIndex(tab => tab.id === tabId);
+
+    const tabIndex = this.drillDownTabs.findIndex((tab) => tab.id === tabId);
     if (tabIndex === -1) return;
-    
+
     // Remove the tab
     this.drillDownTabs.splice(tabIndex, 1);
-    
+
     // If we closed the active tab, switch to another tab
     if (this.activeTabId === tabId) {
       if (this.drillDownTabs.length > 0) {
@@ -2252,7 +2260,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         this.activeTabId = 'main-chart';
       }
     }
-    
+
     this.emitStateChange();
   }
 
@@ -2271,42 +2279,42 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
   private async openModelDrillDown(modelName: string): Promise<void> {
     const tabId = `model-detail-${modelName.replace(/[^a-zA-Z0-9]/g, '-')}`;
     const tabTitle = `Model: ${modelName}`;
-    
+
     // Check if tab already exists
-    if (this.drillDownTabs.find(tab => tab.id === tabId)) {
+    if (this.drillDownTabs.find((tab) => tab.id === tabId)) {
       this.selectTab(tabId);
       return;
     }
-    
+
     // Create new model detail tab
     const newTab: DrillDownTab = {
       id: tabId,
       title: tabTitle,
       type: 'model-detail',
-      closeable: true
+      closeable: true,
     };
-    
+
     this.drillDownTabs.push(newTab);
     this.selectTab(tabId);
-    
+
     // Load model details
     this.loadModelDetails(newTab, modelName);
   }
 
   private async loadDrillDownData(tab: DrillDownTab): Promise<void> {
     if (!tab.timestamp) return;
-    
+
     this.loadingDrillDown = true;
-    
+
     try {
       // Determine bucket size based on selected time range
       const { start, end } = this.getTimeRangeFromSelection();
       const duration = end.getTime() - start.getTime();
       const hours = duration / (1000 * 60 * 60);
-      
+
       let windowSizeMs: number;
       let alignToDay = false;
-      
+
       if (hours <= 24) {
         // For up to 24 hours, use 1 hour window (30 min before and after)
         windowSizeMs = 30 * 60 * 1000;
@@ -2320,66 +2328,66 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
         windowSizeMs = 12 * 60 * 60 * 1000; // 12 hours before/after = 24 hour window
         alignToDay = true;
       }
-      
+
       // Create time window around the clicked point
       let startTime = new Date(tab.timestamp.getTime() - windowSizeMs);
       let endTime = new Date(tab.timestamp.getTime() + windowSizeMs);
-      
+
       // For day-aligned queries, expand to full day boundaries
       if (alignToDay) {
         // Set start to beginning of the day
         startTime = new Date(tab.timestamp);
         startTime.setHours(0, 0, 0, 0);
-        
+
         // Set end to end of the day
         endTime = new Date(tab.timestamp);
         endTime.setHours(23, 59, 59, 999);
       }
-      
+
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
         new RunView().RunView<AIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'RunAt DESC' 
+          OrderBy: 'RunAt DESC',
         }),
         new RunView().RunView<AIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
-          OrderBy: 'StartedAt DESC' 
-        })
+          OrderBy: 'StartedAt DESC',
+        }),
       ]);
-      
+
       // Convert to ExecutionRecord format
       const executions: ExecutionRecord[] = [];
-      
+
       // Add prompt executions
       for (const run of promptResults.Results) {
-        const duration = run.CompletedAt ? 
-          new Date(run.CompletedAt).getTime() - new Date(run.RunAt).getTime() : 
-          Date.now() - new Date(run.RunAt).getTime();
-          
+        const duration = run.CompletedAt
+          ? new Date(run.CompletedAt).getTime() - new Date(run.RunAt).getTime()
+          : Date.now() - new Date(run.RunAt).getTime();
+
         executions.push({
           id: run.ID,
           type: 'prompt',
           name: run.Prompt || 'Unnamed Prompt',
           model: run.Model || undefined,
-          status: run.Success ? 'completed' : (run.Success === false ? 'failed' : 'running'),
+          status: run.Success ? 'completed' : run.Success === false ? 'failed' : 'running',
           startTime: new Date(run.RunAt),
           endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
           duration: duration,
           cost: run.Cost || 0,
           tokens: run.TokensUsed || 0,
-          errorMessage: run.ErrorMessage || undefined
+          errorMessage: run.ErrorMessage || undefined,
         });
       }
-      
+
       // Add agent executions
       for (const run of agentResults.Results) {
-        const duration = run.CompletedAt ? 
-          new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime() : 
-          Date.now() - new Date(run.StartedAt).getTime();
-          
+        const duration = run.CompletedAt
+          ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
+          : Date.now() - new Date(run.StartedAt).getTime();
+
         executions.push({
           id: run.ID,
           type: 'agent',
@@ -2390,17 +2398,16 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
           duration: duration,
           cost: run.TotalCost || 0,
           tokens: run.TotalTokensUsed || 0,
-          errorMessage: run.ErrorMessage || undefined
+          errorMessage: run.ErrorMessage || undefined,
         });
       }
-      
+
       // Sort by start time (most recent first)
       executions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-      
+
       // Update tab data
       tab.data = executions;
       this.cdr.markForCheck();
-      
     } catch (error) {
       console.error('Error loading drill-down data:', error);
       tab.data = [];
@@ -2413,15 +2420,15 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
 
   private async loadModelDetails(tab: DrillDownTab, modelName: string): Promise<void> {
     this.loadingDrillDown = true;
-    
+
     try {
       // Find model by name
       const rv = new RunView();
       const result = await rv.RunView<AIModelEntityExtended>({
         EntityName: 'AI Models',
-        ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 
+        ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'`,
       });
-      
+
       const model = result.Results[0];
       if (model) {
         tab.data = {
@@ -2429,14 +2436,13 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
           vendor: model.Vendor,
           apiName: model.APIName,
           inputTokenCost: 0, // Not available in current model
-          outputTokenCost: 0, // Not available in current model  
+          outputTokenCost: 0, // Not available in current model
           isActive: model.IsActive,
-          description: model.Description
+          description: model.Description,
         };
       } else {
         tab.data = null;
       }
-      
     } catch (error) {
       console.error('Error loading model details:', error);
       tab.data = null;
@@ -2461,7 +2467,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       cost: 'Cost',
       tokens: 'Tokens',
       avgTime: 'Avg Time',
-      errors: 'Errors'
+      errors: 'Errors',
     };
     return labels[metric] || metric;
   }
@@ -2490,9 +2496,9 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
       startTime: execution.startTime,
       duration: execution.duration,
       cost: execution.cost,
-      tokens: execution.tokens
+      tokens: execution.tokens,
     };
-    
+
     this.onExecutionClick(liveExecution);
   }
 
@@ -2521,7 +2527,7 @@ export class ExecutionMonitoringComponent implements OnInit, OnDestroy {
     setTimeout(() => {
       window.dispatchEvent(new Event('resize'));
     }, 100);
-    
+
     // Emit state change when splitter changes
     this.emitStateChange();
   }

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 import { AIAgentRunEntity } from '@memberjunction/core-entities';
 import { AgentStateService, AgentStatus } from '../../services/agent-state.service';
 import { Subscription } from 'rxjs';
@@ -50,7 +50,8 @@ import { Subscription } from 'rxjs';
       </button>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .active-agents-container {
       display: flex;
       align-items: center;
@@ -242,7 +243,8 @@ import { Subscription } from 'rxjs';
       min-width: 20px;
       text-align: center;
     }
-  `]
+  `,
+  ],
 })
 export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
   @Input() conversationId?: string;
@@ -261,11 +263,9 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     // Subscribe to active agents for this conversation
-    this.subscription = this.agentStateService
-      .getActiveAgents(this.conversationId)
-      .subscribe(agents => {
-        this.activeAgents = agents;
-      });
+    this.subscription = this.agentStateService.getActiveAgents(this.conversationId).subscribe((agents) => {
+      this.activeAgents = agents;
+    });
   }
 
   ngOnDestroy(): void {
@@ -281,20 +281,24 @@ export class ActiveAgentIndicatorComponent implements OnInit, OnDestroy {
 
   getAgentTooltip(agent: { run: AIAgentRunEntity; status: AgentStatus; confidence: number | null }): string {
     const statusText = this.getStatusText(agent.status);
-    const confidenceText = agent.confidence != null
-      ? ` (Confidence: ${(agent.confidence * 100).toFixed(0)}%)`
-      : '';
+    const confidenceText = agent.confidence != null ? ` (Confidence: ${(agent.confidence * 100).toFixed(0)}%)` : '';
     return `${agent.run.Agent || 'Agent'} - ${statusText}${confidenceText}`;
   }
 
   getStatusText(status: AgentStatus): string {
     switch (status) {
-      case 'acknowledging': return 'Acknowledging request';
-      case 'working': return 'Working on task';
-      case 'completing': return 'Completing';
-      case 'completed': return 'Completed';
-      case 'error': return 'Error occurred';
-      default: return 'Active';
+      case 'acknowledging':
+        return 'Acknowledging request';
+      case 'working':
+        return 'Working on task';
+      case 'completing':
+        return 'Completing';
+      case 'completed':
+        return 'Completed';
+      case 'error':
+        return 'Error occurred';
+      default:
+        return 'Active';
     }
   }
 

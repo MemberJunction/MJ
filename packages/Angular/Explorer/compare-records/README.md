@@ -65,7 +65,7 @@ In your component:
 
 ```typescript
 import { Component, OnInit } from '@angular/core';
-import { BaseEntity, Metadata } from '@memberjunction/core';
+import { BaseEntity, Metadata } from '@memberjunction/global';
 
 @Component({
   selector: 'app-compare-example',
@@ -110,7 +110,7 @@ In your component:
 
 ```typescript
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { BaseEntity, Metadata } from '@memberjunction/core';
+import { BaseEntity, Metadata } from '@memberjunction/global';
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 
 @Component({
@@ -192,28 +192,28 @@ this.recordsToCompare = rawRecords;
 
 #### Inputs
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `recordsToCompare` | `BaseEntity[]` | `[]` | Array of records to compare |
-| `entityName` | `string` | `''` | Name of the entity type being compared |
-| `visibleColumns` | `ViewColumnInfo[]` | `[]` | Optional columns to display (defaults to all entity fields) |
-| `selectionMode` | `boolean` | `false` | Whether to enable selecting values from different records |
+| Name               | Type               | Default | Description                                                 |
+| ------------------ | ------------------ | ------- | ----------------------------------------------------------- |
+| `recordsToCompare` | `BaseEntity[]`     | `[]`    | Array of records to compare                                 |
+| `entityName`       | `string`           | `''`    | Name of the entity type being compared                      |
+| `visibleColumns`   | `ViewColumnInfo[]` | `[]`    | Optional columns to display (defaults to all entity fields) |
+| `selectionMode`    | `boolean`          | `false` | Whether to enable selecting values from different records   |
 
 #### Properties
 
-| Name | Type | Description |
-|------|------|-------------|
-| `selectedRecordCompositeKey` | `CompositeKey` | The primary key of the currently selected record (in selection mode) |
-| `fieldMap` | `{fieldName: string, CompositeKey: CompositeKey, value: any}[]` | Maps fields to records other than the selected record (in selection mode) |
-| `showDifferences` | `boolean` | Whether to show only fields with different values |
-| `suppressBlankFields` | `boolean` | Whether to hide fields with blank values |
+| Name                         | Type                                                            | Description                                                               |
+| ---------------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `selectedRecordCompositeKey` | `CompositeKey`                                                  | The primary key of the currently selected record (in selection mode)      |
+| `fieldMap`                   | `{fieldName: string, CompositeKey: CompositeKey, value: any}[]` | Maps fields to records other than the selected record (in selection mode) |
+| `showDifferences`            | `boolean`                                                       | Whether to show only fields with different values                         |
+| `suppressBlankFields`        | `boolean`                                                       | Whether to hide fields with blank values                                  |
 
 #### Methods
 
-| Name | Return Type | Description |
-|------|-------------|-------------|
+| Name                | Return Type     | Description                                 |
+| ------------------- | --------------- | ------------------------------------------- |
 | `prepareViewData()` | `Promise<void>` | Refreshes the view with the current records |
-| `ResizeGrid()` | `void` | Manually resize the grid |
+| `ResizeGrid()`      | `void`          | Manually resize the grid                    |
 
 ## Styling
 

@@ -1,15 +1,14 @@
 import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular/core';
 
-import { Metadata, RunViewParams } from '@memberjunction/core';
+import { Metadata, RunViewParams } from '@memberjunction/global';
 import { UserEntity } from '@memberjunction/core-entities';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
 import { SharedService } from '@memberjunction/ng-shared';
 
- 
 @Component({
   selector: 'mj-single-user',
   templateUrl: './single-user.component.html',
-  styleUrls: ['./single-user.component.css']
+  styleUrls: ['./single-user.component.css'],
 })
 export class SingleUserComponent implements OnInit {
   @Input() UserID!: string;
@@ -22,29 +21,27 @@ export class SingleUserComponent implements OnInit {
   public UserViewsParams: RunViewParams | undefined;
   public showEntityEditingForm: boolean = false;
 
-  constructor(private cdRef: ChangeDetectorRef) { 
-  } 
+  constructor(private cdRef: ChangeDetectorRef) {}
 
   public InvokeManualResize() {
     SharedService.Instance.InvokeManualResize();
   }
-  
+
   ngOnInit(): void {
     this.Refresh();
   }
 
   protected async Refresh() {
     if (this.UserID && this.UserID.length > 0) {
-        const md = new Metadata();
-        this.UserRecord = await md.GetEntityObject<UserEntity>('Users');
-        await this.UserRecord.Load(this.UserID);      
-        this.UserViewsParams = {
-            EntityName: 'User Views',
-            ExtraFilter: `UserID = '${this.UserID}'`,
-        };
+      const md = new Metadata();
+      this.UserRecord = await md.GetEntityObject<UserEntity>('Users');
+      await this.UserRecord.Load(this.UserID);
+      this.UserViewsParams = {
+        EntityName: 'User Views',
+        ExtraFilter: `UserID = '${this.UserID}'`,
+      };
     }
   }
- 
 
   public async EditRecord() {
     // show the dialog
@@ -53,5 +50,5 @@ export class SingleUserComponent implements OnInit {
 
   public async onEntityFormClosed(result: 'Save' | 'Cancel') {
     this.showEntityEditingForm = false;
-  }    
+  }
 }

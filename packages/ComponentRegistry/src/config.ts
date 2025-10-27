@@ -4,7 +4,7 @@ dotenv.config();
 
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError } from '@memberjunction/core';
+import { LogError } from '@memberjunction/global';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -14,12 +14,14 @@ const databaseSettingsInfoSchema = z.object({
   dbReadOnlyUsername: z.string().optional(),
   dbReadOnlyPassword: z.string().optional(),
   metadataCacheRefreshInterval: z.number().optional().default(0),
-  connectionPool: z.object({
-    max: z.number().optional(),
-    min: z.number().optional(),
-    idleTimeoutMillis: z.number().optional(),
-    acquireTimeoutMillis: z.number().optional()
-  }).optional()
+  connectionPool: z
+    .object({
+      max: z.number().optional(),
+      min: z.number().optional(),
+      idleTimeoutMillis: z.number().optional(),
+      acquireTimeoutMillis: z.number().optional(),
+    })
+    .optional(),
 });
 
 const componentRegistrySettingsSchema = z.object({
@@ -27,9 +29,9 @@ const componentRegistrySettingsSchema = z.object({
   enableRegistry: z.boolean().default(false), // Default to disabled
   registryId: z.string().uuid().optional(),
   requireAuth: z.boolean().default(false),
-  corsOrigins: z.array(z.string()).default(['*'])
+  corsOrigins: z.array(z.string()).default(['*']),
 });
- 
+
 const configInfoSchema = z.object({
   databaseSettings: databaseSettingsInfoSchema,
 
@@ -47,7 +49,7 @@ const configInfoSchema = z.object({
   dbInstanceName: z.string().optional(),
 
   mjCoreSchema: z.string(),
-  componentRegistrySettings: componentRegistrySettingsSchema.optional()
+  componentRegistrySettings: componentRegistrySettingsSchema.optional(),
 });
 
 export type DatabaseSettingsInfo = z.infer<typeof databaseSettingsInfoSchema>;

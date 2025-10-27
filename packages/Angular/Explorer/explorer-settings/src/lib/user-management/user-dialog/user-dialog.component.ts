@@ -1,7 +1,19 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  OnInit,
+  OnDestroy,
+  OnChanges,
+  SimpleChanges,
+  inject,
+  HostListener,
+  ViewEncapsulation,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/global';
 import { UserEntity, RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 
@@ -22,7 +34,7 @@ export interface UserDialogResult {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './user-dialog.component.html',
-  styleUrls: ['./user-dialog.component.css']
+  styleUrls: ['./user-dialog.component.css'],
 })
 export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: UserDialogData | null = null;
@@ -46,7 +58,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
       email: ['', [Validators.required, Validators.email]],
       title: [''],
       type: ['User', Validators.required],
-      isActive: [true]
+      isActive: [true],
     });
   }
 
@@ -59,14 +71,14 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
     if (changes['data']) {
       this.selectedRoleIds.clear();
       this.existingUserRoles = [];
-      
+
       if (this.data?.user && this.isEditMode) {
         this.loadUserData();
       } else {
         this.resetForm();
       }
     }
-    
+
     // Reset form when dialog becomes visible and not in edit mode
     if (changes['visible'] && this.visible && !this.isEditMode) {
       this.resetForm();
@@ -85,7 +97,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
       email: '',
       title: '',
       type: 'User',
-      isActive: true
+      isActive: true,
     });
     this.selectedRoleIds.clear();
     this.error = null;
@@ -117,7 +129,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
       email: user.Email,
       title: user.Title,
       type: user.Type,
-      isActive: user.IsActive
+      isActive: user.IsActive,
     });
 
     // Load existing user roles
@@ -130,7 +142,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
       const result = await rv.RunView<UserRoleEntity>({
         EntityName: 'User Roles',
         ExtraFilter: `UserID='${userId}'`,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success && result.Results) {
@@ -204,7 +216,6 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
       await this.updateUserRoles(user.ID);
 
       this.result.emit({ action: 'save', user });
-
     } catch (error: any) {
       console.error('Error saving user:', error);
       this.error = error.message || 'An unexpected error occurred';
@@ -216,12 +227,12 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   private async updateUserRoles(userId: string): Promise<void> {
     try {
       // Get current role IDs from existing UserRole entities
-      const existingRoleIds = new Set(this.existingUserRoles.map(ur => ur.RoleID));
-      
+      const existingRoleIds = new Set(this.existingUserRoles.map((ur) => ur.RoleID));
+
       // Determine roles to add and remove
-      const rolesToAdd = Array.from(this.selectedRoleIds).filter(roleId => !existingRoleIds.has(roleId));
-      const rolesToRemove = this.existingUserRoles.filter(userRole => !this.selectedRoleIds.has(userRole.RoleID));
-      
+      const rolesToAdd = Array.from(this.selectedRoleIds).filter((roleId) => !existingRoleIds.has(roleId));
+      const rolesToRemove = this.existingUserRoles.filter((userRole) => !this.selectedRoleIds.has(userRole.RoleID));
+
       // Remove unselected roles
       for (const userRole of rolesToRemove) {
         try {
@@ -230,7 +241,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
           console.warn('Failed to remove role:', userRole.RoleID, error);
         }
       }
-      
+
       // Add new selected roles
       for (const roleId of rolesToAdd) {
         try {
@@ -238,7 +249,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = roleId;
-          
+
           const saveResult = await userRole.Save();
           if (!saveResult) {
             console.warn('Failed to assign role:', roleId, userRole.LatestResult?.Message);
@@ -258,7 +269,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private markFormGroupTouched(formGroup: FormGroup): void {
-    Object.keys(formGroup.controls).forEach(key => {
+    Object.keys(formGroup.controls).forEach((key) => {
       const control = formGroup.get(key);
       control?.markAsTouched();
     });

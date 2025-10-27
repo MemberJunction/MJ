@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
-import { RunView, LogError } from '@memberjunction/core';
+import { RunView, LogError } from '@memberjunction/global';
 import { ActionEntity, ActionCategoryEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
@@ -13,10 +13,10 @@ interface CategoryTreeNode {
 @Component({
   selector: 'mj-actions-list-view',
   templateUrl: './actions-list-view.component.html',
-  styleUrls: ['./actions-list-view.component.scss']
+  styleUrls: ['./actions-list-view.component.scss'],
 })
 export class ActionsListViewComponent implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   public isLoading = true;
   public actions: ActionEntity[] = [];
@@ -35,18 +35,16 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     { text: 'All Statuses', value: 'all' },
     { text: 'Active', value: 'Active' },
     { text: 'Pending', value: 'Pending' },
-    { text: 'Disabled', value: 'Disabled' }
+    { text: 'Disabled', value: 'Disabled' },
   ];
 
   public typeOptions = [
     { text: 'All Types', value: 'all' },
     { text: 'AI Generated', value: 'Generated' },
-    { text: 'Custom', value: 'Custom' }
+    { text: 'Custom', value: 'Custom' },
   ];
 
-  public categoryOptions: Array<{text: string; value: string}> = [
-    { text: 'All Categories', value: 'all' }
-  ];
+  public categoryOptions: Array<{ text: string; value: string }> = [{ text: 'All Categories', value: 'all' }];
 
   private destroy$ = new Subject<void>();
 
@@ -67,48 +65,45 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       this.searchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
       this.selectedStatus$.pipe(distinctUntilChanged()),
       this.selectedType$.pipe(distinctUntilChanged()),
-      this.selectedCategory$.pipe(distinctUntilChanged())
-    ]).pipe(
-      takeUntil(this.destroy$)
-    ).subscribe(() => {
-      this.applyFilters();
-    });
+      this.selectedCategory$.pipe(distinctUntilChanged()),
+    ])
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(() => {
+        this.applyFilters();
+      });
   }
 
   private async loadData(): Promise<void> {
     try {
       this.isLoading = true;
-      
+
       const rv = new RunView();
-      
+
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {
           EntityName: 'Actions',
-          OrderBy: 'Name'
+          OrderBy: 'Name',
         },
         {
           EntityName: 'Action Categories',
-          OrderBy: 'Name'
-        }
+          OrderBy: 'Name',
+        },
       ]);
-      
+
       if (!actionsResult.Success || !categoriesResult.Success) {
         const errors = [];
-        if (!actionsResult.Success) 
-          errors.push('Actions: ' + actionsResult.ErrorMessage);
-        if (!categoriesResult.Success) 
-          errors.push('Categories: ' + categoriesResult.ErrorMessage);
+        if (!actionsResult.Success) errors.push('Actions: ' + actionsResult.ErrorMessage);
+        if (!categoriesResult.Success) errors.push('Categories: ' + categoriesResult.ErrorMessage);
         throw new Error('Failed to load data: ' + errors.join(', '));
       }
-      
+
       const actions = (actionsResult.Results || []) as ActionEntity[];
       const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
-       
+
       this.actions = actions;
       this.populateCategoriesMap(categories);
       this.buildCategoryOptions(categories);
       this.applyFilters();
-
     } catch (error) {
       console.error('Error loading actions list data:', error);
       LogError('Failed to load actions list data', undefined, error);
@@ -117,16 +112,15 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     }
   }
 
-
   private populateCategoriesMap(categories: ActionCategoryEntity[]): void {
     this.categories.clear();
-    categories.forEach(category => {
+    categories.forEach((category) => {
       this.categories.set(category.ID, category);
     });
-    
+
     // Build the category tree
     this.buildCategoryTree(categories);
-    
+
     // Build descendant mapping for efficient filtering
     this.buildDescendantMapping(categories);
   }
@@ -134,28 +128,28 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
   private buildCategoryOptions(categories: ActionCategoryEntity[]): void {
     this.categoryOptions = [
       { text: 'All Categories', value: 'all' },
-      ...categories.map(category => ({
+      ...categories.map((category) => ({
         text: category.Name,
-        value: category.ID
-      }))
+        value: category.ID,
+      })),
     ];
   }
 
   private buildCategoryTree(categories: ActionCategoryEntity[]): void {
     const categoryMap = new Map<string, CategoryTreeNode>();
-    
+
     // First pass: create all nodes
-    categories.forEach(category => {
+    categories.forEach((category) => {
       categoryMap.set(category.ID, {
         category,
         children: [],
-        level: 0
+        level: 0,
       });
     });
-    
+
     // Second pass: build tree structure
     const rootNodes: CategoryTreeNode[] = [];
-    categoryMap.forEach(node => {
+    categoryMap.forEach((node) => {
       const parentId = node.category.ParentID;
       if (parentId && categoryMap.has(parentId)) {
         const parent = categoryMap.get(parentId)!;
@@ -165,25 +159,25 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
         rootNodes.push(node);
       }
     });
-    
+
     // Sort children at each level by name
     const sortChildren = (nodes: CategoryTreeNode[]) => {
       nodes.sort((a, b) => a.category.Name.localeCompare(b.category.Name));
-      nodes.forEach(node => sortChildren(node.children));
+      nodes.forEach((node) => sortChildren(node.children));
     };
     sortChildren(rootNodes);
-    
+
     this.categoryTree = rootNodes;
   }
 
   private buildDescendantMapping(categories: ActionCategoryEntity[]): void {
     this.categoryDescendants.clear();
-    
+
     // Initialize each category with itself
-    categories.forEach(category => {
+    categories.forEach((category) => {
       this.categoryDescendants.set(category.ID, new Set([category.ID]));
     });
-    
+
     // Build descendant sets
     const addDescendants = (categoryId: string, descendantId: string) => {
       const descendants = this.categoryDescendants.get(categoryId);
@@ -191,8 +185,8 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
         descendants.add(descendantId);
       }
     };
-    
-    categories.forEach(category => {
+
+    categories.forEach((category) => {
       if (category.ParentID) {
         // Add this category as a descendant of all its ancestors
         let currentParentId: string | null = category.ParentID;
@@ -211,22 +205,21 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     // Apply search filter
     const searchTerm = this.searchTerm$.value.toLowerCase();
     if (searchTerm) {
-      filtered = filtered.filter(action => 
-        action.Name.toLowerCase().includes(searchTerm) ||
-        (action.Description || '').toLowerCase().includes(searchTerm)
+      filtered = filtered.filter(
+        (action) => action.Name.toLowerCase().includes(searchTerm) || (action.Description || '').toLowerCase().includes(searchTerm)
       );
     }
 
     // Apply status filter
     const status = this.selectedStatus$.value;
     if (status !== 'all') {
-      filtered = filtered.filter(action => action.Status === status);
+      filtered = filtered.filter((action) => action.Status === status);
     }
 
     // Apply type filter
     const type = this.selectedType$.value;
     if (type !== 'all') {
-      filtered = filtered.filter(action => action.Type === type);
+      filtered = filtered.filter((action) => action.Type === type);
     }
 
     // Apply category filter (includes descendants)
@@ -235,9 +228,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
       const descendantIds = this.categoryDescendants.get(categoryId);
       if (descendantIds) {
         // Filter actions that belong to the selected category or any of its descendants
-        filtered = filtered.filter(action => 
-          action.CategoryID && descendantIds.has(action.CategoryID)
-        );
+        filtered = filtered.filter((action) => action.CategoryID && descendantIds.has(action.CategoryID));
       } else {
         console.warn(`Category ID ${categoryId} not found in category hierarchy`);
         filtered = [];
@@ -266,7 +257,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
   public openAction(action: ActionEntity): void {
     this.openEntityRecord.emit({
       entityName: 'Actions',
-      recordId: action.ID
+      recordId: action.ID,
     });
   }
 
@@ -277,18 +268,25 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
 
   public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
     switch (status) {
-      case 'Active': return 'success';
-      case 'Pending': return 'warning';
-      case 'Disabled': return 'error';
-      default: return 'info';
+      case 'Active':
+        return 'success';
+      case 'Pending':
+        return 'warning';
+      case 'Disabled':
+        return 'error';
+      default:
+        return 'info';
     }
   }
 
   public getTypeIcon(type: string): string {
     switch (type) {
-      case 'Generated': return 'fa-solid fa-robot';
-      case 'Custom': return 'fa-solid fa-code';
-      default: return 'fa-solid fa-cog';
+      case 'Generated':
+        return 'fa-solid fa-robot';
+      case 'Custom':
+        return 'fa-solid fa-code';
+      default:
+        return 'fa-solid fa-cog';
     }
   }
 
@@ -320,10 +318,8 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
   public getCategoryActionCount(categoryId: string): number {
     const descendantIds = this.categoryDescendants.get(categoryId);
     if (!descendantIds) return 0;
-    
-    return this.actions.filter(action => 
-      action.CategoryID && descendantIds.has(action.CategoryID)
-    ).length;
+
+    return this.actions.filter((action) => action.CategoryID && descendantIds.has(action.CategoryID)).length;
   }
 
   public showCategoryTree = false;

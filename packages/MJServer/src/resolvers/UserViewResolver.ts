@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { EntitySaveOptions, Metadata } from '@memberjunction/core';
+import { EntitySaveOptions, Metadata } from '@memberjunction/global';
 import { AppContext, Arg, Ctx, Int, Query, Resolver, UserPayload } from '@memberjunction/server';
 import { MJUserView_, MJUserViewResolverBase } from '../generated/generated.js';
 import { UserResolver } from './UserResolver.js';
@@ -10,7 +10,7 @@ import { GetReadOnlyProvider } from '../util.js';
 export class UserViewResolver extends MJUserViewResolverBase {
   @Query(() => [MJUserView_])
   async UserViewsByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { providers, userPayload }: AppContext) {
-    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
     return await this.findBy(provider, 'User Views', { UserID }, userPayload.userRecord);
   }
 
@@ -20,18 +20,23 @@ export class UserViewResolver extends MJUserViewResolverBase {
     @Arg('EntityID', () => Int) EntityID: number,
     @Ctx() { providers, userPayload }: AppContext
   ) {
-    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
+    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
     return await this.findBy(provider, 'User Views', { UserID, EntityID, IsDefault: true }, userPayload.userRecord);
   }
 
   @Query(() => [MJUserView_])
   async CurrentUserDefaultViewByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
-    return await this.findBy(provider, 'User Views', {
-      UserID: await this.getCurrentUserID(context),
-      EntityID,
-      IsDefault: true,
-    }, context.userPayload.userRecord);
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    return await this.findBy(
+      provider,
+      'User Views',
+      {
+        UserID: await this.getCurrentUserID(context),
+        EntityID,
+        IsDefault: true,
+      },
+      context.userPayload.userRecord
+    );
   }
 
   protected async getCurrentUserID(context: AppContext): Promise<number> {
@@ -42,8 +47,8 @@ export class UserViewResolver extends MJUserViewResolverBase {
 
   @Query(() => [MJUserView_])
   async CurrentUserUserViewsByEntityID(@Arg('EntityID', () => Int) EntityID: number, @Ctx() context: AppContext) {
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true})    
-    return this.findBy(provider, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID}, context.userPayload.userRecord);
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+    return this.findBy(provider, 'User Views', { UserID: await this.getCurrentUserID(context), EntityID }, context.userPayload.userRecord);
   }
 
   @Query(() => [MJUserView_])
@@ -52,7 +57,7 @@ export class UserViewResolver extends MJUserViewResolverBase {
     // this should normally not be a factor but we have this exposed in the GraphQL API so that
     // a dev can force the update if desired from the client. The normal path is just to update
     // filter state which in turn will be used to update the where clause in the entity sub-class.
-    const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
+    const p = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
     const u = this.GetUserFromPayload(userPayload);
     const viewEntity = <UserViewEntityExtended>await p.GetEntityObject('User Views', u);
     await viewEntity.Load(ID);

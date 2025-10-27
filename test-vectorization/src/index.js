@@ -1,6 +1,6 @@
 import { EntityVectorSyncer } from '@memberjunction/ai-vector-sync';
 import { AIEngine } from '@memberjunction/aiengine';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { Metadata, UserInfo } from '@memberjunction/global';
 import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { LoadGeneratedEntities } from 'mj_generatedentities';
 import { pool } from './db.js';
@@ -10,7 +10,7 @@ import { LoadOpenAILLM } from '@memberjunction/ai-openai';
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
 
-const SYSTEM_USER_ID = "EDAFCCEC-6A37-EF11-86D4-000D3A4E707E";
+const SYSTEM_USER_ID = 'EDAFCCEC-6A37-EF11-86D4-000D3A4E707E';
 
 await pool.connect();
 const config = new SQLServerProviderConfigData(pool, '', '__mj', 5000);
@@ -22,8 +22,8 @@ LoadMistralEmbedding();
 LoadPineconeVectorDB();
 
 const params = {
-  EntityID: "5F248F34-2837-EF11-86D4-6045BDEE16E6", // Accounts
-  EntityDocumentID: "A4AECCEC-6A37-EF11-86D4-000D3A4E707E",
+  EntityID: '5F248F34-2837-EF11-86D4-6045BDEE16E6', // Accounts
+  EntityDocumentID: 'A4AECCEC-6A37-EF11-86D4-000D3A4E707E',
 };
 
 const md = new Metadata();
@@ -32,9 +32,9 @@ const systemUser = new UserInfo(sqlServerDataProvider, {
   Name: 'Jonathan Stfelix',
   Email: 'jonathan.stfelix@bluecypress.io',
   UserRoles: [
-    { UserID: SYSTEM_USER_ID, RoleName: 'UI', RoleID: 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' }, 
+    { UserID: SYSTEM_USER_ID, RoleName: 'UI', RoleID: 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E' },
     { UserID: SYSTEM_USER_ID, RoleName: 'Developer', RoleID: 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E' },
-    { UserID: SYSTEM_USER_ID, RoleName: 'Integration', RoleID: 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' }
+    { UserID: SYSTEM_USER_ID, RoleName: 'Integration', RoleID: 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E' },
   ],
 });
 
@@ -66,4 +66,3 @@ await vectorizer.VectorizeEntity(request, systemUser);
 
 console.log('Done');
 process.exit('0');
-

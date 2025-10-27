@@ -20,8 +20,7 @@
   },
   "dependencies": {
     "@memberjunction/global": "2.111.0",
-    "@memberjunction/core-entities": "2.111.0",
-    "@memberjunction/core": "2.111.0"
+    "@memberjunction/core-entities": "2.111.0"
   },
   "repository": {
     "type": "git",

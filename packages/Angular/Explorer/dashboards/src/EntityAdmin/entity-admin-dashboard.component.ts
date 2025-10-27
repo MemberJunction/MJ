@@ -1,7 +1,7 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
-import { EntityInfo, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, CompositeKey } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 
@@ -21,7 +21,7 @@ interface DashboardState {
 @Component({
   selector: 'mj-entity-admin-dashboard',
   templateUrl: './entity-admin-dashboard.component.html',
-  styleUrls: ['./entity-admin-dashboard.component.scss']
+  styleUrls: ['./entity-admin-dashboard.component.scss'],
 })
 @RegisterClass(BaseDashboard, 'EntityAdmin')
 export class EntityAdminDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
@@ -43,9 +43,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
 
   ngAfterViewInit(): void {
     // Setup state persistence
-    this.userStateChangeSubject.pipe(
-      debounceTime(1000)
-    ).subscribe(state => {
+    this.userStateChangeSubject.pipe(debounceTime(1000)).subscribe((state) => {
       this.emitUserStateChange(state);
     });
   }
@@ -70,18 +68,17 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     }
   }
 
-
   public onStateChange(state: DashboardState): void {
     // Update local state to keep header controls in sync
     this.filterPanelVisible = state.filterPanelVisible;
     this.filteredEntities = this.erdComposite?.filteredEntities || [];
-    
+
     if (state.selectedEntityId && this.erdComposite) {
-      this.selectedEntity = this.erdComposite.entities.find(e => e.ID === state.selectedEntityId) || null;
+      this.selectedEntity = this.erdComposite.entities.find((e) => e.ID === state.selectedEntityId) || null;
     } else {
       this.selectedEntity = null;
     }
-    
+
     // Load user state when data becomes available for the first time
     if (this.erdComposite?.isDataLoaded && !this.hasLoadedUserState) {
       this.hasLoadedUserState = true;
@@ -100,20 +97,20 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
     this.openEntity(entity);
   }
 
-  public onOpenRecord(event: {EntityName: string, RecordID: string}): void {
+  public onOpenRecord(event: { EntityName: string; RecordID: string }): void {
     // Emit open record event for parent to handle
     this.OpenEntityRecord.emit({
       EntityName: event.EntityName,
-      RecordPKey: new CompositeKey([{FieldName: 'ID', Value: event.RecordID}])
+      RecordPKey: new CompositeKey([{ FieldName: 'ID', Value: event.RecordID }]),
     });
   }
 
   public openEntity(entity: EntityInfo): void {
     // Emit interaction for parent to handle
-    this.Interaction.emit({ 
-      type: 'openEntity', 
+    this.Interaction.emit({
+      type: 'openEntity',
       entity: entity,
-      data: { entityId: entity.ID, entityName: entity.Name }
+      data: { entityId: entity.ID, entityName: entity.Name },
     });
   }
 

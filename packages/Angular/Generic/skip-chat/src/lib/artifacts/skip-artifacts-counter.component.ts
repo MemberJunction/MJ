@@ -1,20 +1,20 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
 import { ConversationArtifactEntity, ArtifactTypeEntity } from '@memberjunction/core-entities';
-import { RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { LogError } from '@memberjunction/core';
+import { LogError } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
   selector: 'skip-artifacts-counter',
   templateUrl: './skip-artifacts-counter.component.html',
-  styleUrls: ['./skip-artifacts-counter.component.css']
+  styleUrls: ['./skip-artifacts-counter.component.css'],
 })
 export class SkipArtifactsCounterComponent extends BaseAngularComponent implements OnChanges {
   @Input() public ConversationID: string = '';
   @Output() public ArtifactSelected = new EventEmitter<any>();
-  
+
   public isLoading: boolean = false;
   public showDropdown: boolean = false;
   public artifacts: any[] = [];
@@ -43,14 +43,14 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
 
     try {
       const provider = this.ProviderToUse;
-      
+
       // Get artifacts for this conversation
       // Use RunView to execute the query
       const runView = new RunView(this.RunViewToUse);
       const artifactsResult = await runView.RunView<ConversationArtifactEntity>({
         EntityName: 'ConversationArtifact',
         ResultType: 'entity_object',
-        ExtraFilter: `ConversationID = '${this.ConversationID}'`
+        ExtraFilter: `ConversationID = '${this.ConversationID}'`,
       });
 
       if (artifactsResult && artifactsResult.Success && artifactsResult.Results.length > 0) {
@@ -68,11 +68,7 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
     } catch (err) {
       LogError('Error loading artifacts for conversation', err instanceof Error ? err.message : String(err));
       this.error = err instanceof Error ? err.message : 'Unknown error loading artifacts';
-      this.notificationService.CreateSimpleNotification(
-        'Error loading artifacts', 
-        'error',
-        3000
-      );
+      this.notificationService.CreateSimpleNotification('Error loading artifacts', 'error', 3000);
 
       this.artifacts = [];
       this.artifactCount = 0;
@@ -90,7 +86,7 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
       const runView = new RunView(this.RunViewToUse);
       const typesResult = await runView.RunView<ArtifactTypeEntity>({
         EntityName: 'ArtifactType',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (typesResult && typesResult.Success && typesResult.Results.length > 0) {
@@ -101,12 +97,12 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
         }, {});
 
         // Add type information to artifacts
-        this.artifacts = this.artifacts.map(artifact => {
+        this.artifacts = this.artifacts.map((artifact) => {
           const type = typeMap[artifact.ArtifactTypeID];
           return {
             ...artifact,
             typeName: type ? type.Name : 'Unknown',
-            contentType: type ? type.ContentType : 'text/plain'
+            contentType: type ? type.ContentType : 'text/plain',
           };
         });
       }
@@ -120,7 +116,7 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
     if (!this.showDropdown) {
       this.loadArtifacts();
     }
-    
+
     this.showDropdown = !this.showDropdown;
     event.stopPropagation();
   }
@@ -137,18 +133,21 @@ export class SkipArtifactsCounterComponent extends BaseAngularComponent implemen
 
   public getIconClass(contentType: string): string {
     if (!contentType) return 'fa-file';
-    
+
     if (contentType.includes('markdown')) return 'fa-file-alt';
     if (contentType.includes('json')) return 'fa-file-code';
-    if (contentType.includes('javascript') || 
-        contentType.includes('typescript') || 
-        contentType.includes('python') || 
-        contentType.includes('java') || 
-        contentType.includes('csharp')) return 'fa-file-code';
+    if (
+      contentType.includes('javascript') ||
+      contentType.includes('typescript') ||
+      contentType.includes('python') ||
+      contentType.includes('java') ||
+      contentType.includes('csharp')
+    )
+      return 'fa-file-code';
     if (contentType.includes('html')) return 'fa-file-code';
     if (contentType.includes('sql')) return 'fa-database';
     if (contentType.includes('image')) return 'fa-file-image';
-    
+
     return 'fa-file';
   }
 }

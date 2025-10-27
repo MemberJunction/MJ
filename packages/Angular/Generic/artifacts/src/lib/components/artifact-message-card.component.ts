@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView } from '@memberjunction/global';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 
@@ -43,7 +43,8 @@ import { takeUntil } from 'rxjs/operators';
       }
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .artifact-message-card {
       margin: 12px 0;
     }
@@ -175,7 +176,8 @@ import { takeUntil } from 'rxjs/operators';
     .artifact-info-bar:hover .open-icon {
       color: #1e40af;
     }
-  `]
+  `,
+  ],
 })
 export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   @Input() artifactId!: string;
@@ -183,7 +185,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   @Input() currentUser!: UserInfo;
   @Input() artifact?: ArtifactEntity; // Optional - if provided, skips loading
   @Input() artifactVersion?: ArtifactVersionEntity; // Optional - if provided, skips loading
-  @Output() actionPerformed = new EventEmitter<{action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}>();
+  @Output() actionPerformed = new EventEmitter<{ action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity }>();
 
   public _artifact: ArtifactEntity | null = null;
   public _currentVersion: ArtifactVersionEntity | null = null;
@@ -233,12 +235,15 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
 
       // Load artifact directly
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactEntity>({
-        EntityName: 'MJ: Conversation Artifacts',
-        ExtraFilter: `ID='${this.artifactId}'`,
-        MaxRows: 1,
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      const result = await rv.RunView<ArtifactEntity>(
+        {
+          EntityName: 'MJ: Conversation Artifacts',
+          ExtraFilter: `ID='${this.artifactId}'`,
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        this.currentUser
+      );
 
       if (result.Success && result.Results && result.Results.length > 0) {
         this._artifact = result.Results[0];
@@ -247,7 +252,6 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
       } else {
         this.error = true;
       }
-
     } catch (err) {
       console.error('Error loading artifact:', err);
       this.error = true;
@@ -265,13 +269,16 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
         ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.versionNumber}`
         : `ArtifactID='${this._artifact.ID}'`;
 
-      const result = await rv.RunView<ArtifactVersionEntity>({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: filter,
-        OrderBy: 'VersionNumber DESC',
-        MaxRows: 1,
-        ResultType: 'entity_object'
-      }, this.currentUser);
+      const result = await rv.RunView<ArtifactVersionEntity>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: filter,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object',
+        },
+        this.currentUser
+      );
 
       if (result.Success && result.Results && result.Results.length > 0) {
         this._currentVersion = result.Results[0];
@@ -304,8 +311,24 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
   public get isCodeArtifact(): boolean {
     if (!this._artifact) return false;
     const name = this._artifact.Name?.toLowerCase() || '';
-    const codeExtensions = ['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cs', '.cpp', '.c', '.go', '.rs', '.sql', '.html', '.css', '.scss'];
-    return codeExtensions.some(ext => name.endsWith(ext));
+    const codeExtensions = [
+      '.js',
+      '.ts',
+      '.jsx',
+      '.tsx',
+      '.py',
+      '.java',
+      '.cs',
+      '.cpp',
+      '.c',
+      '.go',
+      '.rs',
+      '.sql',
+      '.html',
+      '.css',
+      '.scss',
+    ];
+    return codeExtensions.some((ext) => name.endsWith(ext));
   }
 
   public getArtifactIcon(): string {

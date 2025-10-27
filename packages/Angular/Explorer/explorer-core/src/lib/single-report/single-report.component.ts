@@ -1,16 +1,16 @@
 import { AfterViewInit, Component, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
-import { LogError, Metadata, RunReport } from '@memberjunction/core';
+import { LogError, Metadata, RunReport } from '@memberjunction/global';
 import { ReportEntity } from '@memberjunction/core-entities';
 import { SkipDynamicTabbedReportComponent } from '@memberjunction/ng-ask-skip';
-import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types'; 
+import { SkipColumnInfo, SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 
 @Component({
   selector: 'mj-single-report',
   templateUrl: './single-report.component.html',
-  styleUrls: ['./single-report.component.css']
+  styleUrls: ['./single-report.component.css'],
 })
 export class SingleReportComponent implements OnInit {
-  @Input() reportId!: string;  
+  @Input() reportId!: string;
   @Output() public loadComplete: EventEmitter<any> = new EventEmitter<any>();
   @Output() public loadStarted: EventEmitter<any> = new EventEmitter<any>();
 
@@ -23,10 +23,10 @@ export class SingleReportComponent implements OnInit {
   public Configuration: SkipAPIAnalysisCompleteResponse | undefined;
 
   public get IsChart(): boolean {
-    return this.theReport.IsChart
+    return this.theReport.IsChart;
   }
   public get IsTable(): boolean {
-    return this.theReport.IsTable
+    return this.theReport.IsTable;
   }
   public get Columns(): SkipColumnInfo[] {
     return this.theReport.Columns;
@@ -35,7 +35,6 @@ export class SingleReportComponent implements OnInit {
     return this.theReport;
   }
 
- 
   async ngOnInit() {
     await this.doLoad();
   }
@@ -49,11 +48,8 @@ export class SingleReportComponent implements OnInit {
       this.Configuration = JSON.parse(this.ReportEntity.Configuration!);
 
       this.loadComplete.emit();
-    }
-    catch (err) {
+    } catch (err) {
       LogError(err);
     }
   }
-
-
 }

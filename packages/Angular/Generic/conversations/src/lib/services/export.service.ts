@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ConversationEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
-import { RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo } from '@memberjunction/global';
 
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'text';
 
@@ -12,7 +12,7 @@ export interface ExportOptions {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class ExportService {
   async exportConversation(
@@ -28,7 +28,7 @@ export class ExportService {
       includeMessages: options.includeMessages ?? true,
       includeMetadata: options.includeMetadata ?? true,
       prettyPrint: options.prettyPrint ?? true,
-      includeCSS: options.includeCSS ?? true
+      includeCSS: options.includeCSS ?? true,
     };
 
     let content: string;
@@ -70,19 +70,22 @@ export class ExportService {
     const rv = new RunView();
 
     // Load conversation and details in parallel
-    const [conversationResult, detailsResult] = await rv.RunViews([
-      {
-        EntityName: 'Conversations',
-        ExtraFilter: `ID='${conversationId}'`,
-        ResultType: 'entity_object'
-      },
-      {
-        EntityName: 'Conversation Details',
-        ExtraFilter: `ConversationID='${conversationId}'`,
-        OrderBy: 'Sequence ASC',
-        ResultType: 'entity_object'
-      }
-    ], currentUser);
+    const [conversationResult, detailsResult] = await rv.RunViews(
+      [
+        {
+          EntityName: 'Conversations',
+          ExtraFilter: `ID='${conversationId}'`,
+          ResultType: 'entity_object',
+        },
+        {
+          EntityName: 'Conversation Details',
+          ExtraFilter: `ConversationID='${conversationId}'`,
+          OrderBy: 'Sequence ASC',
+          ResultType: 'entity_object',
+        },
+      ],
+      currentUser
+    );
 
     if (!conversationResult.Success || !conversationResult.Results?.length) {
       throw new Error('Conversation not found');
@@ -90,7 +93,7 @@ export class ExportService {
 
     return {
       conversation: conversationResult.Results[0] as ConversationEntity,
-      details: (detailsResult.Results || []) as ConversationDetailEntity[]
+      details: (detailsResult.Results || []) as ConversationDetailEntity[],
     };
   }
 
@@ -110,11 +113,11 @@ export class ExportService {
         name: data.conversation.Name,
         description: data.conversation.Description,
         createdAt: data.conversation.__mj_CreatedAt,
-        updatedAt: data.conversation.__mj_UpdatedAt
+        updatedAt: data.conversation.__mj_UpdatedAt,
       };
     } else {
       exportData.conversation = {
-        name: data.conversation.Name
+        name: data.conversation.Name,
       };
     }
 
@@ -123,7 +126,7 @@ export class ExportService {
       exportData.messages = data.details.map((detail, index) => {
         const message: Record<string, unknown> = {
           role: detail.Role,
-          message: detail.Message
+          message: detail.Message,
         };
 
         if (options.includeMetadata) {
@@ -182,7 +185,8 @@ export class ExportService {
     },
     options: Required<ExportOptions>
   ): string {
-    const styles = options.includeCSS ? `
+    const styles = options.includeCSS
+      ? `
   <style>
     body { font-family: system-ui, -apple-system, sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; line-height: 1.6; }
     h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
@@ -193,7 +197,8 @@ export class ExportService {
     .role { font-weight: 600; color: #007bff; margin-bottom: 10px; }
     .content { white-space: pre-wrap; }
     .timestamp { color: #999; font-size: 12px; margin-top: 10px; }
-  </style>` : '';
+  </style>`
+      : '';
 
     let html = `<!DOCTYPE html>
 <html lang="en">
@@ -294,7 +299,7 @@ export class ExportService {
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     });
   }
 

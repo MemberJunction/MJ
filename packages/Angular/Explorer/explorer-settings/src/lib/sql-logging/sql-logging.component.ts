@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -12,71 +12,66 @@ import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 
 /**
  * Angular component for managing SQL logging sessions in MemberJunction.
- * 
+ *
  * This component provides a user interface for:
  * - Viewing SQL logging configuration and status
  * - Starting and stopping SQL logging sessions
  * - Managing session options (filtering, formatting, etc.)
  * - Real-time monitoring of active sessions
- * 
+ *
  * **Security**: Only users with 'Owner' type can access SQL logging features.
- * 
+ *
  * @example
  * ```html
  * <mj-sql-logging></mj-sql-logging>
  * ```
- * 
+ *
  * @requires Owner-level user privileges
  * @requires SQL logging enabled in server configuration
  */
 @Component({
   selector: 'mj-sql-logging',
   standalone: true,
-  imports: [
-    CommonModule,
-    FormsModule,
-    SharedSettingsModule,
-    CodeEditorModule
-  ],
+  imports: [CommonModule, FormsModule, SharedSettingsModule, CodeEditorModule],
   templateUrl: './sql-logging.component.html',
-  styleUrls: ['./sql-logging.component.scss']
+  styleUrls: ['./sql-logging.component.scss'],
 })
 export class SqlLoggingComponent implements OnInit, OnDestroy {
   private destroy$ = new Subject<void>();
 
   /** Whether the component is currently performing an async operation */
   loading = false;
-  
+
   /** Current error message to display to the user, if any */
   error: string | null = null;
-  
+
   /** Whether the current user has Owner privileges to access SQL logging */
   isOwner = false;
-  
+
   /** Whether SQL logging is enabled in the server configuration */
   configEnabled = false;
-  
+
   /** Current SQL logging configuration from the server */
   sqlLoggingConfig: any = null;
-  
+
   /** List of currently active SQL logging sessions */
   activeSessions: any[] = [];
-  
+
   /** Currently selected session for viewing logs */
   selectedSession: any = null;
-  
+
   /** Content of the currently viewed log file */
   logContent = '';
-  
+
   /** Whether to automatically refresh session data */
   autoRefresh = false;
-  
+
   /** Interval in milliseconds for auto-refresh functionality */
   refreshInterval = 5000; // 5 seconds
-  
+
   /** Whether the start session dialog is currently visible */
   showStartSessionDialog = false;
-  
+
   /** Options for creating a new SQL logging session */
   newSessionOptions = {
     /** Custom filename for the log file */
@@ -90,14 +85,14 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     /** Whether to format SQL with proper indentation */
     prettyPrint: true,
     /** Human-readable name for the session */
-    sessionName: ''
+    sessionName: '',
   };
-  
+
   /** Available options for SQL statement type filtering */
   statementTypeOptions = [
     { text: 'Both Queries and Mutations', value: 'both' },
     { text: 'Queries Only', value: 'queries' },
-    { text: 'Mutations Only', value: 'mutations' }
+    { text: 'Mutations Only', value: 'mutations' },
   ];
 
   constructor(private sharedService: SharedService) {}
@@ -123,11 +118,11 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     this.destroy$.next();
     this.destroy$.complete();
   }
-  
+
   /**
    * Starts the auto-refresh timer for session data.
    * Only refreshes when autoRefresh is enabled and user is Owner.
-   * 
+   *
    * @private
    */
   private startAutoRefresh() {
@@ -146,7 +141,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
   /**
    * Checks if the current user has Owner privileges required for SQL logging.
    * Updates the isOwner flag and handles error states.
-   * 
+   *
    * @private
    */
   private async checkUserPermissions() {
@@ -154,17 +149,17 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
       // Try multiple ways to get the current user
       const md = new Metadata();
       const currentUser = md.CurrentUser;
-      
+
       console.log('Method 1 - Metadata.CurrentUser:', {
         email: currentUser?.Email,
         type: currentUser?.Type,
         name: currentUser?.Name,
-        id: currentUser?.ID
+        id: currentUser?.ID,
       });
-      
+
       // Use the current user from Metadata
       const userToCheck = currentUser;
-      
+
       if (userToCheck && userToCheck.Type?.trim().toLowerCase() === 'owner') {
         this.isOwner = true;
         console.log('User is an Owner - SQL logging features enabled');
@@ -172,12 +167,19 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
         this.isOwner = false;
         this.error = 'SQL logging requires Owner privileges';
         console.log('User is NOT an Owner. Type:', userToCheck?.Type);
-        
+
         // Also check if it's a string comparison issue
         if (userToCheck) {
           console.log('Type value (raw):', JSON.stringify(userToCheck.Type));
           console.log('Type trimmed:', JSON.stringify(userToCheck.Type?.trim()));
-          console.log('Type comparison:', userToCheck.Type?.trim().toLowerCase(), '===', 'owner', ':', userToCheck.Type?.trim().toLowerCase() === 'owner');
+          console.log(
+            'Type comparison:',
+            userToCheck.Type?.trim().toLowerCase(),
+            '===',
+            'owner',
+            ':',
+            userToCheck.Type?.trim().toLowerCase() === 'owner'
+          );
         }
       }
     } catch (error) {
@@ -198,7 +200,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     this.newSessionOptions.fileName = `sql-log-${new Date().toISOString().replace(/[:.]/g, '-')}.sql`;
     this.showStartSessionDialog = true;
   }
-  
+
   /**
    * Creates and starts a new SQL logging session with the configured options.
    * Shows success/error notifications and refreshes the sessions list.
@@ -206,7 +208,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
   async startNewSession() {
     try {
       this.loading = true;
-      
+
       const dataProvider = Metadata.Provider as GraphQLDataProvider;
       const mutation = `
         mutation StartSqlLogging($input: StartSqlLoggingInput!) {
@@ -225,7 +227,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
           }
         }
       `;
-      
+
       const variables = {
         input: {
           fileName: this.newSessionOptions.fileName,
@@ -234,33 +236,28 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
             formatAsMigration: this.newSessionOptions.formatAsMigration,
             statementTypes: this.newSessionOptions.statementTypes,
             prettyPrint: this.newSessionOptions.prettyPrint,
-            sessionName: this.newSessionOptions.sessionName
-          }
-        }
+            sessionName: this.newSessionOptions.sessionName,
+          },
+        },
       };
-      
+
       const result = await dataProvider.ExecuteGQL(mutation, variables);
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-      
+
       const newSession = result?.startSqlLogging;
-      
+
       if (!newSession) {
         throw new Error('Failed to start SQL logging session - no session data returned');
       }
-      
-      MJNotificationService.Instance.CreateSimpleNotification(
-        `SQL logging session started: ${newSession.sessionName}`,
-        'success',
-        5000
-      );
-      
+
+      MJNotificationService.Instance.CreateSimpleNotification(`SQL logging session started: ${newSession.sessionName}`, 'success', 5000);
+
       this.showStartSessionDialog = false;
       await this.loadActiveSessions();
       this.selectSession(newSession);
-      
     } catch (error: any) {
       console.error('Error starting SQL logging session:', error);
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -272,10 +269,10 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
       this.loading = false;
     }
   }
-  
+
   /**
    * Stops a specific SQL logging session.
-   * 
+   *
    * @param session - The session object to stop
    * @param event - Optional event to stop propagation
    */
@@ -283,40 +280,35 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     if (event) {
       event.stopPropagation();
     }
-    
+
     if (!confirm(`Stop SQL logging session "${session.sessionName}"?`)) {
       return;
     }
-    
+
     try {
       this.loading = true;
-      
+
       const dataProvider = Metadata.Provider as GraphQLDataProvider;
       const mutation = `
         mutation StopSqlLogging($sessionId: String!) {
           stopSqlLogging(sessionId: $sessionId)
         }
       `;
-      
+
       const result = await dataProvider.ExecuteGQL(mutation, { sessionId: session.id });
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-      
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'SQL logging session stopped',
-        'success',
-        3000
-      );
-      
+
+      MJNotificationService.Instance.CreateSimpleNotification('SQL logging session stopped', 'success', 3000);
+
       if (this.selectedSession?.id === session.id) {
         this.selectedSession = null;
         this.logContent = '';
       }
-      
+
       await this.loadActiveSessions();
-      
     } catch (error: any) {
       console.error('Error stopping SQL logging session:', error);
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -328,7 +320,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
       this.loading = false;
     }
   }
-  
+
   /**
    * Stops all currently active SQL logging sessions.
    * Prompts for confirmation before proceeding.
@@ -337,33 +329,28 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     if (!confirm('Stop ALL active SQL logging sessions?')) {
       return;
     }
-    
+
     try {
       this.loading = true;
-      
+
       const dataProvider = Metadata.Provider as GraphQLDataProvider;
       const mutation = `
         mutation StopAllSqlLogging {
           stopAllSqlLogging
         }
       `;
-      
+
       const result = await dataProvider.ExecuteGQL(mutation, {});
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-      
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'All SQL logging sessions stopped',
-        'success',
-        3000
-      );
-      
+
+      MJNotificationService.Instance.CreateSimpleNotification('All SQL logging sessions stopped', 'success', 3000);
+
       this.selectedSession = null;
       this.logContent = '';
       await this.loadActiveSessions();
-      
     } catch (error: any) {
       console.error('Error stopping all SQL logging sessions:', error);
       MJNotificationService.Instance.CreateSimpleNotification(
@@ -375,21 +362,21 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
       this.loading = false;
     }
   }
-  
+
   /**
    * Selects a session for viewing and loads its log content.
-   * 
+   *
    * @param session - The session to select
    */
   selectSession(session: any) {
     this.selectedSession = session;
     this.loadSessionLog(session);
   }
-  
+
   /**
    * Loads the log file content for a specific session using real-time GraphQL query.
    * Reads actual SQL statements from the log file on the server.
-   * 
+   *
    * @param session - The session whose log to load
    */
   async loadSessionLog(session: any) {
@@ -400,49 +387,50 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
           readSqlLogFile(sessionId: $sessionId, maxLines: $maxLines)
         }
       `;
-      
+
       const variables = {
         sessionId: session.id,
-        maxLines: 1000 // Limit to last 1000 lines for performance
+        maxLines: 1000, // Limit to last 1000 lines for performance
       };
-      
+
       const result = await dataProvider.ExecuteGQL(query, variables);
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-      
+
       const logContent = result?.readSqlLogFile || '';
-      
+
       // Add session header information (show only filename for security)
       const fileName = session.filePath ? session.filePath.split(/[\\\/]/).pop() : 'unknown';
-      const header = `-- =====================================================\n` +
-                   `-- SQL Log File: ${fileName}\n` +
-                   `-- Session: ${session.sessionName}\n` +
-                   `-- Started: ${new Date(session.startTime).toLocaleString()}\n` +
-                   `-- Statements Captured: ${session.statementCount}\n` +
-                   `-- User Filter: ${session.filterByUserId || 'All Users'}\n` +
-                   `-- Statement Types: ${session.options?.statementTypes || 'both'}\n` +
-                   `-- Pretty Print: ${session.options?.prettyPrint ? 'Yes' : 'No'}\n` +
-                   `-- Migration Format: ${session.options?.formatAsMigration ? 'Yes' : 'No'}\n` +
-                   `-- =====================================================\n\n`;
-      
+      const header =
+        `-- =====================================================\n` +
+        `-- SQL Log File: ${fileName}\n` +
+        `-- Session: ${session.sessionName}\n` +
+        `-- Started: ${new Date(session.startTime).toLocaleString()}\n` +
+        `-- Statements Captured: ${session.statementCount}\n` +
+        `-- User Filter: ${session.filterByUserId || 'All Users'}\n` +
+        `-- Statement Types: ${session.options?.statementTypes || 'both'}\n` +
+        `-- Pretty Print: ${session.options?.prettyPrint ? 'Yes' : 'No'}\n` +
+        `-- Migration Format: ${session.options?.formatAsMigration ? 'Yes' : 'No'}\n` +
+        `-- =====================================================\n\n`;
+
       this.logContent = header + (logContent || '-- No SQL statements captured yet --');
-      
     } catch (error: any) {
       console.error('Error loading session log:', error);
-      this.logContent = `-- Error loading log file --\n-- ${error.message || 'Unknown error occurred'} --\n\n` +
-                       `-- Session Info --\n` +
-                       `-- File: ${session.filePath}\n` +
-                       `-- Session: ${session.sessionName}\n` +
-                       `-- Started: ${new Date(session.startTime).toLocaleString()}\n`;
+      this.logContent =
+        `-- Error loading log file --\n-- ${error.message || 'Unknown error occurred'} --\n\n` +
+        `-- Session Info --\n` +
+        `-- File: ${session.filePath}\n` +
+        `-- Session: ${session.sessionName}\n` +
+        `-- Started: ${new Date(session.startTime).toLocaleString()}\n`;
     }
   }
-  
+
   /**
    * Loads the SQL logging configuration from the server.
    * Updates component state with current settings and capabilities.
-   * 
+   *
    * @private
    */
   async loadSqlLoggingConfig() {
@@ -468,40 +456,39 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
           }
         }
       `;
-      
+
       const result = await dataProvider.ExecuteGQL(query, {});
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-      
+
       // Debug logging to understand the response structure
       console.log('SQL Logging Config Result:', result);
       console.log('Result keys:', Object.keys(result || {}));
       console.log('Direct result.sqlLoggingConfig:', result?.sqlLoggingConfig);
-      
+
       // Access the data directly from the result, matching AI prompt pattern
       const configData = result?.sqlLoggingConfig;
       console.log('Extracted config data:', configData);
-      
+
       this.sqlLoggingConfig = configData || null;
       this.configEnabled = this.sqlLoggingConfig?.enabled || false;
-      
+
       console.log('Component state after update:');
       console.log('  this.sqlLoggingConfig:', this.sqlLoggingConfig);
       console.log('  this.configEnabled:', this.configEnabled);
       console.log('  this.isOwner:', this.isOwner);
-      
     } catch (error: any) {
       console.error('Error loading SQL logging config:', error);
       this.error = error.message || 'Failed to load SQL logging configuration';
     }
   }
-  
+
   /**
    * Loads the list of currently active SQL logging sessions.
    * Updates the activeSessions array and handles session selection state.
-   * 
+   *
    * @private
    */
   async loadActiveSessions() {
@@ -524,26 +511,26 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
           }
         }
       `;
-      
+
       const result = await dataProvider.ExecuteGQL(query, {});
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-      
+
       // Debug logging to understand the response structure
       console.log('Active Sessions Result:', result);
       console.log('Result keys:', Object.keys(result || {}));
-      
+
       // Access the data directly from the result, matching AI prompt pattern
       const sessionsData = result?.activeSqlLoggingSessions;
       console.log('Extracted sessions data:', sessionsData);
-      
+
       this.activeSessions = sessionsData || [];
-      
+
       // Update selected session if it still exists
       if (this.selectedSession) {
-        const stillExists = this.activeSessions.find(s => s.id === this.selectedSession.id);
+        const stillExists = this.activeSessions.find((s) => s.id === this.selectedSession.id);
         if (stillExists) {
           this.selectedSession = stillExists;
         } else {
@@ -551,15 +538,14 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
           this.logContent = '';
         }
       }
-      
     } catch (error: any) {
       console.error('Error loading active sessions:', error);
     }
   }
-  
+
   /**
    * Calculates and formats the duration of a logging session.
-   * 
+   *
    * @param startTime - ISO string of when the session started
    * @returns Formatted duration string (e.g., "2h 30m", "45m 23s", "12s")
    */
@@ -567,11 +553,11 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
     const start = new Date(startTime);
     const now = new Date();
     const diff = now.getTime() - start.getTime();
-    
+
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    
+
     if (hours > 0) {
       return `${hours}h ${minutes}m`;
     } else if (minutes > 0) {
@@ -588,17 +574,17 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
   async refreshUserPermissions() {
     console.log('Refreshing user permissions...');
     this.loading = true;
-    
+
     try {
       // Try to refresh SharedService data
       await SharedService.RefreshData(false);
-      
+
       // Wait a moment for data to propagate
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
       // Re-check permissions
       await this.checkUserPermissions();
-      
+
       console.log('Permissions refreshed');
     } catch (error) {
       console.error('Error refreshing permissions:', error);
@@ -610,7 +596,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
   /**
    * Extracts the filename from a full file path for security purposes.
    * Only shows the filename, not the full server path.
-   * 
+   *
    * @param filePath - Full file path from server
    * @returns Just the filename portion
    */
@@ -621,7 +607,7 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
 
   /**
    * Calculates the total number of SQL statements across all active sessions.
-   * 
+   *
    * @returns Total statement count
    */
   getTotalStatementCount(): number {
@@ -635,24 +621,25 @@ export class SqlLoggingComponent implements OnInit, OnDestroy {
   async debugUserEmail() {
     try {
       this.loading = true;
-      
+
       const dataProvider = Metadata.Provider as GraphQLDataProvider;
       const query = `
         query DebugCurrentUserEmail {
           debugCurrentUserEmail
         }
       `;
-      
+
       const result = await dataProvider.ExecuteGQL(query, {});
-      
+
       if (result.errors) {
         throw new Error(result.errors[0].message);
       }
-      
+
       const debugInfo = result?.debugCurrentUserEmail || 'No debug info returned';
-      
-      alert(`Context User Info:\n\n${debugInfo}\n\nThe system now passes user context through method calls instead of storing it in the provider.`);
-      
+
+      alert(
+        `Context User Info:\n\n${debugInfo}\n\nThe system now passes user context through method calls instead of storing it in the provider.`
+      );
     } catch (error: any) {
       console.error('Error getting context user info:', error);
       alert(`Error: ${error.message || 'Failed to get debug info'}`);

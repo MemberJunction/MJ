@@ -1,22 +1,22 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView } from '@memberjunction/global';
 import { UserEntity } from '@memberjunction/core-entities';
 
 export interface UserSearchResult {
-    id: string;
-    name: string;
-    email: string;
-    firstName: string;
-    lastName: string;
+  id: string;
+  name: string;
+  email: string;
+  firstName: string;
+  lastName: string;
 }
 
 @Component({
-    selector: 'mj-user-picker',
-    standalone: true,
-    imports: [CommonModule, FormsModule],
-    template: `
+  selector: 'mj-user-picker',
+  standalone: true,
+  imports: [CommonModule, FormsModule],
+  template: `
         <div class="user-picker">
             <div class="search-input-wrapper">
                 <input
@@ -62,7 +62,8 @@ export interface UserSearchResult {
             }
         </div>
     `,
-    styles: [`
+  styles: [
+    `
         .user-picker {
             width: 100%;
             position: relative;
@@ -198,115 +199,119 @@ export interface UserSearchResult {
         .no-results span {
             font-size: 14px;
         }
-    `]
+    `,
+  ],
 })
 export class UserPickerComponent implements OnInit, OnDestroy {
-    @Input() currentUser!: UserInfo;
-    @Input() excludeUserIds: string[] = [];
-    @Input() placeholder: string = 'Search for a user (press Enter)...';
+  @Input() currentUser!: UserInfo;
+  @Input() excludeUserIds: string[] = [];
+  @Input() placeholder: string = 'Search for a user (press Enter)...';
 
-    @Output() userSelected = new EventEmitter<UserSearchResult>();
+  @Output() userSelected = new EventEmitter<UserSearchResult>();
 
-    searchQuery: string = '';
-    searchResults: UserSearchResult[] = [];
-    isSearching: boolean = false;
-    showResults: boolean = false;
+  searchQuery: string = '';
+  searchResults: UserSearchResult[] = [];
+  isSearching: boolean = false;
+  showResults: boolean = false;
 
-    ngOnInit(): void {
-        // Add click outside listener to close dropdown
-        document.addEventListener('click', this.handleClickOutside.bind(this));
+  ngOnInit(): void {
+    // Add click outside listener to close dropdown
+    document.addEventListener('click', this.handleClickOutside.bind(this));
+  }
+
+  ngOnDestroy(): void {
+    document.removeEventListener('click', this.handleClickOutside.bind(this));
+  }
+
+  private handleClickOutside(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.user-picker')) {
+      this.showResults = false;
+    }
+  }
+
+  onSearch(): void {
+    if (!this.searchQuery || this.searchQuery.trim().length < 2) {
+      this.showResults = false;
+      return;
     }
 
-    ngOnDestroy(): void {
-        document.removeEventListener('click', this.handleClickOutside.bind(this));
+    this.performSearch(this.searchQuery.trim());
+  }
+
+  onSelectUser(user: UserSearchResult): void {
+    this.userSelected.emit(user);
+    this.searchQuery = '';
+    this.searchResults = [];
+    this.showResults = false;
+  }
+
+  private async performSearch(query: string): Promise<void> {
+    if (!query || query.length < 2) {
+      this.searchResults = [];
+      this.showResults = false;
+      return;
     }
 
-    private handleClickOutside(event: MouseEvent): void {
-        const target = event.target as HTMLElement;
-        if (!target.closest('.user-picker')) {
-            this.showResults = false;
-        }
-    }
+    this.isSearching = true;
+    this.showResults = true;
 
-    onSearch(): void {
-        if (!this.searchQuery || this.searchQuery.trim().length < 2) {
-            this.showResults = false;
-            return;
-        }
+    try {
+      const rv = new RunView();
 
-        this.performSearch(this.searchQuery.trim());
-    }
+      // Escape single quotes in query to prevent SQL errors
+      const escapedQuery = query.replace(/'/g, "''");
 
-    onSelectUser(user: UserSearchResult): void {
-        this.userSelected.emit(user);
-        this.searchQuery = '';
-        this.searchResults = [];
-        this.showResults = false;
-    }
+      // Build exclude filter
+      let excludeFilter = '';
+      if (this.excludeUserIds.length > 0) {
+        const ids = this.excludeUserIds.map((id) => `'${id}'`).join(',');
+        excludeFilter = ` AND ID NOT IN (${ids})`;
+      }
 
-    private async performSearch(query: string): Promise<void> {
-        if (!query || query.length < 2) {
-            this.searchResults = [];
-            this.showResults = false;
-            return;
-        }
-
-        this.isSearching = true;
-        this.showResults = true;
-
-        try {
-            const rv = new RunView();
-
-            // Escape single quotes in query to prevent SQL errors
-            const escapedQuery = query.replace(/'/g, "''");
-
-            // Build exclude filter
-            let excludeFilter = '';
-            if (this.excludeUserIds.length > 0) {
-                const ids = this.excludeUserIds.map(id => `'${id}'`).join(',');
-                excludeFilter = ` AND ID NOT IN (${ids})`;
-            }
-
-            // Search in Name, Email, FirstName, and LastName (case-insensitive)
-            const searchFilter = `(
+      // Search in Name, Email, FirstName, and LastName (case-insensitive)
+      const searchFilter = `(
                 Name LIKE '%${escapedQuery}%' OR
                 Email LIKE '%${escapedQuery}%' OR
                 FirstName LIKE '%${escapedQuery}%' OR
                 LastName LIKE '%${escapedQuery}%'
             )${excludeFilter}`;
 
-            const result = await rv.RunView<UserEntity>({
-                EntityName: 'Users',
-                ExtraFilter: searchFilter,
-                OrderBy: 'Name ASC',
-                MaxRows: 20,
-                ResultType: 'entity_object'
-            }, this.currentUser);
+      const result = await rv.RunView<UserEntity>(
+        {
+          EntityName: 'Users',
+          ExtraFilter: searchFilter,
+          OrderBy: 'Name ASC',
+          MaxRows: 20,
+          ResultType: 'entity_object',
+        },
+        this.currentUser
+      );
 
-            console.log('User search result:', {
-                query,
-                success: result.Success,
-                count: result.Results?.length,
-                error: result.ErrorMessage
-            });
+      console.log('User search result:', {
+        query,
+        success: result.Success,
+        count: result.Results?.length,
+        error: result.ErrorMessage,
+      });
 
-            if (result.Success && result.Results) {
-                this.searchResults = result.Results.map(user => ({
-                    id: user.ID,
-                    name: user.Name,
-                    email: user.Email,
-                    firstName: user.FirstName || '',
-                    lastName: user.LastName || ''
-                }));
-            } else {
-                console.warn('User search returned no results or failed:', result.ErrorMessage);
-                this.searchResults = [];
-            }
-        } catch (error) {
-            console.error('Error searching users:', error);
-            this.searchResults = [];
-        } finally {
-            this.isSearching = false;
-        }
+      if (result.Success && result.Results) {
+        this.searchResults = result.Results.map((user) => ({
+          id: user.ID,
+          name: user.Name,
+          email: user.Email,
+          firstName: user.FirstName || '',
+          lastName: user.LastName || '',
+        }));
+      } else {
+        console.warn('User search returned no results or failed:', result.ErrorMessage);
+        this.searchResults = [];
+      }
+    } catch (error) {
+      console.error('Error searching users:', error);
+      this.searchResults = [];
+    } finally {
+      this.isSearching = false;
     }
+  }
 }

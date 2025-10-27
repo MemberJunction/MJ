@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, Int, ObjectType, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ResolverBase } from './ResolverBase.js';
-import { LogError, LogStatus, EntityInfo } from '@memberjunction/core';
+import { LogError, LogStatus, EntityInfo } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadOnlyProvider } from '../util.js';
 import { UserViewEntityExtended } from '@memberjunction/core-entities';
@@ -385,8 +385,8 @@ export class RunViewGenericInput {
 
 @ObjectType()
 export class RunViewResultRow {
-  @Field(() => [KeyValuePairOutputType], { 
-    description: 'Primary key values for the record' 
+  @Field(() => [KeyValuePairOutputType], {
+    description: 'Primary key values for the record',
   })
   PrimaryKey: KeyValuePairOutputType[];
 
@@ -399,8 +399,8 @@ export class RunViewResultRow {
 
 @ObjectType()
 export class RunViewGenericResultRow {
-  @Field(() => [KeyValuePairOutputType], { 
-    description: 'Primary key values for the record' 
+  @Field(() => [KeyValuePairOutputType], {
+    description: 'Primary key values for the record',
   })
   PrimaryKey: KeyValuePairOutputType[];
 
@@ -470,10 +470,11 @@ export class RunViewResolver extends ResolverBase {
     try {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) 
-        return null;
+      if (rawData === null) return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { Name: input.ViewName }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(
+        await super.findBy<UserViewEntityExtended>(provider, 'User Views', { Name: input.ViewName }, userPayload.userRecord)
+      );
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
@@ -498,10 +499,11 @@ export class RunViewResolver extends ResolverBase {
     try {
       const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
       const rawData = await super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
-      if (rawData === null) 
-        return null;
+      if (rawData === null) return null;
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(
+        await super.findBy<UserViewEntityExtended>(provider, 'User Views', { ID: input.ViewID }, userPayload.userRecord)
+      );
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
@@ -595,7 +597,7 @@ export class RunViewResolver extends ResolverBase {
           ErrorMessage: `Failed to execute view: ${input.ViewName}`,
           RowCount: 0,
           TotalRowCount: 0,
-          ExecutionTime: 0
+          ExecutionTime: 0,
         };
       }
 
@@ -620,7 +622,7 @@ export class RunViewResolver extends ResolverBase {
         ErrorMessage: errorMessage,
         RowCount: 0,
         TotalRowCount: 0,
-        ExecutionTime: 0
+        ExecutionTime: 0,
       };
     }
   }
@@ -642,11 +644,13 @@ export class RunViewResolver extends ResolverBase {
           ErrorMessage: `Failed to execute view with ID: ${input.ViewID}`,
           RowCount: 0,
           TotalRowCount: 0,
-          ExecutionTime: 0
+          ExecutionTime: 0,
         };
       }
 
-      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(await super.findBy<UserViewEntityExtended>(provider, "User Views", { ID: input.ViewID }, userPayload.userRecord));
+      const viewInfo = super.safeFirstArrayElement<UserViewEntityExtended>(
+        await super.findBy<UserViewEntityExtended>(provider, 'User Views', { ID: input.ViewID }, userPayload.userRecord)
+      );
       const entity = provider.Entities.find((e) => e.ID === viewInfo.EntityID);
       const returnData = this.processRawData(rawData.Results, viewInfo.EntityID, entity);
       return {
@@ -667,7 +671,7 @@ export class RunViewResolver extends ResolverBase {
         ErrorMessage: errorMessage,
         RowCount: 0,
         TotalRowCount: 0,
-        ExecutionTime: 0
+        ExecutionTime: 0,
       };
     }
   }
@@ -689,7 +693,7 @@ export class RunViewResolver extends ResolverBase {
           ErrorMessage: 'Failed to execute dynamic view',
           RowCount: 0,
           TotalRowCount: 0,
-          ExecutionTime: 0
+          ExecutionTime: 0,
         };
       }
 
@@ -703,7 +707,7 @@ export class RunViewResolver extends ResolverBase {
           ErrorMessage: errorMsg,
           RowCount: 0,
           TotalRowCount: 0,
-          ExecutionTime: 0
+          ExecutionTime: 0,
         };
       }
       const returnData = this.processRawData(rawData.Results, entity.ID, entity);
@@ -725,7 +729,7 @@ export class RunViewResolver extends ResolverBase {
         ErrorMessage: errorMessage,
         RowCount: 0,
         TotalRowCount: 0,
-        ExecutionTime: 0
+        ExecutionTime: 0,
       };
     }
   }
@@ -775,13 +779,13 @@ export class RunViewResolver extends ResolverBase {
     const returnResult = [];
     for (let i = 0; i < rawData.length; i++) {
       const row = rawData[i];
-      
+
       // Build the primary key array from the entity's primary key fields
-      const primaryKey: KeyValuePairOutputType[] = entityInfo.PrimaryKeys.map(pk => ({
+      const primaryKey: KeyValuePairOutputType[] = entityInfo.PrimaryKeys.map((pk) => ({
         FieldName: pk.Name,
-        Value: row[pk.Name]?.toString() || ''
+        Value: row[pk.Name]?.toString() || '',
       }));
-      
+
       returnResult.push({
         PrimaryKey: primaryKey,
         EntityID: entityId,

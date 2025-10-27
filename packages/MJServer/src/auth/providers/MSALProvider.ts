@@ -1,6 +1,6 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
-import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/global';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 
 /**
@@ -17,7 +17,7 @@ export class MSALProvider extends BaseAuthProvider {
    */
   extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // MSAL/Azure AD uses some custom claims
-    const email = payload.email as string | undefined || payload.preferred_username as string | undefined;
+    const email = (payload.email as string | undefined) || (payload.preferred_username as string | undefined);
     const fullName = payload.name as string | undefined;
     const firstName = payload.given_name as string | undefined;
     const lastName = payload.family_name as string | undefined;
@@ -28,7 +28,7 @@ export class MSALProvider extends BaseAuthProvider {
       firstName: firstName || fullName?.split(' ')[0],
       lastName: lastName || fullName?.split(' ')[1] || fullName?.split(' ')[0],
       fullName,
-      preferredUsername
+      preferredUsername,
     };
   }
 
@@ -39,7 +39,7 @@ export class MSALProvider extends BaseAuthProvider {
     const baseValid = super.validateConfig();
     const hasClientId = !!this.config.clientId;
     const hasTenantId = !!this.config.tenantId;
-    
+
     return baseValid && hasClientId && hasTenantId;
   }
 }

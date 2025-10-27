@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey } from '@memberjunction/global';
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
 import { EnvironmentEntityExtended } from '@memberjunction/core-entities';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
@@ -31,14 +31,16 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
       </mj-conversation-workspace>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .chat-wrapper {
       width: 100%;
       height: 100%;
       display: flex;
       flex-direction: column;
     }
-  `]
+  `,
+  ],
 })
 @RegisterClass(BaseNavigationComponent, 'Chat')
 export class ChatWrapperComponent implements OnInit {
@@ -67,7 +69,7 @@ export class ChatWrapperComponent implements OnInit {
     this.environmentId = EnvironmentEntityExtended.DefaultEnvironmentID;
 
     // Subscribe to route params for conversation and context navigation
-    this.route.params.subscribe(params => {
+    this.route.params.subscribe((params) => {
       if (params['conversationId']) {
         this.conversationId = params['conversationId'];
       }
@@ -90,7 +92,7 @@ export class ChatWrapperComponent implements OnInit {
     });
 
     // Subscribe to query params for navigation state (tab, activeTaskId, etc.)
-    this.route.queryParams.subscribe(queryParams => {
+    this.route.queryParams.subscribe((queryParams) => {
       // Parse navigation properties from query params
       if (queryParams['tab']) {
         const tab = queryParams['tab'];
@@ -129,7 +131,7 @@ export class ChatWrapperComponent implements OnInit {
     // IMPORTANT: Only include params relevant to the current tab
     // This prevents parameter accumulation across different contexts
     const queryParams: any = {
-      tab: event.tab
+      tab: event.tab,
     };
 
     if (event.tab === 'conversations' && event.conversationId) {
@@ -152,7 +154,7 @@ export class ChatWrapperComponent implements OnInit {
     this.router.navigate([], {
       relativeTo: this.route,
       queryParams: queryParams,
-      replaceUrl: false // Add to browser history for back/forward navigation
+      replaceUrl: false, // Add to browser history for back/forward navigation
     });
   }
 
@@ -160,7 +162,7 @@ export class ChatWrapperComponent implements OnInit {
    * Handle openEntityRecord event from conversation components
    * Opens the specified entity record in a new tab using SharedService
    */
-  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
+  onOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
     SharedService.Instance.OpenEntityRecord(event.entityName, event.compositeKey);
   }
 }

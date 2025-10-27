@@ -83,7 +83,7 @@ Display data from multiple entity types on the same timeline with different visu
 
 ```typescript
 import { TimelineGroup } from '@memberjunction/ng-timeline';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity } from '@memberjunction/global';
 
 export class YourComponent implements OnInit {
   timelineGroups: TimelineGroup[] = [];
@@ -125,7 +125,7 @@ Create a TimelineGroup using pre-configured RunViewParams:
 
 ```typescript
 import { TimelineGroup } from '@memberjunction/ng-timeline';
-import { RunViewParams } from '@memberjunction/core';
+import { RunViewParams } from '@memberjunction/global';
 
 export class YourComponent implements OnInit {
   timelineGroups: TimelineGroup[] = [];
@@ -158,7 +158,7 @@ For scenarios where you already have entity data loaded:
 
 ```typescript
 import { TimelineGroup } from '@memberjunction/ng-timeline';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity } from '@memberjunction/global';
 
 export class YourComponent {
   timelineGroups: TimelineGroup[] = [];
@@ -220,42 +220,42 @@ export class YourComponent {
 
 #### Inputs
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `DisplayOrientation` | `'horizontal' \| 'vertical'` | `'vertical'` | Orientation of the timeline |
-| `Groups` | `TimelineGroup[]` | `[]` | Array of groups to display on the timeline |
-| `AllowLoad` | `boolean` | `true` | Whether to load data automatically |
+| Name                 | Type                         | Default      | Description                                |
+| -------------------- | ---------------------------- | ------------ | ------------------------------------------ |
+| `DisplayOrientation` | `'horizontal' \| 'vertical'` | `'vertical'` | Orientation of the timeline                |
+| `Groups`             | `TimelineGroup[]`            | `[]`         | Array of groups to display on the timeline |
+| `AllowLoad`          | `boolean`                    | `true`       | Whether to load data automatically         |
 
 #### Methods
 
-| Name | Parameters | Return Type | Description |
-|------|------------|-------------|-------------|
-| `Refresh` | None | `Promise<void>` | Refreshes the timeline with current group data |
+| Name      | Parameters | Return Type     | Description                                    |
+| --------- | ---------- | --------------- | ---------------------------------------------- |
+| `Refresh` | None       | `Promise<void>` | Refreshes the timeline with current group data |
 
 ### TimelineGroup Class
 
 #### Properties
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `EntityName` | `string` | (required) | Entity name for the records to display |
-| `DataSourceType` | `'array' \| 'entity'` | `'entity'` | Specifies data source type |
-| `Filter` | `string` | (optional) | Filter to apply when loading entity data |
-| `EntityObjects` | `BaseEntity[]` | `[]` | Array of entities when using 'array' data source |
-| `TitleFieldName` | `string` | (required) | Field name for event titles |
-| `DateFieldName` | `string` | (required) | Field name for event dates |
-| `DisplayIconMode` | `'standard' \| 'custom'` | `'standard'` | Icon display mode |
-| `DisplayIcon` | `string` | (optional) | Custom icon class for events |
-| `DisplayColorMode` | `'auto' \| 'manual'` | `'auto'` | Color selection mode |
-| `DisplayColor` | `string` | (optional) | Manual color for events |
-| `SummaryMode` | `'field' \| 'custom' \| 'none'` | `'field'` | Mode for summary display |
-| `SummaryFieldName` | `string` | (optional) | Field name for summary when using 'field' mode (Note: Currently uses TitleFieldName) |
-| `SummaryFunction` | `(record: BaseEntity) => string` | (optional) | Function for custom summary generation |
+| Name               | Type                             | Default      | Description                                                                          |
+| ------------------ | -------------------------------- | ------------ | ------------------------------------------------------------------------------------ |
+| `EntityName`       | `string`                         | (required)   | Entity name for the records to display                                               |
+| `DataSourceType`   | `'array' \| 'entity'`            | `'entity'`   | Specifies data source type                                                           |
+| `Filter`           | `string`                         | (optional)   | Filter to apply when loading entity data                                             |
+| `EntityObjects`    | `BaseEntity[]`                   | `[]`         | Array of entities when using 'array' data source                                     |
+| `TitleFieldName`   | `string`                         | (required)   | Field name for event titles                                                          |
+| `DateFieldName`    | `string`                         | (required)   | Field name for event dates                                                           |
+| `DisplayIconMode`  | `'standard' \| 'custom'`         | `'standard'` | Icon display mode                                                                    |
+| `DisplayIcon`      | `string`                         | (optional)   | Custom icon class for events                                                         |
+| `DisplayColorMode` | `'auto' \| 'manual'`             | `'auto'`     | Color selection mode                                                                 |
+| `DisplayColor`     | `string`                         | (optional)   | Manual color for events                                                              |
+| `SummaryMode`      | `'field' \| 'custom' \| 'none'`  | `'field'`    | Mode for summary display                                                             |
+| `SummaryFieldName` | `string`                         | (optional)   | Field name for summary when using 'field' mode (Note: Currently uses TitleFieldName) |
+| `SummaryFunction`  | `(record: BaseEntity) => string` | (optional)   | Function for custom summary generation                                               |
 
 #### Static Methods
 
-| Name | Parameters | Return Type | Description |
-|------|------------|-------------|-------------|
+| Name       | Parameters      | Return Type              | Description                                |
+| ---------- | --------------- | ------------------------ | ------------------------------------------ |
 | `FromView` | `RunViewParams` | `Promise<TimelineGroup>` | Creates a TimelineGroup from RunViewParams |
 
 ## Styling

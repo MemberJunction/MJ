@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata } from '@memberjunction/global';
 import { CollectionEntity, ArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -162,7 +162,8 @@ import { Subject, takeUntil } from 'rxjs';
       (cancelled)="onShareModalCancelled()">
     </mj-collection-share-modal>
   `,
-  styles: [`
+  styles: [
+    `
     .collections-view {
       display: flex;
       flex-direction: column;
@@ -528,7 +529,8 @@ import { Subject, takeUntil } from 'rxjs';
       color: #DC2626;
       border-color: #FCA5A5;
     }
-  `]
+  `,
+  ],
 })
 export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
@@ -582,35 +584,29 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
    */
   private subscribeToCollectionState(): void {
     // Watch for external navigation requests (e.g., from search or URL)
-    this.collectionState.activeCollectionId$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(collectionId => {
-        // Ignore state changes that we triggered ourselves
-        if (this.isNavigatingProgrammatically) {
-          return;
-        }
+    this.collectionState.activeCollectionId$.pipe(takeUntil(this.destroy$)).subscribe((collectionId) => {
+      // Ignore state changes that we triggered ourselves
+      if (this.isNavigatingProgrammatically) {
+        return;
+      }
 
-        // Only navigate if the state is different from our current state
-        if (collectionId !== this.currentCollectionId) {
-          if (collectionId) {
-            console.log('📁 Collection state changed, navigating to:', collectionId);
-            this.navigateToCollectionById(collectionId);
-          } else {
-            console.log('📁 Collection state cleared, navigating to root');
-            this.navigateToRoot();
-          }
+      // Only navigate if the state is different from our current state
+      if (collectionId !== this.currentCollectionId) {
+        if (collectionId) {
+          console.log('📁 Collection state changed, navigating to:', collectionId);
+          this.navigateToCollectionById(collectionId);
+        } else {
+          console.log('📁 Collection state cleared, navigating to root');
+          this.navigateToRoot();
         }
-      });
+      }
+    });
   }
 
   async loadData(): Promise<void> {
     this.isLoading = true;
     try {
-      await Promise.all([
-        this.loadCollections(),
-        this.loadArtifacts(),
-        this.loadCurrentCollectionPermission()
-      ]);
+      await Promise.all([this.loadCollections(), this.loadArtifacts(), this.loadCurrentCollectionPermission()]);
     } finally {
       this.isLoading = false;
     }
@@ -628,8 +624,9 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         WHERE UserID='${this.currentUser.ID}'
       )`;
 
-      const baseFilter = `EnvironmentID='${this.environmentId}'` +
-                         (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
+      const baseFilter =
+        `EnvironmentID='${this.environmentId}'` +
+        (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
 
       const filter = `${baseFilter} AND (OwnerID IS NULL OR ${ownerFilter} OR ${permissionSubquery})`;
 
@@ -639,7 +636,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
           ExtraFilter: filter,
           OrderBy: 'Name ASC',
           MaxRows: 1000,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
         },
         this.currentUser
       );
@@ -658,11 +655,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.userPermissions.clear();
 
     for (const collection of this.collections) {
-      const permission = await this.permissionService.checkPermission(
-        collection.ID,
-        this.currentUser.ID,
-        this.currentUser
-      );
+      const permission = await this.permissionService.checkPermission(collection.ID, this.currentUser.ID, this.currentUser);
 
       if (permission) {
         this.userPermissions.set(collection.ID, permission);
@@ -675,11 +668,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const permission = await this.permissionService.checkPermission(
-      this.currentCollectionId,
-      this.currentUser.ID,
-      this.currentUser
-    );
+    const permission = await this.permissionService.checkPermission(this.currentCollectionId, this.currentUser.ID, this.currentUser);
 
     if (permission) {
       this.userPermissions.set(this.currentCollectionId, permission);
@@ -694,10 +683,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
 
     try {
-      this.artifacts = await this.artifactState.loadArtifactsForCollection(
-        this.currentCollectionId,
-        this.currentUser
-      );
+      this.artifacts = await this.artifactState.loadArtifactsForCollection(this.currentCollectionId, this.currentUser);
       this.filteredArtifacts = [...this.artifacts];
     } catch (error) {
       console.error('Failed to load artifacts:', error);
@@ -718,7 +704,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       // Emit navigation event
       this.collectionNavigated.emit({
         collectionId: collection.ID,
-        artifactId: null
+        artifactId: null,
       });
     } finally {
       this.isNavigatingProgrammatically = false;
@@ -728,7 +714,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   async navigateTo(crumb: { id: string; name: string }): Promise<void> {
     this.isNavigatingProgrammatically = true;
     try {
-      const index = this.breadcrumbs.findIndex(b => b.id === crumb.id);
+      const index = this.breadcrumbs.findIndex((b) => b.id === crumb.id);
       if (index !== -1) {
         this.breadcrumbs = this.breadcrumbs.slice(0, index + 1);
         this.currentCollectionId = crumb.id;
@@ -746,7 +732,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         // Emit navigation event
         this.collectionNavigated.emit({
           collectionId: crumb.id,
-          artifactId: null
+          artifactId: null,
         });
       }
     } finally {
@@ -768,7 +754,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       // Emit navigation event
       this.collectionNavigated.emit({
         collectionId: null,
-        artifactId: null
+        artifactId: null,
       });
     } finally {
       this.isNavigatingProgrammatically = false;
@@ -807,7 +793,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
           // Add to front of trail (we're working backwards)
           trail.unshift({
             id: parentCollection.ID,
-            name: parentCollection.Name
+            name: parentCollection.Name,
           });
           currentId = parentCollection.ParentID;
         } else {
@@ -818,7 +804,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       // Add the target collection to the trail (breadcrumbs includes current collection)
       trail.push({
         id: targetCollection.ID,
-        name: targetCollection.Name
+        name: targetCollection.Name,
       });
 
       // Update component state
@@ -836,7 +822,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       // NOTE: We don't emit artifactId here because this is for deep linking/programmatic navigation
       // Artifact state is managed separately by the artifact state service
       this.collectionNavigated.emit({
-        collectionId: targetCollection.ID
+        collectionId: targetCollection.ID,
       });
 
       console.log('✅ Successfully navigated to collection with breadcrumb trail:', trail);
@@ -882,7 +868,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       message: `Are you sure you want to delete "${collection.Name}"? This will also delete all child collections and remove all artifacts. This action cannot be undone.`,
       okText: 'Delete',
       cancelText: 'Cancel',
-      dangerous: true
+      dangerous: true,
     });
 
     console.log('Delete confirmed:', confirmed);
@@ -908,7 +894,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         EntityName: 'MJ: Collections',
         ExtraFilter: `ParentID='${collectionId}'`,
         MaxRows: 1000,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       },
       this.currentUser
     );
@@ -928,7 +914,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         EntityName: 'MJ: Collection Artifacts',
         ExtraFilter: `CollectionID='${collectionId}'`,
         MaxRows: 1000,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       },
       this.currentUser
     );
@@ -995,16 +981,12 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       title: 'Remove Artifact',
       message: `Remove "${artifact.Name}" from this collection?`,
       okText: 'Remove',
-      cancelText: 'Cancel'
+      cancelText: 'Cancel',
     });
 
     if (confirmed) {
       try {
-        await this.artifactState.removeFromCollection(
-          artifact.ID,
-          this.currentCollectionId,
-          this.currentUser
-        );
+        await this.artifactState.removeFromCollection(artifact.ID, this.currentCollectionId, this.currentUser);
         await this.loadArtifacts();
       } catch (error) {
         console.error('Error removing artifact:', error);
@@ -1019,15 +1001,12 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     // Emit navigation event with both collection and artifact
     this.collectionNavigated.emit({
       collectionId: this.currentCollectionId,
-      artifactId: artifact.ID
+      artifactId: artifact.ID,
     });
   }
 
   // Permission validation and checking methods
-  private async validatePermission(
-    collection: CollectionEntity | null,
-    requiredPermission: 'edit' | 'delete' | 'share'
-  ): Promise<boolean> {
+  private async validatePermission(collection: CollectionEntity | null, requiredPermission: 'edit' | 'delete' | 'share'): Promise<boolean> {
     // Owner has all permissions (including backwards compatibility for null OwnerID)
     if (!collection?.OwnerID || collection.OwnerID === this.currentUser.ID) {
       return true;
@@ -1035,10 +1014,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     const permission = this.userPermissions.get(collection.ID);
     if (!permission) {
-      await this.dialogService.alert(
-        'Permission Denied',
-        'You do not have permission to perform this action.'
-      );
+      await this.dialogService.alert('Permission Denied', 'You do not have permission to perform this action.');
       return false;
     }
 
@@ -1049,10 +1025,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
     if (!hasPermission) {
       const permissionName = requiredPermission.charAt(0).toUpperCase() + requiredPermission.slice(1);
-      await this.dialogService.alert(
-        'Permission Denied',
-        `You do not have ${permissionName} permission for this collection.`
-      );
+      await this.dialogService.alert('Permission Denied', `You do not have ${permissionName} permission for this collection.`);
       return false;
     }
 

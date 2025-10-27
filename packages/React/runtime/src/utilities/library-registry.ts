@@ -4,8 +4,8 @@
  * @module @memberjunction/react-runtime/utilities
  */
 
-import { UserInfo } from "@memberjunction/core";
-import { ComponentLibraryEntity, ComponentMetadataEngine } from "@memberjunction/core-entities";
+import { UserInfo } from '@memberjunction/global';
+import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 /**
  * Library definition in the registry
@@ -38,7 +38,7 @@ export class LibraryRegistry {
   private static _configured: boolean = false;
   public static async Config(forceRefresh: boolean = false, componentLibraries: ComponentLibraryEntity[]) {
     if (!this._configured || forceRefresh) {
-      // next up, we need to map the component metadata to the library definitions 
+      // next up, we need to map the component metadata to the library definitions
       // with two steps - first step is that we need to group the libraries in the engine
       // by name and then we'll have all the versions for that particular library we can break
       // into versions in our structure
@@ -55,15 +55,15 @@ export class LibraryRegistry {
       for (const [name, versions] of libraryGroups) {
         const libDef: LibraryDefinition = {
           name,
-          globalVariable: versions[0].GlobalVariable || "",
-          category: versions[0].Category || "",
+          globalVariable: versions[0].GlobalVariable || '',
+          category: versions[0].Category || '',
           versions: {},
-          defaultVersion: versions[0].Version || ""
+          defaultVersion: versions[0].Version || '',
         };
         for (const version of versions) {
           libDef.versions[version.Version!] = {
-            cdnUrl: version.CDNUrl || "",
-            cssUrls: version.CDNCssUrl?.split(",") || []
+            cdnUrl: version.CDNUrl || '',
+            cssUrls: version.CDNCssUrl?.split(',') || [],
           };
         }
         this.libraries.set(name, libDef);
@@ -78,8 +78,7 @@ export class LibraryRegistry {
    * Get library definition by name
    */
   static getLibrary(name: string): LibraryDefinition | undefined {
-    if (!this._configured)
-      throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
+    if (!this._configured) throw new Error('LibraryRegistry is not configured, call LibraryRegistry.Config() before using!');
 
     return this.libraries.get(name?.trim().toLowerCase());
   }
@@ -91,8 +90,7 @@ export class LibraryRegistry {
    * @returns CDN URL or undefined if library/version not found
    */
   static getCdnUrl(name: string, version?: string): string | undefined {
-    if (!this._configured)
-      throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
+    if (!this._configured) throw new Error('LibraryRegistry is not configured, call LibraryRegistry.Config() before using!');
 
     const library = this.libraries.get(name?.trim().toLowerCase());
     if (!library) return undefined;
@@ -105,8 +103,7 @@ export class LibraryRegistry {
    * Check if a library is approved
    */
   static isApproved(name: string): boolean {
-    if (!this._configured)
-      throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
+    if (!this._configured) throw new Error('LibraryRegistry is not configured, call LibraryRegistry.Config() before using!');
 
     return this.libraries.has(name?.trim().toLowerCase());
   }
@@ -117,8 +114,7 @@ export class LibraryRegistry {
    * TODO: Implement proper semver resolution
    */
   static resolveVersion(name: string, versionPattern?: string): string | undefined {
-    if (!this._configured)
-      throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
+    if (!this._configured) throw new Error('LibraryRegistry is not configured, call LibraryRegistry.Config() before using!');
 
     const library = this.libraries.get(name?.trim().toLowerCase());
     if (!library) return undefined;
@@ -141,8 +137,7 @@ export class LibraryRegistry {
    * with libraries loaded from a database
    */
   static registerLibrary(definition: LibraryDefinition): void {
-    if (!this._configured)
-      throw new Error("LibraryRegistry is not configured, call LibraryRegistry.Config() before using!");
+    if (!this._configured) throw new Error('LibraryRegistry is not configured, call LibraryRegistry.Config() before using!');
 
     this.libraries.set(definition.name?.trim().toLowerCase(), definition);
   }

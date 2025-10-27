@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RunQuery } from '@memberjunction/core';
+import { Metadata, RunQuery } from '@memberjunction/global';
 
 export interface AgentRunCostMetrics {
   totalCost: number;
@@ -20,7 +20,7 @@ interface QueryResult {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class AIAgentRunCostService {
   private costCache = new Map<string, { metrics: AgentRunCostMetrics; timestamp: number }>();
@@ -44,7 +44,7 @@ export class AIAgentRunCostService {
       totalPrompts: 0,
       totalTokensInput: 0,
       totalTokensOutput: 0,
-      isLoading: true
+      isLoading: true,
     };
 
     try {
@@ -54,13 +54,13 @@ export class AIAgentRunCostService {
         QueryName: 'CalculateRunCost',
         CategoryPath: '/MJ/AI/Agents/',
         Parameters: {
-          AIAgentRunID: agentRunId
-        }
+          AIAgentRunID: agentRunId,
+        },
       });
 
       if (queryResult.Success && queryResult.Results && queryResult.Results.length > 0) {
         const result = queryResult.Results[0] as QueryResult;
-        
+
         metrics.totalCost = result.TotalCost || 0;
         metrics.totalPrompts = result.TotalPrompts || 0;
         metrics.totalTokensInput = result.TotalTokensInput || 0;
@@ -68,22 +68,21 @@ export class AIAgentRunCostService {
       } else {
         console.warn(`No cost data found for agent run ${agentRunId}:`, queryResult.ErrorMessage);
       }
-      
+
       metrics.isLoading = false;
-      
+
       // Cache the results
       if (useCache) {
         this.setCachedMetrics(agentRunId, metrics);
       }
-      
+
       return metrics;
-      
     } catch (error) {
       console.error('Error calculating agent run cost metrics:', error);
       return {
         ...metrics,
         isLoading: false,
-        error: 'Failed to calculate cost metrics'
+        error: 'Failed to calculate cost metrics',
       };
     }
   }
@@ -112,15 +111,15 @@ export class AIAgentRunCostService {
    */
   private getCachedMetrics(agentRunId: string): AgentRunCostMetrics | null {
     const cached = this.costCache.get(agentRunId);
-    if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION_MS) {
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION_MS) {
       return { ...cached.metrics }; // Return a copy
     }
-    
+
     // Remove stale cache entry
     if (cached) {
       this.costCache.delete(agentRunId);
     }
-    
+
     return null;
   }
 
@@ -130,7 +129,7 @@ export class AIAgentRunCostService {
   private setCachedMetrics(agentRunId: string, metrics: AgentRunCostMetrics): void {
     this.costCache.set(agentRunId, {
       metrics: { ...metrics }, // Store a copy
-      timestamp: Date.now()
+      timestamp: Date.now(),
     });
   }
 }

@@ -1,8 +1,7 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
-import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/global';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
-
 
 /**
  * AWS Cognito authentication provider implementation
@@ -18,21 +17,19 @@ export class CognitoProvider extends BaseAuthProvider {
    */
   extractUserInfo(payload: JwtPayload): AuthUserInfo {
     // Cognito uses custom claims with 'cognito:' prefix for some fields
-    const email = payload.email as string | undefined || 
-                  payload['cognito:username'] as string | undefined;
+    const email = (payload.email as string | undefined) || (payload['cognito:username'] as string | undefined);
     const fullName = payload.name as string | undefined;
     const firstName = payload.given_name as string | undefined;
     const lastName = payload.family_name as string | undefined;
-    const preferredUsername = payload['cognito:username'] as string | undefined || 
-                             payload.preferred_username as string | undefined || 
-                             email;
+    const preferredUsername =
+      (payload['cognito:username'] as string | undefined) || (payload.preferred_username as string | undefined) || email;
 
     return {
       email,
       firstName: firstName || fullName?.split(' ')[0],
       lastName: lastName || fullName?.split(' ')[1] || fullName?.split(' ')[0],
       fullName,
-      preferredUsername
+      preferredUsername,
     };
   }
 
@@ -44,7 +41,7 @@ export class CognitoProvider extends BaseAuthProvider {
     const hasClientId = !!this.config.clientId;
     const hasRegion = !!this.config.region;
     const hasUserPoolId = !!this.config.userPoolId;
-    
+
     return baseValid && hasClientId && hasRegion && hasUserPoolId;
   }
 }

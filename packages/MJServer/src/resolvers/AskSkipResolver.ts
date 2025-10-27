@@ -1,5 +1,18 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
-import { LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey, EntityFieldInfo, EntityInfo, EntityRelationshipInfo, EntitySaveOptions, EntityDeleteOptions, IMetadataProvider } from '@memberjunction/core';
+import {
+  LogError,
+  LogStatus,
+  Metadata,
+  RunView,
+  UserInfo,
+  CompositeKey,
+  EntityFieldInfo,
+  EntityInfo,
+  EntityRelationshipInfo,
+  EntitySaveOptions,
+  EntityDeleteOptions,
+  IMetadataProvider,
+} from '@memberjunction/global';
 import { AppContext, UserPayload, MJ_SERVER_EVENT_CODE } from '../types.js';
 import { BehaviorSubject } from 'rxjs';
 import { take } from 'rxjs/operators';
@@ -52,9 +65,18 @@ import {
   DataContextEntity,
   DataContextItemEntity,
   UserNotificationEntity,
-  AIAgentEntityExtended
+  AIAgentEntityExtended,
 } from '@memberjunction/core-entities';
-import { apiKey as callbackAPIKey, AskSkipInfo, baseUrl, publicUrl, configInfo, graphqlPort, graphqlRootPath, mj_core_schema } from '../config.js';
+import {
+  apiKey as callbackAPIKey,
+  AskSkipInfo,
+  baseUrl,
+  publicUrl,
+  configInfo,
+  graphqlPort,
+  graphqlRootPath,
+  mj_core_schema,
+} from '../config.js';
 import mssql from 'mssql';
 
 import { registerEnumType } from 'type-graphql';
@@ -84,12 +106,15 @@ const SKIP_API_ENDPOINTS = {
  */
 class ActiveConversationStreams {
   private static instance: ActiveConversationStreams;
-  private streams: Map<string, { 
-    lastStatus: string, 
-    lastUpdate: Date,
-    startTime: Date, // When processing actually started
-    sessionIds: Set<string> // Track which sessions are listening
-  }> = new Map();
+  private streams: Map<
+    string,
+    {
+      lastStatus: string;
+      lastUpdate: Date;
+      startTime: Date; // When processing actually started
+      sessionIds: Set<string>; // Track which sessions are listening
+    }
+  > = new Map();
 
   private constructor() {}
 
@@ -114,7 +139,7 @@ class ActiveConversationStreams {
         lastStatus: status,
         lastUpdate: now,
         startTime: now, // Track when processing started
-        sessionIds: sessionId ? new Set([sessionId]) : new Set()
+        sessionIds: sessionId ? new Set([sessionId]) : new Set(),
       });
     }
   }
@@ -140,7 +165,7 @@ class ActiveConversationStreams {
         lastStatus: 'Processing...',
         lastUpdate: now,
         startTime: now, // Track when processing started
-        sessionIds: new Set([sessionId])
+        sessionIds: new Set([sessionId]),
       });
     }
   }
@@ -152,7 +177,7 @@ class ActiveConversationStreams {
   isActive(conversationId: string): boolean {
     const stream = this.streams.get(conversationId);
     if (!stream) return false;
-    
+
     // Consider a stream inactive if no update in last 5 minutes
     const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
     return stream.lastUpdate > fiveMinutesAgo;
@@ -170,19 +195,19 @@ class ActiveConversationStreams {
   cleanupStaleStreams() {
     const now = new Date();
     const staleThreshold = new Date(now.getTime() - 30 * 60 * 1000); // 30 minutes
-    
+
     const staleConversations: string[] = [];
     this.streams.forEach((stream, conversationId) => {
       if (stream.lastUpdate < staleThreshold) {
         staleConversations.push(conversationId);
       }
     });
-    
-    staleConversations.forEach(conversationId => {
+
+    staleConversations.forEach((conversationId) => {
       this.streams.delete(conversationId);
       LogStatus(`Cleaned up stale stream for conversation ${conversationId}`);
     });
-    
+
     if (staleConversations.length > 0) {
       LogStatus(`Cleaned up ${staleConversations.length} stale conversation streams`);
     }
@@ -192,9 +217,12 @@ class ActiveConversationStreams {
 const activeStreams = ActiveConversationStreams.getInstance();
 
 // Set up periodic cleanup of stale streams (every 10 minutes)
-setInterval(() => {
-  activeStreams.cleanupStaleStreams();
-}, 10 * 60 * 1000);
+setInterval(
+  () => {
+    activeStreams.cleanupStaleStreams();
+  },
+  10 * 60 * 1000
+);
 
 @ObjectType()
 class ReattachConversationResponse {
@@ -283,11 +311,11 @@ export class CycleDetailsType {
   /** Unique identifier for the learning cycle */
   @Field(() => String)
   LearningCycleId: string;
-  
+
   /** ISO timestamp when the cycle started */
   @Field(() => String)
   StartTime: string;
-  
+
   /** Duration of the cycle in minutes */
   @Field(() => Number)
   RunningForMinutes: number;
@@ -302,15 +330,15 @@ export class RunningOrganizationType {
   /** Identifier of the organization running the cycle */
   @Field(() => String)
   OrganizationId: string;
-  
+
   /** Unique identifier for the learning cycle */
   @Field(() => String)
   LearningCycleId: string;
-  
+
   /** ISO timestamp when the cycle started */
   @Field(() => String)
   StartTime: string;
-  
+
   /** Duration the cycle has been running in minutes */
   @Field(() => Number)
   RunningForMinutes: number;
@@ -325,11 +353,11 @@ export class LearningCycleStatusType {
   /** Whether the scheduler process is currently active */
   @Field(() => Boolean)
   IsSchedulerRunning: boolean;
-  
+
   /** ISO timestamp of the last time the scheduler ran a cycle */
   @Field(() => String, { nullable: true })
   LastRunTime: string;
-  
+
   /** List of organizations that are currently running learning cycles */
   @Field(() => [RunningOrganizationType], { nullable: true })
   RunningOrganizations: RunningOrganizationType[];
@@ -344,15 +372,15 @@ export class StopLearningCycleResultType {
   /** Whether the stop operation succeeded */
   @Field(() => Boolean)
   Success: boolean;
-  
+
   /** Descriptive message about the result of the stop operation */
   @Field(() => String)
   Message: string;
-  
+
   /** Whether the cycle was actually running when the stop was attempted */
   @Field(() => Boolean)
   WasRunning: boolean;
-  
+
   /** Details about the cycle that was stopped (if any) */
   @Field(() => CycleDetailsType, { nullable: true })
   CycleDetails: CycleDetailsType;
@@ -379,7 +407,7 @@ export class StopLearningCycleResultType {
 //             // LogStatus('Skip AI Learning Cycles not enabled in configuration');
 //             return;
 //           }
-          
+
 //           // Check if we have a valid endpoint when cycles are enabled
 //           const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
 //                                       (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
@@ -387,18 +415,17 @@ export class StopLearningCycleResultType {
 //             LogError('Skip AI Learning cycle scheduler not started: Learning cycles are enabled but no Learning Cycle API endpoint is configured');
 //             return;
 //           }
-          
+
 //           const dataSources = event.args.dataSources;
 //           if (dataSources && dataSources.length > 0) {
 //             // Initialize the scheduler
 //             const scheduler = LearningCycleScheduler.Instance;
-            
+
 //             // Set the data sources for the scheduler
 //             scheduler.setDataSources(dataSources);
-            
+
 //             // Default is 60 minutes, if the interval is not set in the config, use 60 minutes
 //             const interval = skipConfigInfo.learningCycleIntervalInMinutes ?? 60;
-
 
 //             if (skipConfigInfo.learningCycleRunUponStartup) {
 //               // If configured to run immediately, run the learning cycle
@@ -439,32 +466,32 @@ export class StopLearningCycleResultType {
  */
 type BaseSkipRequest = {
   /** Entity metadata to send to Skip */
-  entities: SkipEntityInfo[],
+  entities: SkipEntityInfo[];
   /** Query metadata to send to Skip */
-  queries: SkipQueryInfo[],
+  queries: SkipQueryInfo[];
   /** Agent notes to send to Skip */
-  notes: SkipAPIAgentNote[],
+  notes: SkipAPIAgentNote[];
   /** Note type definitions to send to Skip */
-  noteTypes: SkipAPIAgentNoteType[],
+  noteTypes: SkipAPIAgentNoteType[];
   /** Agent requests to send to Skip */
-  requests: SkipAPIAgentRequest[], 
+  requests: SkipAPIAgentRequest[];
   /** Access token for authorizing Skip to call back to MemberJunction */
-  accessToken: GetDataAccessToken,
+  accessToken: GetDataAccessToken;
   /** Organization identifier */
-  organizationID: string,
+  organizationID: string;
   /** Additional organization-specific information */
-  organizationInfo: any,
+  organizationInfo: any;
   /** API keys for various AI services to be used by Skip */
-  apiKeys: SkipAPIRequestAPIKey[],
+  apiKeys: SkipAPIRequestAPIKey[];
   /** URL of the calling server for callback purposes */
-  callingServerURL: string,
+  callingServerURL: string;
   /** API key for the calling server */
-  callingServerAPIKey: string,
+  callingServerAPIKey: string;
   /** Access token for the calling server */
-  callingServerAccessToken: string,
+  callingServerAccessToken: string;
   /** Email of the user making the request */
-  userEmail: string
-}
+  userEmail: string;
+};
 /**
  * Resolver for Skip AI interactions
  * Handles conversations with Skip, learning cycles, and related operations.
@@ -474,14 +501,14 @@ type BaseSkipRequest = {
 export class AskSkipResolver {
   /** Default name for new conversations */
   private static _defaultNewChatName = 'New Chat';
-  
+
   /** Maximum number of historical messages to include in a conversation context */
   private static _maxHistoricalMessages = 30;
 
   /**
    * Handles a chat interaction with Skip about a specific data record
    * Allows users to ask questions about a particular entity record
-   * 
+   *
    * @param UserQuestion The question or message from the user
    * @param ConversationId ID of an existing conversation, or empty for a new conversation
    * @param EntityName The name of the entity the record belongs to
@@ -509,11 +536,7 @@ export class AskSkipResolver {
     // now load up the messages. We will load up ALL of the messages for this conversation, and then pass them to the Skip API
     let messages: SkipMessage[] = [];
     if (ConversationId && ConversationId.length > 0) {
-      messages = await this.LoadConversationDetailsIntoSkipMessages(
-        dataSource,
-        ConversationId,
-        AskSkipResolver._maxHistoricalMessages
-      );  
+      messages = await this.LoadConversationDetailsIntoSkipMessages(dataSource, ConversationId, AskSkipResolver._maxHistoricalMessages);
     }
 
     const md = GetReadWriteProvider(providers);
@@ -555,7 +578,20 @@ export class AskSkipResolver {
       }
     }
 
-    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'chat_with_a_record', false, false, false, false, user, dataSource, false, false);
+    const input = await this.buildSkipChatAPIRequest(
+      messages,
+      ConversationId,
+      dataContext,
+      'chat_with_a_record',
+      false,
+      false,
+      false,
+      false,
+      user,
+      dataSource,
+      false,
+      false
+    );
     messages.push({
       content: UserQuestion,
       role: 'user',
@@ -568,7 +604,7 @@ export class AskSkipResolver {
   // /**
   //  * Executes a Skip learning cycle
   //  * Learning cycles allow Skip to analyze conversations and improve its knowledge and capabilities
-  //  * 
+  //  *
   //  * @param dataSource Database connection
   //  * @param userPayload Information about the authenticated user
   //  * @param ForceEntityRefresh Whether to force a refresh of entity metadata
@@ -591,7 +627,7 @@ export class AskSkipResolver {
   //         requestChanges: []
   //       };
   //     }
-      
+
   //     // Check if we have a valid endpoint when cycles are enabled
   //     const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
   //                                 (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
@@ -605,20 +641,20 @@ export class AskSkipResolver {
   //         requestChanges: []
   //       };
   //     }
-      
+
   //     const startTime = new Date();
   //     // First, get the user from the cache
   //     const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email.trim().toLowerCase());
   //     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
 
   //     // if already configured this does nothing, just makes sure we're configured
-  //     await AIEngine.Instance.Config(false, user); 
+  //     await AIEngine.Instance.Config(false, user);
 
   //     // Check if this organization is already running a learning cycle using their organization ID
   //     const organizationId = skipConfigInfo.orgID;
   //     const scheduler = LearningCycleScheduler.Instance;
   //     const runningStatus = scheduler.isOrganizationRunningCycle(organizationId);
-      
+
   //     if (runningStatus.isRunning) {
   //       LogStatus(`Learning cycle already in progress for organization ${organizationId}, started at ${runningStatus.startTime.toISOString()}`);
   //       return {
@@ -659,7 +695,7 @@ export class AskSkipResolver {
 
   //     // Register this organization as running a learning cycle
   //     scheduler.registerRunningCycle(organizationId, learningCycleId);
-      
+
   //     try {
   //       // Build the request to Skip learning API
   //       LogStatus(`Building Skip Learning API request`);
@@ -699,29 +735,29 @@ export class AskSkipResolver {
   //         if (!(await learningCycleEntity.Save())) {
   //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
   //         }
-          
+
   //         return response;
   //       }
-  //     } 
+  //     }
   //     catch (error) {
   //       // Make sure to update the learning cycle record as failed
   //       learningCycleEntity.Status = 'Failed';
   //       learningCycleEntity.EndedAt = new Date();
-        
+
   //       try {
   //         await learningCycleEntity.Save();
-  //       } 
+  //       }
   //       catch (saveError) {
   //         LogError(`Failed to update learning cycle record after error: ${saveError}`);
   //       }
-        
+
   //       // Re-throw the original error
   //       throw error;
   //     }
   //     finally {
   //       // Unregister the cycle/organizationId safely
   //       try {
-  //         scheduler.unregisterRunningCycle(organizationId);          
+  //         scheduler.unregisterRunningCycle(organizationId);
   //       }
   //       catch (error) {
   //         LogError(`Failed to unregister organization ${organizationId} from running cycles: ${error}`);
@@ -732,7 +768,7 @@ export class AskSkipResolver {
   // /**
   //  * Handles the HTTP POST request to the Skip learning cycle API
   //  * Sends the learning cycle request and processes the response
-  //  * 
+  //  *
   //  * @param input The learning cycle request payload
   //  * @param user User context for the request
   //  * @param learningCycleId ID of the current learning cycle
@@ -740,8 +776,8 @@ export class AskSkipResolver {
   //  * @returns Response from the Skip learning cycle API
   //  */
   // protected async handleSimpleSkipLearningPostRequest(
-  //   input: SkipAPILearningCycleRequest, 
-  //   user: UserInfo, 
+  //   input: SkipAPILearningCycleRequest,
+  //   user: UserInfo,
   //   learningCycleId: string,
   //   agentID: string,
   //   userPayload: UserPayload
@@ -773,7 +809,7 @@ export class AskSkipResolver {
   //     // if (apiResponse.requestChanges && apiResponse.requestChanges.length > 0) {
   //     //   await this.processLearningCycleRequestChanges(apiResponse.requestChanges, user);
   //     // }
-      
+
   //     return apiResponse;
   //   } else {
   //     return {
@@ -791,7 +827,7 @@ export class AskSkipResolver {
   /**
    * Handles the HTTP POST request to the Skip chat API
    * Sends the chat request and processes the response
-   * 
+   *
    * @param input The chat request payload
    * @param convoEntity The conversation entity object
    * @param convoDetailEntity The conversation detail entity object
@@ -817,9 +853,10 @@ export class AskSkipResolver {
       if (response && response.length > 0) {
         // the last object in the response array is the final response from the Skip API
         const apiResponse = <SkipAPIResponse>response[response.length - 1].value;
-        const AIMessageConversationDetailID = createAIMessageConversationDetail && convoEntity
-          ? await this.CreateAIMessageConversationDetail(apiResponse, convoEntity.ID, user, userPayload)
-          : '';
+        const AIMessageConversationDetailID =
+          createAIMessageConversationDetail && convoEntity
+            ? await this.CreateAIMessageConversationDetail(apiResponse, convoEntity.ID, user, userPayload)
+            : '';
         //      const apiResponse = <SkipAPIResponse>response.data;
         LogStatus(`  Skip API response: ${apiResponse.responsePhase}`);
         return {
@@ -836,7 +873,7 @@ export class AskSkipResolver {
         if (convoEntity) {
           await this.setConversationStatus(convoEntity, 'Available', userPayload);
         }
-        
+
         return {
           Success: false,
           Status: 'Error',
@@ -852,152 +889,157 @@ export class AskSkipResolver {
       if (convoEntity) {
         await this.setConversationStatus(convoEntity, 'Available', userPayload);
       }
-      
+
       // Log the error for debugging
       LogError(`Error in handleSimpleSkipChatPostRequest: ${error}`);
-      
+
       // Re-throw the error to propagate it up the stack
       throw error;
     }
   }
 
-//   /**
-//    * Processes note changes received from the Skip API learning cycle
-//    * Applies changes to agent notes based on the learning cycle response
-//    * 
-//    * @param noteChanges Changes to agent notes
-//    * @param agentID ID of the Skip agent
-//    * @param user User context for the request
-//    * @returns Promise that resolves when processing is complete
-//    */
-//   protected async processLearningCycleNoteChanges(
-//     noteChanges: SkipLearningCycleNoteChange[], 
-//     agentID: string,
-//     user: UserInfo,
-//     userPayload: UserPayload
-//     ): Promise<void> {
-//       const md = new Metadata();
+  //   /**
+  //    * Processes note changes received from the Skip API learning cycle
+  //    * Applies changes to agent notes based on the learning cycle response
+  //    *
+  //    * @param noteChanges Changes to agent notes
+  //    * @param agentID ID of the Skip agent
+  //    * @param user User context for the request
+  //    * @returns Promise that resolves when processing is complete
+  //    */
+  //   protected async processLearningCycleNoteChanges(
+  //     noteChanges: SkipLearningCycleNoteChange[],
+  //     agentID: string,
+  //     user: UserInfo,
+  //     userPayload: UserPayload
+  //     ): Promise<void> {
+  //       const md = new Metadata();
 
-//       // Filter out any operations on "Human" notes
-//       const validNoteChanges = noteChanges.filter(change => {
-//         // Check if the note is of type "Human"
-//         if (change.note.agentNoteType === "Human") {
-//           LogStatus(`WARNING: Ignoring ${change.changeType} operation on Human note with ID ${change.note.id}. Human notes cannot be modified by the
-//     learning cycle.`);
-//           return false;
-//         }
-//         return true;
-//       });
-      
-//       // Process all valid note changes in parallel
-//       await Promise.all(validNoteChanges.map(async (change) => {
-//         try {
-//           if (change.changeType === 'add' || change.changeType === 'update') {
-//             await this.processAddOrUpdateSkipNote(change, agentID, user, userPayload);
-//           } else if (change.changeType === 'delete') {
-//             await this.processDeleteSkipNote(change, user, userPayload);
-//           }
-//         } catch (e) {
-//           LogError(`Error processing note change: ${e}`);
-//         }
-//       }));
-//   }
+  //       // Filter out any operations on "Human" notes
+  //       const validNoteChanges = noteChanges.filter(change => {
+  //         // Check if the note is of type "Human"
+  //         if (change.note.agentNoteType === "Human") {
+  //           LogStatus(`WARNING: Ignoring ${change.changeType} operation on Human note with ID ${change.note.id}. Human notes cannot be modified by the
+  //     learning cycle.`);
+  //           return false;
+  //         }
+  //         return true;
+  //       });
 
-//   /**
-//    * Processes an add or update operation for a Skip agent note
-//    * Creates a new note or updates an existing one based on the change type
-//    * 
-//    * @param change The note change information
-//    * @param agentID ID of the Skip agent
-//    * @param user User context for the operation
-//    * @returns Whether the operation was successful
-//    */
-//   protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
-//     try {  
-//       // Get the note entity object
-//       const md = new Metadata();
-//       const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
-      
-//       if (change.changeType === 'update') {
-//         // Load existing note
-//         const loadResult = await noteEntity.Load(change.note.id);
-//         if (!loadResult) {
-//           LogError(`Could not load note with ID ${change.note.id}`);
-//           return false;
-//         }
-//       } else {
-//         // Create a new note
-//         noteEntity.NewRecord();
-//         noteEntity.AgentID = agentID;
-//       }
-//       noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI'); // always set to AI
-//       noteEntity.Note = change.note.note;
-//       noteEntity.Type = change.note.type;
+  //       // Process all valid note changes in parallel
+  //       await Promise.all(validNoteChanges.map(async (change) => {
+  //         try {
+  //           if (change.changeType === 'add' || change.changeType === 'update') {
+  //             await this.processAddOrUpdateSkipNote(change, agentID, user, userPayload);
+  //           } else if (change.changeType === 'delete') {
+  //             await this.processDeleteSkipNote(change, user, userPayload);
+  //           }
+  //         } catch (e) {
+  //           LogError(`Error processing note change: ${e}`);
+  //         }
+  //       }));
+  //   }
 
-//       if (change.note.type === 'User') {
-//         noteEntity.UserID = change.note.userId;
-//       }
+  //   /**
+  //    * Processes an add or update operation for a Skip agent note
+  //    * Creates a new note or updates an existing one based on the change type
+  //    *
+  //    * @param change The note change information
+  //    * @param agentID ID of the Skip agent
+  //    * @param user User context for the operation
+  //    * @returns Whether the operation was successful
+  //    */
+  //   protected async processAddOrUpdateSkipNote(change: SkipLearningCycleNoteChange, agentID: string, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+  //     try {
+  //       // Get the note entity object
+  //       const md = new Metadata();
+  //       const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
 
-//       // Save the note
-//       if (!(await noteEntity.Save())) {
-//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
-//         return false;
-//       }
+  //       if (change.changeType === 'update') {
+  //         // Load existing note
+  //         const loadResult = await noteEntity.Load(change.note.id);
+  //         if (!loadResult) {
+  //           LogError(`Could not load note with ID ${change.note.id}`);
+  //           return false;
+  //         }
+  //       } else {
+  //         // Create a new note
+  //         noteEntity.NewRecord();
+  //         noteEntity.AgentID = agentID;
+  //       }
+  //       noteEntity.AgentNoteTypeID = this.getAgentNoteTypeIDByName('AI'); // always set to AI
+  //       noteEntity.Note = change.note.note;
+  //       noteEntity.Type = change.note.type;
 
-//       return true;
-//     } catch (e) {
-//       LogError(`Error processing note change: ${e}`);
-//       return false;
-//     }
-//   }
+  //       if (change.note.type === 'User') {
+  //         noteEntity.UserID = change.note.userId;
+  //       }
 
-//   /**
-//    * Processes a delete operation for a Skip agent note
-//    * Removes the specified note from the database
-//    * 
-//    * @param change The note change information
-//    * @param user User context for the operation
-//    * @returns Whether the deletion was successful
-//    */
-//   protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
-//     // Get the note entity object
-//     const md = new Metadata();
-//     const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
+  //       // Save the note
+  //       if (!(await noteEntity.Save())) {
+  //         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
+  //         return false;
+  //       }
 
-//     // Load the note first
-//     const loadResult = await noteEntity.Load(change.note.id);
+  //       return true;
+  //     } catch (e) {
+  //       LogError(`Error processing note change: ${e}`);
+  //       return false;
+  //     }
+  //   }
 
-//     if (!loadResult) {
-//       LogError(`Could not load note with ID ${change.note.id} for deletion`);
-//       return false;
-//     }
+  //   /**
+  //    * Processes a delete operation for a Skip agent note
+  //    * Removes the specified note from the database
+  //    *
+  //    * @param change The note change information
+  //    * @param user User context for the operation
+  //    * @returns Whether the deletion was successful
+  //    */
+  //   protected async processDeleteSkipNote(change: SkipLearningCycleNoteChange, user: UserInfo, userPayload: UserPayload): Promise<boolean> {
+  //     // Get the note entity object
+  //     const md = new Metadata();
+  //     const noteEntity = await md.GetEntityObject<AIAgentNoteEntity>('AI Agent Notes', user);
 
-//     // Double-check if the loaded note is of type "Human"
-//     if (change.note.agentNoteType === "Human") {
-//       LogStatus(`WARNING: Ignoring delete operation on Human note with ID ${change.note.id}. Human notes cannot be deleted by the learning
-// cycle.`);
-//       return false;
-//     }
+  //     // Load the note first
+  //     const loadResult = await noteEntity.Load(change.note.id);
 
-//     // Proceed with deletion
-//     if (!(await noteEntity.Delete())) {
-//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
-//       return false;
-//     }
+  //     if (!loadResult) {
+  //       LogError(`Could not load note with ID ${change.note.id} for deletion`);
+  //       return false;
+  //     }
 
-//     return true;
-//   }
+  //     // Double-check if the loaded note is of type "Human"
+  //     if (change.note.agentNoteType === "Human") {
+  //       LogStatus(`WARNING: Ignoring delete operation on Human note with ID ${change.note.id}. Human notes cannot be deleted by the learning
+  // cycle.`);
+  //       return false;
+  //     }
+
+  //     // Proceed with deletion
+  //     if (!(await noteEntity.Delete())) {
+  //       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
+  //       return false;
+  //     }
+
+  //     return true;
+  //   }
 
   /**
    * Creates a conversation detail entry for an AI message
    * Stores the AI response in the conversation history
-   * 
+   *
    * @param apiResponse The response from the Skip API
    * @param conversationID ID of the conversation
    * @param user User context for the operation
    * @returns ID of the created conversation detail, or empty string if creation failed
    */
-  protected async CreateAIMessageConversationDetail(apiResponse: SkipAPIResponse, conversationID: string, user: UserInfo, userPayload: UserPayload): Promise<string> {
+  protected async CreateAIMessageConversationDetail(
+    apiResponse: SkipAPIResponse,
+    conversationID: string,
+    user: UserInfo,
+    userPayload: UserPayload
+  ): Promise<string> {
     const md = new Metadata();
     const convoDetailEntityAI = <ConversationDetailEntity>await md.GetEntityObject('Conversation Details', user);
     convoDetailEntityAI.NewRecord();
@@ -1023,7 +1065,7 @@ export class AskSkipResolver {
   /**
    * Builds the base Skip API request with common fields and data
    * Creates the foundation for both chat and learning cycle requests
-   * 
+   *
    * @param contextUser The user making the request
    * @param dataSource The data source to use
    * @param includeEntities Whether to include entities in the request
@@ -1052,7 +1094,7 @@ export class AskSkipResolver {
     const queries = includeQueries ? this.BuildSkipQueries() : [];
     //const {notes, noteTypes} = includeNotes ? await this.BuildSkipAgentNotes(contextUser, filterUserNotesToContextUser) : {notes: [], noteTypes: []};
     const requests = includeRequests ? await this.BuildSkipRequests(contextUser) : [];
-    
+
     // Setup access token if needed
     let accessToken: GetDataAccessToken;
     if (includeCallBackKeyAndAccessToken) {
@@ -1061,39 +1103,35 @@ export class AskSkipResolver {
         userEmail: contextUser.Email,
         userName: contextUser.Name,
         userID: contextUser.ID,
-        ...additionalTokenInfo
+        ...additionalTokenInfo,
       };
-      
-      accessToken = registerAccessToken(
-        undefined,
-        1000 * 60 * 10 /*10 minutes*/, 
-        tokenInfo
-      );
+
+      accessToken = registerAccessToken(undefined, 1000 * 60 * 10 /*10 minutes*/, tokenInfo);
     }
-    
+
     return {
       entities,
       queries,
       notes: undefined,
       noteTypes: undefined,
       userEmail: contextUser.Email,
-      requests, 
+      requests,
       accessToken,
       organizationID: skipConfigInfo.orgID,
       organizationInfo: configInfo?.askSkip?.organizationInfo,
       apiKeys: this.buildSkipAPIKeys(),
       // Favors public URL for conciseness or when behind a proxy for local development
       // otherwise uses base URL and GraphQL port/path from configuration
-      callingServerURL: accessToken ? (publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}`) : undefined,
+      callingServerURL: accessToken ? publicUrl || `${baseUrl}:${graphqlPort}${graphqlRootPath}` : undefined,
       callingServerAPIKey: accessToken ? callbackAPIKey : undefined,
-      callingServerAccessToken: accessToken ? accessToken.Token : undefined
+      callingServerAccessToken: accessToken ? accessToken.Token : undefined,
     };
   }
 
   /**
    * Builds the learning API request for Skip
    * Creates a request specific to the learning cycle operation
-   * 
+   *
    * @param learningCycleId ID of the current learning cycle
    * @param lastLearningCycleDate Date of the last completed learning cycle
    * @param includeEntities Whether to include entities in the request
@@ -1130,7 +1168,7 @@ export class AskSkipResolver {
       forceEntitiesRefresh,
       includeCallBackKeyAndAccessToken
     );
-    
+
     // Get data specific to learning cycle
     const newConversations = await this.BuildSkipLearningCycleNewConversations(lastLearningCycleDate, dataSource, contextUser);
 
@@ -1146,7 +1184,7 @@ export class AskSkipResolver {
       notes: baseRequest.notes,
       noteTypes: baseRequest.noteTypes,
       requests: baseRequest.requests,
-      apiKeys: baseRequest.apiKeys
+      apiKeys: baseRequest.apiKeys,
     };
 
     return input;
@@ -1155,7 +1193,7 @@ export class AskSkipResolver {
   /**
    * Loads the conversations that have been updated or added since the last learning cycle
    * These are used to train Skip and improve its understanding
-   * 
+   *
    * @param lastLearningCycleDate The date of the last learning cycle
    * @param dataSource Database connection
    * @param contextUser User context for the request
@@ -1170,31 +1208,35 @@ export class AskSkipResolver {
       const rv = new RunView();
 
       // Get all conversations with a conversation detail that has been updated (modified or added) since the last learning cycle
-      const conversationsSinceLastLearningCycle = await rv.RunView<ConversationEntity>({
-        EntityName: 'Conversations',
-        ExtraFilter: `ID IN (SELECT ConversationID FROM __mj.vwConversationDetails WHERE __mj_UpdatedAt >= '${lastLearningCycleDate.toISOString()}')`,
-        ResultType: 'entity_object',
-      }, contextUser);
+      const conversationsSinceLastLearningCycle = await rv.RunView<ConversationEntity>(
+        {
+          EntityName: 'Conversations',
+          ExtraFilter: `ID IN (SELECT ConversationID FROM __mj.vwConversationDetails WHERE __mj_UpdatedAt >= '${lastLearningCycleDate.toISOString()}')`,
+          ResultType: 'entity_object',
+        },
+        contextUser
+      );
 
       if (!conversationsSinceLastLearningCycle.Success || conversationsSinceLastLearningCycle.Results.length === 0) {
         return [];
       }
 
-      // Now we map the conversations to SkipConversations and return 
-      return await Promise.all(conversationsSinceLastLearningCycle.Results.map(async (c) => {
-        return {
-          id: c.ID,
-          name: c.Name,
-          userId: c.UserID,
-          user: c.User,
-          description: c.Description,
-          messages: await this.LoadConversationDetailsIntoSkipMessages(dataSource, c.ID),
-          createdAt: c.__mj_CreatedAt,
-          updatedAt: c.__mj_UpdatedAt
-        };
-      }));
-    }
-    catch (e) {
+      // Now we map the conversations to SkipConversations and return
+      return await Promise.all(
+        conversationsSinceLastLearningCycle.Results.map(async (c) => {
+          return {
+            id: c.ID,
+            name: c.Name,
+            userId: c.UserID,
+            user: c.User,
+            description: c.Description,
+            messages: await this.LoadConversationDetailsIntoSkipMessages(dataSource, c.ID),
+            createdAt: c.__mj_CreatedAt,
+            updatedAt: c.__mj_UpdatedAt,
+          };
+        })
+      );
+    } catch (e) {
       LogError(`Error loading conversations since last learning cycle: ${e}`);
       return [];
     }
@@ -1203,13 +1245,11 @@ export class AskSkipResolver {
   /**
    * Builds an array of agent requests
    * These are requests that have been made to the AI agent
-   * 
+   *
    * @param contextUser User context for loading the requests
    * @returns Array of agent request objects
    */
-  protected async BuildSkipRequests(
-    contextUser: UserInfo
-  ): Promise<SkipAPIAgentRequest[]> {
+  protected async BuildSkipRequests(contextUser: UserInfo): Promise<SkipAPIAgentRequest[]> {
     try {
       const md = new Metadata();
       const requestEntity = await md.GetEntityObject<AIAgentRequestEntity>('AI Agent Requests', contextUser);
@@ -1229,13 +1269,12 @@ export class AskSkipResolver {
           responseByUserId: r.ResponseByUserID,
           responseByUser: r.ResponseByUser,
           respondedAt: r.RespondedAt,
-          comments: r.Comments, 
+          comments: r.Comments,
           createdAt: r.__mj_CreatedAt,
           updatedAt: r.__mj_UpdatedAt,
         };
       });
       return requests;
-
     } catch (e) {
       LogError(`Error loading requests: ${e}`);
       return [];
@@ -1245,7 +1284,7 @@ export class AskSkipResolver {
   /**
    * Gets the date of the last complete learning cycle for the Skip agent
    * Used to determine which data to include in the next learning cycle
-   * 
+   *
    * @param agentID ID of the Skip agent
    * @param user User context for the query
    * @returns Date of the last complete learning cycle, or epoch if none exists
@@ -1254,20 +1293,22 @@ export class AskSkipResolver {
     const md = new Metadata();
     const rv = new RunView();
 
-    const lastLearningCycleRV = await rv.RunView<AIAgentLearningCycleEntity>({
-      EntityName: 'AI Agent Learning Cycles',
-      ExtraFilter: `AgentID = '${agentID}' AND Status = 'Complete'`,
-      ResultType: 'entity_object',
-      OrderBy: 'StartedAt DESC',
-      MaxRows: 1,
-    }, user);
+    const lastLearningCycleRV = await rv.RunView<AIAgentLearningCycleEntity>(
+      {
+        EntityName: 'AI Agent Learning Cycles',
+        ExtraFilter: `AgentID = '${agentID}' AND Status = 'Complete'`,
+        ResultType: 'entity_object',
+        OrderBy: 'StartedAt DESC',
+        MaxRows: 1,
+      },
+      user
+    );
 
     const lastLearningCycle = lastLearningCycleRV.Results[0];
 
     if (lastLearningCycle) {
       return lastLearningCycle.StartedAt;
-    }
-    else {
+    } else {
       // if no lerarning cycle found, return the epoch date
       return new Date(0);
     }
@@ -1276,7 +1317,7 @@ export class AskSkipResolver {
   /**
    * Builds the chat API request for Skip
    * Creates a request specific to a chat interaction
-   * 
+   *
    * @param messages Array of messages in the conversation
    * @param conversationId ID of the conversation
    * @param dataContext Data context associated with the conversation
@@ -1310,7 +1351,7 @@ export class AskSkipResolver {
       conversationId,
       requestPhase,
     };
-    
+
     // Get base request data
     const baseRequest = await this.buildBaseSkipRequest(
       contextUser,
@@ -1334,41 +1375,48 @@ export class AskSkipResolver {
       conversationID: conversationId.toString(),
       dataContext: <DataContext>CopyScalarsAndArrays(dataContext), // we are casting this to DataContext as we're pushing this to the Skip API, and we don't want to send the real DataContext object, just a copy of the scalar and array properties
       requestPhase,
-      artifacts: artifacts
+      artifacts: artifacts,
     };
-    
+
     return input;
   }
 
   /**
    * Builds up an array of artifacts associated with a conversation
    * Artifacts are content or documents generated during conversations
-   * 
+   *
    * @param contextUser User context for the query
    * @param dataSource Database connection
    * @param conversationId ID of the conversation
    * @returns Array of artifacts associated with the conversation
    */
-  protected async buildSkipAPIArtifacts(contextUser: UserInfo, dataSource: mssql.ConnectionPool, conversationId: string): Promise<SkipAPIArtifact[]> {
+  protected async buildSkipAPIArtifacts(
+    contextUser: UserInfo,
+    dataSource: mssql.ConnectionPool,
+    conversationId: string
+  ): Promise<SkipAPIArtifact[]> {
     const md = new Metadata();
     const ei = md.EntityByName('MJ: Conversation Artifacts');
     const rv = new RunView();
-    const results = await rv.RunViews([
-      {
-        EntityName: "MJ: Conversation Artifacts",
-        ExtraFilter: `ConversationID='${conversationId}'`, // get artifacts linked to this convo
-        OrderBy: "__mj_CreatedAt"
-      },
-      {
-        EntityName: "MJ: Artifact Types", // get all artifact types
-        OrderBy: "Name"
-      },
-      {
-        EntityName: "MJ: Conversation Artifact Versions",
-        ExtraFilter: `ConversationArtifactID IN (SELECT ID FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ConversationID='${conversationId}')`,
-        OrderBy: 'ConversationArtifactID, __mj_CreatedAt'
-      }
-    ], contextUser);
+    const results = await rv.RunViews(
+      [
+        {
+          EntityName: 'MJ: Conversation Artifacts',
+          ExtraFilter: `ConversationID='${conversationId}'`, // get artifacts linked to this convo
+          OrderBy: '__mj_CreatedAt',
+        },
+        {
+          EntityName: 'MJ: Artifact Types', // get all artifact types
+          OrderBy: 'Name',
+        },
+        {
+          EntityName: 'MJ: Conversation Artifact Versions',
+          ExtraFilter: `ConversationArtifactID IN (SELECT ID FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ConversationID='${conversationId}')`,
+          OrderBy: 'ConversationArtifactID, __mj_CreatedAt',
+        },
+      ],
+      contextUser
+    );
     if (results && results.length > 0 && results.every((r) => r.Success)) {
       const types: SkipAPIArtifactType[] = results[1].Results.map((a: ArtifactTypeEntity) => {
         const retVal: SkipAPIArtifactType = {
@@ -1378,13 +1426,13 @@ export class AskSkipResolver {
           contentType: a.ContentType,
           enabled: a.IsEnabled,
           createdAt: a.__mj_CreatedAt,
-          updatedAt: a.__mj_UpdatedAt
-        }
+          updatedAt: a.__mj_UpdatedAt,
+        };
         return retVal;
       });
       const allConvoArtifacts = results[0].Results.map((a: ConversationArtifactEntity) => {
         const rawVersions: ConversationArtifactVersionEntity[] = results[2].Results as ConversationArtifactVersionEntity[];
-        const thisArtifactsVersions = rawVersions.filter(rv => rv.ConversationArtifactID === a.ID);
+        const thisArtifactsVersions = rawVersions.filter((rv) => rv.ConversationArtifactID === a.ID);
         const versionsForThisArtifact: SkipAPIArtifactVersion[] = thisArtifactsVersions.map((v: ConversationArtifactVersionEntity) => {
           const versionRetVal: SkipAPIArtifactVersion = {
             id: v.ID,
@@ -1394,7 +1442,7 @@ export class AskSkipResolver {
             content: v.Content,
             comments: v.Comments,
             createdAt: v.__mj_CreatedAt,
-            updatedAt: v.__mj_UpdatedAt
+            updatedAt: v.__mj_UpdatedAt,
           };
           return versionRetVal;
         });
@@ -1403,28 +1451,26 @@ export class AskSkipResolver {
           name: a.Name,
           description: a.Description,
           comments: a.Comments,
-          sharingScope: a.SharingScope as 'None' |'SpecificUsers' |'Everyone' |'Public',
+          sharingScope: a.SharingScope as 'None' | 'SpecificUsers' | 'Everyone' | 'Public',
           versions: versionsForThisArtifact,
           conversationId: a.ConversationID,
-          artifactType: types.find((t => t.id === a.ArtifactTypeID)),
+          artifactType: types.find((t) => t.id === a.ArtifactTypeID),
           createdAt: a.__mj_CreatedAt,
-          updatedAt: a.__mj_UpdatedAt
+          updatedAt: a.__mj_UpdatedAt,
         };
         return artifactRetVal;
       });
 
       return allConvoArtifacts;
-    }
-    else {
+    } else {
       return [];
     }
   }
 
-
   /**
    * Executes a script in the context of a data context
    * Allows running code against data context objects
-   * 
+   *
    * @param dataSource Database connection
    * @param userPayload Information about the authenticated user
    * @param pubSub Publisher/subscriber for events
@@ -1443,7 +1489,22 @@ export class AskSkipResolver {
     if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
     const dataContext: DataContext = new DataContext();
     await dataContext.Load(DataContextId, dataSource, true, false, 0, user);
-    const input = <SkipAPIRunScriptRequest>await this.buildSkipChatAPIRequest([], '', dataContext, 'run_existing_script', false, false, false, false, user, dataSource, false, false);
+    const input = <SkipAPIRunScriptRequest>(
+      await this.buildSkipChatAPIRequest(
+        [],
+        '',
+        dataContext,
+        'run_existing_script',
+        false,
+        false,
+        false,
+        false,
+        user,
+        dataSource,
+        false,
+        false
+      )
+    );
     input.scriptText = ScriptText;
     return this.handleSimpleSkipChatPostRequest(input, undefined, undefined, undefined, userPayload.userRecord, userPayload);
   }
@@ -1451,7 +1512,7 @@ export class AskSkipResolver {
   /**
    * Builds the array of API keys for various AI services
    * These are used by Skip to call external AI services
-   * 
+   *
    * @returns Array of API keys for different vendor services
    */
   protected buildSkipAPIKeys(): SkipAPIRequestAPIKey[] {
@@ -1500,34 +1561,34 @@ export class AskSkipResolver {
         LogError(`User ${userPayload.email} not found in UserCache`);
         return null;
       }
-      
+
       // Load the conversation
       const convoEntity = await md.GetEntityObject<ConversationEntity>('Conversations', user);
       const loadResult = await convoEntity.Load(ConversationId);
-      
+
       if (!loadResult) {
         LogError(`Could not load conversation ${ConversationId} for re-attachment`);
         return null;
       }
-      
+
       // Check if the conversation belongs to this user
       if (convoEntity.UserID !== user.ID) {
         LogError(`Conversation ${ConversationId} does not belong to user ${user.Email}`);
         return null;
       }
-      
+
       // If the conversation is processing, reattach the session to receive updates
       if (convoEntity.Status === 'Processing') {
         // Add this session to the active streams for this conversation
         activeStreams.addSession(ConversationId, userPayload.sessionId);
-        
+
         // Get the last known status message and start time from our cache
         const lastStatusMessage = activeStreams.getStatus(ConversationId) || 'Processing...';
         const startTime = activeStreams.getStartTime(ConversationId);
-        
+
         // Check if the stream is still active
         const isStreamActive = activeStreams.isActive(ConversationId);
-        
+
         if (isStreamActive) {
           // Send the last known status to the frontend
           const statusMessage = {
@@ -1537,20 +1598,22 @@ export class AskSkipResolver {
             conversationID: convoEntity.ID,
             message: lastStatusMessage,
           };
-          
+
           pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
             pushStatusUpdates: {
               message: JSON.stringify(statusMessage),
-              sessionId: userPayload.sessionId
-            }
+              sessionId: userPayload.sessionId,
+            },
           });
-          
-          LogStatus(`Re-attached session ${userPayload.sessionId} to active stream for conversation ${ConversationId}, last status: ${lastStatusMessage}`);
-          
+
+          LogStatus(
+            `Re-attached session ${userPayload.sessionId} to active stream for conversation ${ConversationId}, last status: ${lastStatusMessage}`
+          );
+
           // Return the status and start time
           return {
             lastStatusMessage,
-            startTime: startTime || convoEntity.__mj_UpdatedAt
+            startTime: startTime || convoEntity.__mj_UpdatedAt,
           };
         } else {
           // Stream is inactive or doesn't exist, just send default status
@@ -1561,20 +1624,20 @@ export class AskSkipResolver {
             conversationID: convoEntity.ID,
             message: 'Processing...',
           };
-          
+
           pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
             pushStatusUpdates: {
               message: JSON.stringify(statusMessage),
-              sessionId: userPayload.sessionId
-            }
+              sessionId: userPayload.sessionId,
+            },
           });
-          
+
           LogStatus(`Re-attached session ${userPayload.sessionId} to conversation ${ConversationId}, but stream is inactive`);
-          
+
           // Return default start time since stream is inactive
           return {
             lastStatusMessage: 'Processing...',
-            startTime: convoEntity.__mj_UpdatedAt
+            startTime: convoEntity.__mj_UpdatedAt,
           };
         }
       } else {
@@ -1590,7 +1653,7 @@ export class AskSkipResolver {
   /**
    * Executes an analysis query with Skip
    * This is the primary entry point for general Skip conversations
-   * 
+   *
    * @param UserQuestion The question or message from the user
    * @param ConversationId ID of an existing conversation, or empty for a new conversation
    * @param dataSource Database connection
@@ -1637,8 +1700,21 @@ export class AskSkipResolver {
       AskSkipResolver._maxHistoricalMessages
     );
 
-    const conversationDetailCount = 1
-    const input = await this.buildSkipChatAPIRequest(messages, ConversationId, dataContext, 'initial_request', true, true, true, false, user, dataSource, ForceEntityRefresh === undefined ? false : ForceEntityRefresh, true);
+    const conversationDetailCount = 1;
+    const input = await this.buildSkipChatAPIRequest(
+      messages,
+      ConversationId,
+      dataContext,
+      'initial_request',
+      true,
+      true,
+      true,
+      false,
+      user,
+      dataSource,
+      ForceEntityRefresh === undefined ? false : ForceEntityRefresh,
+      true
+    );
 
     return this.HandleSkipChatRequest(
       input,
@@ -1658,28 +1734,27 @@ export class AskSkipResolver {
     );
   }
 
-
   /**
    * Recursively builds the category path for a query
-   * @param md 
-   * @param categoryID 
+   * @param md
+   * @param categoryID
    */
   protected buildQueryCategoryPath(md: Metadata, categoryID: string): string {
     const cat = md.QueryCategories.find((c) => c.ID === categoryID);
     if (!cat) return '';
     if (!cat.ParentID) return cat.Name; // base case, no parent, just return the name
     const parentPath = this.buildQueryCategoryPath(md, cat.ParentID); // build the path recursively
-    return parentPath ? `${parentPath}/${cat.Name}` : cat.Name; 
+    return parentPath ? `${parentPath}/${cat.Name}` : cat.Name;
   }
 
   /**
    * Packages up queries from the metadata based on their status
    * Used to provide Skip with information about available queries
-   * 
+   *
    * @param status The status of queries to include
    * @returns Array of query information objects
    */
-  protected BuildSkipQueries(status: "Pending" | "In-Review" | "Approved" | "Rejected" | "Obsolete" = 'Approved'): SkipQueryInfo[] {
+  protected BuildSkipQueries(status: 'Pending' | 'In-Review' | 'Approved' | 'Rejected' | 'Obsolete' = 'Approved'): SkipQueryInfo[] {
     const md = new Metadata();
     const approvedQueries = md.Queries.filter((q) => q.Status === status);
     return approvedQueries.map((q) => {
@@ -1743,33 +1818,33 @@ export class AskSkipResolver {
             createdAt: e.__mj_CreatedAt,
             updatedAt: e.__mj_UpdatedAt,
           };
-        })
-      }
+        }),
+      };
     });
   }
 
   // /**
   //  * Builds up the array of notes and note types for Skip
   //  * These notes are used to provide Skip with domain knowledge and context
-  //  * 
+  //  *
   //  * @param contextUser User context for the request
   //  * @returns Object containing arrays of notes and note types
   //  */
   // protected async BuildSkipAgentNotes(contextUser: UserInfo, filterUserNotesToContextUser: boolean): Promise<{notes: SkipAPIAgentNote[], noteTypes: SkipAPIAgentNoteType[]}> {
   //   try {
   //     // if already configured this does nothing, just makes sure we're configured
-  //     await AIEngine.Instance.Config(false, contextUser); 
+  //     await AIEngine.Instance.Config(false, contextUser);
 
   //     const agent: AIAgentEntityExtended = AIEngine.Instance.GetAgentByName('Skip');
   //     if (agent) {
   //       let notes: SkipAPIAgentNote[] = [];
   //       let noteTypes: SkipAPIAgentNoteType[] = [];
-        
+
   //       notes = agent.Notes.map((r) => {
   //         return {
   //           id: r.ID,
   //           agentNoteTypeId: r.AgentNoteTypeID,
-  //           agentNoteType: r.AgentNoteType, 
+  //           agentNoteType: r.AgentNoteType,
   //           note: r.Note,
   //           type: r.Type,
   //           userId: r.UserID,
@@ -1781,7 +1856,7 @@ export class AskSkipResolver {
 
   //       if (filterUserNotesToContextUser){
   //         // filter out any notes that are not for this user
-  //         notes = notes.filter((n) => n.type === 'Global' || 
+  //         notes = notes.filter((n) => n.type === 'Global' ||
   //                                     (n.type === 'User' && n.userId === contextUser.ID));
   //       }
 
@@ -1810,21 +1885,22 @@ export class AskSkipResolver {
   /**
    * Packs entity rows for inclusion in Skip requests
    * Provides sample data based on entity configuration
-   * 
+   *
    * @param e Entity information
    * @param dataSource Database connection
    * @returns Array of entity rows based on packing configuration
    */
   protected async PackEntityRows(e: EntityInfo, dataSource: mssql.ConnectionPool): Promise<any[]> {
     try {
-      if (e.RowsToPackWithSchema === 'None')
-        return [];
+      if (e.RowsToPackWithSchema === 'None') return [];
 
       // only include columns that have a scopes including either All and/or AI or have Null for ScopeDefault
       const fields = e.Fields.filter((f) => {
         const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
         return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
-      }).map(f => `[${f.Name}]`).join(',');
+      })
+        .map((f) => `[${f.Name}]`)
+        .join(',');
 
       // now run the query based on the row packing method
       let sql: string = '';
@@ -1857,12 +1933,10 @@ export class AskSkipResolver {
       const result = await request.query(sql);
       if (!result || !result.recordset) {
         return [];
-      }
-      else {
+      } else {
         return result.recordset;
       }
-    }
-    catch (e) {
+    } catch (e) {
       LogError(`AskSkipResolver::PackEntityRows: ${e}`);
       return [];
     }
@@ -1871,7 +1945,7 @@ export class AskSkipResolver {
   /**
    * Packs possible values for an entity field
    * These values help Skip understand the domain and valid values for fields
-   * 
+   *
    * @param f Field information
    * @param dataSource Database connection
    * @returns Array of possible values for the field
@@ -1880,39 +1954,39 @@ export class AskSkipResolver {
     try {
       if (f.ValuesToPackWithSchema === 'None') {
         return []; // don't pack anything
-      }
-      else if (f.ValuesToPackWithSchema === 'All') {
+      } else if (f.ValuesToPackWithSchema === 'All') {
         // wants ALL of the distinct values
         return await this.GetFieldDistinctValues(f, dataSource);
-      }
-      else if (f.ValuesToPackWithSchema === 'Auto') {
+      } else if (f.ValuesToPackWithSchema === 'Auto') {
         // default setting - pack based on the ValueListType
         if (f.ValueListTypeEnum === 'List') {
           // simple list of values in the Entity Field Values table
           return f.EntityFieldValues.map((v) => {
-            return {value: v.Value, displayValue: v.Value};
+            return { value: v.Value, displayValue: v.Value };
           });
-        }
-        else if (f.ValueListTypeEnum === 'ListOrUserEntry') {
-          // could be a user provided value, OR the values in the list of possible values. 
+        } else if (f.ValueListTypeEnum === 'ListOrUserEntry') {
+          // could be a user provided value, OR the values in the list of possible values.
           // get the distinct list of values from the DB and concat that with the f.EntityFieldValues array - deduped and return
           const values = await this.GetFieldDistinctValues(f, dataSource);
           if (!values || values.length === 0) {
             // no result, just return the EntityFieldValues
             return f.EntityFieldValues.map((v) => {
-              return {value: v.Value, displayValue: v.Value};
+              return { value: v.Value, displayValue: v.Value };
             });
-          }
-          else {
-            return [...new Set([...f.EntityFieldValues.map((v) => {
-              return {value: v.Value, displayValue: v.Value};
-            }), ...values])];
+          } else {
+            return [
+              ...new Set([
+                ...f.EntityFieldValues.map((v) => {
+                  return { value: v.Value, displayValue: v.Value };
+                }),
+                ...values,
+              ]),
+            ];
           }
         }
       }
       return []; // if we get here, nothing to pack
-    }
-    catch (e) {
+    } catch (e) {
       LogError(`AskSkipResolver::PackFieldPossibleValues: ${e}`);
       return [];
     }
@@ -1921,7 +1995,7 @@ export class AskSkipResolver {
   /**
    * Gets distinct values for a field from the database
    * Used to provide Skip with information about the possible values
-   * 
+   *
    * @param f Field information
    * @param dataSource Database connection
    * @returns Array of distinct values for the field
@@ -1933,64 +2007,70 @@ export class AskSkipResolver {
       const result = await request.query(sql);
       if (!result || !result.recordset) {
         return [];
-      }
-      else {
+      } else {
         return result.recordset.map((r) => {
           return {
-            value: r[f.Name], 
-            displayValue: r[f.Name]
-          };  
+            value: r[f.Name],
+            displayValue: r[f.Name],
+          };
         });
       }
-    }
-    catch (e) {
+    } catch (e) {
       LogError(`AskSkipResolver::GetFieldDistinctValues: ${e}`);
-      return [];      
+      return [];
     }
   }
 
-
   // SKIP ENTITIES CACHING
   // Static variables shared across all instances
-  private static __skipEntitiesCache$: BehaviorSubject<Promise<SkipEntityInfo[]> | null> = new BehaviorSubject<Promise<SkipEntityInfo[]> | null>(null);
+  private static __skipEntitiesCache$: BehaviorSubject<Promise<SkipEntityInfo[]> | null> = new BehaviorSubject<Promise<
+    SkipEntityInfo[]
+  > | null>(null);
   private static __lastRefreshTime: number = 0;
 
   /**
    * Refreshes the Skip entities cache
    * Rebuilds the entity information that is provided to Skip
-   * 
+   *
    * @param dataSource Database connection
    * @returns Updated array of entity information
    */
   private async refreshSkipEntities(dataSource: mssql.ConnectionPool): Promise<SkipEntityInfo[]> {
     try {
       const md = new Metadata();
-      const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? [])
-        .map((e) => e.trim().toLowerCase());
-  
+      const skipSpecialIncludeEntities = (configInfo.askSkip?.entitiesToSend?.includeEntitiesFromExcludedSchemas ?? []).map((e) =>
+        e.trim().toLowerCase()
+      );
+
       // get the list of entities
       const entities = md.Entities.filter((e) => {
-        if (!configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
-            skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())) {
+        if (
+          !configInfo.askSkip.entitiesToSend.excludeSchemas.includes(e.SchemaName) ||
+          skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())
+        ) {
           const sd = e.ScopeDefault?.trim();
           if (sd && sd.length > 0) {
             const scopes = sd.split(',').map((s) => s.trim().toLowerCase()) ?? ['all'];
-            return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai') || skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase());
-          }
-          else {
+            return (
+              !scopes ||
+              scopes.length === 0 ||
+              scopes.includes('all') ||
+              scopes.includes('ai') ||
+              skipSpecialIncludeEntities.includes(e.Name.trim().toLowerCase())
+            );
+          } else {
             return true; // no scope, so include it
           }
         }
         return false;
       });
-  
+
       // now we have our list of entities, pack em up
       const result = await Promise.all(entities.map((e) => this.PackSingleSkipEntityInfo(e, dataSource)));
-  
+
       AskSkipResolver.__lastRefreshTime = Date.now(); // Update last refresh time
-      return result;        
-    }
-    catch (e) {
+      return result;
+    } catch (e) {
       LogError(`AskSkipResolver::refreshSkipEntities: ${e}`);
       return [];
     }
@@ -1999,27 +2079,30 @@ export class AskSkipResolver {
   /**
    * Builds or retrieves Skip entities from cache
    * Uses caching to avoid expensive rebuilding of entity information
-   * 
+   *
    * @param dataSource Database connection
    * @param forceRefresh Whether to force a refresh regardless of cache state
    * @param refreshIntervalMinutes Minutes before cache expires
    * @returns Array of entity information
    */
-  public async BuildSkipEntities(dataSource: mssql.ConnectionPool, forceRefresh: boolean = false, refreshIntervalMinutes: number = 15): Promise<SkipEntityInfo[]> {
+  public async BuildSkipEntities(
+    dataSource: mssql.ConnectionPool,
+    forceRefresh: boolean = false,
+    refreshIntervalMinutes: number = 15
+  ): Promise<SkipEntityInfo[]> {
     try {
       const now = Date.now();
-      const cacheExpired = (now - AskSkipResolver.__lastRefreshTime) > (refreshIntervalMinutes * 60 * 1000);
-  
+      const cacheExpired = now - AskSkipResolver.__lastRefreshTime > refreshIntervalMinutes * 60 * 1000;
+
       // If force refresh is requested OR cache expired OR cache is empty, refresh
       if (forceRefresh || cacheExpired || AskSkipResolver.__skipEntitiesCache$.value === null) {
         console.log(`Forcing Skip Entities refresh: ${forceRefresh}, Cache Expired: ${cacheExpired}`);
         const newData = this.refreshSkipEntities(dataSource);
         AskSkipResolver.__skipEntitiesCache$.next(newData);
       }
-  
-      return AskSkipResolver.__skipEntitiesCache$.pipe(take(1)).toPromise();  
-    }
-    catch (e) {
+
+      return AskSkipResolver.__skipEntitiesCache$.pipe(take(1)).toPromise();
+    } catch (e) {
       LogError(`AskSkipResolver::BuildSkipEntities: ${e}`);
       return [];
     }
@@ -2028,7 +2111,7 @@ export class AskSkipResolver {
   /**
    * Packs information about a single entity for Skip
    * Includes fields, relationships, and sample data
-   * 
+   *
    * @param e Entity information
    * @param dataSource Database connection
    * @returns Packaged entity information
@@ -2041,26 +2124,27 @@ export class AskSkipResolver {
         schemaName: e.SchemaName,
         baseView: e.BaseView,
         description: e.Description,
-  
-        fields: await Promise.all(e.Fields.filter(f => {
-          // we want to check the scopes for the field level and make sure it is either All or AI or has both
-          const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
-          return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
-        }).map(f => {
-          return this.PackSingleSkipEntityField(f, dataSource);
-        })),
-  
+
+        fields: await Promise.all(
+          e.Fields.filter((f) => {
+            // we want to check the scopes for the field level and make sure it is either All or AI or has both
+            const scopes = f.ScopeDefault?.split(',').map((s) => s.trim().toLowerCase());
+            return !scopes || scopes.length === 0 || scopes.includes('all') || scopes.includes('ai');
+          }).map((f) => {
+            return this.PackSingleSkipEntityField(f, dataSource);
+          })
+        ),
+
         relatedEntities: e.RelatedEntities.map((r) => {
           return this.PackSingleSkipEntityRelationship(r);
         }),
-  
+
         rowsPacked: e.RowsToPackWithSchema,
         rowsSampleMethod: e.RowsToPackSampleMethod,
-        rows: await this.PackEntityRows(e, dataSource)
+        rows: await this.PackEntityRows(e, dataSource),
       };
       return ret;
-    }
-    catch (e) {
+    } catch (e) {
       LogError(`AskSkipResolver::PackSingleSkipEntityInfo: ${e}`);
       return null;
     }
@@ -2069,7 +2153,7 @@ export class AskSkipResolver {
   /**
    * Packs information about a single entity relationship
    * These relationships help Skip understand the data model
-   * 
+   *
    * @param r Relationship information
    * @returns Packaged relationship information
    */
@@ -2089,8 +2173,7 @@ export class AskSkipResolver {
         relatedEntity: r.RelatedEntity,
         relatedEntityBaseView: r.RelatedEntityBaseView,
       };
-    }
-    catch (e) {
+    } catch (e) {
       LogError(`AskSkipResolver::PackSingleSkipEntityRelationship: ${e}`);
       return null;
     }
@@ -2099,7 +2182,7 @@ export class AskSkipResolver {
   /**
    * Packs information about a single entity field
    * Includes metadata and possible values
-   * 
+   *
    * @param f Field information
    * @param dataSource Database connection
    * @returns Packaged field information
@@ -2137,8 +2220,7 @@ export class AskSkipResolver {
         relatedEntityBaseView: f.RelatedEntityBaseView,
         possibleValues: await this.PackFieldPossibleValues(f, dataSource),
       };
-    }
-    catch (e) {
+    } catch (e) {
       LogError(`AskSkipResolver::PackSingleSkipEntityField: ${e}`);
       return null;
     }
@@ -2147,7 +2229,7 @@ export class AskSkipResolver {
   /**
    * Handles initial object loading for Skip chat interactions
    * Creates or loads conversation objects, data contexts, and other required entities
-   * 
+   *
    * @param dataSource Database connection
    * @param ConversationId ID of an existing conversation, or empty for a new one
    * @param UserQuestion The user's question or message
@@ -2192,8 +2274,7 @@ export class AskSkipResolver {
             LogError(`Creating a new data context failed`, undefined, dataContextEntity.LatestResult);
             throw new Error(`Creating a new data context failed`);
           }
-        } 
-        else {
+        } else {
           const dcLoadResult = await dataContextEntity.Load(DataContextId);
           if (!dcLoadResult) {
             throw new Error(`Loading DataContextEntity for DataContextId ${DataContextId} failed`);
@@ -2210,17 +2291,14 @@ export class AskSkipResolver {
               LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
             }
           }
-        } 
-        else {
+        } else {
           LogError(`Creating a new conversation failed`, undefined, convoEntity.LatestResult);
           throw new Error(`Creating a new conversation failed`);
         }
-      } 
-      else {
+      } else {
         throw new Error(`User ${userPayload.email} not found in UserCache`);
       }
-    } 
-    else {
+    } else {
       await convoEntity.Load(ConversationId); // load the existing conversation, will need it later
       dataContextEntity = await md.GetEntityObject<DataContextEntity>('Data Contexts', user);
 
@@ -2233,19 +2311,16 @@ export class AskSkipResolver {
           if (!convoEntitySaveResult) {
             LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
           }
-        } 
-        else {
-          // note - we ignore the parameter DataContextId if it is passed in, we will use the data context from the conversation that is saved. 
+        } else {
+          // note - we ignore the parameter DataContextId if it is passed in, we will use the data context from the conversation that is saved.
           // If a user wants to change the data context for a convo, they can do that elsewhere
           console.warn(
             `AskSkipResolver: DataContextId ${DataContextId} was passed in but it was ignored because it was different than the DataContextID in the conversation ${convoEntity.DataContextID}`
           );
         }
         // only load if we have a data context here, otherwise we have a new record in the dataContext entity
-        if (convoEntity.DataContextID)
-          await dataContextEntity.Load(convoEntity.DataContextID);
-      }
-      else if ((!DataContextId || DataContextId.length === 0) && (!convoEntity.DataContextID || convoEntity.DataContextID.length === 0)) {
+        if (convoEntity.DataContextID) await dataContextEntity.Load(convoEntity.DataContextID);
+      } else if ((!DataContextId || DataContextId.length === 0) && (!convoEntity.DataContextID || convoEntity.DataContextID.length === 0)) {
         // in this branch of the logic we don't have a passed in DataContextId and we don't have a DataContextID in the conversation, so we need to save the data context, get the ID,
         // update the conversation and save it as well
         dataContextEntity.NewRecord();
@@ -2254,14 +2329,11 @@ export class AskSkipResolver {
         if (await dataContextEntity.Save()) {
           DataContextId = convoEntity.DataContextID;
           convoEntity.DataContextID = dataContextEntity.ID;
-          if (!await convoEntity.Save()) {
+          if (!(await convoEntity.Save())) {
             LogError(`Error saving conversation entity for conversation: ${ConversationId}`, undefined, convoEntity.LatestResult);
           }
-        } 
-        else
-          LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
-      }
-      else {
+        } else LogError(`Error saving DataContextEntity for conversation: ${ConversationId}`, undefined, dataContextEntity.LatestResult);
+      } else {
         // finally in this branch we get here if we have a DataContextId passed in and it is the same as the DataContextID in the conversation, in this case simply load the data context
         await dataContextEntity.Load(convoEntity.DataContextID);
       }
@@ -2281,7 +2353,7 @@ export class AskSkipResolver {
       LogError(`Error saving conversation detail entity for user message: ${UserQuestion}`, undefined, convoDetailEntity.LatestResult);
     }
 
-    const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext);  
+    const dataContext = MJGlobal.Instance.ClassFactory.CreateInstance<DataContext>(DataContext);
     await dataContext.Load(dataContextEntity.ID, dataSource, false, false, 0, user);
     return { dataContext, convoEntity, dataContextEntity, convoDetailEntity };
   }
@@ -2289,7 +2361,7 @@ export class AskSkipResolver {
   /**
    * Loads conversation details from the database and transforms them into Skip message format
    * Used to provide Skip with conversation history for context
-   * 
+   *
    * @param dataSource Database connection
    * @param ConversationId ID of the conversation to load details for
    * @param maxHistoricalMessages Maximum number of historical messages to include
@@ -2309,10 +2381,10 @@ export class AskSkipResolver {
       // load up all the conversation details from the database server
       const md = new Metadata();
       const e = md.Entities.find((e) => e.Name === 'Conversation Details');
-      
+
       // Add role filter if specified
       const roleFilterClause = roleFilter ? ` AND Role = '${roleFilter}'` : '';
-      
+
       const sql = `SELECT
                       ${maxHistoricalMessages ? 'TOP ' + maxHistoricalMessages : ''} *
                    FROM
@@ -2323,8 +2395,7 @@ export class AskSkipResolver {
                       BY __mj_CreatedAt DESC`;
       const request = new mssql.Request(dataSource);
       const result = await request.query(sql);
-      if (!result || !result.recordset) 
-        throw new Error(`Error running SQL: ${sql}`);
+      if (!result || !result.recordset) throw new Error(`Error running SQL: ${sql}`);
       else {
         // first, let's sort the result array into a local variable called returnData and in that we will sort by __mj_CreatedAt in ASCENDING order so we have the right chronological order
         // the reason we're doing a LOCAL sort here is because in the SQL query above, we're sorting in DESCENDING order so we can use the TOP clause to limit the number of records and get the
@@ -2359,7 +2430,7 @@ export class AskSkipResolver {
                 executionResults: analysisDetail.executionResults,
                 tableDataColumns: analysisDetail.tableDataColumns,
                 componentOptions: analysisDetail.componentOptions,
-                artifactRequest: analysisDetail.artifactRequest
+                artifactRequest: analysisDetail.artifactRequest,
               });
             } else if (detail?.responsePhase === SkipResponsePhase.ClarifyingQuestion) {
               const clarifyingQuestionDetail = <SkipAPIClarifyingQuestionResponse>detail;
@@ -2397,7 +2468,7 @@ export class AskSkipResolver {
   /**
    * Maps database role values to Skip API role format
    * Converts role names from database format to the format expected by Skip API
-   * 
+   *
    * @param role Database role value
    * @returns Skip API role value ('user' or 'system')
    */
@@ -2415,7 +2486,7 @@ export class AskSkipResolver {
   /**
    * Handles the main Skip chat request processing flow
    * Routes the request through the different phases based on the Skip API response
-   * 
+   *
    * @param input Skip API request to send
    * @param UserQuestion The question or message from the user
    * @param user User information
@@ -2443,7 +2514,7 @@ export class AskSkipResolver {
     convoEntity: ConversationEntity,
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
-    dataContextEntity: DataContextEntity, 
+    dataContextEntity: DataContextEntity,
     conversationDetailCount: number,
     startTime: Date
   ): Promise<AskSkipResultType> {
@@ -2499,10 +2570,10 @@ export class AskSkipResolver {
           LogStatus(JSON.stringify(message, null, 4));
           if (message.type === 'status_update') {
             const statusContent = message.value.messages[0].content;
-            
+
             // Store the status in our active streams cache
             activeStreams.updateStatus(ConversationId, statusContent, userPayload.sessionId);
-            
+
             // Publish to all sessions listening to this conversation
             const sessionIds = activeStreams.getSessionIds(ConversationId);
             for (const sessionId of sessionIds) {
@@ -2523,10 +2594,10 @@ export class AskSkipResolver {
     } catch (error) {
       // Set conversation status to Available on error so user can try again
       await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
-      
+
       // Log the error for debugging
       LogError(`Error in HandleSkipChatRequest sendPostRequest: ${error}`);
-      
+
       // Publish error status update to user
       pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
         message: JSON.stringify({
@@ -2537,7 +2608,7 @@ export class AskSkipResolver {
         }),
         sessionId: userPayload.sessionId,
       });
-      
+
       // Re-throw the error to propagate it up the stack
       throw error;
     }
@@ -2564,7 +2635,7 @@ export class AskSkipResolver {
           convoEntity,
           convoDetailEntity,
           dataContext,
-          dataContextEntity, 
+          dataContextEntity,
           conversationDetailCount,
           startTime
         );
@@ -2581,7 +2652,7 @@ export class AskSkipResolver {
           pubSub,
           convoEntity,
           convoDetailEntity,
-          startTime,
+          startTime
         );
       } else if (apiResponse.responsePhase === 'analysis_complete') {
         return await this.HandleAnalysisComplete(
@@ -2638,7 +2709,7 @@ export class AskSkipResolver {
   /**
    * Publishes a status update message to the user based on the Skip API response
    * Provides feedback about what phase of processing is happening
-   * 
+   *
    * @param apiResponse The response from the Skip API
    * @param userPayload User payload from context
    * @param conversationID ID of the conversation
@@ -2679,7 +2750,7 @@ export class AskSkipResolver {
   /**
    * Handles the analysis complete phase of the Skip chat process
    * Finalizes the conversation and creates necessary artifacts
-   * 
+   *
    * @param apiRequest The original request sent to Skip
    * @param apiResponse The analysis complete response from Skip
    * @param UserQuestion The original user question
@@ -2745,7 +2816,7 @@ export class AskSkipResolver {
   /**
    * Handles the clarifying question phase of the Skip chat process
    * Creates a conversation detail for the clarifying question from Skip
-   * 
+   *
    * @param apiRequest The original request sent to Skip
    * @param apiResponse The clarifying question response from Skip
    * @param UserQuestion The original user question
@@ -2781,10 +2852,10 @@ export class AskSkipResolver {
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
     convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
-    
+
     // Set conversation status back to Available since we need user input for the clarifying question
     await this.setConversationStatus(convoEntity, 'Available', userPayload, pubSub);
-    
+
     if (await convoDetailEntityAI.Save()) {
       return {
         Success: true,
@@ -2816,7 +2887,7 @@ export class AskSkipResolver {
   /**
    * Handles the data request phase of the Skip chat process
    * Processes data requests from Skip and loads requested data
-   * 
+   *
    * @param apiRequest The original request sent to Skip
    * @param apiResponse The data request response from Skip
    * @param UserQuestion The original user question
@@ -2844,7 +2915,7 @@ export class AskSkipResolver {
     convoEntity: ConversationEntity,
     convoDetailEntity: ConversationDetailEntity,
     dataContext: DataContext,
-    dataContextEntity: DataContextEntity, 
+    dataContextEntity: DataContextEntity,
     conversationDetailCount: number,
     startTime: Date
   ): Promise<AskSkipResultType> {
@@ -2975,7 +3046,7 @@ export class AskSkipResolver {
         convoEntity,
         convoDetailEntity,
         dataContext,
-        dataContextEntity, 
+        dataContextEntity,
         conversationDetailCount,
         startTime
       );
@@ -2988,7 +3059,7 @@ export class AskSkipResolver {
   /**
    * Finishes a successful conversation and notifies the user
    * Creates necessary records, artifacts, and notifications
-   * 
+   *
    * @param apiResponse The analysis complete response from Skip
    * @param dataContext Data context associated with the conversation
    * @param dataContextEntity Data context entity
@@ -3032,40 +3103,39 @@ export class AskSkipResolver {
         artifactEntity.Name = apiResponse.artifactRequest.name;
         artifactEntity.Description = apiResponse.artifactRequest.description;
         // make sure AI Engine is configured.
-        await AIEngine.Instance.Config(false, user)
+        await AIEngine.Instance.Config(false, user);
         artifactEntity.ArtifactTypeID = AIEngine.Instance.ArtifactTypes.find((t) => t.Name === 'Report')?.ID;
         artifactEntity.SharingScope = 'None';
 
         if (await artifactEntity.Save()) {
           // saved, grab the new ID
           artifactId = artifactEntity.ID;
-        }
-        else {
+        } else {
           LogError(`Error saving artifact entity for conversation: ${convoEntity.ID}`, undefined, artifactEntity.LatestResult);
         }
         newVersion = 1;
-      }
-      else {
+      } else {
         // we are updating an existing artifact with a new vesrion so we need to get the old max version and increment it
-        const ei = md.EntityByName("MJ: Conversation Artifact Versions");        
+        const ei = md.EntityByName('MJ: Conversation Artifact Versions');
         const sSQL = `SELECT ISNULL(MAX(Version),0) AS MaxVersion FROM [${ei.SchemaName}].[${ei.BaseView}] WHERE ConversationArtifactID = '${artifactId}'`;
         try {
           const request = new mssql.Request(dataSource);
           const result = await request.query(sSQL);
           if (result && result.recordset && result.recordset.length > 0) {
             newVersion = result.recordset[0].MaxVersion + 1;
-          } 
-          else {
+          } else {
             LogError(`Error getting max version for artifact ID: ${artifactId}`, undefined, result);
           }
-        }
-        catch (e) {
+        } catch (e) {
           LogError(`Error getting max version for artifact ID: ${artifactId}`, undefined, e);
         }
       }
       if (artifactId && newVersion > 0) {
         // only do this if we were provided an artifact ID or we saved a new one above successfully
-        const artifactVersionEntity = await md.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions', user);
+        const artifactVersionEntity = await md.GetEntityObject<ConversationArtifactVersionEntity>(
+          'MJ: Conversation Artifact Versions',
+          user
+        );
         // create the new artifact version here
         artifactVersionEntity.NewRecord();
         artifactVersionEntity.ConversationArtifactID = artifactId;
@@ -3075,9 +3145,8 @@ export class AskSkipResolver {
         if (await artifactVersionEntity.Save()) {
           // success saving the new version, set the artifactVersionId
           artifactVersionId = artifactVersionEntity.ID;
-        }
-        else {
-          LogError(`Error saving Artifact Version record`)
+        } else {
+          LogError(`Error saving Artifact Version record`);
         }
       }
     }
@@ -3091,14 +3160,14 @@ export class AskSkipResolver {
     convoDetailEntityAI.Role = 'AI';
     convoDetailEntityAI.HiddenToUser = false;
     convoDetailEntityAI.CompletionTime = endTime.getTime() - startTime.getTime();
-    
+
     if (artifactId && artifactId.length > 0) {
       // bind the new convo detail record to the artifact + version for this response
       convoDetailEntityAI.ArtifactID = artifactId;
       if (artifactVersionId && artifactVersionId.length > 0) {
         convoDetailEntityAI.ArtifactVersionID = artifactVersionId;
       }
-    }    
+    }
 
     const convoDetailSaveResult: boolean = await convoDetailEntityAI.Save();
     if (!convoDetailSaveResult) {
@@ -3107,19 +3176,19 @@ export class AskSkipResolver {
 
     // Update the conversation properties: name if it's the default, and set status back to 'Available'
     let needToSaveConvo = false;
-    
+
     // Update name if still default
     if (convoEntity.Name === AskSkipResolver._defaultNewChatName && sTitle && sTitle !== AskSkipResolver._defaultNewChatName) {
       convoEntity.Name = sTitle; // use the title from the response
       needToSaveConvo = true;
     }
-    
+
     // Set status back to 'Available' since processing is complete
     if (convoEntity.Status === 'Processing') {
       convoEntity.Status = 'Available';
       needToSaveConvo = true;
     }
-    
+
     // Save if any changes were made
     if (needToSaveConvo) {
       const convoEntitySaveResult: boolean = await convoEntity.Save();
@@ -3180,44 +3249,49 @@ export class AskSkipResolver {
     };
   }
 
-  private async setConversationStatus(convoEntity: ConversationEntity, status: 'Processing' | 'Available', userPayload: UserPayload, pubSub?: PubSubEngine): Promise<boolean> {
+  private async setConversationStatus(
+    convoEntity: ConversationEntity,
+    status: 'Processing' | 'Available',
+    userPayload: UserPayload,
+    pubSub?: PubSubEngine
+  ): Promise<boolean> {
     if (convoEntity.Status !== status) {
-    convoEntity.Status = status;
+      convoEntity.Status = status;
 
-    const convoSaveResult = await convoEntity.Save();
-    if (!convoSaveResult) {
-      LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
-    } else {
-      // If conversation is now Available (completed), remove it from active streams
-      if (status === 'Available') {
-        activeStreams.removeConversation(convoEntity.ID);
-        LogStatus(`Removed conversation ${convoEntity.ID} from active streams (status changed to Available)`);
-      } else if (status === 'Processing') {
-        // If conversation is starting to process, add the session to active streams
-        activeStreams.addSession(convoEntity.ID, userPayload.sessionId);
-        LogStatus(`Added session ${userPayload.sessionId} to active streams for conversation ${convoEntity.ID}`);
-      }
-      
-      if (pubSub) {
-      // Publish status update to notify frontend of conversation status change
-      const statusMessage = {
-        type: 'ConversationStatusUpdate',
-        conversationID: convoEntity.ID,
-        status: status,
-        timestamp: new Date().toISOString()
-      };
-      
-      pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-        pushStatusUpdates: {
-          message: JSON.stringify(statusMessage),
-          sessionId: userPayload.sessionId
+      const convoSaveResult = await convoEntity.Save();
+      if (!convoSaveResult) {
+        LogError(`Error updating conversation status to '${status}'`, undefined, convoEntity.LatestResult);
+      } else {
+        // If conversation is now Available (completed), remove it from active streams
+        if (status === 'Available') {
+          activeStreams.removeConversation(convoEntity.ID);
+          LogStatus(`Removed conversation ${convoEntity.ID} from active streams (status changed to Available)`);
+        } else if (status === 'Processing') {
+          // If conversation is starting to process, add the session to active streams
+          activeStreams.addSession(convoEntity.ID, userPayload.sessionId);
+          LogStatus(`Added session ${userPayload.sessionId} to active streams for conversation ${convoEntity.ID}`);
         }
-      });
-      
-      LogStatus(`Published conversation status update for ${convoEntity.ID}: ${status}`);
+
+        if (pubSub) {
+          // Publish status update to notify frontend of conversation status change
+          const statusMessage = {
+            type: 'ConversationStatusUpdate',
+            conversationID: convoEntity.ID,
+            status: status,
+            timestamp: new Date().toISOString(),
+          };
+
+          pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+            pushStatusUpdates: {
+              message: JSON.stringify(statusMessage),
+              sessionId: userPayload.sessionId,
+            },
+          });
+
+          LogStatus(`Published conversation status update for ${convoEntity.ID}: ${status}`);
+        }
       }
-    }
-    return convoSaveResult;
+      return convoSaveResult;
     }
     return true;
   }
@@ -3225,19 +3299,20 @@ export class AskSkipResolver {
   /**
    * Gets the ID of an agent note type by its name
    * Falls back to a default note type if the specified one is not found
-   * 
+   *
    * @param name Name of the agent note type
    * @param defaultNoteType Default note type to use if the specified one is not found
    * @returns ID of the agent note type
    */
   protected getAgentNoteTypeIDByName(name: string, defaultNoteType: string = 'AI'): string {
-    const noteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === name.trim().toLowerCase())?.ID;
-    if (noteTypeID) { 
+    const noteTypeID = AIEngine.Instance.AgentNoteTypes.find((nt) => nt.Name.trim().toLowerCase() === name.trim().toLowerCase())?.ID;
+    if (noteTypeID) {
       return noteTypeID;
-    }
-    else{ 
-      // default  
-      const defaultNoteTypeID = AIEngine.Instance.AgentNoteTypes.find(nt => nt.Name.trim().toLowerCase() === defaultNoteType.trim().toLowerCase())?.ID;
+    } else {
+      // default
+      const defaultNoteTypeID = AIEngine.Instance.AgentNoteTypes.find(
+        (nt) => nt.Name.trim().toLowerCase() === defaultNoteType.trim().toLowerCase()
+      )?.ID;
       return defaultNoteTypeID;
     }
   }
@@ -3245,7 +3320,7 @@ export class AskSkipResolver {
   /**
    * Gets data from a view
    * Helper method to run a view and retrieve its data
-   * 
+   *
    * @param ViewId ID of the view to run
    * @param user User context for the query
    * @returns Results of the view query
@@ -3260,7 +3335,7 @@ export class AskSkipResolver {
   // /**
   //  * Manually executes the Skip AI learning cycle
   //  * Allows triggering a learning cycle on demand rather than waiting for scheduled execution
-  //  * 
+  //  *
   //  * @param OrganizationId Optional organization ID to register for this run
   //  * @returns Result of the manual learning cycle execution
   //  */
@@ -3278,7 +3353,7 @@ export class AskSkipResolver {
   //         Message: 'Learning cycles are not enabled in configuration'
   //       };
   //     }
-      
+
   //     // Check if we have a valid endpoint when cycles are enabled
   //     const hasLearningEndpoint = (skipConfigInfo.url && skipConfigInfo.url.trim().length > 0) ||
   //                                 (skipConfigInfo.learningCycleURL && skipConfigInfo.learningCycleURL.trim().length > 0);
@@ -3288,17 +3363,17 @@ export class AskSkipResolver {
   //         Message: 'Learning cycle API endpoint is not configured'
   //       };
   //     }
-      
+
   //     // Use the organization ID from config if not provided
   //     const orgId = OrganizationId || skipConfigInfo.orgID;
-      
+
   //     // Call the scheduler's manual execution method with org ID
   //     const result = await LearningCycleScheduler.Instance.manuallyExecuteLearningCycle(orgId);
-      
+
   //     return {
   //       Success: result,
-  //       Message: result 
-  //         ? `Learning cycle was successfully executed manually for organization ${orgId}` 
+  //       Message: result
+  //         ? `Learning cycle was successfully executed manually for organization ${orgId}`
   //         : `Learning cycle execution failed for organization ${orgId}. Check server logs for details.`
   //     };
   //   }
@@ -3310,18 +3385,18 @@ export class AskSkipResolver {
   //     };
   //   }
   // }
-  
+
   // /**
   //  * Gets the current status of the learning cycle scheduler
   //  * Provides information about the scheduler state and any running cycles
-  //  * 
+  //  *
   //  * @returns Status information about the learning cycle scheduler
   //  */
   // @Query(() => LearningCycleStatusType)
   // async GetLearningCycleStatus(): Promise<LearningCycleStatusType> {
   //   try {
   //     const status = LearningCycleScheduler.Instance.getStatus();
-      
+
   //     return {
   //       IsSchedulerRunning: status.isSchedulerRunning,
   //       LastRunTime: status.lastRunTime ? status.lastRunTime.toISOString() : null,
@@ -3342,11 +3417,11 @@ export class AskSkipResolver {
   //     };
   //   }
   // }
-  
+
   // /**
   //  * Checks if a specific organization is running a learning cycle
   //  * Used to determine if a new learning cycle can be started for an organization
-  //  * 
+  //  *
   //  * @param OrganizationId The organization ID to check
   //  * @returns Information about the running cycle, or null if no cycle is running
   //  */
@@ -3358,13 +3433,13 @@ export class AskSkipResolver {
   //     const skipConfigInfo = configInfo.askSkip;
   //     // Use the organization ID from config if not provided
   //     const orgId = OrganizationId || skipConfigInfo.orgID;
-      
+
   //     const status = LearningCycleScheduler.Instance.isOrganizationRunningCycle(orgId);
-      
+
   //     if (!status.isRunning) {
   //       return null;
   //     }
-      
+
   //     return {
   //       OrganizationId: orgId,
   //       LearningCycleId: status.learningCycleId,
@@ -3377,11 +3452,11 @@ export class AskSkipResolver {
   //     return null;
   //   }
   // }
-  
+
   // /**
   //  * Stops a running learning cycle for a specific organization
   //  * Allows manual intervention to stop a learning cycle that is taking too long or causing issues
-  //  * 
+  //  *
   //  * @param OrganizationId The organization ID to stop the cycle for
   //  * @returns Result of the stop operation, including details about the stopped cycle
   //  */
@@ -3392,9 +3467,9 @@ export class AskSkipResolver {
   //   try {
   //     // Use the organization ID from config if not provided
   //     const orgId = OrganizationId || configInfo.askSkip.orgID;
-      
+
   //     const result = LearningCycleScheduler.Instance.stopLearningCycleForOrganization(orgId);
-      
+
   //     // Transform the result to match our GraphQL type
   //     return {
   //       Success: result.success,
@@ -3417,7 +3492,6 @@ export class AskSkipResolver {
   //     };
   //   }
   // }
-
 }
 
 export default AskSkipResolver;

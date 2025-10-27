@@ -1,6 +1,6 @@
 import { Component, OnInit, ViewEncapsulation } from '@angular/core';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { BaseEntity, Metadata } from '@memberjunction/core';
+import { BaseEntity, Metadata } from '@memberjunction/global';
 import { ApplicationEntity, RoleEntity, UserEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -15,14 +15,14 @@ export enum SettingsItem {
   Role = 'Role',
   Applications = 'Applications',
   Application = 'Application',
-  SqlLogging = 'SqlLogging'
+  SqlLogging = 'SqlLogging',
 }
 
 @Component({
   selector: 'mj-settings',
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss'],
-  encapsulation: ViewEncapsulation.None
+  encapsulation: ViewEncapsulation.None,
 })
 @RegisterClass(BaseNavigationComponent, 'Settings')
 export class SettingsComponent extends BaseNavigationComponent implements OnInit {
@@ -30,7 +30,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   public baseRoute: string = '/settings';
 
   public selectedRoleID: string = '';
-  public selectedUserID: string = "";
+  public selectedUserID: string = '';
   public selectedApplicationName: string = '';
   public selectedApplicationID: string = '';
 
@@ -39,41 +39,37 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
     { label: 'Roles', value: SettingsItem.Roles },
     { label: 'Applications', value: SettingsItem.Applications },
     { label: 'Entity Permissions', value: SettingsItem.EntityPermissions },
-    { label: 'SQL Logging', value: SettingsItem.SqlLogging }
+    { label: 'SQL Logging', value: SettingsItem.SqlLogging },
   ];
 
-
   public selectItem(item: SettingsItem | string, changeRoute: boolean = true) {
-    if (typeof item === 'string')
-      this.currentItem = SettingsItem[item as keyof typeof SettingsItem];
-    else
-      this.currentItem = item;
+    if (typeof item === 'string') this.currentItem = SettingsItem[item as keyof typeof SettingsItem];
+    else this.currentItem = item;
 
-    if (changeRoute)
-        this.changeRoute(item.toLowerCase());
+    if (changeRoute) this.changeRoute(item.toLowerCase());
   }
 
   changeRoute(subPath: string) {
     // Constructs a navigation path relative to the /settings base route
     this.router.navigate([this.baseRoute, subPath]);
   }
-  
-  constructor(private router: Router, private activatedRoute: ActivatedRoute) { 
+
+  constructor(
+    private router: Router,
+    private activatedRoute: ActivatedRoute
+  ) {
     super();
   }
- 
 
   ngOnInit() {
     // manually update the first time
     this.updateComponentStateBasedOnPath();
 
     // Listen to changes in the route
-    this.router.events.pipe(
-        filter(event => event instanceof NavigationEnd)
-      ).subscribe(() => {
-        this.updateComponentStateBasedOnPath();
-      }); 
-   }
+    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe(() => {
+      this.updateComponentStateBasedOnPath();
+    });
+  }
 
   updateComponentStateBasedOnPath() {
     // On each navigation end, access the current URL from window.location
@@ -81,7 +77,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
 
     // Split the fullPath into segments and query string as needed
     const [path, queryString] = fullPath.split('?');
-    const segments = path.split('/').filter(segment => segment.length > 0);
+    const segments = path.split('/').filter((segment) => segment.length > 0);
 
     const firstSegment = segments.length > 1 ? segments[1] : '';
     switch (firstSegment.trim().toLowerCase()) {
@@ -94,14 +90,14 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       case 'application':
         this.selectedApplicationName = segments.length > 2 ? segments[2] : '';
         const md = new Metadata();
-        this.selectedApplicationID = md.Applications.find(a => a.Name === this.selectedApplicationName)?.ID ?? '';
+        this.selectedApplicationID = md.Applications.find((a) => a.Name === this.selectedApplicationName)?.ID ?? '';
         this.selectItem(SettingsItem.Application, false);
         break;
       case 'users':
         this.selectItem(SettingsItem.Users, false);
         break;
       case 'user':
-        this.selectedUserID = segments.length > 2 ? segments[2] : "";
+        this.selectedUserID = segments.length > 2 ? segments[2] : '';
         this.selectItem(SettingsItem.User, false);
         break;
       case 'roles':
@@ -128,7 +124,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
   public selectUser(u: BaseEntity) {
     this.selectRoute('/settings/user', (<UserEntity>u).ID);
   }
-  
+
   /**
    * Function that returns the appropriate Font Awesome icon for the user toggle button
    * based on the user's IsActive status
@@ -156,40 +152,36 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       // Get current status
       const currentlyActive = user.IsActive;
       const userName = user.Name;
-      
+
       // Toggle the IsActive flag
       user.IsActive = !currentlyActive;
-      
+
       if (await user.Save()) {
         MJNotificationService.Instance.CreateSimpleNotification(
-          `User ${userName} has been ${currentlyActive ? 'deactivated' : 'activated'} successfully.`, 
-          'success', 
+          `User ${userName} has been ${currentlyActive ? 'deactivated' : 'activated'} successfully.`,
+          'success',
           3000
         );
-        
+
         // Refresh the user list
         this.selectItem(SettingsItem.Users);
       } else {
         MJNotificationService.Instance.CreateSimpleNotification(
-          `Error ${currentlyActive ? 'deactivating' : 'activating'} user ${userName}`, 
-          'error', 
+          `Error ${currentlyActive ? 'deactivating' : 'activating'} user ${userName}`,
+          'error',
           5000
         );
       }
     } catch (error) {
       console.error('Error toggling user activation:', error);
-      MJNotificationService.Instance.CreateSimpleNotification(
-        'An error occurred while toggling user activation.', 
-        'error', 
-        5000
-      );
+      MJNotificationService.Instance.CreateSimpleNotification('An error occurred while toggling user activation.', 'error', 5000);
     }
   }
   public selectRoute(route: string, value: any) {
-    this.router.navigate([route, value]);    
+    this.router.navigate([route, value]);
   }
 
-  public leftNavItemSelected(option: {label: string, value: any}) {
+  public leftNavItemSelected(option: { label: string; value: any }) {
     // if the currentItem matches it directly or if adding an S to the current item matches it, then return true
     // for example for Application/Applications we want to match so the left nav item is highlighted
     return option.value === this.currentItem || option.value === this.currentItem + 's';
@@ -207,7 +199,7 @@ export class SettingsComponent extends BaseNavigationComponent implements OnInit
       [SettingsItem.Applications]: 'fa-solid fa-th-large',
       [SettingsItem.Application]: 'fa-solid fa-cube',
       [SettingsItem.EntityPermissions]: 'fa-solid fa-lock',
-      [SettingsItem.SqlLogging]: 'fa-solid fa-database'
+      [SettingsItem.SqlLogging]: 'fa-solid fa-database',
     };
     return iconMap[settingsItem] || 'fa-solid fa-cog';
   }

@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata } from '@memberjunction/global';
 import { ScheduledJobEntity, ScheduledJobRunEntity, ScheduledJobTypeEntity } from '@memberjunction/core-entities';
 
 export interface SchedulingKPIs {
@@ -80,12 +80,12 @@ export interface LockInfo {
 }
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class SchedulingInstrumentationService {
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
     start: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
-    end: new Date()
+    end: new Date(),
   });
 
   private readonly _refreshTrigger$ = new BehaviorSubject<number>(0);
@@ -173,18 +173,18 @@ export class SchedulingInstrumentationService {
       {
         EntityName: 'MJ: Scheduled Jobs',
         ExtraFilter: "Status='Active'",
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       },
       {
         EntityName: 'MJ: Scheduled Job Runs',
         ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       },
       {
         EntityName: 'MJ: Scheduled Job Runs',
         ExtraFilter: `StartedAt >= '${sevenDaysAgo.toISOString()}'`,
-        ResultType: 'entity_object'
-      }
+        ResultType: 'entity_object',
+      },
     ]);
 
     const jobs = jobsResult.Results as ScheduledJobEntity[];
@@ -192,18 +192,18 @@ export class SchedulingInstrumentationService {
     const runs7d = runs7dResult.Results as ScheduledJobRunEntity[];
 
     const totalActiveJobs = jobs.length;
-    const jobsDueInNextHour = jobs.filter(j => {
+    const jobsDueInNextHour = jobs.filter((j) => {
       if (!j.NextRunAt) return false;
       const nextRun = new Date(j.NextRunAt);
       return nextRun >= now && nextRun <= oneHourFromNow;
     }).length;
 
     const recentExecutions24h = runs24h.length;
-    const successfulRuns24h = runs24h.filter(r => r.Success).length;
+    const successfulRuns24h = runs24h.filter((r) => r.Success).length;
     const successRate24h = runs24h.length > 0 ? successfulRuns24h / runs24h.length : 0;
 
-    const currentlyRunning = runs24h.filter(r => r.Status === 'Running').length;
-    const lockedJobs = jobs.filter(j => j.LockToken != null).length;
+    const currentlyRunning = runs24h.filter((r) => r.Status === 'Running').length;
+    const lockedJobs = jobs.filter((j) => j.LockToken != null).length;
 
     // Calculate total cost from runs that have Details with cost information
     let totalCost24h = 0;
@@ -219,7 +219,7 @@ export class SchedulingInstrumentationService {
       }
     }
 
-    const failedRuns7d = runs7d.filter(r => !r.Success && r.Status !== 'Running');
+    const failedRuns7d = runs7d.filter((r) => !r.Success && r.Status !== 'Running');
     const totalFailures7d = failedRuns7d.length;
     const failureRate7d = runs7d.length > 0 ? totalFailures7d / runs7d.length : 0;
 
@@ -233,7 +233,7 @@ export class SchedulingInstrumentationService {
       totalCost24h,
       failureRate7d,
       totalFailures7d,
-      pollingInterval: 60000 // Default, would need to query engine for actual
+      pollingInterval: 60000, // Default, would need to query engine for actual
     };
   }
 
@@ -246,7 +246,7 @@ export class SchedulingInstrumentationService {
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${recentTime.toISOString()}'`,
       OrderBy: 'StartedAt DESC',
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
     });
 
     if (!result.Success) {
@@ -256,7 +256,7 @@ export class SchedulingInstrumentationService {
 
     const runs = result.Results || [];
 
-    return runs.map(run => {
+    return runs.map((run) => {
       const duration = run.CompletedAt
         ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
         : now.getTime() - new Date(run.StartedAt).getTime();
@@ -271,7 +271,7 @@ export class SchedulingInstrumentationService {
         completedAt: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
         duration: duration,
         success: run.Success != null ? run.Success : undefined,
-        errorMessage: run.ErrorMessage || undefined
+        errorMessage: run.ErrorMessage || undefined,
       };
     });
   }
@@ -285,7 +285,7 @@ export class SchedulingInstrumentationService {
       EntityName: 'MJ: Scheduled Jobs',
       ExtraFilter: `Status='Active' AND NextRunAt IS NOT NULL AND NextRunAt >= '${now.toISOString()}' AND NextRunAt <= '${next24Hours.toISOString()}'`,
       OrderBy: 'NextRunAt ASC',
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
     });
 
     if (!result.Success) {
@@ -295,13 +295,13 @@ export class SchedulingInstrumentationService {
 
     const jobs = result.Results || [];
 
-    return jobs.map(job => ({
+    return jobs.map((job) => ({
       jobId: job.ID,
       jobName: job.Name,
       jobType: job.JobType || 'Unknown Type',
       nextRunAt: new Date(job.NextRunAt!),
       cronExpression: job.CronExpression,
-      timezone: job.Timezone || 'UTC'
+      timezone: job.Timezone || 'UTC',
     }));
   }
 
@@ -313,7 +313,7 @@ export class SchedulingInstrumentationService {
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
       OrderBy: 'StartedAt DESC',
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
     });
 
     if (!result.Success) {
@@ -323,10 +323,8 @@ export class SchedulingInstrumentationService {
 
     const runs = result.Results || [];
 
-    return runs.map(run => {
-      const duration = run.CompletedAt
-        ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
-        : undefined;
+    return runs.map((run) => {
+      const duration = run.CompletedAt ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime() : undefined;
 
       return {
         id: run.ID,
@@ -338,7 +336,7 @@ export class SchedulingInstrumentationService {
         completedAt: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
         duration: duration,
         success: run.Success != null ? run.Success : undefined,
-        errorMessage: run.ErrorMessage || undefined
+        errorMessage: run.ErrorMessage || undefined,
       };
     });
   }
@@ -351,7 +349,7 @@ export class SchedulingInstrumentationService {
     const result = await rv.RunView<ScheduledJobRunEntity>({
       EntityName: 'MJ: Scheduled Job Runs',
       ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
     });
 
     if (!result.Success) {
@@ -378,19 +376,19 @@ export class SchedulingInstrumentationService {
       const bucketStart = bucket;
       const bucketEnd = new Date(bucket.getTime() + bucketSizeMs);
 
-      const runsInBucket = allRuns.filter(r => {
+      const runsInBucket = allRuns.filter((r) => {
         const startedAt = new Date(r.StartedAt);
         return startedAt >= bucketStart && startedAt < bucketEnd;
       });
 
-      const successes = runsInBucket.filter(r => r.Success).length;
-      const failures = runsInBucket.filter(r => !r.Success && r.Status !== 'Running').length;
+      const successes = runsInBucket.filter((r) => r.Success).length;
+      const failures = runsInBucket.filter((r) => !r.Success && r.Status !== 'Running').length;
 
       trends.push({
         timestamp: bucket,
         executions: runsInBucket.length,
         successes,
-        failures
+        failures,
       });
     }
 
@@ -402,7 +400,7 @@ export class SchedulingInstrumentationService {
     const result = await rv.RunView<ScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       OrderBy: 'Name ASC',
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
     });
 
     if (!result.Success) {
@@ -412,7 +410,7 @@ export class SchedulingInstrumentationService {
 
     const jobs = result.Results || [];
 
-    return jobs.map(job => ({
+    return jobs.map((job) => ({
       jobId: job.ID,
       jobName: job.Name,
       jobType: job.JobType || 'Unknown Type',
@@ -422,7 +420,7 @@ export class SchedulingInstrumentationService {
       failureCount: job.FailureCount || 0,
       successRate: job.RunCount > 0 ? (job.SuccessCount || 0) / job.RunCount : 0,
       lastRunAt: job.LastRunAt ? new Date(job.LastRunAt) : undefined,
-      nextRunAt: job.NextRunAt ? new Date(job.NextRunAt) : undefined
+      nextRunAt: job.NextRunAt ? new Date(job.NextRunAt) : undefined,
     }));
   }
 
@@ -433,28 +431,28 @@ export class SchedulingInstrumentationService {
       {
         EntityName: 'MJ: Scheduled Job Types',
         OrderBy: 'Name ASC',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       },
       {
         EntityName: 'MJ: Scheduled Jobs',
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       },
       {
         EntityName: 'MJ: Scheduled Job Runs',
-        ResultType: 'entity_object'
-      }
+        ResultType: 'entity_object',
+      },
     ]);
 
     const types = typesResult.Results as ScheduledJobTypeEntity[];
     const allJobs = jobsResult.Results as ScheduledJobEntity[];
     const allRuns = runsResult.Results as ScheduledJobRunEntity[];
 
-    return types.map(type => {
-      const jobsOfType = allJobs.filter(j => j.JobTypeID === type.ID);
-      const activeJobs = jobsOfType.filter(j => j.Status === 'Active');
-      const jobIds = new Set(jobsOfType.map(j => j.ID));
-      const runsOfType = allRuns.filter(r => jobIds.has(r.ScheduledJobID));
-      const successfulRuns = runsOfType.filter(r => r.Success).length;
+    return types.map((type) => {
+      const jobsOfType = allJobs.filter((j) => j.JobTypeID === type.ID);
+      const activeJobs = jobsOfType.filter((j) => j.Status === 'Active');
+      const jobIds = new Set(jobsOfType.map((j) => j.ID));
+      const runsOfType = allRuns.filter((r) => jobIds.has(r.ScheduledJobID));
+      const successfulRuns = runsOfType.filter((r) => r.Success).length;
       const successRate = runsOfType.length > 0 ? successfulRuns / runsOfType.length : 0;
 
       return {
@@ -462,7 +460,7 @@ export class SchedulingInstrumentationService {
         typeName: type.Name,
         activeJobsCount: activeJobs.length,
         totalRuns: runsOfType.length,
-        successRate
+        successRate,
       };
     });
   }
@@ -474,7 +472,7 @@ export class SchedulingInstrumentationService {
     const result = await rv.RunView<ScheduledJobEntity>({
       EntityName: 'MJ: Scheduled Jobs',
       ExtraFilter: 'LockToken IS NOT NULL',
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
     });
 
     if (!result.Success) {
@@ -484,7 +482,7 @@ export class SchedulingInstrumentationService {
 
     const jobs = result.Results || [];
 
-    return jobs.map(job => {
+    return jobs.map((job) => {
       const expectedCompletion = job.ExpectedCompletionAt ? new Date(job.ExpectedCompletionAt) : now;
       const isStale = expectedCompletion < now;
 
@@ -495,7 +493,7 @@ export class SchedulingInstrumentationService {
         lockedAt: new Date(job.LockedAt!),
         lockedBy: job.LockedByInstance || 'Unknown',
         expectedCompletion,
-        isStale
+        isStale,
       };
     });
   }

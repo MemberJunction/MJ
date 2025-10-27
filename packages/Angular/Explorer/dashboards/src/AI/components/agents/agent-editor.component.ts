@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
-import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
+import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/global';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import * as d3 from 'd3';
 
@@ -23,13 +23,13 @@ interface AgentPrompt {
 @Component({
   selector: 'mj-agent-editor',
   templateUrl: './agent-editor.component.html',
-  styleUrls: ['./agent-editor.component.scss']
+  styleUrls: ['./agent-editor.component.scss'],
 })
 export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentId: string | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() openAgent = new EventEmitter<string>();
-  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
+  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
 
   @ViewChild('hierarchyChart', { static: false }) hierarchyChartRef!: ElementRef;
 
@@ -43,12 +43,12 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   // Tab settings
   public activeTab: 'hierarchy' | 'prompts' | 'properties' = 'hierarchy';
-  
+
   // Legacy layout settings (keeping for compatibility)
   public showHierarchy = true;
   public showPrompts = true;
   public showProperties = true;
-  
+
   // Sub-agent creation
   public showCreateSubAgent = false;
   public newSubAgentName = '';
@@ -89,16 +89,16 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         EntityName: 'AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
-        MaxRows: 1000
+        MaxRows: 1000,
       });
 
       this.allAgents = result.Results as AIAgentEntityExtended[];
-      this.currentAgent = this.allAgents.find(a => a.ID === this.agentId) || null;
+      this.currentAgent = this.allAgents.find((a) => a.ID === this.agentId) || null;
 
       if (this.currentAgent) {
         this.buildHierarchy();
         this.loadAgentPrompts();
-        
+
         // Initialize chart after data is loaded
         setTimeout(() => {
           if (this.hierarchyChartRef) {
@@ -119,7 +119,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Find the root of the hierarchy that contains our current agent
     const rootAgent = this.findRootAgent(this.currentAgent);
-    
+
     this.hierarchyData = this.buildHierarchyTree(rootAgent);
     this.selectedNode = this.findNodeInHierarchy(this.hierarchyData, this.currentAgent.ID);
   }
@@ -127,7 +127,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   private findRootAgent(agent: AIAgentEntityExtended): AIAgentEntityExtended {
     let current = agent;
     while (current.ParentID) {
-      const parent = this.allAgents.find(a => a.ID === current.ParentID);
+      const parent = this.allAgents.find((a) => a.ID === current.ParentID);
       if (!parent) break;
       current = parent;
     }
@@ -135,20 +135,18 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   private buildHierarchyTree(agent: AIAgentEntityExtended): AgentHierarchyNode {
-    const children = this.allAgents
-      .filter(a => a.ParentID === agent.ID)
-      .map(child => this.buildHierarchyTree(child));
+    const children = this.allAgents.filter((a) => a.ParentID === agent.ID).map((child) => this.buildHierarchyTree(child));
 
     const node: AgentHierarchyNode = {
       id: agent.ID,
       name: agent.Name || 'Unnamed Agent',
       agent: agent,
-      children: children
+      children: children,
     };
 
     // Set parent references
     if (node.children) {
-      node.children.forEach(child => child.parent = node);
+      node.children.forEach((child) => (child.parent = node));
     }
 
     return node;
@@ -156,26 +154,26 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   private findNodeInHierarchy(node: AgentHierarchyNode, agentId: string): AgentHierarchyNode | null {
     if (node.id === agentId) return node;
-    
+
     if (node.children) {
       for (const child of node.children) {
         const found = this.findNodeInHierarchy(child, agentId);
         if (found) return found;
       }
     }
-    
+
     return null;
   }
 
   private async loadAgentPrompts(): Promise<void> {
     if (!this.currentAgent) return;
-    
+
     try {
       // This would load prompts associated with the agent
       // For now, using mock data structure
       this.agentPrompts = [
         { id: '1', name: 'System Prompt', content: 'Default system instructions...', type: 'system' },
-        { id: '2', name: 'User Prompt', content: 'User interaction template...', type: 'user' }
+        { id: '2', name: 'User Prompt', content: 'User interaction template...', type: 'user' },
       ];
     } catch (error) {
       console.error('Error loading agent prompts:', error);
@@ -195,7 +193,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     d3.select(container).selectAll('*').remove();
 
     // Create SVG with zoom/pan functionality
-    this.svg = d3.select(container)
+    this.svg = d3
+      .select(container)
       .append('svg')
       .attr('width', width)
       .attr('height', height)
@@ -203,7 +202,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       .style('border', '1px solid #e0e0e0');
 
     // Create zoom behavior with wheel support
-    this.zoom = d3.zoom()
+    this.zoom = d3
+      .zoom()
       .scaleExtent([0.1, 3])
       .wheelDelta((event: any) => -event.deltaY * (event.deltaMode === 1 ? 0.05 : event.deltaMode ? 1 : 0.002) * (event.ctrlKey ? 10 : 1))
       .on('zoom', (event) => {
@@ -217,9 +217,10 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     this.g = this.svg.append('g');
 
     // Create tree layout with proper spacing - use nodeSize for fixed spacing
-    this.tree = d3.tree()
+    this.tree = d3
+      .tree()
       .nodeSize([150, 100]) // Fixed node spacing: 150px horizontal, 100px vertical
-      .separation((a: any, b: any) => a.parent === b.parent ? 1 : 1.5);
+      .separation((a: any, b: any) => (a.parent === b.parent ? 1 : 1.5));
 
     this.renderHierarchy();
   }
@@ -239,34 +240,42 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     // Get container dimensions
     const container = this.hierarchyChartRef.nativeElement;
     const containerWidth = container.clientWidth || 800;
-    
+
     // Calculate the tree bounds after layout
     const treeBounds = this.getTreeBounds(this.root);
-    
+
     // Calculate centering offsets
     const offsetX = (containerWidth - treeBounds.width) / 2 - treeBounds.minX;
     const offsetY = 150; // Top margin for the tree
-    
+
     // Apply transform to center the tree properly
     this.g.attr('transform', `translate(${offsetX}, ${offsetY})`);
 
     // Draw links
-    this.g.selectAll('.link')
+    this.g
+      .selectAll('.link')
       .data(this.root.links())
-      .enter().append('path')
+      .enter()
+      .append('path')
       .attr('class', 'link')
-      .attr('d', d3.linkVertical()
-        .x((d: any) => d.x)
-        .y((d: any) => d.y))
+      .attr(
+        'd',
+        d3
+          .linkVertical()
+          .x((d: any) => d.x)
+          .y((d: any) => d.y)
+      )
       .style('fill', 'none')
       .style('stroke', '#999')
       .style('stroke-width', '2px')
       .style('stroke-opacity', 0.6);
 
     // Draw nodes
-    const nodes = this.g.selectAll('.node')
+    const nodes = this.g
+      .selectAll('.node')
       .data(this.root.descendants())
-      .enter().append('g')
+      .enter()
+      .append('g')
       .attr('class', 'node')
       .attr('transform', (d: any) => `translate(${d.x}, ${d.y})`)
       .style('cursor', 'pointer')
@@ -275,8 +284,9 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     // Add rectangles for nodes
     const nodeWidth = 120;
     const nodeHeight = 40;
-    
-    nodes.append('rect')
+
+    nodes
+      .append('rect')
       .attr('x', -nodeWidth / 2)
       .attr('y', -nodeHeight / 2)
       .attr('width', nodeWidth)
@@ -285,15 +295,16 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       .attr('ry', 6)
       .style('fill', (d: any) => this.getNodeColor(d))
       .style('stroke', (d: any) => this.getNodeStrokeColor(d))
-      .style('stroke-width', (d: any) => d.data.id === this.currentAgent?.ID ? '3px' : '2px')
+      .style('stroke-width', (d: any) => (d.data.id === this.currentAgent?.ID ? '3px' : '2px'))
       .style('opacity', 0.9);
 
     // Add node labels (agent names)
-    nodes.append('text')
+    nodes
+      .append('text')
       .attr('dy', -2)
       .attr('text-anchor', 'middle')
       .style('font-size', '11px')
-      .style('font-weight', (d: any) => d.data.id === this.currentAgent?.ID ? 'bold' : '500')
+      .style('font-weight', (d: any) => (d.data.id === this.currentAgent?.ID ? 'bold' : '500'))
       .style('fill', '#333')
       .style('pointer-events', 'none')
       .text((d: any) => {
@@ -302,7 +313,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       });
 
     // Add execution mode labels
-    nodes.append('text')
+    nodes
+      .append('text')
       .attr('dy', 12)
       .attr('text-anchor', 'middle')
       .style('font-size', '9px')
@@ -311,7 +323,8 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       .text((d: any) => d.data.agent.ExecutionMode);
 
     // Add level indicators
-    nodes.append('text')
+    nodes
+      .append('text')
       .attr('x', nodeWidth / 2 - 8)
       .attr('y', -nodeHeight / 2 + 12)
       .attr('text-anchor', 'middle')
@@ -322,48 +335,50 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       .text((d: any) => `L${d.depth}`);
   }
 
-  private getTreeBounds(root: any): { width: number, height: number, minX: number, maxX: number, minY: number, maxY: number } {
-    let minX = Infinity, maxX = -Infinity;
-    let minY = Infinity, maxY = -Infinity;
-    
+  private getTreeBounds(root: any): { width: number; height: number; minX: number; maxX: number; minY: number; maxY: number } {
+    let minX = Infinity,
+      maxX = -Infinity;
+    let minY = Infinity,
+      maxY = -Infinity;
+
     root.descendants().forEach((d: any) => {
       minX = Math.min(minX, d.x);
       maxX = Math.max(maxX, d.x);
       minY = Math.min(minY, d.y);
       maxY = Math.max(maxY, d.y);
     });
-    
+
     return {
       width: maxX - minX,
       height: maxY - minY,
       minX,
       maxX,
       minY,
-      maxY
+      maxY,
     };
   }
 
   private getNodeColor(d: any): string {
     const level = d.depth;
     const isCurrentAgent = d.data.id === this.currentAgent?.ID;
-    
+
     // Level-based color scheme
     const levelColors = [
       '#1976d2', // Level 0 (root) - Blue
-      '#388e3c', // Level 1 - Green  
+      '#388e3c', // Level 1 - Green
       '#f57c00', // Level 2 - Orange
       '#7b1fa2', // Level 3 - Purple
       '#c2185b', // Level 4 - Pink
-      '#5d4037'  // Level 5+ - Brown
+      '#5d4037', // Level 5+ - Brown
     ];
-    
+
     const baseColor = levelColors[Math.min(level, levelColors.length - 1)];
-    
+
     // Highlight current agent with brighter color
     if (isCurrentAgent) {
       return baseColor;
     }
-    
+
     // Make non-current agents slightly lighter
     return this.lightenColor(baseColor, 0.3);
   }
@@ -382,11 +397,11 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
     const r = parseInt(hex.slice(0, 2), 16);
     const g = parseInt(hex.slice(2, 4), 16);
     const b = parseInt(hex.slice(4, 6), 16);
-    
+
     const newR = Math.min(255, Math.floor(r + (255 - r) * factor));
     const newG = Math.min(255, Math.floor(g + (255 - g) * factor));
     const newB = Math.min(255, Math.floor(b + (255 - b) * factor));
-    
+
     return `rgb(${newR}, ${newG}, ${newB})`;
   }
 
@@ -398,27 +413,20 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   public zoomIn(): void {
     if (this.svg && this.zoom) {
-      this.svg.transition().call(
-        this.zoom.scaleBy, 1.5
-      );
+      this.svg.transition().call(this.zoom.scaleBy, 1.5);
     }
   }
 
   public zoomOut(): void {
     if (this.svg && this.zoom) {
-      this.svg.transition().call(
-        this.zoom.scaleBy, 1 / 1.5
-      );
+      this.svg.transition().call(this.zoom.scaleBy, 1 / 1.5);
     }
   }
 
   public resetZoom(): void {
     if (this.svg && this.zoom) {
       // Reset to initial centered position
-      this.svg.transition().call(
-        this.zoom.transform,
-        d3.zoomIdentity
-      );
+      this.svg.transition().call(this.zoom.transform, d3.zoomIdentity);
     }
   }
 
@@ -469,12 +477,12 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Create new AI Agent entity
       const newAgent = await md.GetEntityObject<AIAgentEntityExtended>('AI Agents', md.CurrentUser);
-      
+
       // Set agent properties
       newAgent.Name = this.newSubAgentName.trim();
       newAgent.Description = this.newSubAgentDescription.trim() || '';
       newAgent.ParentID = this.currentAgent.ID;
-      
+
       // Set default values based on parent agent
       newAgent.ExecutionMode = this.currentAgent.ExecutionMode || 'Sequential';
       newAgent.ExecutionOrder = 1; // Default to 1, could be made configurable
@@ -485,16 +493,16 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Save the new agent
       const result = await newAgent.Save();
-      
+
       if (result) {
         LogStatus('Sub-agent created successfully');
-        
+
         // Close the dialog
         this.closeCreateSubAgent();
-        
+
         // Reload agent data to show the new hierarchy
         await this.loadAgentData();
-        
+
         // Navigate to the newly created agent
         this.openAgent.emit(newAgent.ID);
       } else {
@@ -503,7 +511,6 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
         this.error = `Failed to create sub-agent: ${errorMessage}`;
         LogError('Sub-agent creation failed', undefined, errorMessage);
       }
-
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred';
       this.error = `Failed to create sub-agent: ${errorMessage}`;
@@ -514,7 +521,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   public hasChildren(): boolean {
-    return this.selectedNode?.children && this.selectedNode.children.length > 0 || false;
+    return (this.selectedNode?.children && this.selectedNode.children.length > 0) || false;
   }
 
   public hasParent(): boolean {

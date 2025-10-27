@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@memberjunction/communication-types": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/global": "2.111.0",
     "dotenv": "^16.3.1",
     "env-var": "^7.4.1",

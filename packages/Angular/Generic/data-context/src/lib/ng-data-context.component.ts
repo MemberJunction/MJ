@@ -1,22 +1,22 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from '@memberjunction/global';
 import { DataContextEntity, DataContextItemEntity } from '@memberjunction/core-entities';
 
 @Component({
   selector: 'mj-data-context',
   templateUrl: './ng-data-context.component.html',
-  styleUrls: ['./ng-data-context.component.css']
+  styleUrls: ['./ng-data-context.component.css'],
 })
 export class DataContextComponent implements OnInit {
   @Input() dataContextId!: string;
   @Input() Provider: IMetadataProvider | null = null;
- 
+
   public dataContextRecord?: DataContextEntity;
   public dataContextItems: DataContextItemEntity[] = [];
   public showLoader: boolean = false;
   public errorMessage: string = '';
   public searchTerm: string = '';
-  
+
   // UI state
   public showSQLPreview: boolean = false;
   public previewSQL: string = '';
@@ -31,13 +31,14 @@ export class DataContextComponent implements OnInit {
     if (!this.searchTerm) {
       return this.dataContextItems;
     }
-    
+
     const term = this.searchTerm.toLowerCase();
-    return this.dataContextItems.filter(item => 
-      item.Type?.toLowerCase().includes(term) ||
-      item.SQL?.toLowerCase().includes(term) ||
-      (item.EntityID ? this.getEntityName(item.EntityID)?.toLowerCase().includes(term) : false) ||
-      item.Description?.toLowerCase().includes(term)
+    return this.dataContextItems.filter(
+      (item) =>
+        item.Type?.toLowerCase().includes(term) ||
+        item.SQL?.toLowerCase().includes(term) ||
+        (item.EntityID ? this.getEntityName(item.EntityID)?.toLowerCase().includes(term) : false) ||
+        item.Description?.toLowerCase().includes(term)
     );
   }
 
@@ -46,7 +47,7 @@ export class DataContextComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    if(this.dataContextId){
+    if (this.dataContextId) {
       this.showLoader = true;
       this.LoadDataContext(this.dataContextId);
     }
@@ -56,19 +57,18 @@ export class DataContextComponent implements OnInit {
     try {
       if (dataContextId) {
         const p = this.ProviderToUse;
-        this.dataContextRecord = await p.GetEntityObject<DataContextEntity>("Data Contexts", p.CurrentUser);
+        this.dataContextRecord = await p.GetEntityObject<DataContextEntity>('Data Contexts', p.CurrentUser);
         await this.dataContextRecord.Load(dataContextId);
 
-        const rv = new RunView(<IRunViewProvider><any>p);
-        const response = await rv.RunView<DataContextItemEntity>(
-          { 
-            EntityName: "Data Context Items", 
-            ExtraFilter: `DataContextID='${dataContextId}'`,
-            OrderBy: '__mj_CreatedAt DESC',
-            ResultType: 'entity_object'
-          });
-          
-        if(response.Success){
+        const rv = new RunView(<IRunViewProvider>(<any>p));
+        const response = await rv.RunView<DataContextItemEntity>({
+          EntityName: 'Data Context Items',
+          ExtraFilter: `DataContextID='${dataContextId}'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'entity_object',
+        });
+
+        if (response.Success) {
           this.dataContextItems = response.Results;
           this.showLoader = false;
         } else {
@@ -86,38 +86,38 @@ export class DataContextComponent implements OnInit {
 
   public getTypeIcon(type: string): string {
     const typeIcons: Record<string, string> = {
-      'sql': 'fa-solid fa-database',
-      'view': 'fa-solid fa-table',
-      'query': 'fa-solid fa-magnifying-glass',
-      'entity': 'fa-solid fa-cube',
-      'record': 'fa-solid fa-file'
+      sql: 'fa-solid fa-database',
+      view: 'fa-solid fa-table',
+      query: 'fa-solid fa-magnifying-glass',
+      entity: 'fa-solid fa-cube',
+      record: 'fa-solid fa-file',
     };
-    
+
     return typeIcons[type?.toLowerCase()] || 'fa-solid fa-question';
   }
 
   public getTypeColor(type: string): string {
     const typeColors: Record<string, string> = {
-      'sql': '#2196f3',
-      'view': '#4caf50',
-      'query': '#ff9800',
-      'entity': '#9c27b0',
-      'record': '#f44336'
+      sql: '#2196f3',
+      view: '#4caf50',
+      query: '#ff9800',
+      entity: '#9c27b0',
+      record: '#f44336',
     };
-    
+
     return typeColors[type?.toLowerCase()] || '#757575';
   }
 
   public getEntityName(entityId: string | null): string | undefined {
     if (!entityId) return undefined;
     const md = new Metadata();
-    return md.Entities.find(e => e.ID === entityId)?.Name;
+    return md.Entities.find((e) => e.ID === entityId)?.Name;
   }
 
   public async getViewName(viewId: string): Promise<string | undefined> {
     try {
       const p = this.ProviderToUse;
-      const view = await p.GetEntityObject("Views", p.CurrentUser);
+      const view = await p.GetEntityObject('Views', p.CurrentUser);
       await (view as any).Load(viewId);
       return (view as any).Get('Name');
     } catch {
@@ -128,7 +128,7 @@ export class DataContextComponent implements OnInit {
   public async getQueryName(queryId: string): Promise<string | undefined> {
     try {
       const p = this.ProviderToUse;
-      const query = await p.GetEntityObject("Queries", p.CurrentUser);
+      const query = await p.GetEntityObject('Queries', p.CurrentUser);
       await (query as any).Load(queryId);
       return (query as any).Get('Name');
     } catch {
@@ -190,17 +190,17 @@ export class DataContextComponent implements OnInit {
   public exportToCSV(): void {
     // Implement CSV export functionality
     const headers = ['Type', 'SQL', 'View', 'Query', 'Entity', 'Record ID', 'Description'];
-    const rows = this.filteredItems.map(item => [
+    const rows = this.filteredItems.map((item) => [
       item.Type,
       item.SQL,
       item.ViewID,
       item.QueryID,
       this.getEntityName(item.EntityID) || item.EntityID,
       item.RecordID,
-      item.Description || ''
+      item.Description || '',
     ]);
-    
-    const csv = [headers, ...rows].map(row => row.map(cell => `"${cell}"`).join(',')).join('\n');
+
+    const csv = [headers, ...rows].map((row) => row.map((cell) => `"${cell}"`).join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');

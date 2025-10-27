@@ -55,7 +55,7 @@ Seamlessly integrate with vector databases through the MemberJunction AI infrast
 
 ```typescript
 import { EntityVectorSyncer } from '@memberjunction/ai-vector-sync';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Initialize the syncer
 const syncer = new EntityVectorSyncer();

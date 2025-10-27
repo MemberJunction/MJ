@@ -1,5 +1,5 @@
 import { configInfo } from '../config.js';
-import { AuthProviderConfig, LogError, LogStatus } from '@memberjunction/core';
+import { AuthProviderConfig, LogError, LogStatus } from '@memberjunction/global';
 import { AuthProviderFactory } from './AuthProviderFactory.js';
 
 /**
@@ -7,7 +7,7 @@ import { AuthProviderFactory } from './AuthProviderFactory.js';
  */
 export function initializeAuthProviders(): void {
   const factory = AuthProviderFactory.getInstance();
-  
+
   // Clear any existing providers
   factory.clear();
 

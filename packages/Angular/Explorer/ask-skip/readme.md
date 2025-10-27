@@ -176,16 +176,16 @@ The dynamic report component provides multiple tabs:
 
 ## Available Components
 
-| Component | Selector | Description |
-|-----------|----------|-------------|
-| SkipButtonComponent | `mj-skip-button` | Button that opens Skip via route navigation or overlay window |
-| SkipWindowComponent | `mj-skip-window` | Skip chat displayed in a CDK overlay popup window |
-| SkipChatWithRecordComponent | `mj-skip-chat-with-record` | Skip chat interface for analyzing a specific entity record |
-| SkipChatWithRecordWindowComponent | `mj-skip-chat-with-record-window` | Skip chat for a record wrapped in a Kendo dialog window |
-| SkipDynamicTabbedReportComponent | `skip-dynamic-tabbed-report` | Dynamic AI-generated report with chart, HTML, table, and drill-down tabs |
-| DynamicReportDrillDownComponent | `mj-dynamic-report-drill-down` | Interactive drill-down component for exploring related data |
-| UserViewGridWithAnalysisComponent | `mj-user-view-grid-with-analysis` | User view grid enhanced with Skip AI analysis capabilities |
-| SkipChatWrapperComponent | `mj-skip-chat-wrapper` | Container wrapper for Skip chat with navigation and drill-down support |
+| Component                         | Selector                          | Description                                                              |
+| --------------------------------- | --------------------------------- | ------------------------------------------------------------------------ |
+| SkipButtonComponent               | `mj-skip-button`                  | Button that opens Skip via route navigation or overlay window            |
+| SkipWindowComponent               | `mj-skip-window`                  | Skip chat displayed in a CDK overlay popup window                        |
+| SkipChatWithRecordComponent       | `mj-skip-chat-with-record`        | Skip chat interface for analyzing a specific entity record               |
+| SkipChatWithRecordWindowComponent | `mj-skip-chat-with-record-window` | Skip chat for a record wrapped in a Kendo dialog window                  |
+| SkipDynamicTabbedReportComponent  | `skip-dynamic-tabbed-report`      | Dynamic AI-generated report with chart, HTML, table, and drill-down tabs |
+| DynamicReportDrillDownComponent   | `mj-dynamic-report-drill-down`    | Interactive drill-down component for exploring related data              |
+| UserViewGridWithAnalysisComponent | `mj-user-view-grid-with-analysis` | User view grid enhanced with Skip AI analysis capabilities               |
+| SkipChatWrapperComponent          | `mj-skip-chat-wrapper`            | Container wrapper for Skip chat with navigation and drill-down support   |
 
 ## Inline Artifacts Support
 
@@ -262,10 +262,10 @@ Control artifact features with these input properties:
 </mj-skip-chat-with-record>
 ```
 
-| Property | Type | Default | Description |
-|----------|------|---------|-------------|
-| `EnableArtifactSplitView` | boolean | true | Enable/disable split-panel artifact viewing |
-| `DefaultSplitRatio` | number | 0.6 | Default ratio for split panels (0-1) |
+| Property                  | Type    | Default | Description                                 |
+| ------------------------- | ------- | ------- | ------------------------------------------- |
+| `EnableArtifactSplitView` | boolean | true    | Enable/disable split-panel artifact viewing |
+| `DefaultSplitRatio`       | number  | 0.6     | Default ratio for split panels (0-1)        |
 
 ## Component Details
 
@@ -411,7 +411,7 @@ import {
 import { ChatMessage, ChatWelcomeQuestion } from '@memberjunction/ng-chat';
 import { SkipAPIChatWithRecordResponse, SkipAPIArtifact } from '@memberjunction/skip-types';
 import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
-import { CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/global';
 ```
 
 ## Integration with MemberJunction

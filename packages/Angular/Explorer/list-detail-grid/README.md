@@ -91,7 +91,7 @@ In your component:
 
 ```typescript
 import { Component } from '@angular/core';
-import { RunViewParams } from '@memberjunction/core';
+import { RunViewParams } from '@memberjunction/global';
 import { GridRowClickedEvent, GridRowEditedEvent } from '@memberjunction/ng-list-detail-grid';
 
 @Component({
@@ -176,43 +176,43 @@ The main component that renders the grid and handles all data operations.
 
 #### Inputs
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `Params` | `RunViewParams` | `undefined` | Parameters for the view to display. Can include ViewID, ViewName, ViewEntity, or EntityName with ExtraFilter |
-| `BottomMargin` | `number` | `0` | Margin to apply at the bottom of the grid in pixels |
-| `InEditMode` | `boolean` | `false` | Whether the grid is currently in edit mode |
-| `EditMode` | `"None" \| "Save" \| "Queue"` | `"None"` | Mode for handling edited records. "Save" saves immediately, "Queue" batches changes |
-| `AutoNavigate` | `boolean` | `true` | Whether to auto-navigate to a record detail page when clicked |
-| `AllowLoad` | `boolean` | `true` | Whether to allow loading the data. Useful for deferring load until ready |
+| Name           | Type                          | Default     | Description                                                                                                  |
+| -------------- | ----------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------ |
+| `Params`       | `RunViewParams`               | `undefined` | Parameters for the view to display. Can include ViewID, ViewName, ViewEntity, or EntityName with ExtraFilter |
+| `BottomMargin` | `number`                      | `0`         | Margin to apply at the bottom of the grid in pixels                                                          |
+| `InEditMode`   | `boolean`                     | `false`     | Whether the grid is currently in edit mode                                                                   |
+| `EditMode`     | `"None" \| "Save" \| "Queue"` | `"None"`    | Mode for handling edited records. "Save" saves immediately, "Queue" batches changes                          |
+| `AutoNavigate` | `boolean`                     | `true`      | Whether to auto-navigate to a record detail page when clicked                                                |
+| `AllowLoad`    | `boolean`                     | `true`      | Whether to allow loading the data. Useful for deferring load until ready                                     |
 
 #### Outputs
 
-| Name | Type | Description |
-|------|------|-------------|
+| Name         | Type                                | Description                                                           |
+| ------------ | ----------------------------------- | --------------------------------------------------------------------- |
 | `rowClicked` | `EventEmitter<GridRowClickedEvent>` | Emitted when a row is clicked, includes entity info and composite key |
-| `rowEdited` | `EventEmitter<GridRowEditedEvent>` | Emitted when a row is edited, includes the record and save status |
+| `rowEdited`  | `EventEmitter<GridRowEditedEvent>`  | Emitted when a row is edited, includes the record and save status     |
 
 #### Public Methods
 
-| Name | Parameters | Return Type | Description |
-|------|------------|-------------|-------------|
-| `Refresh` | `params: RunViewParams` | `Promise<void>` | Refreshes the grid data with new parameters |
-| `RefreshFromSavedParams` | None | `Promise<void>` | Refreshes using the current saved parameters |
-| `EditingComplete` | None | `Promise<boolean>` | Completes the current edit operation and closes any open cells |
-| `RevertPendingChanges` | None | `void` | Reverts all pending changes in Queue mode |
-| `enableCheckbox` | `cancel: boolean, type: 'merge' \| 'compare' \| 'duplicate' \| ''` | `void` | Enables/disables selection mode for operations |
-| `doExcelExport` | None | `Promise<void>` | Exports the entire dataset to Excel |
-| `IsDynamicView` | None | `boolean` | Returns true if using a dynamic view (not saved) |
+| Name                     | Parameters                                                         | Return Type        | Description                                                    |
+| ------------------------ | ------------------------------------------------------------------ | ------------------ | -------------------------------------------------------------- |
+| `Refresh`                | `params: RunViewParams`                                            | `Promise<void>`    | Refreshes the grid data with new parameters                    |
+| `RefreshFromSavedParams` | None                                                               | `Promise<void>`    | Refreshes using the current saved parameters                   |
+| `EditingComplete`        | None                                                               | `Promise<boolean>` | Completes the current edit operation and closes any open cells |
+| `RevertPendingChanges`   | None                                                               | `void`             | Reverts all pending changes in Queue mode                      |
+| `enableCheckbox`         | `cancel: boolean, type: 'merge' \| 'compare' \| 'duplicate' \| ''` | `void`             | Enables/disables selection mode for operations                 |
+| `doExcelExport`          | None                                                               | `Promise<void>`    | Exports the entire dataset to Excel                            |
+| `IsDynamicView`          | None                                                               | `boolean`          | Returns true if using a dynamic view (not saved)               |
 
 #### Public Properties
 
-| Name | Type | Description |
-|------|------|-------------|
-| `PendingRecords` | `GridPendingRecordItem[]` | Array of records with pending changes in Queue mode |
-| `ViewID` | `string` | The ID of the current view (if using a saved view) |
-| `viewColumns` | `ViewColumnInfo[]` | Array of all column configurations |
-| `visibleColumns` | `ViewColumnInfo[]` | Array of visible (non-hidden) columns |
-| `viewExecutionTime` | `number` | Time taken to execute the view query (in seconds) |
+| Name                | Type                      | Description                                         |
+| ------------------- | ------------------------- | --------------------------------------------------- |
+| `PendingRecords`    | `GridPendingRecordItem[]` | Array of records with pending changes in Queue mode |
+| `ViewID`            | `string`                  | The ID of the current view (if using a saved view)  |
+| `viewColumns`       | `ViewColumnInfo[]`        | Array of all column configurations                  |
+| `visibleColumns`    | `ViewColumnInfo[]`        | Array of visible (non-hidden) columns               |
+| `viewExecutionTime` | `number`                  | Time taken to execute the view query (in seconds)   |
 
 ### Type Definitions
 

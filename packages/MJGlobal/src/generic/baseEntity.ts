@@ -1,5 +1,4 @@
-import { MJEventType, MJGlobal, uuidv4 } from '@memberjunction/global';
-import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, EntityRelationshipInfo } from './entityInfo';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -9,6 +8,10 @@ import { LogDebug, LogError, LogStatus } from './logging';
 import { CompositeKey, FieldValueCollection } from './compositeKey';
 import { finalize, firstValueFrom, from, Observable, of, shareReplay, Subject, Subscription, switchMap } from 'rxjs';
 import { z } from 'zod';
+import { MJGlobal } from '../Global';
+import { MJEventType } from '../interface';
+import { uuidv4 } from '../util';
+import { ValidationErrorInfo, ValidationResult } from '../ValidationTypes';
 
 /**
  * Represents a field in an instance of the BaseEntity class. This class is used to store the value of the field, dirty state, as well as other run-time information about the field. The class encapsulates the underlying field metadata and exposes some of the more commonly
@@ -16,7 +19,7 @@ import { z } from 'zod';
  */
 export class EntityField {
     /**
-     * Static object containing the value ranges for various SQL number types. 
+     * Static object containing the value ranges for various SQL number types.
      * This is used to validate the value of the field when it is set or validated.
      */
     public static readonly SQLTypeValueRanges = {
@@ -26,7 +29,7 @@ export class EntityField {
         "tinyint": { min: 0, max: 255 },
         "decimal": { min: -7922816251426433759354395033, max: 79228162514264337593543950335 },
         "numeric": { min: -7922816251426433759354395033, max: 79228162514264337593543950335 },
-        "float": { min: -1.7976931348623157e+308, max: 1.7976931348623157e+308 },   
+        "float": { min: -1.7976931348623157e+308, max: 1.7976931348623157e+308 },
         "real": { min: -3.402823466e+38, max: 3.402823466e+38 },
         "money": { min: -922337203685477.5808, max: 922337203685477.5807 },
     }
@@ -36,7 +39,7 @@ export class EntityField {
      * Starts off as false and turns to true after contructor is done doing all its setup work. Internally, this can be
      * temporarily turned off to allow for legacy fields to be created without asserting the active status.
      */
-    private _assertActiveStatusRequired: boolean = false; 
+    private _assertActiveStatusRequired: boolean = false;
     private _entityFieldInfo: EntityFieldInfo;
     private _OldValue: any;
     private _Value: any;
@@ -80,7 +83,7 @@ export class EntityField {
         // Asserting status here for deprecated or disabled fields, not in constructor because
         // we legacy fields will exist
         if (this._assertActiveStatusRequired) {
-            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter');
         }
         return this._Value;
     }
@@ -115,7 +118,7 @@ export class EntityField {
             // asserting status here becuase the flag is on AND the values
             // are different - this avoid assertions during sysops like SetMany that often aren't changing
             // the value of the field
-            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter'); 
+            EntityFieldInfo.AssertEntityFieldActiveStatus(this._entityFieldInfo, 'EntityField.Value setter');
         }
         if (
               !this.ReadOnly ||
@@ -136,7 +139,7 @@ export class EntityField {
     }
 
     /**
-     * Resets the NeverSet flag - this is generally an internal method but is available when working with read only fields (mainly primary key fields) to allow them 
+     * Resets the NeverSet flag - this is generally an internal method but is available when working with read only fields (mainly primary key fields) to allow them
      * to be set/changed once after the object is created. This is useful for scenarios where you want to set a read only field
      * after the object is created, but only once. This is typically used in the BaseEntity class when loading an entity from an array of values or the DB and reusing an existing object.
      */
@@ -169,7 +172,7 @@ export class EntityField {
                 }
 
                 // Special handling for bit/Boolean types - treat truthy values as equivalent
-                if (this._entityFieldInfo.TSType === EntityFieldTSType.Boolean || 
+                if (this._entityFieldInfo.TSType === EntityFieldTSType.Boolean ||
                     this._entityFieldInfo.Type.toLowerCase() === 'bit') {
                     // Convert both values to boolean for comparison
                     const oldBool = this.convertToBoolean(oldCompare);
@@ -181,7 +184,7 @@ export class EntityField {
                 if (this._entityFieldInfo.TSType === EntityFieldTSType.Number || this.isNumericType(this._entityFieldInfo.Type)) {
                     const oldNum = this.convertToNumber(oldCompare);
                     const newNum = this.convertToNumber(newCompare);
-                    
+
                     // Handle NaN cases - if both are NaN, they're equivalent
                     if (isNaN(oldNum) && isNaN(newNum)) {
                         return false;
@@ -190,7 +193,7 @@ export class EntityField {
                     if (isNaN(oldNum) || isNaN(newNum)) {
                         return true;
                     }
-                    
+
                     return oldNum !== newNum;
                 }
 
@@ -240,7 +243,7 @@ export class EntityField {
         if (!sqlType) return false;
         const normalizedType = sqlType.toLowerCase().trim();
         return ['int', 'smallint', 'bigint', 'tinyint', 'money', 'decimal', 'numeric', 'float', 'real'].includes(normalizedType) ||
-               normalizedType.startsWith('decimal(') || 
+               normalizedType.startsWith('decimal(') ||
                normalizedType.startsWith('numeric(');
     }
 
@@ -331,12 +334,12 @@ export class EntityField {
 
 
     constructor(fieldInfo: EntityFieldInfo, Value?: any) {
-        // NOTE: Do not assert EntityFieldInfo status here, because we are 
-        // creating a new EntityField object and it is possible that the field 
-        // is disabled or is deprecated, but we still need to create the object 
+        // NOTE: Do not assert EntityFieldInfo status here, because we are
+        // creating a new EntityField object and it is possible that the field
+        // is disabled or is deprecated, but we still need to create the object
         // since it is physically part of the entity. We DO assert for the status
         // if the Value is later accessed or set.
-        
+
         this._entityFieldInfo = fieldInfo;
         if (Value) {
             this.Value = Value;
@@ -540,7 +543,7 @@ export class BaseEntityResult {
         // first check the message property
         if (this.Message && this.Message.trim().length > 0) {
             msg = this.Message;
-        }   
+        }
 
         // now check the simple Error property
         if (this.Error) {
@@ -555,7 +558,7 @@ export class BaseEntityResult {
                 msg += JSON.stringify(this.Error);
             }
         }
-        
+
         // now check the Errors array
         if (this.Errors && this.Errors.length > 0) {
             // append
@@ -565,7 +568,7 @@ export class BaseEntityResult {
         return msg;
     }
 }
- 
+
 
 /**
  * Event type that is used to raise events and provided structured callbacks for any caller that is interested in registering for events.
@@ -644,8 +647,8 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
-     * This method can be used to register a callback for events that will be raised by the instance of the BaseEntity object. The callback will be called with a 
-     * BaseEntityEvent object that contains the type of event and any payload that is associated with the event. Subclasses of the BaseEntity can define their 
+     * This method can be used to register a callback for events that will be raised by the instance of the BaseEntity object. The callback will be called with a
+     * BaseEntityEvent object that contains the type of event and any payload that is associated with the event. Subclasses of the BaseEntity can define their
      * own event types and payloads as needed.
      * @param callback
      * @returns
@@ -969,7 +972,7 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Returns a partial object that contains only the fields that have changed since the last time the record was saved. This is useful for scenarios where you want to send only the changes to the server or to a client.
      * It is also helpful for quickly finding the fields that are "dirty".
-     * @returns 
+     * @returns
      */
     public GetChangesSinceLastSave(): Partial<T> {
         return this.GetAll(false, true);
@@ -998,7 +1001,7 @@ export abstract class BaseEntity<T = unknown> {
     public async GetDataObject(params: DataObjectParams = null): Promise<any> {
         if (!params)
             params = new DataObjectParams();
-        
+
         // first, get the object from GetAll
         const obj = this.GetAll(params.oldValues);
 
@@ -1132,12 +1135,12 @@ export abstract class BaseEntity<T = unknown> {
     public NewRecord(newValues?: FieldValueCollection) : boolean {
         this.init();
         this._everSaved = false; // Reset save state for new record
-        
+
         // Generate UUID for non-auto-increment uniqueidentifier primary keys
         if (this.EntityInfo.PrimaryKeys.length === 1) {
             const pk = this.EntityInfo.PrimaryKeys[0];
-            if (!pk.AutoIncrement && 
-                pk.Type.toLowerCase().trim() === 'uniqueidentifier' && 
+            if (!pk.AutoIncrement &&
+                pk.Type.toLowerCase().trim() === 'uniqueidentifier' &&
                 !this.Get(pk.Name)) {
                 // Generate and set UUID for this primary key
                 const uuid = uuidv4();
@@ -1145,11 +1148,11 @@ export abstract class BaseEntity<T = unknown> {
                 const field = this.GetFieldByName(pk.Name);
                 if (field) {
                     // Reset the never set flag so that we can set this value later if needed, this is so that people who do deferred load after new record are still ok
-                    field.ResetNeverSetFlag(); 
+                    field.ResetNeverSetFlag();
                 }
             }
         }
-        
+
         if (newValues) {
             newValues.KeyValuePairs.filter(kv => kv.Value !== null && kv.Value !== undefined).forEach(kv => {
                 this.Set(kv.FieldName, kv.Value);
@@ -1167,10 +1170,10 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Saves the current state of the object to the database. Uses the active provider to handle the actual saving of the record.
      * If the record is new, it will be created, if it already exists, it will be updated.
-     * 
+     *
      * Debounces multiple calls so that if Save() is called again while a save is in progress,
      * the second call will simply receive the same result as the first.
-     * 
+     *
      * @param options
      * @returns Promise<boolean>
      */
@@ -1191,8 +1194,8 @@ export abstract class BaseEntity<T = unknown> {
         );
 
         return firstValueFrom(this._pendingSave$);
-    }    
-    
+    }
+
     /**
      * Private, internal method to handle saving the current state of the object to the database. This method is called by the public facing Save() method
      * and is debounced to prevent multiple calls from being executed simultaneously.
@@ -1212,7 +1215,7 @@ export abstract class BaseEntity<T = unknown> {
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
 
             if (_options.IgnoreDirtyState || this.Dirty || _options.ReplayOnly) {
-                if (!this.ProviderToUse) {    
+                if (!this.ProviderToUse) {
                     throw new Error('No provider set');
                 }
                 else  {
@@ -1223,22 +1226,22 @@ export abstract class BaseEntity<T = unknown> {
                     else {
                         // First run synchronous validation
                         valResult = this.Validate();
-                        
+
                         // Determine if we should run async validation:
                         // 1. Explicitly set in options, OR
                         // 2. Use the subclass's default if not specified in options
-                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ? 
+                        const skipAsyncValidation = _options.SkipAsyncValidation !== undefined ?
                             _options.SkipAsyncValidation : this.DefaultSkipAsyncValidation;
-                            
+
                         // If not skipping async validation, run it - even if sync validation failed
                         // This ensures all validation errors (sync and async) are collected
                         if (!skipAsyncValidation) {
                             const asyncResult = await this.ValidateAsync();
-                            
+
                             // Combine the results of both validations
                             // If either validation fails, the overall result fails
                             valResult.Success = valResult.Success && asyncResult.Success;
-                            
+
                             // Add any async validation errors to the result
                             asyncResult.Errors.forEach(error => {
                                 valResult.Errors.push(error);
@@ -1255,7 +1258,7 @@ export abstract class BaseEntity<T = unknown> {
                             // we are part of a transaction group, so we return true and subscribe to the transaction groups' events and do the finalization work then
                             this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                                 if (success) {
-                                    const transItem = results.find(r => r.Transaction.BaseEntity === this); 
+                                    const transItem = results.find(r => r.Transaction.BaseEntity === this);
                                     if (transItem) {
                                         this.finalizeSave(transItem.Result, saveSubType); // we get the resulting data from the transaction result, not data above as that will be blank when in a TG
                                     }
@@ -1420,7 +1423,7 @@ export abstract class BaseEntity<T = unknown> {
      * @returns true if success, false otherwise
      */
     public async InnerLoad(CompositeKey: CompositeKey, EntityRelationshipsToLoad: string[] = null) : Promise<boolean> {
-        if (!this.ProviderToUse) {    
+        if (!this.ProviderToUse) {
             throw new Error('No provider set');
         }
         else{
@@ -1459,26 +1462,26 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Loads entity data from a plain object, typically from database query results.
-     * 
-     * This method is meant to be used only in situations where you are sure that the data you are loading 
-     * is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS. The Dirty flags and other internal 
+     *
+     * This method is meant to be used only in situations where you are sure that the data you are loading
+     * is current in the database. MAKE SURE YOU ARE PASSING IN ALL FIELDS. The Dirty flags and other internal
      * state will assume what is loading from the data parameter you pass in is equivalent to what is in the database.
-     * 
+     *
      * @remarks
      * Generally speaking, you should use Load() instead of this method. The main use cases where this makes sense are:
      * 1. On the server if you are pulling data you know is fresh from the result of another DB operation
      * 2. If on any tier you run a fresh RunView result that gives you data from the database
      * 3. When the RunView Object RunView() method is called with ResultType='entity_object'
-     * 
-     * **Important for Subclasses**: As of v2.53.0, this method is now async to support subclasses that need to 
+     *
+     * **Important for Subclasses**: As of v2.53.0, this method is now async to support subclasses that need to
      * perform additional asynchronous loading operations (e.g., loading related data, fetching additional metadata).
-     * 
-     * Subclasses that need to perform additional loading should override BOTH this method AND Load() to ensure 
-     * consistent behavior regardless of how the entity is populated. This is because these two methods have 
+     *
+     * Subclasses that need to perform additional loading should override BOTH this method AND Load() to ensure
+     * consistent behavior regardless of how the entity is populated. This is because these two methods have
      * different execution paths:
      * - Load() fetches data from the network/database and then calls provider-specific loading
      * - LoadFromData() is called when data is already available (e.g., from RunView results)
-     * 
+     *
      * @example
      * ```typescript
      * // Subclass implementation
@@ -1491,7 +1494,7 @@ export abstract class BaseEntity<T = unknown> {
      *     }
      *     return result;
      * }
-     * 
+     *
      * // Don't forget to also override Load() for consistency, unless you INTEND to have different behavior
      * // for Load() vs LoadFromData()
      * public override async Load(ID: string, EntityRelationshipsToLoad: string[] = null): Promise<boolean> {
@@ -1504,9 +1507,9 @@ export abstract class BaseEntity<T = unknown> {
      *     return result;
      * }
      * ```
-     * 
+     *
      * @param data - A simple object that has properties that match the field names of the entity object
-     * @param replaceOldValues - If true, the old values of the fields will be set to the values provided 
+     * @param replaceOldValues - If true, the old values of the fields will be set to the values provided
      *                           in the data parameter; if false, they will be left alone
      * @returns Promise<boolean> - Returns true if the load was successful
      */
@@ -1537,7 +1540,7 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * This method is used automatically within Save() and is used to determine if the state of the object is valid relative to the validation rules that are defined in metadata. In addition, sub-classes can
      * override or wrap this base class method to add other logic for validation.
-     * 
+     *
      * @returns ValidationResult The validation result
      */
     public Validate(): ValidationResult  {
@@ -1554,33 +1557,33 @@ export abstract class BaseEntity<T = unknown> {
 
         return result;
     }
-    
+
     /**
      * Default value for whether async validation should be skipped.
      * Subclasses can override this property to enable async validation by default.
-     * When the options object is passed to Save(), and it includes a value for the 
+     * When the options object is passed to Save(), and it includes a value for the
      * SkipAsyncValidation property, that value will take precedence over this default.
-     * 
+     *
      * @see {@link Save}
-     * 
+     *
      * @protected
      */
     public get DefaultSkipAsyncValidation(): boolean {
         return true; // By default, skip async validation unless explicitly enabled
     }
-    
+
     /**
      * Asynchronous validation method that can be overridden by subclasses to add custom async validation logic.
      * This method is automatically called by Save() AFTER the synchronous Validate() passes.
-     * 
-     * IMPORTANT: 
+     *
+     * IMPORTANT:
      * 1. This should NEVER be called INSTEAD of the synchronous Validate() method
      * 2. This is meant to be overridden by subclasses that need to perform async validations
      * 3. The base implementation just returns success - no actual validation is performed
-     * 
-     * Subclasses should override this to add complex validations that require database queries 
+     *
+     * Subclasses should override this to add complex validations that require database queries
      * or other async operations that cannot be performed in the synchronous Validate() method.
-     * 
+     *
      * @returns Promise<ValidationResult> A promise that resolves to the validation result
      */
     public async ValidateAsync(): Promise<ValidationResult> {
@@ -1601,12 +1604,12 @@ export abstract class BaseEntity<T = unknown> {
         newResult.StartedAt = new Date();
 
         try {
-            if (!this.ProviderToUse) {    
+            if (!this.ProviderToUse) {
                 throw new Error('No provider set');
             }
             else{
                 this.CheckPermissions(EntityPermissionType.Delete, true); // this will throw an error and exit out if we don't have permission
-                
+
                 // stash the old values for the event
                 const oldVals =  await this.GetDataObject({
                     oldValues: false,
@@ -1627,14 +1630,14 @@ export abstract class BaseEntity<T = unknown> {
                         this.NewRecord(); // will trigger a new record event here too
                     }
                     else {
-                        // part of a transaction, wait for the transaction to submit successfully and then 
+                        // part of a transaction, wait for the transaction to submit successfully and then
                         // raise the event
                         this.TransactionGroup.TransactionNotifications$.subscribe(({ success, results, error }) => {
                             if (success) {
                                 this.RaiseEvent('delete', {OldValues: oldVals});
 
                                 // wipe out the current data to flush out the DIRTY flags by calling NewRecord()
-                                this.NewRecord(); // will trigger a new record event here too    
+                                this.NewRecord(); // will trigger a new record event here too
                             }
                             else {
                                 // transaction failed, so we need to add a new result to the history here
@@ -1687,7 +1690,7 @@ export abstract class BaseEntity<T = unknown> {
 
     private static _globalProviderKey: string = 'MJ_BaseEntityProvider';
     /**
-     * Static property to get/set the IEntityDataProvider that is used by all BaseEntity objects. This is a global setting that is used by all BaseEntity objects. It can be overriden for a given BaseEntity object instance by passing in a provider to the 
+     * Static property to get/set the IEntityDataProvider that is used by all BaseEntity objects. This is a global setting that is used by all BaseEntity objects. It can be overriden for a given BaseEntity object instance by passing in a provider to the
      * constructor of the BaseEntity object. Typically, a provider will pass itself into BaseEntity objects it creates to create a tight coupling between the provider and the BaseEntity objects it creates. This allows multiple concurrent
      * connections to exist in the same process space without interfering with each other.
      */
@@ -1721,12 +1724,12 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Static Utility method to get RecordChanges for a given entityName/KeyValuePair combination
-     * @param entityName 
-     * @returns 
+     * @param entityName
+     * @returns
      */
     public static async GetRecordChanges(entityName: string, primaryKey: CompositeKey, provider: IEntityDataProvider | null = null): Promise<RecordChange[]> {
         const providerToUse = provider || BaseEntity.Provider;
-        if (!providerToUse) {    
+        if (!providerToUse) {
             throw new Error('No provider set or passed in');
         }
         else{
@@ -1823,7 +1826,7 @@ export abstract class BaseEntity<T = unknown> {
             throw new Error(`Vector field not found: ${vectorFieldName}`);
         if (modelFieldName?.trim().length > 0 && !modelField)
             throw new Error(`Model field not found: ${modelFieldName}`);
-        
+
         return await this.GenerateEmbedding(field, vectorField, modelField);
     }
 
@@ -1868,21 +1871,21 @@ export abstract class BaseEntity<T = unknown> {
                     if (modelField)
                         modelField.Value = null;
                 }
-            }        
+            }
             return true;
         }
         catch (e) {
             console.error("Error generating embedding:", e);
             return false;
         }
-    }    
+    }
 
     /**
-     * In the BaseEntity class this method is not implemented. This method shoudl be implemented only in 
+     * In the BaseEntity class this method is not implemented. This method shoudl be implemented only in
      * **server-side** sub-classes only by calling AIEngine or other methods to generate embeddings for a given
      * piece of text provided. Subclasses that override this method to implement embedding support should also
      * override @see SupportsEmbedTextLocal and return true
-     * @param textToEmbed 
+     * @param textToEmbed
      */
     protected async EmbedTextLocal(textToEmbed: string): Promise<SimpleEmbeddingResult>{
         throw new Error("EmbedTextLocal not implemented in BaseEntity, sub-classes must implement this functionality to use it");
@@ -1890,9 +1893,9 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Specifies if the current object supports the @see EmbedTextLocal method or not - useful to know before calling it for conditional
-     * code that has fallbacks as needed. BaseEntity does not implement this method but server-side sub-classes often do, but it is not mandatory for 
+     * code that has fallbacks as needed. BaseEntity does not implement this method but server-side sub-classes often do, but it is not mandatory for
      * any sub-class.
-     * @returns 
+     * @returns
      */
     public SupportsEmbedTextLocal(): boolean {
         return false;
@@ -1903,11 +1906,11 @@ export abstract class BaseEntity<T = unknown> {
      * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
      * that embed multiple fields if desired.
      */
-    private _vectors: Map<string, number[]> = new Map<string, number[]>();  
+    private _vectors: Map<string, number[]> = new Map<string, number[]>();
 
     /**
      * Utility storage for vector embeddings that represent the active record. Each string in the Map can be any unique key relative to the object so you can
-     * use this to track vectors associated with 
+     * use this to track vectors associated with
      */
     public get Vectors(): Map<string, number[]> {
         return this._vectors;

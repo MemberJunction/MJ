@@ -13,7 +13,6 @@
     "@angular/common": "^18.0.0",
     "@angular/core": "^18.0.0",
     "@angular/platform-browser": "^18.0.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/ai-engine-base": "2.111.0",
     "dhtmlx-gantt": "^8.0.10",

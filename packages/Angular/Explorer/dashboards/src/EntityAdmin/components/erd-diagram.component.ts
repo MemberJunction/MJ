@@ -1,5 +1,16 @@
-import { Component, Input, Output, EventEmitter, ElementRef, ViewChild, AfterViewInit, OnDestroy, OnChanges, SimpleChanges } from '@angular/core';
-import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  ElementRef,
+  ViewChild,
+  AfterViewInit,
+  OnDestroy,
+  OnChanges,
+  SimpleChanges,
+} from '@angular/core';
+import { EntityInfo, EntityFieldInfo } from '@memberjunction/global';
 import * as d3 from 'd3';
 
 interface EntityNode {
@@ -28,7 +39,7 @@ interface EntityLink {
 @Component({
   selector: 'mj-erd-diagram',
   templateUrl: './erd-diagram.component.html',
-  styleUrls: ['./erd-diagram.component.scss']
+  styleUrls: ['./erd-diagram.component.scss'],
 })
 export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges {
   @ViewChild('erdContainer', { static: false }) erdContainer!: ElementRef;
@@ -55,7 +66,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     setTimeout(() => {
       this.setupERD();
     }, 100);
-    
+
     // Add resize observer to handle container size changes
     this.setupResizeObserver();
   }
@@ -64,7 +75,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     if (changes['filteredEntities'] && !changes['filteredEntities'].firstChange) {
       this.setupERD();
     }
-    
+
     if (changes['selectedEntityId'] && !changes['selectedEntityId'].firstChange) {
       this.updateSelectionHighlighting();
     }
@@ -84,26 +95,19 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
   public zoomIn(): void {
     if (this.zoom) {
-      this.svg.transition().duration(300).call(
-        this.zoom.scaleBy, 1.5
-      );
+      this.svg.transition().duration(300).call(this.zoom.scaleBy, 1.5);
     }
   }
 
   public zoomOut(): void {
     if (this.zoom) {
-      this.svg.transition().duration(300).call(
-        this.zoom.scaleBy, 0.67
-      );
+      this.svg.transition().duration(300).call(this.zoom.scaleBy, 0.67);
     }
   }
 
   public resetZoom(): void {
     if (this.zoom) {
-      this.svg.transition().duration(500).call(
-        this.zoom.transform,
-        d3.zoomIdentity
-      );
+      this.svg.transition().duration(500).call(this.zoom.transform, d3.zoomIdentity);
     }
   }
 
@@ -128,8 +132,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     const height = container.clientHeight || 600;
 
     // Prevent resize loops by checking if size actually changed
-    if (Math.abs(this.lastKnownSize.width - width) < 5 && 
-        Math.abs(this.lastKnownSize.height - height) < 5) {
+    if (Math.abs(this.lastKnownSize.width - width) < 5 && Math.abs(this.lastKnownSize.height - height) < 5) {
       return;
     }
 
@@ -157,7 +160,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     if (this.resizeTimeout) {
       clearTimeout(this.resizeTimeout);
     }
-    
+
     this.resizeTimeout = window.setTimeout(() => {
       this.resizeSVG();
     }, 100);
@@ -173,25 +176,24 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
       if (this.resizeTimeout) {
         clearTimeout(this.resizeTimeout);
       }
-      
+
       this.resizeTimeout = window.setTimeout(() => {
         // Double-check that container size actually changed
         const container = this.erdContainer?.nativeElement;
         if (!container) return;
-        
+
         const newWidth = container.clientWidth;
         const newHeight = container.clientHeight;
-        
+
         // Only resize if there's a meaningful size change
-        if (Math.abs(this.lastKnownSize.width - newWidth) >= 5 || 
-            Math.abs(this.lastKnownSize.height - newHeight) >= 5) {
+        if (Math.abs(this.lastKnownSize.width - newWidth) >= 5 || Math.abs(this.lastKnownSize.height - newHeight) >= 5) {
           requestAnimationFrame(() => {
             this.resizeSVG();
           });
         }
       }, 50);
     });
-    
+
     this.resizeObserver.observe(this.erdContainer.nativeElement);
   }
 
@@ -203,16 +205,16 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
   }
 
   private createNodes(): void {
-    this.nodes = this.filteredEntities.map(entity => {
-      const entityFields = this.allEntityFields.filter(f => f.EntityID === entity.ID);
-      const primaryKeys = entityFields.filter(f => f.IsPrimaryKey);
-      const foreignKeys = entityFields.filter(f => f.RelatedEntityID && !f.IsPrimaryKey);
+    this.nodes = this.filteredEntities.map((entity) => {
+      const entityFields = this.allEntityFields.filter((f) => f.EntityID === entity.ID);
+      const primaryKeys = entityFields.filter((f) => f.IsPrimaryKey);
+      const foreignKeys = entityFields.filter((f) => f.RelatedEntityID && !f.IsPrimaryKey);
 
       const fieldCount = Math.max(1, primaryKeys.length + foreignKeys.length);
       const baseHeight = 60;
       const fieldHeight = 20;
       const maxHeight = 300;
-      const calculatedHeight = Math.min(baseHeight + (fieldCount * fieldHeight), maxHeight);
+      const calculatedHeight = Math.min(baseHeight + fieldCount * fieldHeight, maxHeight);
 
       return {
         id: entity.ID,
@@ -221,33 +223,33 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         width: 180,
         height: calculatedHeight,
         primaryKeys: primaryKeys,
-        foreignKeys: foreignKeys
+        foreignKeys: foreignKeys,
       };
     });
   }
 
   private createLinks(): void {
     this.links = [];
-    const entityMap = new Map(this.nodes.map(node => [node.id, node]));
+    const entityMap = new Map(this.nodes.map((node) => [node.id, node]));
 
-    this.allEntityFields.forEach(field => {
+    this.allEntityFields.forEach((field) => {
       if (field.RelatedEntityID && !field.IsPrimaryKey) {
         const sourceNode = entityMap.get(field.EntityID);
         const targetNode = entityMap.get(field.RelatedEntityID);
 
         if (sourceNode && targetNode) {
           const isSelfReference = field.EntityID === field.RelatedEntityID;
-          
+
           // Find target field (primary key in target entity)
-          const targetField = targetNode.primaryKeys.find(pk => pk.Name === field.RelatedEntityFieldName);
-          
+          const targetField = targetNode.primaryKeys.find((pk) => pk.Name === field.RelatedEntityFieldName);
+
           this.links.push({
             source: sourceNode,
             target: targetNode,
             field: field,
             sourceField: field,
             targetField: targetField,
-            isSelfReference: isSelfReference
+            isSelfReference: isSelfReference,
           });
         }
       }
@@ -320,7 +322,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
             const sourceSize = Math.max(sourceNode.width, sourceNode.height);
             const targetSize = Math.max(targetNode.width, targetNode.height);
             return (sourceSize + targetSize) / 2 + 80;
-          }),
+          })
       )
       .force('charge', d3.forceManyBody().strength(-800))
       .force('center', d3.forceCenter(width / 2, height / 2))
@@ -329,7 +331,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         d3.forceCollide().radius((d: any) => {
           const node = d as EntityNode;
           return Math.max(node.width, node.height) / 2 + 20;
-        }),
+        })
       );
 
     // Create links with arrows
@@ -367,7 +369,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
           .drag()
           .on('start', (event, d: any) => this.dragstarted(event, d))
           .on('drag', (event, d: any) => this.dragged(event, d))
-          .on('end', (event, d: any) => this.dragended(event, d)),
+          .on('end', (event, d: any) => this.dragended(event, d))
       );
 
     // Add main rectangle for entity
@@ -494,7 +496,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     node
       .on('click', (event: any, d: EntityNode) => {
         event.stopPropagation();
-        
+
         // Check if this entity is already selected
         if (this.selectedEntityId === d.entity.ID) {
           // If clicking on the selected entity, deselect it
@@ -502,17 +504,17 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
         } else {
           // Select the new entity
           this.entitySelected.emit(d.entity);
-          
+
           // Check if entity is too small and needs auto-zoom
           const currentTransform = d3.zoomTransform(this.svg.node()!);
           const currentRenderedWidth = d.width * currentTransform.k;
           const shouldAutoZoom = currentRenderedWidth < 20;
-          
+
           if (shouldAutoZoom) {
             this.zoomToEntity(d.entity.ID);
           }
         }
-        
+
         // Update visual selection state
         this.updateSelectionHighlighting();
       })
@@ -621,39 +623,39 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
 
   private clearAllHighlighting(): void {
     if (!this.svg) return;
-    
-    this.svg.selectAll('.node')
+
+    this.svg
+      .selectAll('.node')
       .classed('selected', false)
       .classed('relationship-connected', false)
       .classed('entity-connections-highlighted', false);
-      
-    this.svg.selectAll('.entity-rect')
+
+    this.svg
+      .selectAll('.entity-rect')
       .classed('highlighted', false)
       .classed('relationship-highlighted', false)
       .classed('connection-highlighted', false)
       .style('stroke', '#333')
       .style('stroke-width', '2px')
       .style('filter', null);
-      
-    this.svg.selectAll('.link-group')
-      .classed('highlighted', false);
-      
-    this.svg.selectAll('.link')
-      .classed('highlighted', false);
-      
-    this.svg.selectAll('.link-label')
-      .classed('highlighted', false);
+
+    this.svg.selectAll('.link-group').classed('highlighted', false);
+
+    this.svg.selectAll('.link').classed('highlighted', false);
+
+    this.svg.selectAll('.link-label').classed('highlighted', false);
   }
 
   private updateSelectionHighlighting(): void {
     if (!this.svg) return;
-    
+
     // Clear existing selections
     this.clearAllHighlighting();
-    
+
     // Highlight selected entity if any
     if (this.selectedEntityId) {
-      this.svg.selectAll('.node')
+      this.svg
+        .selectAll('.node')
         .filter((d: any) => d.id === this.selectedEntityId)
         .classed('selected', true)
         .select('.entity-rect')
@@ -664,7 +666,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
   }
 
   public zoomToEntity(entityId: string): void {
-    const node = this.nodes.find(n => n.id === entityId);
+    const node = this.nodes.find((n) => n.id === entityId);
     if (!node || !this.zoom) return;
 
     const container = this.erdContainer.nativeElement;
@@ -675,10 +677,7 @@ export class ERDDiagramComponent implements AfterViewInit, OnDestroy, OnChanges 
     const x = width / 2 - (node.x || 0) * scale;
     const y = height / 2 - (node.y || 0) * scale;
 
-    this.svg.transition().duration(750).call(
-      this.zoom.transform,
-      d3.zoomIdentity.translate(x, y).scale(scale)
-    );
+    this.svg.transition().duration(750).call(this.zoom.transform, d3.zoomIdentity.translate(x, y).scale(scale));
   }
 
   private dragstarted(event: any, d: any): void {

@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "tslib": "^2.3.0",
-    "@memberjunction/core": "2.111.0"
+    "@memberjunction/global": "2.111.0"
   },
   "sideEffects": false,
   "repository": {

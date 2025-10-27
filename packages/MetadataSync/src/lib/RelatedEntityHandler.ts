@@ -1,4 +1,4 @@
-import { BaseEntity, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, RunView, UserInfo } from '@memberjunction/global';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { RelatedEntityConfig, EntityConfig } from '../config';
 
@@ -42,18 +42,14 @@ export class RelatedEntityHandler {
         return [];
       }
 
-      const relatedRecords = await this.queryRelatedEntities(
-        parentPrimaryKey, 
-        relationConfig, 
-        verbose
-      );
+      const relatedRecords = await this.queryRelatedEntities(parentPrimaryKey, relationConfig, verbose);
 
       if (!relatedRecords) {
         return [];
       }
 
       const relatedEntityConfig = this.createRelatedEntityConfig(relationConfig, parentEntityConfig);
-      
+
       return await this.processRelatedRecords(
         relatedRecords,
         relationConfig,
@@ -79,17 +75,20 @@ export class RelatedEntityHandler {
     verbose?: boolean
   ): Promise<BaseEntity[] | null> {
     const filter = this.buildRelatedEntityFilter(parentPrimaryKey, relationConfig);
-    
+
     if (verbose) {
       console.log(`Loading related entities: ${relationConfig.entity} with filter: ${filter}`);
     }
 
     const rv = new RunView();
-    const result = await rv.RunView({
-      EntityName: relationConfig.entity,
-      ExtraFilter: filter,
-      ResultType: 'entity_object'
-    }, this.contextUser);
+    const result = await rv.RunView(
+      {
+        EntityName: relationConfig.entity,
+        ExtraFilter: filter,
+        ResultType: 'entity_object',
+      },
+      this.contextUser
+    );
 
     if (!result.Success) {
       this.logWarning(`Failed to load related entities ${relationConfig.entity}: ${result.ErrorMessage}`, verbose);
@@ -117,10 +116,7 @@ export class RelatedEntityHandler {
   /**
    * Creates entity config for related entity processing
    */
-  private createRelatedEntityConfig(
-    relationConfig: RelatedEntityConfig, 
-    parentEntityConfig: EntityConfig
-  ): EntityConfig {
+  private createRelatedEntityConfig(relationConfig: RelatedEntityConfig, parentEntityConfig: EntityConfig): EntityConfig {
     return {
       entity: relationConfig.entity,
       pull: {
@@ -129,8 +125,8 @@ export class RelatedEntityHandler {
         externalizeFields: relationConfig.externalizeFields || [],
         relatedEntities: relationConfig.relatedEntities || {},
         ignoreVirtualFields: parentEntityConfig.pull?.ignoreVirtualFields || false,
-        ignoreNullFields: parentEntityConfig.pull?.ignoreNullFields || false
-      }
+        ignoreNullFields: parentEntityConfig.pull?.ignoreNullFields || false,
+      },
     };
   }
 
@@ -186,14 +182,14 @@ export class RelatedEntityHandler {
    */
   private buildDatabaseRecordMap(dbRecords: BaseEntity[]): Map<string, BaseEntity> {
     const dbRecordMap = new Map<string, BaseEntity>();
-    
+
     for (const relatedRecord of dbRecords) {
       const relatedPrimaryKey = this.getRecordPrimaryKey(relatedRecord);
       if (relatedPrimaryKey) {
         dbRecordMap.set(relatedPrimaryKey, relatedRecord);
       }
     }
-    
+
     return dbRecordMap;
   }
 
@@ -260,11 +256,7 @@ export class RelatedEntityHandler {
     ancestryPath: Set<string>,
     verbose?: boolean
   ): Promise<RecordData | null> {
-    const relatedRecordPrimaryKey = this.buildPrimaryKeyForRecord(
-      existingPrimaryKey, 
-      dbRecord, 
-      relationConfig.entity
-    );
+    const relatedRecordPrimaryKey = this.buildPrimaryKeyForRecord(existingPrimaryKey, dbRecord, relationConfig.entity);
 
     const fieldOverrides = this.createFieldOverrides(dbRecord, relationConfig);
     if (!fieldOverrides) {
@@ -336,11 +328,7 @@ export class RelatedEntityHandler {
     ancestryPath: Set<string>,
     verbose?: boolean
   ): Promise<RecordData | null> {
-    const relatedRecordPrimaryKey = this.buildPrimaryKeyForRecord(
-      relatedPrimaryKey, 
-      relatedRecord, 
-      relationConfig.entity
-    );
+    const relatedRecordPrimaryKey = this.buildPrimaryKeyForRecord(relatedPrimaryKey, relatedRecord, relationConfig.entity);
 
     const fieldOverrides = this.createFieldOverrides(relatedRecord, relationConfig);
     if (!fieldOverrides) {
@@ -381,14 +369,10 @@ export class RelatedEntityHandler {
   /**
    * Builds primary key for a record
    */
-  private buildPrimaryKeyForRecord(
-    primaryKeyValue: string, 
-    record: BaseEntity, 
-    entityName: string
-  ): Record<string, any> {
+  private buildPrimaryKeyForRecord(primaryKeyValue: string, record: BaseEntity, entityName: string): Record<string, any> {
     const relatedRecordPrimaryKey: Record<string, any> = {};
     const entityInfo = this.syncEngine.getEntityInfo(entityName);
-    
+
     for (const pk of entityInfo?.PrimaryKeys || []) {
       if (pk.Name === 'ID') {
         relatedRecordPrimaryKey[pk.Name] = primaryKeyValue;
@@ -397,7 +381,7 @@ export class RelatedEntityHandler {
         relatedRecordPrimaryKey[pk.Name] = this.getFieldValue(record, pk.Name);
       }
     }
-    
+
     return relatedRecordPrimaryKey;
   }
 
@@ -406,20 +390,20 @@ export class RelatedEntityHandler {
    */
   private getRecordPrimaryKey(record: BaseEntity): string | null {
     if (!record) return null;
-    
+
     // Try to get ID directly
     if ((record as any).ID) return (record as any).ID;
-    
+
     // Try to get from GetAll() method if it's an entity object
     if (typeof record.GetAll === 'function') {
       const data = record.GetAll();
       if (data.ID) return data.ID;
     }
-    
+
     // Try common variations
     if ((record as any).id) return (record as any).id;
     if ((record as any).Id) return (record as any).Id;
-    
+
     return null;
   }
 
@@ -428,16 +412,16 @@ export class RelatedEntityHandler {
    */
   private getFieldValue(record: BaseEntity, fieldName: string): any {
     if (!record) return null;
-    
+
     // Try to get field directly using bracket notation with type assertion
     if ((record as any)[fieldName] !== undefined) return (record as any)[fieldName];
-    
+
     // Try to get from GetAll() method if it's an entity object
     if (typeof record.GetAll === 'function') {
       const data = record.GetAll();
       if (data[fieldName] !== undefined) return data[fieldName];
     }
-    
+
     return null;
   }
 

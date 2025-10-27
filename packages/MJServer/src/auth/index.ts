@@ -2,7 +2,7 @@ import { JwtHeader, SigningKeyCallback, JwtPayload } from 'jsonwebtoken';
 import { configInfo } from '../config.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
-import { Metadata, RoleInfo, UserInfo } from '@memberjunction/core';
+import { Metadata, RoleInfo, UserInfo } from '@memberjunction/global';
 import { NewUserBase } from './newUsers.js';
 import { MJGlobal } from '@memberjunction/global';
 import { UserEntity, UserEntityType } from '@memberjunction/core-entities';
@@ -53,14 +53,14 @@ const refreshUserCache = async (dataSource?: sql.ConnectionPool) => {
 export const getValidationOptions = (issuer: string): { audience: string; jwksUri: string } | undefined => {
   const factory = AuthProviderFactory.getInstance();
   const provider = factory.getByIssuer(issuer);
-  
+
   if (!provider) {
     return undefined;
   }
 
   return {
     audience: provider.audience,
-    jwksUri: provider.jwksUri
+    jwksUri: provider.jwksUri,
   };
 };
 
@@ -68,18 +68,21 @@ export const getValidationOptions = (issuer: string): { audience: string; jwksUr
  * Backward compatible validationOptions object
  * @deprecated Use getValidationOptions() or AuthProviderRegistry instead
  */
-export const validationOptions: Record<string, { audience: string; jwksUri: string }> = new Proxy({}, {
-  get: (target, prop: string) => {
-    return getValidationOptions(prop);
-  },
-  has: (target, prop: string) => {
-    return getValidationOptions(prop) !== undefined;
-  },
-  ownKeys: () => {
-    const factory = AuthProviderFactory.getInstance();
-    return factory.getAllProviders().map(p => p.issuer);
+export const validationOptions: Record<string, { audience: string; jwksUri: string }> = new Proxy(
+  {},
+  {
+    get: (target, prop: string) => {
+      return getValidationOptions(prop);
+    },
+    has: (target, prop: string) => {
+      return getValidationOptions(prop) !== undefined;
+    },
+    ownKeys: () => {
+      const factory = AuthProviderFactory.getInstance();
+      return factory.getAllProviders().map((p) => p.issuer);
+    },
   }
-});
+);
 
 export class UserPayload {
   aio?: string;
@@ -108,14 +111,14 @@ export class UserPayload {
  */
 export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: SigningKeyCallback) => {
   const factory = AuthProviderFactory.getInstance();
-  
+
   // Initialize providers if not already done
   if (!factory.hasProviders()) {
     initializeAuthProviders();
   }
 
   const provider = factory.getByIssuer(issuer);
-  
+
   if (!provider) {
     // Check if we have any providers at all
     if (!factory.hasProviders()) {
@@ -130,7 +133,9 @@ export const getSigningKeys = (issuer: string) => (header: JwtHeader, cb: Signin
 /**
  * Extracts user information from JWT payload using the appropriate provider
  */
-export const extractUserInfoFromPayload = (payload: JwtPayload): {
+export const extractUserInfoFromPayload = (
+  payload: JwtPayload
+): {
   email?: string;
   firstName?: string;
   lastName?: string;
@@ -139,31 +144,31 @@ export const extractUserInfoFromPayload = (payload: JwtPayload): {
 } => {
   const factory = AuthProviderFactory.getInstance();
   const issuer = payload.iss;
-  
+
   if (!issuer) {
     // Fallback to default extraction
     const preferredUsername = payload.preferred_username as string | undefined;
     return {
-      email: payload.email as string | undefined || preferredUsername,
+      email: (payload.email as string | undefined) || preferredUsername,
       firstName: payload.given_name as string | undefined,
       lastName: payload.family_name as string | undefined,
       fullName: payload.name as string | undefined,
-      preferredUsername
+      preferredUsername,
     };
   }
 
   const provider = factory.getByIssuer(issuer);
-  
+
   if (!provider) {
     // Fallback to default extraction
     const fullName = payload.name as string | undefined;
     const preferredUsername = payload.preferred_username as string | undefined;
     return {
-      email: payload.email as string | undefined || preferredUsername,
-      firstName: payload.given_name as string | undefined || fullName?.split(' ')[0],
-      lastName: payload.family_name as string | undefined || fullName?.split(' ')[1] || fullName?.split(' ')[0],
+      email: (payload.email as string | undefined) || preferredUsername,
+      firstName: (payload.given_name as string | undefined) || fullName?.split(' ')[0],
+      lastName: (payload.family_name as string | undefined) || fullName?.split(' ')[1] || fullName?.split(' ')[0],
       fullName,
-      preferredUsername
+      preferredUsername,
     };
   }
 

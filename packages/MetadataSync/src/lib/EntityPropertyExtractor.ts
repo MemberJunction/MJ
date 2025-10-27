@@ -1,4 +1,4 @@
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity } from '@memberjunction/global';
 
 /**
  * Handles discovery and extraction of all properties from BaseEntity objects,
@@ -14,16 +14,16 @@ export class EntityPropertyExtractor {
    */
   extractAllProperties(record: BaseEntity, fieldOverrides?: Record<string, any>): Record<string, any> {
     const allProperties: Record<string, any> = {};
-    
+
     // 1. Get database fields using GetAll()
     this.extractDatabaseFields(record, allProperties);
-    
+
     // 2. Apply field overrides (e.g., for @parent:ID replacement in related entities)
     this.applyFieldOverrides(allProperties, fieldOverrides);
-    
+
     // 3. Extract virtual properties by walking the prototype chain
     this.extractVirtualProperties(record, allProperties, fieldOverrides);
-    
+
     return allProperties;
   }
 
@@ -49,23 +49,19 @@ export class EntityPropertyExtractor {
   /**
    * Extracts virtual properties by walking the prototype chain
    */
-  private extractVirtualProperties(
-    record: BaseEntity, 
-    allProperties: Record<string, any>, 
-    fieldOverrides?: Record<string, any>
-  ): void {
+  private extractVirtualProperties(record: BaseEntity, allProperties: Record<string, any>, fieldOverrides?: Record<string, any>): void {
     const virtualProperties = this.discoverVirtualProperties(record);
-    
+
     for (const propertyName of virtualProperties) {
       try {
         // Skip if this property is overridden
         if (fieldOverrides && propertyName in fieldOverrides) {
           continue;
         }
-        
+
         // Use bracket notation to access the getter
         const value = (record as any)[propertyName];
-        
+
         // Only include if the value is not undefined and not a function
         if (value !== undefined && typeof value !== 'function') {
           allProperties[propertyName] = value;
@@ -84,15 +80,15 @@ export class EntityPropertyExtractor {
   private discoverVirtualProperties(record: BaseEntity): string[] {
     const virtualProperties: string[] = [];
     const dbFieldNames = this.getDatabaseFieldNames(record);
-    
+
     // Walk the prototype chain to find getters
     let currentPrototype = Object.getPrototypeOf(record);
-    
+
     while (currentPrototype && currentPrototype !== Object.prototype) {
       this.extractPropertiesFromPrototype(currentPrototype, virtualProperties, dbFieldNames);
       currentPrototype = Object.getPrototypeOf(currentPrototype);
     }
-    
+
     return virtualProperties;
   }
 
@@ -101,25 +97,21 @@ export class EntityPropertyExtractor {
    */
   private getDatabaseFieldNames(record: BaseEntity): Set<string> {
     const dbFieldNames = new Set<string>();
-    
+
     if (typeof record.GetAll === 'function') {
       const dbFields = record.GetAll();
-      Object.keys(dbFields).forEach(key => dbFieldNames.add(key));
+      Object.keys(dbFields).forEach((key) => dbFieldNames.add(key));
     }
-    
+
     return dbFieldNames;
   }
 
   /**
    * Extracts properties from a single prototype level
    */
-  private extractPropertiesFromPrototype(
-    prototype: any, 
-    virtualProperties: string[], 
-    dbFieldNames: Set<string>
-  ): void {
+  private extractPropertiesFromPrototype(prototype: any, virtualProperties: string[], dbFieldNames: Set<string>): void {
     const propertyNames = Object.getOwnPropertyNames(prototype);
-    
+
     for (const propertyName of propertyNames) {
       if (this.shouldIncludeProperty(propertyName, virtualProperties, dbFieldNames)) {
         const descriptor = Object.getOwnPropertyDescriptor(prototype, propertyName);
@@ -133,16 +125,12 @@ export class EntityPropertyExtractor {
   /**
    * Determines if a property should be considered for inclusion
    */
-  private shouldIncludeProperty(
-    propertyName: string, 
-    virtualProperties: string[], 
-    dbFieldNames: Set<string>
-  ): boolean {
+  private shouldIncludeProperty(propertyName: string, virtualProperties: string[], dbFieldNames: Set<string>): boolean {
     // Skip if already found or is a database field
     if (virtualProperties.includes(propertyName) || dbFieldNames.has(propertyName)) {
       return false;
     }
-    
+
     // Skip internal properties and methods
     return !this.shouldSkipProperty(propertyName);
   }
@@ -152,12 +140,12 @@ export class EntityPropertyExtractor {
    */
   private isVirtualProperty(descriptor: PropertyDescriptor | undefined): boolean {
     if (!descriptor) return false;
-    
+
     // Skip read-only getters (might be computed properties)
     if (typeof descriptor.get === 'function' && !descriptor.set) {
       return false;
     }
-    
+
     // Include read-write getter/setter pairs (likely virtual properties)
     return typeof descriptor.get === 'function' && typeof descriptor.set === 'function';
   }
@@ -170,12 +158,12 @@ export class EntityPropertyExtractor {
     if (propertyName.startsWith('_') || propertyName.startsWith('__')) {
       return true;
     }
-    
+
     // Skip constructor and common Object.prototype methods
     if (this.isCommonObjectMethod(propertyName)) {
       return true;
     }
-    
+
     // Skip known BaseEntity methods and properties
     return this.isBaseEntityMethod(propertyName);
   }
@@ -193,11 +181,25 @@ export class EntityPropertyExtractor {
    */
   private isBaseEntityMethod(propertyName: string): boolean {
     const baseEntityMethods = [
-      'Get', 'Set', 'GetAll', 'SetMany', 'LoadFromData', 'Save', 'Load', 'Delete',
-      'Fields', 'Dirty', 'IsSaved', 'PrimaryKeys', 'EntityInfo', 'ContextCurrentUser',
-      'ProviderToUse', 'RecordChanges', 'TransactionGroup'
+      'Get',
+      'Set',
+      'GetAll',
+      'SetMany',
+      'LoadFromData',
+      'Save',
+      'Load',
+      'Delete',
+      'Fields',
+      'Dirty',
+      'IsSaved',
+      'PrimaryKeys',
+      'EntityInfo',
+      'ContextCurrentUser',
+      'ProviderToUse',
+      'RecordChanges',
+      'TransactionGroup',
     ];
-    
+
     return baseEntityMethods.includes(propertyName);
   }
 }

@@ -9,7 +9,7 @@ import { ComponentRegistryService } from './component-registry-service';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentCompiler } from '../compiler';
 import { RuntimeContext } from '../types';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
 /**
@@ -39,16 +39,11 @@ export class ComponentResolver {
    * @param runtimeContext - Optional runtime context for registry-based components
    * @param debug - Enable debug logging (defaults to false)
    */
-  constructor(
-    registry: ComponentRegistry,
-    compiler?: ComponentCompiler,
-    runtimeContext?: RuntimeContext,
-    debug: boolean = false
-  ) {
+  constructor(registry: ComponentRegistry, compiler?: ComponentCompiler, runtimeContext?: RuntimeContext, debug: boolean = false) {
     this.registry = registry;
     this.resolverInstanceId = `resolver-${Date.now()}-${Math.random()}`;
     this.debug = debug;
-    
+
     if (compiler && runtimeContext) {
       this.compiler = compiler;
       this.runtimeContext = runtimeContext;
@@ -63,11 +58,7 @@ export class ComponentResolver {
    * @param contextUser - Optional user context for database operations
    * @returns Map of component names to resolved components
    */
-  async resolveComponents(
-    spec: ComponentSpec, 
-    namespace: string = 'Global',
-    contextUser?: UserInfo
-  ): Promise<ResolvedComponents> {
+  async resolveComponents(spec: ComponentSpec, namespace: string = 'Global', contextUser?: UserInfo): Promise<ResolvedComponents> {
     console.log(`🚀 [ComponentResolver] Starting component resolution for: ${spec.name}`);
     console.log(`📋 [ComponentResolver] Root component spec:`, {
       name: spec.name,
@@ -75,19 +66,22 @@ export class ComponentResolver {
       registry: spec.registry,
       namespace: spec.namespace,
       hasCode: !!spec.code,
-      hasDependencies: !!(spec.dependencies && spec.dependencies.length > 0)
+      hasDependencies: !!(spec.dependencies && spec.dependencies.length > 0),
     });
-    
+
     if (this.debug) {
-      console.log(`📋 [ComponentResolver] Dependencies to resolve:`, (spec.dependencies || []).map(d => ({
-        name: d.name,
-        location: d.location,
-        namespace: d.namespace
-      })));
+      console.log(
+        `📋 [ComponentResolver] Dependencies to resolve:`,
+        (spec.dependencies || []).map((d) => ({
+          name: d.name,
+          location: d.location,
+          namespace: d.namespace,
+        }))
+      );
     }
-    
+
     const resolved: ResolvedComponents = {};
-    
+
     // Initialize component engine if we have registry service
     if (this.registryService) {
       if (this.debug) {
@@ -98,22 +92,22 @@ export class ComponentResolver {
         console.log(`✅ [ComponentResolver] Component engine initialized with ${this.componentEngine.Components?.length || 0} components`);
       }
     }
-    
+
     // Resolve the component hierarchy
     console.log(`🔄 [ComponentResolver] About to call resolveComponentHierarchy for root: ${spec.name}`);
     await this.resolveComponentHierarchy(spec, resolved, namespace, new Set(), contextUser);
     console.log(`✅ [ComponentResolver] Returned from resolveComponentHierarchy`);
     console.log(`🔍 [ComponentResolver] Looking for root component '${spec.name}' in resolved:`, !!resolved[spec.name]);
-    
+
     if (!resolved[spec.name]) {
       console.error(`❌ [ComponentResolver] Root component '${spec.name}' was NOT added to resolved map!`);
       console.log(`📦 [ComponentResolver] What IS in resolved map:`, Object.keys(resolved));
     }
-    
+
     if (this.debug) {
       console.log(`📊 [ComponentResolver] Resolved components before unwrapping:`, Object.keys(resolved));
     }
-    
+
     // Unwrap component wrappers before returning
     // Components from the registry come as objects with component/print/refresh properties
     // We need to extract just the component function for use in child components
@@ -143,15 +137,18 @@ export class ComponentResolver {
         unwrapped[name] = value; // Pass through for debugging
       }
     }
-    
+
     if (this.debug) {
-      console.log(`🎯 [ComponentResolver] Final resolved components:`, Object.keys(unwrapped).map(name => ({
-        name,
-        type: typeof unwrapped[name],
-        isUndefined: unwrapped[name] === undefined
-      })));
+      console.log(
+        `🎯 [ComponentResolver] Final resolved components:`,
+        Object.keys(unwrapped).map((name) => ({
+          name,
+          type: typeof unwrapped[name],
+          isUndefined: unwrapped[name] === undefined,
+        }))
+      );
     }
-    
+
     return unwrapped;
   }
 
@@ -172,7 +169,7 @@ export class ComponentResolver {
   ): Promise<void> {
     // Create a unique identifier for this component
     const componentId = `${spec.namespace || namespace}/${spec.name}@${spec.version || 'latest'}`;
-    
+
     // Check if already resolved (not just visited)
     if (resolved[spec.name]) {
       if (this.debug) {
@@ -180,7 +177,7 @@ export class ComponentResolver {
       }
       return;
     }
-    
+
     // Prevent circular dependencies
     if (visited.has(componentId)) {
       if (this.debug) {
@@ -217,7 +214,7 @@ export class ComponentResolver {
           console.log(`  📍 [ComponentResolver] Local registry (no registry field specified)`);
         }
       }
-      
+
       try {
         // If spec.registry is populated, this is an external registry component
         // If spec.registry is blank/undefined, this is a local registry component
@@ -226,17 +223,17 @@ export class ComponentResolver {
           if (this.debug) {
             console.log(`🌐 [ComponentResolver] Fetching from external registry: ${spec.registry}`);
           }
-          
+
           // Get compiled component from registry service (which will handle the external fetch)
           const compiledComponent = await this.registryService.getCompiledComponentFromRegistry(
-            spec.registry,  // Registry name
+            spec.registry, // Registry name
             spec.namespace || namespace,
             spec.name,
             spec.version || 'latest',
             this.resolverInstanceId,
             contextUser
           );
-          
+
           if (compiledComponent) {
             resolved[spec.name] = compiledComponent;
             if (this.debug) {
@@ -250,54 +247,54 @@ export class ComponentResolver {
           if (this.debug) {
             console.log(`💾 [ComponentResolver] Looking for locally registered component`);
           }
-          
+
           // First, try to find the component in the metadata engine
           const allComponents = this.componentEngine.Components || [];
           if (this.debug) {
             console.log(`📊 [ComponentResolver] Total components in engine: ${allComponents.length}`);
           }
-          
+
           // Log all matching names to see duplicates
           const matchingNames = allComponents.filter((c: any) => c.Name === spec.name);
           if (matchingNames.length > 0 && this.debug) {
-            console.log(`🔎 [ComponentResolver] Found ${matchingNames.length} components with name "${spec.name}":`, 
+            console.log(
+              `🔎 [ComponentResolver] Found ${matchingNames.length} components with name "${spec.name}":`,
               matchingNames.map((c: any) => ({
                 ID: c.ID,
                 Name: c.Name,
                 Namespace: c.Namespace,
                 Version: c.Version,
-                Status: c.Status
+                Status: c.Status,
               }))
             );
           }
-          
+
           const component = this.componentEngine.Components?.find(
-            (c: any) => c.Name === spec.name && 
-                 c.Namespace === (spec.namespace || namespace)
+            (c: any) => c.Name === spec.name && c.Namespace === (spec.namespace || namespace)
           );
-          
+
           if (component) {
             if (this.debug) {
               console.log(`✅ [ComponentResolver] Found component in local DB:`, {
                 ID: component.ID,
                 Name: component.Name,
                 Namespace: component.Namespace,
-                Version: component.Version
+                Version: component.Version,
               });
             }
-            
+
             // Get compiled component from registry service (local compilation)
-            const compiledComponent = await this.registryService.getCompiledComponent(
-              component.ID,
-              this.resolverInstanceId,
-              contextUser
-            );
+            const compiledComponent = await this.registryService.getCompiledComponent(component.ID, this.resolverInstanceId, contextUser);
             resolved[spec.name] = compiledComponent;
             if (this.debug) {
-              console.log(`📦 [ComponentResolver] Successfully compiled and resolved local component: ${spec.name}, type: ${typeof compiledComponent}`);
+              console.log(
+                `📦 [ComponentResolver] Successfully compiled and resolved local component: ${spec.name}, type: ${typeof compiledComponent}`
+              );
             }
           } else {
-            console.error(`❌ [ComponentResolver] Local registry component NOT found in database: ${spec.name} with namespace: ${spec.namespace || namespace}`);
+            console.error(
+              `❌ [ComponentResolver] Local registry component NOT found in database: ${spec.name} with namespace: ${spec.namespace || namespace}`
+            );
             if (this.debug) {
               console.warn(`Local registry component not found in database: ${spec.name}`);
             }
@@ -312,13 +309,13 @@ export class ComponentResolver {
       // Embedded/Local component
       // Use the component's specified namespace if it has one, otherwise use parent's namespace
       const componentNamespace = spec.namespace || namespace;
-      
+
       // First check if component has inline code that needs compilation
       if (spec.code && this.compiler) {
         if (this.debug) {
           console.log(`🔨 [ComponentResolver] Component ${spec.name} has inline code, compiling...`);
         }
-        
+
         try {
           // Compile the component with its code
           const compilationResult = await this.compiler.compile({
@@ -326,9 +323,9 @@ export class ComponentResolver {
             componentCode: spec.code,
             libraries: spec.libraries,
             dependencies: spec.dependencies,
-            allLibraries: [] // TODO: Get from ComponentMetadataEngine if needed
+            allLibraries: [], // TODO: Get from ComponentMetadataEngine if needed
           });
-          
+
           if (compilationResult.success && compilationResult.component) {
             // Get the component object from the factory (only if we have runtimeContext)
             if (!this.runtimeContext) {
@@ -336,13 +333,13 @@ export class ComponentResolver {
               return;
             }
             const componentObject = compilationResult.component.factory(this.runtimeContext);
-            
+
             // Register it in the local registry for future use
             this.registry.register(spec.name, componentObject, componentNamespace, spec.version || 'latest');
-            
+
             // Add to resolved
             resolved[spec.name] = componentObject;
-            
+
             if (this.debug) {
               console.log(`✅ [ComponentResolver] Successfully compiled and registered inline component: ${spec.name}`);
             }
@@ -357,7 +354,7 @@ export class ComponentResolver {
         if (this.debug) {
           console.log(`🔍 [ComponentResolver] Looking for embedded component: ${spec.name} in namespace: ${componentNamespace}`);
         }
-        
+
         const component = this.registry.get(spec.name, componentNamespace);
         if (component) {
           resolved[spec.name] = component;
@@ -376,14 +373,21 @@ export class ComponentResolver {
           if (fallbackComponent) {
             resolved[spec.name] = fallbackComponent;
             if (this.debug) {
-              console.log(`✅ [ComponentResolver] Found embedded component in fallback namespace: ${spec.name}, type: ${typeof fallbackComponent}`);
+              console.log(
+                `✅ [ComponentResolver] Found embedded component in fallback namespace: ${spec.name}, type: ${typeof fallbackComponent}`
+              );
             }
             if (this.debug) {
-              console.log(`📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}, type:`, typeof fallbackComponent);
+              console.log(
+                `📄 Resolved embedded component: ${spec.name} from fallback namespace ${namespace}, type:`,
+                typeof fallbackComponent
+              );
             }
           } else {
             // Component not found - this might cause issues later
-            console.error(`❌ [ComponentResolver] Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
+            console.error(
+              `❌ [ComponentResolver] Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`
+            );
             if (this.debug) {
               console.warn(`⚠️ Could not resolve embedded component: ${spec.name} in namespace ${componentNamespace} or ${namespace}`);
             }
@@ -393,7 +397,7 @@ export class ComponentResolver {
         }
       }
     }
-    
+
     // Child components have already been processed at the beginning of this method
     // No need to process them again - we're using depth-first, post-order traversal
   }
@@ -421,9 +425,9 @@ export class ComponentResolver {
   validateDependencies(spec: ComponentSpec, namespace: string = 'Global'): string[] {
     const missing: string[] = [];
     const checked = new Set<string>();
-    
+
     this.checkDependencies(spec, namespace, missing, checked);
-    
+
     return missing;
   }
 
@@ -434,12 +438,7 @@ export class ComponentResolver {
    * @param missing - Array to collect missing components
    * @param checked - Set of already checked components
    */
-  private checkDependencies(
-    spec: ComponentSpec,
-    namespace: string,
-    missing: string[],
-    checked: Set<string>
-  ): void {
+  private checkDependencies(spec: ComponentSpec, namespace: string, missing: string[], checked: Set<string>): void {
     if (checked.has(spec.name)) return;
     checked.add(spec.name);
 
@@ -463,9 +462,9 @@ export class ComponentResolver {
   getDependencyGraph(spec: ComponentSpec): Map<string, string[]> {
     const graph = new Map<string, string[]>();
     const visited = new Set<string>();
-    
+
     this.buildDependencyGraph(spec, graph, visited);
-    
+
     return graph;
   }
 
@@ -475,17 +474,13 @@ export class ComponentResolver {
    * @param graph - Graph to build
    * @param visited - Set of visited components
    */
-  private buildDependencyGraph(
-    spec: ComponentSpec,
-    graph: Map<string, string[]>,
-    visited: Set<string>
-  ): void {
+  private buildDependencyGraph(spec: ComponentSpec, graph: Map<string, string[]>, visited: Set<string>): void {
     if (visited.has(spec.name)) return;
     visited.add(spec.name);
 
     const children = spec.dependencies || [];
-    const dependencies = children.map(child => child.name);
-    
+    const dependencies = children.map((child) => child.name);
+
     graph.set(spec.name, dependencies);
 
     // Recursively process children
@@ -522,12 +517,7 @@ export class ComponentResolver {
    * @param visited - Set of visited nodes
    * @param stack - Result stack
    */
-  private topologicalSortDFS(
-    node: string,
-    graph: Map<string, string[]>,
-    visited: Set<string>,
-    stack: string[]
-  ): void {
+  private topologicalSortDFS(node: string, graph: Map<string, string[]>, visited: Set<string>, stack: string[]): void {
     visited.add(node);
 
     const dependencies = graph.get(node) || [];
@@ -546,7 +536,10 @@ export class ComponentResolver {
    * @param namespace - Namespace for resolution
    * @returns Ordered array of resolved components
    */
-  resolveInOrder(spec: ComponentSpec, namespace: string = 'Global'): Array<{
+  resolveInOrder(
+    spec: ComponentSpec,
+    namespace: string = 'Global'
+  ): Array<{
     name: string;
     component: any;
   }> {
@@ -583,11 +576,7 @@ export class ComponentResolver {
    * @param collected - Array to collect specs
    * @param visited - Set of visited component names
    */
-  private collectComponentSpecs(
-    spec: ComponentSpec,
-    collected: ComponentSpec[],
-    visited: Set<string>
-  ): void {
+  private collectComponentSpecs(spec: ComponentSpec, collected: ComponentSpec[], visited: Set<string>): void {
     if (visited.has(spec.name)) return;
     visited.add(spec.name);
 

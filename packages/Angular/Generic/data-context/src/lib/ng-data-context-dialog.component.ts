@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
-import { IMetadataProvider } from '@memberjunction/core';
+import { IMetadataProvider } from '@memberjunction/global';
 
 /**
  * Enhanced dialog wrapper component for the data context viewer
@@ -7,14 +7,14 @@ import { IMetadataProvider } from '@memberjunction/core';
 @Component({
   selector: 'mj-data-context-dialog',
   templateUrl: './ng-data-context-dialog.component.html',
-  styleUrls: ['./ng-data-context-dialog.component.css']
+  styleUrls: ['./ng-data-context-dialog.component.css'],
 })
 export class DataContextDialogComponent {
   @Output() dialogClosed = new EventEmitter();
   @Input() dataContextId!: string;
   @Input() dataContextName?: string;
   @Input() Provider: IMetadataProvider | null = null;
-  
+
   public isMaximized: boolean = false;
 
   public get dialogWidth(): number {

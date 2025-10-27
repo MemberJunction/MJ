@@ -1,324 +1,325 @@
-import { BaseEntity, UserInfo } from "@memberjunction/core";
-import { RegisterClass } from "@memberjunction/global";
-import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
+import { BaseEntity, UserInfo } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
+import {
+  CommunicationProviderEntity,
+  CommunicationProviderMessageTypeEntity,
+  CommunicationRunEntity,
+  TemplateEntityExtended,
+} from '@memberjunction/core-entities';
 
 /**
  * Information about a single recipient
  */
 export class MessageRecipient {
-    /**
-     * The address is the "TO" field for the message and would be either an email, phone #, social handle, etc
-     * it is provider-specific and can be anything that the provider supports as a recipient
-     */
-    public To: string;
-    /**
-     * The full name of the recipient, if available
-     */
-    public FullName?: string;
+  /**
+   * The address is the "TO" field for the message and would be either an email, phone #, social handle, etc
+   * it is provider-specific and can be anything that the provider supports as a recipient
+   */
+  public To: string;
+  /**
+   * The full name of the recipient, if available
+   */
+  public FullName?: string;
 
-    /**
-     * When using templates, this is the context data that is used to render the template for this recipient
-     */
-    public ContextData: any;
+  /**
+   * When using templates, this is the context data that is used to render the template for this recipient
+   */
+  public ContextData: any;
 }
-
 
 /**
  * Message class, holds information and functionality specific to a single message
  */
 export class Message {
-    /**
-     * The type of message to send
-     */
-    public MessageType: CommunicationProviderMessageTypeEntity;
+  /**
+   * The type of message to send
+   */
+  public MessageType: CommunicationProviderMessageTypeEntity;
 
-    /**
-     * The sender of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
-     * media provider, it might be a user's social media handle
-     */
-    public From: string;
+  /**
+   * The sender of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
+   * media provider, it might be a user's social media handle
+   */
+  public From: string;
 
-    /**
-     * The name of the sender, typically the display name of the email address
-     */
-    public FromName?: string;
+  /**
+   * The name of the sender, typically the display name of the email address
+   */
+  public FromName?: string;
 
-    /**
-     * The recipient of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
-     * media provider, it might be a user's social media handle
-     */
-    public To: string;
+  /**
+   * The recipient of the message, typically an email address but can be anything that is provider-specific for example for a provider that is a social
+   * media provider, it might be a user's social media handle
+   */
+  public To: string;
 
-    /**
-     * Recipients to send a copy of the message to, typically an email address
-     */
-    public CCRecipients?: string[];
+  /**
+   * Recipients to send a copy of the message to, typically an email address
+   */
+  public CCRecipients?: string[];
 
-    /**
-     * Recipients to send a copy of the message to without revealing their email addresses to the other recipients, typically an email address
-     */
-    public BCCRecipients?: string[];
+  /**
+   * Recipients to send a copy of the message to without revealing their email addresses to the other recipients, typically an email address
+   */
+  public BCCRecipients?: string[];
 
-    /**
-     * The date and time to send the message, if not provided the message will be sent immediately
-     */
-    public SendAt?: Date;
+  /**
+   * The date and time to send the message, if not provided the message will be sent immediately
+   */
+  public SendAt?: Date;
 
-    /**
-     * The body of the message, used if BodyTemplate is not provided.
-     */
-    public Body?: string;
-    /**
-     * Optional, when provided, Body is ignored and the template is used to render the message. In addition,
-     * if BodyTemplate is provided it will be used to render the Body and if the template has HTML content it will
-     * also be used to render the HTMLBody
-     */
-    public BodyTemplate?: TemplateEntityExtended;
+  /**
+   * The body of the message, used if BodyTemplate is not provided.
+   */
+  public Body?: string;
+  /**
+   * Optional, when provided, Body is ignored and the template is used to render the message. In addition,
+   * if BodyTemplate is provided it will be used to render the Body and if the template has HTML content it will
+   * also be used to render the HTMLBody
+   */
+  public BodyTemplate?: TemplateEntityExtended;
 
-    /**
-     * The HTML body of the message
-     */
-    public HTMLBody?: string;
-    /**
-     * Optional, when provided, HTMLBody is ignored and the template is used to render the message. This OVERRIDES
-     * the BodyTemplate's HTML content even if BodyTemplate is provided. This allows for flexibility in that you can
-     * specify a completely different HTMLBodyTemplate and not just relay on the TemplateContent of the BodyTemplate having
-     * an HTML option.
-     */
-    public HTMLBodyTemplate?: TemplateEntityExtended;
+  /**
+   * The HTML body of the message
+   */
+  public HTMLBody?: string;
+  /**
+   * Optional, when provided, HTMLBody is ignored and the template is used to render the message. This OVERRIDES
+   * the BodyTemplate's HTML content even if BodyTemplate is provided. This allows for flexibility in that you can
+   * specify a completely different HTMLBodyTemplate and not just relay on the TemplateContent of the BodyTemplate having
+   * an HTML option.
+   */
+  public HTMLBodyTemplate?: TemplateEntityExtended;
 
-    /**
-     * The subject line for the message, used if SubjectTemplate is not provided and only supported by some providers
-     */
-    public Subject?: string;
-    /**
-     * Optional, when provided, Subject is ignored and the template is used to render the message
-     */
-    public SubjectTemplate?: TemplateEntityExtended;
+  /**
+   * The subject line for the message, used if SubjectTemplate is not provided and only supported by some providers
+   */
+  public Subject?: string;
+  /**
+   * Optional, when provided, Subject is ignored and the template is used to render the message
+   */
+  public SubjectTemplate?: TemplateEntityExtended;
 
-    /**
-     * Optional, any context data that is needed to render the message template
-     */
-    public ContextData?: any;
+  /**
+   * Optional, any context data that is needed to render the message template
+   */
+  public ContextData?: any;
 
-    /**
-     * Optional, any headers to add to the message
-     */
-    public Headers?: Record<string, string>;
+  /**
+   * Optional, any headers to add to the message
+   */
+  public Headers?: Record<string, string>;
 
-    constructor(copyFrom?: Message) {
-        // copy all properties from the message to us, used for copying a message
-        if (copyFrom){
-            Object.assign(this, copyFrom);
-        }
+  constructor(copyFrom?: Message) {
+    // copy all properties from the message to us, used for copying a message
+    if (copyFrom) {
+      Object.assign(this, copyFrom);
     }
+  }
 }
 
 /**
  * This class is used to hold the results of a pre-processed message. This is used to hold the results of processing a message, for example, rendering a template.
  */
 export abstract class ProcessedMessage extends Message {
-    /**
-     * The body of the message after processing
-     */
-    public ProcessedBody: string;
+  /**
+   * The body of the message after processing
+   */
+  public ProcessedBody: string;
 
-    /**
-     * The HTML body of the message after processing
-     */
-    public ProcessedHTMLBody: string
+  /**
+   * The HTML body of the message after processing
+   */
+  public ProcessedHTMLBody: string;
 
-    /**
-     * The subject of the message after processing
-     */
-    public ProcessedSubject: string;
+  /**
+   * The subject of the message after processing
+   */
+  public ProcessedSubject: string;
 
-
-    public abstract Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{Success: boolean, Message?: string}>
+  public abstract Process(forceTemplateRefresh?: boolean, contextUser?: UserInfo): Promise<{ Success: boolean; Message?: string }>;
 }
 
 /**
  * MessageResult class, holds information and functionality specific to a single message result
  */
 export class MessageResult {
-    public Run?: CommunicationRunEntity;
-    public Message: ProcessedMessage;
-    public Success: boolean;
-    public Error: string;
-};
-
-export type BaseMessageResult = {
-    Success: boolean;
-    ErrorMessage?: string;
+  public Run?: CommunicationRunEntity;
+  public Message: ProcessedMessage;
+  public Success: boolean;
+  public Error: string;
 }
 
-export type GetMessagesParams<T = Record<string, any>> = {
-    /**
-     * The number of messages to return
-     */
-    NumMessages: number;
-    /**
-     * Optional. If true, only messages not marked as read will be returned
-     */
-    UnreadOnly?: boolean;
-    /**
-     * Optional, any provider-specific parameters that are needed to get messages
-     */
-    ContextData?: T;
+export type BaseMessageResult = {
+  Success: boolean;
+  ErrorMessage?: string;
+};
 
-    /**
-     * Optional, include the headers in the response (defaults to false)
-     */
-    IncludeHeaders?: boolean;
+export type GetMessagesParams<T = Record<string, any>> = {
+  /**
+   * The number of messages to return
+   */
+  NumMessages: number;
+  /**
+   * Optional. If true, only messages not marked as read will be returned
+   */
+  UnreadOnly?: boolean;
+  /**
+   * Optional, any provider-specific parameters that are needed to get messages
+   */
+  ContextData?: T;
+
+  /**
+   * Optional, include the headers in the response (defaults to false)
+   */
+  IncludeHeaders?: boolean;
 };
 
 export type GetMessageMessage = {
-    From: string;
-    To: string,
-    Body: string;
-    /**
-     * In some providers, such as MS Graph, replies can be sent to multiple other recipients
-     * rather than just the original sender
-     */
-    ReplyTo?: string[];
-    Subject?: string;
-    ExternalSystemRecordID?: string;
-    /**
-     * The ID of the thread the message belongs to
-     */
-    ThreadID?: string;
+  From: string;
+  To: string;
+  Body: string;
+  /**
+   * In some providers, such as MS Graph, replies can be sent to multiple other recipients
+   * rather than just the original sender
+   */
+  ReplyTo?: string[];
+  Subject?: string;
+  ExternalSystemRecordID?: string;
+  /**
+   * The ID of the thread the message belongs to
+   */
+  ThreadID?: string;
 };
 
 export type GetMessagesResult<T = Record<string, any>> = BaseMessageResult & {
-    /**
-     * If populated, holds provider-specific data that is returned from the provider
-     */
-    SourceData?: T[];
-    /**
-     * Messages returned in a standardized format
-     */
-    Messages: GetMessageMessage[];
+  /**
+   * If populated, holds provider-specific data that is returned from the provider
+   */
+  SourceData?: T[];
+  /**
+   * Messages returned in a standardized format
+   */
+  Messages: GetMessageMessage[];
 };
 
 export type ForwardMessageParams = {
-    /**
-     * The ID of the message to forward
-     */
-    MessageID: string;
-    /**
-     * An optional message to go along with the forwarded message
-     */
-    Message?: string;
-    /*
-    * The recipients to forward the message to
-    */
-    ToRecipients: string[];
+  /**
+   * The ID of the message to forward
+   */
+  MessageID: string;
+  /**
+   * An optional message to go along with the forwarded message
+   */
+  Message?: string;
+  /*
+   * The recipients to forward the message to
+   */
+  ToRecipients: string[];
 
-    /*
-    * The recipients to send a copy of the forwarded message to
-    */
-    CCRecipients?: string[];
+  /*
+   * The recipients to send a copy of the forwarded message to
+   */
+  CCRecipients?: string[];
 
-    /*
-    * The recipients to send a blind copy of the forwarded message to
-    */
-    BCCRecipients?: string[];
+  /*
+   * The recipients to send a blind copy of the forwarded message to
+   */
+  BCCRecipients?: string[];
 };
 
 export type ForwardMessageResult<T = Record<string, any>> = BaseMessageResult & {
-    Result?: T;
+  Result?: T;
 };
 
 export type ReplyToMessageParams<T = Record<string, any>> = {
-    /**
-     * The ID of the message to reply to
-     */
-    MessageID: string;
-    /**
-     * The message to send as a reply
-     */
-    Message: ProcessedMessage;
+  /**
+   * The ID of the message to reply to
+   */
+  MessageID: string;
+  /**
+   * The message to send as a reply
+   */
+  Message: ProcessedMessage;
 
-    /*
-    * Provider-specific context data
-    */
-    ContextData?: T
+  /*
+   * Provider-specific context data
+   */
+  ContextData?: T;
 };
 
 export type ReplyToMessageResult<T = Record<string, any>> = BaseMessageResult & {
-    /**
-     * If populated, holds provider-specific result of replying to the message
-     */
-    Result?: T;
+  /**
+   * If populated, holds provider-specific result of replying to the message
+   */
+  Result?: T;
 };
 
 export type CreateDraftParams = {
-    /**
-     * The message to save as a draft
-     */
-    Message: ProcessedMessage;
+  /**
+   * The message to save as a draft
+   */
+  Message: ProcessedMessage;
 
-    /**
-     * Optional provider-specific context data
-     */
-    ContextData?: Record<string, any>;
+  /**
+   * Optional provider-specific context data
+   */
+  ContextData?: Record<string, any>;
 };
 
 export type CreateDraftResult<T = Record<string, any>> = BaseMessageResult & {
-    /**
-     * The ID of the created draft in the provider's system
-     */
-    DraftID?: string;
+  /**
+   * The ID of the created draft in the provider's system
+   */
+  DraftID?: string;
 
-    /**
-     * If populated, holds provider-specific result data
-     */
-    Result?: T;
+  /**
+   * If populated, holds provider-specific result data
+   */
+  Result?: T;
 };
-
 
 /**
  * Base class for all communication providers. Each provider sub-classes this base class and implements functionality specific to the provider.
  */
 export abstract class BaseCommunicationProvider {
-    /**
-     *
-     */
-    public abstract SendSingleMessage(message: ProcessedMessage): Promise<MessageResult>
+  /**
+   *
+   */
+  public abstract SendSingleMessage(message: ProcessedMessage): Promise<MessageResult>;
 
-    /**
-     * Fetches messages using the provider
-     */
-    public abstract GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>
+  /**
+   * Fetches messages using the provider
+   */
+  public abstract GetMessages(params: GetMessagesParams): Promise<GetMessagesResult>;
 
-    /**
-     * Forwards a message to another client using the provider
-     */
-    public abstract ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>
+  /**
+   * Forwards a message to another client using the provider
+   */
+  public abstract ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult>;
 
-    /**
-     * Replies to a message using the provider
-     */
-    public abstract ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>
+  /**
+   * Replies to a message using the provider
+   */
+  public abstract ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>;
 
-    /**
-     * Creates a draft message using the provider.
-     * Providers that don't support drafts should return Success: false
-     * with an appropriate error message.
-     * @param params - Parameters for creating the draft
-     * @returns Promise<CreateDraftResult> - Result containing draft ID if successful
-     */
-    public abstract CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult>
-
+  /**
+   * Creates a draft message using the provider.
+   * Providers that don't support drafts should return Success: false
+   * with an appropriate error message.
+   * @param params - Parameters for creating the draft
+   * @returns Promise<CreateDraftResult> - Result containing draft ID if successful
+   */
+  public abstract CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult>;
 }
 
 @RegisterClass(BaseEntity, 'Communication Providers') // sub-class to extend the properties of the base entity
 export class CommunicationProviderEntityExtended extends CommunicationProviderEntity {
-    private _ProviderMessageTypes: CommunicationProviderMessageTypeEntity[];
-    public get MessageTypes(): CommunicationProviderMessageTypeEntity[] {
-        return this._ProviderMessageTypes;
-    }
-    public set MessageTypes(value: CommunicationProviderMessageTypeEntity[]) {
-        this._ProviderMessageTypes = value;
-    }
+  private _ProviderMessageTypes: CommunicationProviderMessageTypeEntity[];
+  public get MessageTypes(): CommunicationProviderMessageTypeEntity[] {
+    return this._ProviderMessageTypes;
+  }
+  public set MessageTypes(value: CommunicationProviderMessageTypeEntity[]) {
+    this._ProviderMessageTypes = value;
+  }
 }

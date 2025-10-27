@@ -1,18 +1,21 @@
 import { Component, Input, OnInit, ViewChild, ElementRef, AfterViewInit, ViewContainerRef, ComponentRef, OnDestroy } from '@angular/core';
-import { CompositeKey, LogError, Metadata, RunView, RunViewParams } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata, RunView, RunViewParams } from '@memberjunction/global';
 import { DashboardEntity, DashboardUserPreferenceEntity, DashboardUserStateEntity, ResourceData } from '@memberjunction/core-entities';
 import { BaseDashboard, DashboardConfig } from '@memberjunction/ng-dashboards';
 import { InvokeManualResize, MJGlobal, SafeJSONParse } from '@memberjunction/global';
 import { MJTabStripComponent } from '@memberjunction/ng-tabstrip';
 import { Router } from '@angular/router';
-import { DashboardPreferencesDialogComponent, DashboardPreferencesResult } from '../dashboard-preferences-dialog/dashboard-preferences-dialog.component';
+import {
+  DashboardPreferencesDialogComponent,
+  DashboardPreferencesResult,
+} from '../dashboard-preferences-dialog/dashboard-preferences-dialog.component';
 import { SingleDashboardComponent } from '../single-dashboard/single-dashboard.component';
 import { SharedService } from '@memberjunction/ng-shared';
 
 @Component({
   selector: 'mj-tabbed-dashboard',
   templateUrl: './tabbed-dashboard.component.html',
-  styleUrls: ['./tabbed-dashboard.component.css']
+  styleUrls: ['./tabbed-dashboard.component.css'],
 })
 export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild('tabstrip') tabstrip!: MJTabStripComponent;
@@ -20,12 +23,12 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
   @ViewChild('noTabsContainer') noTabsContainer!: ElementRef;
   @ViewChild('tabContainer') tabContainer!: ElementRef;
   @ViewChild('tabstripContainer', { read: ViewContainerRef }) tabstripContainer!: ViewContainerRef;
-  
+
   /**
    * Specify the application to display dashboards for. If not specified, the scope is global.
    */
   @Input() public ApplicationID: string | null = null;
-  
+
   /**
    * Name for the default tab when no dashboards are available.
    */
@@ -35,19 +38,17 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
    * Specify the position of the default dashboard, first, last or not shown at all.
    */
   @Input() public DefaultDashboardPosition: 'first' | 'last' | 'none' = 'last';
-  
+
   public dashboards: DashboardEntity[] = [];
   public loading: boolean = true;
   public error: string | null = null;
-  
+
   private dashboardInstances: Map<string, BaseDashboard> = new Map();
   private dashboardComponentRefs: Map<string, ComponentRef<BaseDashboard>> = new Map();
-  
+
   constructor(private router: Router) {}
 
-  async ngOnInit(): Promise<void> {
-  }
-
+  async ngOnInit(): Promise<void> {}
 
   async ngAfterViewInit() {
     try {
@@ -68,7 +69,7 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
             // now, we need to invoke a manual resize to ensure everything shows up right
             InvokeManualResize(100);
           }
-        } 
+        }
       }, 10);
     } catch (error) {
       LogError('Error in TabbedDashboardComponent.ngOnInit', null, error);
@@ -97,13 +98,13 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
       const rv = new RunView();
       const appFilter = this.ApplicationID ? ` AND ApplicationID='${this.ApplicationID}'` : '';
 
-      const ds = await md.GetAndCacheDatasetByName("MJ_Metadata"); // get the main MJ_Metadata dataset which is usually already cached
+      const ds = await md.GetAndCacheDatasetByName('MJ_Metadata'); // get the main MJ_Metadata dataset which is usually already cached
       if (!ds || !ds.Success) {
         this.error = ds.Status || 'Failed to load metadata dataset';
         this.dashboards = [];
         return;
       }
-      const dashList = ds.Results.find(r => r.Code === 'Dashboards');
+      const dashList = ds.Results.find((r) => r.Code === 'Dashboards');
       if (!dashList) {
         this.error = 'Dashboards dataset not found';
         this.dashboards = [];
@@ -127,10 +128,10 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
         ExtraFilter: filter,
         ResultType: 'entity_object',
         OrderBy: 'DisplayOrder',
-      };      
+      };
 
       const prefsResult = await rv.RunView<DashboardUserPreferenceEntity>(params); // Use RunView for user preferences because we don't want to cache this data as it would cause cache being refreshed all the time since
-                                                                                   // user preferences can change frequently and we want to ensure we always have the latest preferences for the current user    
+      // user preferences can change frequently and we want to ensure we always have the latest preferences for the current user
       if (prefsResult && prefsResult.Success && prefsResult.Results.length > 0) {
         const dashResults = dashList.Results.filter((d: DashboardEntity) => {
           return prefsResult.Results.some((p: DashboardUserPreferenceEntity) => p.DashboardID === d.ID);
@@ -138,16 +139,15 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
         if (dashResults.length > 0) {
           // now sort the dashboards based on the user preferences
           this.dashboards = dashResults.sort((a, b) => {
-            const prefA = prefsResult.Results.find(p => p.DashboardID === a.ID);
-            const prefB = prefsResult.Results.find(p => p.DashboardID === b.ID);
+            const prefA = prefsResult.Results.find((p) => p.DashboardID === a.ID);
+            const prefB = prefsResult.Results.find((p) => p.DashboardID === b.ID);
             if (prefA && prefB) {
               // we want to sort by DisplayOrder where lower numbers come first
               return (prefA.DisplayOrder || 0) - (prefB.DisplayOrder || 0);
             }
             return 0;
           });
-        } 
-        else {
+        } else {
           this.error = 'Failed to load dashboards';
           this.dashboards = [];
         }
@@ -166,7 +166,7 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
     if (!this.dashboardInstances.has(dashboardId)) {
       try {
         // Create instance of the appropriate dashboard class
-        const dashboardEntity = this.dashboards.find(d => d.ID === dashboardId);
+        const dashboardEntity = this.dashboards.find((d) => d.ID === dashboardId);
         if (dashboardEntity && this.tabstripContainer) {
           // Use the type of the dashboard to determine which class to instantiate
           let instance: BaseDashboard | undefined;
@@ -177,36 +177,43 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
               // Class not found error
               const errorMsg = `Dashboard class '${dashboardEntity.DriverClass}' not found`;
               console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
-              this.displayDashboardError(dashboardId, `Dashboard component not available: ${dashboardEntity.DriverClass}`, 'The dashboard class is not registered. Please contact your system administrator.');
+              this.displayDashboardError(
+                dashboardId,
+                `Dashboard component not available: ${dashboardEntity.DriverClass}`,
+                'The dashboard class is not registered. Please contact your system administrator.'
+              );
               return undefined;
             }
 
             // Create the component dynamically
             componentRef = this.tabstripContainer.createComponent<BaseDashboard>(classInfo.SubClass);
             instance = componentRef.instance as BaseDashboard;
-          }
-          else {
-            // configuration type dashboard, so we can use the 
+          } else {
+            // configuration type dashboard, so we can use the
             // Create the component dynamically
             componentRef = this.tabstripContainer.createComponent<BaseDashboard>(SingleDashboardComponent);
             instance = componentRef.instance as BaseDashboard;
             // get the single dashboard component to set the DashboardID
             const resData = new ResourceData();
             resData.ResourceRecordID = dashboardId;
-            (instance as SingleDashboardComponent).ResourceData = resData;  
+            (instance as SingleDashboardComponent).ResourceData = resData;
           }
           if (!instance) {
             // Instance creation failed error
             const errorMsg = `Failed to create instance of dashboard class '${dashboardEntity.DriverClass}'`;
             console.error(`Error loading dashboard '${dashboardEntity.Name}': ${errorMsg}`);
-            this.displayDashboardError(dashboardId, 'Dashboard failed to initialize', 'The dashboard could not be created. Please contact your system administrator.');
+            this.displayDashboardError(
+              dashboardId,
+              'Dashboard failed to initialize',
+              'The dashboard could not be created. Please contact your system administrator.'
+            );
             return undefined;
           }
 
           // Store both the instance and component reference
           this.dashboardInstances.set(dashboardId, instance);
           this.dashboardComponentRefs.set(dashboardId, componentRef);
-          
+
           // Find the target container element and append the component
           setTimeout(async () => {
             const targetElement = document.getElementById(`dashboard-${dashboardId}`);
@@ -216,17 +223,17 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
               const userStateEntity = await this.loadDashboardUserState(dashboardId);
               const config: DashboardConfig = {
                 dashboard: dashboardEntity,
-                userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {}
+                userState: userStateEntity.UserState ? SafeJSONParse(userStateEntity.UserState) : {},
               };
 
-              // handle open entity record events in MJ Explorer with routing                  
+              // handle open entity record events in MJ Explorer with routing
               instance.OpenEntityRecord.subscribe((data: { EntityName: string; RecordPKey: CompositeKey }) => {
                 // check to see if the data has entityname/pkey
                 if (data && data.EntityName && data.RecordPKey) {
                   // open the record in the explorer
                   SharedService.Instance.OpenEntityRecord(data.EntityName, data.RecordPKey);
-                  // this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()], 
-                  //                      { queryParams: { Entity: data.EntityName } })                      
+                  // this.router.navigate(['resource', 'record', data.RecordPKey.ToURLSegment()],
+                  //                      { queryParams: { Entity: data.EntityName } })
                 }
               });
 
@@ -237,7 +244,7 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
                 }
                 // save the user state to the dashboard user state entity
                 userStateEntity.UserState = JSON.stringify(userState);
-                if (!await userStateEntity.Save()) {
+                if (!(await userStateEntity.Save())) {
                   LogError('Error saving user state', null, userStateEntity.LatestResult.Error);
                 }
               });
@@ -250,18 +257,22 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
               InvokeManualResize(100);
             }
           }, 0);
-          
+
           return instance;
         }
       } catch (error) {
-        const dashboardEntity = this.dashboards.find(d => d.ID === dashboardId);
+        const dashboardEntity = this.dashboards.find((d) => d.ID === dashboardId);
         const errorMsg = `Error creating dashboard instance for '${dashboardEntity?.Name || dashboardId}'`;
         console.error(errorMsg, error);
         LogError(errorMsg, null, error);
-        this.displayDashboardError(dashboardId, 'Dashboard loading error', 'An unexpected error occurred while loading the dashboard. Please contact your system administrator.');
+        this.displayDashboardError(
+          dashboardId,
+          'Dashboard loading error',
+          'An unexpected error occurred while loading the dashboard. Please contact your system administrator.'
+        );
       }
     }
-    
+
     return this.dashboardInstances.get(dashboardId);
   }
 
@@ -294,8 +305,7 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
     let stateObject: DashboardUserStateEntity;
     if (stateResult && stateResult.Success && stateResult.Results.length > 0) {
       stateObject = stateResult.Results[0];
-    }
-    else {
+    } else {
       stateObject = await md.GetEntityObject<DashboardUserStateEntity>('MJ: Dashboard User States');
       stateObject.DashboardID = dashboardId;
       stateObject.UserID = md.CurrentUser.ID;
@@ -310,11 +320,11 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
     if (dashboardIndex >= 0 && dashboardIndex < this.dashboards.length) {
       const dashboard = this.dashboards[dashboardIndex];
       const instance = this.getDashboardInstance(dashboard.ID);
-      
+
       if (instance) {
         // You might want to trigger a refresh or other actions here when tab is selected
         instance.SetVisible(true);
-        // now get all the other instances and let them know they're not visible 
+        // now get all the other instances and let them know they're not visible
         this.dashboards.forEach((d, index) => {
           if (index !== dashboardIndex) {
             const otherInstance = this.getDashboardInstance(d.ID);
@@ -335,33 +345,32 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
       // Create the preferences dialog component dynamically
       const componentRef = this.tabstripContainer.createComponent(DashboardPreferencesDialogComponent);
       const dialogInstance = componentRef.instance;
-      
+
       // Configure the dialog
       dialogInstance.applicationId = this.ApplicationID;
       dialogInstance.scope = this.ApplicationID ? 'App' : 'Global';
-      
+
       // Handle dialog result
       dialogInstance.result.subscribe((result: DashboardPreferencesResult) => {
         if (result.saved) {
           // Preferences were saved, reload dashboards
           this.refreshDashboards();
         }
-        
+
         // Clean up the dialog component
         componentRef.destroy();
       });
-      
+
       // The Kendo dialog will handle its own modal overlay and positioning
       // Just append to body for proper z-index stacking
       document.body.appendChild(componentRef.location.nativeElement);
-      
+
       // Clean up when dialog closes
       dialogInstance.result.subscribe(() => {
         if (document.body.contains(componentRef.location.nativeElement)) {
           document.body.removeChild(componentRef.location.nativeElement);
         }
       });
-      
     } catch (error) {
       LogError('Error opening preferences dialog', null, error);
     }
@@ -371,21 +380,21 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
     try {
       this.loading = true;
       this.error = null;
-      
+
       // Clear existing dashboard instances
-      this.dashboardComponentRefs.forEach(componentRef => {
+      this.dashboardComponentRefs.forEach((componentRef) => {
         componentRef.destroy();
       });
       this.dashboardComponentRefs.clear();
       this.dashboardInstances.clear();
-      
+
       // Reload dashboards
       await this.loadDashboards();
-      
+
       // Move content to correct container
       setTimeout(() => {
         this.moveContentToCorrectContainer();
-        
+
         // Load first dashboard if available
         if (this.DefaultDashboardPosition !== 'first' && this.dashboards.length > 0) {
           const dashboardId = this.dashboards[0].ID;
@@ -406,7 +415,7 @@ export class TabbedDashboardComponent implements OnInit, AfterViewInit, OnDestro
 
   ngOnDestroy(): void {
     // Clean up component references
-    this.dashboardComponentRefs.forEach(componentRef => {
+    this.dashboardComponentRefs.forEach((componentRef) => {
       componentRef.destroy();
     });
     this.dashboardComponentRefs.clear();

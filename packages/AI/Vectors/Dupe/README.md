@@ -31,7 +31,7 @@ The main class that handles duplicate detection operations.
 
 ```typescript
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
+import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/global';
 
 const detector = new DuplicateRecordDetector();
 ```
@@ -68,7 +68,7 @@ const config: EntitySyncConfig = {
 
 ```typescript
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
-import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/core';
+import { PotentialDuplicateRequest, UserInfo } from '@memberjunction/global';
 
 // Initialize the detector
 const detector = new DuplicateRecordDetector();

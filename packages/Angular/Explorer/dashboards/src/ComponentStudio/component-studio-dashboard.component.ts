@@ -1,12 +1,17 @@
-import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, ViewContainerRef, HostListener } from '@angular/core';
+import {
+  Component,
+  AfterViewInit,
+  OnDestroy,
+  ViewChild,
+  ElementRef,
+  ChangeDetectorRef,
+  ViewContainerRef,
+  HostListener,
+} from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
-import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
-import {
-  ComponentEntityExtended,
-  ArtifactEntity,
-  ArtifactVersionEntity
-} from '@memberjunction/core-entities';
+import { RunView, CompositeKey, Metadata } from '@memberjunction/global';
+import { ComponentEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -47,11 +52,10 @@ interface Category {
 @Component({
   selector: 'mj-component-studio-dashboard',
   templateUrl: './component-studio-dashboard.component.html',
-  styleUrls: ['./component-studio-dashboard.component.scss']
+  styleUrls: ['./component-studio-dashboard.component.scss'],
 })
 @RegisterClass(BaseDashboard, 'ComponentStudioDashboard')
 export class ComponentStudioDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
-  
   // Component data
   public components: ComponentEntityExtended[] = [];
   public fileLoadedComponents: FileLoadedComponent[] = []; // Components loaded from files
@@ -63,27 +67,27 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public isLoading = true; // Start as true to show loading state initially
   public searchQuery = '';
   public isRunning = false; // Track if component is currently running
-  
+
   // View and filtering
   public selectedCategories: Set<string> = new Set();
   public availableCategories: { name: string; count: number; color: string }[] = [];
   public showAllCategories = false; // Show only top categories by default
-  
+
   // Favorites
   public favoriteComponents: Set<string> = new Set(); // Set of component IDs
   public showOnlyFavorites = false; // Filter to show only favorites
   public showDeprecatedComponents = false; // Filter to show/hide deprecated components
   private metadata: Metadata = new Metadata();
-  
+
   // Error handling
   public currentError: { type: string; message: string; technicalDetails?: any } | null = null;
-  
+
   // Tab management
   public activeTab = 0; // 0 = Spec, 1 = Code
-  
+
   // Splitter state
   public isDetailsPaneCollapsed = true; // Start with details collapsed
-  
+
   // Editor content
   public editableSpec = ''; // JSON string for spec editor
   public editableCode = ''; // JavaScript code for code editor
@@ -91,20 +95,20 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public isEditingSpec = false;
   public isEditingCode = false;
   private lastEditSource: 'spec' | 'code' | null = null;
-  
+
   // File input element reference
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
-  
+
   // Dropdown states
   public importDropdownOpen = false;
   public exportDropdownOpen = false;
 
   // Filter panel state
   public isFilterPanelExpanded = false;
-  
+
   // Text import dialog reference
   private textImportDialog?: DialogRef;
-  
+
   private destroy$ = new Subject<void>();
 
   constructor(
@@ -132,7 +136,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   protected async loadData(): Promise<void> {
     this.isLoading = true;
-    
+
     try {
       const rv = new RunView();
       const result = await rv.RunView<ComponentEntityExtended>({
@@ -140,7 +144,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         ExtraFilter: 'HasRequiredCustomProps = 0', // Only load components without required custom props
         OrderBy: 'Name',
         MaxRows: 1000,
-        ResultType: 'entity_object'
+        ResultType: 'entity_object',
       });
 
       if (result.Success) {
@@ -167,16 +171,12 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     if (!currentUserId) return;
 
     this.favoriteComponents.clear();
-    
+
     // Check favorite status for each component
     for (const component of this.components) {
       try {
-        const isFavorite = await this.metadata.GetRecordFavoriteStatus(
-          currentUserId,
-          'MJ: Components',
-          CompositeKey.FromID(component.ID)
-        );
-        
+        const isFavorite = await this.metadata.GetRecordFavoriteStatus(currentUserId, 'MJ: Components', CompositeKey.FromID(component.ID));
+
         if (isFavorite) {
           this.favoriteComponents.add(component.ID);
         }
@@ -196,30 +196,25 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     const md = new Metadata();
     const currentUserId = md.CurrentUser?.ID;
     if (!currentUserId) return;
-    
+
     // File-loaded components can't be favorited
     if (this.isFileLoadedComponent(component)) {
       return;
     }
-    
+
     const componentId = this.getComponentId(component);
     const isFavorite = this.favoriteComponents.has(componentId);
-    
+
     try {
-      await this.metadata.SetRecordFavoriteStatus(
-        currentUserId,
-        'MJ: Components',
-        CompositeKey.FromID(componentId),
-        !isFavorite
-      );
-      
+      await this.metadata.SetRecordFavoriteStatus(currentUserId, 'MJ: Components', CompositeKey.FromID(componentId), !isFavorite);
+
       // Update local state
       if (isFavorite) {
         this.favoriteComponents.delete(componentId);
       } else {
         this.favoriteComponents.add(componentId);
       }
-      
+
       // Trigger change detection
       this.cdr.detectChanges();
     } catch (error) {
@@ -257,9 +252,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    * Get count of deprecated components
    */
   public getDeprecatedCount(): number {
-    return this.allComponents.filter(c =>
-      this.getComponentStatus(c) === 'Deprecated'
-    ).length;
+    return this.allComponents.filter((c) => this.getComponentStatus(c) === 'Deprecated').length;
   }
 
   /**
@@ -297,10 +290,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
   private combineAndFilterComponents(): void {
     // Combine database components with file-loaded components
-    this.allComponents = [
-      ...this.fileLoadedComponents,
-      ...this.components
-    ] as DisplayComponent[];
+    this.allComponents = [...this.fileLoadedComponents, ...this.components] as DisplayComponent[];
 
     // Build available categories from all components
     this.buildCategories();
@@ -310,7 +300,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
     // Filter out deprecated components unless explicitly shown
     if (!this.showDeprecatedComponents) {
-      filtered = filtered.filter(c => {
+      filtered = filtered.filter((c) => {
         const status = this.getComponentStatus(c);
         return status !== 'Deprecated';
       });
@@ -318,12 +308,12 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
 
     // Apply favorites filter if enabled
     if (this.showOnlyFavorites) {
-      filtered = filtered.filter(c => this.isFavorite(c));
+      filtered = filtered.filter((c) => this.isFavorite(c));
     }
 
     // Apply category filter
     if (this.selectedCategories.size > 0) {
-      filtered = filtered.filter(c => {
+      filtered = filtered.filter((c) => {
         const namespace = this.getComponentNamespace(c) || 'Uncategorized';
         const category = this.extractCategoryFromNamespace(namespace);
         return this.selectedCategories.has(category);
@@ -333,7 +323,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // Apply search filter
     if (this.searchQuery) {
       const query = this.searchQuery.toLowerCase();
-      filtered = filtered.filter(c => {
+      filtered = filtered.filter((c) => {
         const name = this.getComponentName(c)?.toLowerCase() || '';
         const description = this.getComponentDescription(c)?.toLowerCase() || '';
         const type = this.getComponentType(c)?.toLowerCase() || '';
@@ -351,13 +341,13 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   private buildCategories(): void {
     const categoryMap = new Map<string, number>();
     const allNamespaces = new Set<string>();
-    
+
     // Count components per top-level category and track all namespaces
     for (const component of this.allComponents) {
       const namespace = this.getComponentNamespace(component) || 'Uncategorized';
       const category = this.extractCategoryFromNamespace(namespace);
       categoryMap.set(category, (categoryMap.get(category) || 0) + 1);
-      
+
       // Track full namespace paths for better display
       if (namespace && namespace !== 'Uncategorized') {
         allNamespaces.add(namespace);
@@ -369,7 +359,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       .map(([name, count]) => ({
         name,
         count,
-        color: this.getCategoryColor(name)
+        color: this.getCategoryColor(name),
       }))
       .sort((a, b) => b.count - a.count);
   }
@@ -379,9 +369,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    */
   private extractCategoryFromNamespace(namespace: string): string {
     if (!namespace || namespace === 'Uncategorized') return 'Uncategorized';
-    
+
     // Get the first part of the namespace path
-    const parts = namespace.split('/').filter(p => p.length > 0);
+    const parts = namespace.split('/').filter((p) => p.length > 0);
     return parts[0] || 'Uncategorized';
   }
 
@@ -401,7 +391,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       '#EAB308', // yellow
       '#EF4444', // red
     ];
-    
+
     // Use hash of category name to get consistent color
     let hash = 0;
     for (let i = 0; i < category.length; i++) {
@@ -417,7 +407,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     if (!namespace || namespace === 'Uncategorized') {
       return '#6C757D'; // Gray for uncategorized
     }
-    
+
     // Extract the main category (first part) for consistent coloring
     const category = this.extractCategoryFromNamespace(namespace);
     return this.getCategoryColor(category);
@@ -430,14 +420,14 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     if (!namespace || namespace === 'Uncategorized') {
       return 'Uncategorized';
     }
-    
-    const parts = namespace.split('/').filter(p => p.length > 0);
-    
+
+    const parts = namespace.split('/').filter((p) => p.length > 0);
+
     // If it's really long, show abbreviated version
     if (parts.length > 3) {
       return `${parts[0]} / ... / ${parts[parts.length - 1]}`;
     }
-    
+
     // Otherwise show full path with spacing
     return parts.join(' / ');
   }
@@ -501,19 +491,19 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   public getComponentDescription(component: DisplayComponent): string | undefined {
-    return component.isFileLoaded ? component.description : (component.Description || undefined);
+    return component.isFileLoaded ? component.description : component.Description || undefined;
   }
 
   public getComponentType(component: DisplayComponent): string | undefined {
-    return component.isFileLoaded ? component.type : (component.Type || undefined);
+    return component.isFileLoaded ? component.type : component.Type || undefined;
   }
 
   public getComponentStatus(component: DisplayComponent): string | undefined {
-    return component.isFileLoaded ? component.status : (component.Status || undefined);
+    return component.isFileLoaded ? component.status : component.Status || undefined;
   }
 
   public getComponentVersion(component: DisplayComponent): string {
-    return component.isFileLoaded ? '1.0.0' : (component.Version || '1.0.0');
+    return component.isFileLoaded ? '1.0.0' : component.Version || '1.0.0';
   }
 
   public getComponentSpec(component: DisplayComponent): ComponentSpec {
@@ -544,7 +534,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // Toggle expansion - if clicking the same component, collapse it
     const componentId = this.getComponentId(component);
     const expandedId = this.expandedComponent ? this.getComponentId(this.expandedComponent) : null;
-    
+
     if (expandedId === componentId) {
       this.expandedComponent = null;
     } else {
@@ -557,12 +547,11 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // If another component is running, stop it first then start the new one
     const componentId = this.getComponentId(component);
     const selectedId = this.selectedComponent ? this.getComponentId(this.selectedComponent) : null;
-    
+
     if (this.isRunning && selectedId !== componentId) {
       this.stopComponent();
       this.startComponent(component);
-    } 
-    else {
+    } else {
       this.startComponent(component);
     }
   }
@@ -573,7 +562,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       // Only clear if not already running (switching components handles this in stopComponent)
       MJReactComponent.forceClearRegistries();
     }
-    
+
     this.selectedComponent = component;
     this.componentSpec = this.getComponentSpec(component);
     this.isRunning = true;
@@ -593,15 +582,14 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.selectedComponent = null;
     this.componentSpec = null;
     this.currentError = null;
-    
+
     // CLEAR ALL REGISTRIES for fresh component loads
     MJReactComponent.forceClearRegistries();
     console.log('Component Studio: Cleared all registries for fresh component testing');
-    
+
     try {
       this.cdr.detectChanges();
-    }
-    catch (error) {
+    } catch (error) {
       console.error('Error with cdr.detectChanges():', error);
     }
   }
@@ -614,7 +602,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
       this.currentError = {
         type: event.payload?.source || 'Component Error',
         message: event.payload?.error || 'An error occurred while rendering the component',
-        technicalDetails: event.payload?.errorInfo || event.payload
+        technicalDetails: event.payload?.errorInfo || event.payload,
       };
       this.cdr.detectChanges();
     }
@@ -648,7 +636,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
    */
   public async copyErrorToClipboard(): Promise<void> {
     if (!this.currentError) return;
-    
+
     const errorText = `
 Component Error Report
 ${'='.repeat(50)}
@@ -657,7 +645,7 @@ Error Type: ${this.currentError.type}
 Message: ${this.currentError.message}
 ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify(this.currentError.technicalDetails, null, 2) : ''}
 `;
-    
+
     try {
       await navigator.clipboard.writeText(errorText);
       console.log('Error details copied to clipboard');
@@ -696,34 +684,34 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       this.importDropdownOpen = false;
     }
   }
-  
+
   public closeImportDropdown(): void {
     this.importDropdownOpen = false;
   }
-  
+
   @HostListener('document:click', ['$event'])
   public onDocumentClick(event: MouseEvent): void {
     // Close dropdowns if clicking outside
     const target = event.target as HTMLElement;
-    
+
     // Check import dropdown
     const importDropdown = target.closest('.import-dropdown');
     if (!importDropdown && this.importDropdownOpen) {
       this.importDropdownOpen = false;
     }
-    
+
     // Check export dropdown
     const exportDropdown = target.closest('.export-dropdown');
     if (!exportDropdown && this.exportDropdownOpen) {
       this.exportDropdownOpen = false;
     }
   }
-  
+
   public importFromFile(): void {
     this.closeImportDropdown();
     this.fileInput?.nativeElement.click();
   }
-  
+
   public importFromText(): void {
     this.closeImportDropdown();
     this.openTextImportDialog();
@@ -733,17 +721,17 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     this.closeImportDropdown();
 
     // Small delay to ensure dropdown is closed before opening dialog
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     try {
       const dialogRef = this.dialogService.open({
         content: ArtifactLoadDialogComponent,
         width: 1200,
         height: 700,
-        appendTo: this.viewContainerRef
+        appendTo: this.viewContainerRef,
       });
 
-      const result = await dialogRef.result.toPromise() as ArtifactLoadResult | undefined;
+      const result = (await dialogRef.result.toPromise()) as ArtifactLoadResult | undefined;
 
       if (!result) {
         // User cancelled
@@ -760,7 +748,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         loadedAt: new Date(),
         isFileLoaded: true,
         type: result.spec.type || 'Component',
-        status: 'Artifact'
+        status: 'Artifact',
       };
 
       // Store source reference for potential re-save
@@ -777,52 +765,44 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
       console.log(`✅ Loaded component "${result.spec.name}" from artifact version ${result.versionNumber}`);
 
-      this.notificationService.CreateSimpleNotification(
-        `Loaded component "${result.spec.name}" from artifact`,
-        'success',
-        3000
-      );
-
+      this.notificationService.CreateSimpleNotification(`Loaded component "${result.spec.name}" from artifact`, 'success', 3000);
     } catch (error) {
       // Only show error if it's actually an error (not a cancel)
       console.error('Error loading from artifact:', error);
 
       // Check if this is a real error or just a dialog dismissal
       if (error && error !== 'cancel' && error !== undefined) {
-        this.notificationService.CreateSimpleNotification(
-          'Failed to load component from artifact',
-          'error'
-        );
+        this.notificationService.CreateSimpleNotification('Failed to load component from artifact', 'error');
       }
     }
   }
-  
+
   private openTextImportDialog(): void {
     this.textImportDialog = this.dialogService.open({
       content: TextImportDialogComponent,
       width: 700,
       height: 600,
       minWidth: 500,
-      title: '',  // Title is in the component
-      actions: [],  // Actions are in the component
-      appendTo: this.viewContainerRef
+      title: '', // Title is in the component
+      actions: [], // Actions are in the component
+      appendTo: this.viewContainerRef,
     });
-    
+
     // Handle the import event from the dialog component
     const dialogComponentRef = this.textImportDialog.content.instance as TextImportDialogComponent;
-    
+
     // Subscribe to import event
     dialogComponentRef.importSpec.subscribe((spec: ComponentSpec) => {
       this.handleTextImport(spec);
       this.textImportDialog?.close();
     });
-    
+
     // Subscribe to cancel event
     dialogComponentRef.cancelDialog.subscribe(() => {
       this.textImportDialog?.close();
     });
   }
-  
+
   private async handleTextImport(spec: ComponentSpec): Promise<void> {
     // Create a file-loaded component (reusing the same structure)
     const textComponent: FileLoadedComponent = {
@@ -834,15 +814,15 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       loadedAt: new Date(),
       isFileLoaded: true,
       type: spec.type || 'Component',
-      status: 'Text'
+      status: 'Text',
     };
-    
+
     // Add to the list and refresh
     this.fileLoadedComponents.push(textComponent);
     this.combineAndFilterComponents();
-    
+
     console.log(`Loaded component "${spec.name}" from text input`);
-    
+
     // Automatically select and run the newly loaded component
     this.expandedComponent = textComponent;
     this.runComponent(textComponent);
@@ -851,26 +831,26 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   public async handleFileSelect(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
-    
+
     if (!file) return;
-    
+
     // Only accept JSON files
     if (!file.name.endsWith('.json')) {
       console.error('Please select a JSON file');
       // Could add a toast notification here
       return;
     }
-    
+
     try {
       const fileContent = await this.readFile(file);
       const spec = JSON.parse(fileContent) as ComponentSpec;
-      
+
       // Validate the spec has required fields
       if (!spec.name || !spec.code) {
         console.error('Invalid component specification: missing required fields (name, code)');
         return;
       }
-      
+
       // Create a file-loaded component
       const fileComponent: FileLoadedComponent = {
         id: this.generateId(),
@@ -881,22 +861,21 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         loadedAt: new Date(),
         isFileLoaded: true,
         type: spec.type || 'Component',
-        status: 'File'
+        status: 'File',
       };
-      
+
       // Add to the list and refresh
       this.fileLoadedComponents.push(fileComponent);
       this.combineAndFilterComponents();
-      
+
       console.log(`Loaded component "${spec.name}" from ${file.name}`);
-      
+
       // Automatically select and run the newly loaded component
       this.expandedComponent = fileComponent;
       this.runComponent(fileComponent);
-      
+
       // Clear the input for future uploads
       input.value = '';
-      
     } catch (error) {
       console.error('Error loading component file:', error);
     }
@@ -919,47 +898,47 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     const index = this.fileLoadedComponents.indexOf(component);
     if (index > -1) {
       this.fileLoadedComponents.splice(index, 1);
-      
+
       // If this was the selected component, clear it
       if (this.selectedComponent === component) {
         this.stopComponent();
       }
-      
+
       // If this was the expanded component, clear it
       if (this.expandedComponent === component) {
         this.expandedComponent = null;
       }
-      
+
       this.combineAndFilterComponents();
     }
   }
 
   public getComponentTypeIcon(type: string | null | undefined): string {
     const icons: Record<string, string> = {
-      'Report': 'fa-file-alt',
-      'Dashboard': 'fa-tachometer-alt',
-      'Form': 'fa-edit',
-      'Chart': 'fa-chart-bar',
-      'Table': 'fa-table',
-      'Widget': 'fa-cube',
-      'Navigation': 'fa-compass',
-      'Search': 'fa-search',
-      'Utility': 'fa-cog'
+      Report: 'fa-file-alt',
+      Dashboard: 'fa-tachometer-alt',
+      Form: 'fa-edit',
+      Chart: 'fa-chart-bar',
+      Table: 'fa-table',
+      Widget: 'fa-cube',
+      Navigation: 'fa-compass',
+      Search: 'fa-search',
+      Utility: 'fa-cog',
     };
     return icons[type || ''] || 'fa-puzzle-piece';
   }
 
   public getComponentTypeColor(type: string | null | undefined): string {
     const colors: Record<string, string> = {
-      'Report': '#3B82F6',
-      'Dashboard': '#8B5CF6',
-      'Form': '#10B981',
-      'Chart': '#F97316',
-      'Table': '#06B6D4',
-      'Widget': '#EC4899',
-      'Navigation': '#6366F1',
-      'Search': '#14B8A6',
-      'Utility': '#64748B'
+      Report: '#3B82F6',
+      Dashboard: '#8B5CF6',
+      Form: '#10B981',
+      Chart: '#F97316',
+      Table: '#06B6D4',
+      Widget: '#EC4899',
+      Navigation: '#6366F1',
+      Search: '#14B8A6',
+      Utility: '#64748B',
     };
     return colors[type || ''] || '#9CA3AF';
   }
@@ -970,22 +949,22 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   public initializeEditors(): void {
     if (this.selectedComponent) {
       const spec = this.getComponentSpec(this.selectedComponent);
-      
+
       // Deep parse the spec for better readability
       const parseOptions: ParseJSONOptions = {
         extractInlineJson: true,
         maxDepth: 100,
-        debug: false
+        debug: false,
       };
       const parsed = ParseJSONRecursive(spec, parseOptions);
       this.editableSpec = JSON.stringify(parsed, null, 2);
-      
+
       // Extract code from spec
       this.editableCode = spec.code || '// No code available';
-      
+
       // Build code sections array
       this.buildCodeSections();
-      
+
       // Reset editing flags
       this.isEditingSpec = false;
       this.isEditingCode = false;
@@ -1017,7 +996,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   public applySpecChanges(): void {
     try {
       const parsed = JSON.parse(this.editableSpec);
-      
+
       // Update the component spec
       if (this.selectedComponent) {
         if (this.isFileLoadedComponent(this.selectedComponent)) {
@@ -1027,25 +1006,25 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           // Update database component's Specification field in memory only
           (this.selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(parsed);
         }
-        
+
         // Update the runtime spec
         this.componentSpec = parsed;
-        
+
         // Update the code editor with new code from spec
         this.editableCode = parsed.code || '// No code available';
-        
+
         // Rebuild code sections from updated spec
         this.buildCodeSections();
-        
+
         // Clear registries to ensure fresh component load
         MJReactComponent.forceClearRegistries();
         console.log('Cleared registries after applying spec changes');
-        
+
         // If component is running, update it without full refresh
         if (this.isRunning) {
           this.updateRunningComponent();
         }
-        
+
         this.isEditingSpec = false;
       }
     } catch (error) {
@@ -1062,12 +1041,12 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       try {
         // Parse the current spec
         const spec = JSON.parse(this.editableSpec);
-        
+
         // Update main code and dependencies from code sections
         if (this.codeSections.length > 0) {
           // First section is always the main component
           spec.code = this.codeSections[0].code;
-          
+
           // Update dependencies if any
           if (this.codeSections.length > 1 && spec.dependencies) {
             for (let i = 1; i < this.codeSections.length; i++) {
@@ -1078,16 +1057,16 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
             }
           }
         }
-        
+
         // Update the spec editor
         const parseOptions: ParseJSONOptions = {
           extractInlineJson: true,
           maxDepth: 100,
-          debug: false
+          debug: false,
         };
         const parsed = ParseJSONRecursive(spec, parseOptions);
         this.editableSpec = JSON.stringify(parsed, null, 2);
-        
+
         // Update the component entity in memory
         if (this.isFileLoadedComponent(this.selectedComponent)) {
           (this.selectedComponent as FileLoadedComponent).specification = spec;
@@ -1095,19 +1074,19 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           // Update database component's Specification field in memory only
           (this.selectedComponent as ComponentEntityExtended).Specification = JSON.stringify(spec);
         }
-        
+
         // Update the runtime spec
         this.componentSpec = spec;
-        
+
         // Clear registries to ensure fresh component load
         MJReactComponent.forceClearRegistries();
         console.log('Cleared registries after applying code changes');
-        
+
         // If component is running, update it without full refresh
         if (this.isRunning) {
           this.updateRunningComponent();
         }
-        
+
         this.isEditingCode = false;
       } catch (error) {
         console.error('Error applying code changes:', error);
@@ -1132,11 +1111,11 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     if (this.selectedComponent && this.isRunning) {
       // Get the updated spec
       const spec = this.getComponentSpec(this.selectedComponent);
-      
+
       // Temporarily set to null to force React to re-render
       this.componentSpec = null;
       this.cdr.detectChanges();
-      
+
       // Then set the new spec
       setTimeout(() => {
         this.componentSpec = spec;
@@ -1157,18 +1136,18 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       this.codeSections = [];
       return;
     }
-    
+
     const spec = this.getComponentSpec(this.selectedComponent);
     const sections = [];
-    
+
     // Main component code
     sections.push({
       title: spec.name || 'Main Component',
       code: spec.code || '// No code available',
       expanded: true,
-      isDependency: false
+      isDependency: false,
     });
-    
+
     // Add dependent components if any
     if (spec.dependencies && Array.isArray(spec.dependencies)) {
       spec.dependencies.forEach((dep: ComponentSpec, index: number) => {
@@ -1177,11 +1156,11 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           code: dep.code || '// No code available',
           expanded: false,
           isDependency: true,
-          index: index
+          index: index,
         });
       });
     }
-    
+
     this.codeSections = sections;
   }
 
@@ -1216,7 +1195,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
    */
   public onTabSelect(event: any): void {
     this.activeTab = event.index;
-    
+
     // Initialize editors when switching to spec or code tabs
     // Both tabs now need initialization since there's no separate Run tab
     this.initializeEditors();
@@ -1227,7 +1206,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
    */
   public async exportToArtifact(): Promise<void> {
     console.log('exportToArtifact called');
-    
+
     if (!this.selectedComponent || !this.componentSpec) {
       console.error('No component selected or spec available');
       return;
@@ -1237,13 +1216,13 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
     // Close the dropdown
     this.exportDropdownOpen = false;
-    
+
     // Small delay to ensure dropdown is closed before opening dialog
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     // Get the current spec - use edited version if available
     let currentSpec: ComponentSpec;
-    
+
     // Check if user has made edits
     if (this.isEditingSpec || this.isEditingCode) {
       // Parse the edited spec to get the latest version
@@ -1259,25 +1238,25 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
     // Open the artifact selection dialog
     console.log('Opening artifact selection dialog...');
-    
+
     let result: ArtifactSelectionResult | undefined;
-    
+
     try {
       const dialogRef = this.dialogService.open({
         content: ArtifactSelectionDialogComponent,
         width: 1200, // Increased from 1000px by 200px
         height: 900, // Keep same height
-        appendTo: this.viewContainerRef
+        appendTo: this.viewContainerRef,
       });
 
       console.log('Dialog opened, waiting for result...');
-      result = await dialogRef.result.toPromise() as ArtifactSelectionResult | undefined;
+      result = (await dialogRef.result.toPromise()) as ArtifactSelectionResult | undefined;
       console.log('Dialog result:', result);
     } catch (error) {
       console.error('Error opening dialog:', error);
       return;
     }
-    
+
     if (!result || !result.action) {
       console.log('User cancelled dialog');
       // User cancelled
@@ -1304,7 +1283,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
           ExtraFilter: `ArtifactID = '${artifact.ID}'`,
           OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
-          ResultType: 'entity_object'
+          ResultType: 'entity_object',
         });
 
         if (versionsResult.Success && versionsResult.Results && versionsResult.Results.length > 0) {
@@ -1335,26 +1314,14 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
         const componentName = this.getComponentName(this.selectedComponent);
         console.log(`✅ Saved ${componentName} as artifact version ${version.VersionNumber}`);
 
-        this.notificationService.CreateSimpleNotification(
-          `Component saved as artifact version ${version.VersionNumber}`,
-          'success',
-          3000
-        );
-      }
-      else {
+        this.notificationService.CreateSimpleNotification(`Component saved as artifact version ${version.VersionNumber}`, 'success', 3000);
+      } else {
         console.error('Failed to save artifact version - Full LatestResult:', version.LatestResult);
-        this.notificationService.CreateSimpleNotification(
-          'Failed to save artifact version',
-          'error'
-        );
+        this.notificationService.CreateSimpleNotification('Failed to save artifact version', 'error');
       }
-
     } catch (error) {
       console.error('Error saving to artifact:', error);
-      this.notificationService.CreateSimpleNotification(
-        'Error saving component to artifact',
-        'error'
-      );
+      this.notificationService.CreateSimpleNotification('Error saving component to artifact', 'error');
     }
   }
 
@@ -1366,7 +1333,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
     const data = encoder.encode(content);
     const hashBuffer = await crypto.subtle.digest('SHA-256', data);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
   }
 
   /**
@@ -1383,7 +1350,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
     // Get the current spec - use edited version if available
     let currentSpec: ComponentSpec;
-    
+
     if (this.isEditingSpec || this.isEditingCode) {
       try {
         currentSpec = JSON.parse(this.editableSpec);
@@ -1397,26 +1364,30 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
     // Create filename from component name - replace spaces and special chars with dashes
     const componentName = this.getComponentName(this.selectedComponent);
-    const filename = componentName.replace(/\s+/g, '-').replace(/[^a-z0-9\-]/gi, '-').toLowerCase() + '.json';
+    const filename =
+      componentName
+        .replace(/\s+/g, '-')
+        .replace(/[^a-z0-9\-]/gi, '-')
+        .toLowerCase() + '.json';
 
     // Create a blob with the JSON content
     const jsonContent = JSON.stringify(currentSpec, null, 2);
     const blob = new Blob([jsonContent], { type: 'application/json' });
-    
+
     // Create download link
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
     link.download = filename;
-    
+
     // Trigger download
     document.body.appendChild(link);
     link.click();
-    
+
     // Cleanup
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
+
     console.log(`✅ Exported ${componentName} to ${filename}`);
   }
 
@@ -1434,7 +1405,7 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
     // Get the current spec - use edited version if available
     let currentSpec: ComponentSpec;
-    
+
     if (this.isEditingSpec || this.isEditingCode) {
       try {
         currentSpec = JSON.parse(this.editableSpec);
@@ -1448,13 +1419,13 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
     // Copy to clipboard
     const jsonContent = JSON.stringify(currentSpec, null, 2);
-    
+
     try {
       await navigator.clipboard.writeText(jsonContent);
-      
+
       const componentName = this.getComponentName(this.selectedComponent);
       console.log(`✅ Copied ${componentName} spec to clipboard`);
-      
+
       // Show success message (you could add a toast/notification here)
       alert('Component specification copied to clipboard!');
     } catch (error) {

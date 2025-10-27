@@ -86,7 +86,7 @@ await dataProvider.initialize();
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata, CompositeKey, UserInfo } from '@memberjunction/core';
+import { Metadata, CompositeKey, UserInfo } from '@memberjunction/global';
 import { UserEntity } from '@memberjunction/core-entities';
 
 // Setup data provider
@@ -143,7 +143,7 @@ The SQL Server Data Provider supports comprehensive transaction management throu
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { SQLServerTransactionGroup } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 
 // Setup data provider
 const dataProvider = new SQLServerDataProvider(/* config */);
@@ -244,7 +244,7 @@ try {
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { RunViewParams, RunReportParams } from '@memberjunction/core';
+import { RunViewParams, RunReportParams } from '@memberjunction/global';
 
 // Setup data provider
 const dataProvider = new SQLServerDataProvider(/* config */);
@@ -289,7 +289,7 @@ if (reportResult.Success) {
 
 ```typescript
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { RunQueryParams } from '@memberjunction/core';
+import { RunQueryParams } from '@memberjunction/global';
 
 // Setup data provider
 const dataProvider = new SQLServerDataProvider(/* config */);
@@ -374,21 +374,21 @@ dataProvider.clearUserCache();
 
 The SQL Server data provider accepts the following configuration options:
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `host` | SQL Server hostname or IP | required |
-| `port` | SQL Server port | 1433 |
-| `database` | Database name | required |
-| `user` | Username | required |
-| `password` | Password | required |
-| `connectionTimeout` | Connection timeout in ms | 15000 |
-| `requestTimeout` | Request timeout in ms | 15000 |
-| `pool.max` | Maximum pool size | 10 |
-| `pool.min` | Minimum pool size | 0 |
-| `pool.idleTimeoutMillis` | Pool idle timeout | 30000 |
-| `options.encrypt` | Use encryption | true |
-| `options.trustServerCertificate` | Trust server certificate | false |
-| `options.enableArithAbort` | Enable arithmetic abort | true |
+| Option                           | Description               | Default  |
+| -------------------------------- | ------------------------- | -------- |
+| `host`                           | SQL Server hostname or IP | required |
+| `port`                           | SQL Server port           | 1433     |
+| `database`                       | Database name             | required |
+| `user`                           | Username                  | required |
+| `password`                       | Password                  | required |
+| `connectionTimeout`              | Connection timeout in ms  | 15000    |
+| `requestTimeout`                 | Request timeout in ms     | 15000    |
+| `pool.max`                       | Maximum pool size         | 10       |
+| `pool.min`                       | Minimum pool size         | 0        |
+| `pool.idleTimeoutMillis`         | Pool idle timeout         | 30000    |
+| `options.encrypt`                | Use encryption            | true     |
+| `options.trustServerCertificate` | Trust server certificate  | false    |
+| `options.enableArithAbort`       | Enable arithmetic abort   | true     |
 
 ## Advanced Usage
 

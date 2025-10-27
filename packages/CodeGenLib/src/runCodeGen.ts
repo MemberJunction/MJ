@@ -13,7 +13,7 @@ import { MSSQLConnection } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue } from './Config/config';
 import { logError, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
-import * as MJ from '@memberjunction/core';
+import * as MJ from '@memberjunction/global';
 import { RunCommandsBase } from './Misc/runCommand';
 import { DBSchemaGeneratorBase } from './Database/dbSchema';
 import { AngularClientGeneratorBase } from './Angular/angular-codegen';
@@ -33,10 +33,10 @@ const { mjCoreSchema } = configInfo;
 
 /**
  * Main orchestrator class for the MemberJunction code generation process.
- * 
+ *
  * This class coordinates a comprehensive code generation pipeline that transforms
  * database schemas into a complete, type-safe, full-stack application. The process includes:
- * 
+ *
  * **Pipeline Steps:**
  * 1. **Database Setup** - Initialize connections and metadata
  * 2. **Metadata Management** - Analyze schema changes and update metadata
@@ -47,11 +47,11 @@ const { mjCoreSchema } = configInfo;
  * 7. **Action Classes** - Create business logic containers
  * 8. **Documentation** - Generate schema JSON for AI/documentation
  * 9. **Post-processing** - Run commands and integrity checks
- * 
+ *
  * **Customization:**
  * You can sub-class this class and override specific methods to customize
  * the code generation process for your specific needs.
- * 
+ *
  * @example
  * ```typescript
  * const codeGen = new RunCodeGenBase();
@@ -64,10 +64,10 @@ export class RunCodeGenBase {
    * Sets up the SQL Server data source and initializes the MemberJunction core metadata.
    * This method establishes the database connection pool and configures the data provider
    * that will be used throughout the code generation process.
-   * 
+   *
    * Override this method to customize the data source setup process for different
    * database providers or connection configurations.
-   * 
+   *
    * @returns Promise resolving to the configured SQLServerDataProvider instance
    * @throws Error if connection setup fails
    */
@@ -85,11 +85,11 @@ export class RunCodeGenBase {
 
   /**
    * Main entry point for the complete code generation process.
-   * 
+   *
    * Orchestrates the entire pipeline from database schema analysis to final code output.
    * The process is highly configurable through the configuration file and can be
    * partially skipped for faster iteration during development.
-   * 
+   *
    * **Process Flow:**
    * 1. Initialize data sources and user context
    * 2. Execute pre-generation commands and scripts
@@ -102,7 +102,7 @@ export class RunCodeGenBase {
    * 9. Create documentation JSON
    * 10. Run integrity checks
    * 11. Execute post-generation commands
-   * 
+   *
    * @param skipDatabaseGeneration If true, skips all database-related operations
    *   (metadata management, SQL generation). Useful for faster UI-only regeneration.
    * @throws Error if any critical step fails
@@ -198,12 +198,10 @@ export class RunCodeGenBase {
           } else {
             succeedSpinner('SQL scripts and execution completed');
           }
-        } 
-        else {
+        } else {
           warnSpinner('SQL output directory NOT found in config file, skipping...');
         }
-      } 
-      else {
+      } else {
         warnSpinner('Skipping database generation (skip_database_generation = true)');
 
         // we skipped the database generation but we need to load generated code for validators from the database to ensure that we have them
@@ -228,7 +226,7 @@ export class RunCodeGenBase {
 
       // Check if we're in verbose mode to determine spinner behavior
       const isVerbose = configInfo?.verboseOutput ?? false;
-      
+
       if (!isVerbose) {
         // In non-verbose mode, start a single spinner for all TypeScript generation
         startSpinner('Generating TypeScript code...');
@@ -242,7 +240,9 @@ export class RunCodeGenBase {
         // generate the GraphQL server code
         if (isVerbose) startSpinner('Generating CORE Entity GraphQL Resolver Code...');
         const graphQLGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<GraphQLServerGeneratorBase>(GraphQLServerGeneratorBase)!;
-        if (!graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true)) {
+        if (
+          !graphQLGenerator.generateGraphQLServerCode(coreEntities, graphQLCoreResolversOutputDir, '@memberjunction/core-entities', true)
+        ) {
           failSpinner('Error generating GraphQL server code');
           return;
         } else if (isVerbose) {
@@ -274,7 +274,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating CORE Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, coreEntities, coreEntitySubClassOutputDir, skipDB)) {
+        if (!(await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, coreEntities, coreEntitySubClassOutputDir, skipDB))) {
           failSpinner('Error generating entity subclass code');
           return;
         } else if (isVerbose) {
@@ -291,7 +291,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating Entity Subclass Code...');
         const entitySubClassGeneratorObject =
           MJGlobal.Instance.ClassFactory.CreateInstance<EntitySubClassGeneratorBase>(EntitySubClassGeneratorBase)!;
-        if (!await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, nonCoreEntities, entitySubClassOutputDir, skipDB)) {
+        if (!(await entitySubClassGeneratorObject.generateAllEntitySubClasses(pool, nonCoreEntities, entitySubClassOutputDir, skipDB))) {
           failSpinner('Error generating entity subclass code');
           return;
         } else if (isVerbose) {
@@ -353,7 +353,7 @@ export class RunCodeGenBase {
             // STEP 7 - Actions Code Gen
             ****************************************************************************************/
       const coreActionsOutputDir = outputDir('CoreActionSubclasses', false);
-      await ActionEngineBase.Instance.Config(false, currentUser); // this is inefficient as we have the server 
+      await ActionEngineBase.Instance.Config(false, currentUser); // this is inefficient as we have the server
       if (coreActionsOutputDir) {
         if (isVerbose) startSpinner('Generating CORE Actions Code...');
         const actionsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<ActionSubClassGeneratorBase>(ActionSubClassGeneratorBase)!;
@@ -417,12 +417,10 @@ export class RunCodeGenBase {
           succeedSpinner('After-all SQL Scripts completed');
         }
       }
-        
+
       const endTime = new Date();
       const totalSeconds = (endTime.getTime() - startTime.getTime()) / 1000;
-      succeedSpinner(
-        `MJ CodeGen Complete! ${md.Entities.length} entities processed in ${totalSeconds}s @ ${endTime.toLocaleString()}`
-      );
+      succeedSpinner(`MJ CodeGen Complete! ${md.Entities.length} entities processed in ${totalSeconds}s @ ${endTime.toLocaleString()}`);
 
       process.exit(0); // wrap it up, 0 means success
     } catch (e) {
@@ -436,19 +434,19 @@ export class RunCodeGenBase {
 /**
  * Convenience function to run the MemberJunction code generation process.
  * Creates a new instance of RunCodeGenBase and executes the full generation pipeline.
- * 
+ *
  * This is the recommended way to trigger code generation from external scripts
  * or applications.
- * 
+ *
  * @param skipDatabaseGeneration Whether to skip database-related operations
  * @returns Promise that resolves when generation is complete
  * @throws Error if generation fails
- * 
+ *
  * @example
  * ```typescript
  * // Full generation
  * await runMemberJunctionCodeGeneration();
- * 
+ *
  * // Skip database operations for faster UI generation
  * await runMemberJunctionCodeGeneration(true);
  * ```

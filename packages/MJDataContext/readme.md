@@ -32,7 +32,7 @@ npm install @memberjunction/data-context
 
 ```typescript
 import { DataContext, DataContextItem } from '@memberjunction/data-context';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 
 // Create a new data context
 const context = new DataContext();
@@ -75,7 +75,7 @@ context.Items.push(viewItem);
 #### From a Single Record
 
 ```typescript
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity } from '@memberjunction/global';
 
 // Assuming you have an entity record loaded
 const record: BaseEntity = await md.GetEntityObject('Customers');
@@ -88,7 +88,7 @@ context.Items.push(recordItem);
 #### From a Query
 
 ```typescript
-import { QueryInfo } from '@memberjunction/core';
+import { QueryInfo } from '@memberjunction/global';
 
 // Get query info from metadata
 const queryInfo = md.Queries.find(q => q.Name === 'My Query');
@@ -101,7 +101,7 @@ if (queryInfo) {
 #### From a Full Entity
 
 ```typescript
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/global';
 
 // Get entity info from metadata
 const entityInfo = md.Entities.find(e => e.Name === 'Products');

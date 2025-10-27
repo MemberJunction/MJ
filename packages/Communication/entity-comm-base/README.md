@@ -121,7 +121,7 @@ export class CustomEntityCommunicationEngine extends EntityCommunicationsEngineB
 
 ```typescript
 import { CustomEntityCommunicationEngine } from './custom-engine';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 
 // Initialize the engine
 const engine = CustomEntityCommunicationEngine.Instance;

@@ -1,5 +1,5 @@
 import { Observable } from 'rxjs';
-import { AuthProviderConfig } from '@memberjunction/core';
+import { AuthProviderConfig } from '@memberjunction/global';
 
 // Create an alias for Angular-specific config that extends the base
 export interface AngularAuthProviderConfig extends AuthProviderConfig {

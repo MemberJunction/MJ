@@ -250,7 +250,7 @@ listener.displayString = 'Hello from JavaScript!';
 When using these components in a TypeScript project:
 
 ```typescript
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/global';
 
 // Type the elements
 const entityList = document.querySelector('mj-entity-list-demo') as HTMLElement & {

@@ -3,21 +3,21 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 import { ButtonModule } from '@progress/kendo-angular-buttons';
-import { UserInfo } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/global';
 import { ArtifactEntity } from '@memberjunction/core-entities';
 import { ArtifactPermissionService, ArtifactPermission, ArtifactPermissionSet } from '../../services/artifact-permission.service';
 import { UserPickerComponent, UserSearchResult } from '../shared/user-picker.component';
 
 interface PermissionDisplay extends ArtifactPermission {
-    isEditing: boolean;
-    editingPermissions: ArtifactPermissionSet;
+  isEditing: boolean;
+  editingPermissions: ArtifactPermissionSet;
 }
 
 @Component({
-    selector: 'mj-artifact-share-modal',
-    standalone: true,
-    imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
-    template: `
+  selector: 'mj-artifact-share-modal',
+  standalone: true,
+  imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
+  template: `
         @if (isOpen && artifact) {
             <kendo-window
                 [title]="'Share: ' + artifact.Name"
@@ -196,254 +196,225 @@ interface PermissionDisplay extends ArtifactPermission {
             </kendo-window>
         }
     `,
-    styleUrls: ['./artifact-share-modal.component.scss']
+  styleUrls: ['./artifact-share-modal.component.scss'],
 })
 export class ArtifactShareModalComponent implements OnInit, OnChanges {
-    @Input() isOpen: boolean = false;
-    @Input() artifact: ArtifactEntity | null = null;
-    @Input() currentUser!: UserInfo;
+  @Input() isOpen: boolean = false;
+  @Input() artifact: ArtifactEntity | null = null;
+  @Input() currentUser!: UserInfo;
 
-    @Output() saved = new EventEmitter<void>();
-    @Output() cancelled = new EventEmitter<void>();
+  @Output() saved = new EventEmitter<void>();
+  @Output() cancelled = new EventEmitter<void>();
 
-    permissions: PermissionDisplay[] = [];
-    selectedUser: UserSearchResult | null = null;
-    availablePermissions: string[] = [];
-    canModifyPermissions: boolean = false;
+  permissions: PermissionDisplay[] = [];
+  selectedUser: UserSearchResult | null = null;
+  availablePermissions: string[] = [];
+  canModifyPermissions: boolean = false;
 
-    newPermissions: ArtifactPermissionSet = {
-        canRead: true,
-        canShare: false,
-        canEdit: false
+  newPermissions: ArtifactPermissionSet = {
+    canRead: true,
+    canShare: false,
+    canEdit: false,
+  };
+
+  constructor(
+    private permissionService: ArtifactPermissionService,
+    private cdr: ChangeDetectorRef
+  ) {}
+
+  async ngOnInit(): Promise<void> {
+    if (this.artifact) {
+      await this.loadPermissions();
+      await this.updateAvailablePermissions();
+    }
+  }
+
+  async ngOnChanges(changes: SimpleChanges): Promise<void> {
+    // Reload permissions when modal opens or artifact changes
+    const modalOpened = changes['isOpen']?.currentValue === true && changes['isOpen']?.previousValue === false;
+    const artifactChanged = changes['artifact'] && !changes['artifact'].isFirstChange();
+
+    if ((modalOpened || artifactChanged) && this.artifact) {
+      await this.loadPermissions();
+      await this.updateAvailablePermissions();
+    }
+  }
+
+  private async loadPermissions(): Promise<void> {
+    if (!this.artifact) return;
+
+    const perms = await this.permissionService.loadPermissions(this.artifact.ID, this.currentUser);
+    this.permissions = perms.map((p) => ({
+      ...p,
+      isEditing: false,
+      editingPermissions: {
+        canRead: p.canRead,
+        canShare: p.canShare,
+        canEdit: p.canEdit,
+      },
+    }));
+    this.cdr.detectChanges();
+  }
+
+  private async updateAvailablePermissions(): Promise<void> {
+    if (!this.artifact) return;
+
+    // Check if current user is owner
+    const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
+
+    // Check if user has share permission
+    const hasSharePermission = await this.permissionService.checkPermission(
+      this.artifact.ID,
+      this.currentUser.ID,
+      'share',
+      this.currentUser
+    );
+
+    // Allow modification if user is owner OR has Share permission
+    this.canModifyPermissions = isOwner || hasSharePermission;
+
+    // Get user's current permissions
+    const userPerms: ArtifactPermissionSet = {
+      canRead: true,
+      canShare: hasSharePermission,
+      canEdit: await this.permissionService.checkPermission(this.artifact.ID, this.currentUser.ID, 'edit', this.currentUser),
     };
 
-    constructor(
-        private permissionService: ArtifactPermissionService,
-        private cdr: ChangeDetectorRef
-    ) {}
+    this.availablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
 
-    async ngOnInit(): Promise<void> {
-        if (this.artifact) {
-            await this.loadPermissions();
-            await this.updateAvailablePermissions();
-        }
+    console.log('Share modal permissions:', {
+      artifactId: this.artifact?.ID,
+      userId: this.artifact?.UserID,
+      currentUserId: this.currentUser.ID,
+      isOwner,
+      availablePermissions: this.availablePermissions,
+    });
+  }
+
+  getExcludedUserIds(): string[] {
+    const ids = this.permissions.map((p) => p.userId);
+    ids.push(this.currentUser.ID); // Can't share with yourself
+    if (this.artifact?.UserID) {
+      ids.push(this.artifact.UserID); // Owner already has all permissions
+    }
+    return ids;
+  }
+
+  onUserSelected(user: UserSearchResult): void {
+    this.selectedUser = user;
+    this.cdr.detectChanges();
+  }
+
+  onClearSelection(): void {
+    this.selectedUser = null;
+    this.newPermissions = {
+      canRead: true,
+      canShare: false,
+      canEdit: false,
+    };
+    this.cdr.detectChanges();
+  }
+
+  async onAddUser(): Promise<void> {
+    if (!this.selectedUser || !this.artifact) return;
+
+    try {
+      // Check if user is owner
+      const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
+
+      // Get current user's permissions
+      const userPerms: ArtifactPermissionSet = {
+        canRead: true,
+        canShare: await this.permissionService.checkPermission(this.artifact.ID, this.currentUser.ID, 'share', this.currentUser),
+        canEdit: await this.permissionService.checkPermission(this.artifact.ID, this.currentUser.ID, 'edit', this.currentUser),
+      };
+
+      // Validate permissions
+      if (!this.permissionService.validatePermissions(this.newPermissions, userPerms, isOwner)) {
+        alert('You cannot grant permissions you do not have');
+        return;
+      }
+
+      // Grant permission
+      await this.permissionService.grantPermission(
+        this.artifact.ID,
+        this.selectedUser.id,
+        this.newPermissions,
+        this.currentUser.ID,
+        this.currentUser
+      );
+
+      await this.loadPermissions();
+      this.onClearSelection();
+      this.saved.emit();
+    } catch (error) {
+      console.error('Error adding user:', error);
+      alert('Failed to add user. Please try again.');
+    }
+  }
+
+  onEditPermission(permission: PermissionDisplay): void {
+    permission.isEditing = true;
+    this.cdr.detectChanges();
+  }
+
+  onCancelEdit(permission: PermissionDisplay): void {
+    permission.isEditing = false;
+    permission.editingPermissions = {
+      canRead: permission.canRead,
+      canShare: permission.canShare,
+      canEdit: permission.canEdit,
+    };
+    this.cdr.detectChanges();
+  }
+
+  async onSavePermission(permission: PermissionDisplay): Promise<void> {
+    if (!this.artifact) return;
+
+    try {
+      // Check if user is owner
+      const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
+
+      // Get current user's permissions
+      const userPerms: ArtifactPermissionSet = {
+        canRead: true,
+        canShare: await this.permissionService.checkPermission(this.artifact.ID, this.currentUser.ID, 'share', this.currentUser),
+        canEdit: await this.permissionService.checkPermission(this.artifact.ID, this.currentUser.ID, 'edit', this.currentUser),
+      };
+
+      // Validate permissions
+      if (!this.permissionService.validatePermissions(permission.editingPermissions, userPerms, isOwner)) {
+        alert('You cannot grant permissions you do not have');
+        return;
+      }
+
+      // Update permission
+      await this.permissionService.updatePermission(permission.id, permission.editingPermissions, this.currentUser);
+
+      await this.loadPermissions();
+      this.saved.emit();
+    } catch (error) {
+      console.error('Error updating permission:', error);
+      alert('Failed to update permissions. Please try again.');
+    }
+  }
+
+  async onRevokePermission(permission: PermissionDisplay): Promise<void> {
+    if (!confirm(`Remove ${permission.userName}'s access to this artifact?`)) {
+      return;
     }
 
-    async ngOnChanges(changes: SimpleChanges): Promise<void> {
-        // Reload permissions when modal opens or artifact changes
-        const modalOpened = changes['isOpen']?.currentValue === true && changes['isOpen']?.previousValue === false;
-        const artifactChanged = changes['artifact'] && !changes['artifact'].isFirstChange();
-
-        if ((modalOpened || artifactChanged) && this.artifact) {
-            await this.loadPermissions();
-            await this.updateAvailablePermissions();
-        }
+    try {
+      await this.permissionService.revokePermission(permission.id, this.currentUser);
+      await this.loadPermissions();
+      this.saved.emit();
+    } catch (error) {
+      console.error('Error revoking permission:', error);
+      alert('Failed to revoke permission. Please try again.');
     }
+  }
 
-    private async loadPermissions(): Promise<void> {
-        if (!this.artifact) return;
-
-        const perms = await this.permissionService.loadPermissions(this.artifact.ID, this.currentUser);
-        this.permissions = perms.map(p => ({
-            ...p,
-            isEditing: false,
-            editingPermissions: {
-                canRead: p.canRead,
-                canShare: p.canShare,
-                canEdit: p.canEdit
-            }
-        }));
-        this.cdr.detectChanges();
-    }
-
-    private async updateAvailablePermissions(): Promise<void> {
-        if (!this.artifact) return;
-
-        // Check if current user is owner
-        const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
-
-        // Check if user has share permission
-        const hasSharePermission = await this.permissionService.checkPermission(
-            this.artifact.ID,
-            this.currentUser.ID,
-            'share',
-            this.currentUser
-        );
-
-        // Allow modification if user is owner OR has Share permission
-        this.canModifyPermissions = isOwner || hasSharePermission;
-
-        // Get user's current permissions
-        const userPerms: ArtifactPermissionSet = {
-            canRead: true,
-            canShare: hasSharePermission,
-            canEdit: await this.permissionService.checkPermission(
-                this.artifact.ID,
-                this.currentUser.ID,
-                'edit',
-                this.currentUser
-            )
-        };
-
-        this.availablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
-
-        console.log('Share modal permissions:', {
-            artifactId: this.artifact?.ID,
-            userId: this.artifact?.UserID,
-            currentUserId: this.currentUser.ID,
-            isOwner,
-            availablePermissions: this.availablePermissions
-        });
-    }
-
-    getExcludedUserIds(): string[] {
-        const ids = this.permissions.map(p => p.userId);
-        ids.push(this.currentUser.ID); // Can't share with yourself
-        if (this.artifact?.UserID) {
-            ids.push(this.artifact.UserID); // Owner already has all permissions
-        }
-        return ids;
-    }
-
-    onUserSelected(user: UserSearchResult): void {
-        this.selectedUser = user;
-        this.cdr.detectChanges();
-    }
-
-    onClearSelection(): void {
-        this.selectedUser = null;
-        this.newPermissions = {
-            canRead: true,
-            canShare: false,
-            canEdit: false
-        };
-        this.cdr.detectChanges();
-    }
-
-    async onAddUser(): Promise<void> {
-        if (!this.selectedUser || !this.artifact) return;
-
-        try {
-            // Check if user is owner
-            const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
-
-            // Get current user's permissions
-            const userPerms: ArtifactPermissionSet = {
-                canRead: true,
-                canShare: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
-                    'share',
-                    this.currentUser
-                ),
-                canEdit: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
-                    'edit',
-                    this.currentUser
-                )
-            };
-
-            // Validate permissions
-            if (!this.permissionService.validatePermissions(this.newPermissions, userPerms, isOwner)) {
-                alert('You cannot grant permissions you do not have');
-                return;
-            }
-
-            // Grant permission
-            await this.permissionService.grantPermission(
-                this.artifact.ID,
-                this.selectedUser.id,
-                this.newPermissions,
-                this.currentUser.ID,
-                this.currentUser
-            );
-
-            await this.loadPermissions();
-            this.onClearSelection();
-            this.saved.emit();
-        } catch (error) {
-            console.error('Error adding user:', error);
-            alert('Failed to add user. Please try again.');
-        }
-    }
-
-    onEditPermission(permission: PermissionDisplay): void {
-        permission.isEditing = true;
-        this.cdr.detectChanges();
-    }
-
-    onCancelEdit(permission: PermissionDisplay): void {
-        permission.isEditing = false;
-        permission.editingPermissions = {
-            canRead: permission.canRead,
-            canShare: permission.canShare,
-            canEdit: permission.canEdit
-        };
-        this.cdr.detectChanges();
-    }
-
-    async onSavePermission(permission: PermissionDisplay): Promise<void> {
-        if (!this.artifact) return;
-
-        try {
-            // Check if user is owner
-            const isOwner = await this.permissionService.isOwner(this.artifact.ID, this.currentUser.ID, this.currentUser);
-
-            // Get current user's permissions
-            const userPerms: ArtifactPermissionSet = {
-                canRead: true,
-                canShare: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
-                    'share',
-                    this.currentUser
-                ),
-                canEdit: await this.permissionService.checkPermission(
-                    this.artifact.ID,
-                    this.currentUser.ID,
-                    'edit',
-                    this.currentUser
-                )
-            };
-
-            // Validate permissions
-            if (!this.permissionService.validatePermissions(permission.editingPermissions, userPerms, isOwner)) {
-                alert('You cannot grant permissions you do not have');
-                return;
-            }
-
-            // Update permission
-            await this.permissionService.updatePermission(
-                permission.id,
-                permission.editingPermissions,
-                this.currentUser
-            );
-
-            await this.loadPermissions();
-            this.saved.emit();
-        } catch (error) {
-            console.error('Error updating permission:', error);
-            alert('Failed to update permissions. Please try again.');
-        }
-    }
-
-    async onRevokePermission(permission: PermissionDisplay): Promise<void> {
-        if (!confirm(`Remove ${permission.userName}'s access to this artifact?`)) {
-            return;
-        }
-
-        try {
-            await this.permissionService.revokePermission(permission.id, this.currentUser);
-            await this.loadPermissions();
-            this.saved.emit();
-        } catch (error) {
-            console.error('Error revoking permission:', error);
-            alert('Failed to revoke permission. Please try again.');
-        }
-    }
-
-    onCancel(): void {
-        this.cancelled.emit();
-    }
+  onCancel(): void {
+    this.cancelled.emit();
+  }
 }

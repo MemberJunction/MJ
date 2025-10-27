@@ -2,7 +2,7 @@
 // import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 // import { DialogRef } from '@progress/kendo-angular-dialog';
 // import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
-// import { RunView, Metadata } from '@memberjunction/core';
+// import { RunView, Metadata } from '@memberjunction/global';
 // import { AIAgentEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 // import { MJNotificationService } from '@memberjunction/ng-notifications';
 // import { Router } from '@angular/router';
@@ -13,18 +13,18 @@
 //   logoURL: string | null;
 //   iconClass: string | null;
 //   driverClass: string | null;
-  
-//   // System Configuration  
+
+//   // System Configuration
 //   exposeAsAction: boolean;
 //   typeID: string | null;
 //   status: string | null;
-  
+
 //   // Context Compression
 //   enableContextCompression: boolean;
 //   contextCompressionMessageThreshold: number | null;
 //   contextCompressionPromptID: string | null;
 //   contextCompressionMessageRetentionCount: number | null;
-  
+
 //   // Payload Control
 //   payloadDownstreamPaths: string;
 //   payloadUpstreamPaths: string;
@@ -42,25 +42,25 @@
 //   styleUrls: ['./agent-advanced-settings-dialog.component.css']
 // })
 // export class AgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
-  
+
 //   // Input properties set by service
 //   agent!: AIAgentEntityExtended;
-  
+
 //   // Reactive state management
 //   private destroy$ = new Subject<void>();
 //   public result = new Subject<AdvancedSettingsFormData | null>();
-  
+
 //   // Form and data
 //   advancedForm!: FormGroup;
 //   isLoading$ = new BehaviorSubject<boolean>(false);
 //   isSaving$ = new BehaviorSubject<boolean>(false);
-  
+
 //   // Dropdown data
 //   agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
-  
+
 //   // Selected compression prompt
 //   selectedCompressionPrompt: AIPromptEntityExtended | null = null;
-  
+
 //   // Available options
 //   statusOptions = [
 //     { text: 'Active', value: 'Active' },
@@ -94,18 +94,18 @@
 //       logoURL: [this.agent.LogoURL],
 //       iconClass: [this.agent.IconClass],
 //       driverClass: [this.agent.DriverClass],
-      
+
 //       // System Configuration
 //       exposeAsAction: [this.agent.ExposeAsAction],
 //       typeID: [this.agent.TypeID],
 //       status: [this.agent.Status],
-      
+
 //       // Context Compression
 //       enableContextCompression: [this.agent.EnableContextCompression],
 //       contextCompressionMessageThreshold: [this.agent.ContextCompressionMessageThreshold, [Validators.min(1)]],
 //       contextCompressionPromptID: [this.agent.ContextCompressionPromptID],
 //       contextCompressionMessageRetentionCount: [this.agent.ContextCompressionMessageRetentionCount, [Validators.min(1)]],
-      
+
 //       // Payload Control
 //       payloadDownstreamPaths: [this.agent.PayloadDownstreamPaths, [Validators.required]],
 //       payloadUpstreamPaths: [this.agent.PayloadUpstreamPaths, [Validators.required]],
@@ -136,12 +136,12 @@
 //         thresholdControl?.clearValidators();
 //         promptControl?.clearValidators();
 //         retentionControl?.clearValidators();
-        
+
 //         // Reset field values to null
 //         thresholdControl?.setValue(null);
 //         promptControl?.setValue(null);
 //         retentionControl?.setValue(null);
-        
+
 //         // Clear the selected compression prompt display
 //         this.selectedCompressionPrompt = null;
 //       }
@@ -155,10 +155,10 @@
 
 //   private async loadDropdownData() {
 //     this.isLoading$.next(true);
-    
+
 //     try {
 //       const rv = new RunView();
-      
+
 //       const agentTypesResult = await rv.RunView<AIAgentTypeEntity>({
 //         EntityName: 'MJ: AI Agent Types',
 //         ExtraFilter: 'IsActive = 1',
@@ -293,10 +293,10 @@
 //     }
 
 //     this.isSaving$.next(true);
-    
+
 //     try {
 //       const formData: AdvancedSettingsFormData = this.advancedForm.value;
-      
+
 //       // Validate JSON fields
 //       const jsonFields = ['payloadDownstreamPaths', 'payloadUpstreamPaths', 'payloadSelfReadPaths', 'payloadSelfWritePaths'];
 //       for (const field of jsonFields) {
@@ -314,7 +314,7 @@
 
 //       this.result.next(formData);
 //       this.dialogRef.close();
-      
+
 //     } catch (error) {
 //       console.error('Error saving advanced settings:', error);
 //       MJNotificationService.Instance.CreateSimpleNotification(

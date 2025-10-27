@@ -20,7 +20,6 @@
     "@memberjunction/ai-vectors": "2.111.0",
     "@memberjunction/ai-vectors-pinecone": "2.111.0",
     "@memberjunction/aiengine": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/global": "2.111.0",
     "@memberjunction/templates": "2.111.0",
     "@memberjunction/templates-base-types": "2.111.0",

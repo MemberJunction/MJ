@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
-import { LogError } from '@memberjunction/core';
+import { LogError } from '@memberjunction/global';
 
 /** Global configuration explorer for finding MJ config files */
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
@@ -321,7 +321,6 @@ const newEntityPermissionDefaultsSchema = z.object({
  */
 export type NewEntityPermissionDefaults = z.infer<typeof newEntityPermissionDefaultsSchema>;
 
-
 export type EntityNameRulesBySchema = z.infer<typeof newEntityNameRulesBySchema>;
 const newEntityNameRulesBySchema = z.object({
   SchemaName: z.string(),
@@ -345,8 +344,6 @@ const newEntityDefaultsSchema = z.object({
   PermissionDefaults: newEntityPermissionDefaultsSchema,
   NameRulesBySchema: newEntityNameRulesBySchema.array().default([]),
 });
-
-
 
 export type NewEntityRelationshipDefaults = z.infer<typeof newEntityRelationshipDefaultsSchema>;
 const newEntityRelationshipDefaultsSchema = z.object({

@@ -1,4 +1,4 @@
-import { UserInfo } from "@memberjunction/core";
+import { UserInfo } from "@memberjunction/global";
 
 export type RasaResponse<T = Record<string, any>> = {
     code: number,

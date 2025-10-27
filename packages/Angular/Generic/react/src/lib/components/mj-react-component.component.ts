@@ -14,23 +14,23 @@ import {
   AfterViewInit,
   OnDestroy,
   ChangeDetectionStrategy,
-  ChangeDetectorRef
+  ChangeDetectorRef,
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
-import { 
+import {
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   resourceManager,
   reactRootManager,
   ResolvedComponents,
   SetupStyles,
-  ComponentRegistryService
+  ComponentRegistryService,
 } from '@memberjunction/react-runtime';
 import { createRuntimeUtilities } from '../utilities/runtime-utilities';
-import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
+import { LogError, CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 
@@ -79,7 +79,8 @@ export interface UserSettingsChangedEvent {
       }
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     :host {
       display: block;
       width: 100%;
@@ -122,8 +123,9 @@ export interface UserSettingsChangedEvent {
       color: #64748B;
       margin-top: 8px;
     }
-  `],
-  changeDetection: ChangeDetectionStrategy.OnPush
+  `,
+  ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class MJReactComponent implements AfterViewInit, OnDestroy {
   @Input() component!: ComponentSpec;
@@ -134,7 +136,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   @Input() enableLogging: boolean = false;
   @Input() useComponentManager: boolean = true; // NEW: Use unified ComponentManager by default
-  
+
   // Auto-initialize utilities if not provided
   private _utilities: any;
   @Input()
@@ -152,7 +154,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     }
     return this._utilities;
   }
-  
+
   // Auto-initialize styles if not provided
   private _styles?: Partial<ComponentStyles>;
   @Input()
@@ -169,7 +171,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     }
     return this._styles;
   }
-  
+
   private _savedUserSettings: any = {};
   @Input()
   set savedUserSettings(value: any) {
@@ -182,15 +184,15 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   get savedUserSettings(): any {
     return this._savedUserSettings;
   }
-  
+
   @Output() stateChange = new EventEmitter<StateChangeEvent>();
   @Output() componentEvent = new EventEmitter<ReactComponentEvent>();
   @Output() refreshData = new EventEmitter<void>();
   @Output() openEntityRecord = new EventEmitter<{ entityName: string; key: CompositeKey }>();
   @Output() userSettingsChanged = new EventEmitter<UserSettingsChangedEvent>();
-  
+
   @ViewChild('container', { read: ElementRef, static: true }) container!: ElementRef<HTMLDivElement>;
-  
+
   private reactRootId: string | null = null;
   private compiledComponent: ComponentObject | null = null;
   private loadedDependencies: Record<string, ComponentObject> = {};
@@ -201,9 +203,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private pendingRender = false;
   private isDestroying = false;
   private componentId: string;
-  private componentVersion: string = '';  // Store the version for resolver
+  private componentVersion: string = ''; // Store the version for resolver
   hasError = false;
-  
+
   /**
    * Public property containing the fully resolved component specification.
    * This includes all external code fetched from registries, allowing consumers
@@ -234,14 +236,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     } catch (e) {
       registrySize = 'Not available';
     }
-    
+
     console.log(`🎬 [ngAfterViewInit] Starting component initialization:`, {
       componentId: this.componentId,
       componentName: this.component?.name,
       timestamp: new Date().toISOString(),
-      registrySize: registrySize
+      registrySize: registrySize,
     });
-    
+
     // Trigger change detection to show loading state
     this.cdr.detectChanges();
     await this.initializeComponent();
@@ -250,15 +252,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   ngOnDestroy() {
     // Set destroying flag immediately
     this.isDestroying = true;
-    
+
     // Cancel any pending renders
     this.pendingRender = false;
-    
+
     this.destroyed$.next();
     this.destroyed$.complete();
     this.cleanup();
   }
-
 
   /**
    * Initialize the React component
@@ -270,102 +271,97 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         registry: this.component?.registry,
         hasCode: !!this.component?.code,
         browserRefreshed: performance.navigation.type === 1,
-        performanceType: performance.navigation.type
+        performanceType: performance.navigation.type,
       });
-      
+
       // Ensure React is loaded
       await this.reactBridge.getReactContext();
-      
+
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
-      
+
       // NEW: Use ComponentManager if enabled (default: true)
       if (this.useComponentManager) {
         console.log(`🎯 [initializeComponent] Using NEW ComponentManager approach`);
         await this.loadComponentWithManager();
-        
+
         // Component is already compiled and stored in this.compiledComponent
         // No need to fetch from registry - it's already set
       } else {
         console.log(`📦 [initializeComponent] Using legacy approach (will be deprecated)`);
         // Register component hierarchy (this compiles and registers all components including from registries)
         await this.registerComponentHierarchy();
-        
+
         // The resolved spec should now be available from the registration result
         // No need to fetch again
-        
+
         // Get the already-registered component from the registry
         const registry = this.adapter.getRegistry();
-        
+
         console.log(`🔍 [initializeComponent] Looking for component in registry:`, {
           name: this.component.name,
           namespace: this.component.namespace || 'Global',
-          version: this.componentVersion
+          version: this.componentVersion,
         });
-        
+
         // Let's also check what's actually in the registry
         // Note: ComponentRegistry doesn't have a list() method, so we'll skip this for now
-        
-        const componentWrapper = registry.get(
-          this.component.name, 
-          this.component.namespace || 'Global', 
-          this.componentVersion
-        );
-        
+
+        const componentWrapper = registry.get(this.component.name, this.component.namespace || 'Global', this.componentVersion);
+
         console.log(`🔍 [initializeComponent] Registry.get result:`, {
           found: !!componentWrapper,
           type: componentWrapper ? typeof componentWrapper : 'undefined',
-          hasComponent: componentWrapper ? !!componentWrapper.component : false
+          hasComponent: componentWrapper ? !!componentWrapper.component : false,
         });
-        
+
         if (!componentWrapper) {
           const source = this.component.registry ? `external registry ${this.component.registry}` : 'local registry';
           console.error(`❌ [initializeComponent] Component not found! Details:`, {
             searchedName: this.component.name,
             searchedNamespace: this.component.namespace || 'Global',
             searchedVersion: this.componentVersion,
-            source: source
+            source: source,
           });
           throw new Error(`Component ${this.component.name} was not found in registry after registration from ${source}`);
         }
-        
+
         // The registry now stores ComponentObjects directly
         // Validate it has the expected structure
         if (!componentWrapper || typeof componentWrapper !== 'object') {
           throw new Error(`Invalid component wrapper returned for ${this.component.name}: ${typeof componentWrapper}`);
         }
-        
+
         if (!componentWrapper.component) {
           throw new Error(`Component wrapper missing 'component' property for ${this.component.name}`);
         }
-        
+
         // Now that we use a regular HOC wrapper, components should always be functions
         if (typeof componentWrapper.component !== 'function') {
           throw new Error(`Component is not a function for ${this.component.name}: ${typeof componentWrapper.component}`);
         }
-        
+
         this.compiledComponent = componentWrapper;
       } // End of else block for legacy approach
-      
+
       // Create managed React root
       const reactContext = this.reactBridge.getCurrentContext();
       if (!reactContext) {
         throw new Error('React context not available');
       }
-      
+
       this.reactRootId = reactRootManager.createRoot(
         this.container.nativeElement,
         (container: HTMLElement) => reactContext.ReactDOM.createRoot(container),
         this.componentId
       );
-      
+
       // Initial render
       this.renderComponent();
       this.isInitialized = true;
-      
+
       // Trigger change detection since we're using OnPush
       this.cdr.detectChanges();
-      
     } catch (error) {
       this.hasError = true;
       LogError(`Failed to initialize React component: ${error}`);
@@ -373,14 +369,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         type: 'error',
         payload: {
           error: error instanceof Error ? error.message : String(error),
-          source: 'initialization'
-        }
+          source: 'initialization',
+        },
       });
       // Trigger change detection to show error state
       this.cdr.detectChanges();
     }
   }
- 
 
   /**
    * Generate a hash from component code for versioning
@@ -389,7 +384,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private generateComponentHash(spec: ComponentSpec): string {
     // Collect all code from the component hierarchy
     const codeStrings: string[] = [];
-    
+
     const collectCode = (s: ComponentSpec) => {
       if (s.code) {
         codeStrings.push(s.code);
@@ -400,18 +395,18 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         }
       }
     };
-    
+
     collectCode(spec);
-    
+
     // Generate hash from concatenated code
     const fullCode = codeStrings.join('|');
     let hash = 0;
     for (let i = 0; i < fullCode.length; i++) {
       const char = fullCode.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
-    
+
     // Convert to hex string and take first 8 characters for readability
     const hexHash = Math.abs(hash).toString(16).padStart(8, '0').substring(0, 8);
     return `v${hexHash}`;
@@ -420,27 +415,30 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   /**
    * Resolve components using the runtime's resolver
    */
-  private async resolveComponentsWithVersion(spec: ComponentSpec, version: string, namespace: string = 'Global'): Promise<ResolvedComponents> {
+  private async resolveComponentsWithVersion(
+    spec: ComponentSpec,
+    version: string,
+    namespace: string = 'Global'
+  ): Promise<ResolvedComponents> {
     const resolver = this.adapter.getResolver();
-    
+
     // Debug: Log what dependencies we're trying to resolve
     if (this.enableLogging) {
       console.log(`Resolving components for ${spec.name}. Dependencies:`, spec.dependencies);
     }
-    
+
     // Use the runtime's resolver which now handles registry-based components
     const resolved = await resolver.resolveComponents(
-      spec, 
+      spec,
       namespace,
       Metadata.Provider.CurrentUser // Pass current user context for database operations
     );
-    
+
     if (this.enableLogging) {
       console.log(`Resolved ${Object.keys(resolved).length} components for version ${version}:`, Object.keys(resolved));
     }
     return resolved;
   }
-
 
   /**
    * NEW: Load component using unified ComponentManager - MUCH SIMPLER!
@@ -448,41 +446,40 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private async loadComponentWithManager() {
     try {
       const manager = this.adapter.getComponentManager();
-      
+
       console.log(`🚀 [ComponentManager] Loading component hierarchy: ${this.component.name}`);
-      
+
       // Load the entire hierarchy with one simple call
       const result = await manager.loadHierarchy(this.component, {
         contextUser: Metadata.Provider.CurrentUser,
         defaultNamespace: 'Global',
         defaultVersion: this.component.version || this.generateComponentHash(this.component),
-        returnType: 'both'
+        returnType: 'both',
       });
-      
+
       if (!result.success) {
-        const errorMessages = result.errors.map(e => `${e.componentName}: ${e.message}`).join(', ');
+        const errorMessages = result.errors.map((e) => `${e.componentName}: ${e.message}`).join(', ');
         console.error(`❌ [ComponentManager] Failed to load hierarchy:`, errorMessages);
         throw new Error(`Component loading failed: ${errorMessages}`);
       }
-      
+
       // Store the results (handle undefined values)
       this.resolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
       this.compiledComponent = result.rootComponent || null;
       this.componentVersion = result.resolvedSpec?.version || this.component.version || 'latest';
-      
+
       // IMPORTANT: Store the loaded dependencies for use in renderComponent
       this.loadedDependencies = result.components || {};
-      
+
       console.log(`✅ [ComponentManager] Successfully loaded hierarchy:`, {
         rootComponent: result.resolvedSpec?.name,
         loadedCount: result.loadedComponents.length,
         dependencies: Object.keys(this.loadedDependencies),
-        stats: result.stats
+        stats: result.stats,
       });
-      
+
       // Component is ready to render
       return true;
-      
     } catch (error) {
       console.error(`❌ [ComponentManager] Error loading component:`, error);
       throw error;
@@ -496,44 +493,44 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private async registerComponentHierarchy() {
     // Use semantic version from spec or generate hash-based version for uniqueness
     const version = this.component.version || this.generateComponentHash(this.component);
-    this.componentVersion = version;  // Store for use in resolver
-    
+    this.componentVersion = version; // Store for use in resolver
+
     console.log(`🔍 [registerComponentHierarchy] Starting registration for ${this.component.name}@${version}`, {
       location: this.component.location,
       registry: this.component.registry,
       namespace: this.component.namespace,
       hasCode: !!this.component.code,
-      codeLength: this.component.code?.length || 0
+      codeLength: this.component.code?.length || 0,
     });
-    
+
     // Check if already registered to avoid duplication
     const registry = this.adapter.getRegistry();
     const checkNamespace = this.component.namespace || 'Global';
-    
+
     console.log(`🔍 [registerComponentHierarchy] Checking registry for existing component:`, {
       name: this.component.name,
       namespace: checkNamespace,
       version: version,
       registrySize: registry.size(),
-      registryId: registry.registryId || 'unknown'
+      registryId: registry.registryId || 'unknown',
     });
-    
+
     // Log registry state for debugging
     console.log(`📦 [registerComponentHierarchy] Registry state:`, {
       totalSize: registry.size(),
-      registryInstance: registry.registryId || 'unknown'
+      registryInstance: registry.registryId || 'unknown',
     });
-    
+
     const existingComponent = registry.get(this.component.name, checkNamespace, version);
-    
+
     if (existingComponent) {
       console.log(`⚠️ [registerComponentHierarchy] Component ${this.component.name}@${version} already registered!`, {
         existingType: typeof existingComponent,
         hasComponent: !!(existingComponent as any).component,
         registrationTime: (existingComponent as any).registeredAt || 'unknown',
-        runtimeContextLibraries: Object.keys(this.adapter.getRuntimeContext().libraries || {})
+        runtimeContextLibraries: Object.keys(this.adapter.getRuntimeContext().libraries || {}),
       });
-      
+
       // For registry components, we need to check the resolved spec's libraries, not the input spec
       // The input spec from Angular doesn't have library information for registry components
       if (this.component.location === 'registry' && this.component.registry) {
@@ -543,64 +540,66 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         // For local components, check using the input spec
         const requiredLibraries = this.component.libraries || [];
         const runtimeLibraries = this.adapter.getRuntimeContext().libraries || {};
-        const missingLibraries = requiredLibraries.filter(lib => !runtimeLibraries[lib.globalVariable]);
-        
+        const missingLibraries = requiredLibraries.filter((lib) => !runtimeLibraries[lib.globalVariable]);
+
         if (missingLibraries.length > 0) {
           console.warn(`⚠️ [registerComponentHierarchy] Component registered but libraries missing:`, {
-            required: requiredLibraries.map(l => l.globalVariable),
+            required: requiredLibraries.map((l) => l.globalVariable),
             loaded: Object.keys(runtimeLibraries),
-            missing: missingLibraries.map(l => l.globalVariable)
+            missing: missingLibraries.map((l) => l.globalVariable),
           });
           // Don't return early - continue to load libraries
         } else {
-          console.log(`✅ [registerComponentHierarchy] Component ${this.component.name}@${version} already registered with all libraries, skipping`);
+          console.log(
+            `✅ [registerComponentHierarchy] Component ${this.component.name}@${version} already registered with all libraries, skipping`
+          );
           return;
         }
       }
     } else {
       console.log(`🆕 [registerComponentHierarchy] Component not found in registry, proceeding with registration`);
     }
-    
+
     // Initialize metadata engine
     await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
-    
+
     // Use the runtime's hierarchy registrar
     const registrar = new ComponentHierarchyRegistrar(
       this.adapter.getCompiler(),
       this.adapter.getRegistry(),
       this.adapter.getRuntimeContext()
     );
-    
+
     console.log(`📦 [registerComponentHierarchy] Calling registrar.registerHierarchy for ${this.component.name}`, {
       hasStyles: !!this.styles,
       namespace: this.component.namespace || 'Global',
       version: version,
       libraryCount: ComponentMetadataEngine.Instance.ComponentLibraries?.length || 0,
       hasCode: !!this.component.code,
-      codeLength: this.component.code?.length || 0
+      codeLength: this.component.code?.length || 0,
     });
-    
+
     // Register with proper configuration
     // Pass the partial spec - the React runtime will handle fetching from registries
     const result = await registrar.registerHierarchy(
-      this.component,  // Pass the original spec, not fetched
+      this.component, // Pass the original spec, not fetched
       {
         styles: this.styles as ComponentStyles,
         namespace: this.component.namespace || 'Global',
         version: version,
-        allowOverride: false,  // Each version is unique
+        allowOverride: false, // Each version is unique
         allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries,
         debug: true,
-        contextUser: Metadata.Provider.CurrentUser
+        contextUser: Metadata.Provider.CurrentUser,
       }
     );
-    
+
     if (!result.success) {
-      const errors = result.errors.map(e => e.error).join(', ');
+      const errors = result.errors.map((e) => e.error).join(', ');
       console.error(`❌ [registerComponentHierarchy] Registration failed:`, errors);
       throw new Error(`Component registration failed: ${errors}`);
     }
-    
+
     // Store the resolved spec from the registration result
     if (result.resolvedSpec) {
       this.resolvedComponentSpec = this.enrichSpecWithRegistryInfo(result.resolvedSpec || null);
@@ -608,12 +607,15 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         name: result.resolvedSpec.name,
         hasCode: !!result.resolvedSpec.code,
         libraryCount: result.resolvedSpec.libraries?.length || 0,
-        dependencyCount: result.resolvedSpec.dependencies?.length || 0
+        dependencyCount: result.resolvedSpec.dependencies?.length || 0,
       });
     }
-    
-    console.log(`✅ [registerComponentHierarchy] Successfully registered ${result.registeredComponents.length} components:`, result.registeredComponents);
-    
+
+    console.log(
+      `✅ [registerComponentHierarchy] Successfully registered ${result.registeredComponents.length} components:`,
+      result.registeredComponents
+    );
+
     // Verify the component is actually in the registry
     const verifyComponent = registry.get(this.component.name, this.component.namespace || 'Global', version);
     console.log(`🔍 [registerComponentHierarchy] Verification - component in registry after registration:`, {
@@ -621,7 +623,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       name: this.component.name,
       namespace: this.component.namespace || 'Global',
       version: version,
-      componentType: verifyComponent ? typeof verifyComponent : 'not found'
+      componentType: verifyComponent ? typeof verifyComponent : 'not found',
     });
   }
 
@@ -632,14 +634,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
    */
   private enrichSpecWithRegistryInfo(spec: ComponentSpec | null): ComponentSpec | null {
     if (!spec || !this.component) return spec;
-    
+
     // Create a deep copy to avoid mutating the original
     const enrichedSpec = JSON.parse(JSON.stringify(spec));
-    
+
     // Recursive function to process spec and all dependencies
     // Takes the original spec at the same level to find registry info
     const processSpec = (currentSpec: ComponentSpec, originalSpec: ComponentSpec) => {
-      // If this component has code but shows location as 'embedded', 
+      // If this component has code but shows location as 'embedded',
       // check the original spec to see where it came from
       if (currentSpec.code && currentSpec.location === 'embedded' && currentSpec.name) {
         // Try to find this component in the original spec at the same level
@@ -656,10 +658,10 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
             }
           }
         }
-        
+
         // Also check in original's dependencies for a match
         if (originalSpec.dependencies) {
-          const originalDep = originalSpec.dependencies.find(d => d.name === currentSpec.name);
+          const originalDep = originalSpec.dependencies.find((d) => d.name === currentSpec.name);
           if (originalDep && (originalDep.location === 'registry' || originalDep.registry)) {
             currentSpec.location = 'registry';
             if (originalDep.registry) {
@@ -671,12 +673,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           }
         }
       }
-      
+
       // Process all dependencies recursively
       if (currentSpec.dependencies && Array.isArray(currentSpec.dependencies)) {
         currentSpec.dependencies.forEach((dep, index) => {
           // Find the corresponding original dependency by name or use the one at same index
-          let originalDep = originalSpec.dependencies?.find(d => d.name === dep.name);
+          let originalDep = originalSpec.dependencies?.find((d) => d.name === dep.name);
           if (!originalDep && originalSpec.dependencies && index < originalSpec.dependencies.length) {
             originalDep = originalSpec.dependencies[index];
           }
@@ -686,7 +688,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         });
       }
     };
-    
+
     processSpec(enrichedSpec, this.component);
     return enrichedSpec;
   }
@@ -699,7 +701,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     if (this.isDestroying) {
       return;
     }
-    
+
     if (!this.compiledComponent || !this.reactRootId) {
       return;
     }
@@ -717,7 +719,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
 
     this.isRendering = true;
     const { React } = context;
-    
+
     // Resolve components with the correct version using runtime's resolver
     // SKIP this if using ComponentManager - components are already loaded!
     let components = {};
@@ -728,16 +730,16 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       components = this.loadedDependencies;
       console.log(`🎯 [renderComponent] Using dependencies from ComponentManager:`, Object.keys(components));
     }
-    
+
     // Create callbacks once per component instance
     if (!this.currentCallbacks) {
       this.currentCallbacks = this.createCallbacks();
     }
-    
+
     // Get libraries from runtime context
     const runtimeContext = this.adapter.getRuntimeContext();
     const libraries = runtimeContext.libraries || {};
-    
+
     // Build props with savedUserSettings pattern
     const props = {
       utilities: this.utilities, // Now uses getter which auto-initializes if needed
@@ -746,7 +748,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       styles: this.styles as any,
       libraries, // Pass the loaded libraries to components
       savedUserSettings: this._savedUserSettings,
-      onSaveUserSettings: this.handleSaveUserSettings.bind(this)
+      onSaveUserSettings: this.handleSaveUserSettings.bind(this),
     };
 
     // Validate component before creating element
@@ -754,7 +756,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       LogError(`Component is undefined for ${this.component.name} during render`);
       return;
     }
-    
+
     // Components should be functions after HOC wrapping
     if (typeof this.compiledComponent.component !== 'function') {
       LogError(`Component is not a function for ${this.component.name}: ${typeof this.compiledComponent.component}`);
@@ -765,15 +767,11 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const ErrorBoundary = createErrorBoundary(React, {
       onError: this.handleReactError.bind(this),
       logErrors: true,
-      recovery: 'retry'
+      recovery: 'retry',
     });
 
     // Create element with error boundary
-    const element = React.createElement(
-      ErrorBoundary,
-      null,
-      React.createElement(this.compiledComponent.component, props)
-    );
+    const element = React.createElement(ErrorBoundary, null, React.createElement(this.compiledComponent.component, props));
 
     // Render with timeout protection using resource manager
     const timeoutId = resourceManager.setTimeout(
@@ -785,8 +783,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
             type: 'error',
             payload: {
               error: 'Component render timeout - possible infinite loop detected',
-              source: 'render'
-            }
+              source: 'render',
+            },
           });
         }
       },
@@ -795,27 +793,23 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     );
 
     // Use managed React root for rendering
-    reactRootManager.render(
-      this.reactRootId,
-      element,
-      () => {
-        // Clear the timeout as render completed
-        resourceManager.clearTimeout(this.componentId, timeoutId);
-        
-        // Don't update state if component is destroyed
-        if (this.isDestroying) {
-          return;
-        }
-        
-        this.isRendering = false;
-        
-        // If there was a pending render request, execute it now
-        if (this.pendingRender) {
-          this.pendingRender = false;
-          this.renderComponent();
-        }
+    reactRootManager.render(this.reactRootId, element, () => {
+      // Clear the timeout as render completed
+      resourceManager.clearTimeout(this.componentId, timeoutId);
+
+      // Don't update state if component is destroyed
+      if (this.isDestroying) {
+        return;
       }
-    );
+
+      this.isRendering = false;
+
+      // If there was a pending render request, execute it now
+      if (this.pendingRender) {
+        this.pendingRender = false;
+        this.renderComponent();
+      }
+    });
   }
 
   /**
@@ -828,24 +822,18 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         // This is just a placeholder to satisfy the interface
         // The actual registration happens in the wrapper component
       },
-      CreateSimpleNotification: (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
+      CreateSimpleNotification: (message: string, style: 'none' | 'success' | 'error' | 'warning' | 'info', hideAfter?: number) => {
         // Use the MJ notification service to display the notification
-        const notificationStyle = style as "none" | "success" | "error" | "warning" | "info" | undefined;
-        this.notificationService.CreateSimpleNotification(
-          message, 
-          style, 
-          hideAfter
-        );
+        const notificationStyle = style as 'none' | 'success' | 'error' | 'warning' | 'info' | undefined;
+        this.notificationService.CreateSimpleNotification(message, style, hideAfter);
       },
       OpenEntityRecord: async (entityName: string, key: CompositeKey) => {
         let keyToUse: CompositeKey | null = null;
         if (key instanceof Array) {
           keyToUse = CompositeKey.FromKeyValuePairs(key);
-        }
-        else if (typeof key === 'object' && !!key.GetValueByFieldName) {
+        } else if (typeof key === 'object' && !!key.GetValueByFieldName) {
           keyToUse = key as CompositeKey;
-        }
-        else if (typeof key === 'object') {
+        } else if (typeof key === 'object') {
           //} && !!key.FieldName && !!key.Value) {
           // possible that have an object that is a simple key/value pair with
           // FieldName and value properties
@@ -863,14 +851,13 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           let shouldRunView = false;
           // now check each key in the keyToUse to see if it is a pkey
           for (const singleKey of keyToUse.KeyValuePairs) {
-            const field = e.Fields.find(f => f.Name.trim().toLowerCase() === singleKey.FieldName.trim().toLowerCase());
+            const field = e.Fields.find((f) => f.Name.trim().toLowerCase() === singleKey.FieldName.trim().toLowerCase());
             if (!field) {
               // if we get here this is a problem, the component has given us a non-matching field, this shouldn't ever happen
               // but if it doesn't log warning to console and exit
               console.warn(`Non-matching field found for key: ${JSON.stringify(keyToUse)}`);
               return;
-            }
-            else if (!field.IsPrimaryKey) {
+            } else if (!field.IsPrimaryKey) {
               // if we get here that means we have a non-pkey so we'll want to do a lookup via a RunView
               // to get the actual pkey value
               shouldRunView = true;
@@ -884,26 +871,24 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
             const rv = new RunView();
             const result = await rv.RunView({
               EntityName: entityName,
-              ExtraFilter: keyToUse.ToWhereClause()
-            })
+              ExtraFilter: keyToUse.ToWhereClause(),
+            });
             if (result && result.Success && result.Results.length > 0) {
               // we have a match, use the first row and update our keyToUse
               const kvPairs: KeyValuePair[] = [];
-              e.PrimaryKeys.forEach(pk => {
-                kvPairs.push(
-                  {
-                    FieldName: pk.Name,
-                    Value: result.Results[0][pk.Name]
-                  }
-                )
-              })
+              e.PrimaryKeys.forEach((pk) => {
+                kvPairs.push({
+                  FieldName: pk.Name,
+                  Value: result.Results[0][pk.Name],
+                });
+              });
               keyToUse = CompositeKey.FromKeyValuePairs(kvPairs);
             }
           }
 
           this.openEntityRecord.emit({ entityName, key: keyToUse });
-        }  
-      } 
+        }
+      },
     };
   }
 
@@ -917,8 +902,8 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       payload: {
         error: error?.toString() || 'Unknown error',
         errorInfo,
-        source: 'react'
-      }
+        source: 'react',
+      },
     });
   }
 
@@ -932,9 +917,9 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     this.userSettingsChanged.emit({
       settings: newSettings,
       componentName: this.component?.name,
-      timestamp: new Date()
+      timestamp: new Date(),
     });
-    
+
     // DO NOT re-render the component!
     // The component already has the correct state - it's the one that told us about the change.
     // Re-rendering would cause unnecessary DOM updates and visual flashing.
@@ -946,18 +931,18 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   private cleanup() {
     // Clean up all resources managed by resource manager
     resourceManager.cleanupComponent(this.componentId);
-    
+
     // Clean up prop builder subscriptions
     if (this.currentCallbacks) {
       this.currentCallbacks = null;
     }
-    
+
     // Unmount React root using managed unmount
     if (this.reactRootId) {
       // Force stop rendering flags
       this.isRendering = false;
       this.pendingRender = false;
-      
+
       // This will handle waiting for render completion if needed
       reactRootManager.unmountRoot(this.reactRootId);
       this.reactRootId = null;
@@ -999,7 +984,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   // =================================================================
   // Standard Component Methods - Strongly Typed
   // =================================================================
-  
+
   /**
    * Gets the current data state of the component
    * Used by AI agents to understand what data is currently displayed
@@ -1008,7 +993,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   getCurrentDataState(): any {
     return this.compiledComponent?.getCurrentDataState?.();
   }
-  
+
   /**
    * Gets the history of data state changes in the component
    * @returns Array of timestamped state snapshots, or empty array if not implemented
@@ -1016,7 +1001,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   getDataStateHistory(): Array<{ timestamp: Date; state: any }> {
     return this.compiledComponent?.getDataStateHistory?.() || [];
   }
-  
+
   /**
    * Validates the current state of the component
    * @returns true if valid, false or validation errors otherwise
@@ -1024,7 +1009,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   validate(): boolean | { valid: boolean; errors?: string[] } {
     return this.compiledComponent?.validate?.() || true;
   }
-  
+
   /**
    * Checks if the component has unsaved changes
    * @returns true if dirty, false otherwise
@@ -1032,14 +1017,14 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   isDirty(): boolean {
     return this.compiledComponent?.isDirty?.() || false;
   }
-  
+
   /**
    * Resets the component to its initial state
    */
   reset(): void {
     this.compiledComponent?.reset?.();
   }
-  
+
   /**
    * Scrolls to a specific element or position within the component
    * @param target - Element selector, element reference, or scroll options
@@ -1047,7 +1032,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   scrollTo(target: string | HTMLElement | { top?: number; left?: number }): void {
     this.compiledComponent?.scrollTo?.(target);
   }
-  
+
   /**
    * Sets focus to a specific element within the component
    * @param target - Element selector or element reference
@@ -1055,7 +1040,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   focus(target?: string | HTMLElement): void {
     this.compiledComponent?.focus?.(target);
   }
-  
+
   /**
    * Invokes a custom method on the component
    * @param methodName - Name of the method to invoke
@@ -1065,7 +1050,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   invokeMethod(methodName: string, ...args: any[]): any {
     return this.compiledComponent?.invokeMethod?.(methodName, ...args);
   }
-  
+
   /**
    * Checks if a method is available on the component
    * @param methodName - Name of the method to check
@@ -1074,7 +1059,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   hasMethod(methodName: string): boolean {
     return this.compiledComponent?.hasMethod?.(methodName) || false;
   }
-  
+
   /**
    * Print the component content
    * Uses component's print method if available, otherwise uses window.print()
@@ -1095,13 +1080,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   public static forceClearRegistries(): void {
     // Clear React runtime's component registry service
     ComponentRegistryService.reset();
-    
+
     // Clear any cached hierarchy registrar
     if (typeof window !== 'undefined' && (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__) {
       (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__ = null;
     }
-    
+
     console.log('🧹 All component registries cleared for fresh load');
   }
-
 }

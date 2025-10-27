@@ -59,7 +59,7 @@ Generated forms are dynamically loaded based on entity names. The typical patter
 
 ```typescript
 import { Component, ViewChild, ViewContainerRef, ComponentFactoryResolver } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 
 @Component({
   selector: 'app-entity-form-container',
@@ -208,15 +208,15 @@ Each entity form typically follows this structure:
 
 ## Key Components
 
-| Component | Description |
-|-----------|-------------|
-| Entity forms | Forms for managing metadata entities (Entity, EntityField, etc.) |
-| Action forms | Forms for managing actions and workflows |
-| User forms | Forms for user management and permissions |
-| Integration forms | Forms for external system integrations |
-| AI-related forms | Forms for AI models, prompts, and agents |
-| Content forms | Forms for content management |
-| Communication forms | Forms for messaging and notifications |
+| Component           | Description                                                      |
+| ------------------- | ---------------------------------------------------------------- |
+| Entity forms        | Forms for managing metadata entities (Entity, EntityField, etc.) |
+| Action forms        | Forms for managing actions and workflows                         |
+| User forms          | Forms for user management and permissions                        |
+| Integration forms   | Forms for external system integrations                           |
+| AI-related forms    | Forms for AI models, prompts, and agents                         |
+| Content forms       | Forms for content management                                     |
+| Communication forms | Forms for messaging and notifications                            |
 
 ## Notes
 

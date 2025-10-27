@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, AfterViewInit, Renderer2, ChangeDetectorRef } from '@angular/core';
-import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/core';
+import { BaseEntity, EntityField, EntityFieldInfo, EntityFieldTSType } from '@memberjunction/global';
 import { BaseRecordComponent } from './base-record-component';
 import { MarkdownComponent } from 'ngx-markdown';
 import { languages } from '@codemirror/language-data';
@@ -70,7 +70,7 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
 
   public get ExtendedType(): string {
     const entityField: EntityField | null = this.record.GetFieldByName(this.FieldName);
-    if (!entityField){
+    if (!entityField) {
       return '';
     }
 
@@ -133,9 +133,7 @@ export class MJFormField extends BaseRecordComponent implements AfterViewInit {
 
   @ViewChild('markdown', { static: false }) markdown: MarkdownComponent | undefined;
 
-  constructor(
-    private renderer: Renderer2,
-  ) {
+  constructor(private renderer: Renderer2) {
     super();
   }
 

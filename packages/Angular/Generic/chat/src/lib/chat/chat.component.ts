@@ -1,12 +1,11 @@
 import { AfterViewInit, ChangeDetectorRef, Component, ElementRef, EventEmitter, Input, Output, ViewChild } from '@angular/core';
 import { MarkdownService } from 'ngx-markdown';
-import { LogError } from '@memberjunction/core'
-
+import { LogError } from '@memberjunction/global';
 
 export class ChatWelcomeQuestion {
-  public topLine: string="";
-  public bottomLine: string="";
-  public prompt: string="";
+  public topLine: string = '';
+  public bottomLine: string = '';
+  public prompt: string = '';
 }
 export class ChatMessage {
   public message!: string;
@@ -25,7 +24,7 @@ export class ChatMessage {
 @Component({
   selector: 'mj-chat',
   templateUrl: './chat.component.html',
-  styleUrl: './chat.component.css'
+  styleUrl: './chat.component.css',
 })
 export class ChatComponent implements AfterViewInit {
   @Input() InitialMessage: string = '';
@@ -37,7 +36,7 @@ export class ChatComponent implements AfterViewInit {
   @Input() AILargeImageURL: string = '';
 
   /**
-   * Optional, provide up to 4 welcome questions with example prompts. 
+   * Optional, provide up to 4 welcome questions with example prompts.
    * These will be shown to the user when the chat is first opened and there are no messages.
    */
   @Input() WelcomeQuestions: ChatWelcomeQuestion[] = [];
@@ -65,7 +64,7 @@ export class ChatComponent implements AfterViewInit {
   public set ShowWaitingIndicator(value: boolean) {
     this._ShowWaitingIndicator = value;
     this.cd?.detectChanges(); // Manually trigger change detection
-    if (!value)  {
+    if (!value) {
       this.FocusTextArea();
     }
   }
@@ -82,7 +81,10 @@ export class ChatComponent implements AfterViewInit {
 
   public currentMessage: string = '';
   public showingClearAllDialog: boolean = false;
-  constructor(private markdownService: MarkdownService, private cd: ChangeDetectorRef) {}
+  constructor(
+    private markdownService: MarkdownService,
+    private cd: ChangeDetectorRef
+  ) {}
 
   public SendCurrentMessage(): void {
     if (this.currentMessage.trim() !== '') {
@@ -102,18 +104,16 @@ export class ChatComponent implements AfterViewInit {
       const textarea = this.theInput?.nativeElement;
       if (textarea) {
         textarea.style.height = 'auto'; // Reset height to recalculate
-        textarea.style.height = `${textarea.scrollHeight}px`; // Set to scrollHeight    
+        textarea.style.height = `${textarea.scrollHeight}px`; // Set to scrollHeight
       }
-    }
-    catch (e) {
+    } catch (e) {
       LogError(e);
     }
   }
 
-
   public SendMessage(message: string, senderName: string, senderType: 'user' | 'ai', id: any, fireEvent: boolean = true): void {
     const newMessage = new ChatMessage(message, senderName, senderType, id);
-    this.AppendMessage(newMessage, fireEvent);  
+    this.AppendMessage(newMessage, fireEvent);
   }
 
   public SendUserMessage(message: string) {
@@ -142,7 +142,7 @@ export class ChatComponent implements AfterViewInit {
 
   protected async AppendMessage(message: ChatMessage, fireEvent: boolean = true) {
     const messageWrapElement = document.createElement('div');
-    messageWrapElement.className = "chat-message-wrap";
+    messageWrapElement.className = 'chat-message-wrap';
     const imageElement = document.createElement('span');
     if (message.senderType === 'ai') {
       if (this.AIImageURL) {
@@ -150,19 +150,16 @@ export class ChatComponent implements AfterViewInit {
         img.src = this.AIImageURL;
         img.style.maxWidth = '24px';
         imageElement.appendChild(img);
-      }
-      else
-        imageElement.classList.add('fa-solid', 'fa-robot');
-    }
-    else {
+      } else imageElement.classList.add('fa-solid', 'fa-robot');
+    } else {
       imageElement.classList.add('fa-solid', 'fa-user');
     }
-    imageElement.classList.add("chat-message-image");
+    imageElement.classList.add('chat-message-image');
 
     messageWrapElement.appendChild(imageElement);
     const messageElement = document.createElement('div');
     messageElement.innerHTML = await this.markdownService.parse(message.message);
-    messageElement.className = "chat-message";  
+    messageElement.className = 'chat-message';
     if (message.senderType === 'ai') {
       messageElement.classList.add('chat-message-ai');
     }
@@ -173,9 +170,8 @@ export class ChatComponent implements AfterViewInit {
       // clear out the default message
       this.messagesContainer.nativeElement.innerHTML = '';
     }
-    this.messagesContainer.nativeElement.appendChild(messageWrapElement);       
-    if (fireEvent)
-      this.MessageAdded.emit(message); 
+    this.messagesContainer.nativeElement.appendChild(messageWrapElement);
+    if (fireEvent) this.MessageAdded.emit(message);
 
     this.ScrollMessagesToBottom(false);
 
@@ -188,15 +184,13 @@ export class ChatComponent implements AfterViewInit {
         const element = this.messagesContainer.nativeElement;
         element.scrollTo({
           top: element.scrollHeight,
-          behavior: 'smooth'  // This enables the smooth scrolling
-        });      
-      }
-      else {
+          behavior: 'smooth', // This enables the smooth scrolling
+        });
+      } else {
         this.messagesContainer.nativeElement.scrollTop = this.messagesContainer.nativeElement.scrollHeight;
       }
-    } catch(err) {}
+    } catch (err) {}
   }
-
 
   public ShowScrollToBottomButton: boolean = false;
 

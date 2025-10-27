@@ -56,7 +56,7 @@ In your component file:
 
 ```typescript
 import { TimelineGroup } from '@memberjunction/ng-treelist';
-import { RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/global';
 
 export class YourComponent implements OnInit {
   timelineGroups: TimelineGroup[] = [];
@@ -91,7 +91,7 @@ You can customize the appearance and content of timeline events:
 
 ```typescript
 import { TimelineGroup } from '@memberjunction/ng-treelist';
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity } from '@memberjunction/global';
 
 export class YourComponent implements OnInit {
   timelineGroups: TimelineGroup[] = [];
@@ -138,7 +138,7 @@ You can create a TimelineGroup using the static FromView method:
 
 ```typescript
 import { TimelineGroup } from '@memberjunction/ng-treelist';
-import { RunViewParams } from '@memberjunction/core';
+import { RunViewParams } from '@memberjunction/global';
 
 export class YourComponent implements OnInit {
   timelineGroups: TimelineGroup[] = [];
@@ -169,38 +169,38 @@ export class YourComponent implements OnInit {
 
 #### Inputs
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `Groups` | `TimelineGroup[]` | `[]` | Array of groups to display on the timeline |
-| `AllowLoad` | `boolean` | `true` | Whether to load data automatically |
+| Name        | Type              | Default | Description                                |
+| ----------- | ----------------- | ------- | ------------------------------------------ |
+| `Groups`    | `TimelineGroup[]` | `[]`    | Array of groups to display on the timeline |
+| `AllowLoad` | `boolean`         | `true`  | Whether to load data automatically         |
 
 #### Methods
 
-| Name | Parameters | Return Type | Description |
-|------|------------|-------------|-------------|
-| `Refresh` | None | `void` | Refreshes the timeline with current group data |
+| Name      | Parameters | Return Type | Description                                    |
+| --------- | ---------- | ----------- | ---------------------------------------------- |
+| `Refresh` | None       | `void`      | Refreshes the timeline with current group data |
 
 ### TimelineGroup Class
 
 #### Properties
 
-| Name | Type | Default | Description |
-|------|------|---------|-------------|
-| `EntityName` | `string` | (required) | Entity name for the records to display |
-| `EntityObjects` | `BaseEntity[]` | `[]` | Array of entity objects to display |
-| `TitleFieldName` | `string` | (required) | Field name for event titles |
-| `DateFieldName` | `string` | (required) | Field name for event dates |
-| `DisplayIconMode` | `'standard' \| 'custom'` | `'standard'` | Icon display mode |
-| `DisplayIcon` | `string` | (optional) | Custom icon class for events |
-| `DisplayColorMode` | `'auto' \| 'manual'` | `'auto'` | Color selection mode |
-| `DisplayColor` | `string` | (optional) | Manual color for events |
-| `SummaryMode` | `'field' \| 'custom' \| 'none'` | `'field'` | Mode for summary display. Note: 'field' mode currently uses TitleFieldName |
-| `SummaryFunction` | `(record: BaseEntity) => string` | (optional) | Function for custom summary generation |
+| Name               | Type                             | Default      | Description                                                                |
+| ------------------ | -------------------------------- | ------------ | -------------------------------------------------------------------------- |
+| `EntityName`       | `string`                         | (required)   | Entity name for the records to display                                     |
+| `EntityObjects`    | `BaseEntity[]`                   | `[]`         | Array of entity objects to display                                         |
+| `TitleFieldName`   | `string`                         | (required)   | Field name for event titles                                                |
+| `DateFieldName`    | `string`                         | (required)   | Field name for event dates                                                 |
+| `DisplayIconMode`  | `'standard' \| 'custom'`         | `'standard'` | Icon display mode                                                          |
+| `DisplayIcon`      | `string`                         | (optional)   | Custom icon class for events                                               |
+| `DisplayColorMode` | `'auto' \| 'manual'`             | `'auto'`     | Color selection mode                                                       |
+| `DisplayColor`     | `string`                         | (optional)   | Manual color for events                                                    |
+| `SummaryMode`      | `'field' \| 'custom' \| 'none'`  | `'field'`    | Mode for summary display. Note: 'field' mode currently uses TitleFieldName |
+| `SummaryFunction`  | `(record: BaseEntity) => string` | (optional)   | Function for custom summary generation                                     |
 
 #### Static Methods
 
-| Name | Parameters | Return Type | Description |
-|------|------------|-------------|-------------|
+| Name       | Parameters      | Return Type              | Description                                |
+| ---------- | --------------- | ------------------------ | ------------------------------------------ |
 | `FromView` | `RunViewParams` | `Promise<TimelineGroup>` | Creates a TimelineGroup from RunViewParams |
 
 ## Styling

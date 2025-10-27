@@ -1,4 +1,4 @@
-import { EntityPermissionType, IRunViewProvider } from '@memberjunction/core';
+import { EntityPermissionType, IRunViewProvider } from '@memberjunction/global';
 import { AppContext } from '../types.js';
 import { Arg, Ctx, Query, Resolver, InputType, Field } from 'type-graphql';
 import { MJEntity_, MJEntityResolverBase } from '../generated/generated.js';
@@ -33,14 +33,16 @@ export class EntityResolver extends MJEntityResolverBase {
       else totalWhere = ` ${rlsWhere}`;
     }
     const rv = provider as any as IRunViewProvider;
-    const result = await rv.RunView({
-      EntityName: 'Entities',
-      ExtraFilter: totalWhere,
-    }, userPayload.userRecord);
+    const result = await rv.RunView(
+      {
+        EntityName: 'Entities',
+        ExtraFilter: totalWhere,
+      },
+      userPayload.userRecord
+    );
     if (result && result.Success) {
       return result.Results;
-    }
-    else {
+    } else {
       throw new Error(`Failed to fetch entities: ${result?.ErrorMessage || 'Unknown error'}`);
     }
   }

@@ -15,7 +15,6 @@
   "license": "ISC",
   "dependencies": {
     "@memberjunction/global": "2.111.0",
-    "@memberjunction/core": "2.111.0",
     "@memberjunction/core-entities": "2.111.0",
     "@memberjunction/actions": "2.111.0",
     "@memberjunction/actions-base": "2.111.0",

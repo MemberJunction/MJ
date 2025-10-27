@@ -1,5 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
-import { UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView } from '@memberjunction/global';
 import { ConversationEntity } from '@memberjunction/core-entities';
 import { NavigationTab } from '../../models/conversation-state.model';
 import { ConversationStateService } from '../../services/conversation-state.service';
@@ -23,7 +23,8 @@ import { ConversationStateService } from '../../services/conversation-state.serv
       </div>
     </div>
   `,
-  styles: [`
+  styles: [
+    `
     .conversation-sidebar {
       height: 100%;
       display: flex;
@@ -47,7 +48,8 @@ import { ConversationStateService } from '../../services/conversation-state.serv
       margin: 0;
       font-size: 14px;
     }
-  `]
+  `,
+  ],
 })
 export class ConversationSidebarComponent implements OnInit {
   @Input() activeTab: NavigationTab = 'conversations';

@@ -1,5 +1,5 @@
 import { JwtHeader, JwtPayload, SigningKeyCallback } from 'jsonwebtoken';
-import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/global';
 
 /**
  * Interface for authentication providers in MemberJunction

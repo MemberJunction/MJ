@@ -1,4 +1,4 @@
-import { EntitySaveOptions, IRunReportProvider, Metadata, RunReport } from '@memberjunction/core';
+import { EntitySaveOptions, IRunReportProvider, Metadata, RunReport } from '@memberjunction/global';
 import { Arg, Ctx, Field, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { ConversationDetailEntity, ReportEntity } from '@memberjunction/core-entities';
@@ -49,7 +49,7 @@ export class CreateReportResultType {
 export class ReportResolverExtended {
   @Query(() => RunReportResultType)
   async GetReportData(@Arg('ReportID', () => String) ReportID: string, @Ctx() context: AppContext): Promise<RunReportResultType> {
-    const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
+    const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const rp = new RunReport(provider as unknown as IRunReportProvider);
 
     const result = await rp.RunReport({ ReportID: ReportID });

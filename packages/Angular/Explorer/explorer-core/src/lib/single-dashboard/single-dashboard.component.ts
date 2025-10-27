@@ -1,8 +1,8 @@
 import { Component, ElementRef, EventEmitter, Input, OnInit, Output, ViewChild } from '@angular/core';
-import { TileLayoutReorderEvent, TileLayoutResizeEvent } from "@progress/kendo-angular-layout";
+import { TileLayoutReorderEvent, TileLayoutResizeEvent } from '@progress/kendo-angular-layout';
 import { ResourceData } from '@memberjunction/core-entities';
 import { DashboardEntityExtended, ResourceTypeEntity } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ResourceContainerComponent } from '../generic/resource-container-component';
 import { Subject, debounceTime } from 'rxjs';
@@ -12,11 +12,10 @@ import { BaseDashboard } from '@memberjunction/ng-dashboards';
 @Component({
   selector: 'mj-single-dashboard',
   templateUrl: './single-dashboard.component.html',
-  styleUrls: ['./single-dashboard.component.css']
+  styleUrls: ['./single-dashboard.component.css'],
 })
 export class SingleDashboardComponent extends BaseDashboard implements OnInit {
-
-  @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>
+  @ViewChild('dashboardNameInput') dashboardNameInput!: ElementRef<HTMLInputElement>;
 
   @Input() public ResourceData!: ResourceData;
   @Output() public dashboardSaved: EventEmitter<DashboardEntityExtended> = new EventEmitter<DashboardEntityExtended>();
@@ -48,24 +47,21 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     return false;
   }
 
-  protected initDashboard(): void {
-    
-  }
-  protected loadData(): void {
-    
-  }
+  protected initDashboard(): void {}
+  protected loadData(): void {}
 
-  constructor(private route: ActivatedRoute, public sharedService: SharedService) {
+  constructor(
+    private route: ActivatedRoute,
+    public sharedService: SharedService
+  ) {
     super();
-    
-    this.saveChangesSubject
-    .pipe(debounceTime(500))
-    .subscribe(() => {
+
+    this.saveChangesSubject.pipe(debounceTime(500)).subscribe(() => {
       this.SaveDashboard();
     });
 
     let edit = this.route.snapshot.queryParamMap.get('edit');
-    if(edit){
+    if (edit) {
       this.editOnLoad = true;
     }
   }
@@ -76,7 +72,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     const config = this.ResourceData.Configuration;
     if (this.ResourceData) {
       const md = new Metadata();
-      let uiConfig: any = {items:[]};
+      let uiConfig: any = { items: [] };
       this.dashboardEntity = await md.GetEntityObject<DashboardEntityExtended>('Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {
         await this.dashboardEntity.Load(this.ResourceData.ResourceRecordID);
@@ -92,25 +88,24 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 
         //the save and canel functions call this function
         //and we only want to show the edit view once
-        if(this.editOnLoad){
+        if (this.editOnLoad) {
           this.editOnLoad = false;
           this.toggleEditDashboard(true);
         }
-      }
-      else {
+      } else {
         this.dashboardEntity.NewRecord(); // creating a new dashboard
         this.dashboardEntity.UserID = md.CurrentUser.ID;
-        
+
         // We should never get here now because dashboard creation is handled in dashboard-browser
         // But just in case, set a better default name
         this.dashboardEntity.Name = 'My Dashboard';
-        
+
         // Set default configuration
-        this.config.columns = 4;  // 4-column layout
+        this.config.columns = 4; // 4-column layout
         this.config.rowHeight = 150;
         this.config.resizable = true;
         this.config.reorderable = true;
-        
+
         // Automatically show edit mode for new dashboards to encourage adding items
         setTimeout(() => {
           this.toggleEditDashboard(true);
@@ -136,14 +131,14 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
       dashboardItem.row = item.row;
       dashboardItem.rowSpan = item.rowSpan;
       dashboardItem.colSpan = item.colSpan;
-      dashboardItem.ResourceData = new ResourceData(item.ResourceData);  
+      dashboardItem.ResourceData = new ResourceData(item.ResourceData);
     }
     return dashboardItem;
   }
 
   public loadingStarted(resourceComponent: ResourceContainerComponent) {
-    // look up the copmonent in the 
-    const item = this.items.find(i => i.ResourceData === resourceComponent.Data);
+    // look up the copmonent in the
+    const item = this.items.find((i) => i.ResourceData === resourceComponent.Data);
     if (item) {
       item.contentLoading = true;
       this.loadStarted.emit();
@@ -151,8 +146,8 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   }
 
   public loadingComplete(resourceComponent: ResourceContainerComponent) {
-    // look up the copmonent in the 
-    const item = this.items.find(i => i.ResourceData === resourceComponent.Data);
+    // look up the copmonent in the
+    const item = this.items.find((i) => i.ResourceData === resourceComponent.Data);
     if (item) {
       item.contentLoading = false;
       if (!this.contentLoading) {
@@ -168,11 +163,11 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   }
 
   public closeDialog(data: any): void {
-    if(data) {
+    if (data) {
       const dashboardItem = this.CreateDashboardItem(data);
       this.items.push(dashboardItem);
       console.log(dashboardItem);
-        this.saveChangesSubject.next(true);
+      this.saveChangesSubject.next(true);
     }
     this.selectedResource = null;
     this.isItemDialogOpened = false;
@@ -188,12 +183,11 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   public async onClickSaveDashboard(): Promise<void> {
     this.toggleEditDashboard(false);
     let result = await this.SaveDashboard();
-    if(result){
-      this.sharedService.CreateSimpleNotification("Dashboard changes have been saved.", "success", 1000);
+    if (result) {
+      this.sharedService.CreateSimpleNotification('Dashboard changes have been saved.', 'success', 1000);
       await this.ngOnInit();
-    }
-    else{
-      this.sharedService.CreateSimpleNotification("An error occured saving the dashboard changes", "error", 1000);
+    } else {
+      this.sharedService.CreateSimpleNotification('An error occured saving the dashboard changes', 'error', 1000);
     }
   }
 
@@ -202,15 +196,15 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     await this.ngOnInit();
   }
 
-  public closeDashboardDialog(data: any = null){
+  public closeDashboardDialog(data: any = null) {
     this.isEditDialogOpened = false;
   }
 
   saveChanges(data: any): void {
-    if(data.config){
+    if (data.config) {
       this.config = data.config;
     }
-    if(data.itemsChanged && data.items){
+    if (data.itemsChanged && data.items) {
       this.items = data.items;
       this.sharedService.InvokeManualResize();
     }
@@ -225,16 +219,14 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
         rowHeight: this.config.rowHeight,
         resizable: this.config.resizable,
         reorderable: this.config.reorderable,
-        items: this.items
-      }
+        items: this.items,
+      };
       const configJSON = JSON.stringify(configData);
       this.dashboardEntity.UIConfigDetails = configJSON;
       const result = await this.dashboardEntity.Save();
-      
+
       return result;
-    }
-    else  
-      return false;
+    } else return false;
   }
 
   public dashboardSaveComplete(entity: DashboardEntityExtended): void {
@@ -243,7 +235,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
 
   public toggleInlineNameEdit(visible: boolean): void {
     this.isEditDashboardNameDialogOpened = visible;
-    if(this.isEditDashboardNameDialogOpened){
+    if (this.isEditDashboardNameDialogOpened) {
       this.dashboardNameInput?.nativeElement?.focus();
     }
   }
@@ -251,12 +243,11 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   public saveDashboardName(): void {
     this.toggleInlineNameEdit(true);
     const inputValue = this.dashboardNameInput.nativeElement.value;
-    if(inputValue && inputValue.length > 3){
+    if (inputValue && inputValue.length > 3) {
       this.dashboardEntity.Name = inputValue;
       this.SaveDashboard();
-    }
-    else {
-      this.sharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.','warning', 1000);
+    } else {
+      this.sharedService.CreateSimpleNotification('Invalid dashboard name: Must be at least 3 characters.', 'warning', 1000);
     }
   }
 
@@ -275,43 +266,42 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   }
 
   public async deleteDashboardItem(item: DashboardItem): Promise<void> {
-    this.items = this.items.filter(i => i.uniqueId != item.uniqueId);
+    this.items = this.items.filter((i) => i.uniqueId != item.uniqueId);
     let result = await this.SaveDashboard();
-    if(result){
-      this.sharedService.CreateSimpleNotification(`Dashboard item ${item.uniqueId} deleted successfully`, "success", 1000);
-    }
-    else{
-      this.sharedService.CreateSimpleNotification(`Unable to delete dashboard item ${item.uniqueId}`, "error", 1000);
+    if (result) {
+      this.sharedService.CreateSimpleNotification(`Dashboard item ${item.uniqueId} deleted successfully`, 'success', 1000);
+    } else {
+      this.sharedService.CreateSimpleNotification(`Unable to delete dashboard item ${item.uniqueId}`, 'error', 1000);
     }
     this.selectedDashboardItem = null;
     this.isDeletingDashboardItem = false;
   }
 
   public getIsEditingItemBodyStyle(): string {
-    return this.isEditingDashboard ? "bg-light-grey" : "";
+    return this.isEditingDashboard ? 'bg-light-grey' : '';
   }
 
   public getIsEditingItemHeaderStyle(): string {
-    return this.isEditingDashboard ? "bg-dark-grey" : "bg-blue";
+    return this.isEditingDashboard ? 'bg-dark-grey' : 'bg-blue';
   }
 
   onReorder(e: TileLayoutReorderEvent): void {
-    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+    const item = this.items.find((i) => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
     if (item) {
       // move the item in our config state to the new index
       if (e.oldIndex !== e.newIndex) {
         this.items.splice(e.oldIndex, 1);
-        this.items.splice(e.newIndex, 0, item);  
+        this.items.splice(e.newIndex, 0, item);
       }
       //item.order = e.item.order;
       item.col = e.newCol ? e.newCol : item.col;
       item.row = e.newRow ? e.newRow : item.row;
     }
   }
-  
+
   onResize(e: TileLayoutResizeEvent): void {
-    const item = this.items.find(i => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
-    if (item) {      
+    const item = this.items.find((i) => i.uniqueId === parseInt(e.item.elem.nativeElement.id));
+    if (item) {
       item.colSpan = e.newColSpan;
       item.rowSpan = e.newRowSpan;
     }
@@ -329,7 +319,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   //so that it is not offset by a wide margin when we click/drag it
   //https://github.com/telerik/kendo-angular/issues/3492
   getSelectedComponentStyle(component: SingleDashboardComponent): string {
-    return this.selectedComponent === component ? "position: unset" : "";
+    return this.selectedComponent === component ? 'position: unset' : '';
   }
 
   /**
@@ -340,16 +330,16 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
   getResourceIcon(resourceType: string | undefined): string {
     // Default to a cube icon if type is undefined
     if (!resourceType) return 'fa-solid fa-cube';
-    
+
     // Map resource types to appropriate FontAwesome icons
-    const iconMap: {[key: string]: string} = {
-      'Reports': 'fa-solid fa-chart-line',
-      'UserViews': 'fa-solid fa-table',
-      'Dashboards': 'fa-solid fa-grip',
-      'Lists': 'fa-solid fa-list',
-      'default': 'fa-solid fa-cube'
+    const iconMap: { [key: string]: string } = {
+      Reports: 'fa-solid fa-chart-line',
+      UserViews: 'fa-solid fa-table',
+      Dashboards: 'fa-solid fa-grip',
+      Lists: 'fa-solid fa-list',
+      default: 'fa-solid fa-cube',
     };
-    
+
     return iconMap[resourceType] || iconMap['default'];
   }
 }

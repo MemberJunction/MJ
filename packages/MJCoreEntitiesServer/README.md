@@ -44,7 +44,7 @@ LoadCoreEntitiesServerSubClasses();
 The package includes an extended AI Prompt entity that automatically manages Template and Template Contents records:
 
 ```typescript
-import { Metadata } from '@memberjunction/core';
+import { Metadata } from '@memberjunction/global';
 
 // The metadata system will automatically use the server-side subclass
 const md = new Metadata();
@@ -126,7 +126,7 @@ export class AIPromptEntityExtendedServer extends AIPromptEntity {
 Example:
 
 ```typescript
-import { BaseEntity, RegisterClass } from '@memberjunction/core';
+import { BaseEntity, RegisterClass } from '@memberjunction/global';
 import { UserEntity } from '@memberjunction/core-entities';
 
 @RegisterClass(BaseEntity, 'Users')
@@ -177,7 +177,7 @@ A shared utility function that simplifies embedding generation for any server-si
 
 ```typescript
 import { EmbedTextLocalHelper } from '@memberjunction/core-entities-server';
-import { BaseEntity, SimpleEmbeddingResult } from '@memberjunction/core';
+import { BaseEntity, SimpleEmbeddingResult } from '@memberjunction/global';
 
 @RegisterClass(BaseEntity, 'MyEntity')
 export class MyEntityServer extends MyEntity {

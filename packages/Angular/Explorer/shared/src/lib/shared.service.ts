@@ -1,16 +1,16 @@
 import { ElementRef, Injectable } from '@angular/core';
-import { CompositeKey, LogError, Metadata } from '@memberjunction/core';
+import { CompositeKey, LogError, Metadata } from '@memberjunction/global';
 import { ResourcePermissionEngine, ResourceTypeEntity, UserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal, ConvertMarkdownStringToHtmlList, InvokeManualResize } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { Subject, Observable, BehaviorSubject, firstValueFrom } from 'rxjs';
 import { first, tap } from 'rxjs/operators';
-import { NotificationService } from "@progress/kendo-angular-notification";
+import { NotificationService } from '@progress/kendo-angular-notification';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Router } from '@angular/router';
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: 'root',
 })
 export class SharedService {
   private static _instance: SharedService;
@@ -20,7 +20,11 @@ export class SharedService {
   private tabChange = new Subject();
   tabChange$ = this.tabChange.asObservable();
 
-  constructor(private notificationService: NotificationService, private mjNotificationsService: MJNotificationService, private router: Router) {
+  constructor(
+    private notificationService: NotificationService,
+    private mjNotificationsService: MJNotificationService,
+    private router: Router
+  ) {
     if (SharedService._instance) {
       // return existing instance which will short circuit the creation of a new instance
       return SharedService._instance;
@@ -31,14 +35,14 @@ export class SharedService {
     MJGlobal.Instance.GetEventListener(true).subscribe(async (event) => {
       switch (event.event) {
         case MJEventType.LoggedIn:
-          if (SharedService._loaded === false)  {
+          if (SharedService._loaded === false) {
             const p1 = SharedService.RefreshData(false);
             const p2 = ResourcePermissionEngine.Instance.Config(); // make sure that we get resource permissions configured
             await Promise.all([p1, p2]);
           }
           break;
-      }      
-    });    
+      }
+    });
   }
 
   public static get Instance(): SharedService {
@@ -56,28 +60,28 @@ export class SharedService {
     return SharedService._resourceTypes;
   }
   public get ViewResourceType(): ResourceTypeEntity {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'user views')!;
+    return SharedService._resourceTypes.find((rt) => rt.Name.trim().toLowerCase() === 'user views')!;
   }
   public get RecordResourceType(): ResourceTypeEntity {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'records')!;
+    return SharedService._resourceTypes.find((rt) => rt.Name.trim().toLowerCase() === 'records')!;
   }
   public get DashboardResourceType(): ResourceTypeEntity {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'dashboards')!;
+    return SharedService._resourceTypes.find((rt) => rt.Name.trim().toLowerCase() === 'dashboards')!;
   }
   public get ReportResourceType(): ResourceTypeEntity {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'reports')!;
+    return SharedService._resourceTypes.find((rt) => rt.Name.trim().toLowerCase() === 'reports')!;
   }
   public get SearchResultsResourceType(): ResourceTypeEntity {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'search results')!;
+    return SharedService._resourceTypes.find((rt) => rt.Name.trim().toLowerCase() === 'search results')!;
   }
   public get ListResourceType(): ResourceTypeEntity {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === 'lists')!;
+    return SharedService._resourceTypes.find((rt) => rt.Name.trim().toLowerCase() === 'lists')!;
   }
   public ResourceTypeByID(id: string): ResourceTypeEntity | undefined {
-    return SharedService._resourceTypes.find(rt => rt.ID === id);
+    return SharedService._resourceTypes.find((rt) => rt.ID === id);
   }
   public ResourceTypeByName(name: string): ResourceTypeEntity | undefined {
-    return SharedService._resourceTypes.find(rt => rt.Name.trim().toLowerCase() === name.trim().toLowerCase());
+    return SharedService._resourceTypes.find((rt) => rt.Name.trim().toLowerCase() === name.trim().toLowerCase());
   }
 
   /**
@@ -89,7 +93,7 @@ export class SharedService {
     }
 
     const canProceed$ = SharedService.isLoading$.pipe(
-      first(isLoading => !isLoading),
+      first((isLoading) => !isLoading),
       tap(() => SharedService.isLoading$.next(true))
     );
 
@@ -118,21 +122,17 @@ export class SharedService {
     await ResourcePermissionEngine.Instance.Config(); // don't reload if already loaded
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
-    await SharedService.RefreshUserNotifications();  
-  }  
+    await SharedService.RefreshUserNotifications();
+  }
 
-  FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = "...") {
-    if (value === null || value === undefined)
-      return value;
+  FormatColumnValue(col: ViewColumnInfo, value: any, maxLength: number = 0, trailingChars: string = '...') {
+    if (value === null || value === undefined) return value;
 
     try {
       const retVal = col.EntityField.FormatValue(value, 0);
-      if (maxLength > 0 && retVal && retVal.length > maxLength)
-        return retVal.substring(0, maxLength) + trailingChars;
-      else
-        return retVal;
-    }
-    catch (e) {
+      if (maxLength > 0 && retVal && retVal.length > maxLength) return retVal.substring(0, maxLength) + trailingChars;
+      else return retVal;
+    } catch (e) {
       LogError(e);
       return value;
     }
@@ -142,7 +142,6 @@ export class SharedService {
     return ConvertMarkdownStringToHtmlList(listType, text);
   }
 
-  
   public InvokeManualResize(delay: number = 50) {
     return InvokeManualResize(delay, this);
   }
@@ -180,7 +179,7 @@ export class SharedService {
   }
 
   /**
-   * Utility method that returns true if child is a descendant of parent, false otherwise. 
+   * Utility method that returns true if child is a descendant of parent, false otherwise.
    */
   public static IsDescendant(parent: ElementRef, child: ElementRef) {
     if (parent && child && parent.nativeElement && child.nativeElement) {
@@ -195,19 +194,32 @@ export class SharedService {
     return false;
   }
 
-
   /**
    * Creates a notification in the database and refreshes the UI. Returns the notification object.
-   * @param title 
-   * @param message 
-   * @param resourceTypeId 
-   * @param resourceRecordId 
+   * @param title
+   * @param message
+   * @param resourceTypeId
+   * @param resourceRecordId
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
-   * @returns 
+   * @returns
    * @deprecated Use MJNotificationService.CreateNotification instead
    */
-  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser : boolean = true): Promise<UserNotificationEntity> {
-    return this.mjNotificationsService.CreateNotification(title, message, resourceTypeId, resourceRecordId, resourceConfiguration, displayToUser);
+  public async CreateNotification(
+    title: string,
+    message: string,
+    resourceTypeId: string | null,
+    resourceRecordId: string | null,
+    resourceConfiguration: any | null,
+    displayToUser: boolean = true
+  ): Promise<UserNotificationEntity> {
+    return this.mjNotificationsService.CreateNotification(
+      title,
+      message,
+      resourceTypeId,
+      resourceRecordId,
+      resourceConfiguration,
+      displayToUser
+    );
   }
 
   /**
@@ -224,11 +236,13 @@ export class SharedService {
    * @param hideAfter - option to auto hide after the specified delay in milliseconds
    * @deprecated Use MJNotificationService.CreateSimpleNotification instead
    */
-  public CreateSimpleNotification(message: string, style: "none" | "success" | "error" | "warning" | "info" = "success", hideAfter?: number) {
+  public CreateSimpleNotification(
+    message: string,
+    style: 'none' | 'success' | 'error' | 'warning' | 'info' = 'success',
+    hideAfter?: number
+  ) {
     return this.mjNotificationsService.CreateSimpleNotification(message, style, hideAfter);
   }
-
-
 
   private _resourceTypeMap = [
     { routeSegment: 'record', name: 'records' },
@@ -238,41 +252,34 @@ export class SharedService {
     { routeSegment: 'query', name: 'queries' },
     { routeSegment: 'dashboard', name: 'dashboards' },
     { routeSegment: 'list', name: 'lists' },
-    
-  ]
+  ];
   /**
    * Maps a Resource Type record Name column to the corresponding route segment
-   * @param resourceTypeName 
-   * @returns 
+   * @param resourceTypeName
+   * @returns
    */
   public mapResourceTypeNameToRouteSegment(resourceTypeName: string) {
-    const item =  this._resourceTypeMap.find(rt => rt.name.trim().toLowerCase() === resourceTypeName.trim().toLowerCase());
-    if (item)
-      return item.routeSegment;
-    else
-      return null 
+    const item = this._resourceTypeMap.find((rt) => rt.name.trim().toLowerCase() === resourceTypeName.trim().toLowerCase());
+    if (item) return item.routeSegment;
+    else return null;
   }
 
   /**
    * Maps a route segment to the corresponding Resource Type record Name column
-   * @param resourceRouteSegment 
-   * @returns 
+   * @param resourceRouteSegment
+   * @returns
    */
   public mapResourceTypeRouteSegmentToName(resourceRouteSegment: string) {
-    const item =  this._resourceTypeMap.find(rt => rt.routeSegment.trim().toLowerCase() === resourceRouteSegment.trim().toLowerCase());
-    if (item)
-      return item.name;
-    else
-      return null 
+    const item = this._resourceTypeMap.find((rt) => rt.routeSegment.trim().toLowerCase() === resourceRouteSegment.trim().toLowerCase());
+    if (item) return item.name;
+    else return null;
   }
 
   public OpenEntityRecord(entityName: string, recordPkey: CompositeKey) {
     try {
-      this.router.navigate(['resource', 'record', recordPkey.ToURLSegment()], 
-                            { queryParams: { Entity: entityName } })        
-    }
-    catch (e) {
-      LogError(e);    
+      this.router.navigate(['resource', 'record', recordPkey.ToURLSegment()], { queryParams: { Entity: entityName } });
+    } catch (e) {
+      LogError(e);
     }
   }
 }
@@ -282,25 +289,24 @@ export const HtmlListType = {
   Ordered: 'Ordered',
 } as const;
 
-export type HtmlListType = typeof HtmlListType[keyof typeof HtmlListType];
-
+export type HtmlListType = (typeof HtmlListType)[keyof typeof HtmlListType];
 
 export const EventCodes = {
-  ViewClicked: "ViewClicked",
-  EntityRecordClicked: "EntityRecordClicked",
-  AddDashboard: "AddDashboard",
-  AddReport: "AddReport",
-  AddQuery: "AddQuery",
-  ViewCreated: "ViewCreated",
-  ViewUpdated: "ViewUpdated",
-  RunSearch: "RunSearch",
-  ViewNotifications: "ViewNotifications",
-  PushStatusUpdates: "PushStatusUpdates",
-  UserNotificationsUpdated: "UserNotificationsUpdated",
-  CloseCurrentTab: "CloseCurrentTab",
-  ListCreated: "ListCreated",
+  ViewClicked: 'ViewClicked',
+  EntityRecordClicked: 'EntityRecordClicked',
+  AddDashboard: 'AddDashboard',
+  AddReport: 'AddReport',
+  AddQuery: 'AddQuery',
+  ViewCreated: 'ViewCreated',
+  ViewUpdated: 'ViewUpdated',
+  RunSearch: 'RunSearch',
+  ViewNotifications: 'ViewNotifications',
+  PushStatusUpdates: 'PushStatusUpdates',
+  UserNotificationsUpdated: 'UserNotificationsUpdated',
+  CloseCurrentTab: 'CloseCurrentTab',
+  ListCreated: 'ListCreated',
   ListClicked: 'ListClicked',
-  AvatarUpdated: 'AvatarUpdated'
+  AvatarUpdated: 'AvatarUpdated',
 } as const;
 
-export type EventCodes = typeof EventCodes[keyof typeof EventCodes];
+export type EventCodes = (typeof EventCodes)[keyof typeof EventCodes];
