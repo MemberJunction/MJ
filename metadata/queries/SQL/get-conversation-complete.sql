@@ -51,7 +51,24 @@ SELECT
           AND cda.Direction = 'Output'
         ORDER BY cda.__mj_CreatedAt, av.VersionNumber
         FOR JSON PATH
-    ) as ArtifactsJSON
+    ) as ArtifactsJSON,
+
+    -- Ratings as JSON array (0-N per conversation detail)
+    -- Includes all user ratings for multi-user support
+    (
+        SELECT
+            cdr.ID,
+            cdr.UserID,
+            cdr.Rating,
+            cdr.Comments,
+            cdr.__mj_CreatedAt,
+            u.Name as UserName
+        FROM [__mj].[vwConversationDetailRatings] cdr
+        INNER JOIN [__mj].[vwUsers] u ON cdr.UserID = u.ID
+        WHERE cdr.ConversationDetailID = cd.ID
+        ORDER BY cdr.__mj_CreatedAt DESC
+        FOR JSON PATH
+    ) as RatingsJSON
 
 FROM [__mj].[vwConversationDetails] cd
 LEFT OUTER JOIN [__mj].[vwUsers] u ON cd.UserID = u.ID

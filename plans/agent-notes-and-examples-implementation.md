@@ -2,10 +2,39 @@
 
 ## Implementation Status
 
-✅ **COMPLETED** - All code implemented and compiling successfully
+🔄 **IN PROGRESS** - Core functionality complete, refinements in progress
 - Migration: `V202510270900__v2.112.x__Agent_Memory_Complete_Schema.sql`
 - Branch: `feature/agent-memory-manager`
 - Date: 2025-10-27
+
+### Remaining Refinements
+
+#### 1. BaseAgent.InjectContextMemory Cleanup
+- [ ] Remove unused `memoryResult` local variable
+- [ ] Move conversationMessages.unshift() into InjectContextMemory method itself
+- [ ] Return the injected context from the method
+
+#### 2. Memory Context in Results
+- [ ] Add `memoryContext?: {notes: AIAgentNoteEntity[], examples: AIAgentExampleEntity[]}` to ExecuteAgentResult type
+- [ ] Check AIAgentRun schema for appropriate field to store memory context
+- [ ] Either use existing field or add new migration for MemoryContextJSON column
+- [ ] Populate in BaseAgent when returning results
+
+#### 3. Conversation Rating Performance
+- [ ] Study `/Users/amith/Dropbox/develop/Mac/MJ/metadata/queries/SQL/get-conversation-complete.sql`
+- [ ] Modify query to return ratings as JSON aggregate
+- [ ] Update ConversationMessageRatingComponent to accept ratings as @Input
+- [ ] Pass ratings from parent component instead of fetching per message
+
+#### 4. Artifact Usage Async/Await
+- [ ] Fix line 72 of artifact-use-tracking.service.ts to use await instead of .catch()
+- [ ] Ensure proper error handling with try/catch
+
+#### 5. Testing & Verification
+- [ ] Test memory injection with real agent
+- [ ] Verify ratings appear in conversation UI
+- [ ] Test Memory Manager scheduled execution
+- [ ] Verify efficient database queries (no N+1)
 
 ## Key Improvements Made During Implementation
 

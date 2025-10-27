@@ -599,21 +599,15 @@ export class BaseAgent {
                 .pop();
             const inputText = lastUserMessage?.content || '';
 
-            const memoryResult = await this.InjectContextMemory(
+            // Inject context memory (notes and examples) into conversation messages
+            await this.InjectContextMemory(
                 typeof inputText === 'string' ? inputText : '',
                 params.agent,
                 userId,
                 companyId,
-                params.contextUser
+                params.contextUser,
+                wrappedParams.conversationMessages
             );
-
-            // If we have memory context, inject it as a system message at the start
-            if (this._memoryContext) {
-                wrappedParams.conversationMessages.unshift({
-                    role: 'system',
-                    content: this._memoryContext
-                });
-            }
 
             // Execute the agent's internal logic with wrapped parameters
             this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
@@ -753,14 +747,21 @@ export class BaseAgent {
     private _memoryContext: string = '';
 
     /**
+     * Storage for injected notes and examples to include in result
+     */
+    private _injectedMemory: { notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] } = { notes: [], examples: [] };
+
+    /**
      * Inject notes and examples into agent context memory.
      * Called automatically before agent execution if injection is enabled on the agent.
+     * Injects memory context directly into conversation messages array.
      *
      * @param input - The user input text for semantic search
      * @param agent - The agent configuration entity
      * @param userId - Optional user ID for scoping
      * @param companyId - Optional company ID for scoping
      * @param contextUser - User context
+     * @param conversationMessages - The conversation messages array to inject into
      * @returns Object containing injected notes and examples
      */
     protected async InjectContextMemory(
@@ -768,7 +769,8 @@ export class BaseAgent {
         agent: AIAgentEntityExtended,
         userId?: string,
         companyId?: string,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        conversationMessages?: ChatMessage[]
     ): Promise<{ notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] }> {
         // Check if injection is enabled
         if (!agent.InjectNotes && !agent.InjectExamples) {
@@ -803,8 +805,8 @@ export class BaseAgent {
             })
             : [];
 
-        // Store formatted memory context for later injection into prompts
-        if (notes.length > 0 || examples.length > 0) {
+        // Format and inject memory context into conversation messages
+        if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
             const notesText = injector.FormatNotesForInjection(notes);
             const examplesText = injector.FormatExamplesForInjection(examples);
 
@@ -812,11 +814,20 @@ export class BaseAgent {
             if (notesText) this._memoryContext += notesText + '\n\n';
             if (examplesText) this._memoryContext += examplesText + '\n\n';
 
+            // Inject as system message at the start
+            conversationMessages.unshift({
+                role: 'system',
+                content: this._memoryContext
+            });
+
             this.logStatus(
-                `💾 Loaded ${notes.length} notes and ${examples.length} examples for context injection`,
+                `💾 Injected ${notes.length} notes and ${examples.length} examples into conversation context`,
                 true
             );
         }
+
+        // Store for inclusion in result
+        this._injectedMemory = { notes, examples };
 
         return { notes, examples };
     }
@@ -5508,7 +5519,10 @@ Please choose an alternative approach to complete your task.`
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
             agentRun: this._agentRun!,
-            suggestedResponses: finalStep.suggestedResponses
+            suggestedResponses: finalStep.suggestedResponses,
+            memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
+                ? this._injectedMemory
+                : undefined
         };
     }
 

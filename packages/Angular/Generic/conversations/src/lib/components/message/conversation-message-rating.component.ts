@@ -111,6 +111,7 @@ import { ConversationDetailRatingEntity } from '@memberjunction/core-entities';
 export class ConversationMessageRatingComponent implements OnInit {
     @Input() conversationDetailId!: string;
     @Input() currentUser!: UserInfo;
+    @Input() ratingsData?: any[]; // Pre-loaded ratings from parent (RatingsJSON from query)
 
     thumbsUpCount = 0;
     thumbsDownCount = 0;
@@ -122,11 +123,29 @@ export class ConversationMessageRatingComponent implements OnInit {
     }
 
     async ngOnInit() {
-        await this.LoadRatings();
+        if (this.ratingsData) {
+            // Use pre-loaded ratings (no database query needed)
+            this.ProcessRatings(this.ratingsData);
+        } else {
+            // Fallback to loading ratings if not provided
+            await this.LoadRatings();
+        }
     }
 
     /**
-     * Load all ratings for this message
+     * Process ratings data (from query or API)
+     */
+    private ProcessRatings(ratings: any[]): void {
+        this.thumbsUpCount = ratings.filter(r => r.Rating >= 8).length;
+        this.thumbsDownCount = ratings.filter(r => r.Rating <= 3).length;
+        this.totalRatings = ratings.length;
+
+        const currentUserRating = ratings.find(r => r.UserID === this.currentUserId);
+        this.currentUserRating = currentUserRating?.Rating ?? null;
+    }
+
+    /**
+     * Load all ratings for this message (fallback if not pre-loaded)
      */
     async LoadRatings(): Promise<void> {
         try {
@@ -141,13 +160,7 @@ export class ConversationMessageRatingComponent implements OnInit {
                 return;
             }
 
-            const ratings = result.Results;
-            this.thumbsUpCount = ratings.filter(r => r.Rating >= 8).length;
-            this.thumbsDownCount = ratings.filter(r => r.Rating <= 3).length;
-            this.totalRatings = ratings.length;
-
-            const currentUserRating = ratings.find(r => r.UserID === this.currentUserId);
-            this.currentUserRating = currentUserRating?.Rating ?? null;
+            this.ProcessRatings(result.Results);
 
         } catch (error) {
             console.error('Failed to load ratings:', error);

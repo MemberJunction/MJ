@@ -278,6 +278,14 @@ export type ExecuteAgentResult<P = any> = {
      * Populated when the agent's final step is 'Chat' or 'Success' and includes suggested responses.
      */
     suggestedResponses?: BaseAgentSuggestedResponse[];
+    /**
+     * Optional memory context that was injected into the agent execution.
+     * Includes the notes and examples that were retrieved and used for context.
+     */
+    memoryContext?: {
+        notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
+        examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
+    };
 }
 
 /**

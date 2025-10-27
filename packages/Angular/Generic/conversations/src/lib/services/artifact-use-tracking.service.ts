@@ -69,9 +69,11 @@ export class ArtifactUseTrackingService {
             usage.UsageContext = context ? JSON.stringify(context) : null;
 
             // Save asynchronously - don't block UI
-            usage.Save().catch(error => {
+            try {
+                await usage.Save();
+            } catch (error) {
                 console.error('Failed to track artifact usage:', error);
-            });
+            }
 
         } catch (error) {
             console.error('Error in trackUsage:', error);
