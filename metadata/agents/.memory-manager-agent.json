@@ -1,0 +1,41 @@
+[
+  {
+    "fields": {
+      "Name": "Memory Manager",
+      "Description": "System agent that automatically extracts notes and examples from conversations and agent runs. Analyzes user ratings and artifact usage to identify valuable learnings. Runs on a 15-minute schedule.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ArtifactCreationMode": "Never",
+      "ExposeAsAction": false,
+      "IsRestricted": true,
+      "InjectNotes": false,
+      "MaxNotesToInject": 0,
+      "NoteInjectionStrategy": "Recent",
+      "InjectExamples": false,
+      "MaxExamplesToInject": 0,
+      "ExampleInjectionStrategy": "Recent",
+      "IconClass": "fa-solid fa-brain"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Memory Manager - Extract Notes",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Memory Manager - Extract Examples",
+            "ExecutionOrder": 1,
+            "Status": "Active"
+          }
+        }
+      ]
+    }
+  }
+]
