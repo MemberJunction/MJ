@@ -41,6 +41,19 @@
                             >
                         </mj-user-view-grid>                    
                     </mj-tab-body>
+
+                    <mj-tab Name="MJ: Artifact Uses" [Visible]="record.IsSaved"> 
+                        MJ: Artifact Uses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
+                            [AllowLoad]="IsCurrentTab('MJ: Artifact Uses')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
                 </mj-tabstrip>
     </form>
 </div>
