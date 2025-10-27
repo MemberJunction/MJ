@@ -125,6 +125,8 @@ jobs:
 
       - name: Publish to npm
         run: npm run change publish
+        env:
+          NPM_TOKEN: ''
 
       - name: Get version string
         if: ${{ env.BRANCH == 'main' }}
