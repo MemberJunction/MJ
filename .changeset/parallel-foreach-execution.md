@@ -1,6 +1,6 @@
 ---
-"@memberjunction/ai-core-plus": minor
-"@memberjunction/ai-agents": minor
+"@memberjunction/ai-core-plus": patch
+"@memberjunction/ai-agents": patch
 ---
 
 Add parallel execution support for ForEach loops in Agent framework
