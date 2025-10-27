@@ -5,6 +5,7 @@ import { Metadata } from '@memberjunction/core';
 import { AIAgentRunStepEntityExtended } from '@memberjunction/core-entities';
 import { AgentSpecSync } from '../agent-spec-sync';
 import { TemplateEngineServer } from '@memberjunction/templates';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
  * Builder Agent - Persists validated AgentSpec to database via AgentSpecSync
@@ -54,6 +55,11 @@ export class AgentBuilderAgent extends BaseAgent {
             const specSync = new AgentSpecSync(agentSpec, params.contextUser);
             specSync.markDirty();
 
+            // If updating existing agent (ID exists), mark as loaded so delete logic runs
+            if (agentSpec.ID && agentSpec.ID !== '') {
+                specSync.markLoaded();
+            }
+
             const result = await specSync.SaveToDatabase();
 
             if (!result.success) {
@@ -70,6 +76,11 @@ export class AgentBuilderAgent extends BaseAgent {
             const templateEngine = new TemplateEngineServer();
             await templateEngine.Config(true, params.contextUser);
             console.log('✅ Builder Agent: Metadata and template caches refreshed');
+
+            // Refresh AIEngine cache so newly created agents are immediately available
+            const aiEngine = AIEngineBase.Instance;
+            await aiEngine.Config(true, params.contextUser);
+            console.log('✅ Builder Agent: AIEngine cache refreshed');
 
             // Create AI Agent Run Step record directly
             const agentRunId = params.parentRun?.ID || 'unknown';

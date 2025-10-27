@@ -211,6 +211,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: AI Agent Examples" [Visible]="record.IsSaved"> 
+                        MJ: AI Agent Examples
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Examples','AgentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: AI Agent Examples')"
+                            [AllowLoad]="IsCurrentTab('MJ: AI Agent Examples')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="AI Result Cache" [Visible]="record.IsSaved"> 
                         AI Result Cache
                     </mj-tab>

@@ -35,6 +35,10 @@ Concrete implementation of BaseAgentType that:
 - Executes in a loop until task completion
 - Parses structured JSON responses from prompts
 - Supports actions, sub-agents, and conditional termination
+- ForEach and While iteration operations (v2.112+)
+  - LLM can request batch processing over collections
+  - Conditional loops with While operations
+  - 90% token reduction for iterative tasks
 
 ### FlowAgentType
 Deterministic workflow agent type that:
@@ -43,6 +47,11 @@ Deterministic workflow agent type that:
 - Supports parallel starting steps (Sequence=0)
 - Provides action output mapping to payload
 - Enables hybrid AI/deterministic workflows
+- ForEach and While loop step types (v2.112+)
+  - Iterate over collections with ForEach steps
+  - Conditional loops with While steps
+  - Self-contained loop configuration
+  - Support for Action, Sub-Agent, and Prompt loop bodies
 
 ### AgentRunner
 Simple orchestrator that:
@@ -97,6 +106,59 @@ const followUpResult = await runner.RunAgent({
     autoPopulateLastRunPayload: true // Automatically use previous run's final payload
 });
 ```
+
+## Iterative Operations (v2.112+)
+
+Both Flow and Loop agents support native ForEach and While iterations for efficient batch processing and retry logic.
+
+**📘 Complete Guide:** [Guide to Iterative Operations in Agents](./guide-to-iterative-operations-in-agents.md)
+
+### Quick Start
+
+**Flow Agent - ForEach Example:**
+```typescript
+// Create a ForEach step that sends email to each customer
+const forEachStep = await md.GetEntityObject<AIAgentStepEntity>('MJ: AI Agent Steps');
+forEachStep.StepType = 'ForEach';
+forEachStep.LoopBodyType = 'Action';
+forEachStep.ActionID = sendEmailActionId;
+forEachStep.Configuration = JSON.stringify({
+    type: 'ForEach',
+    collectionPath: 'payload.customers',
+    itemVariable: 'customer',
+    maxIterations: 500
+});
+forEachStep.ActionInputMapping = JSON.stringify({
+    to: 'customer.email',
+    subject: 'Welcome!'
+});
+```
+
+**Loop Agent - ForEach Example:**
+```json
+{
+    "taskComplete": false,
+    "message": "Processing all documents",
+    "nextStep": {
+        "type": "ForEach",
+        "forEach": {
+            "collectionPath": "payload.documents",
+            "action": {
+                "name": "Analyze Document",
+                "params": { "path": "item.path" }
+            }
+        }
+    }
+}
+```
+
+**Benefits:**
+- 90% token reduction (Loop agents)
+- Deterministic iteration (Flow agents)
+- Type-safe loop variables
+- Built-in error handling
+
+See the [complete guide](./guide-to-iterative-operations-in-agents.md) for While loops, nested iterations, and advanced patterns.
 
 ## Agent Configuration
 

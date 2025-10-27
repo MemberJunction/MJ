@@ -56,6 +56,7 @@ export * from './custom/files/file-compress.action';
 
 // File Storage Actions - Granular operations for cloud storage
 export * from './custom/files';
+export * from './custom/files/get-file-content.action';
 
 // Integration Actions
 export * from './custom/integration/http-request.action';
@@ -77,8 +78,8 @@ export * from './custom/workflow/delay.action';
 // AI Actions
 export * from './custom/ai/execute-ai-prompt.action';
 export * from './custom/ai/summarize-content.action';
-export * from './custom/ai/find-best-agent.action';
-export * from './custom/ai/find-best-action.action';
+export * from './custom/ai/find-candidate-agents.action';
+export * from './custom/ai/find-candidate-actions.action';
 export * from './custom/ai/load-agent-spec.action';
 
 // User Management Actions
@@ -95,9 +96,11 @@ export * from './custom/visualization/create-svg-word-cloud.action';
 export * from './custom/visualization/create-svg-network.action';
 export * from './custom/visualization/create-svg-infographic.action';
 export * from './custom/visualization/create-svg-sketch-diagram.action';
+export * from './custom/visualization/create-mermaid-diagram.action';
 export * from './custom/visualization/shared/svg-types';
 export * from './custom/visualization/shared/svg-utils';
 export * from './custom/visualization/shared/svg-theming';
+export * from './custom/visualization/shared/mermaid-types';
 
 // Import Load functions to prevent tree shaking of @RegisterClass decorators
 import { LoadSendSingleMessageAction } from './custom/communication/send-single-message.action';
@@ -142,6 +145,7 @@ import { LoadFileCompressAction } from './custom/files/file-compress.action';
 import { LoadListObjectsAction } from './custom/files/list-objects.action';
 import { LoadGetMetadataAction } from './custom/files/get-metadata.action';
 import { LoadGetObjectAction } from './custom/files/get-object.action';
+import { LoadGetFileContentAction } from './custom/files/get-file-content.action';
 import { LoadGetDownloadUrlAction } from './custom/files/get-download-url.action';
 import { LoadGetUploadUrlAction } from './custom/files/get-upload-url.action';
 import { LoadObjectExistsAction } from './custom/files/object-exists.action';
@@ -166,8 +170,8 @@ import { LoadRetryAction } from './custom/workflow/retry.action';
 import { LoadDelayAction } from './custom/workflow/delay.action';
 import { LoadExecuteAIPromptAction } from './custom/ai/execute-ai-prompt.action';
 import { LoadSummarizeContentAction } from './custom/ai/summarize-content.action';
-import { LoadFindBestAgentAction } from './custom/ai/find-best-agent.action';
-import { LoadFindBestActionAction } from './custom/ai/find-best-action.action';
+import { LoadFindBestAgentAction } from './custom/ai/find-candidate-agents.action';
+import { LoadFindBestActionAction } from './custom/ai/find-candidate-actions.action';
 import { LoadLoadAgentSpecAction } from './custom/ai/load-agent-spec.action';
 import { LoadCheckUserPermissionAction } from './custom/user-management/check-user-permission.action';
 import { LoadCreateUserAction } from './custom/user-management/create-user.action';
@@ -180,6 +184,7 @@ import { LoadCreateSVGWordCloudAction } from './custom/visualization/create-svg-
 import { LoadCreateSVGNetworkAction } from './custom/visualization/create-svg-network.action';
 import { LoadCreateSVGInfographicAction } from './custom/visualization/create-svg-infographic.action';
 import { LoadCreateSVGSketchDiagramAction } from './custom/visualization/create-svg-sketch-diagram.action';
+import { LoadCreateMermaidDiagramAction } from './custom/visualization/create-mermaid-diagram.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
 
@@ -229,6 +234,7 @@ export function LoadAllCoreActions() {
     LoadListObjectsAction();
     LoadGetMetadataAction();
     LoadGetObjectAction();
+    LoadGetFileContentAction();
     LoadGetDownloadUrlAction();
     LoadGetUploadUrlAction();
     LoadObjectExistsAction();
@@ -267,6 +273,7 @@ export function LoadAllCoreActions() {
     LoadCreateSVGNetworkAction();
     LoadCreateSVGInfographicAction();
     LoadCreateSVGSketchDiagramAction();
+    LoadCreateMermaidDiagramAction();
 }
 
 // ensure that the core entities server sub-classes are loaded and not tree-shaken out

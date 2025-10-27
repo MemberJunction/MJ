@@ -248,15 +248,33 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name/path of the file object",
-            "IsRequired": true
+            "Description": "Name/path of the file object. Required if ObjectID not provided.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "1E918DB8-0268-4590-BBB6-F5B2592C2FCF"
           },
           "sync": {
-            "lastModified": "2025-10-02T05:50:00.985Z",
-            "checksum": "7277fe0dd59c9a6bf175bb15cbd40c4f47eab7e1c72c92f0697d1da6a56d82c2"
+            "lastModified": "2025-10-26T19:46:00.985Z",
+            "checksum": "f8643ff7c94d75aadc22b285a96b910f8ee4e003464338529eec4f87331a8828"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider-specific object ID (Box: file ID, Google Drive: file ID, SharePoint: item ID, Dropbox: id). If provided, bypasses path resolution for faster access. Obtain from search results ObjectID field.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6BA8A9CB-AC80-4745-956A-58DDBDAC596A"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:00.940Z",
+            "checksum": "2f6363d6dade6911589478699a06f55a2acb56c97da9c3f46f987c0c92d10138"
           }
         },
         {
@@ -545,15 +563,33 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Name/path of the file object",
-            "IsRequired": true
+            "Description": "Name/path of the file object. Required if ObjectID not provided.",
+            "IsRequired": false
           },
           "primaryKey": {
             "ID": "455FB26C-23BF-438F-BF92-9E6B7679B457"
           },
           "sync": {
-            "lastModified": "2025-10-02T05:50:01.164Z",
-            "checksum": "7277fe0dd59c9a6bf175bb15cbd40c4f47eab7e1c72c92f0697d1da6a56d82c2"
+            "lastModified": "2025-10-26T19:46:01.133Z",
+            "checksum": "f8643ff7c94d75aadc22b285a96b910f8ee4e003464338529eec4f87331a8828"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider-specific object ID (Box: file ID, Google Drive: file ID, SharePoint: item ID, Dropbox: id). If provided, bypasses path resolution for faster access. Obtain from search results ObjectID field.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "622C43A3-F0B4-4AFE-8BE9-6FB42C598A56"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:01.249Z",
+            "checksum": "2f6363d6dade6911589478699a06f55a2acb56c97da9c3f46f987c0c92d10138"
           }
         },
         {

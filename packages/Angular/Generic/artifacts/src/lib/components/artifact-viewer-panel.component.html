@@ -34,9 +34,17 @@
       </div>
       @if (showSaveToCollection) {
         <button class="save-to-collection-btn"
+                [class.in-collection]="isInCollection"
                 (click)="onSaveToLibrary()"
-                title="Save to Collection">
-          <i class="far fa-bookmark"></i>
+                [title]="isInCollection ? 'Saved to ' + artifactCollections.length + ' collection(s)' : 'Save to Collection'">
+          <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
+        </button>
+      }
+      @if (canShare) {
+        <button class="share-btn"
+                (click)="onShare()"
+                title="Share">
+          <i class="fas fa-share-nodes"></i>
         </button>
       }
       <button class="close-btn" (click)="onClose()" title="Close">

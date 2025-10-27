@@ -92,11 +92,12 @@ export abstract class BaseFileStorageAction extends BaseAction {
     /**
      * Helper to create success result
      */
-    protected createSuccessResult(data: Record<string, unknown>): ActionResultSimple {
+    protected createSuccessResult(data: Record<string, unknown>, params?: RunActionParams): ActionResultSimple {
         return {
             Success: true,
             ResultCode: "SUCCESS",
-            Message: JSON.stringify(data, null, 2)
+            Message: JSON.stringify(data, null, 2),
+            Params: params?.Params
         };
     }
 

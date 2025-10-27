@@ -1,43 +1,20 @@
-<div class="message-input-container">
-  <textarea
-    #messageTextarea
-    class="message-input"
-    [class.intent-checking]="isProcessing"
-    [(ngModel)]="messageText"
+<div class="message-input-wrapper">
+  <!-- Processing Indicator Overlay -->
+  <div class="processing-indicator" *ngIf="isProcessing">
+    <i class="fas fa-circle-notch fa-spin"></i>
+    <span>{{ processingMessage }}</span>
+  </div>
+
+  <!-- Message Input Box -->
+  <mj-message-input-box
+    #inputBox
     [placeholder]="placeholder"
     [disabled]="disabled || isProcessing"
-    (keydown)="onKeyDown($event)"
-    (input)="onInput($event)"
-    rows="3">
-  </textarea>
-
-  <!-- Mention Autocomplete Dropdown -->
-  <mj-mention-dropdown
-    [suggestions]="mentionSuggestions"
-    [position]="mentionDropdownPosition"
-    [visible]="showMentionDropdown"
-    [showAbove]="mentionDropdownShowAbove"
-    (suggestionSelected)="onMentionSelected($event)"
-    (closed)="closeMentionDropdown()">
-  </mj-mention-dropdown>
-
-  <div class="input-actions">
-    <div class="processing-indicator" *ngIf="isProcessing">
-      <i class="fas fa-circle-notch fa-spin"></i>
-      <span>{{ processingMessage }}</span>
-    </div>
-    <button
-      class="btn-attach"
-      [disabled]="disabled"
-      title="Attach file (coming soon)">
-      <i class="fas fa-paperclip"></i>
-    </button>
-    <button
-      class="btn-send"
-      [disabled]="!canSend"
-      (click)="onSend()"
-      [title]="isSending ? 'Sending...' : 'Send message'">
-      <i class="fas fa-paper-plane"></i>
-    </button>
-  </div>
+    [showCharacterCount]="false"
+    [enableMentions]="true"
+    [currentUser]="currentUser"
+    [rows]="3"
+    [(value)]="messageText"
+    (textSubmitted)="onTextSubmitted($event)">
+  </mj-message-input-box>
 </div>

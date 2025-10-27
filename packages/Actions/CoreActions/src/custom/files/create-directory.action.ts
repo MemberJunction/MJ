@@ -58,7 +58,7 @@ export class CreateDirectoryAction extends BaseFileStorageAction {
                 operation: 'CreateDirectory',
                 directoryPath,
                 success
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

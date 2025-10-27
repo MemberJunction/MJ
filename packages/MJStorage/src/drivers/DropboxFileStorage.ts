@@ -8,6 +8,8 @@ import {
   FileSearchResult,
   FileSearchResultSet,
   FileStorageBase,
+  GetObjectParams,
+  GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -603,27 +605,30 @@ export class DropboxFileStorage extends FileStorageBase {
   
   /**
    * Gets metadata for a file or folder
-   * 
+   *
    * This method retrieves metadata information about a file or folder, such as
    * its name, size, content type, and last modified date.
-   * 
-   * @param objectName - Path to the object to get metadata for (e.g., 'documents/report.pdf')
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a StorageObjectMetadata object
    * @throws Error if the object doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   // Get metadata for a file
-   *   const metadata = await storage.GetObjectMetadata('presentations/quarterly-update.pptx');
-   *   
+   *   // Fast path: Use objectId (Dropbox file ID)
+   *   const metadata = await storage.GetObjectMetadata({ objectId: 'id:a4ayc_80_OEAAAAAAAAAXw' });
+   *
+   *   // Slow path: Use path
+   *   const metadata2 = await storage.GetObjectMetadata({ fullPath: 'presentations/quarterly-update.pptx' });
+   *
    *   console.log(`Name: ${metadata.name}`);
    *   console.log(`Path: ${metadata.path}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Content Type: ${metadata.contentType}`);
    *   console.log(`Last Modified: ${metadata.lastModified}`);
    *   console.log(`Is Directory: ${metadata.isDirectory}`);
-   *   
+   *
    *   // Dropbox-specific metadata is available in customMetadata
    *   console.log(`Dropbox ID: ${metadata.customMetadata.id}`);
    *   console.log(`Revision: ${metadata.customMetadata.rev}`);
@@ -632,45 +637,70 @@ export class DropboxFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
     try {
-      const metadata = await this._getMetadata(objectName);
-      
-      // Parse path to get parent path
-      const pathParts = objectName.split('/');
-      pathParts.pop(); // Remove filename/foldername
-      const parentPath = pathParts.join('/');
-      
-      return this._convertToMetadata(metadata, parentPath);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      let path: string;
+      let parentPath = '';
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        // Dropbox IDs must be prefixed with "id:"
+        path = params.objectId.startsWith('id:') ? params.objectId : `id:${params.objectId}`;
+        console.log(`⚡ Fast path: Using Object ID directly: ${path}`);
+      } else {
+        // Slow path: Use normalized path
+        path = this._normalizePath(params.fullPath!);
+        console.log(`🐌 Slow path: Using path: ${path}`);
+
+        // Parse path to get parent path
+        const pathParts = params.fullPath!.split('/');
+        pathParts.pop(); // Remove filename/foldername
+        parentPath = pathParts.join('/');
+      }
+
+      const response = await this._client.filesGetMetadata({
+        path: path,
+        include_media_info: false
+      });
+
+      return this._convertToMetadata(response.result, parentPath);
     } catch (error) {
-      console.error('Error getting object metadata', { objectName, error });
-      throw new Error(`Object not found: ${objectName}`);
+      console.error('Error getting object metadata', { params, error });
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
   
   /**
    * Downloads a file's contents
-   * 
+   *
    * This method retrieves the raw content of a file as a Buffer.
-   * 
-   * @param objectName - Path to the file to download (e.g., 'documents/report.pdf')
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise that resolves to a Buffer containing the file's contents
    * @throws Error if the file doesn't exist or cannot be downloaded
-   * 
+   *
    * @remarks
    * - This method will throw an error if the object is a folder
    * - For large files, consider using CreatePreAuthDownloadUrl instead
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   // Download a text file
-   *   const fileContent = await storage.GetObject('documents/notes.txt');
-   *   
+   *   // Fast path: Use objectId (Dropbox file ID)
+   *   const fileContent = await storage.GetObject({ objectId: 'id:a4ayc_80_OEAAAAAAAAAXw' });
+   *
+   *   // Slow path: Use path
+   *   const fileContent2 = await storage.GetObject({ fullPath: 'documents/notes.txt' });
+   *
    *   // Convert Buffer to string for text files
    *   const textContent = fileContent.toString('utf8');
    *   console.log('File content:', textContent);
-   *   
+   *
    *   // For binary files, you can write the buffer to disk
    *   // or process it as needed
    * } catch (error) {
@@ -678,20 +708,36 @@ export class DropboxFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
-      const normalizedPath = this._normalizePath(objectName);
-      
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
+      }
+
+      let path: string;
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        // Dropbox IDs must be prefixed with "id:"
+        path = params.objectId.startsWith('id:') ? params.objectId : `id:${params.objectId}`;
+        console.log(`⚡ Fast path: Using Object ID directly: ${path}`);
+      } else {
+        // Slow path: Use normalized path
+        path = this._normalizePath(params.fullPath!);
+        console.log(`🐌 Slow path: Using path: ${path}`);
+      }
+
       const response = await this._client.filesDownload({
-        path: normalizedPath
+        path: path
       });
-      
+
       // Extract file content as Buffer
       // Note: In Dropbox SDK, the file content is in response.result.fileBinary
       return Buffer.from((response.result as any).fileBinary);
     } catch (error) {
-      console.error('Error getting object', { objectName, error });
-      throw new Error(`Failed to get object: ${objectName}`);
+      console.error('Error getting object', { params, error });
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
   
@@ -1028,6 +1074,7 @@ export class DropboxFileStorage extends FileStorageBase {
           size: metadata.size || 0,
           contentType: mime.lookup(fileName) || 'application/octet-stream',
           lastModified: new Date(metadata.server_modified),
+          objectId: metadata.id || '',  // Dropbox file ID for direct access
           matchInFilename: this._checkFilenameMatch(fileName, query),
           customMetadata: {
             id: metadata.id,

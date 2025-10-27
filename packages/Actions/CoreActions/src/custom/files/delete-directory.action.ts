@@ -66,7 +66,7 @@ export class DeleteDirectoryAction extends BaseFileStorageAction {
                 directoryPath,
                 recursive,
                 success
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

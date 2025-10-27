@@ -19,8 +19,8 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/global": "2.100.3",
-    "@memberjunction/core": "2.100.3",
+    "@memberjunction/global": "2.110.1",
+    "@memberjunction/core": "2.110.1",
     "@memberjunction/core-entities": "2.110.1",
     "@memberjunction/core-entities-server": "2.110.1",
     "@memberjunction/ai-core-plus": "2.110.1",
@@ -68,6 +68,7 @@
     "@types/d3-hierarchy": "^3.1.7",
     "@types/d3-scale": "^4.0.8",
     "@types/d3-shape": "^3.1.6",
-    "roughjs": "^4.6.6"
+    "roughjs": "^4.6.6",
+    "mermaid": "^11.12.0"
   }
 }

@@ -25,6 +25,7 @@ export class MentionDropdownComponent implements OnInit, OnDestroy {
   @Input() position: { top: number; left: number } = { top: 0, left: 0 };
   @Input() visible: boolean = false;
   @Input() showAbove: boolean = false; // Controls whether dropdown grows upward
+  @Input() useFixedPositioning: boolean = false; // Use fixed positioning to escape parent containers
 
   @Output() suggestionSelected = new EventEmitter<MentionSuggestion>();
   @Output() closed = new EventEmitter<void>();

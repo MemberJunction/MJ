@@ -3,10 +3,11 @@ import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 import { ArtifactEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { ArtifactPermissionService } from './artifact-permission.service';
 
 /**
  * State management for artifacts and the artifact panel
- * Handles artifact CRUD operations and caching
+ * Handles artifact CRUD operations and caching with permission enforcement
  */
 @Injectable({
   providedIn: 'root'
@@ -33,7 +34,37 @@ export class ArtifactStateService {
     shareReplay(1)
   );
 
-  constructor() {}
+  constructor(private artifactPermissionService: ArtifactPermissionService) {}
+
+  /**
+   * Check if current user can read an artifact
+   * @param artifactId The artifact ID
+   * @param currentUser The current user context
+   * @returns True if user has read permission
+   */
+  async canReadArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'read', currentUser);
+  }
+
+  /**
+   * Check if current user can edit an artifact
+   * @param artifactId The artifact ID
+   * @param currentUser The current user context
+   * @returns True if user has edit permission
+   */
+  async canEditArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
+  }
+
+  /**
+   * Check if current user can share an artifact
+   * @param artifactId The artifact ID
+   * @param currentUser The current user context
+   * @returns True if user has share permission
+   */
+  async canShareArtifact(artifactId: string, currentUser: UserInfo): Promise<boolean> {
+    return this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'share', currentUser);
+  }
 
   /**
    * Opens an artifact in the panel
@@ -230,6 +261,12 @@ export class ArtifactStateService {
    * @returns True if successful
    */
   async updateArtifact(id: string, updates: Partial<ArtifactEntity>, currentUser: UserInfo): Promise<boolean> {
+    // Check edit permission
+    const canEdit = await this.artifactPermissionService.checkPermission(id, currentUser.ID, 'edit', currentUser);
+    if (!canEdit) {
+      throw new Error('You do not have permission to edit this artifact');
+    }
+
     const md = new Metadata();
     const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', currentUser);
 
@@ -256,6 +293,12 @@ export class ArtifactStateService {
    * @returns True if successful
    */
   async deleteArtifact(id: string, currentUser: UserInfo): Promise<boolean> {
+    // Check edit permission (required for deletion)
+    const canEdit = await this.artifactPermissionService.checkPermission(id, currentUser.ID, 'edit', currentUser);
+    if (!canEdit) {
+      throw new Error('You do not have permission to delete this artifact');
+    }
+
     const md = new Metadata();
     const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts', currentUser);
 
@@ -283,6 +326,12 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    */
   async addToCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+    // Check edit permission (required to modify collection membership)
+    const canEdit = await this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
+    if (!canEdit) {
+      throw new Error('You do not have permission to add this artifact to a collection');
+    }
+
     const md = new Metadata();
     const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', currentUser);
 
@@ -302,6 +351,12 @@ export class ArtifactStateService {
    * @param currentUser The current user context
    */
   async removeFromCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+    // Check edit permission (required to modify collection membership)
+    const canEdit = await this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
+    if (!canEdit) {
+      throw new Error('You do not have permission to remove this artifact from a collection');
+    }
+
     const rv = new RunView();
     const result = await rv.RunView<any>(
       {

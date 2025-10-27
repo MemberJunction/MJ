@@ -30,6 +30,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() placeholder: string = 'Type a message... (Ctrl+Enter to send)';
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() conversationHistory: ConversationDetailEntity[] = []; // For agent context
+  @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
 
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
@@ -41,21 +42,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Output() intentCheckStarted = new EventEmitter<void>(); // Emits when intent checking starts
   @Output() intentCheckCompleted = new EventEmitter<void>(); // Emits when intent checking completes
 
-  @ViewChild('messageTextarea') messageTextarea!: ElementRef;
+  @ViewChild('inputBox') inputBox!: any; // MessageInputBoxComponent
 
   public messageText: string = '';
   public isSending: boolean = false;
   public isProcessing: boolean = false; // True when waiting for agent/naming response
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
   public converationManagerAgent: AIAgentEntityExtended | null = null;
-
-  // Mention autocomplete state
-  public showMentionDropdown: boolean = false;
-  public mentionSuggestions: MentionSuggestion[] = [];
-  public mentionDropdownPosition: { top: number; left: number } = { top: 0, left: 0 };
-  public mentionDropdownShowAbove: boolean = false; // Controls transform direction
-  private mentionStartIndex: number = -1;
-  private mentionQuery: string = '';
 
   // PubSub subscription for task progress updates
   private pushStatusSubscription?: Subscription;
@@ -71,14 +64,14 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private conversationState: ConversationStateService,
     private dataCache: DataCacheService,
     private activeTasks: ActiveTasksService,
-    private mentionAutocomplete: MentionAutocompleteService,
-    private mentionParser: MentionParserService
+    private mentionParser: MentionParserService,
+    private mentionAutocomplete: MentionAutocompleteService
   ) {}
 
   async ngOnInit() {
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
 
-    // Initialize mention autocomplete
+    // Initialize mention autocomplete (needed for parsing mentions in messages)
     await this.mentionAutocomplete.initialize(this.currentUser);
 
     // Subscribe to PubSub for task progress updates
@@ -95,6 +88,14 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   ngAfterViewInit() {
     // Focus input on initial load
     this.focusInput();
+
+    // If there's an initial message to send (from empty state), send it automatically
+    if (this.initialMessage) {
+      console.log('📨 MessageInputComponent received initialMessage:', this.initialMessage);
+      setTimeout(() => {
+        this.sendMessageWithText(this.initialMessage!);
+      }, 100);
+    }
   }
 
   ngOnDestroy() {
@@ -110,8 +111,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   private focusInput(): void {
     // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
-      if (this.messageTextarea?.nativeElement) {
-        this.messageTextarea.nativeElement.focus();
+      if (this.inputBox) {
+        this.inputBox.focus();
       }
     }, 100);
   }
@@ -214,148 +215,34 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   }
 
   /**
-   * Handle input events to detect @ mentions
+   * Handle text submitted from the input box
    */
-  onInput(event: Event): void {
-    const textarea = event.target as HTMLTextAreaElement;
-    const cursorPos = textarea.selectionStart;
-    const text = textarea.value;
+  async onTextSubmitted(text: string): Promise<void> {
+    console.log('[MessageInput] onTextSubmitted called with text:', text);
 
-    // Check if we're typing after an @ symbol
-    const textBeforeCursor = text.substring(0, cursorPos);
-    const mentionMatch = textBeforeCursor.match(/@(\S*)$/);
-
-    if (mentionMatch) {
-      // We found an @ mention being typed
-      this.mentionStartIndex = cursorPos - mentionMatch[0].length;
-      this.mentionQuery = mentionMatch[1] || '';
-
-      console.log('[MentionInput] Detected @mention:', this.mentionQuery);
-
-      // Get suggestions
-      this.mentionSuggestions = this.mentionAutocomplete.getSuggestions(this.mentionQuery);
-
-      console.log('[MentionInput] Got suggestions:', this.mentionSuggestions.length, this.mentionSuggestions);
-
-      // Calculate dropdown position
-      this.calculateDropdownPosition(textarea);
-
-      // Show dropdown if we have suggestions OR to show empty state
-      this.showMentionDropdown = true;
-      console.log('[MentionInput] Showing dropdown:', this.showMentionDropdown);
-    } else {
-      // No @ mention, close dropdown
-      this.closeMentionDropdown();
-    }
-  }
-
-  /**
-   * Handle keydown events in the textarea
-   * - Enter alone: Send message (unless dropdown is open)
-   * - Shift+Enter: Add new line
-   * - Arrow keys, Tab, Escape: Handle mention dropdown if open
-   */
-  onKeyDown(event: KeyboardEvent): void {
-    // If mention dropdown is open, let it handle certain keys
-    if (this.showMentionDropdown) {
-      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(event.key)) {
-        // These keys are handled by the dropdown component
-        return;
-      }
-    }
-
-    // Regular key handling
-    if (event.key === 'Enter' && !event.shiftKey) {
-      // Prevent default behavior (adding newline)
-      event.preventDefault();
-
-      // Send the message
-      this.onSend();
-    }
-    // If Shift+Enter, allow default behavior (add newline)
-  }
-
-  /**
-   * Calculate position for mention dropdown
-   * Keeps dropdown anchored to textarea edge regardless of content size
-   */
-  private calculateDropdownPosition(textarea: HTMLTextAreaElement): void {
-    const rect = textarea.getBoundingClientRect();
-    const container = textarea.closest('.message-input-container');
-    const containerRect = container?.getBoundingClientRect();
-
-    if (!containerRect) {
-      // Fallback to absolute positioning
-      this.mentionDropdownPosition = {
-        top: rect.bottom + window.scrollY + 4,
-        left: rect.left + window.scrollX
-      };
+    // Use the text parameter directly since the box component already cleared its value
+    if (!text || !text.trim()) {
+      console.log('[MessageInput] Empty text, aborting');
       return;
     }
 
-    // Check if there's enough space below the textarea
-    const spaceBelow = window.innerHeight - rect.bottom;
-    const spaceAbove = rect.top;
-    this.mentionDropdownShowAbove = spaceBelow < 200 && spaceAbove > spaceBelow;
+    this.isSending = true;
+    try {
+      const messageDetail = await this.createMessageDetailFromText(text.trim());
+      console.log('[MessageInput] Created message detail:', messageDetail.Message);
 
-    // Position relative to the container
-    // Always anchor to the textarea edge so dropdown stays in place as content changes
-    if (this.mentionDropdownShowAbove) {
-      // Show above the textarea - anchor to the TOP of the textarea
-      // CSS transform will make it grow upward from this anchor point
-      this.mentionDropdownPosition = {
-        top: rect.top - containerRect.top - 4, // Anchor just above textarea
-        left: rect.left - containerRect.left
-      };
-    } else {
-      // Show below the textarea (default) - anchor to the BOTTOM of the textarea
-      this.mentionDropdownPosition = {
-        top: rect.bottom - containerRect.top + 4,
-        left: rect.left - containerRect.left
-      };
+      const saved = await messageDetail.Save();
+
+      if (saved) {
+        await this.handleSuccessfulSend(messageDetail);
+      } else {
+        this.handleSendFailure(messageDetail);
+      }
+    } catch (error) {
+      this.handleSendError(error);
+    } finally {
+      this.isSending = false;
     }
-  }
-
-  /**
-   * Handle mention suggestion selection
-   */
-  onMentionSelected(suggestion: MentionSuggestion): void {
-    if (this.mentionStartIndex === -1) return;
-
-    const textarea = this.messageTextarea.nativeElement;
-    const cursorPos = textarea.selectionStart;
-
-    // Replace the @mention text with the selected name
-    const beforeMention = this.messageText.substring(0, this.mentionStartIndex);
-    const afterMention = this.messageText.substring(cursorPos);
-
-    // If name has spaces, wrap in quotes
-    const mentionText = suggestion.displayName.includes(' ')
-      ? `@"${suggestion.displayName}" `
-      : `@${suggestion.displayName} `;
-
-    this.messageText = beforeMention + mentionText + afterMention;
-
-    // Close dropdown
-    this.closeMentionDropdown();
-
-    // Set cursor position after the mention
-    const newCursorPos = beforeMention.length + mentionText.length;
-    setTimeout(() => {
-      textarea.selectionStart = newCursorPos;
-      textarea.selectionEnd = newCursorPos;
-      textarea.focus();
-    }, 0);
-  }
-
-  /**
-   * Close mention dropdown
-   */
-  closeMentionDropdown(): void {
-    this.showMentionDropdown = false;
-    this.mentionSuggestions = [];
-    this.mentionStartIndex = -1;
-    this.mentionQuery = '';
   }
 
   async onSend(): Promise<void> {
@@ -429,6 +316,24 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     detail.ConversationID = this.conversationId;
     detail.Message = this.messageText.trim();
+    detail.Role = 'User';
+    detail.UserID = this.currentUser.ID; // Set the user who sent the message
+
+    if (this.parentMessageId) {
+      detail.ParentID = this.parentMessageId;
+    }
+
+    return detail;
+  }
+
+  /**
+   * Creates and configures a new conversation detail message from provided text
+   */
+  private async createMessageDetailFromText(text: string): Promise<ConversationDetailEntity> {
+    const detail = await this.dataCache.createConversationDetail(this.currentUser);
+
+    detail.ConversationID = this.conversationId;
+    detail.Message = text;
     detail.Role = 'User';
     detail.UserID = this.currentUser.ID; // Set the user who sent the message
 
@@ -617,8 +522,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    */
   private refocusTextarea(): void {
     setTimeout(() => {
-      if (this.messageTextarea?.nativeElement) {
-        this.messageTextarea.nativeElement.focus();
+      if (this.inputBox) {
+        this.inputBox.focus();
       }
     }, 100);
   }
@@ -1700,24 +1605,38 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           agentResponseMessage.AgentID = result.agentRun.AgentID;
         }
 
-        await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
-
-        // Server created artifacts - emit event to trigger UI reload
-        if (result.payload && Object.keys(result.payload).length > 0) {
-          this.artifactCreated.emit({
-            artifactId: '',
-            versionId: '',
-            versionNumber: 0,
-            conversationDetailId: agentResponseMessage.ID,
-            name: ''
-          });
-          this.messageSent.emit(agentResponseMessage);
+        // Multi-stage response handling (same logic as ambient Sage)
+        // Stage 1: Check for task graph (multi-step orchestration)
+        if (result.payload?.taskGraph) {
+          console.log('📋 Task graph detected from @mention, starting task orchestration');
+          await this.handleTaskGraphExecution(userMessage, result, conversationId, agentResponseMessage);
         }
+        // Stage 2: Check for sub-agent invocation (single-step delegation)
+        else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
+          console.log('🎯 Sub-agent invocation detected from @mention');
+          await this.handleSubAgentInvocation(userMessage, result, conversationId, agentResponseMessage);
+        }
+        // Stage 3: Normal chat response
+        else {
+          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
 
-        // Mark user message as complete
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+          // Server created artifacts - emit event to trigger UI reload
+          if (result.payload && Object.keys(result.payload).length > 0) {
+            this.artifactCreated.emit({
+              artifactId: '',
+              versionId: '',
+              versionNumber: 0,
+              conversationDetailId: agentResponseMessage.ID,
+              name: ''
+            });
+            this.messageSent.emit(agentResponseMessage);
+          }
+
+          // Mark user message as complete
+          userMessage.Status = 'Complete';
+          await userMessage.Save();
+          this.messageSent.emit(userMessage);
+        }
       } else {
         // Agent failed - create error message
         const errorMessage = await this.dataCache.createConversationDetail(this.currentUser);

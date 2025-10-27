@@ -1,10 +1,11 @@
-import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
+import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { MJGlobal } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
 import { FileStorageProviderEntity } from "@memberjunction/core-entities";
 import { FileStorageBase } from "@memberjunction/storage";
 import { BaseFileStorageAction } from "./base-file-storage.action";
+import { BaseAction } from "@memberjunction/actions";
 
 /**
  * Action that retrieves a list of active and available file storage providers.
@@ -43,30 +44,25 @@ import { BaseFileStorageAction } from "./base-file-storage.action";
  * });
  * ```
  */
-@RegisterClass(BaseFileStorageAction, "List Storage Providers")
+@RegisterClass(BaseAction, "List Storage Providers")
 export class ListStorageProvidersAction extends BaseFileStorageAction {
-
-    /**
-     * List of storage provider driver keys that support native file search.
-     * Used to populate the SupportsSearch field in results.
-     */
-    private readonly SEARCH_SUPPORTED_PROVIDERS = [
-        'Google Drive Storage',
-        'SharePoint Storage',
-        'Dropbox Storage',
-        'Box Storage'
-    ];
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         // Optional parameter to filter only providers that support search
         const searchSupportedOnly = this.getBooleanParam(params, "searchsupportedonly", false);
 
         try {
+            // Build filter for active providers, optionally filtering for search support
+            let extraFilter = "IsActive=1";
+            if (searchSupportedOnly) {
+                extraFilter += " AND SupportsSearch=1";
+            }
+
             // Query for active file storage providers from database
             const rv = new RunView();
             const result = await rv.RunView<FileStorageProviderEntity>({
                 EntityName: 'File Storage Providers',
-                ExtraFilter: "IsActive=1",
+                ExtraFilter: extraFilter,
                 OrderBy: 'Priority, Name',
                 ResultType: 'entity_object'
             }, params.ContextUser);
@@ -90,7 +86,8 @@ export class ListStorageProvidersAction extends BaseFileStorageAction {
 
             // Check which providers are actually available in the running environment
             for (const provider of dbProviders) {
-                const supportsSearch = this.SEARCH_SUPPORTED_PROVIDERS.includes(provider.ServerDriverKey);
+                // Get SupportsSearch from database column (using Get() until CodeGen regenerates entity class)
+                const supportsSearch = provider.Get('SupportsSearch') ?? false;
 
                 // Skip if filtering for search-only and this provider doesn't support it
                 if (searchSupportedOnly && !supportsSearch) {
@@ -147,7 +144,7 @@ export class ListStorageProvidersAction extends BaseFileStorageAction {
             const totalCount = availableProviders.length;
             const configuredCount = configuredProviders.length;
 
-            // Create detailed result message
+            // Create detailed result message with provider list
             let message = `Found ${totalCount} active storage provider(s) in database`;
             if (configuredCount < totalCount) {
                 message += `, ${configuredCount} configured and available`;
@@ -160,15 +157,47 @@ export class ListStorageProvidersAction extends BaseFileStorageAction {
                 message += ` (${searchSupportedCount} support search)`;
             }
 
+            // Add provider details to message for LLM visibility
+            message += '\n\nAvailable Providers:';
+            for (const provider of availableProviders) {
+                message += `\n- ${provider.Name}`;
+                if (provider.IsConfigured) {
+                    message += ` (Configured, ${provider.SupportsSearch ? 'Supports Search' : 'No Search Support'})`;
+                } else {
+                    message += ` (Not Configured: ${provider.ConfigurationError})`;
+                }
+            }
+
+            // Build output parameters array per ActionResultSimple spec
+            const outputParams: ActionParam[] = [
+                {
+                    Name: 'Providers',
+                    Value: availableProviders,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'TotalCount',
+                    Value: totalCount,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'ConfiguredCount',
+                    Value: configuredCount,
+                    Type: 'Output'
+                },
+                {
+                    Name: 'SearchSupportedCount',
+                    Value: searchSupportedCount,
+                    Type: 'Output'
+                }
+            ];
+
             // Return results
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
                 Message: message,
-                Providers: availableProviders,
-                TotalCount: totalCount,
-                ConfiguredCount: configuredCount,
-                SearchSupportedCount: searchSupportedCount
+                Params: outputParams
             } as ActionResultSimple;
 
         } catch (error) {

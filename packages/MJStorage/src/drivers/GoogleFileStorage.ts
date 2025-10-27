@@ -7,6 +7,8 @@ import {
   FileStorageBase,
   FileSearchOptions,
   FileSearchResultSet,
+  GetObjectParams,
+  GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -437,19 +439,23 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Retrieves metadata for a specific object in Google Cloud Storage.
-   * 
+   *
    * This method fetches the properties of an object without downloading its content,
    * which is more efficient for checking file attributes like size, content type,
    * and last modified date.
-   * 
-   * @param objectName - The name of the object to get metadata for
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for GCS)
    * @returns A Promise resolving to a StorageObjectMetadata object
    * @throws Error if the object doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const metadata = await gcsStorage.GetObjectMetadata('documents/report.pdf');
+   *   // For GCS, objectId and fullPath are the same (both are the object name)
+   *   const metadata = await gcsStorage.GetObjectMetadata({ fullPath: 'documents/report.pdf' });
+   *   // Or equivalently:
+   *   const metadata2 = await gcsStorage.GetObjectMetadata({ objectId: 'documents/report.pdf' });
+   *
    *   console.log(`File: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Last modified: ${metadata.lastModified}`);
@@ -458,15 +464,23 @@ export class GoogleFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For GCS, objectId and fullPath are the same (both are the object name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const file = this._client.bucket(this._bucket).file(objectName);
       const [metadata] = await file.getMetadata();
-      
+
       const pathParts = objectName.split('/');
       const name = pathParts[pathParts.length - 1];
       const path = pathParts.slice(0, -1).join('/');
-      
+
       return {
         name,
         path,
@@ -482,24 +496,28 @@ export class GoogleFileStorage extends FileStorageBase {
     } catch (e) {
       console.error('Error getting object metadata from Google storage', { objectName, bucket: this._bucket });
       console.error(e);
-      throw new Error(`Object not found: ${objectName}`);
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
 
   /**
    * Downloads an object's content from Google Cloud Storage.
-   * 
+   *
    * This method retrieves the full content of an object and returns it
    * as a Buffer for processing in memory.
-   * 
-   * @param objectName - The name of the object to download
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for GCS)
    * @returns A Promise resolving to a Buffer containing the object's data
    * @throws Error if the object doesn't exist or cannot be downloaded
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const content = await gcsStorage.GetObject('documents/config.json');
+   *   // For GCS, objectId and fullPath are the same (both are the object name)
+   *   const content = await gcsStorage.GetObject({ fullPath: 'documents/config.json' });
+   *   // Or equivalently:
+   *   const content2 = await gcsStorage.GetObject({ objectId: 'documents/config.json' });
+   *
    *   // Parse the JSON content
    *   const config = JSON.parse(content.toString('utf8'));
    *   console.log('Configuration loaded:', config);
@@ -508,7 +526,15 @@ export class GoogleFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For GCS, objectId and fullPath are the same (both are the object name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const file = this._client.bucket(this._bucket).file(objectName);
       const [bufferContent] = await file.download();
@@ -516,7 +542,7 @@ export class GoogleFileStorage extends FileStorageBase {
     } catch (e) {
       console.error('Error getting object from Google storage', { objectName, bucket: this._bucket });
       console.error(e);
-      throw new Error(`Failed to get object: ${objectName}`);
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
 

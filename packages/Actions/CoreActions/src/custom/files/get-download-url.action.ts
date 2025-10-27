@@ -58,7 +58,7 @@ export class GetDownloadUrlAction extends BaseFileStorageAction {
                 operation: 'GetDownloadUrl',
                 objectName,
                 downloadUrl: url
-            });
+            }, params);
 
         } catch (error) {
             return this.createErrorResult(

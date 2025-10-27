@@ -151,6 +151,62 @@
             "lastModified": "2025-10-15T23:02:37.485Z",
             "checksum": "50cf04ad8ea727f08056ca68fe58f56412df1315f8726ef227853a78cd257d9c"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: Get File Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1A53B7ED-BCF4-4656-AF5C-277E21E12F36"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.231Z",
+            "checksum": "7ef6f0eb8f8090090edd92742a0cd683e0e5eba8752194c1928685f22a6f19ce"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: Get Object Metadata",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BECD0806-3A02-4A0B-A747-058BF2EC7054"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.251Z",
+            "checksum": "0a07b0149fcd6fbe5545f18bff56d510f65d4fc00d4660821ad93842702d0b00"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: Get Download URL",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "99897734-2055-4DEF-A0A2-519E2CE8EA37"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.270Z",
+            "checksum": "5d8551411882946da1cf4e14048c6a23af6fd31f57e286f2febe4cf47e3965c7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: List Objects",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E42D14C-B739-4ADA-AA40-9DE95CEDCC24"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.489Z",
+            "checksum": "d8b358da42739a5d23ca02dd91c36d37c6c6467e2a6eba9c6f78dfdd64c0abbf"
+          }
         }
       ]
     },
@@ -378,6 +434,20 @@
                 "sync": {
                   "lastModified": "2025-10-20T02:09:52.485Z",
                   "checksum": "b98d16398b0f08d0244872e2b3ecd5a55625b9cf702602a2a7cb744bdbce22b1"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create Mermaid Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9FD498B7-423E-4039-8AE3-10260202549C"
+                },
+                "sync": {
+                  "lastModified": "2025-10-26T19:46:28.764Z",
+                  "checksum": "71d83cfcb0c7b18241d34b70d23557c0249fe07da16dd7f01ec685317d11ec66"
                 }
               }
             ],

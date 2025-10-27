@@ -8,6 +8,8 @@ import {
   FileSearchOptions,
   FileSearchResult,
   FileSearchResultSet,
+  GetObjectParams,
+  GetObjectMetadataParams,
   StorageListResult,
   StorageObjectMetadata
 } from '../generic/FileStorageBase';
@@ -642,19 +644,24 @@ export class GoogleDriveFileStorage extends FileStorageBase {
   
   /**
    * Retrieves metadata for a specific object in Google Drive.
-   * 
+   *
    * This method fetches the file information without downloading its content,
    * which is more efficient for checking file attributes like size, type,
    * and last modified date.
-   * 
-   * @param objectName - The path to the file to get metadata for
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise resolving to a StorageObjectMetadata object
    * @throws Error if the file doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const metadata = await driveStorage.GetObjectMetadata('documents/report.pdf');
+   *   // Fast path: Use objectId (Google Drive file ID)
+   *   const metadata = await driveStorage.GetObjectMetadata({ objectId: '1a2b3c4d5e' });
+   *
+   *   // Slow path: Use path
+   *   const metadata2 = await driveStorage.GetObjectMetadata({ fullPath: 'documents/report.pdf' });
+   *
    *   console.log(`File: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Last modified: ${metadata.lastModified}`);
@@ -663,41 +670,65 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
     try {
-      // Get the file
-      const file = await this._getItemByPath(objectName);
-      
-      if (!file.id) {
-        throw new Error(`File not found: ${objectName}`);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
       }
-      
-      // Parse path to get parent path
-      const pathParts = objectName.split('/');
-      pathParts.pop(); // Remove filename
-      const parentPath = pathParts.join('/');
-      
+
+      let file: drive_v3.Schema$File;
+      let parentPath = '';
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        console.log(`⚡ Fast path: Using Object ID directly: ${params.objectId}`);
+        const response = await this._drive.files.get({
+          fileId: params.objectId,
+          fields: 'id, name, mimeType, size, modifiedTime, createdTime, parents'
+        });
+        file = response.data;
+      } else {
+        // Slow path: Resolve path to file
+        console.log(`🐌 Slow path: Resolving path "${params.fullPath}" to ID`);
+        file = await this._getItemByPath(params.fullPath!);
+
+        if (!file.id) {
+          throw new Error(`File not found: ${params.fullPath}`);
+        }
+
+        // Parse path to get parent path
+        const pathParts = params.fullPath!.split('/');
+        pathParts.pop(); // Remove filename
+        parentPath = pathParts.join('/');
+      }
+
       return this._fileToMetadata(file, parentPath);
     } catch (error) {
-      console.error('Error getting object metadata', { objectName, error });
-      throw new Error(`Object not found: ${objectName}`);
+      console.error('Error getting object metadata', { params, error });
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
   
   /**
    * Downloads an object's content from Google Drive.
-   * 
+   *
    * This method retrieves the full content of a file and returns it
    * as a Buffer for processing in memory.
-   * 
-   * @param objectName - The path to the file to download
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise resolving to a Buffer containing the file's data
    * @throws Error if the file doesn't exist or cannot be downloaded
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const content = await driveStorage.GetObject('documents/config.json');
+   *   // Fast path: Use objectId (Google Drive file ID)
+   *   const content = await driveStorage.GetObject({ objectId: '1a2b3c4d5e' });
+   *
+   *   // Slow path: Use path
+   *   const content2 = await driveStorage.GetObject({ fullPath: 'documents/config.json' });
+   *
    *   // Parse the JSON content
    *   const config = JSON.parse(content.toString('utf8'));
    *   console.log('Configuration loaded:', config);
@@ -706,27 +737,43 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
-      // Get the file
-      const file = await this._getItemByPath(objectName);
-      
-      if (!file.id) {
-        throw new Error(`File not found: ${objectName}`);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
       }
-      
+
+      let fileId: string;
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        fileId = params.objectId;
+        console.log(`⚡ Fast path: Using Object ID directly: ${fileId}`);
+      } else {
+        // Slow path: Resolve path to ID
+        console.log(`🐌 Slow path: Resolving path "${params.fullPath}" to ID`);
+        const file = await this._getItemByPath(params.fullPath!);
+
+        if (!file.id) {
+          throw new Error(`File not found: ${params.fullPath}`);
+        }
+
+        fileId = file.id;
+      }
+
       // Download the file
       const response = await this._drive.files.get({
-        fileId: file.id,
+        fileId: fileId,
         alt: 'media'
       }, {
         responseType: 'arraybuffer'
       });
-      
+
       return Buffer.from(response.data as ArrayBuffer);
     } catch (error) {
-      console.error('Error getting object', { objectName, error });
-      throw new Error(`Failed to get object: ${objectName}`);
+      console.error('Error getting object', { params, error });
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
   
@@ -1022,12 +1069,8 @@ export class GoogleDriveFileStorage extends FileStorageBase {
         const folder = await this._getItemByPath(options.pathPrefix);
         parentFolderId = folder.id || undefined;
       } catch (error) {
-        // If path doesn't exist, return empty results
-        return {
-          results: [],
-          totalMatches: 0,
-          hasMore: false
-        };
+        // If path doesn't exist, throw error so caller knows search failed
+        throw new Error(`Google Drive search failed - invalid pathPrefix: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
     if (parentFolderId) {
@@ -1073,6 +1116,7 @@ export class GoogleDriveFileStorage extends FileStorageBase {
           size: parseInt(file.size || '0'),
           contentType: file.mimeType!,
           lastModified: new Date(file.modifiedTime!),
+          objectId: file.id || '',  // Google Drive file ID for direct access
           matchInFilename: file.name!.toLowerCase().includes(query.toLowerCase()),
           customMetadata: file.properties as Record<string, string>,
           providerData: { driveFileId: file.id }

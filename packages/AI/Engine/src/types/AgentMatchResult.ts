@@ -42,6 +42,13 @@ export interface AgentMatchResult {
      * Values: 'Any', 'Top-Level', 'Sub-Agent'
      */
     invocationMode?: string;
+
+    /**
+     * Name of the default artifact type this agent produces (optional)
+     * NULL if agent doesn't produce artifacts (orchestration/utility agents)
+     * Examples: "Research Content", "Report", "Diagram"
+     */
+    defaultArtifactType?: string;
 }
 
 /**
@@ -59,4 +66,10 @@ export interface AgentEmbeddingMetadata {
      * Values: 'Any', 'Top-Level', 'Sub-Agent'
      */
     invocationMode?: string;
+
+    /**
+     * Name of the default artifact type this agent produces
+     * NULL if agent doesn't produce artifacts
+     */
+    defaultArtifactType?: string;
 }

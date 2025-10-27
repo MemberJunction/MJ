@@ -172,6 +172,39 @@
   font-size: 14px;
 }
 
+.save-to-collection-btn.in-collection {
+  color: #6366F1; /* Indigo color to indicate it's saved */
+}
+
+.save-to-collection-btn.in-collection:hover {
+  background: #EEF2FF;
+  color: #4F46E5;
+}
+
+.share-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #9CA3AF;
+  padding: 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.share-btn:hover {
+  background: #F3F4F6;
+  color: #6366F1;
+}
+
+.share-btn i {
+  font-size: 14px;
+}
+
 .close-btn {
   background: none;
   border: none;

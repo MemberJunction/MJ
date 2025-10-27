@@ -14,7 +14,7 @@ import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
  * ```typescript
  * // Find agents for a research task
  * await runAction({
- *   ActionName: 'Find Best Agent',
+ *   ActionName: 'Find Candidate Agents',
  *   Params: [{
  *     Name: 'TaskDescription',
  *     Value: 'Research market trends and compile a comprehensive report'
@@ -28,18 +28,19 @@ import { AIAgentPermissionHelper } from "@memberjunction/ai-engine-base";
  * });
  * ```
  */
-@RegisterClass(BaseAction, "Find Best Agent")
+@RegisterClass(BaseAction, "Find Candidate Agents")
 export class FindBestAgentAction extends BaseAction {
     // Singleton initialization removed - AIEngine handles embedding lifecycle
 
     /**
-     * Executes the Find Best Agent action.
+     * Executes the Find Candidate Agents action.
      *
      * @param params - The action parameters containing:
      *   - TaskDescription: Description of the task to find agents for (required)
      *   - MaxResults: Maximum number of agents to return (optional, default: 5)
      *   - MinimumSimilarityScore: Minimum similarity score 0-1 (optional, default: 0.5)
      *   - IncludeInactive: Include inactive agents (optional, default: false)
+     *   - ExcludeSubAgents: Exclude agents with invocation mode 'Sub-Agent' (optional, default: true)
      *
      * @returns Action result with matched agents
      */
@@ -50,6 +51,7 @@ export class FindBestAgentAction extends BaseAction {
             const maxResults = parseInt(this.getParamValue(params, 'maxresults') || '5');
             const minimumSimilarityScore = parseFloat(this.getParamValue(params, 'minimumsimilarityscore') || '0.5');
             const includeInactive = this.getBooleanParam(params, 'includeinactive', false);
+            const excludeSubAgents = this.getBooleanParam(params, 'excludesubagents', true);
 
             // Validate required input
             if (!taskDescription || taskDescription.trim().length === 0) {
@@ -111,11 +113,14 @@ export class FindBestAgentAction extends BaseAction {
                 permissionFilteredAgents = permissionFilteredAgents.filter(a => a.status === 'Active');
             }
 
-            // Filter by invocation mode - exclude Sub-Agent agents (only show Any or Top-Level)
-            // Sub-Agents are meant to be called by other agents, not discovered by users/tools
-            const invocationFilteredAgents = permissionFilteredAgents.filter(a =>
-                a.invocationMode !== 'Sub-Agent'
-            );
+            // Filter by invocation mode if excludeSubAgents is true
+            // Sub-Agents are meant to be called by other agents, not typically discovered by users/tools
+            let invocationFilteredAgents = permissionFilteredAgents;
+            if (excludeSubAgents) {
+                invocationFilteredAgents = permissionFilteredAgents.filter(a =>
+                    a.invocationMode !== 'Sub-Agent'
+                );
+            }
 
             // Limit to maxResults after all filtering
             const filteredAgents = invocationFilteredAgents.slice(0, maxResults);
@@ -138,6 +143,37 @@ export class FindBestAgentAction extends BaseAction {
                 agentActionsMap.set(agent.agentId, agentActions);
             }
 
+            // Create map of agentId -> sub-agents (name and description)
+            const agentSubAgentsMap = new Map<string, Array<{name: string, description: string}>>();
+            for (const agent of filteredAgents) {
+                const subAgents: Array<{name: string, description: string}> = [];
+
+                // Find child agents (ParentID = this agent)
+                const childAgents = AIEngine.Instance.Agents.filter(a =>
+                    a.ParentID === agent.agentId && a.Status === 'Active'
+                );
+                subAgents.push(...childAgents.map(a => ({
+                    name: a.Name,
+                    description: a.Description || ''
+                })));
+
+                // Find related agents (via AgentRelationships)
+                const relationships = AIEngine.Instance.AgentRelationships.filter(r =>
+                    r.AgentID === agent.agentId && r.Status === 'Active'
+                );
+                for (const rel of relationships) {
+                    const relatedAgent = AIEngine.Instance.Agents.find(a => a.ID === rel.SubAgentID);
+                    if (relatedAgent && relatedAgent.Status === 'Active') {
+                        subAgents.push({
+                            name: relatedAgent.Name,
+                            description: relatedAgent.Description || ''
+                        });
+                    }
+                }
+
+                agentSubAgentsMap.set(agent.agentId, subAgents);
+            }
+
             // Add output parameters
             params.Params.push({
                 Name: 'MatchedAgents',
@@ -151,7 +187,7 @@ export class FindBestAgentAction extends BaseAction {
                 Value: filteredAgents.length
             });
 
-            // Build response message with full descriptions and actions
+            // Build response message with full descriptions, actions, and sub-agents
             const responseData = {
                 message: `Found ${filteredAgents.length} accessible agent(s)`,
                 taskDescription: taskDescription,
@@ -161,7 +197,9 @@ export class FindBestAgentAction extends BaseAction {
                     agentName: a.agentName,
                     similarityScore: Math.round(a.similarityScore * 100) / 100, // Round to 2 decimal places
                     description: a.description,  // Full description, no truncation
-                    actions: agentActionsMap.get(a.agentId) || []
+                    actions: agentActionsMap.get(a.agentId) || [],
+                    subAgents: agentSubAgentsMap.get(a.agentId) || [],  // Sub-agents with name and description
+                    defaultArtifactType: a.defaultArtifactType || null  // Artifact type this agent produces
                 }))
             };
 
@@ -175,7 +213,7 @@ export class FindBestAgentAction extends BaseAction {
             return {
                 Success: false,
                 ResultCode: 'EXECUTION_ERROR',
-                Message: `Failed to find best agent: ${error instanceof Error ? error.message : String(error)}`
+                Message: `Failed to Find Candidate Agents: ${error instanceof Error ? error.message : String(error)}`
             };
         }
     }
