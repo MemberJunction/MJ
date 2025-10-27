@@ -46,7 +46,11 @@ export type SkipAPIArtifactVersion = {
     /**
      * Foreign key to the related artifact - not using a link to the object here to avoid circular references
      */
-    artifactId: string; 
+    artifactId: string;
+    /**
+     * Optional foreign key to the conversation detail that created this artifact version.
+     */
+    conversationDetailID?: string;
     /**
      * Auto increment sequential version, start with 1 for each artifact
      */

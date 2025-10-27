@@ -6,9 +6,9 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, LogError, Metadata, UserInfo, RunView } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo, RunView } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelEntityExtended, ActionEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIAgentEntityExtended, AIModelEntityExtended, ActionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -54,6 +54,11 @@ export class AIEngine extends AIEngineBase {
     // Actions loaded from database
     private _actions: ActionEntity[] = [];
 
+    // Embedding caches to track which items have embeddings generated
+    private _agentEmbeddingsCache: Map<string, boolean> = new Map();
+    private _actionEmbeddingsCache: Map<string, boolean> = new Map();
+    private _embeddingsGenerated: boolean = false;
+
     public static get Instance(): AIEngine {
         return super.getInstance<AIEngine>();
     }
@@ -82,6 +87,46 @@ export class AIEngine extends AIEngineBase {
      */
     public get SystemActions(): ActionEntity[] {
         return this._actions;
+    }
+
+    /**
+     * Force regeneration of all embeddings for agents and actions.
+     *
+     * Use this method when:
+     * - Switching to a different embedding model
+     * - Agent or Action descriptions have been significantly updated
+     * - You want to ensure embeddings are up-to-date after bulk changes
+     * - Troubleshooting embedding-related issues
+     *
+     * Note: This is an expensive operation and should not be called frequently.
+     * Normal auto-refresh operations will NOT regenerate embeddings to avoid performance issues.
+     *
+     * @param contextUser - User context for database operations (required on server-side)
+     */
+    public async RegenerateEmbeddings(contextUser?: UserInfo): Promise<void> {
+        console.log('AIEngine: Force regenerating all embeddings...');
+
+        try {
+            // Clear the caches
+            this._agentEmbeddingsCache.clear();
+            this._actionEmbeddingsCache.clear();
+            this._embeddingsGenerated = false;
+
+            // Clear the vector services
+            this._agentVectorService = null;
+            this._actionVectorService = null;
+
+            // Reload actions and regenerate embeddings
+            await this.loadActions(contextUser);
+            await this.loadAgentEmbeddings();
+            await this.loadActionEmbeddings();
+            this._embeddingsGenerated = true;
+
+            console.log('AIEngine: Embedding regeneration complete');
+        } catch (error) {
+            console.error('AIEngine: Failed to regenerate embeddings:', error);
+            throw error;
+        }
     }
 
     /**
@@ -178,30 +223,38 @@ export class AIEngine extends AIEngineBase {
     /**
      * Override AdditionalLoading to load Actions and compute embeddings.
      * Called automatically during AIEngine initialization after base loading completes.
+     * Only generates embeddings on the first load to avoid wasteful regeneration during auto-refresh.
      * @param contextUser - User context for any additional operations
      */
     protected override async AdditionalLoading(contextUser?: UserInfo): Promise<void> {
         // Call parent first (sets up prompt-category associations, agent relationships, etc.)
         await super.AdditionalLoading(contextUser);
 
-        // Load Actions from database
-        await this.loadActions(contextUser);
+        // Only generate embeddings on the very first load
+        // On subsequent auto-refreshes (when configs are updated), skip embedding generation
+        // since the embeddings are still valid and expensive to regenerate
+        if (!this._embeddingsGenerated) {
+            // Load Actions from database
+            await this.loadActions(contextUser);
 
-        // Compute agent embeddings using agents already loaded by base class
-        await this.loadAgentEmbeddings();
+            // Compute agent embeddings using agents already loaded by base class
+            await this.loadAgentEmbeddings();
 
-        // Compute action embeddings using actions we just loaded
-        await this.loadActionEmbeddings();
+            // Compute action embeddings using actions we just loaded
+            await this.loadActionEmbeddings();
+
+            this._embeddingsGenerated = true;
+        }
     }
 
     /**
      * Load embeddings for all agents.
      * Uses agents already loaded by AIEngineBase - no database round trip needed.
+     * Only generates embeddings for agents that don't already have them cached.
      * @private
      */
     private async loadAgentEmbeddings(): Promise<void> {
         const startTime = Date.now();
-        console.log('AIEngine: Loading agent embeddings...');
 
         try {
             // Use agents already loaded by base class
@@ -212,18 +265,37 @@ export class AIEngine extends AIEngineBase {
                 return;
             }
 
+            // Filter to only agents that don't have embeddings yet
+            const agentsNeedingEmbeddings = agents.filter(agent =>
+                !this._agentEmbeddingsCache.has(agent.ID)
+            );
+
+            if (agentsNeedingEmbeddings.length === 0) {
+                console.log(`AIEngine: All ${agents.length} agents already have embeddings`);
+                return;
+            }
+
+            console.log(`AIEngine: Generating embeddings for ${agentsNeedingEmbeddings.length} agents (${agents.length - agentsNeedingEmbeddings.length} already cached)...`);
+
             // Generate embeddings using static utility method
             const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
-                agents,
+                agentsNeedingEmbeddings,
                 (text) => this.EmbedTextLocal(text)  // Pass our own embed method
             );
 
-            // Load into vector service
-            this._agentVectorService = new SimpleVectorService();
+            // Mark these agents as having embeddings
+            for (const agent of agentsNeedingEmbeddings) {
+                this._agentEmbeddingsCache.set(agent.ID, true);
+            }
+
+            // Load into vector service (create if needed, or add to existing)
+            if (!this._agentVectorService) {
+                this._agentVectorService = new SimpleVectorService();
+            }
             this._agentVectorService.LoadVectors(entries);
 
             const duration = Date.now() - startTime;
-            console.log(`AIEngine: Loaded embeddings for ${entries.length} agents in ${duration}ms`);
+            console.log(`AIEngine: Generated embeddings for ${agentsNeedingEmbeddings.length} new agents in ${duration}ms`);
 
         } catch (error) {
             console.error(`Failed to load agent embeddings: ${error instanceof Error ? error.message : String(error)}`);
@@ -267,11 +339,11 @@ export class AIEngine extends AIEngineBase {
     /**
      * Load embeddings for all actions.
      * Uses actions loaded in loadActions() - no additional database round trip needed.
+     * Only generates embeddings for actions that don't already have them cached.
      * @private
      */
     private async loadActionEmbeddings(): Promise<void> {
         const startTime = Date.now();
-        console.log('AIEngine: Loading action embeddings...');
 
         try {
             // Use actions loaded in loadActions()
@@ -282,22 +354,133 @@ export class AIEngine extends AIEngineBase {
                 return;
             }
 
+            // Filter to only actions that don't have embeddings yet
+            const actionsNeedingEmbeddings = actions.filter(action =>
+                !this._actionEmbeddingsCache.has(action.ID)
+            );
+
+            if (actionsNeedingEmbeddings.length === 0) {
+                console.log(`AIEngine: All ${actions.length} actions already have embeddings`);
+                return;
+            }
+
+            console.log(`AIEngine: Generating embeddings for ${actionsNeedingEmbeddings.length} actions (${actions.length - actionsNeedingEmbeddings.length} already cached)...`);
+
             // Generate embeddings using static utility method
             const entries = await ActionEmbeddingService.GenerateActionEmbeddings(
-                actions,
+                actionsNeedingEmbeddings,
                 (text) => this.EmbedTextLocal(text)  // Pass our own embed method
             );
 
-            // Load into vector service
-            this._actionVectorService = new SimpleVectorService();
+            // Mark these actions as having embeddings
+            for (const action of actionsNeedingEmbeddings) {
+                this._actionEmbeddingsCache.set(action.ID, true);
+            }
+
+            // Load into vector service (create if needed, or add to existing)
+            if (!this._actionVectorService) {
+                this._actionVectorService = new SimpleVectorService();
+            }
             this._actionVectorService.LoadVectors(entries);
 
             const duration = Date.now() - startTime;
-            console.log(`AIEngine: Loaded embeddings for ${entries.length} actions in ${duration}ms`);
+            console.log(`AIEngine: Generated embeddings for ${actionsNeedingEmbeddings.length} new actions in ${duration}ms`);
 
         } catch (error) {
             console.error(`Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
             // Don't throw - allow AIEngine to continue loading even if embeddings fail
+        }
+    }
+
+    /**
+     * Override HandleIndividualBaseEntityEvent to generate embeddings incrementally for new records.
+     * This ensures that when new agents or actions are created, their embeddings are generated
+     * immediately rather than waiting for a full regeneration.
+     * @param event - The entity event (save, delete, etc.)
+     * @returns Promise<boolean> indicating success
+     */
+    protected override async HandleIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
+        // Call parent to handle config auto-refresh
+        const baseResult = await super.HandleIndividualBaseEntityEvent(event);
+
+        // Handle incremental embedding generation for new records
+        // Only do this if we've already done the initial embedding generation
+        if (event.type === 'save' && this._embeddingsGenerated) {
+            const entityName = event.baseEntity.EntityInfo.Name;
+
+            switch (entityName) {
+                case 'AI Agents':
+                    // New agent created - generate embeddings only for this agent
+                    const agent = this.Agents.find(a => a.ID === event.baseEntity.PrimaryKey.ToString());
+                    if (agent && !this._agentEmbeddingsCache.has(agent.ID)) {
+                        console.log(`AIEngine: Generating embeddings for new agent: ${agent.Name}`);
+                        await this.generateSingleAgentEmbedding(agent);
+                    }
+                    break;
+
+                case 'Actions':
+                    // New action created - generate embeddings only for this action
+                    const action = this._actions.find(a => a.ID === event.baseEntity.PrimaryKey.ToString());
+                    if (action && !this._actionEmbeddingsCache.has(action.ID)) {
+                        console.log(`AIEngine: Generating embeddings for new action: ${action.Name}`);
+                        await this.generateSingleActionEmbedding(action);
+                    }
+                    break;
+            }
+        }
+
+        return baseResult;
+    }
+
+    /**
+     * Generate embedding for a single agent and add it to the vector service.
+     * Used for incremental updates when new agents are created.
+     * @param agent - The agent to generate embeddings for
+     * @private
+     */
+    private async generateSingleAgentEmbedding(agent: AIAgentEntityExtended): Promise<void> {
+        try {
+            const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
+                [agent],
+                (text) => this.EmbedTextLocal(text)
+            );
+
+            if (entries.length > 0) {
+                this._agentEmbeddingsCache.set(agent.ID, true);
+                if (!this._agentVectorService) {
+                    this._agentVectorService = new SimpleVectorService();
+                }
+                this._agentVectorService.LoadVectors(entries);
+                console.log(`AIEngine: Generated embedding for agent ${agent.Name}`);
+            }
+        } catch (error) {
+            console.error(`Failed to generate embedding for agent ${agent.Name}:`, error);
+        }
+    }
+
+    /**
+     * Generate embedding for a single action and add it to the vector service.
+     * Used for incremental updates when new actions are created.
+     * @param action - The action to generate embeddings for
+     * @private
+     */
+    private async generateSingleActionEmbedding(action: ActionEntity): Promise<void> {
+        try {
+            const entries = await ActionEmbeddingService.GenerateActionEmbeddings(
+                [action],
+                (text) => this.EmbedTextLocal(text)
+            );
+
+            if (entries.length > 0) {
+                this._actionEmbeddingsCache.set(action.ID, true);
+                if (!this._actionVectorService) {
+                    this._actionVectorService = new SimpleVectorService();
+                }
+                this._actionVectorService.LoadVectors(entries);
+                console.log(`AIEngine: Generated embedding for action ${action.Name}`);
+            }
+        } catch (error) {
+            console.error(`Failed to generate embedding for action ${action.Name}:`, error);
         }
     }
 
