@@ -11,6 +11,7 @@ import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
+import { hasMetadataKeyword } from '../constants/metadata-keywords';
 import type { SqlLoggingSession, SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 
 // Configuration for parallel processing
@@ -884,7 +885,7 @@ export class PushService {
     // Add to batch context AFTER save so it has an ID for child @parent:ID references
     // Use the recordId (lookupKey) as the key so child records can find this parent
     batchContext.set(lookupKey, entity);
-    
+
     // Update primaryKey for new records
     if (isNew) {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
@@ -896,7 +897,48 @@ export class PushService {
         record.primaryKey = newPrimaryKey;
       }
     }
-    
+
+    // Sync back computed/calculated field values from the entity to the JSON
+    // This handles fields that are set during Save() operations (like ComponentEntityExtended)
+    // We preserve @ references in the original fields, only updating fields without them
+    // IMPORTANT: We only update fields that were already present in the original JSON
+    // and we skip all primary key fields entirely (they belong in the primaryKey property)
+    if (isNew || isDirty) {
+      // Get primary key field names to exclude them
+      const primaryKeyFields = new Set<string>();
+      const entityInfo = this.syncEngine.getEntityInfo(entityName);
+      if (entityInfo) {
+        for (const pk of entityInfo.PrimaryKeys) {
+          primaryKeyFields.add(pk.Name);
+        }
+      }
+
+      for (const [fieldName, originalValue] of Object.entries(originalFields)) {
+        // Skip primary key fields - they should never be in the fields object
+        if (primaryKeyFields.has(fieldName)) {
+          continue;
+        }
+
+        // Check if this field uses an @ reference (and should be preserved)
+        const usesReference = hasMetadataKeyword(originalValue);
+
+        if (!usesReference) {
+          // Get the fresh value from the entity after save
+          const entityValue = entity.Get(fieldName);
+
+          // Only update if the value actually changed during save
+          // This handles computed fields that were set in custom Save() methods
+          if (entityValue !== originalValue) {
+            originalFields[fieldName] = entityValue;
+
+            if (options.verbose) {
+              callbacks?.onLog?.(`   📝 Synced computed field '${fieldName}' back to JSON`);
+            }
+          }
+        }
+      }
+    }
+
     // Only update sync metadata if the record was actually dirty (changed)
     if (isNew || isDirty) {
       record.sync = {
@@ -909,8 +951,9 @@ export class PushService {
     } else if (options.verbose) {
       callbacks?.onLog?.(`   - Skipped sync metadata update (no changes detected)`);
     }
-    
-    // Restore original field values to preserve @ references
+
+    // Update record.fields with the (potentially modified) originalFields
+    // This preserves @ references while syncing computed values
     record.fields = originalFields;
     
     return { 

@@ -2,6 +2,8 @@
  * Validation types and interfaces for MetadataSync
  */
 
+import type { MetadataKeyword } from '../constants/metadata-keywords';
+
 export interface ValidationResult {
     isValid: boolean;
     errors: ValidationError[];
@@ -157,7 +159,11 @@ export interface ValidationOptions {
     checkBestPractices: boolean;
 }
 
-export type ReferenceType = '@file:' | '@lookup:' | '@template:' | '@parent:' | '@root:' | '@env:';
+/**
+ * Reference type representing metadata keywords.
+ * This type is now sourced from the centralized metadata-keywords constants.
+ */
+export type ReferenceType = MetadataKeyword;
 
 export interface ParsedReference {
     type: ReferenceType;
