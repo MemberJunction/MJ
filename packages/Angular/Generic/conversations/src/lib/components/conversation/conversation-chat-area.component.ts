@@ -8,7 +8,7 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
-import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON } from '../../models/conversation-complete-query.model';
+import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON, RatingJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
 import { ArtifactViewerPanelComponent } from '@memberjunction/ng-artifacts';
 import { Subject } from 'rxjs';
@@ -88,6 +88,11 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   // Agent run mapping: ConversationDetailID -> AIAgentRunEntityExtended
   // Loaded once per conversation and kept in sync as new runs are created
   public agentRunsByDetailId = new Map<string, AIAgentRunEntityExtended>();
+
+  /**
+   * Ratings by conversation detail ID (parsed from RatingsJSON)
+   */
+  public ratingsByDetailId = new Map<string, RatingJSON[]>();
 
   // Timer for smooth agent run UI updates (updates every second while agent runs)
   private agentRunUpdateTimer: any = null;
@@ -382,8 +387,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
             AgentID: agentRunData.AgentID,
             Agent: agentRunData.Agent,
             Status: agentRunData.Status,
-            __mj_CreatedAt: new Date(agentRunData.__mj_CreatedAt),
-            __mj_UpdatedAt: new Date(agentRunData.__mj_UpdatedAt),
+            __mj_CreatedAt: agentRunData.__mj_CreatedAt,
+            __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
             TotalPromptTokensUsed: agentRunData.TotalPromptTokensUsed,
             TotalCompletionTokensUsed: agentRunData.TotalCompletionTokensUsed,
             TotalCost: agentRunData.TotalCost,
@@ -419,11 +424,17 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
             this.systemArtifactsByDetailId.set(row.ID, systemArtifactList);
           }
         }
+
+        // Build ratings map
+        if (parsed.ratings.length > 0) {
+          this.ratingsByDetailId.set(row.ID, parsed.ratings);
+        }
       }
 
       // Create new Map references to trigger Angular change detection
       this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
       this.artifactsByDetailId = new Map(this.artifactsByDetailId);
+      this.ratingsByDetailId = new Map(this.ratingsByDetailId);
       this.systemArtifactsByDetailId = new Map(this.systemArtifactsByDetailId);
 
       // Clear combined cache since we loaded new artifacts

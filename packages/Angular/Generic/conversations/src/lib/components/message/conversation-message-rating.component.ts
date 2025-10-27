@@ -1,6 +1,7 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ConversationDetailRatingEntity } from '@memberjunction/core-entities';
+import { RatingJSON } from '../../models/conversation-complete-query.model';
 
 /**
  * Component for displaying and managing multi-user ratings on conversation messages.
@@ -10,14 +11,14 @@ import { ConversationDetailRatingEntity } from '@memberjunction/core-entities';
     selector: 'mj-conversation-message-rating',
     template: `
         <div class="rating-container">
-            <div class="aggregate-rating" *ngIf="totalRatings > 0">
+            <div class="aggregate-rating" *ngIf="totalRatings > 0" [title]="getRatingsTooltip()">
                 <span class="thumbs-up" [class.has-votes]="thumbsUpCount > 0">
                     👍 {{ thumbsUpCount }}
                 </span>
                 <span class="thumbs-down" [class.has-votes]="thumbsDownCount > 0">
                     👎 {{ thumbsDownCount }}
                 </span>
-                <span class="total-count">({{ totalRatings }})</span>
+                <span class="total-count">({{ totalRatings }} {{ totalRatings === 1 ? 'rating' : 'ratings' }})</span>
             </div>
 
             <div class="user-rating" [class.has-rated]="currentUserRating != null">
@@ -111,12 +112,13 @@ import { ConversationDetailRatingEntity } from '@memberjunction/core-entities';
 export class ConversationMessageRatingComponent implements OnInit {
     @Input() conversationDetailId!: string;
     @Input() currentUser!: UserInfo;
-    @Input() ratingsData?: any[]; // Pre-loaded ratings from parent (RatingsJSON from query)
+    @Input() ratingsData?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
 
     thumbsUpCount = 0;
     thumbsDownCount = 0;
     totalRatings = 0;
     currentUserRating: number | null = null;
+    allRatings: RatingJSON[] = [];
 
     private get currentUserId(): string {
         return this.currentUser?.ID || '';
@@ -135,13 +137,37 @@ export class ConversationMessageRatingComponent implements OnInit {
     /**
      * Process ratings data (from query or API)
      */
-    private ProcessRatings(ratings: any[]): void {
-        this.thumbsUpCount = ratings.filter(r => r.Rating >= 8).length;
-        this.thumbsDownCount = ratings.filter(r => r.Rating <= 3).length;
+    private ProcessRatings(ratings: RatingJSON[] | ConversationDetailRatingEntity[]): void {
+        this.allRatings = ratings as RatingJSON[];
+        this.thumbsUpCount = ratings.filter(r => r.Rating ? r.Rating >= 8 : false).length;
+        this.thumbsDownCount = ratings.filter(r => r.Rating ? r.Rating <= 3 : false).length;
         this.totalRatings = ratings.length;
 
         const currentUserRating = ratings.find(r => r.UserID === this.currentUserId);
         this.currentUserRating = currentUserRating?.Rating ?? null;
+    }
+
+    /**
+     * Get tooltip showing who rated this message
+     */
+    getRatingsTooltip(): string {
+        if (this.allRatings.length === 0) return '';
+
+        const thumbsUpUsers = this.allRatings
+            .filter(r => r.Rating ? r.Rating >= 8 : false)
+            .map(r => (r as RatingJSON).UserName || 'Unknown')
+            .join(', ');
+
+        const thumbsDownUsers = this.allRatings
+            .filter(r => r.Rating ? r.Rating <= 3 : false)
+            .map(r => (r as RatingJSON).UserName || 'Unknown')
+            .join(', ');
+
+        const parts: string[] = [];
+        if (thumbsUpUsers) parts.push(`👍 ${thumbsUpUsers}`);
+        if (thumbsDownUsers) parts.push(`👎 ${thumbsDownUsers}`);
+
+        return parts.join('\n');
     }
 
     /**

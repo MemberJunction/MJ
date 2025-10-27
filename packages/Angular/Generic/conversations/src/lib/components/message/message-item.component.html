@@ -185,7 +185,8 @@
     <div class="message-rating" *ngIf="isAIMessage && !isEditing">
       <mj-conversation-message-rating
         [conversationDetailId]="message.ID"
-        [currentUser]="currentUser">
+        [currentUser]="currentUser"
+        [ratingsData]="ratings">
       </mj-conversation-message-rating>
     </div>
 

@@ -1,29 +1,23 @@
-import { ConversationDetailEntityType } from '@memberjunction/core-entities';
+import {
+  ConversationDetailEntityType,
+  ConversationDetailRatingEntityType,
+  AIAgentRunEntityType,
+  ConversationDetailArtifactEntityType
+} from '@memberjunction/core-entities';
 
 /**
- * Agent Run data returned in JSON format from GetConversationComplete query
- * Contains only the fields needed for display in the gear icon
+ * Agent Run data returned in JSON format from GetConversationComplete query.
+ * Uses the auto-generated AIAgentRunEntityType plus Agent view field.
  */
-export interface AgentRunJSON {
-  ID: string;
-  AgentID: string | null;
-  Agent: string | null;
-  Status: string;
-  __mj_CreatedAt: string; // ISO date string from SQL
-  __mj_UpdatedAt: string; // ISO date string from SQL
-  TotalPromptTokensUsed: number | null;
-  TotalCompletionTokensUsed: number | null;
-  TotalCost: number | null;
-  ConversationDetailID: string | null;
-}
+export type AgentRunJSON = AIAgentRunEntityType & {
+  Agent: string | null; // View field from join
+};
 
 /**
- * Artifact data returned in JSON format from GetConversationComplete query
- * Contains only the fields needed for display in artifact cards (excludes Content field)
+ * Artifact data returned in JSON format from GetConversationComplete query.
+ * Combines ConversationDetailArtifact and joined Artifact/ArtifactVersion data.
  */
-export interface ArtifactJSON {
-  ConversationDetailID: string;
-  Direction: string;
+export type ArtifactJSON = ConversationDetailArtifactEntityType & {
   ArtifactVersionID: string;
   VersionNumber: number;
   ArtifactID: string;
@@ -31,7 +25,15 @@ export interface ArtifactJSON {
   ArtifactType: string;
   ArtifactDescription: string | null;
   Visibility: string;
-}
+};
+
+/**
+ * Rating data returned in JSON format from GetConversationComplete query.
+ * Uses the auto-generated ConversationDetailRatingEntityType plus UserName for display.
+ */
+export type RatingJSON = ConversationDetailRatingEntityType & {
+  UserName: string;
+};
 
 /**
  * Complete conversation detail data returned from GetConversationComplete query
@@ -54,6 +56,13 @@ export type ConversationDetailComplete = ConversationDetailEntityType & {
    * Will be null if no artifacts exist
    */
   ArtifactsJSON: string | null;
+
+  /**
+   * JSON string containing array of user ratings for this conversation detail
+   * Parse with JSON.parse() to get RatingJSON[]
+   * Will be null if no ratings exist
+   */
+  RatingsJSON: string | null;
 
   /**
    * User avatar image URL (Base64 or URL) - joined from vwUsers
@@ -82,14 +91,19 @@ export interface ConversationDetailParsed extends ConversationDetailEntityType {
    * Parsed array of artifacts (empty array if none exist)
    */
   artifacts: ArtifactJSON[];
+
+  /**
+   * Parsed array of user ratings (empty array if none exist)
+   */
+  ratings: RatingJSON[];
 }
 
 /**
  * Helper function to parse ConversationDetailComplete query result into typed objects
- * Handles JSON parsing and provides typed arrays for agent runs and artifacts
+ * Handles JSON parsing and provides typed arrays for agent runs, artifacts, and ratings
  *
  * @param queryResult - Raw result from GetConversationComplete query
- * @returns Parsed conversation detail with typed agent runs and artifacts
+ * @returns Parsed conversation detail with typed agent runs, artifacts, and ratings
  */
 export function parseConversationDetailComplete(
   queryResult: ConversationDetailComplete
@@ -101,6 +115,9 @@ export function parseConversationDetailComplete(
       : [],
     artifacts: queryResult.ArtifactsJSON
       ? JSON.parse(queryResult.ArtifactsJSON) as ArtifactJSON[]
+      : [],
+    ratings: queryResult.RatingsJSON
+      ? JSON.parse(queryResult.RatingsJSON) as RatingJSON[]
       : []
   };
 }

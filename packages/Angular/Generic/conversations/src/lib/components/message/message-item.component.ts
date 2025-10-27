@@ -18,6 +18,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
+import { RatingJSON } from '../../models/conversation-complete-query.model';
 
 /**
  * Component for displaying a single message in a conversation
@@ -42,6 +43,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public artifactVersion?: ArtifactVersionEntity;
   @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+  @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
