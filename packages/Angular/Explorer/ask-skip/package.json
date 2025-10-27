@@ -49,5 +49,9 @@
     "@angular/cdk": "18.0.2",
     "ngx-markdown": "18.0.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

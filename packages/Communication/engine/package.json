@@ -25,5 +25,9 @@
     "@memberjunction/core-entities": "2.110.1",
     "@memberjunction/communication-types": "2.110.1",
     "rxjs": "^7.8.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

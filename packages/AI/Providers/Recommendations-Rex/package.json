@@ -25,5 +25,9 @@
     "openai": "^4.28.4",
     "axios": "^1.7.2",
     "dotenv": "^16.4.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

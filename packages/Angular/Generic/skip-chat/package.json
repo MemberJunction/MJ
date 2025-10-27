@@ -52,5 +52,9 @@
     "marked": "^9.1.6",
     "@memberjunction/ng-react": "2.110.1"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

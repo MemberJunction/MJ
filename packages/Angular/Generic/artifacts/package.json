@@ -37,5 +37,9 @@
     "ngx-markdown": "18.0.0",
     "marked": "^9.1.6"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

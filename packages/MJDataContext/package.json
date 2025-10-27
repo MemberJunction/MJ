@@ -22,5 +22,9 @@
     "@memberjunction/global": "2.110.1",
     "@memberjunction/core-entities": "2.110.1",
     "@memberjunction/core": "2.110.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

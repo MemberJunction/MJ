@@ -24,5 +24,9 @@
     "@memberjunction/core-entities": "2.110.1",
     "@memberjunction/entity-communications-base": "2.110.1",
     "@memberjunction/graphql-dataprovider": "2.110.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

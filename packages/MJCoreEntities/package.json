@@ -23,5 +23,9 @@
     "@memberjunction/global": "2.110.1",
     "@memberjunction/interactive-component-types": "2.110.1",
     "zod": "^3.23.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

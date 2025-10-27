@@ -27,5 +27,9 @@
     "@memberjunction/ai-openai": "2.110.1",
     "@memberjunction/ai-openrouter": "2.110.1",
     "@memberjunction/ai-xai": "2.110.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

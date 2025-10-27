@@ -23,5 +23,9 @@
     "@memberjunction/core-entities": "2.110.1",
     "@memberjunction/global": "2.110.1",
     "@memberjunction/sqlserver-dataprovider": "2.110.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

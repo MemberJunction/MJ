@@ -23,5 +23,9 @@
     "@memberjunction/global": "2.110.1",
     "@mistralai/mistralai": "^1.6.0",
     "axios-retry": "4.3.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

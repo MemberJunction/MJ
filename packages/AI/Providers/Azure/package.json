@@ -23,5 +23,9 @@
   "devDependencies": {
     "rimraf": "^5.0.0",
     "typescript": "^5.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

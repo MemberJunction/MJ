@@ -22,5 +22,9 @@
     "@memberjunction/ai": "2.110.1",
     "@memberjunction/global": "2.110.1",
     "@cerebras/cerebras_cloud_sdk": "^1.46.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

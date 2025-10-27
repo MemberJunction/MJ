@@ -36,5 +36,9 @@
     "env-var": "^7.5.0",
     "@types/html-to-text": "^9.0.4",
     "@microsoft/microsoft-graph-types": "^2.40.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

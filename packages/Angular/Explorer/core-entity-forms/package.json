@@ -51,5 +51,9 @@
     "rete-connection-plugin": "^2.0.1",
     "rete-render-utils": "^2.0.2"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

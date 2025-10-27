@@ -40,5 +40,9 @@
     "googleapis": "^134.0.0",
     "mime-types": "^2.1.35",
     "zod": "^3.24.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

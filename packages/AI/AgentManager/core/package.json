@@ -29,5 +29,9 @@
     "@types/node": "^18.11.0",
     "rimraf": "^3.0.2",
     "typescript": "^5.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

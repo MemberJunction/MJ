@@ -26,5 +26,9 @@
     "@memberjunction/core-actions": "2.110.1",
     "@memberjunction/content-autotagging": "2.110.1",
     "axios": "^1.7.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

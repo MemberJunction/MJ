@@ -31,5 +31,9 @@
     "@memberjunction/ng-container-directives": "2.110.1",
     "tslib": "^2.3.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

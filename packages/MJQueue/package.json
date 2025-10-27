@@ -27,5 +27,9 @@
     "@memberjunction/core-entities": "2.110.1",
     "@types/uuid": "^9.0.1",
     "uuid": "^9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

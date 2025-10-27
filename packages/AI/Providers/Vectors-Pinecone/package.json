@@ -34,5 +34,9 @@
     "@pinecone-database/pinecone@2.2.2": {
       "@sinclair/typebox": "0.32.31"
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

@@ -64,5 +64,9 @@
     "@lmdb/lmdb-linux-arm64": "3.0.8",
     "@lmdb/lmdb-linux-x64": "3.0.8",
     "@lmdb/lmdb-win32-x64": "3.0.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

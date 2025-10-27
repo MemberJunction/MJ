@@ -32,5 +32,9 @@
     "tslib": "^2.3.0",
     "@memberjunction/core": "2.110.1"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

@@ -30,5 +30,9 @@
     "@memberjunction/aiengine": "2.110.1",
     "@memberjunction/sqlserver-dataprovider": "2.110.1",
     "zod": "^3.23.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

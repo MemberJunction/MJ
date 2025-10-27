@@ -33,5 +33,9 @@
     "class-validator": "^0.14.0",
     "mj_generatedentities": "1.0.0",
     "mj_generatedactions": "1.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }
