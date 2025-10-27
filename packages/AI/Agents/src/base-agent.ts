@@ -45,6 +45,19 @@ import { AgentDataPreloader } from './AgentDataPreloader';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
 
+// Optional dependency - gracefully fallback to heuristic if not available
+let Tiktoken: any;
+let encoding_for_model: any;
+try {
+    const tiktoken = require('js-tiktoken');
+    Tiktoken = tiktoken.Tiktoken;
+    encoding_for_model = tiktoken.encoding_for_model;
+} catch (e) {
+    // js-tiktoken not available, will use heuristic fallback
+    Tiktoken = null;
+    encoding_for_model = null;
+}
+
 /**
  * Base iteration context for tracking loop execution in BaseAgent.
  * This is agent-type agnostic and handles both ForEach and While loops.
@@ -258,13 +271,24 @@ export class BaseAgent {
     private _validationRetryCount: number = 0;
 
     /**
-     * Flag indicating whether a context recovery attempt has been made in this run.
-     * Context recovery trims conversation messages when context length is exceeded,
-     * giving the agent ONE opportunity to adapt its approach.
+     * Counter tracking the number of context recovery attempts made in this run.
+     * Context recovery removes/compacts old messages when context length is exceeded.
      * Reset at the start of each agent run.
      * @private
      */
-    private _contextRecoveryAttempted: boolean = false;
+    private _contextRecoveryAttempts: number = 0;
+
+    /**
+     * Maximum number of context recovery attempts allowed per agent run.
+     * @private
+     */
+    private readonly MAX_RECOVERY_ATTEMPTS: number = 1;
+
+    /**
+     * Cache of tokenizer encoders by model name for efficient token counting.
+     * @private
+     */
+    private _tokenEncoders: Map<string, any> = new Map();
 
     /**
      * Gets the current validation retry count for the agent run.
@@ -540,7 +564,7 @@ export class BaseAgent {
             // Reset validation retry counters for this run
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
-            this._contextRecoveryAttempted = false;
+            this._contextRecoveryAttempts = 0;
 
             // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
@@ -2031,14 +2055,291 @@ export class BaseAgent {
     }
 
     /**
-     * Attempts to recover from a context length exceeded error by trimming conversation messages.
-     * This gives the agent ONE opportunity to adapt its approach after receiving a large result
-     * that overflowed the context window.
+     * Recovery Strategy 1: Remove oldest action-result messages.
+     * Targets messages older than minAge turns for removal.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn/step number
+     * @param minAge - Minimum age in turns for removal (default: 5)
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected recoveryStrategy_RemoveOldestActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge: number = 5
+    ): { tokensSaved: number; strategyName: string } {
+        let tokensSaved = 0;
+        const removedIndices: number[] = [];
+
+        // Find action-result messages older than minAge turns
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                age: (msg as AgentChatMessage).metadata?.turnAdded
+                    ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
+                    : 0,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result'
+            }))
+            .filter(c => c.isActionResult && c.age >= minAge)
+            .sort((a, b) => b.age - a.age); // Oldest first
+
+        // Remove messages until we've saved enough
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            removedIndices.push(candidate.index);
+            tokensSaved += candidate.tokens;
+
+            this.logStatus(
+                `Removing action-result from ${candidate.age} turns ago (${candidate.tokens} tokens)`,
+                true,
+                params
+            );
+        }
+
+        // Remove in reverse order to maintain indices
+        removedIndices.sort((a, b) => b - a).forEach(index => {
+            const removed = params.conversationMessages.splice(index, 1)[0];
+
+            // Emit lifecycle event
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentStepCount,
+                messageIndex: index,
+                reason: 'Context recovery - oldest action results',
+                tokensSaved: this.estimateTokens(removed.content)
+            });
+        });
+
+        return {
+            tokensSaved,
+            strategyName: `Removed ${removedIndices.length} old action-results (${minAge}+ turns)`
+        };
+    }
+
+    /**
+     * Recovery Strategy 2: Compact old action-result messages.
+     * Uses smart trimming to reduce size while preserving some content.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn/step number
+     * @param minAge - Minimum age in turns for compaction (default: 3)
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected async recoveryStrategy_CompactOldActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge: number = 3
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        let tokensSaved = 0;
+        let compactedCount = 0;
+
+        // Find action-result messages to compact
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                age: (msg as AgentChatMessage).metadata?.turnAdded
+                    ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
+                    : 0,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
+            }))
+            .filter(c => c.isActionResult && c.age >= minAge && !c.alreadyCompacted)
+            .sort((a, b) => b.age - a.age); // Oldest first
+
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            const originalTokens = candidate.tokens;
+            const originalMessage = candidate.message as AgentChatMessage;
+            const originalContent = typeof originalMessage.content === 'string'
+                ? originalMessage.content
+                : JSON.stringify(originalMessage.content);
+
+            // Use smart trim (faster than AI summary, no API cost)
+            const compactedContent = await this.compactMessage(
+                originalMessage,
+                {
+                    compactMode: 'First N Chars',
+                    compactLength: 500,
+                    compactPromptId: '',
+                    originalLength: originalContent.length
+                },
+                params
+            );
+
+            const newTokens = this.estimateTokens(compactedContent);
+            const saved = originalTokens - newTokens;
+
+            if (saved > 0) {
+                // Update message in place with compacted content
+                params.conversationMessages[candidate.index] = {
+                    ...originalMessage,
+                    content: compactedContent,
+                    metadata: {
+                        ...originalMessage.metadata,
+                        wasCompacted: true,
+                        originalLength: originalContent.length,
+                        tokensSaved: saved
+                    }
+                };
+                tokensSaved += saved;
+                compactedCount++;
+
+                this.logStatus(
+                    `Compacted action-result from ${candidate.age} turns ago (saved ${saved} tokens)`,
+                    true,
+                    params
+                );
+            }
+        }
+
+        return {
+            tokensSaved,
+            strategyName: `Compacted ${compactedCount} old action-results (${minAge}+ turns)`
+        };
+    }
+
+    /**
+     * Recovery Strategy 3: Aggressively compact ALL action-result messages.
+     * Used when gentler strategies haven't freed enough space.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected async recoveryStrategy_CompactAllActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        let tokensSaved = 0;
+        let compactedCount = 0;
+
+        // Find ALL action-result messages that aren't already compacted
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
+            }))
+            .filter(c => c.isActionResult && !c.alreadyCompacted && c.tokens > 200)
+            .sort((a, b) => b.tokens - a.tokens); // Largest first
+
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            const originalTokens = candidate.tokens;
+            const originalMessage = candidate.message as AgentChatMessage;
+            const originalContent = typeof originalMessage.content === 'string'
+                ? originalMessage.content
+                : JSON.stringify(originalMessage.content);
+
+            // Aggressive compaction - keep only first 200 chars
+            const compactedContent = await this.compactMessage(
+                originalMessage,
+                {
+                    compactMode: 'First N Chars',
+                    compactLength: 200,
+                    compactPromptId: '',
+                    originalLength: originalContent.length
+                },
+                params
+            );
+
+            const newTokens = this.estimateTokens(compactedContent);
+            const saved = originalTokens - newTokens;
+
+            if (saved > 0) {
+                // Update message in place with compacted content
+                params.conversationMessages[candidate.index] = {
+                    ...originalMessage,
+                    content: compactedContent,
+                    metadata: {
+                        ...originalMessage.metadata,
+                        wasCompacted: true,
+                        originalLength: originalContent.length,
+                        tokensSaved: saved
+                    }
+                };
+                tokensSaved += saved;
+                compactedCount++;
+            }
+        }
+
+        return {
+            tokensSaved,
+            strategyName: `Aggressively compacted ${compactedCount} action-results`
+        };
+    }
+
+    /**
+     * Recovery Strategy 4: Trim last user message (fallback).
+     * This is the original recovery behavior, kept as a last resort.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected recoveryStrategy_TrimLastUserMessage(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): { tokensSaved: number; strategyName: string } {
+        // Find the last user message
+        const lastUserMessageIndex = params.conversationMessages
+            .findLastIndex(m => m.role === 'user');
+
+        if (lastUserMessageIndex === -1) {
+            return { tokensSaved: 0, strategyName: 'No user message to trim' };
+        }
+
+        const lastUserMessage = params.conversationMessages[lastUserMessageIndex];
+        const originalTokens = this.estimateTokens(lastUserMessage.content);
+
+        // Keep at least 50% of the content
+        const contentString = this.contentToString(lastUserMessage.content);
+        const maxLength = Math.max(500, Math.floor(contentString.length * 0.5));
+        const trimResult = this.smartTrimContent(contentString, maxLength);
+
+        const newContent = trimResult.trimmed + '\n\n[Note: Original message was trimmed to fit context limit]';
+        const newTokens = this.estimateTokens(newContent);
+        const saved = originalTokens - newTokens;
+
+        if (saved > 0) {
+            params.conversationMessages[lastUserMessageIndex] = {
+                ...lastUserMessage,
+                content: newContent
+            };
+        }
+
+        return {
+            tokensSaved: saved,
+            strategyName: 'Trimmed last user message'
+        };
+    }
+
+    /**
+     * Attempts to recover from a context length exceeded error using multiple strategies.
+     * Uses escalating strategies: remove old results → compact old results → compact all → trim user message.
+     * This approach preserves the user's original request while removing stale action results.
      *
      * @param params - Agent execution parameters (conversationMessages will be modified)
      * @param payload - Current payload to carry forward
      * @param errorMessage - The original error message from the failed prompt
-     * @returns A Retry step with trimmed context and guidance for the agent
+     * @returns A Retry step with reduced context or Failed if recovery unsuccessful
      * @protected
      */
     protected async attemptContextRecovery<P>(
@@ -2047,31 +2348,72 @@ export class BaseAgent {
         errorMessage: string
     ): Promise<BaseAgentNextStep<P>> {
         this.logStatus(
-            `⚠️ Context length exceeded - attempting recovery by trimming conversation messages`,
+            `⚠️ Context length exceeded - attempting recovery with multi-strategy approach`,
             true,
             params
         );
 
-        // Find the last user message (usually the action/sub-agent result)
-        const messages = params.conversationMessages;
-        let lastUserMessageIndex = -1;
+        // Calculate how many tokens we need to save
+        const modelLimit = this.getModelContextLimit();
+        const currentTokens = this.estimateConversationTokens(params.conversationMessages);
+        const tokensToSave = currentTokens - Math.floor(modelLimit * 0.9); // Target 90% usage
 
-        for (let i = messages.length - 1; i >= 0; i--) {
-            if (messages[i].role === 'user') {
-                lastUserMessageIndex = i;
+        this.logStatus(
+            `Need to save ~${tokensToSave} tokens (current: ${currentTokens}, limit: ${modelLimit})`,
+            true,
+            params
+        );
+
+        if (tokensToSave <= 0) {
+            // Already under limit, this shouldn't happen but handle gracefully
+            this.logStatus(`Already under context limit, retrying...`, true, params);
+            return {
+                step: 'Retry' as const,
+                retryReason: 'Context recovery - already under limit',
+                retryInstructions: 'The context is now within limits.',
+                terminate: false,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+
+        // Get current step count for age calculations
+        const currentStepCount = this._agentRun?.Steps?.length || 0;
+
+        // Try multiple recovery strategies in order
+        const strategies = [
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 5),
+            () => this.recoveryStrategy_CompactOldActionResults(params, tokensToSave, currentStepCount, 3),
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 2),
+            () => this.recoveryStrategy_CompactAllActionResults(params, tokensToSave),
+            () => Promise.resolve(this.recoveryStrategy_TrimLastUserMessage(params, tokensToSave))
+        ];
+
+        let tokensSaved = 0;
+        const strategiesUsed: string[] = [];
+
+        for (const strategy of strategies) {
+            const result = await strategy();
+            tokensSaved += result.tokensSaved;
+            if (result.tokensSaved > 0) {
+                strategiesUsed.push(result.strategyName);
+                this.logStatus(`${result.strategyName}: saved ${result.tokensSaved} tokens`, true, params);
+            }
+
+            if (tokensSaved >= tokensToSave) {
                 break;
             }
         }
 
-        if (lastUserMessageIndex === -1) {
-            // No user message to trim - can't recover
+        // Check if we saved enough
+        if (tokensSaved < tokensToSave * 0.5) {
             this.logStatus(
-                `❌ Context recovery failed: No trimmable user messages found`,
+                `❌ Context recovery insufficient: only saved ${tokensSaved}/${tokensToSave} tokens`,
                 true,
                 params
             );
             return {
-                errorMessage: `Context overflow with no trimmable messages: ${errorMessage}`,
+                errorMessage: `Context recovery failed: only saved ${tokensSaved}/${tokensToSave} tokens. ${errorMessage}`,
                 step: 'Failed' as const,
                 terminate: true,
                 previousPayload: payload,
@@ -2079,45 +2421,17 @@ export class BaseAgent {
             };
         }
 
-        // Capture the original message for logging
-        const originalMessage = messages[lastUserMessageIndex];
-        const contentString = this.contentToString(originalMessage.content);
-        const trimResult = this.smartTrimContent(contentString, 1000);
-
         this.logStatus(
-            `✂️ Trimmed message from ${trimResult.originalLength.toLocaleString()} to ${trimResult.trimmed.length.toLocaleString()} characters using ${trimResult.strategy}`,
+            `✅ Context recovery successful: saved ${tokensSaved} tokens using ${strategiesUsed.length} strategies`,
             true,
             params
         );
 
-        // Replace the message with trimmed version + explanation
-        messages[lastUserMessageIndex] = {
-            role: 'user',
-            content: `⚠️ CONTEXT OVERFLOW RECOVERY ⚠️
-
-The previous step returned a result that exceeded the context window (${(trimResult.originalLength - trimResult.trimmed.length).toLocaleString()} characters truncated).
-
-Here is a PARTIAL result from the previous action:
----
-${trimResult.trimmed}
----
-
-❗ THE ABOVE IS INCOMPLETE - the full result was too large for the context window.
-
-RECOMMENDED ACTIONS:
-1. Use a different action with more specific filters to get smaller result sets
-2. Request data in batches or pages instead of all at once
-3. Ask the user to clarify scope to narrow the query
-4. If you need the full data, acknowledge the limitation and ask the user how to proceed
-
-Please choose an alternative approach to complete your task.`
-        };
-
         // Return Retry step to give agent another chance
         return {
             step: 'Retry' as const,
-            retryReason: 'Context length recovery - previous result too large',
-            retryInstructions: 'The previous action result exceeded context limits. Use more specific filters or request data in smaller batches.',
+            retryReason: `Context recovered by ${strategiesUsed.join(', ')}`,
+            retryInstructions: `The conversation exceeded the model's context limit. I've removed/compacted ${strategiesUsed.length} older action results to free up ${tokensSaved} tokens. Continuing with remaining context.`,
             terminate: false,
             previousPayload: payload,
             newPayload: payload
@@ -3266,9 +3580,9 @@ Please choose an alternative approach to complete your task.`
                 const isContextOverflow = isFatal &&
                     promptResult.chatResult?.errorInfo?.errorType === 'ContextLengthExceeded';
 
-                if (isContextOverflow && !this._contextRecoveryAttempted) {
-                    // Attempt ONE-TIME context recovery
-                    this._contextRecoveryAttempted = true;
+                if (isContextOverflow && this._contextRecoveryAttempts < this.MAX_RECOVERY_ATTEMPTS) {
+                    // Attempt context recovery with multiple strategies
+                    this._contextRecoveryAttempts++;
 
                     this.logStatus(
                         `⚠️ Context length exceeded - attempting recovery by trimming conversation`,
@@ -5870,15 +6184,106 @@ Please choose an alternative approach to complete your task.`
     }
 
     /**
-     * Estimates token count from content (rough approximation).
-     * Uses 4 chars per token heuristic (conservative estimate).
+     * Estimates token count from content.
+     * Uses js-tiktoken for accurate counting when available and model info is provided,
+     * falls back to improved heuristic otherwise.
+     * @param content - The message content to estimate tokens for
+     * @param modelName - Optional model name for accurate tokenization
      * @protected
      */
-    protected estimateTokens(content: ChatMessage['content']): number {
+    protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
         const text = typeof content === 'string'
             ? content
             : JSON.stringify(content);
-        return Math.ceil(text.length / 4);
+
+        // If we have model info and tiktoken is available, try to use accurate tokenizer
+        if (modelName && encoding_for_model) {
+            try {
+                let encoder = this._tokenEncoders.get(modelName);
+                if (!encoder) {
+                    // Map model names to encoder types
+                    const encoderName = this.getEncoderForModel(modelName);
+                    encoder = encoding_for_model(encoderName as any);
+                    this._tokenEncoders.set(modelName, encoder);
+                }
+
+                return encoder.encode(text).length;
+            } catch (err) {
+                // Fallback to heuristic on error
+                LogError('Token encoding failed, using heuristic', undefined, err);
+            }
+        }
+
+        // Fallback: improved heuristic
+        return this.heuristicTokenCount(text);
+    }
+
+    /**
+     * Maps MJ model names to tiktoken encoder types.
+     * @param modelName - The MJ model name
+     * @returns The tiktoken encoder name
+     * @private
+     */
+    private getEncoderForModel(modelName: string): string {
+        const lowerModel = modelName.toLowerCase();
+
+        if (lowerModel.includes('gpt-4')) return 'gpt-4';
+        if (lowerModel.includes('gpt-3.5')) return 'gpt-3.5-turbo';
+        // Claude and other models - use cl100k_base as approximation
+        if (lowerModel.includes('claude')) return 'cl100k_base';
+
+        // Default to cl100k_base (used by most modern models)
+        return 'cl100k_base';
+    }
+
+    /**
+     * Provides an improved heuristic token count when tokenizer is unavailable.
+     * @param text - The text to estimate tokens for
+     * @returns Estimated token count
+     * @private
+     */
+    private heuristicTokenCount(text: string): number {
+        // More sophisticated heuristic
+        const charCount = text.length;
+
+        // Count structural tokens (JSON syntax adds overhead)
+        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
+        const whitespaceChars = (text.match(/\s/g) || []).length;
+
+        // Effective character count (whitespace counts less)
+        const effectiveChars = charCount - (whitespaceChars * 0.5);
+
+        // Base ratio: 4 chars per token
+        // Adjustment: +0.05 token for every structural char
+        const baseTokens = effectiveChars / 4;
+        const structuralTokens = structuralChars * 0.05;
+
+        return Math.ceil(baseTokens + structuralTokens);
+    }
+
+    /**
+     * Gets the context limit for the current model.
+     * Uses agent run model info if available, otherwise returns conservative default.
+     * @returns The maximum input tokens for the model
+     * @protected
+     */
+    protected getModelContextLimit(): number {
+        // Try to get from agent run's model override or configuration
+        // For now, use conservative default
+        // TODO: Get model info from AIEngine or agent configuration
+        return 8000;
+    }
+
+    /**
+     * Estimates total token count across all conversation messages.
+     * @param messages - Message array to estimate
+     * @returns Total estimated tokens
+     * @protected
+     */
+    protected estimateConversationTokens(messages: ChatMessage[]): number {
+        return messages.reduce((total, msg) => {
+            return total + this.estimateTokens(msg.content);
+        }, 0);
     }
 
     /**

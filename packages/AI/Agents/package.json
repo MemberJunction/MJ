@@ -25,6 +25,7 @@
     "@memberjunction/actions": "2.110.1",
     "@memberjunction/actions-base": "2.110.1",
     "dotenv": "^16.4.1",
+    "js-tiktoken": "^1.0.14",
     "lodash": "^4.17.21",
     "rxjs": "^7.8.1"
   },
