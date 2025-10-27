@@ -28,6 +28,7 @@
     "@okta/okta-auth-js": "^7.0.0"
   },
   "dependencies": {
+    "@memberjunction/global": "2.111.1",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },

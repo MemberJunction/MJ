@@ -21,6 +21,7 @@
     "ts-node-dev": "^2.0.0"
   },
   "dependencies": {
+    "@memberjunction/global": "2.111.1",
     "@memberjunction/react-runtime": "2.111.1",
     "@memberjunction/interactive-component-types": "2.111.1",
     "@playwright/test": "^1.40.0",

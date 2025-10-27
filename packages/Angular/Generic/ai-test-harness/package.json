@@ -31,6 +31,7 @@
     "@angular/animations": "18.0.2"
   },
   "dependencies": {
+    "@memberjunction/global": "2.111.1",
     "@memberjunction/core-entities": "2.111.1",
     "@memberjunction/graphql-dataprovider": "2.111.1",
     "@memberjunction/ng-container-directives": "2.111.1",

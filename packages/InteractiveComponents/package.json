@@ -19,6 +19,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@memberjunction/global": "2.111.1",
     "@memberjunction/ai-vectors-memory": "2.111.1"
   },
   "repository": {

@@ -19,6 +19,7 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
+    "@memberjunction/global": "2.111.1",
     "@memberjunction/interactive-component-types": "2.111.1",
     "@memberjunction/data-context": "2.111.1"
   },

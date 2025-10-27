@@ -19,6 +19,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/global": "2.111.1",
     "@memberjunction/core-entities": "2.111.1",
     "@memberjunction/actions": "2.111.1",
     "@memberjunction/actions-content-autotag": "2.111.1",

@@ -28,6 +28,7 @@
     "rxjs": "^7.8.1"
   },
   "dependencies": {
+    "@memberjunction/global": "2.111.1",
     "@memberjunction/core-entities": "2.111.1",
     "@memberjunction/ng-notifications": "2.111.1",
     "@memberjunction/ng-base-types": "2.111.1",
