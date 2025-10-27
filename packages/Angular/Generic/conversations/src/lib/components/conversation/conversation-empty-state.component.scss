@@ -6,6 +6,44 @@
   width: 100%;
   padding: 2rem;
   overflow-y: auto;
+  position: relative;
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.2s ease-in;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 2rem;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+
+  i {
+    color: var(--primary-color, #007bff);
+  }
+}
+
+.loading-message {
+  font-size: 1rem;
+  color: var(--text-primary, #333);
+  font-weight: 500;
+  margin: 0;
 }
 
 .empty-state-container {
@@ -15,6 +53,12 @@
   flex-direction: column;
   gap: 2rem;
   animation: fadeIn 0.3s ease-in;
+  transition: opacity 0.2s ease;
+
+  &.loading {
+    opacity: 0.4;
+    pointer-events: none;
+  }
 }
 
 @keyframes fadeIn {
