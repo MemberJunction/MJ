@@ -181,6 +181,14 @@
       }
     </div>
 
+    <!-- Rating component for AI messages -->
+    <div class="message-rating" *ngIf="isAIMessage && !isEditing">
+      <mj-conversation-message-rating
+        [conversationDetailId]="message.ID"
+        [currentUser]="currentUser">
+      </mj-conversation-message-rating>
+    </div>
+
     <div class="message-actions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
       <!-- Retry button for failed AI messages -->
       <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry" *ngIf="messageStatus === 'Error' && isAIMessage">

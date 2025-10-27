@@ -378,6 +378,10 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
     conversationMessages: ChatMessage[];
     /** Optional user context for permission checking and personalization */
     contextUser?: UserInfo;
+    /** Optional user ID for scoping context memory (notes/examples). If not provided, uses contextUser.ID */
+    userId?: string;
+    /** Optional company ID for scoping context memory (notes/examples) */
+    companyId?: string;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */

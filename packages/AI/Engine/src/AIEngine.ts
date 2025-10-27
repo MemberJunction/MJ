@@ -6,15 +6,17 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, LogError, Metadata, UserInfo, RunView } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo, RunView } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIModelEntityExtended, ActionEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIModelEntityExtended, ActionEntity, AIAgentNoteEntity, AIAgentExampleEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
 import { ActionEmbeddingService } from "./services/ActionEmbeddingService";
 import { AgentEmbeddingMetadata, AgentMatchResult } from "./types/AgentMatchResult";
 import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchResult";
+import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
+import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 
 
 /**
@@ -50,6 +52,12 @@ export class AIEngine extends AIEngineBase {
 
     // Vector service for action embeddings - initialized during AdditionalLoading
     private _actionVectorService: SimpleVectorService<ActionEmbeddingMetadata> | null = null;
+
+    // Vector service for note embeddings - initialized during AdditionalLoading
+    private _noteVectorService: SimpleVectorService<NoteEmbeddingMetadata> | null = null;
+
+    // Vector service for example embeddings - initialized during AdditionalLoading
+    private _exampleVectorService: SimpleVectorService<ExampleEmbeddingMetadata> | null = null;
 
     // Actions loaded from database
     private _actions: ActionEntity[] = [];
@@ -192,6 +200,12 @@ export class AIEngine extends AIEngineBase {
 
         // Compute action embeddings using actions we just loaded
         await this.loadActionEmbeddings();
+
+        // Load note embeddings
+        await this.loadNoteEmbeddings(contextUser);
+
+        // Load example embeddings
+        await this.loadExampleEmbeddings(contextUser);
     }
 
     /**
@@ -302,6 +316,132 @@ export class AIEngine extends AIEngineBase {
     }
 
     /**
+     * Load note embeddings from database and build vector service.
+     * Only loads active notes with embeddings already generated.
+     * @private
+     */
+    private async loadNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
+        const startTime = Date.now();
+        console.log('AIEngine: Loading note embeddings...');
+
+        try {
+            const rv = this.RunViewProviderToUse;
+            const result = await rv.RunView<AIAgentNoteEntity>({
+                EntityName: 'AI Agent Notes',
+                ExtraFilter: `Status='Active' AND EmbeddingVector IS NOT NULL`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!result.Success) {
+                console.error('Failed to load agent notes:', result.ErrorMessage);
+                return;
+            }
+
+            const notes = result.Results || [];
+            if (notes.length === 0) {
+                console.log('AIEngine: No notes with embeddings found');
+                return;
+            }
+
+            const entries = notes.map(note => ({
+                key: note.ID,
+                vector: JSON.parse(note.EmbeddingVector!),
+                metadata: {
+                    id: note.ID,
+                    agentId: note.AgentID,
+                    userId: note.UserID,
+                    companyId: note.CompanyID,
+                    type: note.Type,
+                    noteText: note.Note!,
+                    noteEntity: note
+                }
+            }));
+
+            this._noteVectorService = new SimpleVectorService();
+            this._noteVectorService.LoadVectors(entries);
+
+            const duration = Date.now() - startTime;
+            console.log(`AIEngine: Loaded embeddings for ${entries.length} notes in ${duration}ms`);
+
+        } catch (error) {
+            console.error(`Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Load example embeddings from database and build vector service.
+     * Only loads active examples with embeddings already generated.
+     * @private
+     */
+    private async loadExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
+        const startTime = Date.now();
+        console.log('AIEngine: Loading example embeddings...');
+
+        try {
+            const rv = this.RunViewProviderToUse;
+            const result = await rv.RunView<AIAgentExampleEntity>({
+                EntityName: 'AI Agent Examples',
+                ExtraFilter: `Status='Active' AND EmbeddingVector IS NOT NULL`,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!result.Success) {
+                console.error('Failed to load agent examples:', result.ErrorMessage);
+                return;
+            }
+
+            const examples = result.Results || [];
+            if (examples.length === 0) {
+                console.log('AIEngine: No examples with embeddings found');
+                return;
+            }
+
+            const entries = examples.map(example => ({
+                key: example.ID,
+                vector: JSON.parse(example.EmbeddingVector!),
+                metadata: {
+                    id: example.ID,
+                    agentId: example.AgentID,
+                    userId: example.UserID,
+                    companyId: example.CompanyID,
+                    type: example.Type,
+                    exampleInput: example.ExampleInput,
+                    exampleOutput: example.ExampleOutput,
+                    successScore: example.SuccessScore,
+                    exampleEntity: example
+                }
+            }));
+
+            this._exampleVectorService = new SimpleVectorService();
+            this._exampleVectorService.LoadVectors(entries);
+
+            const duration = Date.now() - startTime;
+            console.log(`AIEngine: Loaded embeddings for ${entries.length} examples in ${duration}ms`);
+
+        } catch (error) {
+            console.error(`Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Override ProcessEntityEvent to refresh note/example embeddings when they change.
+     * Uses 15 second debounce configured in AdditionalLoading.
+     */
+    protected override async ProcessEntityEvent(event: BaseEntityEvent): Promise<void> {
+        // Call base implementation first
+        await super.ProcessEntityEvent(event);
+
+        // Refresh embeddings if notes/examples changed
+        const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
+
+        if (entityName === 'ai agent notes') {
+            await this.loadNoteEmbeddings(this.ContextUser);
+        } else if (entityName === 'ai agent examples') {
+            await this.loadExampleEmbeddings(this.ContextUser);
+        }
+    }
+
+    /**
      * Find agents similar to a task description using semantic search.
      * Convenience method that uses the cached agent vector service.
      *
@@ -355,6 +495,126 @@ export class AIEngine extends AIEngineBase {
             topK,
             minSimilarity
         );
+    }
+
+    /**
+     * Find notes similar to query text using semantic search.
+     * Searches across agent notes and returns matches filtered by scope.
+     *
+     * @param queryText - The text to search for similar notes
+     * @param agentId - Optional agent ID to filter results
+     * @param userId - Optional user ID to filter results
+     * @param companyId - Optional company ID to filter results
+     * @param topK - Maximum number of results to return (default: 5)
+     * @param minSimilarity - Minimum similarity score 0-1 (default: 0.5)
+     * @returns Array of matching notes sorted by similarity score (highest first)
+     * @throws Error if note embeddings not loaded or query text empty
+     */
+    public async FindSimilarAgentNotes(
+        queryText: string,
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 5,
+        minSimilarity: number = 0.5
+    ): Promise<NoteMatchResult[]> {
+        if (!this._noteVectorService) {
+            throw new Error('Note embeddings not loaded. Ensure AIEngine.Config() has completed.');
+        }
+
+        if (!queryText || queryText.trim().length === 0) {
+            throw new Error('queryText cannot be empty');
+        }
+
+        // Generate query embedding
+        const queryEmbedding = await this.EmbedTextLocal(queryText);
+        if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
+            throw new Error('Failed to generate embedding for query text');
+        }
+
+        // Search with extra headroom, then filter
+        const results = this._noteVectorService.FindNearest(
+            queryEmbedding.result.vector,
+            topK * 3,
+            minSimilarity
+        );
+
+        // Filter by scope and similarity
+        const filtered = results
+            .filter(r => r.score >= minSimilarity)
+            .filter(r => {
+                // Apply scoping filters - null means "matches anything"
+                if (agentId && r.metadata.agentId && r.metadata.agentId !== agentId) return false;
+                if (userId && r.metadata.userId && r.metadata.userId !== userId) return false;
+                if (companyId && r.metadata.companyId && r.metadata.companyId !== companyId) return false;
+                return true;
+            })
+            .slice(0, topK);
+
+        return filtered.map(r => ({
+            note: r.metadata.noteEntity,
+            similarity: r.score
+        }));
+    }
+
+    /**
+     * Find examples similar to query text using semantic search.
+     * Searches across agent examples and returns matches filtered by scope.
+     *
+     * @param queryText - The text to search for similar examples
+     * @param agentId - Optional agent ID to filter results
+     * @param userId - Optional user ID to filter results
+     * @param companyId - Optional company ID to filter results
+     * @param topK - Maximum number of results to return (default: 3)
+     * @param minSimilarity - Minimum similarity score 0-1 (default: 0.5)
+     * @returns Array of matching examples sorted by similarity score (highest first)
+     * @throws Error if example embeddings not loaded or query text empty
+     */
+    public async FindSimilarAgentExamples(
+        queryText: string,
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 3,
+        minSimilarity: number = 0.5
+    ): Promise<ExampleMatchResult[]> {
+        if (!this._exampleVectorService) {
+            throw new Error('Example embeddings not loaded. Ensure AIEngine.Config() has completed.');
+        }
+
+        if (!queryText || queryText.trim().length === 0) {
+            throw new Error('queryText cannot be empty');
+        }
+
+        // Generate query embedding
+        const queryEmbedding = await this.EmbedTextLocal(queryText);
+        if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
+            throw new Error('Failed to generate embedding for query text');
+        }
+
+        // Search with extra headroom, then filter
+        const results = this._exampleVectorService.FindNearest(
+            queryEmbedding.result.vector,
+            topK * 3,
+            minSimilarity
+        );
+
+        // Filter by scope and similarity
+        const filtered = results
+            .filter(r => r.score >= minSimilarity)
+            .filter(r => {
+                // Apply scoping filters
+                if (agentId && r.metadata.agentId !== agentId) return false;
+                if (userId && r.metadata.userId && r.metadata.userId !== userId) return false;
+                if (companyId && r.metadata.companyId && r.metadata.companyId !== companyId) return false;
+                return true;
+            })
+            .slice(0, topK);
+
+        return filtered.map(r => ({
+            example: r.metadata.exampleEntity,
+            similarity: r.score
+        }));
     }
 
     /**
