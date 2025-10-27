@@ -216,27 +216,34 @@ GO
 -- Insert Memory Manager scheduled job (runs every 15 minutes)
 IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ScheduledJob] WHERE Name = 'Agent Memory Manager - Every 15 Minutes')
 BEGIN
-    INSERT INTO [${flyway:defaultSchema}].[ScheduledJob] (
-        ID,
-        Name,
-        Description,
-        JobTypeID,
-        CronExpression,
-        Timezone,
-        Status
-    )
-    VALUES (
-        'DDFB765D-9266-4C25-B6B1-49BD42185FB2',
-        'Agent Memory Manager - Every 15 Minutes',
-        'Analyzes conversations and agent runs since last execution to extract valuable notes and examples for agent memory.',
-        '9081AC48-E0D4-4323-B1ED-A3B4261F38DF',
-        '0 */15 * * * *',  -- Every 15 minutes (seconds 0, every 15th minute)
-        'UTC',
-        'Active'
-    );
+    DECLARE @AgentScheduledJobTypeID UNIQUEIDENTIFIER;
+    SELECT @AgentScheduledJobTypeID = ID FROM [${flyway:defaultSchema}].[ScheduledJobType] WHERE DriverClass = 'AgentScheduledJobDriver';
+
+    IF @AgentScheduledJobTypeID IS NOT NULL
+    BEGIN
+        INSERT INTO [${flyway:defaultSchema}].[ScheduledJob] (
+            ID,
+            Name,
+            Description,
+            JobTypeID,
+            CronExpression,
+            Timezone,
+            Status,
+            Configuration
+        )
+        VALUES (
+            'DDFB765D-9266-4C25-B6B1-49BD42185FB2',
+            'Agent Memory Manager - Every 15 Minutes',
+            'Analyzes conversations and agent runs since last execution to extract valuable notes and examples for agent memory.',
+            @AgentScheduledJobTypeID,
+            '0 */15 * * * *',  -- Every 15 minutes
+            'UTC',
+            'Active',
+            '{"AgentID":"@lookup:AI Agents.Name=Memory Manager","InitialMessage":"Analyze recent conversations and extract notes/examples"}'
+        );
+    END
 END
 GO
-
 
 
 
