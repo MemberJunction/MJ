@@ -959,7 +959,10 @@ interface ForEachOperation {
     indexVariable?: string;
     maxIterations?: number;
     continueOnError?: boolean;
-    action?: { name: string; params: Record<string, unknown> };
+    delayBetweenIterationsMs?: number;
+    executionMode?: 'sequential' | 'parallel';  // v2.113+
+    maxConcurrency?: number;                     // v2.113+
+    action?: { name: string; params: Record<string, unknown>; outputMapping?: string };
     subAgent?: { name: string; message: string; templateParameters?: Record<string, unknown> };
 }
 
@@ -975,11 +978,122 @@ interface WhileOperation {
 
 ---
 
+## Parallel Execution (v2.113+)
+
+ForEach loops now support parallel execution for significant performance improvements when iterations are independent.
+
+### Execution Modes
+
+#### Sequential Mode (Default)
+- Processes iterations one at a time in order
+- Safest option for state accumulation
+- Payload changes apply immediately between iterations
+- Use when iterations depend on each other
+
+#### Parallel Mode
+- Processes multiple iterations concurrently
+- Dramatically faster for independent operations (I/O-bound tasks, API calls, web scraping)
+- Results collected in parallel, then applied to payload sequentially to maintain order
+- Use when iterations don't depend on each other
+
+### Configuration
+
+```json
+{
+    "type": "ForEach",
+    "collectionPath": "searchResults",
+    "itemVariable": "result",
+    "executionMode": "parallel",      // 'sequential' (default) or 'parallel'
+    "maxConcurrency": 10,              // Max parallel iterations (default: 10)
+    "action": {
+        "name": "Fetch Web Page Content",
+        "params": { "url": "result.url" }
+    }
+}
+```
+
+### When to Use Parallel Mode
+
+✅ **Use Parallel When:**
+- Fetching data from multiple URLs
+- Processing independent files/documents
+- Making multiple API calls
+- Running independent actions per item
+- Order doesn't matter or can be reconstructed
+
+❌ **Use Sequential When:**
+- Iterations update shared state incrementally
+- Order of execution matters
+- Each iteration depends on previous results
+- Using output mapping that modifies counters or accumulators
+
+### Performance Examples
+
+**Web Scraping (20 pages):**
+- Sequential: 20 pages × 2s = 40 seconds
+- Parallel (maxConcurrency=10): 2 batches × 2s = 4 seconds
+- **10x speedup** 🚀
+
+**Document Processing (100 docs):**
+- Sequential: 100 docs × 5s = 500 seconds
+- Parallel (maxConcurrency=10): 10 batches × 5s = 50 seconds
+- **10x speedup** 🚀
+
+### Loop Agent Example with Parallel Execution
+
+```json
+{
+    "taskComplete": false,
+    "message": "Fetching content from 50 search results in parallel",
+    "reasoning": "Using parallel execution for faster web scraping",
+    "nextStep": {
+        "type": "ForEach",
+        "forEach": {
+            "collectionPath": "searchResults",
+            "itemVariable": "result",
+            "executionMode": "parallel",
+            "maxConcurrency": 15,
+            "continueOnError": true,
+            "action": {
+                "name": "Get Web Page Content",
+                "params": {
+                    "url": "result.url",
+                    "timeout": 10000
+                }
+            }
+        }
+    }
+}
+```
+
+### Max Concurrency Guidelines
+
+| Operation Type | Recommended maxConcurrency |
+|----------------|---------------------------|
+| I/O-bound (API calls, web scraping) | 10-20 |
+| CPU-bound (data processing) | CPU core count (2-8) |
+| Sub-agent spawning | 2-5 (agents are resource-intensive) |
+| Database operations | 5-10 |
+
+### How It Works
+
+1. **Batch Creation**: Collection divided into batches of `maxConcurrency` size
+2. **Parallel Execution**: All items in a batch execute concurrently
+3. **Result Collection**: Results collected with original indices
+4. **Sequential Application**: Results sorted by index and applied to payload in order
+5. **Next Batch**: Process next batch until all items complete
+
+This ensures:
+- **Performance**: Parallel execution for I/O-bound operations
+- **Safety**: Sequential payload updates maintain data consistency
+- **Order**: Results applied in original collection order
+
+---
+
 ## Future Enhancements
 
 Planned features for future releases:
 
-- **Parallel ForEach:** Execute iterations concurrently (v3.3+)
 - **Break/Continue:** Early exit from loops
 - **Map/Filter/Reduce:** Functional collection operations
 - **Loop State Persistence:** Resume loops after interruption

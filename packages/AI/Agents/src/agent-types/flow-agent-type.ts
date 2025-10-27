@@ -1047,7 +1047,9 @@ export class FlowAgentType extends BaseAgentType {
             indexVariable: baseConfig.indexVariable,
             maxIterations: baseConfig.maxIterations,
             continueOnError: baseConfig.continueOnError,
-            delayBetweenIterationsMs: baseConfig.delayBetweenIterationsMs
+            delayBetweenIterationsMs: baseConfig.delayBetweenIterationsMs,
+            executionMode: baseConfig.executionMode,
+            maxConcurrency: baseConfig.maxConcurrency
         };
 
         // Add action or subAgent based on LoopBodyType (using cached engine data - no await needed)

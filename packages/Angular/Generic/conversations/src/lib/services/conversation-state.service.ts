@@ -18,6 +18,9 @@ export class ConversationStateService {
   public isLoading: boolean = false;
   public activeThreadId: string | null = null;
 
+  // Pending message from empty state - persists across component lifecycle
+  public pendingMessageToSend: string | null = null;
+
   constructor() {}
 
   /**

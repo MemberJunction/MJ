@@ -131,3 +131,4 @@ packages/MJAPI/.cache/**
 .cache/**
 packages/test-output/**
 packages/MJServer/src/agents/skipRequest-new-chat.json
+.mjrc.yml.ignore

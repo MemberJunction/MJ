@@ -37,7 +37,7 @@
             "ID": "2EA061FE-A424-4D7C-AFD5-B33B48E1F01C"
           },
           "sync": {
-            "lastModified": "2025-10-25T23:20:13.911Z",
+            "lastModified": "2025-10-26T19:46:25.588Z",
             "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
           }
         }
@@ -266,7 +266,7 @@
                   "ID": "11766FF5-2079-439C-B36F-5BB6CAB74B80"
                 },
                 "sync": {
-                  "lastModified": "2025-10-25T23:20:13.989Z",
+                  "lastModified": "2025-10-26T19:46:25.905Z",
                   "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
                 }
               }
@@ -313,7 +313,7 @@
                   "ID": "B2D9B34B-891A-4C66-8450-D135BDE05F26"
                 },
                 "sync": {
-                  "lastModified": "2025-10-24T19:08:54.276Z",
+                  "lastModified": "2025-10-26T19:46:25.976Z",
                   "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
                 }
               },
@@ -357,6 +357,26 @@
                 "sync": {
                   "lastModified": "2025-07-19T17:05:09.784Z",
                   "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+                }
+              }
+            ],
+            "MJ: AI Agent Relationships": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": "{\"*\": \"TechnicalDesign.databaseSchema\"}",
+                  "SubAgentContextPaths": [
+                    "*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "D1F2F505-309E-48FD-9DB7-CC3B11EF71FF"
+                },
+                "sync": {
+                  "lastModified": "2025-10-27T02:38:25.045Z",
+                  "checksum": "e72291a29a2a441a32452de192a645e6b1c145c884230149c192ff31c80b3054"
                 }
               }
             ]
@@ -408,7 +428,7 @@
                   "ID": "25107FD1-8086-4EA6-B75B-E2F7BFE01D5B"
                 },
                 "sync": {
-                  "lastModified": "2025-10-25T23:20:14.039Z",
+                  "lastModified": "2025-10-26T19:46:26.100Z",
                   "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
                 }
               }
