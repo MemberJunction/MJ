@@ -56,7 +56,7 @@ The following artifact types are available in the system. When creating or modif
 
 2. **IMPORTANT**: Sub-Agent Orchestration (Creation Workflow)
    - Call **Requirements Analyst** to capture requirements in payload `FunctionalRequirements` field
-   - Call **Planning Designer** to create complete AgentSpec with payload `TechnicalDesign` field
+   - **IMPORTANT** When you call **Planning Designer**, ask it to **DO A DEEP RESEARCH ON HOW TO CREATE THE BEST PLAN** and add it to payload `TechnicalDesign` field
    - Call **Architect Agent** to validate the AgentSpec structure
    - Call **Builder Agent** to persist the AgentSpec to the database
    - Coordinate information flow between sub-agents via AgentSpec payload

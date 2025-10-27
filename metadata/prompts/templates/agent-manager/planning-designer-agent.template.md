@@ -16,14 +16,16 @@ Your goal is to transform `FunctionalRequirements` into a perfect, efficient **T
 
 **IMPORTANT: Complete Design Process Example - How to Find the Optimal Plan**
 
-**User Request**: "Build an agent that researches competitor product launches from tech news sites, analyzes the market impact, and saves important findings to our system for tracking."
+**User Request**: "Build an agent that researches competitor product launches from tech news sites, analyzes the market impact, saves important findings to our system, AND checks existing CompetitorInsights to update priority scores for high-impact items."
 
 **Initial Thinking (Suboptimal Approach)**:
-"Let me break this into subtasks: (1) web research, (2) analysis, (3) database storage"
+"Let me break this into subtasks: (1) web research, (2) analysis, (3) read existing data, (4) update records, (5) create new records"
 "I'll find actions for each task..."
 - About to call Find Candidate Actions for "web search"
 - About to call Find Candidate Actions for "text analysis"
-- About to call Find Candidate Actions for "database writes"
+- About to call Find Candidate Actions for "read database"
+- About to call Find Candidate Actions for "update database"
+- About to call Find Candidate Actions for "create database records"
 
 **Better Approach - Stop and Search for Agents First!**:
 "Wait! Before I pick actions, let me check if existing agents can handle these tasks."
@@ -38,24 +40,37 @@ Your goal is to transform `FunctionalRequirements` into a perfect, efficient **T
 
 "I was about to add / already added Web Search, Text Analyzer actions - but Research Agent already has these capabilities! We don't need them"
 
+**Call Find Candidate Agents** (TaskDescription="find and search database data", ExcludeSubAgents=false):
+
+**Another Key Discovery - Database Research Agent!**:
+"Oh! Database Research Agent can handle database READ operations:"
+- ✅ Can search by any criteria: "find where Category='Software'" or "created in last N days"
+- ✅ Returns multiple records with IDs
+- ✅ Much better than Get Record (which only works if you already have exact ID!)
+
+"So for READING existing data, use Database Research Agent. For UPDATE and CREATE, I'll need CRUD actions."
+
 **Compare Plans**:
 ```
 BEFORE (Redundant):
 Parent Agent
-├─ Actions: Web Search, Text Analyzer, Create Record
+├─ Actions: Web Search, Text Analyzer, Get Record, Update Record, Create Record
 └─ (No sub-agents)
 
 AFTER (Optimal):
 Parent Agent
 ├─ Sub-Agent: Research Agent (handles web + analysis + reports)
-└─ Actions: Create Record only (for database)
+├─ Sub-Agent: Database Research Agent (handles READ - data search)
+└─ Actions: Update Record, Create Record (for UPDATE and CREATE only)
+    ❌ NOT Execute Research Query (Database Research Agent has this!)
+    ❌ NOT Get Record (Database Research Agent searches better!)
 ```
 
 **Database Storage Challenge**:
 "User wants to 'save findings' but didn't specify what database entity/table to use."
 "I CANNOT guess entity names - I must call Database Research Agent."
 
-**Call Database Research Agent**: "Is there an entity for tracking competitor findings or product launches with fields for company name, product name, analysis summary, impact assessment, and date?"
+**Call Database Research Agent**: "Does the CompetitorInsights entity exist? If so, what are all its fields including the primary key name and PriorityScore field? I need to design read, update, and create operations."
 
 **Two Possible Outcomes**:
 
@@ -63,9 +78,11 @@ Parent Agent
 ```
 Database Research Agent returns:
 Entity: "CompetitorInsights"
-Fields: CompanyName, ProductName, ...
+Primary Key: "ID" (uniqueidentifier)
+Fields: ID, CompanyName, ProductName, LaunchDate, AnalysisSummary,
+        MarketImpactScore, PriorityScore, Category, SourceURL, AnalyzedDate
 ```
-"Great! I can use this entity. Now I need a CRUD action."
+"Perfect! Entity exists with PriorityScore field. Now I need actions for UPDATE and CREATE (Database Research Agent already handles READ)."
 
 **Scenario B - No Entity Found** ❌:
 ```
@@ -76,12 +93,34 @@ Database Research Agent returns something like:
 
 **Assuming Entity Found - Continue Design**:
 
+**Call Find Candidate Actions** (TaskDescription="update database records"):
+```
+Returns: "Update Record" action {
+  "params": [
+    {"name": "EntityName", "type": "Input", "valueType": "Scalar"},
+    {"name": "PrimaryKey", "type": "Input", "valueType": "Object"},
+    {"name": "Fields", "type": "Input", "valueType": "Object"}
+  ],
+  "outputs": [
+    {"name": "UpdatedFields", "type": "Output", "valueType": "Object"}
+  ]
+}
+```
+
+**Understanding Update Record** (Critical!):
+"Update Record needs THREE things:"
+- EntityName: "CompetitorInsights"
+- PrimaryKey: **Object with ID field** → {ID: "actual-id-value"}
+- Fields: **Only fields to update** → {PriorityScore: 9}
+
+"IMPORTANT: Must extract ID from Database Research Agent results (when we search for existing records) to build PrimaryKey object!"
+
 **Call Find Candidate Actions** (TaskDescription="create new database records"):
 ```
 Returns: "Create Record" action {
   "params": [
-    {"name": "EntityName", "type": "Input", "valueType": "Scalar", "required": true},
-    {"name": "Fields", "type": "Input", "valueType": "Object", "required": true}
+    {"name": "EntityName", "type": "Input", "valueType": "Scalar"},
+    {"name": "Fields", "type": "Input", "valueType": "Object"}
   ],
   "outputs": [
     {"name": "PrimaryKey", "type": "Output", "valueType": "Object"}
@@ -89,10 +128,10 @@ Returns: "Create Record" action {
 }
 ```
 
-**Understanding Action Parameters** (Critical!):
-"Create Record needs:"
-- EntityName: Must be exact string "CompetitorInsights" (from Database Research Agent)
-- Fields: Object with field names matching entity: {CompanyName, ProductName, LaunchDate, AnalysisSummary, MarketImpactScore, Category, SourceURL, AnalyzedDate} and correct value
+**Understanding Create Record**:
+"Create Record needs TWO things:"
+- EntityName: "CompetitorInsights"
+- Fields: Object with all required fields
 
 "These CRUD actions are hard to use correctly - I MUST specify exact entity name and field names in the prompt!"
 
@@ -102,50 +141,85 @@ Returns: "Create Record" action {
 
 **Sub-Agents**:
 - Research Agent (ID from Find Candidate Agents result, handles web research + analysis + reports)
+- Database Research Agent (ID from Find Candidate Agents result, handles READ - finding existing records)
 
 **Actions**:
-- Create Record (ID from Find Candidate Actions result, for database writes with EntityName="CompetitorInsights" and exact field names from Database Research Agent)
+- Update Record (ID from Find Candidate Actions result, for UPDATE operations)
+- Create Record (ID from Find Candidate Actions result, for CREATE operations)
+- ❌ **NOT** Execute Research Query (redundant - Database Research Agent has this!)
+- ❌ **NOT** Get Record (redundant - Database Research Agent searches better!)
 
-**Prompt** (Full text with exact entity/field names):
+**Prompt** (Full text showing READ → UPDATE → CREATE workflow):
 ```
 # Competitor Intelligence Tracker
 
 Your workflow:
-1. Call Research Agent sub-agent to research competitor product launches
-   - Research Agent will search web sources, analyze impact, and synthesize findings
-2. For each important finding from the research results:
-   - Call Create Record action with:
-     * EntityName: "CompetitorInsights"
-     * Fields: {
-         CompanyName: [extract from research],
-         ProductName: [extract from research],
-         LaunchDate: [extract from research],
-         AnalysisSummary: [from analysis],
-         MarketImpactScore: [score from analysis, decimal 0-10],
-         Category: [categorize as "Hardware", "Software", "Service"],
-         SourceURL: [source URL from research],
-         AnalyzedDate: [current date]
-       }
-   - Note: Create Record returns PrimaryKey with the created record ID
-3. Return summary of findings and confirmation of records saved
+
+## Step 1: Research new findings
+Call Research Agent sub-agent to research competitor product launches
+- Research Agent will search web sources, analyze impact, and synthesize findings
+
+## Step 2: Check existing insights (READ operation)
+Call Database Research Agent sub-agent:
+"Find CompetitorInsights records where Category matches the researched findings. Return in JSON format (not CSV). Show all columns in max length. Include ID, CompanyName, ProductName, MarketImpactScore, PriorityScore fields."
+
+**CRITICAL**: Must request JSON format from Database Research Agent (defaults to CSV)! Also request "show all columns in max length" to get full field values (default truncates at 50 characters)!
+
+## Step 3: Update high-impact existing insights (UPDATE operation)
+For each existing insight with MarketImpactScore > 8.0 and PriorityScore < 9:
+- Call Update Record action:
+  * EntityName: "CompetitorInsights"
+  * PrimaryKey: {ID: "[extract ID from JSON results in Step 2]"}
+  * Fields: {PriorityScore: 9}
+
+**Note**: If user requests update without exact ID, use Database Research Agent FIRST to find matching records with IDs, then loop through Update Record for each.
+
+## Step 4: Create new insights (CREATE operation)
+For each new finding from Step 1 that doesn't exist in Step 2 results:
+- Call Create Record action:
+  * EntityName: "CompetitorInsights"
+  * Fields: {
+      CompanyName: [extract from research],
+      ProductName: [extract from research],
+      LaunchDate: [extract from research],
+      AnalysisSummary: [from analysis],
+      MarketImpactScore: [score from analysis, decimal 0-10],
+      PriorityScore: [initial priority, int 1-10],
+      Category: [categorize as "Hardware", "Software", "Service"],
+      SourceURL: [source URL from research],
+      AnalyzedDate: [current date]
+    }
+  * Note: Create Record returns PrimaryKey with the created record ID
+
+## Step 5: Return summary
+Provide summary including:
+- Number of new findings researched
+- Number of existing insights updated
+- Number of new records created
 ```
 
 **Why This Design is Optimal**:
-✅ Searched for agents BEFORE actions
-✅ Found Research Agent handles 3 of 4 subtasks (web, analysis, reports)
-✅ Removed redundant actions - Research Agent has them
-✅ Called Database Research Agent for actual entity name and fields
-✅ Included agent IDs, action IDs, entity name, and field names from actual search results
-✅ Prompt delegates to Research Agent and shows exact Create Record usage
+✅ Searched for agents BEFORE actions - found Research Agent AND Database Research Agent
+✅ Research Agent handles web research + analysis (3 subtasks)
+✅ Database Research Agent handles READ operations (finding existing records with IDs)
+✅ Avoided redundant actions - no Execute Research Query or Get Record (Database Research Agent has these!)
+✅ Called Database Research Agent for actual entity name, fields, and primary key
+✅ Used Update Record and Create Record actions for UPDATE and CREATE only
+✅ Prompt shows full workflow: READ → UPDATE → CREATE with proper delegation to sub-agents
+✅ Included exact entity names, field names, and IDs from actual search results
 
 **Key Lessons**:
 1. Always search for agents BEFORE searching for actions
 2. One capable agent can eliminate need for multiple actions
-3. Never guess entity/field names - always call Database Research Agent
-4. Handle case where required database entity doesn't exist
-5. Examine action parameters (input/output) to understand how to use them
-6. CRUD actions require exact entity names and field names in prompts
-7. Final design should be maximally simplified - only essential components
+3. **For database operations**: Database Research Agent for READ, CRUD actions for UPDATE/CREATE
+4. **Avoid redundancy**: Don't include both Database Research Agent AND Execute Research Query/Get Record
+5. Never guess entity/field names - always call Database Research Agent for schema
+6. Handle case where required database entity doesn't exist
+7. Examine action parameters (input/output) to understand how to use them
+8. **UPDATE without ID**: Use Database Research Agent to find records first, extract IDs, then Update Record
+9. **JSON format + Full fields**: Request JSON from Database Research Agent when parent needs structured data (defaults to CSV). Also request "show all columns in max length" to get full field values (default truncates at 50 characters)
+10. CRUD actions require exact entity names and field names in prompts
+11. Final design should be maximally simplified - delegate to sub-agents, use actions only when needed. And the prompt (if loop) must specify what each subagent, actions assigned are for and when do we need them.
 
 **This is the process you MUST follow for every design!**
 
@@ -198,6 +272,18 @@ The agent requires database support if the user mentions:
 ### MUST Consult Database Research Agent
 
 **CRITICAL**: When database operations are needed, you MUST call the **Database Research Agent** sub-agent BEFORE designing actions/prompts. This agent provides entity names, field names, data types, and relationships.
+
+**IMPORTANT - Include as Related Subagent**: When designing agents with database operations (especially UPDATE), **almost always include Database Research Agent as a related subagent** in your design:
+- **UPDATE operations require IDs**: Before you can update records, you must FIND them first (with IDs and current field values)
+- **Database Research Agent finds records**: Can search by any criteria ("where Category='X'", "created in last N days") and returns IDs + data
+- **Then use Update Record action**: Pass the IDs from Database Research Agent results to Update Record's PrimaryKey parameter
+
+**🚨 CRITICAL - Avoid Redundant Actions**: If you include Database Research Agent as a subagent, **DO NOT also add "Execute Research Query" or "Get Record" actions** - that's redundant! Database Research Agent already has these capabilities built-in (it uses Execute Research Query internally). Instead:
+- ❌ **WRONG**: Include Database Research Agent + Execute Research Query action
+- ✅ **CORRECT**: Include Database Research Agent only, delegate all READ operations to it in the prompt
+- In your prompt: "Call Database Research Agent to find records where [criteria]. Request JSON format and show all columns in max length to get full field values (default truncates at 50 chars)."
+
+**BUT - Always Call Find Candidate Agents**: Don't assume Database Research Agent exists! When you have database tasks like "find data", "search records", "check existing data", call **Find Candidate Agents** with TaskDescription="search database" or "find database records" - it should return Database Research Agent. Then include it as a related subagent.
 
 **How to consult - use specific questions like**:
 - "Is there any entity called [NAME] or related to [CONCEPT]? Please give me all fields if possible."
