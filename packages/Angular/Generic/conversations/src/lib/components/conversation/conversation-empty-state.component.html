@@ -1,5 +1,13 @@
 <div class="conversation-empty-state">
-  <div class="empty-state-container">
+  <!-- Loading Overlay -->
+  <div class="loading-overlay" *ngIf="disabled">
+    <div class="loading-content">
+      <i class="fa-solid fa-spinner fa-spin fa-2x"></i>
+      <p class="loading-message">Creating your conversation...</p>
+    </div>
+  </div>
+
+  <div class="empty-state-container" [class.loading]="disabled">
     <!-- Greeting Header -->
     <div class="greeting-section">
       <div class="greeting-icon">
