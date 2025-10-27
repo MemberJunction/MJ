@@ -3,7 +3,8 @@
   "push": {
     "autoCreateMissingRecords": true
   },
-  "directoryOrder": [
+  "directoryOrder": [ 
+    "scheduled-jobs",
     "artifact-types",
     "action-categories",
     "actions",

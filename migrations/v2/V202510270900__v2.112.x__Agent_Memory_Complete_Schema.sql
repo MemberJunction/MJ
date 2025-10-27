@@ -196,54 +196,7 @@ EXEC sp_addextendedproperty
     @level2type = N'COLUMN', @level2name = N'UsageContext';
 GO
 
------------------------------------------------------------------
--- PART 5: Create Memory Manager Scheduled Job
------------------------------------------------------------------
 
--- Insert Memory Manager scheduled job type
-IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ScheduledJobType] WHERE Name = 'Memory Manager')
-BEGIN
-    INSERT INTO [${flyway:defaultSchema}].[ScheduledJobType] (ID, Name, Description, DriverClass)
-    VALUES (
-        '9081AC48-E0D4-4323-B1ED-A3B4261F38DF',
-        'Memory Manager',
-        'Automatically extracts notes and examples from conversations and agent runs based on user ratings and artifact usage.',
-        'MemoryManagerJobHandler'
-    );
-END
-GO
-
--- Insert Memory Manager scheduled job (runs every 15 minutes)
-IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ScheduledJob] WHERE Name = 'Agent Memory Manager - Every 15 Minutes')
-BEGIN
-    DECLARE @AgentScheduledJobTypeID UNIQUEIDENTIFIER;
-    SELECT @AgentScheduledJobTypeID = ID FROM [${flyway:defaultSchema}].[ScheduledJobType] WHERE DriverClass = 'AgentScheduledJobDriver';
-
-    IF @AgentScheduledJobTypeID IS NOT NULL
-    BEGIN
-        INSERT INTO [${flyway:defaultSchema}].[ScheduledJob] (
-            ID,
-            Name,
-            Description,
-            JobTypeID,
-            CronExpression,
-            Timezone,
-            Status,
-            Configuration
-        )
-        VALUES (
-            'DDFB765D-9266-4C25-B6B1-49BD42185FB2',
-            'Agent Memory Manager - Every 15 Minutes',
-            'Analyzes conversations and agent runs since last execution to extract valuable notes and examples for agent memory.',
-            @AgentScheduledJobTypeID,
-            '0 */15 * * * *',  -- Every 15 minutes
-            'UTC',
-            'Active',
-            '{"AgentID":"@lookup:AI Agents.Name=Memory Manager","InitialMessage":"Analyze recent conversations and extract notes/examples"}'
-        );
-    END
-END
-GO
 
 
 
