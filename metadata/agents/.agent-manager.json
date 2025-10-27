@@ -359,6 +359,26 @@
                   "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
                 }
               }
+            ],
+            "MJ: AI Agent Relationships": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": "{\"*\": \"TechnicalDesign.databaseSchema\"}",
+                  "SubAgentContextPaths": [
+                    "*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "D1F2F505-309E-48FD-9DB7-CC3B11EF71FF"
+                },
+                "sync": {
+                  "lastModified": "2025-10-27T02:38:25.045Z",
+                  "checksum": "e72291a29a2a441a32452de192a645e6b1c145c884230149c192ff31c80b3054"
+                }
+              }
             ]
           },
           "primaryKey": {

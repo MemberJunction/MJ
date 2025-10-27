@@ -904,9 +904,15 @@ export class AgentSpecSync {
         agentEntity.DefaultPromptEffortLevel = this.spec.DefaultPromptEffortLevel || null;
         agentEntity.ChatHandlingOption = this.spec.ChatHandlingOption || null;
         agentEntity.DefaultArtifactTypeID = this.spec.DefaultArtifactTypeID || null;
-        if (this.spec.OwnerUserID) {
+
+        // Set OwnerUserID - always use contextUser if available (user creating/modifying the agent)
+        if (this._contextUser) {
+            agentEntity.OwnerUserID = this._contextUser.ID;
+        } else if (this.spec.OwnerUserID) {
+            // Fallback to spec value if no contextUser provided
             agentEntity.OwnerUserID = this.spec.OwnerUserID;
         }
+
         agentEntity.InvocationMode = this.spec.InvocationMode || 'Any';
 
         // Requirements and design documentation

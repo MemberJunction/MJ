@@ -1,5 +1,7 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { ArtifactEntity } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
+import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 
 @Component({
   selector: 'mj-collection-artifact-card',
@@ -26,12 +28,21 @@ import { ArtifactEntity } from '@memberjunction/core-entities';
         <button class="action-btn" (click)="onView($event)" title="View">
           <i class="fas fa-eye"></i>
         </button>
-        <button class="action-btn" (click)="onEdit($event)" title="Edit">
-          <i class="fas fa-edit"></i>
-        </button>
-        <button class="action-btn" (click)="onRemove($event)" title="Remove from collection">
-          <i class="fas fa-times"></i>
-        </button>
+        @if (canShare) {
+          <button class="action-btn" (click)="onShare($event)" title="Share">
+            <i class="fas fa-share-nodes"></i>
+          </button>
+        }
+        @if (canEdit) {
+          <button class="action-btn" (click)="onEdit($event)" title="Edit">
+            <i class="fas fa-edit"></i>
+          </button>
+        }
+        @if (canEdit) {
+          <button class="action-btn" (click)="onRemove($event)" title="Remove from collection">
+            <i class="fas fa-times"></i>
+          </button>
+        }
       </div>
     </div>
   `,
@@ -57,13 +68,52 @@ import { ArtifactEntity } from '@memberjunction/core-entities';
     .action-btn:hover { background: #F4F4F4; color: #0076B6; }
   `]
 })
-export class CollectionArtifactCardComponent {
+export class CollectionArtifactCardComponent implements OnInit, OnChanges {
   @Input() artifact!: ArtifactEntity;
+  @Input() currentUser!: UserInfo;
 
   @Output() selected = new EventEmitter<ArtifactEntity>();
   @Output() viewed = new EventEmitter<ArtifactEntity>();
+  @Output() shared = new EventEmitter<ArtifactEntity>();
   @Output() edited = new EventEmitter<ArtifactEntity>();
   @Output() removed = new EventEmitter<ArtifactEntity>();
+
+  canShare: boolean = false;
+  canEdit: boolean = false;
+
+  constructor(private artifactPermissionService: ArtifactPermissionService) {}
+
+  async ngOnInit(): Promise<void> {
+    await this.loadPermissions();
+  }
+
+  async ngOnChanges(changes: SimpleChanges): Promise<void> {
+    if (changes['artifact'] && !changes['artifact'].isFirstChange()) {
+      await this.loadPermissions();
+    }
+  }
+
+  private async loadPermissions(): Promise<void> {
+    if (!this.artifact || !this.currentUser) return;
+
+    try {
+      this.canShare = await this.artifactPermissionService.checkPermission(
+        this.artifact.ID,
+        this.currentUser.ID,
+        'share',
+        this.currentUser
+      );
+
+      this.canEdit = await this.artifactPermissionService.checkPermission(
+        this.artifact.ID,
+        this.currentUser.ID,
+        'edit',
+        this.currentUser
+      );
+    } catch (err) {
+      console.error('Error loading artifact permissions:', err);
+    }
+  }
 
   getIconClass(): string {
     const type = this.artifact.Type?.toLowerCase() || '';
@@ -84,6 +134,11 @@ export class CollectionArtifactCardComponent {
   onView(event: Event): void {
     event.stopPropagation();
     this.viewed.emit(this.artifact);
+  }
+
+  onShare(event: Event): void {
+    event.stopPropagation();
+    this.shared.emit(this.artifact);
   }
 
   onEdit(event: Event): void {

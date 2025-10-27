@@ -6,6 +6,7 @@ import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
 import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
+import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { ConversationDetailComplete, parseConversationDetailComplete, AgentRunJSON } from '../../models/conversation-complete-query.model';
 import { MessageInputComponent } from '../message/message-input.component';
@@ -24,6 +25,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   @Output() conversationRenamed = new EventEmitter<{conversationId: string; name: string; description: string}>();
   @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() taskClicked = new EventEmitter<TaskEntity>();
+  @Output() artifactLinkClicked = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
 
   @ViewChild('scrollContainer') private scrollContainer!: ElementRef;
   @ViewChild('messageInput', { static: false }) private messageInputComponent?: MessageInputComponent;
@@ -58,6 +60,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
   public collectionPickerExcludedIds: string[] = [];
+
+  // Artifact permissions
+  public canShareSelectedArtifact: boolean = false;
+  public canEditSelectedArtifact: boolean = false;
+
+  // Share modal state
+  public isArtifactShareModalOpen: boolean = false;
+  public artifactToShare: ArtifactEntity | null = null;
 
   // Conversation data cache: ConversationID -> Array of ConversationDetailComplete
   // Stores raw query results so we don't need to re-query when switching conversations
@@ -105,7 +115,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     private conversationAgentService: ConversationAgentService,
     private activeTasks: ActiveTasksService,
     private cdr: ChangeDetectorRef,
-    private mentionAutocompleteService: MentionAutocompleteService
+    private mentionAutocompleteService: MentionAutocompleteService,
+    private artifactPermissionService: ArtifactPermissionService
   ) {}
 
   async ngOnInit() {
@@ -638,6 +649,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         // Show the LAST (most recent) artifact - uses display data, no lazy load needed
         this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
         this.showArtifactPanel = true;
+        // Load permissions for the new artifact
+        await this.loadArtifactPermissions(this.selectedArtifactId);
       }
     }
 
@@ -921,11 +934,14 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     this.expandedArtifactId = this.expandedArtifactId === artifactId ? null : artifactId;
   }
 
-  openArtifactFromModal(artifactId: string, versionNumber?: number): void {
+  async openArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
     this.selectedArtifactId = artifactId;
     this.selectedVersionNumber = versionNumber;
     this.showArtifactPanel = true;
     this.showArtifactsModal = false;
+
+    // Load permissions for the selected artifact
+    await this.loadArtifactPermissions(artifactId);
   }
 
   exportConversation(): void {
@@ -1042,7 +1058,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // For now, just log it - full implementation would require refactoring agent invocation
   }
 
-  onArtifactClicked(data: {artifactId: string; versionId?: string}): void {
+  async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
     this.selectedArtifactId = data.artifactId;
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
@@ -1062,6 +1078,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     }
 
     this.showArtifactPanel = true;
+
+    // Load permissions for the selected artifact
+    await this.loadArtifactPermissions(data.artifactId);
   }
 
   async onArtifactCreated(data: {conversationDetailId: string, artifactId: string; versionId: string; versionNumber: number; name: string}): Promise<void> {
@@ -1076,6 +1095,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
         // Show the LAST (most recent) artifact - use actual ID from map, not empty event data
         this.selectedArtifactId = artifactList[artifactList.length - 1].artifactId;
         this.showArtifactPanel = true;
+        // Load permissions for the new artifact
+        await this.loadArtifactPermissions(this.selectedArtifactId);
       }
     } else if (this.selectedArtifactId && artifactList && artifactList.length > 0) {
       // Panel is already open - check if new artifact is a new version of currently displayed artifact
@@ -1097,6 +1118,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   onCloseArtifactPanel(): void {
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
+    // Clear permissions
+    this.canShareSelectedArtifact = false;
+    this.canEditSelectedArtifact = false;
   }
 
   onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
@@ -1274,6 +1298,72 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   onTaskClicked(task: TaskEntity): void {
     // Pass task click up to workspace to navigate to Tasks tab
     this.taskClicked.emit(task);
+  }
+
+  /**
+   * Handle navigation request from artifact viewer Links tab
+   */
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+    console.log('🔗 Chat area: Artifact link clicked:', event);
+    this.artifactLinkClicked.emit(event);
+  }
+
+  /**
+   * Load permissions for the given artifact
+   */
+  private async loadArtifactPermissions(artifactId: string): Promise<void> {
+    // Guard against null/undefined
+    if (!artifactId) {
+      this.canShareSelectedArtifact = false;
+      this.canEditSelectedArtifact = false;
+      return;
+    }
+
+    try {
+      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.currentUser);
+      this.canShareSelectedArtifact = permissions.canShare;
+      this.canEditSelectedArtifact = permissions.canEdit;
+    } catch (error) {
+      console.error('Failed to load artifact permissions:', error);
+      this.canShareSelectedArtifact = false;
+      this.canEditSelectedArtifact = false;
+    }
+  }
+
+  /**
+   * Handle share request from artifact viewer
+   */
+  async onArtifactShareRequested(artifactId: string): Promise<void> {
+    // Load the artifact entity to pass to the modal
+    const md = new Metadata();
+    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts');
+    await artifact.Load(artifactId);
+
+    if (artifact) {
+      this.artifactToShare = artifact;
+      this.isArtifactShareModalOpen = true;
+    }
+  }
+
+  /**
+   * Handle close of artifact share modal
+   */
+  onArtifactShareModalClose(): void {
+    this.isArtifactShareModalOpen = false;
+    this.artifactToShare = null;
+  }
+
+  /**
+   * Handle successful share - refresh permissions
+   */
+  async onArtifactShared(): Promise<void> {
+    this.isArtifactShareModalOpen = false;
+    this.artifactToShare = null;
+
+    // Refresh permissions for the active artifact
+    if (this.selectedArtifactId) {
+      await this.loadArtifactPermissions(this.selectedArtifactId);
+    }
   }
 
   // Scroll functionality (pattern from skip-chat)

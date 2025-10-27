@@ -14,6 +14,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
+import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
@@ -107,6 +108,14 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public activeArtifactId: string | null = null;
   public activeVersionNumber: number | null = null;
 
+  // Artifact permissions
+  public canShareActiveArtifact: boolean = false;
+  public canEditActiveArtifact: boolean = false;
+
+  // Share modal state
+  public isArtifactShareModalOpen: boolean = false;
+  public artifactToShare: ArtifactEntity | null = null;
+
   // Resize state - Sidebar
   public sidebarWidth: number = 260; // Default width
   private isSidebarResizing: boolean = false;
@@ -135,6 +144,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     public conversationState: ConversationStateService,
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
+    private artifactPermissionService: ArtifactPermissionService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -168,8 +178,15 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Subscribe to active artifact ID
     this.artifactState.activeArtifactId$
       .pipe(takeUntil(this.destroy$))
-      .subscribe(id => {
+      .subscribe(async id => {
         this.activeArtifactId = id;
+        // Load permissions when artifact changes
+        if (id) {
+          await this.loadArtifactPermissions(id);
+        } else {
+          this.canShareActiveArtifact = false;
+          this.canEditActiveArtifact = false;
+        }
       });
 
     // Subscribe to active version number
@@ -601,6 +618,64 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         tab: 'collections',
         collectionId: event.id
       });
+    }
+  }
+
+  /**
+   * Load permissions for the given artifact
+   */
+  private async loadArtifactPermissions(artifactId: string): Promise<void> {
+    // Guard against null/undefined
+    if (!artifactId) {
+      this.canShareActiveArtifact = false;
+      this.canEditActiveArtifact = false;
+      return;
+    }
+
+    try {
+      const permissions = await this.artifactPermissionService.getUserPermissions(artifactId, this.currentUser);
+      this.canShareActiveArtifact = permissions.canShare;
+      this.canEditActiveArtifact = permissions.canEdit;
+    } catch (error) {
+      console.error('Failed to load artifact permissions:', error);
+      this.canShareActiveArtifact = false;
+      this.canEditActiveArtifact = false;
+    }
+  }
+
+  /**
+   * Handle share request from artifact viewer
+   */
+  async onArtifactShareRequested(artifactId: string): Promise<void> {
+    // Load the artifact entity to pass to the modal
+    const md = new Metadata();
+    const artifact = await md.GetEntityObject<ArtifactEntity>('MJ: Artifacts');
+    await artifact.Load(artifactId);
+
+    if (artifact) {
+      this.artifactToShare = artifact;
+      this.isArtifactShareModalOpen = true;
+    }
+  }
+
+  /**
+   * Handle close of artifact share modal
+   */
+  onArtifactShareModalClose(): void {
+    this.isArtifactShareModalOpen = false;
+    this.artifactToShare = null;
+  }
+
+  /**
+   * Handle successful share - refresh permissions
+   */
+  async onArtifactShared(): Promise<void> {
+    this.isArtifactShareModalOpen = false;
+    this.artifactToShare = null;
+
+    // Refresh permissions for the active artifact
+    if (this.activeArtifactId) {
+      await this.loadArtifactPermissions(this.activeArtifactId);
     }
   }
 }
