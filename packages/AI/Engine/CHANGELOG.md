@@ -1,5 +1,24 @@
 # Change Log - @memberjunction/aiengine
 
+## 2.112.0
+
+### Patch Changes
+
+- e237ca9: - Optimize AIEngine embedding generation to eliminate wasteful auto-refresh regeneration (~3s → <1ms)
+  - Enhance Skip artifact retrieval with optimized query and conversationDetailID for reliable modification workflow
+  - Add Query Parameter Processor to SQLServerDataProvider index exports
+  - Replace 4 RunView calls with single optimized query for Skip artifact retrieval
+- Updated dependencies [c126b59]
+- Updated dependencies [ed74bb8]
+  - @memberjunction/global@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/ai-engine-base@2.112.0
+  - @memberjunction/ai@2.112.0
+  - @memberjunction/ai-vectors-memory@2.112.0
+  - @memberjunction/actions-base@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

@@ -1,5 +1,19 @@
 # Change Log - @memberjunction/storage
 
+## 2.112.0
+
+### Minor Changes
+
+- 2ac2120: migration
+- 2ac2120: migration
+
+### Patch Changes
+
+- Updated dependencies [c126b59]
+  - @memberjunction/global@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

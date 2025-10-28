@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-auth-services",
-  "version": "2.111.4",
+  "version": "2.112.0",
   "description": "MemberJunction Explorer: Authentication Services",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -28,7 +28,7 @@
     "@okta/okta-auth-js": "^7.0.0"
   },
   "dependencies": {
-    "@memberjunction/core": "2.111.4",
+    "@memberjunction/core": "2.112.0",
     "rxjs": "^7.8.1",
     "tslib": "^2.3.0"
   },
