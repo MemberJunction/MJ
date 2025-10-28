@@ -3,18 +3,21 @@
     "fields": {
       "Name": "Agent Memory Manager - Every 15 Minutes",
       "Description": "Analyzes conversations and agent runs since last execution to extract valuable notes and examples for agent memory. Only processes agents with InjectNotes or InjectExamples enabled.",
-      "JobTypeID": "@lookup:MJ: Scheduled Job Types.Name=Agent",
+      "JobTypeID": "@lookup:MJ: Scheduled Job Types.DriverClass=AgentScheduledJobDriver",
       "CronExpression": "0 */15 * * * *",
       "Timezone": "UTC",
       "Status": "Active",
-      "Configuration": "{\"AgentID\":\"@lookup:AI Agents.Name=Memory Manager\",\"InitialMessage\":\"Analyze recent conversations and extract notes/examples\"}"
+      "Configuration": {
+        "AgentID": "@lookup:AI Agents.Name=Memory Manager",
+        "InitialMessage": "Analyze recent conversations and extract notes/examples"
+      }
     },
     "primaryKey": {
       "ID": "DDFB765D-9266-4C25-B6B1-49BD42185FB2"
     },
     "sync": {
-      "lastModified": "2025-10-27T19:29:20.176Z",
-      "checksum": "908572f777dfa6f9fd36c3e3a5e263fa9057b063e2f1310a21ae3de2b6273510"
+      "lastModified": "2025-10-28T13:09:59.650Z",
+      "checksum": "63f684971e877f0bb529098281374a18417cc05a74bdaf4a54a367c58028eb29"
     }
   }
 ]
