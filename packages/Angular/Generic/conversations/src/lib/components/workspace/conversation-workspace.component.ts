@@ -601,12 +601,24 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   /**
    * Handle navigation from artifact links
    */
-  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number}): void {
     console.log('🔗 Navigating from artifact link:', event);
 
     if (event.type === 'conversation') {
       this.activeTab = 'conversations';
+
+      // Close collection artifact viewer if it's open
+      this.artifactState.closeArtifact();
+
+      // Store pending artifact info so chat area can show it and scroll to message
+      if (event.artifactId) {
+        this.conversationState.pendingArtifactId = event.artifactId;
+        this.conversationState.pendingArtifactVersionNumber = event.versionNumber || null;
+        console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
+      }
+
       this.conversationState.setActiveConversation(event.id);
+
       this.navigationChanged.emit({
         tab: 'conversations',
         conversationId: event.id
@@ -614,9 +626,16 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     } else if (event.type === 'collection') {
       this.activeTab = 'collections';
       this.collectionState.setActiveCollection(event.id);
+
+      // Open the artifact automatically when navigating to the collection
+      if (event.artifactId) {
+        this.artifactState.openArtifact(event.artifactId, event.versionNumber);
+      }
+
       this.navigationChanged.emit({
         tab: 'collections',
-        collectionId: event.id
+        collectionId: event.id,
+        artifactId: event.artifactId
       });
     }
   }

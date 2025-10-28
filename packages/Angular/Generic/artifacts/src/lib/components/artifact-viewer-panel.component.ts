@@ -28,7 +28,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() canEdit?: boolean; // Whether user can edit this artifact
   @Output() closed = new EventEmitter<void>();
   @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
-  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
+  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
@@ -57,6 +57,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public originConversation: ConversationEntity | null = null;
   public allCollections: CollectionEntity[] = [];
   public hasAccessToOriginConversation: boolean = false;
+  public originConversationVersionId: string | null = null; // Version ID that came from origin conversation
 
   // Dynamic tabs from plugin
   public get allTabs(): string[] {
@@ -82,8 +83,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       tabs.push('Details');
     }
 
-    // Always add Links tab (unless plugin explicitly removes it)
-    if (!removalsLower.includes('links')) {
+    // Only add Links tab if there are links to show (unless plugin explicitly removes it)
+    if (!removalsLower.includes('links') && this.linksToShow.length > 0) {
       tabs.push('Links');
     }
 
@@ -663,6 +664,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
         if (convDetailArtifactsResult.Success && convDetailArtifactsResult.Results && convDetailArtifactsResult.Results.length > 0) {
           const conversationDetailId = convDetailArtifactsResult.Results[0].ConversationDetailID;
+          const artifactVersionId = convDetailArtifactsResult.Results[0].ArtifactVersionID;
+
+          // Store which version came from the origin conversation
+          this.originConversationVersionId = artifactVersionId;
 
           // Load the conversation detail to get the conversation ID
           const conversationDetail = await md.GetEntityObject<ConversationDetailEntity>('Conversation Details', this.currentUser);
@@ -705,17 +710,25 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
     const links: Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> = [];
 
-    // Add origin conversation if viewing in collection
-    if (this.viewContext === 'collection' && this.originConversation) {
-      links.push({
-        type: 'conversation',
-        id: this.originConversation.ID,
-        name: this.originConversation.Name || 'Untitled Conversation',
-        hasAccess: this.hasAccessToOriginConversation
-      });
+    // Get current version ID being viewed
+    const currentVersionId = this.artifactVersion?.ID;
+
+    // Add origin conversation if viewing in collection AND current version matches origin version
+    if (this.viewContext === 'collection' && this.originConversation && currentVersionId) {
+      // Only show link if the current version is the one that came from the conversation
+      if (currentVersionId === this.originConversationVersionId) {
+        links.push({
+          type: 'conversation',
+          id: this.originConversation.ID,
+          name: this.originConversation.Name || 'Untitled Conversation',
+          hasAccess: this.hasAccessToOriginConversation
+        });
+      }
     }
 
     // Add all collections (excluding current context if applicable)
+    // NOTE: Collections currently save the base artifact (not version-specific),
+    // so all versions of an artifact show links to all collections containing it
     for (const collection of this.allCollections) {
       if (this.viewContext === 'collection' && collection.ID === this.contextCollectionId) {
         // Skip current collection
@@ -741,9 +754,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       return;
     }
 
+    // Include artifact ID and version number so destination can show the artifact
     this.navigateToLink.emit({
       type: link.type,
-      id: link.id
+      id: link.id,
+      artifactId: this.artifactId,
+      versionNumber: this.selectedVersionNumber
     });
   }
 

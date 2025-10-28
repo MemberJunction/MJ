@@ -260,6 +260,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       // After loading messages, check for in-progress runs and ensure we're receiving updates
       await this.detectAndReconnectToInProgressRuns(conversationId);
 
+      // Check for pending artifact navigation (from collection link)
+      await this.handlePendingArtifactNavigation();
+
     } catch (error) {
       console.error('Error loading messages:', error);
       this.messages = [];
@@ -1441,6 +1444,77 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Agent state service is already polling via startPolling() in onConversationChanged()
     // WebSocket subscription is already active via message-input component's subscribeToPushStatus()
     // Both will automatically receive updates for these in-progress runs
+  }
+
+  /**
+   * Handle pending artifact navigation from collection
+   * Opens the artifact and scrolls to the message containing it
+   */
+  private async handlePendingArtifactNavigation(): Promise<void> {
+    const pendingArtifactId = this.conversationState.pendingArtifactId;
+    const pendingVersionNumber = this.conversationState.pendingArtifactVersionNumber;
+
+    if (!pendingArtifactId) {
+      return; // No pending navigation
+    }
+
+    console.log('📦 Processing pending artifact navigation:', pendingArtifactId, 'v' + pendingVersionNumber);
+
+    // Clear pending values immediately to prevent re-processing
+    this.conversationState.pendingArtifactId = null;
+    this.conversationState.pendingArtifactVersionNumber = null;
+
+    // Find the message containing this artifact version
+    let messageIdWithArtifact: string | null = null;
+
+    for (const [detailId, artifactList] of this.artifactsByDetailId.entries()) {
+      for (const artifactInfo of artifactList) {
+        if (artifactInfo.artifactId === pendingArtifactId) {
+          // Found the artifact - check if version matches (if specified)
+          if (pendingVersionNumber == null || artifactInfo.versionNumber === pendingVersionNumber) {
+            messageIdWithArtifact = detailId;
+            console.log('✅ Found artifact in message:', detailId);
+            break;
+          }
+        }
+      }
+      if (messageIdWithArtifact) break;
+    }
+
+    if (!messageIdWithArtifact) {
+      console.warn('⚠️ Could not find message containing artifact:', pendingArtifactId);
+      return;
+    }
+
+    // Open the artifact panel
+    this.selectedArtifactId = pendingArtifactId;
+    this.selectedVersionNumber = pendingVersionNumber ?? undefined;
+    this.showArtifactPanel = true;
+
+    // Load permissions for the artifact
+    await this.loadArtifactPermissions(pendingArtifactId);
+
+    // Scroll to the message
+    this.scrollToMessage(messageIdWithArtifact);
+
+    console.log('✅ Opened artifact and scrolled to message:', messageIdWithArtifact);
+  }
+
+  /**
+   * Scroll to a specific message in the conversation
+   * @param messageId The conversation detail ID to scroll to
+   */
+  private scrollToMessage(messageId: string): void {
+    // Wait for DOM to update, then scroll
+    setTimeout(() => {
+      const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+      if (messageElement) {
+        messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        console.log('📍 Scrolled to message:', messageId);
+      } else {
+        console.warn('⚠️ Message element not found for ID:', messageId);
+      }
+    }, 300); // Give time for artifact panel to open and DOM to render
   }
 
   /**

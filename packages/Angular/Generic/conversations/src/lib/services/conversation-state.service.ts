@@ -21,6 +21,10 @@ export class ConversationStateService {
   // Pending message from empty state - persists across component lifecycle
   public pendingMessageToSend: string | null = null;
 
+  // Pending artifact navigation - used when jumping from collection to conversation
+  public pendingArtifactId: string | null = null;
+  public pendingArtifactVersionNumber: number | null = null;
+
   constructor() {}
 
   /**
