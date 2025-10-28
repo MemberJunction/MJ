@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
-import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType, AIAgentRunEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
+import { UserInfo, Metadata } from '@memberjunction/core';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, AIAgentEntityExtended, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -605,13 +605,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       let progressAgentRun = progress.metadata?.agentRun as any | undefined;
       const progressAgentRunId = progressAgentRun?.ID || progress.metadata?.agentRunId as string | undefined;
 
-      // if (!progressAgentRun && progressAgentRunId) {
-      //   // load the full agent run object from the database if we only have the ID
-      //   const md = new Metadata();
-      //   progressAgentRun = await md.GetEntityObject<AIAgentRunEntity>("MJ: AI Agent Runs");
-      //   await progressAgentRun.Load(progressAgentRunId);
-      // }
-
       // Capture the agent run ID from the first progress message
       if (!capturedAgentRunId && progressAgentRunId) {
         capturedAgentRunId = progressAgentRunId;
@@ -913,8 +906,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       reasoning,
       taskCount
     });
-
-    const md = new Metadata();
 
     // Deduplicate tasks by tempId (LLM sometimes returns duplicates)
     const seenTempIds = new Set<string>();
@@ -1416,39 +1407,28 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
     console.log(`🔄 Agent continuity: Continuing with ${agentName} (AgentID: ${lastAIMessage.AgentID})`);
 
-    // Load the OUTPUT artifact from the last agent message
-    const artifactResult = await rv.RunView<ConversationDetailArtifactEntity>({
-      EntityName: 'MJ: Conversation Detail Artifacts',
-      ExtraFilter: `ConversationDetailID='${lastAIMessage.ID}' AND Direction='Output'`,
-      ResultType: 'entity_object'
-    }, this.currentUser);
-
     let previousPayload: any = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 
-    if (artifactResult.Success && artifactResult.Results && artifactResult.Results.length > 0) {
-      // Load the artifact version content
-      const junctionRecord = artifactResult.Results[0];
-      const versionResult = await rv.RunView<ArtifactVersionEntity>({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ID='${junctionRecord.ArtifactVersionID}'`,
-        ResultType: 'entity_object'
-      }, this.currentUser);
-
-      if (versionResult.Success && versionResult.Results && versionResult.Results.length > 0) {
-        const version = versionResult.Results[0];
-        if (version.Content) {
-          try {
+    // Use pre-loaded artifact data (no DB queries!)
+    if (this.artifactsByDetailId) {
+      const artifacts = this.artifactsByDetailId.get(lastAIMessage.ID);
+      if (artifacts && artifacts.length > 0) {
+        try {
+          // Use the first artifact (should only be one OUTPUT per message)
+          const artifact = artifacts[0];
+          const version = await artifact.getVersion();
+          if (version.Content) {
             previousPayload = JSON.parse(version.Content);
             previousArtifactInfo = {
-              artifactId: version.ArtifactID,
-              versionId: version.ID,
-              versionNumber: version.VersionNumber || 1
+              artifactId: artifact.artifactId,
+              versionId: artifact.artifactVersionId,
+              versionNumber: artifact.versionNumber
             };
             console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
-          } catch (error) {
-            console.warn('⚠️ Could not parse previous artifact content:', error);
           }
+        } catch (error) {
+          console.warn('⚠️ Could not parse previous artifact content:', error);
         }
       }
     }
