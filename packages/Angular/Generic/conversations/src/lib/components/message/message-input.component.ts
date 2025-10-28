@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
-import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType, AIAgentRunEntity } from '@memberjunction/core-entities';
+import { ConversationDetailEntity, AIPromptEntity, ArtifactEntity, ArtifactVersionEntity, ConversationDetailArtifactEntity, AIAgentEntityExtended, ConversationDetailEntityType, AIAgentRunEntity, AIAgentRunEntityExtended } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -13,6 +13,7 @@ import { ExecuteAgentResult, AgentExecutionProgressCallback, BaseAgentSuggestedR
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
+import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -31,6 +32,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   @Input() parentMessageId?: string; // Optional: for replying in threads
   @Input() conversationHistory: ConversationDetailEntity[] = []; // For agent context
   @Input() initialMessage: string | null = null; // Message to send automatically when component initializes
+  @Input() artifactsByDetailId?: Map<string, LazyArtifactInfo[]>; // Pre-loaded artifact data for performance
+  @Input() agentRunsByDetailId?: Map<string, AIAgentRunEntityExtended>; // Pre-loaded agent run data for performance
 
   @Output() messageSent = new EventEmitter<ConversationDetailEntity>();
   @Output() agentResponse = new EventEmitter<{message: ConversationDetailEntity, agentResult: any}>();
@@ -424,17 +427,27 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   ): Promise<void> {
     console.log('🔍 Previous agent found, checking continuity intent...');
 
-    const intent = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
+    const intentResult = await this.checkContinuityIntent(lastAgentId, messageDetail.Message);
 
-    if (intent === 'YES') {
-      console.log('✅ Intent check: YES - continuing with previous agent');
+    if (intentResult.decision === 'YES') {
+      console.log('✅ Intent check: YES - continuing with previous agent', {
+        reasoning: intentResult.reasoning,
+        targetArtifactVersionId: intentResult.targetArtifactVersionId
+      });
       await this.executeRouteWithNaming(
-        () => this.continueWithAgent(messageDetail, lastAgentId, this.conversationId),
+        () => this.continueWithAgent(
+          messageDetail,
+          lastAgentId,
+          this.conversationId,
+          intentResult.targetArtifactVersionId
+        ),
         messageDetail.Message,
         isFirstMessage
       );
     } else {
-      console.log(`🤖 Intent check: ${intent} - routing through Sage for evaluation`);
+      console.log(`🤖 Intent check: ${intentResult.decision} - routing through Sage for evaluation`, {
+        reasoning: intentResult.reasoning
+      });
       await this.executeRouteWithNaming(
         () => this.processMessageThroughAgent(messageDetail, mentionResult),
         messageDetail.Message,
@@ -479,20 +492,30 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
    * Checks if message should continue with the previous agent
    * Emits events to show temporary intent checking message in conversation
    */
-  private async checkContinuityIntent(agentId: string, message: string): Promise<'YES' | 'NO' | 'UNSURE'> {
+  private async checkContinuityIntent(agentId: string, message: string) {
     // Emit event to show temporary "Analyzing intent..." message in conversation
     this.intentCheckStarted.emit();
 
     try {
+      // Build context from pre-loaded maps (if available)
+      if (!this.artifactsByDetailId || !this.agentRunsByDetailId) {
+        console.warn('⚠️ Artifact/agent run context not available for intent check');
+        return { decision: 'UNSURE' as const, reasoning: 'Context not available' };
+      }
+
       const intent = await this.agentService.checkAgentContinuityIntent(
         agentId,
         message,
-        this.conversationHistory
+        this.conversationHistory,
+        {
+          artifactsByDetailId: this.artifactsByDetailId,
+          agentRunsByDetailId: this.agentRunsByDetailId
+        }
       );
       return intent;
     } catch (error) {
       console.error('❌ Intent check failed, defaulting to UNSURE:', error);
-      return 'UNSURE';
+      return { decision: 'UNSURE' as const, reasoning: 'Intent check failed with error' };
     } finally {
       // Emit event to remove temporary intent checking message
       this.intentCheckCompleted.emit();
@@ -1380,14 +1403,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     }
 
     // Load the agent entity to get its name
-    const rv = new RunView();
-    const agentResult = await rv.RunView<AIAgentEntityExtended>({
-      EntityName: 'AI Agents',
-      ExtraFilter: `ID='${lastAIMessage.AgentID}'`,
-      ResultType: 'entity_object'
-    }, this.currentUser);
-
-    if (!agentResult.Success || !agentResult.Results || agentResult.Results.length === 0) {
+    const previousAgent = AIEngineBase.Instance.Agents.find(a => a.ID === lastAIMessage.AgentID);
+    if (!previousAgent) {
       console.warn('⚠️ Could not load previous agent - marking complete');
       userMessage.Status = 'Complete';
       await userMessage.Save();
@@ -1395,7 +1412,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       return;
     }
 
-    const previousAgent = agentResult.Results[0];
     const agentName = previousAgent.Name || 'Agent';
 
     console.log(`🔄 Agent continuity: Continuing with ${agentName} (AgentID: ${lastAIMessage.AgentID})`);
@@ -1683,69 +1699,85 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   /**
    * Continue with the same agent from previous message (implicit continuation)
    * Bypasses Sage - no status messages
+   *
+   * @param targetArtifactVersionId Optional specific artifact version to use as payload (from intent check)
    */
   private async continueWithAgent(
     userMessage: ConversationDetailEntity,
     agentId: string,
-    conversationId: string
+    conversationId: string,
+    targetArtifactVersionId?: string
   ): Promise<void> {
     // Load the agent entity to get its name
-    const rv = new RunView();
-    const agentResult = await rv.RunView<AIAgentEntityExtended>({
-      EntityName: 'AI Agents',
-      ExtraFilter: `ID='${agentId}'`,
-      ResultType: 'entity_object'
-    }, this.currentUser);
-
-    if (!agentResult.Success || !agentResult.Results || agentResult.Results.length === 0) {
+    const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
+    if (!agent) {
       console.warn('⚠️ Could not load agent for continuation - falling back to Sage');
       await this.processMessageThroughAgent(userMessage, { mentions: [], agentMention: null, userMentions: [] });
       return;
     }
 
-    const agent = agentResult.Results[0];
     const agentName = agent.Name || 'Agent';
-
-    // Find the last AI message from this same agent to get the previous OUTPUT artifact
-    const lastAIMessage = this.conversationHistory
-      .slice()
-      .reverse()
-      .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
 
     let previousPayload: any = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 
-    if (lastAIMessage) {
-      // Load the OUTPUT artifact from the last agent message
-      const artifactResult = await rv.RunView<ConversationDetailArtifactEntity>({
-        EntityName: 'MJ: Conversation Detail Artifacts',
-        ExtraFilter: `ConversationDetailID='${lastAIMessage.ID}' AND Direction='Output'`,
-        ResultType: 'entity_object'
-      }, this.currentUser);
+    // Use targetArtifactVersionId if specified (from intent check)
+    if (targetArtifactVersionId && this.artifactsByDetailId) {
+      console.log('🎯 Using target artifact version from intent check:', targetArtifactVersionId);
 
-      if (artifactResult.Success && artifactResult.Results && artifactResult.Results.length > 0) {
-        // Load the artifact version content
-        const junctionRecord = artifactResult.Results[0];
-        const versionResult = await rv.RunView<ArtifactVersionEntity>({
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ID='${junctionRecord.ArtifactVersionID}'`,
-          ResultType: 'entity_object'
-        }, this.currentUser);
-
-        if (versionResult.Success && versionResult.Results && versionResult.Results.length > 0) {
-          const version = versionResult.Results[0];
-          if (version.Content) {
-            try {
+      // Find the artifact in pre-loaded data (O(n) search across all messages)
+      for (const [detailId, artifacts] of this.artifactsByDetailId.entries()) {
+        const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
+        if (targetArtifact) {
+          try {
+            // Lazy load the full version entity to get Content
+            const version = await targetArtifact.getVersion();
+            if (version.Content) {
               previousPayload = JSON.parse(version.Content);
               previousArtifactInfo = {
-                artifactId: version.ArtifactID,
-                versionId: version.ID,
-                versionNumber: version.VersionNumber || 1
+                artifactId: targetArtifact.artifactId,
+                versionId: targetArtifact.artifactVersionId,
+                versionNumber: targetArtifact.versionNumber
               };
-              console.log('📦 Loaded previous OUTPUT artifact as payload for continuation', previousArtifactInfo);
-            } catch (error) {
-              console.warn('⚠️ Could not parse previous artifact content:', error);
+              console.log('📦 Loaded target artifact version as payload', previousArtifactInfo);
             }
+          } catch (error) {
+            console.warn('⚠️ Could not load target artifact version:', error);
+          }
+          break;
+        }
+      }
+    }
+
+    // Fall back to most recent artifact if no target specified or target not found
+    if (!previousPayload) {
+      console.log('📦 Using most recent artifact from last agent message');
+
+      // Find the last AI message from this same agent
+      const lastAIMessage = this.conversationHistory
+        .slice()
+        .reverse()
+        .find(msg => msg.Role === 'AI' && msg.AgentID === agentId);
+
+      if (lastAIMessage && this.artifactsByDetailId) {
+        // Get artifacts from pre-loaded data (no DB query!)
+        const artifacts = this.artifactsByDetailId.get(lastAIMessage.ID);
+        if (artifacts && artifacts.length > 0) {
+          try {
+            // Use the first artifact (should only be one OUTPUT per message)
+            const artifact = artifacts[0];
+            const version = await artifact.getVersion();
+            if (version.Content) {
+              previousPayload = JSON.parse(version.Content);
+              previousArtifactInfo = {
+                artifactId: artifact.artifactId,
+                versionId: artifact.artifactVersionId,
+                versionNumber: artifact.versionNumber
+              };
+              console.log('📦 Loaded most recent artifact as payload', previousArtifactInfo);
+            }
+          } catch (error) {
+            console.warn('⚠️ Could not parse artifact content:', error);
           }
         }
       }

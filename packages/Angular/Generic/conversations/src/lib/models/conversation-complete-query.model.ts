@@ -20,6 +20,9 @@ export type AgentRunJSON = AIAgentRunEntityType & {
 export type ArtifactJSON = ConversationDetailArtifactEntityType & {
   ArtifactVersionID: string;
   VersionNumber: number;
+  VersionName: string | null;
+  VersionDescription: string | null;
+  VersionCreatedAt: Date;
   ArtifactID: string;
   ArtifactName: string;
   ArtifactType: string;

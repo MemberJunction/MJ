@@ -108,6 +108,8 @@
                 [conversationId]="conversationState.activeConversation.ID"
                 [currentUser]="currentUser"
                 [conversationHistory]="messages"
+                [artifactsByDetailId]="artifactsByDetailId"
+                [agentRunsByDetailId]="agentRunsByDetailId"
                 [disabled]="isProcessing"
                 [initialMessage]="conversationState.pendingMessageToSend"
                 (messageSent)="onMessageSent($event)"

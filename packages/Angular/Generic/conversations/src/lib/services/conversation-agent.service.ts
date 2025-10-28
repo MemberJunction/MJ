@@ -6,8 +6,28 @@ import { GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentParams, ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ChatMessage } from '@memberjunction/ai';
 import { AIEngineBase, AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
-import { AIAgentEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { AIAgentEntityExtended, AIAgentRunEntityExtended, ConversationDetailEntity, ConversationDetailArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { LazyArtifactInfo } from '../models/lazy-artifact-info';
+
+/**
+ * Context for artifact lookups - provides pre-loaded data from conversation
+ * to avoid redundant database queries
+ */
+export interface ArtifactLookupContext {
+  agentRunsByDetailId: Map<string, AIAgentRunEntityExtended>;
+  artifactsByDetailId: Map<string, LazyArtifactInfo[]>;
+}
+
+/**
+ * Result from intent check - indicates whether to continue with agent
+ * and which artifact version to use as payload
+ */
+export interface IntentCheckResult {
+  decision: 'YES' | 'NO' | 'UNSURE';
+  reasoning: string;
+  targetArtifactVersionId?: string;
+}
 
 /**
  * Service for managing agent interactions within conversations.
@@ -146,24 +166,11 @@ export class ConversationAgentService {
 
       console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
 
-      // Find all artifacts from this agent in this conversation
-      const agentArtifacts = await this.findAllAgentArtifacts(
-        agent.ID,
-        conversationHistory
-      );
-
-      // Get the most recent version's runId for default payload
-      const mostRecentRunId = agentArtifacts.length > 0 && agentArtifacts[0].versions.length > 0
-        ? agentArtifacts[0].versions[0].runId
-        : undefined;
-
       // Prepare parameters using the correct ExecuteAgentParams type
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
         conversationDetailId: conversationDetailId,
-        lastRunId: mostRecentRunId,
-        autoPopulateLastRunPayload: !!mostRecentRunId,
         data: {
           ALL_AVAILABLE_AGENTS: availAgents.map(a => {
             return {
@@ -173,9 +180,7 @@ export class ConversationAgentService {
             }
           }),
           conversationId: conversationId,
-          latestMessageId: message.ID,
-          hasPriorArtifact: agentArtifacts.length > 0,
-          priorArtifacts: agentArtifacts
+          latestMessageId: message.ID
         },
         onProgress: onProgress
       };
@@ -391,16 +396,18 @@ export class ConversationAgentService {
    * @param agentId The ID of the previous agent
    * @param latestMessage The user's new message
    * @param conversationHistory Recent conversation history for context (last 10 messages)
-   * @returns 'YES' if message continues with agent, 'NO' for context shift, 'UNSURE' when unclear
+   * @param context Pre-loaded artifact and agent run data to avoid database queries
+   * @returns IntentCheckResult with decision, reasoning, and optional target artifact version
    */
   async checkAgentContinuityIntent(
     agentId: string,
     latestMessage: string,
-    conversationHistory: ConversationDetailEntity[]
-  ): Promise<'YES' | 'NO' | 'UNSURE'> {
+    conversationHistory: ConversationDetailEntity[],
+    context: ArtifactLookupContext
+  ): Promise<IntentCheckResult> {
     if (!this._aiClient) {
       console.warn('AI Client not initialized, defaulting to UNSURE for intent check');
-      return 'UNSURE';
+      return { decision: 'UNSURE', reasoning: 'AI Client not initialized' };
     }
 
     try {
@@ -409,15 +416,22 @@ export class ConversationAgentService {
       const prompt = AIEngineBase.Instance.Prompts.find(p => p.Name === 'Check Sage Intent');
       if (!prompt) {
         console.warn('⚠️ Check Sage Intent prompt not found, defaulting to UNSURE');
-        return 'UNSURE';
+        return { decision: 'UNSURE', reasoning: 'Check Sage Intent prompt not found' };
       }
 
       // Get agent details
       const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentId);
       if (!agent) {
         console.warn('⚠️ Previous agent not found, defaulting to UNSURE');
-        return 'UNSURE';
+        return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
       }
+
+      // Find all artifacts from this agent in this conversation
+      const agentArtifacts = this.findAllAgentArtifacts(
+        agentId,
+        conversationHistory,
+        context
+      );
 
       // Build compact conversation history (last 10 messages)
       const recentHistory = conversationHistory.slice(-10);
@@ -427,23 +441,45 @@ export class ConversationAgentService {
         return `${idx + 1}. ${role}: ${content.substring(0, 150)}${content.length > 150 ? '...' : ''}`;
       }).join('\n');
 
+      // Build artifact context if available
+      let artifactContext = '';
+      if (agentArtifacts.length > 0) {
+        artifactContext = '\n\n**Prior Artifacts Created by This Agent**:\n';
+        agentArtifacts.forEach((artifact, idx) => {
+          artifactContext += `${idx + 1}. ${artifact.artifactName} (${artifact.artifactType})\n`;
+          artifactContext += `   - Versions: ${artifact.versions.length}\n`;
+          if (artifact.versions.length > 0) {
+            artifactContext += `   - Latest: v${artifact.versions[0].versionNumber}`;
+            if (artifact.versions[0].versionName) {
+              artifactContext += ` - ${artifact.versions[0].versionName}`;
+            }
+            artifactContext += '\n';
+          }
+        });
+      }
+
       // Build user message with context
       const userMessage = `**Previous Agent**: ${agent.Name} - ${agent.Description || 'No description'}
 
 **Conversation History** (last ${recentHistory.length} messages):
-${compactHistory}
+${compactHistory}${artifactContext}
 
 **Latest User Message**: "${latestMessage}"`;
 
       console.log('🔍 Checking agent continuity intent...', {
         agentName: agent.Name,
-        messagePreview: latestMessage.substring(0, 50)
+        messagePreview: latestMessage.substring(0, 50),
+        artifactCount: agentArtifacts.length
       });
 
-      // Run the prompt
+      // Run the prompt with artifact data included
       const result = await this._aiClient.RunAIPrompt({
         promptId: prompt.ID,
-        messages: [{ role: 'user', content: userMessage }]
+        messages: [{ role: 'user', content: userMessage }],
+        data: {
+          hasPriorArtifact: agentArtifacts.length > 0,
+          priorArtifacts: agentArtifacts
+        }
       });
 
       if (result && result.success && (result.parsedResult || result.output)) {
@@ -453,25 +489,34 @@ ${compactHistory}
         if (parsed && parsed.continuesWith) {
           const decision = parsed.continuesWith.toUpperCase();
           const reasoning = parsed.reasoning || 'No reasoning provided';
+          const targetArtifactVersionId = parsed.targetArtifactVersionId || undefined;
 
           console.log(`✅ Intent check result: ${decision}`, {
             reasoning,
+            targetArtifactVersionId,
             latency: result.executionTimeMs || 'unknown'
           });
 
           // Validate the response
           if (decision === 'YES' || decision === 'NO' || decision === 'UNSURE') {
-            return decision as 'YES' | 'NO' | 'UNSURE';
+            return {
+              decision: decision as 'YES' | 'NO' | 'UNSURE',
+              reasoning,
+              targetArtifactVersionId
+            };
           }
         }
       }
 
       console.warn('⚠️ Intent check failed or returned invalid format, defaulting to UNSURE');
-      return 'UNSURE';
+      return { decision: 'UNSURE', reasoning: 'Invalid format from intent check prompt' };
     } catch (error) {
       console.error('❌ Error checking agent continuity intent:', error);
       // On error, default to UNSURE (safer to let Sage evaluate)
-      return 'UNSURE';
+      return {
+        decision: 'UNSURE',
+        reasoning: `Error during intent check: ${error instanceof Error ? error.message : String(error)}`
+      };
     }
   }
 
@@ -519,11 +564,14 @@ ${compactHistory}
    * Find all artifacts created by the specified agent in this conversation.
    * Returns artifacts grouped by artifact with versions, ordered most recent first.
    * Enables LLM to reason about which artifact/version user is referencing.
+   *
+   * Uses pre-loaded data from ArtifactLookupContext for performance (no database queries).
    */
-  private async findAllAgentArtifacts(
+  private findAllAgentArtifacts(
     agentId: string,
-    conversationDetails: ConversationDetailEntity[]
-  ): Promise<Array<{
+    conversationDetails: ConversationDetailEntity[],
+    context: ArtifactLookupContext
+  ): Array<{
     artifactId: string;
     artifactName: string;
     artifactType: string;
@@ -536,7 +584,7 @@ ${compactHistory}
       versionDescription: string | null;
       createdAt: Date;
     }>;
-  }>> {
+  }> {
     const artifactMap = new Map<string, {
       artifactId: string;
       artifactName: string;
@@ -552,97 +600,56 @@ ${compactHistory}
       }>;
     }>();
 
-    try {
-      const rv = new RunView();
+    // Iterate backwards through conversation details (most recent first)
+    for (let i = conversationDetails.length - 1; i >= 0; i--) {
+      const detail = conversationDetails[i];
 
-      // Iterate backwards through conversation details (most recent first)
-      for (let i = conversationDetails.length - 1; i >= 0; i--) {
-        const detail = conversationDetails[i];
+      // Skip non-AI messages and errors
+      if (detail.Role !== 'AI' || detail.Status === 'Error') continue;
 
-        // Skip non-AI messages and errors
-        if (detail.Role !== 'AI' || detail.Status === 'Error') continue;
-
-        // Check for agent run + artifact in this message
-        const runResult = await rv.RunView({
-          EntityName: 'MJ: AI Agent Runs',
-          ExtraFilter: `ConversationDetailID='${detail.ID}' AND AgentID='${agentId}' AND Status='Success'`,
-          MaxRows: 1,
-          ResultType: 'simple'
-        });
-
-        if (!runResult.Success || !runResult.Results?.length) continue;
-
-        const agentRun = runResult.Results[0];
-
-        // Get artifacts for this message
-        const artifactResult = await rv.RunView({
-          EntityName: 'MJ: Conversation Detail Artifacts',
-          ExtraFilter: `ConversationDetailID='${detail.ID}' AND Direction='Output'`,
-          ResultType: 'entity_object'
-        });
-
-        if (!artifactResult.Success || !artifactResult.Results?.length) continue;
-
-        for (const detailArtifact of artifactResult.Results) {
-          // Load version
-          const versionResult = await rv.RunView({
-            EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ID='${detailArtifact.ArtifactVersionID}'`,
-            MaxRows: 1,
-            ResultType: 'entity_object'
-          });
-
-          if (!versionResult.Success || !versionResult.Results?.length) continue;
-
-          const version = versionResult.Results[0];
-          const mainArtifactId = version.ArtifactID;
-
-          // Get or create artifact entry
-          if (!artifactMap.has(mainArtifactId)) {
-            // Load main artifact for name/type
-            const artifactResult = await rv.RunView({
-              EntityName: 'MJ: Artifacts',
-              ExtraFilter: `ID='${mainArtifactId}'`,
-              MaxRows: 1,
-              ResultType: 'entity_object'
-            });
-
-            if (artifactResult.Success && artifactResult.Results?.length) {
-              const artifact = artifactResult.Results[0];
-              artifactMap.set(mainArtifactId, {
-                artifactId: mainArtifactId,
-                artifactName: artifact.Name || 'Untitled',
-                artifactType: artifact.Type || 'Unknown',
-                artifactDescription: artifact.Description,
-                versions: []
-              });
-            }
-          }
-
-          // Add version to artifact
-          const artifactEntry = artifactMap.get(mainArtifactId);
-          if (artifactEntry) {
-            artifactEntry.versions.push({
-              runId: agentRun.ID,
-              versionId: version.ID,
-              versionNumber: version.VersionNumber || 1,
-              versionName: version.Name,
-              versionDescription: version.Description,
-              createdAt: version.__mj_CreatedAt
-            });
-          }
-        }
+      // O(1) lookup for agent run from pre-loaded data
+      const agentRun = context.agentRunsByDetailId.get(detail.ID);
+      if (!agentRun || agentRun.AgentID !== agentId || agentRun.Status !== 'Completed') {
+        continue;
       }
 
-      // Convert map to array (most recent artifacts first based on their latest version)
-      return Array.from(artifactMap.values()).sort((a, b) => {
-        const aLatest = a.versions[0]?.createdAt || new Date(0);
-        const bLatest = b.versions[0]?.createdAt || new Date(0);
-        return bLatest.getTime() - aLatest.getTime();
-      });
-    } catch (error) {
-      console.error('Error finding agent artifacts:', error);
-      return [];
+      // O(1) lookup for artifacts from pre-loaded data
+      const artifacts = context.artifactsByDetailId.get(detail.ID);
+      if (!artifacts || artifacts.length === 0) continue;
+
+      // Process each artifact
+      for (const lazyArtifact of artifacts) {
+        const mainArtifactId = lazyArtifact.artifactId;
+
+        // Get or create artifact entry
+        if (!artifactMap.has(mainArtifactId)) {
+          artifactMap.set(mainArtifactId, {
+            artifactId: mainArtifactId,
+            artifactName: lazyArtifact.artifactName,
+            artifactType: lazyArtifact.artifactType,
+            artifactDescription: lazyArtifact.artifactDescription || null,
+            versions: []
+          });
+        }
+
+        // Add version to artifact
+        const artifactEntry = artifactMap.get(mainArtifactId)!;
+        artifactEntry.versions.push({
+          runId: agentRun.ID,
+          versionId: lazyArtifact.artifactVersionId,
+          versionNumber: lazyArtifact.versionNumber,
+          versionName: lazyArtifact.versionName,
+          versionDescription: lazyArtifact.versionDescription,
+          createdAt: lazyArtifact.versionCreatedAt
+        });
+      }
     }
+
+    // Convert map to array (most recent artifacts first based on their latest version)
+    return Array.from(artifactMap.values()).sort((a, b) => {
+      const aLatest = a.versions[0]?.createdAt || new Date(0);
+      const bLatest = b.versions[0]?.createdAt || new Date(0);
+      return bLatest.getTime() - aLatest.getTime();
+    });
   }
 }
