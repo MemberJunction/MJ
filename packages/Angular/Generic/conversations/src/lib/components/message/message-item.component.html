@@ -44,8 +44,9 @@
             class="agent-run-icon"
             (click)="toggleAgentDetails()"
             [class.expanded]="isAgentDetailsExpanded"
-            title="Click to view agent execution details">
+            [title]="hasRatings() ? 'Agent details & ' + getRatingCount() + ' rating(s)' : 'Click to view agent execution details'">
         <i class="fas fa-cog"></i>
+        <span class="rating-badge" *ngIf="hasRatings()">{{ getRatingCount() }}</span>
       </span>
     </div>
 
@@ -106,9 +107,65 @@
           </div>
         </div>
       }
+    </div>
 
+    <!-- Message Footer: Rating counts (bottom left) and action buttons for latest message -->
+    @if (isAIMessage && !isEditing) {
+      <div class="message-footer">
+        <!-- Rating counts (shown for any message with ratings) -->
+        @if (hasRatings()) {
+          <div class="rating-counts">
+            <span class="rating-count thumbs-up" *ngIf="getThumbsUpCount() > 0">
+              👍 {{ getThumbsUpCount() }}
+            </span>
+            <span class="rating-count thumbs-down" *ngIf="getThumbsDownCount() > 0">
+              👎 {{ getThumbsDownCount() }}
+            </span>
+            <span class="rating-total">{{ getRatingCount() }} {{ getRatingCount() === 1 ? 'rating' : 'ratings' }}</span>
+          </div>
+        }
+
+        <!-- Pin/Delete buttons for latest unrated message (shown inline with rating) -->
+        @if (shouldShowInlineActions()) {
+          <div class="inline-actions">
+            <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
+              <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
+            </button>
+            <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Agent details content section -->
+    <div class="agent-details-section">
       <!-- Agent Run Details Panel (expandable) -->
       @if (isAgentDetailsExpanded && hasAgentRun) {
+        <!-- Message Action Bar (separate panel above agent details) -->
+        <div class="message-action-bar">
+          <div class="action-bar-container">
+            <!-- Rating Buttons -->
+            <mj-conversation-message-rating
+              [conversationDetailId]="message.ID"
+              [currentUser]="currentUser"
+              [ratingsData]="ratings">
+            </mj-conversation-message-rating>
+
+            <!-- Pin/Delete Buttons (icon only) -->
+            <div class="action-buttons">
+              <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
+                <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
+              </button>
+              <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Agent Run Details Panel -->
         <div class="agent-details-panel">
           @if (agentRun) {
             <div class="agent-details-content">
@@ -182,7 +239,8 @@
     </div>
 
     <!-- Rating component for AI messages -->
-    <div class="message-rating" *ngIf="isAIMessage && !isEditing">
+    <!-- Only show if: completed AI message AND (is last message OR has ratings) -->
+    <div class="message-rating" *ngIf="shouldShowRating()">
       <mj-conversation-message-rating
         [conversationDetailId]="message.ID"
         [currentUser]="currentUser"
@@ -190,23 +248,16 @@
       </mj-conversation-message-rating>
     </div>
 
-    <div class="message-actions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
-      <!-- Retry button for failed AI messages -->
-      <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry" *ngIf="messageStatus === 'Error' && isAIMessage">
-        <i class="fas fa-redo"></i>
-        Retry
-      </button>
-
-      <button class="message-action-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin' : 'Pin'">
-        <i class="fas" [ngClass]="message.IsPinned ? 'fa-thumbtack' : 'fa-thumbtack'"></i>
-      </button>
-      <button class="message-action-btn" (click)="onEditClick()" title="Edit" *ngIf="isUserMessage">
-        <i class="fas fa-edit"></i>
-      </button>
-      <button class="message-action-btn danger" (click)="onDeleteClick()" title="Delete">
-        <i class="fas fa-trash"></i>
-      </button>
-    </div>
+    <!-- Removed message-actions hover panel - actions now in gear icon dropdown -->
+    <!-- Retry button kept for critical error recovery on failed messages -->
+    @if (messageStatus === 'Error' && isAIMessage && !isProcessing && !isEditing) {
+      <div class="message-actions">
+        <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry">
+          <i class="fas fa-redo"></i>
+          Retry
+        </button>
+      </div>
+    }
 
     <!-- Reaction Buttons -->
     <div class="message-reactions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">

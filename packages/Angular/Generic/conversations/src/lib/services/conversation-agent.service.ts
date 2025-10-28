@@ -146,11 +146,24 @@ export class ConversationAgentService {
 
       console.log(`📋 Available agents for Sage: ${availAgents.length} (filtered from ${candidateAgents.length} candidates)`);
 
+      // Find all artifacts from this agent in this conversation
+      const agentArtifacts = await this.findAllAgentArtifacts(
+        agent.ID,
+        conversationHistory
+      );
+
+      // Get the most recent version's runId for default payload
+      const mostRecentRunId = agentArtifacts.length > 0 && agentArtifacts[0].versions.length > 0
+        ? agentArtifacts[0].versions[0].runId
+        : undefined;
+
       // Prepare parameters using the correct ExecuteAgentParams type
       const params: ExecuteAgentParams = {
         agent: agent,
         conversationMessages: conversationMessages,
         conversationDetailId: conversationDetailId,
+        lastRunId: mostRecentRunId,
+        autoPopulateLastRunPayload: !!mostRecentRunId,
         data: {
           ALL_AVAILABLE_AGENTS: availAgents.map(a => {
             return {
@@ -160,7 +173,9 @@ export class ConversationAgentService {
             }
           }),
           conversationId: conversationId,
-          latestMessageId: message.ID
+          latestMessageId: message.ID,
+          hasPriorArtifact: agentArtifacts.length > 0,
+          priorArtifacts: agentArtifacts
         },
         onProgress: onProgress
       };
@@ -498,5 +513,136 @@ ${compactHistory}
     }
 
     return permittedAgents;
+  }
+
+  /**
+   * Find all artifacts created by the specified agent in this conversation.
+   * Returns artifacts grouped by artifact with versions, ordered most recent first.
+   * Enables LLM to reason about which artifact/version user is referencing.
+   */
+  private async findAllAgentArtifacts(
+    agentId: string,
+    conversationDetails: ConversationDetailEntity[]
+  ): Promise<Array<{
+    artifactId: string;
+    artifactName: string;
+    artifactType: string;
+    artifactDescription: string | null;
+    versions: Array<{
+      runId: string;
+      versionId: string;
+      versionNumber: number;
+      versionName: string | null;
+      versionDescription: string | null;
+      createdAt: Date;
+    }>;
+  }>> {
+    const artifactMap = new Map<string, {
+      artifactId: string;
+      artifactName: string;
+      artifactType: string;
+      artifactDescription: string | null;
+      versions: Array<{
+        runId: string;
+        versionId: string;
+        versionNumber: number;
+        versionName: string | null;
+        versionDescription: string | null;
+        createdAt: Date;
+      }>;
+    }>();
+
+    try {
+      const rv = new RunView();
+
+      // Iterate backwards through conversation details (most recent first)
+      for (let i = conversationDetails.length - 1; i >= 0; i--) {
+        const detail = conversationDetails[i];
+
+        // Skip non-AI messages and errors
+        if (detail.Role !== 'AI' || detail.Status === 'Error') continue;
+
+        // Check for agent run + artifact in this message
+        const runResult = await rv.RunView({
+          EntityName: 'MJ: AI Agent Runs',
+          ExtraFilter: `ConversationDetailID='${detail.ID}' AND AgentID='${agentId}' AND Status='Success'`,
+          MaxRows: 1,
+          ResultType: 'simple'
+        });
+
+        if (!runResult.Success || !runResult.Results?.length) continue;
+
+        const agentRun = runResult.Results[0];
+
+        // Get artifacts for this message
+        const artifactResult = await rv.RunView({
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: `ConversationDetailID='${detail.ID}' AND Direction='Output'`,
+          ResultType: 'entity_object'
+        });
+
+        if (!artifactResult.Success || !artifactResult.Results?.length) continue;
+
+        for (const detailArtifact of artifactResult.Results) {
+          // Load version
+          const versionResult = await rv.RunView({
+            EntityName: 'MJ: Artifact Versions',
+            ExtraFilter: `ID='${detailArtifact.ArtifactVersionID}'`,
+            MaxRows: 1,
+            ResultType: 'entity_object'
+          });
+
+          if (!versionResult.Success || !versionResult.Results?.length) continue;
+
+          const version = versionResult.Results[0];
+          const mainArtifactId = version.ArtifactID;
+
+          // Get or create artifact entry
+          if (!artifactMap.has(mainArtifactId)) {
+            // Load main artifact for name/type
+            const artifactResult = await rv.RunView({
+              EntityName: 'MJ: Artifacts',
+              ExtraFilter: `ID='${mainArtifactId}'`,
+              MaxRows: 1,
+              ResultType: 'entity_object'
+            });
+
+            if (artifactResult.Success && artifactResult.Results?.length) {
+              const artifact = artifactResult.Results[0];
+              artifactMap.set(mainArtifactId, {
+                artifactId: mainArtifactId,
+                artifactName: artifact.Name || 'Untitled',
+                artifactType: artifact.Type || 'Unknown',
+                artifactDescription: artifact.Description,
+                versions: []
+              });
+            }
+          }
+
+          // Add version to artifact
+          const artifactEntry = artifactMap.get(mainArtifactId);
+          if (artifactEntry) {
+            artifactEntry.versions.push({
+              runId: agentRun.ID,
+              versionId: version.ID,
+              versionNumber: version.VersionNumber || 1,
+              versionName: version.Name,
+              versionDescription: version.Description,
+              createdAt: version.__mj_CreatedAt
+            });
+          }
+        }
+      }
+
+      // Convert map to array (most recent artifacts first based on their latest version)
+      return Array.from(artifactMap.values()).sort((a, b) => {
+        const aLatest = a.versions[0]?.createdAt || new Date(0);
+        const bLatest = b.versions[0]?.createdAt || new Date(0);
+        return bLatest.getTime() - aLatest.getTime();
+      });
+    } catch (error) {
+      console.error('Error finding agent artifacts:', error);
+      return [];
+    }
   }
 }

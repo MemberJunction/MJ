@@ -397,6 +397,74 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return this.allMessages.indexOf(this.message) === this.allMessages.length - 1;
   }
 
+  /**
+   * Determine if rating component should be shown inline (Option C - Hybrid).
+   * Show for latest completed AI message that user hasn't rated yet.
+   * For older/already-rated messages, ratings accessible via gear menu.
+   */
+  public shouldShowRating(): boolean {
+    // Must be an AI message
+    if (!this.isAIMessage) return false;
+
+    // Must be completed (not in progress or failed)
+    if (this.messageStatus !== 'Complete') return false;
+
+    // Must not be editing
+    if (this.isEditing) return false;
+
+    // Must be the last message in conversation
+    if (!this.isLastMessageInConversation) return false;
+
+    // Check if current user has already rated this message
+    if (this.ratings && this.ratings.length > 0) {
+      const currentUserId = this.currentUser?.ID;
+      const userHasRated = this.ratings.some(r => r.UserID === currentUserId);
+
+      // If user already rated, don't show inline (accessible via gear menu)
+      if (userHasRated) return false;
+    }
+
+    // Show inline rating for latest completed AI message not yet rated by user
+    return true;
+  }
+
+  /**
+   * Check if message has any ratings (for gear icon badge)
+   */
+  public hasRatings(): boolean {
+    return !!(this.ratings && this.ratings.length > 0);
+  }
+
+  /**
+   * Get rating count for badge display on gear icon
+   */
+  public getRatingCount(): number {
+    return this.ratings?.length || 0;
+  }
+
+  /**
+   * Get thumbs up count (ratings >= 8)
+   */
+  public getThumbsUpCount(): number {
+    return this.ratings?.filter(r => r.Rating ? r.Rating >= 8 : false).length || 0;
+  }
+
+  /**
+   * Get thumbs down count (ratings <= 3)
+   */
+  public getThumbsDownCount(): number {
+    return this.ratings?.filter(r => r.Rating ? r.Rating <= 3 : false).length || 0;
+  }
+
+  /**
+   * Determine if pin/delete actions should show inline (with rating buttons).
+   * Show for latest completed AI message that user hasn't rated yet.
+   */
+  public shouldShowInlineActions(): boolean {
+    // Same logic as shouldShowRating - latest unrated message
+    return this.shouldShowRating();
+  }
+
   public get hasArtifact(): boolean {
     return !!this.artifactVersion;
   }

@@ -77,35 +77,50 @@ import { RatingJSON } from '../../models/conversation-complete-query.model';
         }
 
         .rating-button {
-            background: transparent;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 4px 8px;
+            background: white;
+            border: 1px solid #9CA3AF;
+            border-radius: 6px;
+            padding: 6px 10px;
             cursor: pointer;
             font-size: 16px;
-            opacity: 0.5;
+            opacity: 0.6;
             transition: all 0.2s;
+            min-width: 36px;
         }
 
         .rating-button:hover {
-            opacity: 0.8;
-            border-color: #999;
+            opacity: 1;
+            border-color: #6B7280;
         }
 
         .rating-button.active {
             opacity: 1;
-            border-color: #0066cc;
-            background: #f0f7ff;
+        }
+
+        .thumbs-up-btn {
+            color: #16A34A;
+        }
+
+        .thumbs-up-btn:hover {
+            background: #F0FDF4;
         }
 
         .thumbs-up-btn.active {
-            border-color: #28a745;
-            background: #f0fff4;
+            border-color: #16A34A;
+            background: #DCFCE7;
+        }
+
+        .thumbs-down-btn {
+            color: #DC2626;
+        }
+
+        .thumbs-down-btn:hover {
+            background: #FEF2F2;
         }
 
         .thumbs-down-btn.active {
-            border-color: #dc3545;
-            background: #fff5f5;
+            border-color: #DC2626;
+            background: #FEE2E2;
         }
     `]
 })
