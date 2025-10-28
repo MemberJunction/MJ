@@ -499,7 +499,17 @@ export class UserViewEntityExtended extends UserViewEntity  {
         if (!f)
             throw new Error('Unable to find field ' + field + ' in entity ' + entity.Name);
 
-        const newValue = f.TSType === EntityFieldTSType.Boolean ? (value.trim().toLowerCase() === 'true' ? '1' : '0') : value; // for boolean fields, convert true to 1 and false to 0, for all other fields, just use the value as is
+        let newValue = value;
+        if (f.TSType === EntityFieldTSType.Boolean) {
+            if (typeof value === 'boolean') {
+                newValue = value ? '1' : '0';
+            } else if (typeof value === 'string') {
+                newValue = value.trim().toLowerCase() === 'true' ? '1' : '0';
+            } else {
+                // Handle numbers, null, undefined, etc.
+                newValue = value ? '1' : '0';
+            }
+        }
         switch (operator) {
             case 'eq':
                 op = '= ' + this.wrapQuotes(newValue, f.NeedsQuotes);
