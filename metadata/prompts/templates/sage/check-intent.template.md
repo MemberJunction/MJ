@@ -54,20 +54,24 @@ You will receive:
 **Versions:**
 {% for version in artifact.versions %}
   - **v{{ version.versionNumber }}**{% if loop.first %} **(Most Recent)**{% endif %}
+    - Version ID: `{{ version.versionId }}`
     - Created: {{ version.createdAt }}
     {% if version.versionName %}- Name: {{ version.versionName }}{% endif %}
     {% if version.versionDescription %}- Description: {{ version.versionDescription }}{% endif %}
-    - Run ID: {{ version.runId }}
 
 {% endfor %}
 
 {% endfor %}
 
 **Artifact Modification Guidance**:
-- If user says "modify this", "change that", "update it" → Assume most recent version (v1 of most recent artifact)
-- If user says "version 2", "v2", "the second one" → Match to specific version number
-- If user says "the [artifact name]" → Match by artifact name
-- Set `targetArtifactRunId` to the specific run ID if you can determine which version, or use the most recent
+- If user says "modify this", "change that", "update it" → Assume most recent version, set `targetArtifactVersionId` to the most recent version's ID
+- If user says "version 2", "v2", "the second one" → Match to specific version number and return that version's ID
+- If user says "the [artifact name]" → Match by artifact name and return the most recent version of that artifact
+- If user says "regenerate version 1", "go back to v2" → Match to the specific version mentioned
+- Set `targetArtifactVersionId` to the specific version ID if you can determine which version the user means
+- If unclear or user doesn't specify, leave `targetArtifactVersionId` as `null` (will default to most recent)
+
+**Version ID Lookup**: Each version in the artifacts list above has a unique `versionId` field. Use this exact ID in your response.
 {% endif %}
 
 ## Output Format
@@ -78,7 +82,7 @@ Return a JSON object with this exact structure:
   "continuesWith": "YES",
   "reasoning": "Brief explanation of your decision",
   "modifyingArtifact": false,
-  "targetArtifactRunId": null
+  "targetArtifactVersionId": null
 }
 ```
 
@@ -86,7 +90,7 @@ Return a JSON object with this exact structure:
 - `continuesWith`: Must be exactly "YES", "NO", or "UNSURE" (case-sensitive)
 - `reasoning`: 1-2 sentences explaining your decision (for debugging/logging)
 - `modifyingArtifact`: Boolean - true if user intends to modify/refine an artifact, false otherwise
-- `targetArtifactRunId`: String (run ID) or null - the specific run ID if you determined which version, otherwise null (will use most recent)
+- `targetArtifactVersionId`: String (version ID) or null - the specific artifact version ID if you determined which version the user wants to work with, otherwise null (will use most recent)
 
 ## Examples
 
@@ -100,7 +104,8 @@ Return a JSON object with this exact structure:
 {
   "continuesWith": "YES",
   "reasoning": "User is requesting refinements to the content the Marketing Agent just created. This is clearly iterative work on the same task.",
-  "modifyingArtifact": true
+  "modifyingArtifact": true,
+  "targetArtifactVersionId": null
 }
 ```
 
@@ -113,7 +118,9 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "NO",
-  "reasoning": "User is shifting from content creation to content distribution/publishing, which may require a different agent with publishing capabilities.","modifyingArtifact": false
+  "reasoning": "User is shifting from content creation to content distribution/publishing, which may require a different agent with publishing capabilities.",
+  "modifyingArtifact": false,
+  "targetArtifactVersionId": null
 }
 ```
 
@@ -126,7 +133,9 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "YES",
-  "reasoning": "User is requesting a different view of the same analysis, which is within the Data Analysis Agent's scope and is clearly related to the previous work."
+  "reasoning": "User is requesting a different view of the same analysis, which is within the Data Analysis Agent's scope and is clearly related to the previous work.",
+  "modifyingArtifact": false,
+  "targetArtifactVersionId": null
 }
 ```
 
@@ -139,7 +148,9 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "NO",
-  "reasoning": "User is moving from code generation to deployment, which requires different capabilities and likely a different agent. This is a new task domain."
+  "reasoning": "User is moving from code generation to deployment, which requires different capabilities and likely a different agent. This is a new task domain.",
+  "modifyingArtifact": false,
+  "targetArtifactVersionId": null
 }
 ```
 
@@ -152,7 +163,9 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "UNSURE",
-  "reasoning": "Message is vague and could either be expanding the current research or starting a new competitive analysis. Safer to let Sage evaluate the full context."
+  "reasoning": "Message is vague and could either be expanding the current research or starting a new competitive analysis. Safer to let Sage evaluate the full context.",
+  "modifyingArtifact": false,
+  "targetArtifactVersionId": null
 }
 ```
 
@@ -165,7 +178,45 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "YES",
-  "reasoning": "User is directly refining the email content with specific adjustments. Clear continuation of the Email Composer Agent's work."
+  "reasoning": "User is directly refining the email content with specific adjustments. Clear continuation of the Email Composer Agent's work.",
+  "modifyingArtifact": true,
+  "targetArtifactVersionId": null
+}
+```
+
+### Example 7: Specific Version Reference (YES)
+**Previous Agent**: Dashboard Agent (creates interactive data dashboards)
+
+**Latest Message**: "Regenerate version 2 of the sales dashboard"
+
+**Prior Artifacts Context**:
+- Sales Dashboard (Dashboard) has 3 versions: v1, v2 (versionId: "abc-def-123"), v3 (most recent)
+
+**Output**:
+```json
+{
+  "continuesWith": "YES",
+  "reasoning": "User explicitly wants to regenerate version 2 of the dashboard, which is within the Dashboard Agent's scope.",
+  "modifyingArtifact": true,
+  "targetArtifactVersionId": "abc-def-123"
+}
+```
+
+### Example 8: Latest Version Implied (YES)
+**Previous Agent**: Report Agent (generates business reports)
+
+**Latest Message**: "Make the charts bigger"
+
+**Prior Artifacts Context**:
+- Quarterly Report (Report) has 2 versions: v1, v2 (versionId: "xyz-789", most recent)
+
+**Output**:
+```json
+{
+  "continuesWith": "YES",
+  "reasoning": "User wants to modify the report (implied: latest version). This is a clear refinement request.",
+  "modifyingArtifact": true,
+  "targetArtifactVersionId": "xyz-789"
 }
 ```
 
