@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { ExportService, ExportFormat, ExportOptions } from '../../services/export.service';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -126,8 +126,7 @@ import { ToastService } from '../../services/toast.service';
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
-  styles: [
-    `
+  styles: [`
     .export-modal-content {
       padding: 20px;
       max-height: calc(600px - 120px);
@@ -308,8 +307,7 @@ import { ToastService } from '../../services/toast.service';
     kendo-dialog-actions button i {
       margin-right: 6px;
     }
-  `,
-  ],
+  `]
 })
 export class ExportModalComponent {
   @Input() isVisible = false;
@@ -326,7 +324,7 @@ export class ExportModalComponent {
     includeMessages: true,
     includeMetadata: true,
     prettyPrint: true,
-    includeCSS: true,
+    includeCSS: true
   };
 
   get exportTitle(): string {
@@ -334,7 +332,9 @@ export class ExportModalComponent {
   }
 
   get canExport(): boolean {
-    return !this.isExporting && !!this.selectedFormat && this.exportOptions.includeMessages === true;
+    return !this.isExporting &&
+           !!this.selectedFormat &&
+           (this.exportOptions.includeMessages === true);
   }
 
   formats = [
@@ -342,26 +342,26 @@ export class ExportModalComponent {
       value: 'markdown' as ExportFormat,
       name: 'Markdown',
       description: 'Formatted text with markdown syntax',
-      icon: 'fa-solid fa-file-alt',
+      icon: 'fa-solid fa-file-alt'
     },
     {
       value: 'json' as ExportFormat,
       name: 'JSON',
       description: 'Structured data format',
-      icon: 'fa-solid fa-code',
+      icon: 'fa-solid fa-code'
     },
     {
       value: 'html' as ExportFormat,
       name: 'HTML',
       description: 'Web page format',
-      icon: 'fa-solid fa-file-code',
+      icon: 'fa-solid fa-file-code'
     },
     {
       value: 'text' as ExportFormat,
       name: 'Plain Text',
       description: 'Simple text file',
-      icon: 'fa-solid fa-file',
-    },
+      icon: 'fa-solid fa-file'
+    }
   ];
 
   constructor(
@@ -390,7 +390,12 @@ export class ExportModalComponent {
     this.errorMessage = '';
 
     try {
-      await this.exportService.exportConversation(this.conversation.ID, this.selectedFormat!, this.currentUser, this.exportOptions);
+      await this.exportService.exportConversation(
+        this.conversation.ID,
+        this.selectedFormat!,
+        this.currentUser,
+        this.exportOptions
+      );
 
       this.toastService.success('Conversation exported successfully');
       this.exported.emit();
@@ -416,7 +421,7 @@ export class ExportModalComponent {
       includeMessages: true,
       includeMetadata: true,
       prettyPrint: true,
-      includeCSS: true,
+      includeCSS: true
     };
     this.isVisible = false;
   }

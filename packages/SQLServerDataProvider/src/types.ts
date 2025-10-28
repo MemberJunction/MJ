@@ -1,13 +1,13 @@
 /**
  * @fileoverview Type definitions for SQL Server Data Provider
- *
+ * 
  * This module contains all the types, interfaces, and configuration classes
  * used by the SQL Server Data Provider.
- *
+ * 
  * @module @memberjunction/sqlserver-dataprovider/types
  */
 
-import { ProviderConfigDataBase, UserInfo } from '@memberjunction/global';
+import { ProviderConfigDataBase, UserInfo } from '@memberjunction/core';
 import * as sql from 'mssql';
 
 /**
@@ -84,7 +84,7 @@ export class SQLServerProviderConfigData extends ProviderConfigDataBase<SQLServe
   get ConnectionPool(): sql.ConnectionPool {
     return this.Data.ConnectionPool;
   }
-
+  
   /**
    * Gets the interval in seconds for checking metadata refresh
    */
@@ -126,7 +126,7 @@ export interface SqlLoggingOptions {
   formatAsMigration?: boolean;
 
   /**
-   * Optional default schema name to use for Flyway migrations for replacing schema names with
+   * Optional default schema name to use for Flyway migrations for replacing schema names with 
    * the placeholder ${flyway:defaultSchema}
    */
   defaultSchemaName?: string;
@@ -153,11 +153,11 @@ export interface SqlLoggingOptions {
    * Array of patterns to filter SQL statements.
    * Supports both regex (RegExp objects) and simple wildcard patterns (strings).
    * How these patterns are applied depends on filterType.
-   *
+   * 
    * String patterns support:
    * - Simple wildcards: "*AIPrompt*", "spCreate*", "*Run"
    * - Regex strings: "/spCreate.*Run/i", "/^SELECT.*FROM/i"
-   *
+   * 
    * RegExp examples:
    * - /spCreateAIPromptRun/i - Match stored procedure calls
    * - /^SELECT.*FROM.*vw.*Metadata/i - Match metadata view queries
@@ -168,7 +168,7 @@ export interface SqlLoggingOptions {
    * Determines how filterPatterns are applied:
    * - 'exclude': If ANY pattern matches, the SQL is NOT logged (default)
    * - 'include': If ANY pattern matches, the SQL IS logged
-   *
+   * 
    * Note: If filterPatterns is empty/undefined, all SQL is logged regardless of filterType.
    */
   filterType?: 'include' | 'exclude';

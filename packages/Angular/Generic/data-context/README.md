@@ -65,7 +65,7 @@ export class YourModule { }
 
 ```typescript
 import { Component } from '@angular/core';
-import { IMetadataProvider, Metadata } from '@memberjunction/global';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'app-data-context-viewer',
@@ -128,18 +128,18 @@ The main component for displaying a data context and its items.
 
 #### Inputs
 
-| Input           | Type                        | Required | Default             | Description                                                                                 |
-| --------------- | --------------------------- | -------- | ------------------- | ------------------------------------------------------------------------------------------- |
-| `dataContextId` | `string`                    | Yes      | -                   | The ID of the data context to display                                                       |
-| `Provider`      | `IMetadataProvider \| null` | No       | `Metadata.Provider` | Custom metadata provider. If not provided, uses the global MemberJunction metadata provider |
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `dataContextId` | `string` | Yes | - | The ID of the data context to display |
+| `Provider` | `IMetadataProvider \| null` | No | `Metadata.Provider` | Custom metadata provider. If not provided, uses the global MemberJunction metadata provider |
 
 #### Properties
 
-| Property            | Type                             | Description                    |
-| ------------------- | -------------------------------- | ------------------------------ |
+| Property | Type | Description |
+|----------|------|-------------|
 | `dataContextRecord` | `DataContextEntity \| undefined` | The loaded data context entity |
-| `dataContextItems`  | `any[]`                          | Array of data context items    |
-| `showLoader`        | `boolean`                        | Loading state indicator        |
+| `dataContextItems` | `any[]` | Array of data context items |
+| `showLoader` | `boolean` | Loading state indicator |
 
 ### DataContextDialogComponent
 
@@ -149,15 +149,15 @@ Dialog wrapper component that displays the DataContextComponent in a Kendo dialo
 
 #### Inputs
 
-| Input           | Type                        | Required | Default | Description                           |
-| --------------- | --------------------------- | -------- | ------- | ------------------------------------- |
-| `dataContextId` | `string`                    | Yes      | -       | The ID of the data context to display |
-| `Provider`      | `IMetadataProvider \| null` | No       | `null`  | Custom metadata provider              |
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `dataContextId` | `string` | Yes | - | The ID of the data context to display |
+| `Provider` | `IMetadataProvider \| null` | No | `null` | Custom metadata provider |
 
 #### Outputs
 
-| Output         | Type                 | Description                       |
-| -------------- | -------------------- | --------------------------------- |
+| Output | Type | Description |
+|--------|------|-------------|
 | `dialogClosed` | `EventEmitter<void>` | Emitted when the dialog is closed |
 
 ### DataContextModule

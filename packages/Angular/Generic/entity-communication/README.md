@@ -70,7 +70,7 @@ export class YourModule { }
 
 ```typescript
 import { Component } from '@angular/core';
-import { EntityInfo, Metadata, RunViewParams } from '@memberjunction/global';
+import { EntityInfo, Metadata, RunViewParams } from '@memberjunction/core';
 import { TemplateEntityExtended } from '@memberjunction/templates-base-types';
 
 @Component({

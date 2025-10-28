@@ -1,6 +1,6 @@
 import { JwtHeader, JwtPayload, SigningKeyCallback } from 'jsonwebtoken';
 import jwksClient from 'jwks-rsa';
-import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { IAuthProvider } from './IAuthProvider.js';
 
 /**
@@ -28,7 +28,7 @@ export abstract class BaseAuthProvider implements IAuthProvider {
       jwksUri: this.jwksUri,
       cache: true,
       cacheMaxEntries: 5,
-      cacheMaxAge: 600000, // 10 minutes
+      cacheMaxAge: 600000 // 10 minutes
     });
   }
 
@@ -43,8 +43,7 @@ export abstract class BaseAuthProvider implements IAuthProvider {
    * Gets the signing key for token verification
    */
   getSigningKey(header: JwtHeader, callback: SigningKeyCallback): void {
-    this.jwksClient
-      .getSigningKey(header.kid)
+    this.jwksClient.getSigningKey(header.kid)
       .then((key) => {
         const signingKey = 'publicKey' in key ? key.publicKey : key.rsaPublicKey;
         callback(null, signingKey);

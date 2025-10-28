@@ -1,4 +1,4 @@
-import { BaseEntity, RunView, UserInfo, EntityInfo } from '@memberjunction/global';
+import { BaseEntity, RunView, UserInfo, EntityInfo } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { EntityConfig } from '../config';
 import { JsonWriteHelper } from './json-write-helper';
@@ -27,9 +27,9 @@ export class RecordProcessor {
    * Processes a record into the standardized RecordData format
    */
   async processRecord(
-    record: BaseEntity,
+    record: BaseEntity, 
     primaryKey: Record<string, any>,
-    targetDir: string,
+    targetDir: string, 
     entityConfig: EntityConfig,
     verbose?: boolean,
     isNewRecord: boolean = true,
@@ -40,7 +40,7 @@ export class RecordProcessor {
   ): Promise<RecordData> {
     // Extract all properties from the entity
     const allProperties = this.propertyExtractor.extractAllProperties(record, fieldOverrides);
-
+    
     // Process fields and related entities
     const { fields, relatedEntities } = await this.processEntityData(
       allProperties,
@@ -53,12 +53,23 @@ export class RecordProcessor {
       ancestryPath,
       verbose
     );
-
+    
     // Calculate checksum and sync metadata
-    const syncData = await this.calculateSyncMetadata(fields, targetDir, entityConfig, existingRecordData, verbose);
-
+    const syncData = await this.calculateSyncMetadata(
+      fields, 
+      targetDir, 
+      entityConfig, 
+      existingRecordData, 
+      verbose
+    );
+    
     // Build the final record data with proper ordering
-    return JsonWriteHelper.createOrderedRecordData(fields, relatedEntities, primaryKey, syncData);
+    return JsonWriteHelper.createOrderedRecordData(
+      fields,
+      relatedEntities,
+      primaryKey,
+      syncData
+    );
   }
 
   /**
@@ -77,13 +88,29 @@ export class RecordProcessor {
   ): Promise<{ fields: Record<string, any>; relatedEntities: Record<string, RecordData[]> }> {
     const fields: Record<string, any> = {};
     const relatedEntities: Record<string, RecordData[]> = {};
-
+    
     // Process individual fields
-    await this.processFields(allProperties, primaryKey, targetDir, entityConfig, existingRecordData, fields, verbose);
-
+    await this.processFields(
+      allProperties, 
+      primaryKey, 
+      targetDir, 
+      entityConfig, 
+      existingRecordData, 
+      fields, 
+      verbose
+    );
+    
     // Process related entities if configured
-    await this.processRelatedEntities(record, entityConfig, existingRecordData, currentDepth, ancestryPath, relatedEntities, verbose);
-
+    await this.processRelatedEntities(
+      record, 
+      entityConfig, 
+      existingRecordData, 
+      currentDepth, 
+      ancestryPath, 
+      relatedEntities, 
+      verbose
+    );
+    
     return { fields, relatedEntities };
   }
 
@@ -100,12 +127,12 @@ export class RecordProcessor {
     verbose?: boolean
   ): Promise<void> {
     const entityInfo = this.syncEngine.getEntityInfo(entityConfig.entity);
-
+    
     for (const [fieldName, fieldValue] of Object.entries(allProperties)) {
       if (this.shouldSkipField(fieldName, fieldValue, primaryKey, entityConfig, entityInfo)) {
         continue;
       }
-
+      
       let processedValue = await this.processFieldValue(
         fieldName,
         fieldValue,
@@ -115,7 +142,7 @@ export class RecordProcessor {
         existingRecordData,
         verbose
       );
-
+      
       fields[fieldName] = processedValue;
     }
   }
@@ -134,39 +161,43 @@ export class RecordProcessor {
     if (primaryKey[fieldName] !== undefined) {
       return true;
     }
-
+    
     // Skip internal fields
     if (fieldName.startsWith('__mj_')) {
       return true;
     }
-
+    
     // Skip excluded fields
     if (entityConfig.pull?.excludeFields?.includes(fieldName)) {
       return true;
     }
-
+    
     // Skip virtual fields if configured
     if (this.shouldSkipVirtualField(fieldName, entityConfig, entityInfo)) {
       return true;
     }
-
+    
     // Skip null fields if configured
     if (entityConfig.pull?.ignoreNullFields && fieldValue === null) {
       return true;
     }
-
+    
     return false;
   }
 
   /**
    * Checks if a virtual field should be skipped
    */
-  private shouldSkipVirtualField(fieldName: string, entityConfig: EntityConfig, entityInfo: EntityInfo | null): boolean {
+  private shouldSkipVirtualField(
+    fieldName: string,
+    entityConfig: EntityConfig,
+    entityInfo: EntityInfo | null
+  ): boolean {
     if (!entityConfig.pull?.ignoreVirtualFields || !entityInfo) {
       return false;
     }
-
-    const fieldInfo = entityInfo.Fields.find((f) => f.Name === fieldName);
+    
+    const fieldInfo = entityInfo.Fields.find(f => f.Name === fieldName);
     return fieldInfo?.IsVirtual === true;
   }
 
@@ -183,13 +214,18 @@ export class RecordProcessor {
     verbose?: boolean
   ): Promise<any> {
     let processedValue = fieldValue;
-
+    
     // Apply lookup field conversion if configured
-    processedValue = await this.applyLookupFieldConversion(fieldName, processedValue, entityConfig, verbose);
-
+    processedValue = await this.applyLookupFieldConversion(
+      fieldName, 
+      processedValue, 
+      entityConfig, 
+      verbose
+    );
+    
     // Trim string values
     processedValue = this.trimStringValue(processedValue);
-
+    
     // Apply field externalization if configured
     processedValue = await this.applyFieldExternalization(
       fieldName,
@@ -200,7 +236,7 @@ export class RecordProcessor {
       existingRecordData,
       verbose
     );
-
+    
     return processedValue;
   }
 
@@ -217,7 +253,7 @@ export class RecordProcessor {
     if (!lookupConfig || fieldValue == null) {
       return fieldValue;
     }
-
+    
     try {
       return await this.convertGuidToLookup(String(fieldValue), lookupConfig, verbose);
     } catch (error) {
@@ -250,16 +286,16 @@ export class RecordProcessor {
     if (!entityConfig.pull?.externalizeFields || fieldValue == null) {
       return fieldValue;
     }
-
+    
     const externalizePattern = this.getExternalizationPattern(fieldName, entityConfig);
     if (!externalizePattern) {
       return fieldValue;
     }
-
+    
     try {
       const existingFileReference = existingRecordData?.fields?.[fieldName];
       const recordData = this.createRecordDataForExternalization(allProperties);
-
+      
       return await this.fieldExternalizer.externalizeField(
         fieldName,
         fieldValue,
@@ -284,7 +320,7 @@ export class RecordProcessor {
   private getExternalizationPattern(fieldName: string, entityConfig: EntityConfig): string | null {
     const externalizeConfig = entityConfig.pull?.externalizeFields;
     if (!externalizeConfig) return null;
-
+    
     if (Array.isArray(externalizeConfig)) {
       return this.getArrayExternalizationPattern(fieldName, externalizeConfig);
     } else {
@@ -295,7 +331,10 @@ export class RecordProcessor {
   /**
    * Gets externalization pattern from array configuration
    */
-  private getArrayExternalizationPattern(fieldName: string, externalizeConfig: any[]): string | null {
+  private getArrayExternalizationPattern(
+    fieldName: string, 
+    externalizeConfig: any[]
+  ): string | null {
     if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
       // Simple string array format
       if ((externalizeConfig as string[]).includes(fieldName)) {
@@ -303,7 +342,8 @@ export class RecordProcessor {
       }
     } else {
       // Array of objects format
-      const fieldConfig = (externalizeConfig as Array<{ field: string; pattern: string }>).find((config) => config.field === fieldName);
+      const fieldConfig = (externalizeConfig as Array<{field: string; pattern: string}>)
+        .find(config => config.field === fieldName);
       if (fieldConfig) {
         return fieldConfig.pattern;
       }
@@ -314,7 +354,10 @@ export class RecordProcessor {
   /**
    * Gets externalization pattern from object configuration
    */
-  private getObjectExternalizationPattern(fieldName: string, externalizeConfig: Record<string, any>): string | null {
+  private getObjectExternalizationPattern(
+    fieldName: string, 
+    externalizeConfig: Record<string, any>
+  ): string | null {
     const fieldConfig = externalizeConfig[fieldName];
     if (fieldConfig) {
       const extension = fieldConfig.extension || '.md';
@@ -345,11 +388,11 @@ export class RecordProcessor {
     if (!entityConfig.pull?.relatedEntities) {
       return;
     }
-
+    
     for (const [relationKey, relationConfig] of Object.entries(entityConfig.pull.relatedEntities)) {
       try {
         const existingRelated = existingRecordData?.relatedEntities?.[relationKey] || [];
-
+        
         const relatedRecords = await this.relatedEntityHandler.loadRelatedEntities(
           record,
           relationConfig,
@@ -360,7 +403,7 @@ export class RecordProcessor {
           ancestryPath,
           verbose
         );
-
+        
         if (relatedRecords.length > 0) {
           relatedEntities[relationKey] = relatedRecords;
         }
@@ -384,15 +427,15 @@ export class RecordProcessor {
   ): Promise<{ lastModified: string; checksum: string }> {
     // Determine if we should include external file content in checksum
     const hasExternalizedFields = this.hasExternalizedFields(fields, entityConfig);
-
+    
     const checksum = hasExternalizedFields
       ? await this.syncEngine.calculateChecksumWithFileContent(fields, targetDir)
       : this.syncEngine.calculateChecksum(fields);
-
+    
     if (verbose && hasExternalizedFields) {
       console.log(`Calculated checksum including external file content for record`);
     }
-
+    
     // Compare with existing checksum to determine if data changed
     if (existingRecordData?.sync?.checksum === checksum) {
       // No change detected - preserve existing sync metadata
@@ -401,7 +444,7 @@ export class RecordProcessor {
       }
       return {
         lastModified: existingRecordData.sync.lastModified,
-        checksum: checksum,
+        checksum: checksum
       };
     } else {
       // Change detected - update timestamp
@@ -410,7 +453,7 @@ export class RecordProcessor {
       }
       return {
         lastModified: new Date().toISOString(),
-        checksum: checksum,
+        checksum: checksum
       };
     }
   }
@@ -419,10 +462,10 @@ export class RecordProcessor {
    * Checks if the record has externalized fields
    */
   private hasExternalizedFields(fields: Record<string, any>, entityConfig: EntityConfig): boolean {
-    return (
-      !!entityConfig.pull?.externalizeFields &&
-      Object.values(fields).some((value) => typeof value === 'string' && value.startsWith('@file:'))
-    );
+    return !!entityConfig.pull?.externalizeFields && 
+           Object.values(fields).some(value => 
+             typeof value === 'string' && value.startsWith('@file:')
+           );
   }
 
   /**
@@ -439,19 +482,16 @@ export class RecordProcessor {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView(
-        {
-          EntityName: lookupConfig.entity,
-          ExtraFilter: `ID = '${guidValue}'`,
-          ResultType: 'entity_object',
-        },
-        this.contextUser
-      );
+      const result = await rv.RunView({
+        EntityName: lookupConfig.entity,
+        ExtraFilter: `ID = '${guidValue}'`,
+        ResultType: 'entity_object'
+      }, this.contextUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
         const targetRecord = result.Results[0];
         const lookupValue = targetRecord[lookupConfig.field];
-
+        
         if (lookupValue != null) {
           return `@lookup:${lookupConfig.entity}.${lookupConfig.field}=${lookupValue}`;
         }
@@ -460,7 +500,7 @@ export class RecordProcessor {
       if (verbose) {
         console.warn(`Lookup failed for ${guidValue} in ${lookupConfig.entity}.${lookupConfig.field}`);
       }
-
+      
       return guidValue; // Return original GUID if lookup fails
     } catch (error) {
       if (verbose) {

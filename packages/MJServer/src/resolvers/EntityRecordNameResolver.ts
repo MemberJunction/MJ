@@ -1,4 +1,4 @@
-import { Metadata, CompositeKey, DatabaseProviderBase } from '@memberjunction/global';
+import { Metadata, CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
@@ -39,7 +39,7 @@ export class EntityRecordNameResolver {
     @Arg('CompositeKey', () => CompositeKeyInputType) primaryKey: CompositeKey,
     @Ctx() { providers, userPayload }: AppContext
   ): Promise<EntityRecordNameResult> {
-    const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+    const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
 
     return await this.InnerGetEntityRecordName(md, EntityName, primaryKey);
   }
@@ -47,21 +47,17 @@ export class EntityRecordNameResolver {
   @Query(() => [EntityRecordNameResult])
   async GetEntityRecordNames(
     @Arg('info', () => [EntityRecordNameInput]) info: EntityRecordNameInput[],
-    @Ctx() { providers }: AppContext
+    @Ctx() {providers}: AppContext
   ): Promise<EntityRecordNameResult[]> {
     const result: EntityRecordNameResult[] = [];
-    const md = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+    const md = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     for (const i of info) {
       result.push(await this.InnerGetEntityRecordName(md, i.EntityName, i.CompositeKey));
     }
     return result;
   }
 
-  async InnerGetEntityRecordName(
-    md: DatabaseProviderBase,
-    EntityName: string,
-    primaryKey: CompositeKeyInputType
-  ): Promise<EntityRecordNameResult> {
+  async InnerGetEntityRecordName(md: DatabaseProviderBase, EntityName: string, primaryKey: CompositeKeyInputType): Promise<EntityRecordNameResult> {
     const pk = new CompositeKey(primaryKey.KeyValuePairs);
     const e = md.Entities.find((e) => e.Name === EntityName);
     if (e) {

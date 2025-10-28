@@ -1,7 +1,7 @@
 import { Component, AfterViewInit, OnDestroy } from '@angular/core';
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey } from '@memberjunction/global';
+import { CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 
@@ -25,24 +25,25 @@ interface ActionsManagementState {
 @Component({
   selector: 'mj-actions-management-dashboard',
   templateUrl: './actions-management-dashboard.component.html',
-  styleUrls: ['./actions-management-dashboard.component.scss'],
+  styleUrls: ['./actions-management-dashboard.component.scss']
 })
 @RegisterClass(BaseDashboard, 'ActionsManagement')
 export class ActionsManagementDashboardComponent extends BaseDashboard implements AfterViewInit, OnDestroy {
+  
   public isLoading = false;
   public activeTab = 'overview'; // Default tab
   public subView: string | null = null; // Current sub-view
-
+  
   // Navigation items for bottom navigation
   public navigationItems: string[] = ['overview', 'execution', 'scheduled', 'code', 'entities', 'security'];
-
+  
   public navigationConfig = [
     { text: 'Overview', icon: '', faIcon: 'fa-solid fa-dashboard' },
     { text: 'Execution', icon: '', faIcon: 'fa-solid fa-play-circle' },
     { text: 'Scheduled', icon: '', faIcon: 'fa-solid fa-clock' },
     { text: 'Code', icon: '', faIcon: 'fa-solid fa-code' },
     { text: 'Entities', icon: '', faIcon: 'fa-solid fa-sitemap' },
-    { text: 'Security', icon: '', faIcon: 'fa-solid fa-lock' },
+    { text: 'Security', icon: '', faIcon: 'fa-solid fa-lock' }
   ];
 
   private stateChangeSubject = new Subject<ActionsManagementState>();
@@ -75,7 +76,9 @@ export class ActionsManagementDashboardComponent extends BaseDashboard implement
   }
 
   private setupStateManagement(): void {
-    this.stateChangeSubject.pipe(debounceTime(50)).subscribe((state) => {
+    this.stateChangeSubject.pipe(
+      debounceTime(50)
+    ).subscribe(state => {
       this.UserStateChanged.emit(state);
     });
   }
@@ -89,7 +92,7 @@ export class ActionsManagementDashboardComponent extends BaseDashboard implement
       scheduledActionsState: {},
       codeManagementState: {},
       entityIntegrationState: {},
-      securityPermissionsState: {},
+      securityPermissionsState: {}
     };
 
     this.stateChangeSubject.next(state);
@@ -104,13 +107,13 @@ export class ActionsManagementDashboardComponent extends BaseDashboard implement
     }
   }
 
-  public onOpenEntityRecord(data: { entityName: string; recordId: string } | Event): void {
+  public onOpenEntityRecord(data: {entityName: string; recordId: string} | Event): void {
     if (data && typeof data === 'object' && 'entityName' in data && 'recordId' in data) {
-      const entityData = data as { entityName: string; recordId: string };
+      const entityData = data as {entityName: string; recordId: string};
       const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: entityData.recordId }]);
       this.OpenEntityRecord.emit({
         EntityName: entityData.entityName,
-        RecordPKey: compositeKey,
+        RecordPKey: compositeKey
       });
     }
   }
@@ -165,7 +168,7 @@ export class ActionsManagementDashboardComponent extends BaseDashboard implement
   public onShowCategoriesListView(): void {
     this.showSubView('categories-list');
   }
-
+  
   public onShowActionGalleryView(): void {
     this.showSubView('action-gallery');
   }

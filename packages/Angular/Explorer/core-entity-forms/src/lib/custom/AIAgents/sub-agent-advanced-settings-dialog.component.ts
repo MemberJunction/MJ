@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
-import { RunView } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
 import { AIAgentEntityExtended, AIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -21,45 +21,46 @@ export interface SubAgentAdvancedSettingsFormData {
 @Component({
   selector: 'mj-sub-agent-advanced-settings-dialog',
   templateUrl: './sub-agent-advanced-settings-dialog.component.html',
-  styleUrls: ['./sub-agent-advanced-settings-dialog.component.css'],
+  styleUrls: ['./sub-agent-advanced-settings-dialog.component.css']
 })
 export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
+  
   // Input properties set by service
   subAgent!: AIAgentEntityExtended;
   allSubAgents: AIAgentEntityExtended[] = []; // For execution order validation
-
+  
   // Reactive state management
   private destroy$ = new Subject<void>();
   public result = new Subject<SubAgentAdvancedSettingsFormData | null>();
-
+  
   // Form and data
   advancedForm!: FormGroup;
   isLoading$ = new BehaviorSubject<boolean>(false);
   isSaving$ = new BehaviorSubject<boolean>(false);
-
+  
   // Dropdown data
   agentTypes$ = new BehaviorSubject<AIAgentTypeEntity[]>([]);
-
+  
   // Available options
   executionModeOptions = [
-    {
-      text: 'Sequential',
-      value: 'Sequential',
+    { 
+      text: 'Sequential', 
+      value: 'Sequential', 
       description: 'Child agents execute one after another in order',
-      icon: 'fa-list-ol',
+      icon: 'fa-list-ol'
     },
-    {
-      text: 'Parallel',
-      value: 'Parallel',
+    { 
+      text: 'Parallel', 
+      value: 'Parallel', 
       description: 'Child agents execute simultaneously for faster processing',
-      icon: 'fa-layer-group',
-    },
+      icon: 'fa-layer-group'
+    }
   ];
 
   statusOptions = [
     { text: 'Active', value: 'Active' },
     { text: 'Disabled', value: 'Disabled' },
-    { text: 'Pending', value: 'Pending' },
+    { text: 'Pending', value: 'Pending' }
   ];
 
   // Execution order validation
@@ -87,7 +88,7 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
       executionMode: [this.subAgent.ExecutionMode || 'Sequential', [Validators.required]],
       status: [this.subAgent.Status || 'Active', [Validators.required]],
       typeID: [this.subAgent.TypeID],
-      exposeAsAction: [this.subAgent.ExposeAsAction || false],
+      exposeAsAction: [this.subAgent.ExposeAsAction || false]
     });
 
     this.setupValidationLogic();
@@ -96,13 +97,17 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
   private setupValidationLogic() {
     // Execution order validation
     const executionOrderControl = this.advancedForm.get('executionOrder');
-    executionOrderControl?.valueChanges.pipe(takeUntil(this.destroy$)).subscribe((order) => {
+    executionOrderControl?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(order => {
       this.validateExecutionOrder(order);
     });
 
     // ExposeAsAction validation (sub-agents cannot be exposed as actions)
     const exposeAsActionControl = this.advancedForm.get('exposeAsAction');
-    exposeAsActionControl?.valueChanges.pipe(takeUntil(this.destroy$)).subscribe((expose) => {
+    exposeAsActionControl?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(expose => {
       if (expose && this.subAgent.ParentID) {
         // Sub-agents cannot be exposed as actions
         exposeAsActionControl.setValue(false);
@@ -122,8 +127,10 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
     }
 
     // Check for conflicts with other sub-agents under the same parent (excluding current one)
-    const conflictingAgent = this.allSubAgents.find(
-      (agent) => agent.ID !== this.subAgent.ID && agent.ParentID === this.subAgent.ParentID && agent.ExecutionOrder === order
+    const conflictingAgent = this.allSubAgents.find(agent => 
+      agent.ID !== this.subAgent.ID && 
+      agent.ParentID === this.subAgent.ParentID &&
+      agent.ExecutionOrder === order
     );
 
     if (conflictingAgent) {
@@ -137,25 +144,30 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
 
   private async loadDropdownData() {
     this.isLoading$.next(true);
-
+    
     try {
       const rv = new RunView();
-
+      
       // Load AI Agent Types
       const agentTypesResult = await rv.RunView<AIAgentTypeEntity>({
         EntityName: 'MJ: AI Agent Types',
         ExtraFilter: 'IsActive = 1',
         OrderBy: 'Name',
         ResultType: 'entity_object',
-        MaxRows: 1000,
+        MaxRows: 1000
       });
 
       if (agentTypesResult.Success) {
         this.agentTypes$.next(agentTypesResult.Results || []);
       }
+
     } catch (error) {
       console.error('Error loading dropdown data:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error loading form data. Please try again.', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error loading form data. Please try again.',
+        'error',
+        3000
+      );
     } finally {
       this.isLoading$.next(false);
     }
@@ -184,12 +196,12 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
   // === Execution Mode Helpers ===
 
   getExecutionModeIcon(mode: string): string {
-    const option = this.executionModeOptions.find((opt) => opt.value === mode);
+    const option = this.executionModeOptions.find(opt => opt.value === mode);
     return option?.icon || 'fa-robot';
   }
 
   getExecutionModeDescription(mode: string): string {
-    const option = this.executionModeOptions.find((opt) => opt.value === mode);
+    const option = this.executionModeOptions.find(opt => opt.value === mode);
     return option?.description || '';
   }
 
@@ -203,26 +215,35 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
   async save() {
     if (this.advancedForm.invalid || this.hasExecutionOrderError()) {
       this.advancedForm.markAllAsTouched();
-      MJNotificationService.Instance.CreateSimpleNotification('Please fix validation errors before saving', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Please fix validation errors before saving',
+        'error',
+        3000
+      );
       return;
     }
 
     this.isSaving$.next(true);
-
+    
     try {
       const formData: SubAgentAdvancedSettingsFormData = {
         executionOrder: this.advancedForm.get('executionOrder')?.value,
         executionMode: this.advancedForm.get('executionMode')?.value,
         status: this.advancedForm.get('status')?.value,
         typeID: this.advancedForm.get('typeID')?.value || null,
-        exposeAsAction: false, // Sub-agents cannot be exposed as actions
+        exposeAsAction: false // Sub-agents cannot be exposed as actions
       };
 
       this.result.next(formData);
       this.dialogRef.close();
+      
     } catch (error) {
       console.error('Error saving advanced settings:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error saving settings. Please try again.', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error saving settings. Please try again.',
+        'error',
+        3000
+      );
     } finally {
       this.isSaving$.next(false);
     }

@@ -2,14 +2,8 @@ import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angu
 import { Router } from '@angular/router';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
-import {
-  AIPromptEntityExtended,
-  AIPromptTypeEntity,
-  AIPromptCategoryEntity,
-  TemplateEntity,
-  TemplateContentEntity,
-} from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/global';
+import { AIPromptEntityExtended, AIPromptTypeEntity, AIPromptCategoryEntity, TemplateEntity, TemplateContentEntity } from '@memberjunction/core-entities';
+import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -25,10 +19,10 @@ interface PromptWithTemplate extends Omit<AIPromptEntityExtended, 'Template'> {
 @Component({
   selector: 'app-prompt-management-v2',
   templateUrl: './prompt-management-v2.component.html',
-  styleUrls: ['./prompt-management-v2.component.scss'],
+  styleUrls: ['./prompt-management-v2.component.scss']
 })
 export class PromptManagementV2Component implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
   @Input() initialState: any = null;
 
@@ -52,7 +46,12 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   public selectedStatus = 'all';
 
   // Loading messages
-  public loadingMessages = ['Loading AI prompts...', 'Fetching templates...', 'Organizing categories...', 'Almost there...'];
+  public loadingMessages = [
+    'Loading AI prompts...',
+    'Fetching templates...',
+    'Organizing categories...',
+    'Almost there...'
+  ];
   public currentLoadingMessage = this.loadingMessages[0];
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
@@ -93,14 +92,14 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
    */
   private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
     const cacheKey = `${entityName}_${permissionType}`;
-
+    
     if (this._permissionCache.has(cacheKey)) {
       return this._permissionCache.get(cacheKey)!;
     }
 
     try {
-      const entityInfo = this._metadata.Entities.find((e) => e.Name === entityName);
-
+      const entityInfo = this._metadata.Entities.find(e => e.Name === entityName);
+      
       if (!entityInfo) {
         console.warn(`Entity '${entityName}' not found for permission check`);
         this._permissionCache.set(cacheKey, false);
@@ -151,7 +150,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     this.setupSearchListener();
     this.startLoadingMessages();
     this.loadInitialData();
-
+    
     if (this.initialState) {
       this.applyInitialState(this.initialState);
     }
@@ -166,7 +165,11 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   }
 
   private setupSearchListener(): void {
-    this.searchSubject.pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$)).subscribe((searchTerm) => {
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(searchTerm => {
       this.searchTerm = searchTerm;
       this.applyFilters();
     });
@@ -188,23 +191,23 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       const [promptResults, categoryResults, typeResults, templateResults, templateContentResults] = await rv.RunViews([
         {
           EntityName: 'AI Prompts',
-          OrderBy: 'Name',
+          OrderBy: 'Name' 
         },
         {
           EntityName: 'AI Prompt Categories',
-          OrderBy: 'Name',
+          OrderBy: 'Name', 
         },
         {
           EntityName: 'AI Prompt Types',
-          OrderBy: 'Name',
+          OrderBy: 'Name' 
         },
         {
           EntityName: 'Templates',
-          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)`,
+          ExtraFilter: `ID IN (SELECT TemplateID FROM __mj.AIPrompt)` 
         },
         {
-          EntityName: 'Template Contents',
-        },
+          EntityName: 'Template Contents' 
+        }
       ]);
 
       this.categories = categoryResults.Results as AIPromptCategoryEntity[];
@@ -213,30 +216,30 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       // Combine prompts with their templates
       const templates = templateResults.Results as TemplateEntity[];
       const templateContents = templateContentResults.Results as TemplateContentEntity[];
-
+      
       // Create lookup maps
-      const templateMap = new Map(templates.map((t) => [t.ID, t]));
+      const templateMap = new Map(templates.map(t => [t.ID, t]));
       const templateContentMap = new Map<string, TemplateContentEntity[]>();
-
-      templateContents.forEach((tc) => {
+      
+      templateContents.forEach(tc => {
         const contents = templateContentMap.get(tc.TemplateID) || [];
         contents.push(tc);
         templateContentMap.set(tc.TemplateID, contents);
       });
 
-      const categoryMap = new Map(this.categories.map((c) => [c.ID, c.Name]));
-      const typeMap = new Map(this.types.map((t) => [t.ID, t.Name]));
+      const categoryMap = new Map(this.categories.map(c => [c.ID, c.Name]));
+      const typeMap = new Map(this.types.map(t => [t.ID, t.Name]));
 
       // Combine the data - keep the actual entity objects
-      this.prompts = (promptResults.Results as AIPromptEntityExtended[]).map((prompt) => {
+      this.prompts = (promptResults.Results as AIPromptEntityExtended[]).map(prompt => {
         const template = templateMap.get(prompt.ID);
-
+        
         // Add the extra properties directly to the entity
         (prompt as any).TemplateEntity = template;
-        (prompt as any).TemplateContents = template ? templateContentMap.get(template.ID) || [] : [];
+        (prompt as any).TemplateContents = template ? (templateContentMap.get(template.ID) || []) : [];
         (prompt as any).CategoryName = prompt.CategoryID ? categoryMap.get(prompt.CategoryID) || 'Unknown' : 'Uncategorized';
         (prompt as any).TypeName = prompt.TypeID ? typeMap.get(prompt.TypeID) || 'Unknown' : 'Untyped';
-
+        
         return prompt as PromptWithTemplate;
       });
 
@@ -288,16 +291,16 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   }
 
   public applyFilters(): void {
-    this.filteredPrompts = this.prompts.filter((prompt) => {
+    this.filteredPrompts = this.prompts.filter(prompt => {
       // Search filter
       if (this.searchTerm) {
         const searchLower = this.searchTerm.toLowerCase();
-        const matchesSearch =
+        const matchesSearch = 
           prompt.Name?.toLowerCase().includes(searchLower) ||
           prompt.Description?.toLowerCase().includes(searchLower) ||
           prompt.CategoryName?.toLowerCase().includes(searchLower) ||
           prompt.TypeName?.toLowerCase().includes(searchLower);
-
+        
         if (!matchesSearch) return false;
       }
 
@@ -342,7 +345,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
   public openPrompt(promptId: string): void {
     this.openEntityRecord.emit({
       entityName: 'AI Prompts',
-      recordId: promptId,
+      recordId: promptId
     });
   }
 
@@ -350,7 +353,7 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
     if (event) {
       event.stopPropagation();
     }
-
+    
     // Use the test harness service for window management features
     this.testHarnessService.openForPrompt(promptId);
   }
@@ -366,11 +369,11 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       // Empty third parameter means new record
       this.router.navigate(
         ['resource', 'record', ''], // Empty record ID = new record
-        {
-          queryParams: {
-            Entity: 'AI Prompts',
+        { 
+          queryParams: { 
+            Entity: 'AI Prompts'
             // Could add NewRecordValues here for pre-populated defaults if needed
-          },
+          } 
         }
       );
     } catch (error) {
@@ -402,12 +405,15 @@ export class PromptManagementV2Component implements OnInit, OnDestroy {
       selectedCategory: this.selectedCategory,
       selectedType: this.selectedType,
       selectedStatus: this.selectedStatus,
-      promptCount: this.filteredPrompts.length,
+      promptCount: this.filteredPrompts.length
     });
   }
 
   public get hasActiveFilters(): boolean {
-    return this.searchTerm !== '' || this.selectedCategory !== 'all' || this.selectedType !== 'all' || this.selectedStatus !== 'all';
+    return this.searchTerm !== '' || 
+           this.selectedCategory !== 'all' || 
+           this.selectedType !== 'all' || 
+           this.selectedStatus !== 'all';
   }
 
   public get filteredPromptsAsEntities(): AIPromptEntityExtended[] {

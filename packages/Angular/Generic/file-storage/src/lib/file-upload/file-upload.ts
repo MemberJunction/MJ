@@ -1,5 +1,5 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 import { FileEntity, FileSchema, FileStorageProviderEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
 

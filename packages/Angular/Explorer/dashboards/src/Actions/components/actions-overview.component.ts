@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
-import { RunView, LogError } from '@memberjunction/global';
+import { RunView, LogError } from '@memberjunction/core';
 import { ActionEntity, ActionCategoryEntity, ActionExecutionLogEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
@@ -29,13 +29,14 @@ interface ExecutionWithExpanded extends ActionExecutionLogEntity {
   isExpanded?: boolean;
 }
 
+
 @Component({
   selector: 'mj-actions-overview',
   templateUrl: './actions-overview.component.html',
-  styleUrls: ['./actions-overview.component.scss'],
+  styleUrls: ['./actions-overview.component.scss']
 })
 export class ActionsOverviewComponent implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
   @Output() showActionsListView = new EventEmitter<void>();
   @Output() showExecutionsListView = new EventEmitter<void>();
   @Output() showCategoriesListView = new EventEmitter<void>();
@@ -52,7 +53,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     successRate: 0,
     totalCategories: 0,
     aiGeneratedActions: 0,
-    customActions: 0,
+    customActions: 0
   };
 
   public categoryStats: CategoryStats[] = [];
@@ -82,36 +83,36 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     combineLatest([
       this.searchTerm$.pipe(debounceTime(300), distinctUntilChanged()),
       this.selectedStatus$.pipe(distinctUntilChanged()),
-      this.selectedType$.pipe(distinctUntilChanged()),
-    ])
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(() => {
-        this.loadFilteredData();
-      });
+      this.selectedType$.pipe(distinctUntilChanged())
+    ]).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
+      this.loadFilteredData();
+    });
   }
 
   private async loadData(): Promise<void> {
     try {
       this.isLoading = true;
-
+      
       // Load all data in a single batch using RunViews
       const rv = new RunView();
-
+      
       const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
         {
-          EntityName: 'Actions',
-          OrderBy: '__mj_UpdatedAt DESC',
+          EntityName: 'Actions', 
+          OrderBy: '__mj_UpdatedAt DESC' 
         },
         {
-          EntityName: 'Action Categories',
-          OrderBy: 'Name',
+          EntityName: 'Action Categories', 
+          OrderBy: 'Name' 
         },
         {
-          EntityName: 'Action Execution Logs',
-          OrderBy: 'StartedAt DESC',
-        },
+          EntityName: 'Action Execution Logs', 
+          OrderBy: 'StartedAt DESC', 
+        }
       ]);
-
+      
       if (!actionsResult.Success || !categoriesResult.Success || !executionsResult.Success) {
         const errors = [];
         if (!actionsResult.Success) errors.push('Actions: ' + actionsResult.ErrorMessage);
@@ -119,7 +120,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
         if (!executionsResult.Success) errors.push('Executions: ' + executionsResult.ErrorMessage);
         throw new Error('Failed to load data: ' + errors.join(', '));
       }
-
+      
       const actions = (actionsResult.Results || []) as ActionEntity[];
       const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
       const executions = (executionsResult.Results || []) as ActionExecutionLogEntity[];
@@ -127,8 +128,9 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       this.calculateMetrics(actions, categories, executions);
       this.calculateCategoryStats(actions, categories, executions);
       this.recentActions = actions.slice(0, 10);
-      this.recentExecutions = executions.slice(0, 10).map((e) => ({ ...e, isExpanded: false }) as ExecutionWithExpanded);
+      this.recentExecutions = executions.slice(0, 10).map(e => ({ ...e, isExpanded: false } as ExecutionWithExpanded));
       this.topCategories = categories.slice(0, 5);
+
     } catch (error) {
       console.error('Error loading actions overview data:', error);
       LogError('Failed to load actions overview data', undefined, error);
@@ -137,29 +139,35 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  private calculateMetrics(actions: ActionEntity[], categories: ActionCategoryEntity[], executions: ActionExecutionLogEntity[]): void {
+
+
+  private calculateMetrics(
+    actions: ActionEntity[], 
+    categories: ActionCategoryEntity[], 
+    executions: ActionExecutionLogEntity[]
+  ): void {
     this.metrics = {
       totalActions: actions.length,
-      activeActions: actions.filter((a) => a.Status === 'Active').length,
-      pendingActions: actions.filter((a) => a.Status === 'Pending').length,
-      disabledActions: actions.filter((a) => a.Status === 'Disabled').length,
+      activeActions: actions.filter(a => a.Status === 'Active').length,
+      pendingActions: actions.filter(a => a.Status === 'Pending').length,
+      disabledActions: actions.filter(a => a.Status === 'Disabled').length,
       totalExecutions: executions.length,
-      recentExecutions: executions.filter((e) => {
+      recentExecutions: executions.filter(e => {
         const dayAgo = new Date();
         dayAgo.setDate(dayAgo.getDate() - 1);
         return e.StartedAt && new Date(e.StartedAt) > dayAgo;
       }).length,
       successRate: this.calculateSuccessRate(executions),
       totalCategories: categories.length,
-      aiGeneratedActions: actions.filter((a) => a.Type === 'Generated').length,
-      customActions: actions.filter((a) => a.Type === 'Custom').length,
+      aiGeneratedActions: actions.filter(a => a.Type === 'Generated').length,
+      customActions: actions.filter(a => a.Type === 'Custom').length
     };
   }
 
   private calculateSuccessRate(executions: ActionExecutionLogEntity[]): number {
     if (!executions || executions.length === 0) return 0;
     // Check for success based on result code - Actions may use different success codes
-    const successful = executions.filter((e) => {
+    const successful = executions.filter(e => {
       const code = e.ResultCode?.toLowerCase();
       return code === 'success' || code === 'ok' || code === 'completed' || code === '200';
     }).length;
@@ -167,20 +175,22 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   }
 
   private calculateCategoryStats(
-    actions: ActionEntity[],
-    categories: ActionCategoryEntity[],
+    actions: ActionEntity[], 
+    categories: ActionCategoryEntity[], 
     executions: ActionExecutionLogEntity[]
   ): void {
-    this.categoryStats = categories.map((category) => {
-      const categoryActions = actions.filter((a) => a.CategoryID === category.ID);
-      const categoryExecutions = executions.filter((e) => categoryActions.some((a) => a.ID === e.ActionID));
-
+    this.categoryStats = categories.map(category => {
+      const categoryActions = actions.filter(a => a.CategoryID === category.ID);
+      const categoryExecutions = executions.filter(e => 
+        categoryActions.some(a => a.ID === e.ActionID)
+      );
+      
       return {
         categoryId: category.ID,
         categoryName: category.Name,
         actionCount: categoryActions.length,
         executionCount: categoryExecutions.length,
-        successRate: this.calculateSuccessRate(categoryExecutions),
+        successRate: this.calculateSuccessRate(categoryExecutions)
       };
     });
   }
@@ -214,9 +224,9 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
         OrderBy: '__mj_UpdatedAt DESC',
         UserSearchString: searchTerm,
         IgnoreMaxRows: false,
-        MaxRows: 1000,
+        MaxRows: 1000
       });
-
+      
       this.recentActions = ((result.Results || []) as ActionEntity[]).slice(0, 10);
     } catch (error) {
       LogError('Failed to load filtered actions', undefined, error);
@@ -238,21 +248,21 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
   public openAction(action: ActionEntity): void {
     this.openEntityRecord.emit({
       entityName: 'Actions',
-      recordId: action.ID,
+      recordId: action.ID
     });
   }
 
   public openCategory(categoryId: string): void {
     this.openEntityRecord.emit({
       entityName: 'Action Categories',
-      recordId: categoryId,
+      recordId: categoryId
     });
   }
 
   public openExecution(execution: ActionExecutionLogEntity): void {
     this.openEntityRecord.emit({
       entityName: 'Action Execution Logs',
-      recordId: execution.ID,
+      recordId: execution.ID
     });
   }
 
@@ -263,25 +273,18 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
 
   public getStatusColor(status: string): 'success' | 'warning' | 'error' | 'info' {
     switch (status) {
-      case 'Active':
-        return 'success';
-      case 'Pending':
-        return 'warning';
-      case 'Disabled':
-        return 'error';
-      default:
-        return 'info';
+      case 'Active': return 'success';
+      case 'Pending': return 'warning';
+      case 'Disabled': return 'error';
+      default: return 'info';
     }
   }
 
   public getTypeIcon(type: string): string {
     switch (type) {
-      case 'Generated':
-        return 'fa-solid fa-robot';
-      case 'Custom':
-        return 'fa-solid fa-code';
-      default:
-        return 'fa-solid fa-cog';
+      case 'Generated': return 'fa-solid fa-robot';
+      case 'Custom': return 'fa-solid fa-code';
+      default: return 'fa-solid fa-cog';
     }
   }
 
@@ -302,7 +305,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
     // Filter to show AI generated actions in the current view
     this.selectedType$.next('Generated');
   }
-
+  
   public onActionGalleryClick(): void {
     this.showActionGalleryView.emit();
   }
@@ -322,6 +325,7 @@ export class ActionsOverviewComponent implements OnInit, OnDestroy {
       return params;
     }
   }
+
 
   /**
    * Gets the icon class for an action

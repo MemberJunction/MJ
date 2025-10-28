@@ -2,18 +2,7 @@ import { Component, EventEmitter, Input, output, Output } from '@angular/core';
 import { Folder, Item, ItemType, NewItemOption } from '../../generic/Item.types';
 import { ResourceTypeEntity, UserViewEntityType } from '@memberjunction/core-entities';
 import { Subject, debounceTime } from 'rxjs';
-import {
-  BaseEntity,
-  CompositeKey,
-  EntityField,
-  EntityFieldInfo,
-  EntityInfo,
-  KeyValuePair,
-  LogError,
-  Metadata,
-  RunView,
-  RunViewResult,
-} from '@memberjunction/global';
+import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, KeyValuePair, LogError, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { CellClickEvent } from '@progress/kendo-angular-grid';
 import { SharedService } from '@memberjunction/ng-shared';
 import { BeforeDeleteItemEvent, BeforeUpdateItemEvent } from '../../generic/Events.types';
@@ -21,7 +10,7 @@ import { BeforeDeleteItemEvent, BeforeUpdateItemEvent } from '../../generic/Even
 @Component({
   selector: 'mj-resource-browser',
   templateUrl: './resource-browser.component.html',
-  styleUrls: ['./resource-browser.component.css', '../../shared/first-tab-styles.css'],
+  styleUrls: ['./resource-browser.component.css', '../../shared/first-tab-styles.css']
 })
 export class ResourceBrowserComponent {
   /*******************************************************************************************
@@ -31,13 +20,14 @@ export class ResourceBrowserComponent {
   /**
    * The name of the type of resource to display, cannot be changed after it is initially set
    */
-  @Input({ required: true }) public get ResourceTypeName(): string | null {
+  @Input({required: true}) public get ResourceTypeName(): string | null {
     return this._ResourceTypeName;
   }
   public set ResourceTypeName(value: string) {
     if (this._ResourceTypeName === null) {
       this._ResourceTypeName = value;
-    } else {
+    }
+    else {
       // we do not ever want to allow an instance of this component to be "reused" where the Resource Type is changed so throw an exception here
       throw new Error('Resource Type cannot be changed after it has been set');
     }
@@ -50,7 +40,7 @@ export class ResourceBrowserComponent {
 
   /**
    * If Categories are enabled, then the categories fetched will be filtered to return only those whoses EntityID
-   * matches this value.
+   * matches this value. 
    */
   @Input() CategoryEntityID: string | null | undefined = null;
 
@@ -68,7 +58,7 @@ export class ResourceBrowserComponent {
    */
   @Input() EnableItemDelete: boolean = true;
   /**
-   * This proprerty determines if the UI will include a button on items in the display to unlink/remove a link to a shared resource (owned by another user).
+   * This proprerty determines if the UI will include a button on items in the display to unlink/remove a link to a shared resource (owned by another user). 
    * The button will only be shown if the user has permissions, but this is a global setting to turn on/off the button even if the user has permissions. Default is true.
    */
   @Input() EnableRemoveLink: boolean = true;
@@ -96,11 +86,13 @@ export class ResourceBrowserComponent {
    * The visual display mode for this component, tile will show the contents in tiles that are spaced and wrapped based on the viewport, list will show the details of the items in a list, and tree will show the items in a tree view - tree view NOT implemented yet
    */
   @Input() DisplayMode: 'Tile' | 'List' | 'Tree' = 'Tile';
-
+  
   /**
    * Fires whenever a resource/item is selected within the component
    */
   @Output() ResourceSelected: EventEmitter<Item> = new EventEmitter<Item>();
+
+
 
   /*******************************************************************************************
    * EVENTS
@@ -117,7 +109,7 @@ export class ResourceBrowserComponent {
   /**
    * Fires whenever the user clicks the back button to view the parent folder
    */
-  @Output() public NavigateToParentEvent: EventEmitter<void> = new EventEmitter<void>();
+  @Output() public NavigateToParentEvent: EventEmitter<void> = new EventEmitter<void>();  
 
   /**
    * Fires whenever the users clicks to edit an Item that is not a folder
@@ -142,9 +134,10 @@ export class ResourceBrowserComponent {
     return this._isLoading;
   }
 
+
   private _CategoryIDFieldName: string | undefined;
   /**
-   * This is the field name in the Resource Type's Entity that is used to store the CategoryID (e.g. the Folder ID) for the resource.
+   * This is the field name in the Resource Type's Entity that is used to store the CategoryID (e.g. the Folder ID) for the resource. 
    * Not all entities in resource types support a CategoryID concept, so this can be null. This property is read only and
    * is auto-populated during the configuration of the component.
    */
@@ -163,7 +156,7 @@ export class ResourceBrowserComponent {
 
   private _UserIDFieldName: string | undefined = undefined;
   /**
-   * This is the field name in the Resource Type's Entity that is used to store the UserID of the user that OWNS the resource. Commonly, but not always a field called UserID, but can be
+   * This is the field name in the Resource Type's Entity that is used to store the UserID of the user that OWNS the resource. Commonly, but not always a field called UserID, but can be 
    * any field in the Resource Type's entity that is a foreign key to the Users entity. This property is read only and is auto-populated during the configuration of the component.
    */
   public get UserIDFieldName(): string | undefined {
@@ -184,20 +177,20 @@ export class ResourceBrowserComponent {
       Description: 'Create a new Folder',
       Icon: 'folder',
       Action: () => {
-        if (this.EnableCategories) {
+        if(this.EnableCategories){
           this.toggleUpsertFolderView(true, true);
         }
-      },
-    },
+      }}
   ];
 
   public get ItemOptions(): NewItemOption[] {
     return this._DefaultNewItemOptions;
   }
 
-  public upsertNewFolderName: string = '';
-  public upsertNewFolderDescription: string = '';
+  public upsertNewFolderName: string = "";
+  public upsertNewFolderDescription: string = "";
   public selectedFolder: Folder | null = null;
+  
 
   // JS code here and below from old component....
   private _filterDebounceTime: number = 250;
@@ -209,51 +202,53 @@ export class ResourceBrowserComponent {
   public copyFromDialogOpened: boolean = false;
   public upsertFolderDialogVisible: boolean = false;
   private _allResourceTypes: ResourceTypeEntity[] = [];
-  public entityObjectName: string = '';
+  public entityObjectName: string = "";
 
   constructor(public sharedService: SharedService) {
-    this.filterItemsSubject.pipe(debounceTime(this._filterDebounceTime)).subscribe(() => this.filterItems(this.filter));
+    this.filterItemsSubject
+        .pipe(debounceTime(this._filterDebounceTime))
+        .subscribe(() => this.filterItems(this.filter));
   }
 
   public async ngOnInit(): Promise<void> {
+
     /**
      * Hide the create folder option is EnableCategories is false
      */
-    if (this.EnableCategories) {
+    if(this.EnableCategories){
       this._DefaultNewItemOptions.push(...this.NewItemOptions);
-    } else {
+    }
+    else{
       this._DefaultNewItemOptions = this.NewItemOptions;
     }
 
     this._allResourceTypes = this.sharedService.ResourceTypes;
-    const resourceType: ResourceTypeEntity | undefined = this._allResourceTypes.find((rt) => {
+    const resourceType: ResourceTypeEntity | undefined = this._allResourceTypes.find(rt => {
       return rt.Entity === this.ResourceTypeName;
     });
 
-    if (!resourceType) {
+    if (!resourceType){
       throw new Error(`Resource Type ${this.ResourceTypeName} not found`);
     }
 
     this.ResourceType = resourceType;
-    if (!this.ResourceType.EntityID) {
-      throw new Error(
-        `Resource Type ${this.ResourceTypeName} does not have an EntityID specified. EntityID is required for any Resource Type to be used with this component.`
-      );
+    if (!this.ResourceType.EntityID){
+      throw new Error(`Resource Type ${this.ResourceTypeName} does not have an EntityID specified. EntityID is required for any Resource Type to be used with this component.`);
     }
-
-    // now get the entity info for the resource type and for its category entity, if one is specified.
+    
+    // now get the entity info for the resource type and for its category entity, if one is specified. 
     const md = new Metadata();
-    const resourceTypeEntity = md.EntityByID(this.ResourceType.EntityID);
-    const categoryEntity = this.ResourceType.CategoryEntityID ? md.EntityByID(this.ResourceType.CategoryEntityID) : null;
-
+    const resourceTypeEntity = md.EntityByID(this.ResourceType.EntityID);  
+    const categoryEntity = this.ResourceType.CategoryEntityID ? md.EntityByID(this.ResourceType.CategoryEntityID) : null;   
+    
     // Always check for UserID field, not just when we have categories
-    const usersEntity = md.EntityByName('Users');
-    this._UserIDFieldName = resourceTypeEntity.Fields.find((f) => f.RelatedEntityID === usersEntity.ID)?.Name;
-
+    const usersEntity = md.EntityByName("Users");
+    this._UserIDFieldName = resourceTypeEntity.Fields.find(f => f.RelatedEntityID === usersEntity.ID)?.Name;
+    
     // figure out the column inside the entity that points to the categoryEntity, if we have a category entity
     if (categoryEntity) {
-      this._CategoryIDFieldName = resourceTypeEntity.Fields.find((f) => f.RelatedEntityID === categoryEntity.ID)?.Name;
-      this._CategoryParentIDFieldName = categoryEntity.Fields.find((f) => f.RelatedEntityID === categoryEntity.ID)?.Name;
+      this._CategoryIDFieldName = resourceTypeEntity.Fields.find(f => f.RelatedEntityID === categoryEntity.ID)?.Name;
+      this._CategoryParentIDFieldName = categoryEntity.Fields.find(f => f.RelatedEntityID === categoryEntity.ID)?.Name;
     }
     await this.Refresh();
   }
@@ -273,111 +268,108 @@ export class ResourceBrowserComponent {
   private async LoadResources(): Promise<Item[]> {
     let results: Item[] = [];
 
-    if (!this.ResourceType || !this.ResourceType.Entity) {
+    if(!this.ResourceType || !this.ResourceType.Entity){
       return results;
     }
 
     const md = new Metadata();
-    const rv: RunView = new RunView();
+    const rv: RunView = new RunView(); 
     // create a combined filter for the SQL query that combines the user's provided ItemFilter, if provided, with a user filter that only includes items that are OWNED by the current user
     // and finally filter on the current category, if one is set and we have a category entity
-    let filter: string = '';
-    if (this.ItemFilter) {
+    let filter: string = "";
+    if(this.ItemFilter){
       filter += `(${this.ItemFilter})`;
     }
-    if (this.UserIDFieldName) {
-      let base: string = this.ItemFilter ? 'AND ' : ' ';
+    if(this.UserIDFieldName){
+      let base: string = this.ItemFilter ? "AND ": " ";
       filter += `${base}([${this.UserIDFieldName}] = '${md.CurrentUser.ID}')`;
     }
-    if (this.CurrentCategoryID && this.CategoryIDFieldName) {
-      let base: string = this.ItemFilter || this.UserIDFieldName ? 'AND ' : ' ';
+    if(this.CurrentCategoryID && this.CategoryIDFieldName){
+      let base: string = (this.ItemFilter || this.UserIDFieldName) ? "AND ": " ";
       filter += `${base}([${this.CategoryIDFieldName}] = '${this.CurrentCategoryID}')`;
     }
-
+    
     const itemResult = await rv.RunView<BaseEntity>({
-      EntityName: this.ResourceType.Entity,
-      ExtraFilter: filter,
-      OrderBy: this.OrderBy,
-      ResultType: 'entity_object',
-    });
+        EntityName: this.ResourceType.Entity,
+        ExtraFilter: filter,
+        OrderBy: this.OrderBy,
+        ResultType: 'entity_object'
+      }
+    );
 
-    if (!itemResult.Success) {
+    if(!itemResult.Success){
       LogError(`Unable to load views for ${this.ResourceType.Entity}. Reason: ${itemResult.ErrorMessage}`);
-      return results;
+      return results;;
     }
 
     const views: BaseEntity[] = itemResult.Results;
-    const items: Item[] = views.map((view) => new Item(view, ItemType.Resource));
+    const items: Item[] = views.map(view => new Item(view, ItemType.Resource));
     return items;
   }
 
   private async LoadCategories(): Promise<Item[]> {
-    if (!this.EnableCategories) {
+    if(!this.EnableCategories){
       return [];
     }
 
-    if (!this.ResourceType || !this.ResourceType.CategoryEntity) {
+    if(!this.ResourceType || !this.ResourceType.CategoryEntity){
       return [];
     }
 
     const md = new Metadata();
     const categoryEntity: EntityInfo = md.EntityByName(this.ResourceType.CategoryEntity);
-    if (!categoryEntity) {
+    if(!categoryEntity){
       LogError(`Category Entity ${this.ResourceType.CategoryEntity} not found`);
       return [];
     }
 
-    const hasEntityIDField: boolean = categoryEntity.Fields.some((field) => field.Name === 'EntityID');
-
+    const hasEntityIDField: boolean = categoryEntity.Fields.some(field => field.Name === "EntityID");
+    
     let filter: string = `UserID = '${md.CurrentUser.ID}'`;
-    filter += this.CurrentCategoryID ? ` AND ParentID = '${this.CurrentCategoryID}' ` : ' AND ParentID IS NULL ';
-    filter += hasEntityIDField ? ` AND EntityID = '${this.ResourceType.EntityID}'` : '';
+    filter += this.CurrentCategoryID ? ` AND ParentID = '${this.CurrentCategoryID}' ` : " AND ParentID IS NULL ";
+    filter += hasEntityIDField ? ` AND EntityID = '${this.ResourceType.EntityID}'` : "";
 
     const rv: RunView = new RunView();
     const rvResult: RunViewResult<BaseEntity> = await rv.RunView<BaseEntity>({
       EntityName: this.ResourceType.CategoryEntity,
       ExtraFilter: filter,
-      ResultType: 'entity_object',
+      ResultType: 'entity_object'
     });
 
-    if (!rvResult.Success) {
+    if(!rvResult.Success){
       LogError(`Unable to load categories for ${this.ResourceType.CategoryEntity}. Reason: ${rvResult.ErrorMessage}`);
       return [];
     }
 
-    const categories: BaseEntity[] = rvResult.Results;
+    const categories: BaseEntity[]  = rvResult.Results;
     const folders: Folder[] = categories.map((category: BaseEntity) => {
       const folderID: string = category.FirstPrimaryKey.Value;
-      const NameEntityField: EntityField | undefined = category.Fields.find((field) => field.EntityFieldInfo.IsNameField);
-      const folderName: string = NameEntityField ? NameEntityField.Value : 'Folder';
+      const NameEntityField: EntityField | undefined = category.Fields.find(field => field.EntityFieldInfo.IsNameField);
+      const folderName: string = NameEntityField ? NameEntityField.Value : "Folder";
 
       const folder: Folder = new Folder(folderID, folderName);
       folder.CategoryEntity = category;
-      folder.Description = category.Get('Description');
+      folder.Description = category.Get("Description");
       return folder;
     });
 
-    const items: Item[] = folders.map((folder) => new Item(folder, ItemType.Folder));
+    const items: Item[] = folders.map(folder => new Item(folder, ItemType.Folder));
     return items;
   }
 
   //maybe pass in a sort function for custom sorting?
   protected sortItems(items: Item[]): Item[] {
-    items.sort(function (a, b) {
-      const aName: string = a.Name.toLowerCase();
-      const bName: string = b.Name.toLowerCase();
-      if (aName < bName) {
-        return -1;
-      }
-      if (aName > bName) {
-        return 1;
-      }
-      return 0;
+    items.sort(function(a, b){
+        const aName: string = a.Name.toLowerCase();
+        const bName: string = b.Name.toLowerCase();
+        if(aName < bName) { return -1; }
+        if(aName > bName) { return 1; }
+        return 0;
     });
 
     return items;
   }
-
+  
   //wrapper function for the grid view
   public onCellItemClicked(event: CellClickEvent): void {
     this.itemClick(event.dataItem);
@@ -393,22 +385,23 @@ export class ResourceBrowserComponent {
 
   public async updateFolder(): Promise<void> {
     const folder: Folder | null = this.selectedFolder;
-    if (!folder || !folder.CategoryEntity) {
-      LogError('Folder or CategoryEntity is not set, cannot update folder');
-      this.sharedService.CreateSimpleNotification('Unable to update folder', 'error', 2500);
+    if(!folder || !folder.CategoryEntity){
+      LogError("Folder or CategoryEntity is not set, cannot update folder");
+      this.sharedService.CreateSimpleNotification("Unable to update folder", "error", 2500);
       return;
     }
 
     const categoryEntity = folder.CategoryEntity;
-    categoryEntity.Set('Name', this.upsertNewFolderName);
-    categoryEntity.Set('Description', this.upsertNewFolderDescription);
+    categoryEntity.Set("Name", this.upsertNewFolderName);
+    categoryEntity.Set("Description", this.upsertNewFolderDescription);
 
     const saveResult: boolean = await categoryEntity.Save();
-    if (!saveResult) {
+    if(!saveResult){
       LogError(`Unable to update folder ${folder.Name}`, undefined, categoryEntity.LatestResult);
-      this.sharedService.CreateSimpleNotification(`Unable to update folder ${folder.Name}`, 'error', 2500);
-    } else {
-      this.sharedService.CreateSimpleNotification(`Successfully updated folder ${folder.Name}`, 'info', 2500);
+      this.sharedService.CreateSimpleNotification(`Unable to update folder ${folder.Name}`, "error", 2500);
+    }
+    else{
+      this.sharedService.CreateSimpleNotification(`Successfully updated folder ${folder.Name}`, "info", 2500);
       await this.Refresh();
     }
 
@@ -416,62 +409,64 @@ export class ResourceBrowserComponent {
   }
 
   public async createFolder(): Promise<void> {
-    if (!this.ResourceType.CategoryEntity) {
-      LogError('ResourceType.CategoryEntity is not set, cannot create folder');
-      this.sharedService.CreateSimpleNotification('Unable to create folder', 'error', 1500);
+    if(!this.ResourceType.CategoryEntity){
+      LogError("ResourceType.CategoryEntity is not set, cannot create folder");
+      this.sharedService.CreateSimpleNotification("Unable to create folder", "error", 1500);
       return;
     }
-
+    
     const md: Metadata = new Metadata();
     const folderEntity: BaseEntity = await md.GetEntityObject<BaseEntity>(this.ResourceType.CategoryEntity);
 
     folderEntity.NewRecord();
-    folderEntity.Set('Name', this.upsertNewFolderName);
-    folderEntity.Set('Description', this.upsertNewFolderDescription);
-    folderEntity.Set('ParentID', this.CurrentCategoryID);
-    folderEntity.Set('UserID', md.CurrentUser.ID);
-    folderEntity.Set('EntityID', this.CategoryEntityID);
+    folderEntity.Set("Name", this.upsertNewFolderName);
+    folderEntity.Set("Description", this.upsertNewFolderDescription);
+    folderEntity.Set("ParentID", this.CurrentCategoryID);
+    folderEntity.Set("UserID", md.CurrentUser.ID);
+    folderEntity.Set("EntityID", this.CategoryEntityID);
 
     let saveResult: boolean = await folderEntity.Save();
-    if (!saveResult) {
-      this.sharedService.CreateSimpleNotification(`Unable to create folder ${this.upsertNewFolderName}`, 'error', 1500);
+    if(!saveResult){
+      this.sharedService.CreateSimpleNotification(`Unable to create folder ${this.upsertNewFolderName}`, "error", 1500);
       LogError(`Unable to create folder ${this.upsertNewFolderName}`, undefined, folderEntity.LatestResult);
     }
 
     this.toggleUpsertFolderView(false, false);
 
     this.sharedService.CreateSimpleNotification(`successfully created folder ${this.upsertNewFolderName}`, 'success', 1500);
-    let folder: Folder = new Folder(folderEntity.Get('ID'), folderEntity.Get('Name'));
-    folder.ParentFolderID = folderEntity.Get('ParentID');
-    folder.Description = folderEntity.Get('Description');
+    let folder: Folder = new Folder(folderEntity.Get("ID"), folderEntity.Get("Name"));
+    folder.ParentFolderID = folderEntity.Get("ParentID");
+    folder.Description = folderEntity.Get("Description");
 
     let item: Item = new Item(folder, ItemType.Folder);
 
     //navigate to the newly created folder
     //by raising an item click event
-    this.itemClick(item);
+    this.itemClick(item);    
   }
 
-  public async unlinkItem(item: Item) {
+  public async unlinkItem(item: Item){
     await this.deleteOrUnlink(item, false);
   }
 
   private _currentDeleteOrUnlinkState: boolean = false;
-  public async deleteOrUnlink(item: Item, bDelete: boolean) {
-    if (!item) {
+  public async deleteOrUnlink(item: Item, bDelete: boolean){
+    if(!item){
       return;
     }
 
     this._currentDeleteOrUnlinkState = bDelete;
     this.selectedItem = item;
 
-    if (item.Type === ItemType.Folder && bDelete) {
-      this.deleteDialogOpened = true;
-    } else if (item.Type === ItemType.Resource && bDelete) {
-      this.deleteDialogOpened = true;
-    } else if (item.Type === ItemType.Resource && !bDelete) {
+    if(item.Type === ItemType.Folder && bDelete){
       this.deleteDialogOpened = true;
     }
+    else if(item.Type === ItemType.Resource && bDelete){
+      this.deleteDialogOpened = true;
+    }
+    else if (item.Type === ItemType.Resource && !bDelete) {
+      this.deleteDialogOpened = true;
+    }  
   }
 
   public goToParent() {
@@ -483,74 +478,76 @@ export class ResourceBrowserComponent {
   }
 
   public async onConfirmDeleteItem(shouldDelete: boolean): Promise<void> {
-    if (!this.selectedItem || !shouldDelete) {
-      LogError('Selected item is not set or shouldDelete is false');
+    if(!this.selectedItem || !shouldDelete){
+      LogError("Selected item is not set or shouldDelete is false");
       return;
     }
 
     this.deleteDialogOpened = false;
     let item: Item = this.selectedItem;
     let success: boolean = false;
-    if (item.Type === ItemType.Folder && this._currentDeleteOrUnlinkState) {
+    if(item.Type === ItemType.Folder && this._currentDeleteOrUnlinkState){
       success = await this.deleteFolder(item);
-    } else if (item.Type === ItemType.Resource && this._currentDeleteOrUnlinkState) {
+    }
+    else if(item.Type === ItemType.Resource && this._currentDeleteOrUnlinkState){
       success = await this.deleteResource(item);
-    } else if (item.Type === ItemType.Resource && !this._currentDeleteOrUnlinkState) {
+    }
+    else if(item.Type === ItemType.Resource && !this._currentDeleteOrUnlinkState){
       success = await this.unlinkResource(item);
     }
 
     this.selectedItem = null;
-    if (success) {
+    if(success){
       await this.Refresh();
     }
   }
 
-  private async deleteFolder(item: Item): Promise<boolean> {
+  private async deleteFolder(item: Item): Promise<boolean>{
     const folder: Folder = <Folder>item.Data;
-    if (!folder || !folder.CategoryEntity) {
-      LogError('Folder or CategoryEntity is not set, cannot delete folder');
-      this.sharedService.CreateSimpleNotification('Unable to delete folder', 'error', 2500);
+    if(!folder || !folder.CategoryEntity){
+      LogError("Folder or CategoryEntity is not set, cannot delete folder");
+      this.sharedService.CreateSimpleNotification("Unable to delete folder", "error", 2500);
       return false;
     }
 
     const hasChildren: boolean = await this.doesFolderHaveChildren(folder.ID);
-    if (hasChildren) {
-      this.sharedService.CreateSimpleNotification(`Unable to delete Folder ${folder.Name} because it has children`, 'error', 2500);
+    if(hasChildren){
+      this.sharedService.CreateSimpleNotification(`Unable to delete Folder ${folder.Name} because it has children`, "error", 2500);
       return false;
     }
 
     const categoryEntity = folder.CategoryEntity;
     const deleteResult: boolean = await categoryEntity.Delete();
-    if (!deleteResult) {
+    if(!deleteResult){
       LogError(`Unable to delete folder ${folder.Name}`, undefined, categoryEntity.LatestResult);
-      this.sharedService.CreateSimpleNotification(`unable to delete folder ${folder.Name}.`, 'error', 2500);
+      this.sharedService.CreateSimpleNotification(`unable to delete folder ${folder.Name}.`, "error", 2500);
       return false;
     }
 
-    this.sharedService.CreateSimpleNotification(`Successfully deleted folder ${folder.Name}`, 'info', 2500);
+    this.sharedService.CreateSimpleNotification(`Successfully deleted folder ${folder.Name}`, "info", 2500);
     return true;
   }
 
   private async deleteResource(item: Item): Promise<boolean> {
     let genericEntity: BaseEntity = <BaseEntity>item.Data;
-    if (!genericEntity) {
-      LogError('Item Data is not set, cannot delete resource');
+    if(!genericEntity){
+      LogError("Item Data is not set, cannot delete resource");
       return false;
     }
 
     const deleteEvent: BeforeDeleteItemEvent = new BeforeDeleteItemEvent(item);
     this.DeleteItemEvent.emit(deleteEvent);
 
-    if (deleteEvent.Cancel) {
+    if(deleteEvent.Cancel){
       //parent will handle deletion, so we can return early
       return true;
     }
 
     const entity: BaseEntity = item.Data;
     const deleteResult: boolean = await entity.Delete();
-    if (!deleteResult) {
+    if(!deleteResult){
       LogError(`Unable to delete ${item.Name}`, undefined, entity.LatestResult);
-      this.sharedService.CreateSimpleNotification(`Unable to delete ${item.Name}`, 'error', 2500);
+      this.sharedService.CreateSimpleNotification(`Unable to delete ${item.Name}`, "error", 2500);
       return false;
     }
 
@@ -558,6 +555,7 @@ export class ResourceBrowserComponent {
   }
 
   private async unlinkResource(item: Item): Promise<boolean> {
+
     return true;
 
     // // remove the link by removing the Resource Link record
@@ -565,7 +563,7 @@ export class ResourceBrowserComponent {
     //   const md = new Metadata();
     //   const link = await md.GetEntityObject<ResourceLinkEntity>("Resource Links");
     //   if (await link.Load(item.ResourceLinkID))
-    //     return await link.Delete();
+    //     return await link.Delete();  
     //   else
     //     return false;
     // }
@@ -573,25 +571,25 @@ export class ResourceBrowserComponent {
     //   return false;
   }
 
-  private async doesFolderHaveChildren(folderID: string): Promise<boolean> {
-    if (!this.ResourceType.CategoryEntity) {
-      throw new Error('ResourceType.CategoryEntity is not set, cannot check for children');
+  private async doesFolderHaveChildren(folderID: string): Promise<boolean>{
+    if(!this.ResourceType.CategoryEntity){
+      throw new Error("ResourceType.CategoryEntity is not set, cannot check for children");
     }
 
     const rv: RunView = new RunView();
     const folderResult = await rv.RunView({
       EntityName: this.ResourceType.CategoryEntity,
-      ExtraFilter: `ParentID ='${folderID}'`,
+      ExtraFilter: `ParentID ='${folderID}'`
     });
 
-    if (!folderResult.Success) {
+    if(!folderResult.Success){
       throw new Error(`Unable to fetch children for folder ${folderID}. Reason: ${folderResult.ErrorMessage}`);
     }
 
     return folderResult.Results.length > 0;
   }
 
-  public changeViewMode(mode: 'List' | 'Tree' | 'Tile'): void {
+  public changeViewMode(mode: "List" | "Tree" | "Tile"): void {
     this.DisplayMode = mode;
   }
 
@@ -609,7 +607,8 @@ export class ResourceBrowserComponent {
   }
 
   private filterItems(filter: string): void {
-    if (!this.sourceItems) {
+
+    if(!this.sourceItems){
       this.sourceItems = [...this._items];
     }
 
@@ -618,31 +617,32 @@ export class ResourceBrowserComponent {
       return;
     }
 
-    this._items = this.sourceItems.filter((item) => {
+    this._items = this.sourceItems.filter(item => {
       return item.Name.toLowerCase().includes(filter.toLowerCase());
     });
   }
 
   public editItem(item: Item): void {
-    if (!item || !item.Data) {
-      LogError('Item or item data is not set');
-      this.sharedService.CreateSimpleNotification('Unable to edit item', 'error', 2500);
+    if(!item || !item.Data){
+      LogError("Item or item data is not set");
+      this.sharedService.CreateSimpleNotification("Unable to edit item", "error", 2500);
       return;
     }
 
-    if (item.Type === ItemType.Folder) {
-      const folder = <Folder>item.Data;
+    if(item.Type === ItemType.Folder){
+      const folder = <Folder>item.Data
       this.selectedFolder = folder;
       this.toggleUpsertFolderView(true, false);
-    } else {
+    }
+    else{
       const event: BeforeUpdateItemEvent = new BeforeUpdateItemEvent(item);
       this.EditItemEvent.emit(event);
     }
   }
 
-  public async onDropdownItemClick(dropdownItem: NewItemOption): Promise<void> {
-    if (!dropdownItem || !dropdownItem.Action) {
-      LogError('Dropdown item or action is not set');
+  public async onDropdownItemClick(dropdownItem: NewItemOption): Promise<void>{
+    if(!dropdownItem || !dropdownItem.Action){
+      LogError("Dropdown item or action is not set");
       return;
     }
 
@@ -660,31 +660,32 @@ export class ResourceBrowserComponent {
   public toggleUpsertFolderView(visible: boolean, createNew: boolean): void {
     this.upsertFolderDialogVisible = visible;
 
-    if (createNew) {
-      this.upsertNewFolderName = '';
-      this.upsertNewFolderDescription = '';
+    if(createNew){
+      this.upsertNewFolderName = "";
+      this.upsertNewFolderDescription = "";
       this.selectedFolder = null;
-    } else if (visible && this.selectedFolder) {
+    }
+    else if(visible && this.selectedFolder){
       this.upsertNewFolderName = this.selectedFolder.Name;
-      this.upsertNewFolderDescription = this.selectedFolder.Description || '';
+      this.upsertNewFolderDescription = this.selectedFolder.Description || "";
     }
   }
 
   public getIconForResourceType(item: Item): string {
-    if (!item) {
-      return '';
+    if(!item){
+      return "";
     }
 
-    const LargeClass: string = 'fa-3x ';
-    if (item.Type === ItemType.Folder) {
-      return LargeClass + 'fa-regular fa-folder';
+    const LargeClass: string = "fa-3x ";
+    if(item.Type === ItemType.Folder){  
+      return LargeClass + "fa-regular fa-folder";
     }
 
-    const resourceType: ResourceTypeEntity | undefined = this._allResourceTypes.find((rt) => rt.ID === this.ResourceType.ID);
-    if (resourceType) {
-      return LargeClass + resourceType.Icon; // + rotateStyle;
+    const resourceType: ResourceTypeEntity | undefined = this._allResourceTypes.find(rt => rt.ID === this.ResourceType.ID);
+    if(resourceType){
+      return LargeClass + resourceType.Icon;// + rotateStyle;
     }
 
-    return '';
+    return "";
   }
 }

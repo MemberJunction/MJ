@@ -1,42 +1,14 @@
-import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, Renderer2 } from '@angular/core';
+import { Component, ViewChild, ElementRef, Output, EventEmitter, OnInit, Input, AfterViewInit, Renderer2} from '@angular/core';
 import { FormBuilder, FormGroup } from '@angular/forms';
-import { Router } from '@angular/router';
+import { Router } from '@angular/router'
 
-import {
-  Metadata,
-  BaseEntity,
-  RunView,
-  RunViewParams,
-  EntityFieldInfo,
-  EntityFieldTSType,
-  EntityInfo,
-  LogError,
-  KeyValuePair,
-  CompositeKey,
-  PotentialDuplicateRequest,
-} from '@memberjunction/global';
-import {
-  ViewInfo,
-  ViewGridState,
-  ViewColumnInfo,
-  UserViewEntityExtended,
-  ListEntity,
-  ListDetailEntityExtended,
-} from '@memberjunction/core-entities';
+import { Metadata, BaseEntity, RunView, RunViewParams, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, KeyValuePair, CompositeKey, PotentialDuplicateRequest } from '@memberjunction/core';
+import { ViewInfo, ViewGridState, ViewColumnInfo, UserViewEntityExtended, ListEntity, ListDetailEntityExtended } from '@memberjunction/core-entities';
 
-import {
-  CellClickEvent,
-  GridDataResult,
-  PageChangeEvent,
-  GridComponent,
-  CellCloseEvent,
-  ColumnReorderEvent,
-  ColumnResizeArgs,
-  ColumnComponent,
-  SelectionEvent,
-  SelectableSettings,
-} from '@progress/kendo-angular-grid';
+import { CellClickEvent, GridDataResult, PageChangeEvent, GridComponent, CellCloseEvent, 
+         ColumnReorderEvent, ColumnResizeArgs, ColumnComponent, SelectionEvent, SelectableSettings} from "@progress/kendo-angular-grid";
 import { Keys } from '@progress/kendo-angular-common';
+
 
 import { Subject } from 'rxjs';
 import { ExcelExportComponent } from '@progress/kendo-angular-excel-export';
@@ -44,35 +16,36 @@ import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@me
 import { CompareRecordsComponent } from '@memberjunction/ng-compare-records';
 import { TextAreaComponent } from '@progress/kendo-angular-inputs';
 
+
 export type GridRowClickedEvent = {
   entityId: string;
   entityName: string;
   CompositeKey: CompositeKey;
-};
+}
 
 export type GridRowEditedEvent = {
   record: BaseEntity;
   row: number;
   saved: boolean;
-};
-
+}
+ 
 export type GridPendingRecordItem = {
   record: BaseEntity;
   row: number;
   dataItem: any;
-};
+}
 
 @Component({
   selector: 'mj-list-detail-grid',
   templateUrl: './ng-list-detail-grid.component.html',
-  styleUrls: ['./ng-list-detail-grid.component.css'],
+  styleUrls: ['./ng-list-detail-grid.component.css']
 })
 export class ListDetailGridComponent implements OnInit, AfterViewInit {
   title = 'ListDetailGrid';
   @Input() Params: RunViewParams | undefined;
   @Input() BottomMargin: number = 0;
   @Input() InEditMode: boolean = false;
-  @Input() EditMode: 'None' | 'Save' | 'Queue' = 'None';
+  @Input() EditMode: "None" | "Save" | "Queue" = "None"
   @Input() AutoNavigate: boolean = true;
 
   @Output() rowClicked = new EventEmitter<GridRowClickedEvent>();
@@ -96,15 +69,15 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
   public viewColumns: ViewColumnInfo[] = [];
   public visibleColumns: ViewColumnInfo[] = [];
   public sortSettings: any[] = [];
-  public entityRecord: BaseEntity | null = null;
+  public entityRecord: BaseEntity | null = null; 
   public skip: number = 0;
   public pageSize: number = 40;
   public isLoading: boolean = false;
   public gridView: GridDataResult = { data: [], total: 0 };
   public gridHeight: number = 750;
 
-  public _viewEntity: UserViewEntityExtended | undefined;
-  public _entityInfo: EntityInfo | undefined;
+  public _viewEntity: UserViewEntityExtended | undefined
+  public  _entityInfo: EntityInfo | undefined;
   private _newGridState: ViewGridState = {};
 
   private editModeEnded = new Subject<void>();
@@ -116,7 +89,7 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
   public duplicateMode: boolean = false;
 
   public selectableSettings: SelectableSettings = {
-    enabled: false,
+    enabled: false
   };
   public selectedKeys: any[] = [];
   public isCompareDialogOpened: boolean = false;
@@ -130,8 +103,10 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
   }
 
   public get ViewID(): string {
-    if (this.Params && this.Params.ViewID) return this.Params.ViewID;
-    else return '';
+    if (this.Params && this.Params.ViewID)
+      return this.Params.ViewID;
+    else
+      return "";
   }
 
   protected StartEditMode() {
@@ -154,7 +129,9 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
           subscription.unsubscribe();
         });
       });
-    } else return Promise.resolve(true); // not in edit mode, so editing is complete!
+    } 
+    else 
+      return Promise.resolve(true); // not in edit mode, so editing is complete!
   }
 
   public IsDynamicView(): boolean {
@@ -165,19 +142,22 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     this.skip = event.skip;
     this.virtualLoadData();
   }
-  data = [{ text: 'Folder' }, { text: 'Report with Skip' }];
+  data = [
+    { text: "Folder" },
+    { text: "Report with Skip" },
+  ];
   private virtualLoadData(): void {
     // check to see if we have already formatted the slice of the data we need right now
     // we are storing the formattted data in the formattedData array and it has same set
     // of indexes as the viewData array (raw unformatted data). When we first get viewData
-    // from the server we create an array of the same length as viewData, but have nulls in all of the
+    // from the server we create an array of the same length as viewData, but have nulls in all of the 
     // indexes. As we format each row of viewData we store the formatted row in the same index
     // in the formattedData array. So if we have already formatted the data we need for the current
     // page, we just use that data, otherwise we format the data we need for the current page
 
-    try {
+     try {
       // check to see if we have already formatted the data we need for the current page
-      for (let i = this.skip; i < this.skip + this.pageSize && i < this.viewData.length; i++) {
+      for (let i = this.skip; (i < (this.skip + this.pageSize)) && (i < this.viewData.length); i++) {
         if (!this.formattedData[i]) {
           // we have not formatted this row yet, so format it
           const r = this.viewColumns.map((c) => {
@@ -187,20 +167,26 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
                 let formattedValue: any = null;
                 if (c.EntityField.TSType === EntityFieldTSType.Boolean) {
                   formattedValue = this.viewData[i][c.EntityField.Name] ? '✓' : ''; // show a check mark if true, nothing if false
-                } else {
+                }
+                else {
                   formattedValue = ef.FormatValue(this.viewData[i][c.EntityField.Name], 0, undefined, 300);
                 }
 
-                return { field: c.EntityField.Name, value: formattedValue };
-              } else return { field: c.EntityField.Name, value: this.viewData[i][c.EntityField.Name] }; // hidden column, so just return the value, don't bother formatting
-            } else return { field: c.Name, value: null };
+                return {field: c.EntityField.Name, value: formattedValue}
+              }
+              else
+                return {field: c.EntityField.Name, value: this.viewData[i][c.EntityField.Name]} // hidden column, so just return the value, don't bother formatting
+            }
+            else
+              return {field: c.Name, value: null};
           });
           // now r is an array of {field: string, value: any} objects, so we need to convert it to an object
           // with the field names as the keys and the values as the values
           const row: { [key: string]: any } = {};
-          for (let j = 0; j < r.length; j++) {
-            if (r[j] && r[j].field && r[j].field.length > 0) row[r[j].field] = r[j].value;
-          }
+          for (let j = 0; j < r.length; j++) { 
+            if (r[j] && r[j].field && r[j].field.length > 0)
+              row[r[j].field] = r[j].value;
+          }  
           this.formattedData[i] = row;
         }
       }
@@ -210,78 +196,77 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
         data: this.formattedData.slice(this.skip, this.skip + this.pageSize),
         total: this.viewData.length,
       };
-    } catch (e) {
+    }
+    catch (e) {
       LogError(e);
     }
   }
 
-  constructor(
-    private formBuilder: FormBuilder,
-    private router: Router,
-    private renderer: Renderer2
-  ) {}
+  constructor(private formBuilder: FormBuilder, 
+              private router: Router,
+              private renderer: Renderer2) {
+
+  } 
 
   private _saveTimeout: any;
   private SaveView() {
     // debounced outer function...
     clearTimeout(this._saveTimeout);
-    this._saveTimeout = setTimeout(async () => {
+    this._saveTimeout = setTimeout(async ()=> {
       // when we actually call inner save view we do await
-      await this.innerSaveView();
+      await this.innerSaveView()
     }, 5000); // 5 seconds delay
-  }
+  };
+
 
   private _viewDirty: boolean = false;
   public async innerSaveView() {
     if (this._viewDirty) {
-      const md = new Metadata();
-      if (this._viewEntity && this._viewEntity.Get('UserID') === md.CurrentUser.ID) {
+      const md = new Metadata()
+      if (this._viewEntity && 
+          this._viewEntity.Get('UserID') === md.CurrentUser.ID) {  
         // this view is a saved view, AND it belongs to the current user
-
+  
         // update the grid state if we have settings updates for columns and/or sorts
         const tempGridState: ViewGridState = JSON.parse(this._viewEntity.Get('GridState'));
         const tempColSettings = this._newGridState.columnSettings ? this._newGridState.columnSettings : tempGridState.columnSettings;
-        tempColSettings.forEach((col: ViewColumnInfo) => {
-          col.DisplayName, col.ID, col.Name, col.hidden, col.orderIndex, col.width;
-        }); // remove EntityFieldInfo from the column settings
+        tempColSettings.forEach((col: ViewColumnInfo) => {col.DisplayName, col.ID, col.Name, col.hidden, col.orderIndex, col.width}); // remove EntityFieldInfo from the column settings
         tempGridState.columnSettings = tempColSettings;
         tempGridState.sortSettings = this._newGridState.sortSettings ? this._newGridState.sortSettings : tempGridState.sortSettings;
-
+          
         // now stringify the grid state and save it
         this._viewEntity.Set('GridState', JSON.stringify(tempGridState));
-        const newSortState = tempGridState.sortSettings.map((s: any) => {
-          return { field: s.field, direction: s.dir };
-        });
+        const newSortState = tempGridState.sortSettings.map((s: any) => {return {field: s.field, direction: s.dir}})
         const oldSortState = JSON.parse(this._viewEntity.Get('SortState'));
         this._viewEntity.Set('SortState', JSON.stringify(newSortState));
-
+  
         if (await this._viewEntity.Save()) {
           // check to see if sort state changed and if so, refresh the grid
           if (JSON.stringify(newSortState) !== JSON.stringify(oldSortState)) {
-            if (this.Params)
-              // makes sure we have params before we refresh
+            if (this.Params) // makes sure we have params before we refresh
               this.Refresh(this.Params);
           }
           this._viewDirty = false;
-        } else {
-          this.CreateSimpleNotification('Unable to save view settings', 'error', 5000);
+        }
+        else  {
+          this.CreateSimpleNotification('Unable to save view settings', 'error', 5000)
         }
       }
     }
   }
 
-  protected CreateSimpleNotification(message: string, style: 'none' | 'success' | 'error' | 'warning' | 'info', duration: number) {
+  protected CreateSimpleNotification(message: string, style: "none" | "success" | "error" | "warning" | "info", duration: number) {
     const data: DisplaySimpleNotificationRequestData = {
       message: message,
       style: style,
-      DisplayDuration: duration,
-    };
+      DisplayDuration: duration
+    }
     MJGlobal.Instance.RaiseEvent({
       component: this,
       event: MJEventType.DisplaySimpleNotificationRequest,
-      eventCode: '',
-      args: data,
-    });
+      eventCode: "",
+      args: data
+    })
   }
 
   public async columnReorder(args: ColumnReorderEvent) {
@@ -321,26 +306,28 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
         this.SaveView();
       }
     }
+
+
   }
 
   public async columnResize(args: ColumnResizeArgs[]) {
     for (const col of args) {
       const c = col.column as ColumnComponent;
-      const viewCol = this.viewColumns.find((vc) => vc.Name === c.field);
-      const visCol = this.visibleColumns.find((vc) => vc.Name === c.field);
+      const viewCol = this.viewColumns.find(vc => vc.Name === c.field);
+      const visCol = this.visibleColumns.find(vc => vc.Name === c.field);
       const visCols = this.visibleColumns;
-      if (viewCol) viewCol.width = col.newWidth;
+      if (viewCol) 
+        viewCol.width = col.newWidth;
     }
 
-    this._newGridState.columnSettings = this.viewColumns.map((vc) => {
-      return {
-        // only pass back the stuff that should persist, we don't want EntityField persisting, waste of space!
+    this._newGridState.columnSettings = this.viewColumns.map(vc => {
+      return { // only pass back the stuff that should persist, we don't want EntityField persisting, waste of space! 
         Name: vc.Name,
         DisplayName: vc.DisplayName,
         width: vc.width,
         orderIndex: vc.orderIndex,
-        hidden: vc.hidden,
-      };
+        hidden: vc.hidden
+      }
     });
     this._viewDirty = true;
     this.SaveView();
@@ -349,147 +336,165 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
   public async sortChanged(sort: any) {
     if (sort && sort.length > 0) {
       // remove any sort settings that don't have a direction
-      const filterSort = sort.filter((s: any) => s.dir !== undefined && s.dir !== null && s.dir !== '');
+      const filterSort = sort.filter((s: any) => s.dir !== undefined && s.dir !== null && s.dir !== "");
       this._newGridState.sortSettings = filterSort;
-    } else this._newGridState.sortSettings = sort;
+    }
+    else
+      this._newGridState.sortSettings = sort;
 
+      
     this.sortSettings = this._newGridState.sortSettings; // for the UI display - grid binding to this shows that the sort is applied via arrows in the column headers
 
     if (this.IsDynamicView()) {
       // Dynamic View, we have this.Params and can add an OrderBy and then just Refresh() the entire component
       // that will result in going to the server for a refreshed set of data
       if (this.Params) {
-        this.Params.OrderBy = sort[0].field + ' ' + sort[0].dir;
-        this.Refresh(this.Params);
-      } else {
-        LogError('sortChanged() called but this.Params is null or undefined'); // should never get here
+        this.Params.OrderBy = sort[0].field + ' ' + (sort[0].dir);
+        this.Refresh(this.Params);  
       }
-    } else {
+      else {
+        LogError("sortChanged() called but this.Params is null or undefined") // should never get here
+      }
+    }
+    else {
       // Saved view - we do this on the server side only
       this._viewDirty = true;
-      this.innerSaveView(); // for sort changes we call innerSaveView() directly, not through SaveView() which is debounced
+      this.innerSaveView(); // for sort changes we call innerSaveView() directly, not through SaveView() which is debounced  
     }
   }
 
   public async cellClickHandler(args: CellClickEvent) {
-    if (this.compareMode || this.mergeMode) return;
-
+    if(this.compareMode || this.mergeMode ) return;
+    
     if (this._entityInfo) {
       const compositeKey: CompositeKey = new CompositeKey();
       compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, this.viewData[args.rowIndex]);
       this.rowClicked.emit({
         entityId: this._entityInfo.ID,
         entityName: this._entityInfo.Name,
-        CompositeKey: compositeKey,
-      });
+        CompositeKey: compositeKey
+      })
 
-      if (this._entityInfo.AllowUpdateAPI && this.EditMode !== 'None') {
-        const perm = this._entityInfo.GetUserPermisions(new Metadata().CurrentUser);
+      if (this._entityInfo.AllowUpdateAPI && 
+          this.EditMode !== "None"  ) {
+        const perm = this._entityInfo.GetUserPermisions(new Metadata().CurrentUser)
         if (perm.CanUpdate) {
           this.StartEditMode();
           args.sender.editCell(args.rowIndex, args.columnIndex, this.createFormGroup(args.dataItem));
         }
       }
 
-      if (this.EditMode === 'None' && this.AutoNavigate) {
+      if (this.EditMode==='None' && this.AutoNavigate) {
         // tell app router to go to this record
-        this.router.navigate(['resource', 'record', compositeKey.ToURLSegment()], { queryParams: { Entity: this._entityInfo.Name } });
+        this.router.navigate(['resource', 'record', compositeKey.ToURLSegment()], { queryParams: { Entity: this._entityInfo.Name } })
       }
-    }
-  }
+    } 
+  } 
 
   public createFormGroup(dataItem: any): FormGroup {
     const groupFields: any = {};
     this.viewColumns.forEach((vc: ViewColumnInfo) => {
-      if (vc.EntityField.AllowUpdateAPI && vc.EntityField.IsVirtual === false && vc.EntityField.AllowUpdateInView)
+      if (vc.EntityField.AllowUpdateAPI && 
+          vc.EntityField.IsVirtual === false &&
+          vc.EntityField.AllowUpdateInView)
         groupFields[vc.Name] = dataItem[vc.Name];
     });
+
 
     return this.formBuilder.group(groupFields);
   }
 
-  public getEditor(ef: EntityFieldInfo): 'boolean' | 'text' | 'numeric' | 'date' {
-    switch (ef.TSType) {
-      case EntityFieldTSType.Boolean:
-        return 'boolean';
-      case EntityFieldTSType.Date:
-        return 'date';
-      case EntityFieldTSType.Number:
-        return 'numeric';
-      default:
-        return 'text';
-    }
+  public getEditor(ef: EntityFieldInfo): "boolean" | "text" | "numeric" | "date" {
+      switch (ef.TSType) {  
+        case EntityFieldTSType.Boolean:
+          return "boolean";
+        case EntityFieldTSType.Date:
+          return "date";
+        case EntityFieldTSType.Number:
+          return "numeric";
+        default:
+          return "text";
+      }          
   }
 
   public async cellCloseHandler(args: CellCloseEvent) {
     try {
-      if (this._entityInfo && this.EditMode !== 'None') {
+      if (this._entityInfo && this.EditMode !== "None") {
         const { formGroup, dataItem, column } = args;
-
+  
         if (!formGroup.valid) {
           // prevent closing the edited cell if there are invalid values.
           args.preventDefault();
-        } else if (formGroup.dirty) {
-          if (args.originalEvent && args.originalEvent.keyCode === Keys.Escape) return; // user hit escape, so don't save their changes
-
+        } 
+        else if (formGroup.dirty) {
+          if (args.originalEvent && args.originalEvent.keyCode === Keys.Escape) 
+            return; // user hit escape, so don't save their changes
+          
           // update the data item with the new values - this drives UI refresh while we save the record...
-
+  
           Object.assign(dataItem, formGroup.value);
-
+  
           const md = new Metadata();
           let record: BaseEntity | undefined;
           let bSaved: boolean = false;
           let compositeKey: CompositeKey = new CompositeKey();
           compositeKey.LoadFromEntityInfoAndRecord(this._entityInfo, dataItem);
 
-          if (this.EditMode === 'Save') {
+          if (this.EditMode === "Save") {
             record = await md.GetEntityObject(this._entityInfo.Name);
             await record.InnerLoad(compositeKey);
             record.SetMany(formGroup.value);
             bSaved = await record.Save();
             if (!bSaved) {
-              this.CreateSimpleNotification('Error saving record: ' + compositeKey.ToString(), 'error', 5000);
+              this.CreateSimpleNotification("Error saving record: " + compositeKey.ToString(), 'error', 5000)
             }
-          } else {
+          }
+          else {
             record = this._pendingRecords.find((r: GridPendingRecordItem) => {
               // compare each field in the r.record object with the same fields from data Item
               for (const k of r.record.PrimaryKeys) {
                 if (r.record.Get(k.Name) !== dataItem[k.Name]) {
                   return false; // not the same record
-                }
+                }                
               }
               // if we get here, all pkeys matches in the above loop
               return true;
             })?.record;
-            if (!record) {
-              // haven't edited this record before
+            if (!record) { 
+              // haven't edited this record before 
               record = await md.GetEntityObject(this._viewEntity!.Get('Entity'));
               await record.InnerLoad(compositeKey);
-              this._pendingRecords.push({ record, row: args.rowIndex, dataItem }); // don't save - put the changed record on a queue for saving later by our container
+              this._pendingRecords.push({record, 
+                                         row: args.rowIndex, 
+                                         dataItem}); // don't save - put the changed record on a queue for saving later by our container
             }
             // now, based on the column that we're in, update the record with the new value
             record.Set(column.field, formGroup.value[column.field]);
             // if a boolean value, modify what is in the grid so it is formatted properly
             if (column.field && column.field.length > 0) {
-              const ef = this._entityInfo.Fields.find((f) => f.Name === column.field);
+              const ef = this._entityInfo.Fields.find(f => f.Name === column.field);
               if (ef && ef.TSType === EntityFieldTSType.Boolean) {
                 dataItem[column.field] = record.Get(column.field) ? '✓' : '';
               }
             }
           }
-
+  
           this.rowEdited.emit({
             record: record,
             row: args.rowIndex,
-            saved: bSaved,
-          });
+            saved: bSaved
+          })
+  
         }
       }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      this.EndEditMode();
     }
+    catch (e) {
+      console.error(e);
+    }
+    finally {
+      this.EndEditMode(); 
+    }
+
   }
 
   // this handles reverting pending cahnges to records WITHIN the grid, not the user view settings, unrelated to that.
@@ -498,22 +503,28 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
       this._pendingRecords.forEach((r: GridPendingRecordItem) => {
         r.record!.Revert();
         Object.assign(r.dataItem, r.record!.GetAll()); // copy the original values back to the data Item which gets the grid to display the old values again...
-      });
+      })
       this._pendingRecords = [];
-      if (this.Params) this.Refresh(this.Params);
+      if (this.Params)
+        this.Refresh(this.Params);
     }
   }
+ 
+ 
+  ngOnInit(): void {
 
-  ngOnInit(): void {}
+  }
 
   ngAfterViewInit(): void {
     //this.setGridHeight();
-    if (this.Params) this.Refresh(this.Params);
+    if (this.Params)
+      this.Refresh(this.Params);
   }
 
   private _movedToBody: boolean = false;
   moveDialogToBody() {
-    if (this._movedToBody) return;
+    if (this._movedToBody)
+      return;
     const dialogElement = this.compareDialogContainer.nativeElement;
     this.renderer.appendChild(document.body, dialogElement);
 
@@ -526,16 +537,18 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     return this._allowLoad;
   }
   public set AllowLoad(value: boolean) {
-    this._allowLoad = value;
+    this._allowLoad = value
     if (value === true && this._deferLoadCount === 0) {
-      this._deferLoadCount++; // only do this one time
-      if (this.Params) this.Refresh(this.Params);
+      this._deferLoadCount++; // only do this one time 
+      if (this.Params)
+        this.Refresh(this.Params)
       return;
     }
   }
 
   async RefreshFromSavedParams() {
-    if (this.Params) this.Refresh(this.Params);
+    if (this.Params)
+      this.Refresh(this.Params)
   }
   async Refresh(params: RunViewParams) {
     this.Params = params;
@@ -545,7 +558,7 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     }
     if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter))) {
       const startTime = new Date().getTime();
-      this.isLoading = true;
+      this.isLoading = true
 
       const md = new Metadata();
       const rv = new RunView();
@@ -554,36 +567,44 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
       // this is done for performance purposes
       if (params.ViewEntity) {
         // When we receive the .ViewEntity via our params that is a time saver as we don't need to load it again, so ALWAYS use that instance of the entity object for the view entity
-        this._viewEntity = <UserViewEntityExtended>params.ViewEntity;
-        const e = md.Entities.find((x) => x.ID === this._viewEntity?.EntityID);
-        if (e) this._entityInfo = e;
-        else throw new Error('Unable to get entity info for view: ' + this._viewEntity?.Name);
-      } else if (!params.ViewEntity && (params.ViewID || params.ViewName)) {
+        this._viewEntity = <UserViewEntityExtended>params.ViewEntity; 
+        const e = md.Entities.find(x => x.ID === this._viewEntity?.EntityID);
+        if (e)
+          this._entityInfo = e
+        else
+          throw new Error("Unable to get entity info for view: " + this._viewEntity?.Name)
+      }
+      else if (!params.ViewEntity && (params.ViewID || params.ViewName)) {
         // this is NOT a dyamic view as we got either the ViewID or ViewName, so we can get the ViewEntity
         if (params.ViewID && params.ViewID.length > 0) {
-          this._viewEntity = <UserViewEntityExtended>await ViewInfo.GetViewEntity(params.ViewID);
-        } else if (params.ViewName) {
-          this._viewEntity = <UserViewEntityExtended>await ViewInfo.GetViewEntityByName(params.ViewName);
+          this._viewEntity = <UserViewEntityExtended>await ViewInfo.GetViewEntity(params.ViewID); 
+        }
+        else if (params.ViewName) {
+          this._viewEntity = <UserViewEntityExtended>await ViewInfo.GetViewEntityByName(params.ViewName); 
         }
         params.ViewEntity = this._viewEntity;
 
-        const e = md.Entities.find((x) => x.ID === this._viewEntity?.EntityID);
-        if (e) this._entityInfo = e;
-        else throw new Error('Unable to get entity info for view: ' + this._viewEntity?.Name);
-      } else if (params.EntityName) {
+        const e = md.Entities.find(x => x.ID === this._viewEntity?.EntityID)
+        if (e)
+          this._entityInfo = e;
+        else  
+          throw new Error("Unable to get entity info for view: " + this._viewEntity?.Name)
+      }
+      else if (params.EntityName)  { 
         // we don't have a ViewEntity because we're doing a dynamic view, so we need to get the entity info from the Entity Name
-        const e = md.Entities.find((x) => x.Name === params.EntityName);
-        if (e) this._entityInfo = e;
-      } else
-        throw new Error(
-          'Invalid configuration, we need to receive either a ViewEntity, ViewID, ViewName, or EntityName and ExtraFilter in order to run a view'
-        );
+        const e = md.Entities.find(x => x.Name === params.EntityName);
+        if (e)
+          this._entityInfo = e
+      }
+      else
+        throw new Error("Invalid configuration, we need to receive either a ViewEntity, ViewID, ViewName, or EntityName and ExtraFilter in order to run a view")
 
       const rvResult = await rv.RunView(params);
       if (!rvResult.Success) {
         // it failed
-        this.CreateSimpleNotification('Error running view:\n\n' + rvResult.ErrorMessage, 'error', 5000);
-      } else {
+        this.CreateSimpleNotification("Error running view:\n\n" + rvResult.ErrorMessage, 'error', 5000)
+      }
+      else {
         // it worked
         this.viewData = rvResult.Results;
 
@@ -591,30 +612,29 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
         this.formattedData = new Array(this.viewData.length);
 
         let cols: ViewColumnInfo[] | undefined;
-        if (this._viewEntity) cols = this._viewEntity.Columns;
-        else
-          cols = this._entityInfo?.Fields.filter((f: EntityFieldInfo) => f.DefaultInView).map((f: EntityFieldInfo) => {
-            return {
-              ID: f.ID,
-              Name: f.Name,
-              DisplayName: f.DisplayName,
-              EntityField: f,
-              hidden: false,
-              orderIndex: f.Sequence,
-              width: f.DefaultColumnWidth ? f.DefaultColumnWidth : 100,
-            } as ViewColumnInfo;
-          });
+        if (this._viewEntity) 
+          cols = this._viewEntity.Columns
+        else 
+          cols = this._entityInfo?.Fields.filter((f: EntityFieldInfo) => f.DefaultInView ).map((f: EntityFieldInfo) => {
+                                                                                                  return {
+                                                                                                    ID: f.ID,
+                                                                                                    Name: f.Name,
+                                                                                                    DisplayName: f.DisplayName,
+                                                                                                    EntityField: f,
+                                                                                                    hidden: false,
+                                                                                                    orderIndex: f.Sequence,
+                                                                                                    width: f.DefaultColumnWidth ? f.DefaultColumnWidth : 100,
+                                                                                                  } as ViewColumnInfo
+                                                                                                });
         if (cols) {
-          this.viewColumns = cols;
-          const tempCols = cols
-            .filter((x) => x.hidden === false)
-            .sort((a, b) => {
-              const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
-              const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
-              return aOrder - bOrder;
-            });
+          this.viewColumns = cols
+          const tempCols = cols.filter(x => x.hidden === false).sort((a,b) => {
+            const aOrder = a.orderIndex != null ? a.orderIndex : 9999;
+            const bOrder = b.orderIndex != null ? b.orderIndex : 9999;
+            return aOrder - bOrder;
+          });
 
-          this.visibleColumns = tempCols;
+          this.visibleColumns = tempCols
         }
 
         // sorting setup
@@ -622,92 +642,109 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
           const temp = this._viewEntity.ViewSortInfo;
           const kendoSortSettings = temp.map((s: any) => {
             let dir: string;
-            if (typeof s.direction === 'string') dir = s.direction.trim().toLowerCase();
-            else if (typeof s.direction === 'number' && s.direction === 1) dir = 'asc';
-            else if (typeof s.direction === 'number' && s.direction === 2) dir = 'desc';
-            else dir = '';
-            return { field: s.field, dir: dir };
-          });
+            if (typeof s.direction === 'string')
+              dir = s.direction.trim().toLowerCase();
+            else if (typeof s.direction === 'number' && s.direction === 1)
+              dir = 'asc';
+            else if (typeof s.direction === 'number' && s.direction === 2)
+              dir = 'desc';
+            else
+              dir = '';
+            return {field: s.field, dir: dir}
+          })
           this.sortSettings = kendoSortSettings;
         }
-
+  
         this.skip = 0;
         this.virtualLoadData();
+        
       }
 
       this.viewExecutionTime = (new Date().getTime() - startTime) / 1000; // in seconds
-      this.isLoading = false;
-    } else {
-      LogError('Refresh(params) must have ViewID or ViewName or (EntityName and ExtraFilter)');
+      this.isLoading = false
+    }
+    else {
+      LogError("Refresh(params) must have ViewID or ViewName or (EntityName and ExtraFilter)")
     }
   }
 
   GetColumnTitle(col: ViewColumnInfo) {
     if (col.DisplayName)
       return col.DisplayName; // use view's display name first if it exists
-    else if (col.EntityField.DisplayName)
+    else if (col.EntityField.DisplayName )
       return col.EntityField.DisplayName; // then use entity display name, if that exist
-    else return col.Name; // otherwise just use the column name
+    else
+      return col.Name; // otherwise just use the column name
   }
 
   GetColumnCellStyle(col: ViewColumnInfo) {
     switch (col.EntityField.Type.trim().toLowerCase()) {
-      case 'money':
+      case "money":
       case 'decimal':
       case 'real':
       case 'float':
       case 'int':
-        return { 'text-align': 'right', 'vertical-align': 'top' }; // right align numbers,
+        return {'text-align': 'right', 'vertical-align': 'top'}; // right align numbers,
       default:
-        return { 'text-align': 'left', 'vertical-align': 'top' }; // left align everything else
-    }
+        return {'text-align': 'left', 'vertical-align': 'top'}; // left align everything else
+      }
   }
 
   selectionChange(args: SelectionEvent) {
     // update recordsToCompare based on the this.selectedKeys property that is bound
-    // selectedKeys is an array of indexes in the this.viewData, and we need to make our
+    // selectedKeys is an array of indexes in the this.viewData, and we need to make our 
     // this.recordsToCompare an array of records from this.viewData so just map() the selectedKeys for this
     this.recordsToCompare = this.selectedKeys.map((i: number) => this.viewData[i]);
   }
 
-  enableMergeOrCompare(cancel: boolean = false, type: 'merge' | 'compare') {
-    if (!cancel && this.recordsToCompare.length >= 2) {
+  enableMergeOrCompare(cancel: boolean = false, type: 'merge' | 'compare'){
+    if(!cancel && this.recordsToCompare.length >= 2){
       // this scenario occurs when we've already started the merge/compare and the user has selected records, then clicked the merge/compare button again
       this.isCompareDialogOpened = true;
       this.moveDialogToBody();
-    } else if (cancel) {
+    }
+    else if (cancel) {
       // the user clicked cancel in our toolbar
-      if (type === 'merge') this.mergeMode = false;
-      else this.compareMode = false;
+      if (type === 'merge')
+        this.mergeMode = false;
+      else
+        this.compareMode = false;
 
       this.selectedKeys = [];
       this.recordsToCompare = [];
-    } else {
+    }
+    else {
       // just turning on merge mode from the merge/compare button, so just turn it on and let the user select records
-      if (type === 'merge') this.mergeMode = true;
-      else this.compareMode = true;
+      if (type === 'merge')
+        this.mergeMode = true;
+      else
+        this.compareMode = true;
     }
   }
 
-  enableCheckbox(cancel: boolean = false, type: 'merge' | 'compare' | 'duplicate' | '') {
-    if (!cancel && this.recordsToCompare.length >= 2) {
+  enableCheckbox(cancel: boolean = false, type: 'merge' | 'compare' | 'duplicate' | ''){
+    if(!cancel && this.recordsToCompare.length >= 2){
       // this scenario occurs when we've already started the merge/compare/duplicate and the user has selected records, then clicked the merge/compare button again
       this.isCompareDialogOpened = true;
       this.moveDialogToBody();
-    } else if (cancel) {
+    }
+    else if (cancel) {
       // the user clicked cancel in our toolbar
       this.mergeMode = false;
       this.compareMode = false;
       this.duplicateMode = false;
       this.selectedKeys = [];
       this.recordsToCompare = [];
-    } else {
+    }
+    else {
       // just turning on the checkbox from the merge/compare/duplicate button, so just turn it on and let the user select records
-      if (type === 'merge') {
+      if(type === 'merge'){
         this.mergeMode = true;
-      } else if (type === 'compare') {
+      }
+      else if(type === 'compare'){
         this.compareMode = true;
-      } else if (type === 'duplicate') {
+      }
+      else if(type === 'duplicate'){
         this.duplicateMode = true;
       }
     }
@@ -720,25 +757,23 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
         const pkeys = this._entityInfo.PrimaryKeys;
         const result = await md.MergeRecords({
           EntityName: this._entityInfo.Name,
-          RecordsToMerge: this.recordsToCompare
-            .map((r: BaseEntity) => {
-              return r.PrimaryKey;
-            })
-            .filter((compositeKey: CompositeKey) => {
-              if (!this.recordCompareComponent) {
-                return false;
-              }
+          RecordsToMerge: this.recordsToCompare.map((r: BaseEntity) => {
+            return r.PrimaryKey;
+          }).filter((compositeKey: CompositeKey) => {
+            if (!this.recordCompareComponent){
+              return false;
+            }
 
-              return this.recordCompareComponent.selectedRecordCompositeKey.Equals(compositeKey);
-            }),
+            return this.recordCompareComponent.selectedRecordCompositeKey.Equals(compositeKey);
+          }),
           SurvivingRecordCompositeKey: this.recordCompareComponent.selectedRecordCompositeKey,
           FieldMap: this.recordCompareComponent.fieldMap.map((fm: any) => {
             return {
               FieldName: fm.fieldName,
-              Value: fm.value,
-            };
-          }),
-        });
+              Value: fm.value
+            }
+          })
+        })
         if (result.Success) {
           // merge was successful, so refresh the grid
           this.selectedKeys = [];
@@ -748,18 +783,20 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
 
           // close the dialogs
           this.isCompareDialogOpened = false;
-          this.isConfirmDialogOpen = false;
+          this.isConfirmDialogOpen = false; 
 
           // refresh the grid
           this.Refresh(this.Params!);
-        } else {
+        }
+        else {
           // the merge failed, so show an error message
-          this.isConfirmDialogOpen = false;
-          this.CreateSimpleNotification('Error merging records: ' + result.OverallStatus, 'error', 5000);
+          this.isConfirmDialogOpen = false; 
+          this.CreateSimpleNotification("Error merging records: " + result.OverallStatus, 'error', 5000)
         }
       }
-    } else {
-      this.isConfirmDialogOpen = false;
+    }
+    else {
+      this.isConfirmDialogOpen = false; 
       // close the dialog and let the user continue to work on the merge, so don't close the compare dialog
     }
   }
@@ -783,9 +820,10 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     }
   }
 
-  public async findDuplicateRecords(): Promise<void> {
-    if (!this._entityInfo) {
-      console.error('Entity Info is not available');
+  public async findDuplicateRecords(): Promise<void> 
+  {
+    if(!this._entityInfo){
+      console.error("Entity Info is not available");
       this.closeCompareDialog('duplicate');
       return;
     }
@@ -799,9 +837,9 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     list.UserID = md.CurrentUser.ID;
 
     const saveResult = await list.Save();
-    if (!saveResult) {
-      console.error(`Failed to save list for Potential Duplicate Run`);
-      return;
+    if(!saveResult){
+        console.error(`Failed to save list for Potential Duplicate Run`);
+        return;
     }
 
     let params: PotentialDuplicateRequest = new PotentialDuplicateRequest();
@@ -809,7 +847,7 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     params.ListID = list.ID;
     params.RecordIDs = [];
 
-    for (const index of this.selectedKeys) {
+    for(const index of this.selectedKeys){
       const viewData = this.viewData[index];
       const idField: number = viewData.ID;
       const listDetail: ListDetailEntityExtended = await md.GetEntityObject<ListDetailEntityExtended>('List Details');
@@ -820,36 +858,39 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
     }
 
     this.closeCompareDialog('duplicate');
-    this.CreateSimpleNotification('Working on finding duplicates, will notify you when it is complete...', 'info', 2000);
+    this.CreateSimpleNotification("Working on finding duplicates, will notify you when it is complete...", 'info', 2000);
 
     let response = await md.GetRecordDuplicates(params, md.CurrentUser);
     console.log(response);
   }
 
+
   // Export Functionality
   public exportColumns: ViewColumnInfo[] = [];
   public exportData: any[] = [];
   public async doExcelExport() {
-    if (this.kendoExcelExport === null) throw new Error('kendoExcelExport is null, cannot export data');
+    if (this.kendoExcelExport === null) 
+      throw new Error("kendoExcelExport is null, cannot export data");
 
     try {
-      this.CreateSimpleNotification('Working on the export, will notify you when it is complete...', 'info', 2000);
+      this.CreateSimpleNotification("Working on the export, will notify you when it is complete...", 'info', 2000);
       const data = await this.getExportData();
       // we have the data.
-      const cols = this.viewColumns.filter((vc: ViewColumnInfo) => vc.hidden === false);
+      const cols =  this.viewColumns.filter((vc: ViewColumnInfo) => vc.hidden === false) 
       this.exportColumns = cols;
       this.exportData = data;
       // before we call the save, we need to let Angular do its thing that will result in the kendoExcelExport component binding properly to
       // the exportColumns and exportData arrays. So we wait for the next tick before we call save()
       setTimeout(() => {
         this.kendoExcelExport!.save();
-        this.CreateSimpleNotification('Excel Export Complete', 'success', 2000);
+        this.CreateSimpleNotification("Excel Export Complete", 'success', 2000)
       }, 100);
-    } catch (e) {
-      this.CreateSimpleNotification('Error exporting data', 'error', 5000);
+    }
+    catch (e) {
+      this.CreateSimpleNotification("Error exporting data", 'error', 5000)
       LogError(e);
     }
-  }
+  } 
 
   protected async getExportData(): Promise<any[]> {
     // Get the data for the ENTIRE view, not just the current page
@@ -859,11 +900,14 @@ export class ListDetailGridComponent implements OnInit, AfterViewInit {
       ...this.Params!,
       IgnoreMaxRows: true,
       ForceAuditLog: true,
-      AuditLogDescription: `Export of Data From ${this._viewEntity ? '"' + this._viewEntity.Get('Name') + '"' : ''} View for User ${md.CurrentUser.Email}`,
-    };
-    const result = await rv.RunView(p);
+      AuditLogDescription: `Export of Data From ${this._viewEntity ? '"' + this._viewEntity.Get('Name') + '"' : ''} View for User ${md.CurrentUser.Email}`
+    }
+    const result = await rv.RunView(p);    
     if (result && result.Success) {
       return result.Results;
-    } else throw new Error('Unable to get export data');
+    }
+    else  
+      throw new Error("Unable to get export data");    
   }
 }
+ 

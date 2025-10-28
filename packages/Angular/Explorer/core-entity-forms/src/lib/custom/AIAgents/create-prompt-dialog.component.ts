@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild } from '@ang
 import { FormControl, FormGroup, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 import { AIPromptEntityExtended, TemplateEntity, AIPromptTypeEntity, TemplateContentEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { TemplateEditorConfig } from '../../shared/components/template-editor.component';
@@ -35,38 +35,39 @@ export interface CreatePromptResult {
 @Component({
   selector: 'mj-create-prompt-dialog',
   templateUrl: './create-prompt-dialog.component.html',
-  styleUrls: ['./create-prompt-dialog.component.css'],
+  styleUrls: ['./create-prompt-dialog.component.css']
 })
 export class CreatePromptDialogComponent implements OnInit, OnDestroy {
+  
   // Configuration
   config: CreatePromptConfig = {};
-
+  
   // State management
   private destroy$ = new Subject<void>();
   public result = new Subject<CreatePromptResult | null>();
-
+  
   // Form and validation
   promptForm: FormGroup;
   isLoading$ = new BehaviorSubject<boolean>(false);
   isSaving$ = new BehaviorSubject<boolean>(false);
-
+  
   // Data
   availablePromptTypes$ = new BehaviorSubject<AIPromptTypeEntity[]>([]);
-
+  
   // Entities (not saved to database)
   promptEntity: AIPromptEntityExtended | null = null;
   templateEntity: TemplateEntity | null = null;
   templateContents: TemplateContentEntity[] = [];
-
+  
   // Template editor
   @ViewChild('templateEditor') templateEditor: any; // Template editor component reference
   showTemplateEditor = false;
   templateEditorConfig: TemplateEditorConfig = {
     allowEdit: true,
     showRunButton: false,
-    compactMode: true, // Compact mode for dialog
+    compactMode: true  // Compact mode for dialog
   };
-
+  
   // Template state
   templateMode: 'new' | 'existing' = 'new';
 
@@ -95,16 +96,15 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       typeID: new FormControl(this.config.initialTypeID || '', [Validators.required]),
       status: new FormControl('Pending'),
       outputType: new FormControl('string'),
-      templateMode: new FormControl('new'),
+      templateMode: new FormControl('new')
     });
   }
 
   private setupFormWatching() {
     // Watch template mode changes
-    this.promptForm
-      .get('templateMode')
-      ?.valueChanges.pipe(takeUntil(this.destroy$))
-      .subscribe((mode) => {
+    this.promptForm.get('templateMode')?.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(mode => {
         this.templateMode = mode;
         this.handleTemplateModeChange(mode);
       });
@@ -112,19 +112,19 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
   private async loadInitialData() {
     this.isLoading$.next(true);
-
+    
     try {
       // Load prompt types
       const rv = new RunView();
       const typesResult = await rv.RunView<AIPromptTypeEntity>({
         EntityName: 'AI Prompt Types',
         OrderBy: 'Name ASC',
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       });
 
       if (typesResult.Success && typesResult.Results) {
         this.availablePromptTypes$.next(typesResult.Results);
-
+        
         // Set default type if not specified
         if (!this.config.initialTypeID && typesResult.Results.length > 0) {
           this.promptForm.patchValue({ typeID: typesResult.Results[0].ID });
@@ -135,7 +135,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       const md = new Metadata();
       this.promptEntity = await md.GetEntityObject<AIPromptEntityExtended>('AI Prompts');
       this.promptEntity.NewRecord();
-
+      
       // Set default values
       this.promptEntity.Status = 'Pending';
       this.promptEntity.OutputType = 'string';
@@ -145,9 +145,14 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       // Create default template since it's required
       await this.createNewTemplate();
       this.showTemplateEditor = true;
+
     } catch (error) {
       console.error('Error loading prompt creation data:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error loading data for prompt creation', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error loading data for prompt creation',
+        'error',
+        3000
+      );
     } finally {
       this.isLoading$.next(false);
     }
@@ -160,7 +165,7 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
     } else if (mode === 'existing') {
       await this.openTemplateSelector();
     }
-
+    
     this.cdr.detectChanges();
   }
 
@@ -169,22 +174,27 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
     try {
       const md = new Metadata();
-
+      
       // Create template entity
       this.templateEntity = await md.GetEntityObject<TemplateEntity>('Templates');
       this.templateEntity.NewRecord();
-
+      
       const promptName = this.promptForm.get('name')?.value || 'New Prompt';
       this.templateEntity.Name = `${promptName} Template`;
       this.templateEntity.Description = `Template for ${promptName}`;
       // Set UserID on template (required field)
       this.templateEntity.UserID = md.CurrentUser.ID;
-
+      
       // Link template to prompt
       this.promptEntity.TemplateID = this.templateEntity.ID;
+
     } catch (error) {
       console.error('Error creating new template:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error creating template', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error creating template',
+        'error',
+        3000
+      );
     }
   }
 
@@ -194,7 +204,11 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
 
   public async save() {
     if (!this.promptForm.valid || !this.promptEntity) {
-      MJNotificationService.Instance.CreateSimpleNotification('Please fill in all required fields', 'warning', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Please fill in all required fields',
+        'warning',
+        3000
+      );
       return;
     }
 
@@ -214,10 +228,10 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
         // Get the template contents from the editor without saving
         // The parent form will handle saving in the proper order
         this.templateContents = this.templateEditor.templateContents || [];
-
+        
         // Ensure the template contents have the correct TemplateID
         if (this.templateContents && this.templateEntity) {
-          this.templateContents.forEach((content) => {
+          this.templateContents.forEach(content => {
             content.TemplateID = this.templateEntity!.ID;
           });
         }
@@ -227,14 +241,19 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       const result: CreatePromptResult = {
         prompt: this.promptEntity,
         template: this.templateEntity || undefined,
-        templateContents: this.templateContents.length > 0 ? this.templateContents : undefined,
+        templateContents: this.templateContents.length > 0 ? this.templateContents : undefined
       };
 
       this.result.next(result);
       this.dialogRef.close();
+
     } catch (error) {
       console.error('Error preparing prompt for creation:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error preparing prompt for creation', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error preparing prompt for creation',
+        'error',
+        3000
+      );
     } finally {
       this.isSaving$.next(false);
     }
@@ -253,20 +272,20 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       title: 'Select Template for AI Prompt',
       showCreateNew: false,
       multiSelect: false,
-      showActiveOnly: true,
+      showActiveOnly: true
     };
 
     try {
       const result = await this.aiPromptManagementService.openTemplateSelectorDialog(config).toPromise();
-
+      
       if (result && result.selectedTemplates && result.selectedTemplates.length > 0) {
         // Link the selected template
         this.templateEntity = result.selectedTemplates[0];
         this.promptEntity!.TemplateID = this.templateEntity.ID;
-
+        
         // Update UI to show selected template info
         this.showTemplateEditor = false;
-
+        
         MJNotificationService.Instance.CreateSimpleNotification(
           `Template "${this.templateEntity.Name}" linked successfully`,
           'success',
@@ -280,8 +299,12 @@ export class CreatePromptDialogComponent implements OnInit, OnDestroy {
       }
     } catch (error) {
       console.error('Error opening template selector:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error opening template selector', 'error', 3000);
-
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error opening template selector',
+        'error',
+        3000
+      );
+      
       // Revert to new template mode
       this.promptForm.patchValue({ templateMode: 'new' });
       await this.createNewTemplate();

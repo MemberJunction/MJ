@@ -1,6 +1,6 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata } from '@memberjunction/global';
+import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
 
 interface ConversationMember {
@@ -92,8 +92,7 @@ interface ConversationMember {
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
-  styles: [
-    `
+  styles: [`
     .members-modal-content {
       padding: 20px;
     }
@@ -229,8 +228,7 @@ interface ConversationMember {
       padding: 15px 20px;
       border-top: 1px solid #e0e0e0;
     }
-  `,
-  ],
+  `]
 })
 export class MembersModalComponent {
   @Input() isVisible = false;
@@ -251,7 +249,7 @@ export class MembersModalComponent {
 
   roleOptions = [
     { value: 'member', label: 'Member' },
-    { value: 'owner', label: 'Owner' },
+    { value: 'owner', label: 'Owner' }
   ];
 
   constructor(private dialogService: DialogService) {}
@@ -278,8 +276,8 @@ export class MembersModalComponent {
           userName: 'Owner',
           userEmail: this.currentUser.Email,
           role: 'owner',
-          addedAt: this.conversation.__mj_CreatedAt,
-        },
+          addedAt: this.conversation.__mj_CreatedAt
+        }
       ];
     } catch (error) {
       console.error('Error loading members:', error);
@@ -300,7 +298,7 @@ export class MembersModalComponent {
     }
 
     // Check if already a member
-    if (this.members.some((m) => m.userEmail === email)) {
+    if (this.members.some(m => m.userEmail === email)) {
       await this.dialogService.alert('Already a Member', 'This user is already a member');
       return;
     }
@@ -316,7 +314,7 @@ export class MembersModalComponent {
         userName: email.split('@')[0],
         userEmail: email,
         role: this.newMemberRole,
-        addedAt: new Date(),
+        addedAt: new Date()
       };
 
       this.members.push(newMember);
@@ -336,7 +334,7 @@ export class MembersModalComponent {
       title: 'Remove Member',
       message: `Remove ${member.userEmail} from this conversation?`,
       okText: 'Remove',
-      cancelText: 'Cancel',
+      cancelText: 'Cancel'
     });
 
     if (!confirmed) return;
@@ -346,7 +344,7 @@ export class MembersModalComponent {
 
     try {
       // TODO: Delete ConversationMember entity when available
-      this.members = this.members.filter((m) => m.id !== member.id);
+      this.members = this.members.filter(m => m.id !== member.id);
       this.membersChanged.emit();
     } catch (error) {
       console.error('Error removing member:', error);

@@ -5,7 +5,7 @@ import { DynamicReportDrillDownComponent } from './dynamic-drill-down';
 import { TabEvent } from '@memberjunction/ng-tabstrip';
 import { DrillDownInfo } from '@memberjunction/ng-skip-chat';
 import { SkipDynamicReportBase } from '@memberjunction/ng-skip-chat/dist/lib/dynamic-report/base-report';
-import { BaseEntity, CompositeKey, KeyValuePair, RunView } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 
 // This component is used for dynamically rendering report data, it is wrapped by app-single-report which gets
 // info from the database. This can also be used directly to render a dynamic report that is NOT saved in the DB
@@ -49,7 +49,7 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
   public activeTabIndex: number = 0;
   public onTabSelect(e: TabEvent): void {
     this.activeTabIndex = e.index;
-    this.sharedService.InvokeManualResize(100);
+    this.sharedService.InvokeManualResize(100); 
   }
 
   public isTabSelected(index: number) {
@@ -64,7 +64,7 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     let offset = 0;
     switch (currentTabIndex) {
       case 0:
-      case 1:
+      case 1: 
         // chart tab, or HTML tab, no change
         break;
       case 2:
@@ -83,7 +83,7 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     }
     return offset;
   }
-
+ 
   public confirmCreateReportDialogOpen: boolean = false;
   public async askCreateReport() {
     if (!this.SkipData || !this.ConversationID || !this.ConversationName || !this.ConversationDetailID) {
@@ -99,7 +99,7 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     }
     this.confirmCreateReportDialogOpen = false;
   }
-
+  
   public async handleUIComponentDrillDown(info: DrillDownInfo) {
     this.handleDrillDown(info);
   }
@@ -117,22 +117,21 @@ export class SkipDynamicTabbedReportComponent extends SkipDynamicReportBase impl
     const rv = new RunView();
     const result = await rv.RunView<BaseEntity>({
       EntityName: info.EntityName,
-      ExtraFilter: filter,
-    });
+      ExtraFilter: filter 
+    })
     if (result && result.Success && result.Results.length === 1) {
       const record = result.Results[0];
-      const ck = new CompositeKey(
-        record.PrimaryKeys.map((pk) => {
-          const kv = new KeyValuePair();
-          kv.FieldName = pk.Name;
-          kv.Value = record.Get(pk.Name);
-          return kv;
-        })
-      );
-      const urlSegment = ck.ToURLSegment(); //ck.KeyValuePairs.length > 1 ? ck.ToURLSegment() : ck.KeyValuePairs[0].Value;
+      const ck = new CompositeKey(record.PrimaryKeys.map((pk) => {
+        const kv = new KeyValuePair;
+        kv.FieldName = pk.Name;
+        kv.Value = record.Get(pk.Name);
+        return kv;
+      }));
+      const urlSegment = ck.ToURLSegment();//ck.KeyValuePairs.length > 1 ? ck.ToURLSegment() : ck.KeyValuePairs[0].Value;
       const url = `/resource/record/${urlSegment}?Entity=${info.EntityName}`;
       this.router.navigateByUrl(url);
-    } else {
+    }
+    else {
       // first, make sure that the info is not already in the drill down list
       const idx = this.DrillDowns.findIndex((x) => x.EntityName === info.EntityName && x.Filter === info.Filter);
       if (idx >= 0) {

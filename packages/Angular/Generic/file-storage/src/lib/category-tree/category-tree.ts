@@ -1,5 +1,5 @@
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 

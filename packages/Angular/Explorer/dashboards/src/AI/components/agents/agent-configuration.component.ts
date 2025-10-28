@@ -1,5 +1,5 @@
 import { Component, Output, EventEmitter, OnInit, OnDestroy, Input, AfterViewInit, ChangeDetectorRef } from '@angular/core';
-import { RunView, Metadata } from '@memberjunction/global';
+import { RunView, Metadata } from '@memberjunction/core';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { AITestHarnessDialogService } from '@memberjunction/ng-ai-test-harness';
 
@@ -15,28 +15,28 @@ interface AgentFilter {
 @Component({
   selector: 'app-agent-configuration',
   templateUrl: './agent-configuration.component.html',
-  styleUrls: ['./agent-configuration.component.scss'],
+  styleUrls: ['./agent-configuration.component.scss']
 })
 export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   @Input() initialState: any = null;
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
 
   public isLoading = false;
   public filterPanelVisible = true;
   public viewMode: 'grid' | 'list' = 'grid';
   public expandedAgentId: string | null = null;
-
+  
   public agents: AIAgentEntityExtended[] = [];
   public filteredAgents: AIAgentEntityExtended[] = [];
-
+  
   public currentFilters: AgentFilter = {
     searchTerm: '',
     agentType: 'all',
     parentAgent: 'all',
     status: 'all',
     executionMode: 'all',
-    exposeAsAction: 'all',
+    exposeAsAction: 'all'
   };
 
   public selectedAgentForTest: AIAgentEntityExtended | null = null;
@@ -74,14 +74,14 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
    */
   private checkEntityPermission(entityName: string, permissionType: 'Create' | 'Read' | 'Update' | 'Delete'): boolean {
     const cacheKey = `${entityName}_${permissionType}`;
-
+    
     if (this._permissionCache.has(cacheKey)) {
       return this._permissionCache.get(cacheKey)!;
     }
 
     try {
-      const entityInfo = this._metadata.Entities.find((e) => e.Name === entityName);
-
+      const entityInfo = this._metadata.Entities.find(e => e.Name === entityName);
+      
       if (!entityInfo) {
         console.warn(`Entity '${entityName}' not found for permission check`);
         this._permissionCache.set(cacheKey, false);
@@ -161,15 +161,15 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
         EntityName: 'AI Agents',
         ExtraFilter: '',
         OrderBy: 'Name',
-        MaxRows: 1000,
+        MaxRows: 1000 
       });
-
+      
       this.agents = result.Results || [];
       this.filteredAgents = [...this.agents];
     } catch (error) {
       console.error('Error loading AI agents:', error);
     } finally {
-      this.isLoading = false;
+      this.isLoading = false;     
       // force change detection to update the view
       this.cdr.detectChanges();
     }
@@ -200,7 +200,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
       parentAgent: 'all',
       status: 'all',
       executionMode: 'all',
-      exposeAsAction: 'all',
+      exposeAsAction: 'all'
     };
     this.applyFilters();
   }
@@ -211,22 +211,23 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     // Apply search filter (name contains)
     if (this.currentFilters.searchTerm) {
       const searchTerm = this.currentFilters.searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (agent) => (agent.Name || '').toLowerCase().includes(searchTerm) || (agent.Description || '').toLowerCase().includes(searchTerm)
+      filtered = filtered.filter(agent => 
+        (agent.Name || '').toLowerCase().includes(searchTerm) ||
+        (agent.Description || '').toLowerCase().includes(searchTerm)
       );
     }
 
     // Apply agent type filter
     if (this.currentFilters.agentType !== 'all') {
-      filtered = filtered.filter((agent) => agent.TypeID === this.currentFilters.agentType);
+      filtered = filtered.filter(agent => agent.TypeID === this.currentFilters.agentType);
     }
 
     // Apply parent agent filter
     if (this.currentFilters.parentAgent !== 'all') {
       if (this.currentFilters.parentAgent === 'none') {
-        filtered = filtered.filter((agent) => !agent.ParentID);
+        filtered = filtered.filter(agent => !agent.ParentID);
       } else {
-        filtered = filtered.filter((agent) => agent.ParentID === this.currentFilters.parentAgent);
+        filtered = filtered.filter(agent => agent.ParentID === this.currentFilters.parentAgent);
       }
     }
 
@@ -234,21 +235,21 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
     if (this.currentFilters.status !== 'all') {
       const wantActive = this.currentFilters.status === 'active';
       if (wantActive) {
-        filtered = filtered.filter((agent) => agent.Status === 'Active');
+        filtered = filtered.filter(agent => agent.Status === 'Active');
       } else {
-        filtered = filtered.filter((agent) => agent.Status !== 'Active');
+        filtered = filtered.filter(agent => agent.Status !== 'Active');
       }
     }
 
     // Apply execution mode filter
     if (this.currentFilters.executionMode !== 'all') {
-      filtered = filtered.filter((agent) => agent.ExecutionMode === this.currentFilters.executionMode);
+      filtered = filtered.filter(agent => agent.ExecutionMode === this.currentFilters.executionMode);
     }
 
     // Apply expose as action filter
     if (this.currentFilters.exposeAsAction !== 'all') {
       const isExposed = this.currentFilters.exposeAsAction === 'true';
-      filtered = filtered.filter((agent) => agent.ExposeAsAction === isExposed);
+      filtered = filtered.filter(agent => agent.ExposeAsAction === isExposed);
     }
 
     this.filteredAgents = filtered;
@@ -260,7 +261,7 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
       viewMode: this.viewMode,
       expandedAgentId: this.expandedAgentId,
       currentFilters: this.currentFilters,
-      agentCount: this.filteredAgents.length,
+      agentCount: this.filteredAgents.length
     };
     this.stateChange.emit(state);
   }
@@ -307,23 +308,17 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
 
   public getExecutionModeColor(mode: string): string {
     switch (mode) {
-      case 'Sequential':
-        return 'info';
-      case 'Parallel':
-        return 'success';
-      default:
-        return 'info';
+      case 'Sequential': return 'info';
+      case 'Parallel': return 'success';
+      default: return 'info';
     }
   }
 
   public getExecutionModeIcon(mode: string): string {
     switch (mode) {
-      case 'Sequential':
-        return 'fa-solid fa-list-ol';
-      case 'Parallel':
-        return 'fa-solid fa-layer-group';
-      default:
-        return 'fa-solid fa-robot';
+      case 'Sequential': return 'fa-solid fa-list-ol';
+      case 'Parallel': return 'fa-solid fa-layer-group';
+      default: return 'fa-solid fa-robot';
     }
   }
 
@@ -345,4 +340,5 @@ export class AgentConfigurationComponent implements AfterViewInit, OnDestroy {
   public hasLogoURL(agent: AIAgentEntityExtended): boolean {
     return !!agent?.LogoURL;
   }
+
 }

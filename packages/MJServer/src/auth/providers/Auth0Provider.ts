@@ -1,6 +1,6 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
-import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
 
 /**
@@ -21,14 +21,14 @@ export class Auth0Provider extends BaseAuthProvider {
     const fullName = payload.name as string | undefined;
     const firstName = payload.given_name as string | undefined;
     const lastName = payload.family_name as string | undefined;
-    const preferredUsername = (payload.preferred_username as string | undefined) || email;
+    const preferredUsername = payload.preferred_username as string | undefined || email;
 
     return {
       email,
       firstName: firstName || fullName?.split(' ')[0],
       lastName: lastName || fullName?.split(' ')[1] || fullName?.split(' ')[0],
       fullName,
-      preferredUsername,
+      preferredUsername
     };
   }
 
@@ -39,7 +39,7 @@ export class Auth0Provider extends BaseAuthProvider {
     const baseValid = super.validateConfig();
     const hasClientId = !!this.config.clientId;
     const hasDomain = !!this.config.domain;
-
+    
     return baseValid && hasClientId && hasDomain;
   }
 }

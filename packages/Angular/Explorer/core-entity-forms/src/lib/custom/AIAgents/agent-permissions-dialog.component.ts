@@ -1,7 +1,7 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { AIAgentPermissionEntity, AIAgentEntityExtended, RoleEntity, UserEntity } from '@memberjunction/core-entities';
-import { Metadata, RoleInfo, RunView } from '@memberjunction/global';
+import { Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 import { GridDataResult, DataStateChangeEvent, GridComponent } from '@progress/kendo-angular-grid';
 import { State, SortDescriptor, CompositeFilterDescriptor, process } from '@progress/kendo-data-query';
@@ -11,8 +11,8 @@ import { State, SortDescriptor, CompositeFilterDescriptor, process } from '@prog
  * Allows viewing, adding, editing, and removing permission records for an agent.
  */
 @Component({
-  selector: 'mj-agent-permissions-dialog',
-  template: `
+    selector: 'mj-agent-permissions-dialog',
+    template: `
         <kendo-dialog
             [title]="dialogTitle"
             [width]="900"
@@ -240,8 +240,7 @@ import { State, SortDescriptor, CompositeFilterDescriptor, process } from '@prog
             </kendo-dialog-actions>
         </kendo-dialog>
     `,
-  styles: [
-    `
+    styles: [`
         .permissions-dialog-content {
             display: flex;
             flex-direction: column;
@@ -433,264 +432,270 @@ import { State, SortDescriptor, CompositeFilterDescriptor, process } from '@prog
             display: flex;
             gap: 4px;
         }
-    `,
-  ],
+    `]
 })
 export class AgentPermissionsDialogComponent implements OnInit {
-  @ViewChild('grid') grid!: GridComponent;
+    @ViewChild('grid') grid!: GridComponent;
 
-  public agent!: AIAgentEntityExtended;
-  public permissions: AIAgentPermissionEntity[] = [];
-  public users: UserEntity[] = [];
-  public roles: RoleInfo[] = [];
+    public agent!: AIAgentEntityExtended;
+    public permissions: AIAgentPermissionEntity[] = [];
+    public users: UserEntity[] = [];
+    public roles: RoleInfo[] = [];
 
-  public gridData: GridDataResult = { data: [], total: 0 };
-  public pageSize = 10;
-  public skip = 0;
-  public loading = false;
-  public loadingUsers = false;
-  public loadingRoles = false;
+    public gridData: GridDataResult = { data: [], total: 0 };
+    public pageSize = 10;
+    public skip = 0;
+    public loading = false;
+    public loadingUsers = false;
+    public loadingRoles = false;
 
-  public isAddingPermission = false;
-  public editingPermission: AIAgentPermissionEntity | null = null;
-  public grantType: 'user' | 'role' = 'user';
-  public selectedUserId: string | null = null;
-  public selectedRoleId: string | null = null;
-  public ownerName: string | null = null;
+    public isAddingPermission = false;
+    public editingPermission: AIAgentPermissionEntity | null = null;
+    public grantType: 'user' | 'role' = 'user';
+    public selectedUserId: string | null = null;
+    public selectedRoleId: string | null = null;
+    public ownerName: string | null = null;
 
-  public newPermission = {
-    CanView: false,
-    CanRun: false,
-    CanEdit: false,
-    CanDelete: false,
-    Comments: '',
-  };
-
-  public get dialogTitle(): string {
-    return `Manage Permissions: ${this.agent?.Name || 'Agent'}`;
-  }
-
-  constructor(
-    public dialogRef: DialogRef,
-    private sharedService: SharedService
-  ) {}
-
-  async ngOnInit() {
-    await this.loadData();
-  }
-
-  private async loadData() {
-    this.loading = true;
-    try {
-      await Promise.all([this.loadPermissions(), this.loadUsers(), this.loadRoles(), this.loadOwnerName()]);
-    } finally {
-      this.loading = false;
-    }
-  }
-
-  private async loadPermissions() {
-    const rv = new RunView();
-    const result = await rv.RunView<AIAgentPermissionEntity>({
-      EntityName: 'MJ: AI Agent Permissions',
-      ExtraFilter: `AgentID='${this.agent.ID}'`,
-      ResultType: 'entity_object',
-    });
-
-    if (result.Success && result.Results) {
-      this.permissions = result.Results;
-      this.updateGridData();
-    }
-  }
-
-  private async loadUsers() {
-    this.loadingUsers = true;
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView<UserEntity>({
-        EntityName: 'Users',
-        ExtraFilter: 'IsActive=1',
-        OrderBy: 'Name',
-        ResultType: 'entity_object',
-      });
-
-      if (result.Success && result.Results) {
-        this.users = result.Results;
-      }
-    } finally {
-      this.loadingUsers = false;
-    }
-  }
-
-  private async loadRoles() {
-    this.loadingRoles = true;
-    try {
-      const md = new Metadata();
-
-      this.roles = md.Roles;
-    } finally {
-      this.loadingRoles = false;
-    }
-  }
-
-  private async loadOwnerName() {
-    if (!this.agent.OwnerUserID) {
-      this.ownerName = 'Not Set';
-      return;
-    }
-
-    const user = this.users.find((u) => u.ID === this.agent.OwnerUserID);
-    if (user) {
-      this.ownerName = user.Name;
-    } else {
-      // User might not be in the active users list, load separately
-      const md = new Metadata();
-      const userEntity = await md.GetEntityObject<UserEntity>('Users');
-      const loaded = await userEntity.Load(this.agent.OwnerUserID);
-      this.ownerName = loaded ? userEntity.Name : 'Unknown';
-    }
-  }
-
-  private updateGridData() {
-    // Enrich permissions with display data
-    const enrichedData = this.permissions.map((p) => {
-      const grantedToName = p.UserID
-        ? this.users.find((u) => u.ID === p.UserID)?.Name || 'Unknown User'
-        : this.roles.find((r) => r.ID === p.RoleID)?.Name || 'Unknown Role';
-
-      // Calculate effective permissions with hierarchy
-      const effectiveCanDelete = p.CanDelete;
-      const effectiveCanEdit = p.CanDelete || p.CanEdit;
-      const effectiveCanRun = p.CanDelete || p.CanEdit || p.CanRun;
-      const effectiveCanView = p.CanDelete || p.CanEdit || p.CanRun || p.CanView;
-
-      return {
-        ...p.GetAll(),
-        GrantedToName: grantedToName,
-        EffectiveCanView: effectiveCanView,
-        EffectiveCanRun: effectiveCanRun,
-        EffectiveCanEdit: effectiveCanEdit,
-        EffectiveCanDelete: effectiveCanDelete,
-      };
-    });
-
-    this.gridData = {
-      data: enrichedData.slice(this.skip, this.skip + this.pageSize),
-      total: enrichedData.length,
+    public newPermission = {
+        CanView: false,
+        CanRun: false,
+        CanEdit: false,
+        CanDelete: false,
+        Comments: ''
     };
-  }
 
-  public dataStateChange(state: DataStateChangeEvent) {
-    this.skip = state.skip;
-    this.pageSize = state.take;
-    this.updateGridData();
-  }
-
-  public addPermission() {
-    this.isAddingPermission = true;
-    this.editingPermission = null;
-    this.grantType = 'user';
-    this.selectedUserId = null;
-    this.selectedRoleId = null;
-    this.newPermission = {
-      CanView: false,
-      CanRun: false,
-      CanEdit: false,
-      CanDelete: false,
-      Comments: '',
-    };
-  }
-
-  public editPermission(permission: any) {
-    this.editingPermission = this.permissions.find((p) => p.ID === permission.ID) || null;
-    if (!this.editingPermission) return;
-
-    this.isAddingPermission = true;
-    this.grantType = this.editingPermission.UserID ? 'user' : 'role';
-    this.selectedUserId = this.editingPermission.UserID || null;
-    this.selectedRoleId = this.editingPermission.RoleID || null;
-    this.newPermission = {
-      CanView: this.editingPermission.CanView || false,
-      CanRun: this.editingPermission.CanRun || false,
-      CanEdit: this.editingPermission.CanEdit || false,
-      CanDelete: this.editingPermission.CanDelete || false,
-      Comments: this.editingPermission.Comments || '',
-    };
-  }
-
-  public async deletePermission(permission: any) {
-    if (!confirm('Are you sure you want to remove this permission?')) {
-      return;
+    public get dialogTitle(): string {
+        return `Manage Permissions: ${this.agent?.Name || 'Agent'}`;
     }
 
-    const entity = this.permissions.find((p) => p.ID === permission.ID);
-    if (!entity) return;
+    constructor(
+        public dialogRef: DialogRef,
+        private sharedService: SharedService
+    ) {}
 
-    const deleted = await entity.Delete();
-    if (deleted) {
-      await this.loadPermissions();
+    async ngOnInit() {
+        await this.loadData();
     }
-  }
 
-  public cancelEdit() {
-    this.isAddingPermission = false;
-    this.editingPermission = null;
-  }
-
-  public onPermissionChange(level: 'run' | 'edit' | 'delete') {
-    // Apply hierarchical logic
-    if (level === 'delete' && this.newPermission.CanDelete) {
-      this.newPermission.CanEdit = true;
-      this.newPermission.CanRun = true;
-      this.newPermission.CanView = true;
-    } else if (level === 'edit' && this.newPermission.CanEdit) {
-      this.newPermission.CanRun = true;
-      this.newPermission.CanView = true;
-    } else if (level === 'run' && this.newPermission.CanRun) {
-      this.newPermission.CanView = true;
+    private async loadData() {
+        this.loading = true;
+        try {
+            await Promise.all([
+                this.loadPermissions(),
+                this.loadUsers(),
+                this.loadRoles(),
+                this.loadOwnerName()
+            ]);
+        } finally {
+            this.loading = false;
+        }
     }
-  }
 
-  public canSavePermission(): boolean {
-    // Must have selected user or role
-    if (this.grantType === 'user' && !this.selectedUserId) return false;
-    if (this.grantType === 'role' && !this.selectedRoleId) return false;
+    private async loadPermissions() {
+        const rv = new RunView();
+        const result = await rv.RunView<AIAgentPermissionEntity>({
+            EntityName: 'MJ: AI Agent Permissions',
+            ExtraFilter: `AgentID='${this.agent.ID}'`,
+            ResultType: 'entity_object'
+        });
 
-    // Must have at least one permission checked
-    return this.newPermission.CanView || this.newPermission.CanRun || this.newPermission.CanEdit || this.newPermission.CanDelete;
-  }
+        if (result.Success && result.Results) {
+            this.permissions = result.Results;
+            this.updateGridData();
+        }
+    }
 
-  public async savePermission() {
-    if (!this.canSavePermission()) return;
+    private async loadUsers() {
+        this.loadingUsers = true;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView<UserEntity>({
+                EntityName: 'Users',
+                ExtraFilter: 'IsActive=1',
+                OrderBy: 'Name',
+                ResultType: 'entity_object'
+            });
 
-    try {
-      const md = new Metadata();
-      const entity = this.editingPermission || (await md.GetEntityObject<AIAgentPermissionEntity>('MJ: AI Agent Permissions'));
+            if (result.Success && result.Results) {
+                this.users = result.Results;
+            }
+        } finally {
+            this.loadingUsers = false;
+        }
+    }
 
-      entity.AgentID = this.agent.ID;
-      entity.UserID = this.grantType === 'user' ? this.selectedUserId : null;
-      entity.RoleID = this.grantType === 'role' ? this.selectedRoleId : null;
-      entity.CanView = this.newPermission.CanView;
-      entity.CanRun = this.newPermission.CanRun;
-      entity.CanEdit = this.newPermission.CanEdit;
-      entity.CanDelete = this.newPermission.CanDelete;
-      entity.Comments = this.newPermission.Comments || null;
+    private async loadRoles() {
+        this.loadingRoles = true;
+        try {
+            const md = new Metadata();
 
-      const saved = await entity.Save();
-      if (saved) {
+            this.roles = md.Roles;
+        } finally {
+            this.loadingRoles = false;
+        }
+    }
+
+    private async loadOwnerName() {
+        if (!this.agent.OwnerUserID) {
+            this.ownerName = 'Not Set';
+            return;
+        }
+
+        const user = this.users.find(u => u.ID === this.agent.OwnerUserID);
+        if (user) {
+            this.ownerName = user.Name;
+        } else {
+            // User might not be in the active users list, load separately
+            const md = new Metadata();
+            const userEntity = await md.GetEntityObject<UserEntity>('Users');
+            const loaded = await userEntity.Load(this.agent.OwnerUserID);
+            this.ownerName = loaded ? userEntity.Name : 'Unknown';
+        }
+    }
+
+    private updateGridData() {
+        // Enrich permissions with display data
+        const enrichedData = this.permissions.map(p => {
+            const grantedToName = p.UserID
+                ? this.users.find(u => u.ID === p.UserID)?.Name || 'Unknown User'
+                : this.roles.find(r => r.ID === p.RoleID)?.Name || 'Unknown Role';
+
+            // Calculate effective permissions with hierarchy
+            const effectiveCanDelete = p.CanDelete;
+            const effectiveCanEdit = p.CanDelete || p.CanEdit;
+            const effectiveCanRun = p.CanDelete || p.CanEdit || p.CanRun;
+            const effectiveCanView = p.CanDelete || p.CanEdit || p.CanRun || p.CanView;
+
+            return {
+                ...p.GetAll(),
+                GrantedToName: grantedToName,
+                EffectiveCanView: effectiveCanView,
+                EffectiveCanRun: effectiveCanRun,
+                EffectiveCanEdit: effectiveCanEdit,
+                EffectiveCanDelete: effectiveCanDelete
+            };
+        });
+
+        this.gridData = {
+            data: enrichedData.slice(this.skip, this.skip + this.pageSize),
+            total: enrichedData.length
+        };
+    }
+
+    public dataStateChange(state: DataStateChangeEvent) {
+        this.skip = state.skip;
+        this.pageSize = state.take;
+        this.updateGridData();
+    }
+
+    public addPermission() {
+        this.isAddingPermission = true;
+        this.editingPermission = null;
+        this.grantType = 'user';
+        this.selectedUserId = null;
+        this.selectedRoleId = null;
+        this.newPermission = {
+            CanView: false,
+            CanRun: false,
+            CanEdit: false,
+            CanDelete: false,
+            Comments: ''
+        };
+    }
+
+    public editPermission(permission: any) {
+        this.editingPermission = this.permissions.find(p => p.ID === permission.ID) || null;
+        if (!this.editingPermission) return;
+
+        this.isAddingPermission = true;
+        this.grantType = this.editingPermission.UserID ? 'user' : 'role';
+        this.selectedUserId = this.editingPermission.UserID || null;
+        this.selectedRoleId = this.editingPermission.RoleID || null;
+        this.newPermission = {
+            CanView: this.editingPermission.CanView || false,
+            CanRun: this.editingPermission.CanRun || false,
+            CanEdit: this.editingPermission.CanEdit || false,
+            CanDelete: this.editingPermission.CanDelete || false,
+            Comments: this.editingPermission.Comments || ''
+        };
+    }
+
+    public async deletePermission(permission: any) {
+        if (!confirm('Are you sure you want to remove this permission?')) {
+            return;
+        }
+
+        const entity = this.permissions.find(p => p.ID === permission.ID);
+        if (!entity) return;
+
+        const deleted = await entity.Delete();
+        if (deleted) {
+            await this.loadPermissions();
+        }
+    }
+
+    public cancelEdit() {
         this.isAddingPermission = false;
         this.editingPermission = null;
-        await this.loadPermissions();
-      } else {
-        console.error('Failed to save permission');
-        alert('Failed to save permission. Please try again.');
-      }
-    } catch (error) {
-      console.error('Error saving permission:', error);
-      alert('Error saving permission: ' + (error as Error).message);
     }
-  }
 
-  public onCancel() {
-    this.dialogRef.close();
-  }
+    public onPermissionChange(level: 'run' | 'edit' | 'delete') {
+        // Apply hierarchical logic
+        if (level === 'delete' && this.newPermission.CanDelete) {
+            this.newPermission.CanEdit = true;
+            this.newPermission.CanRun = true;
+            this.newPermission.CanView = true;
+        } else if (level === 'edit' && this.newPermission.CanEdit) {
+            this.newPermission.CanRun = true;
+            this.newPermission.CanView = true;
+        } else if (level === 'run' && this.newPermission.CanRun) {
+            this.newPermission.CanView = true;
+        }
+    }
+
+    public canSavePermission(): boolean {
+        // Must have selected user or role
+        if (this.grantType === 'user' && !this.selectedUserId) return false;
+        if (this.grantType === 'role' && !this.selectedRoleId) return false;
+
+        // Must have at least one permission checked
+        return this.newPermission.CanView || this.newPermission.CanRun ||
+               this.newPermission.CanEdit || this.newPermission.CanDelete;
+    }
+
+    public async savePermission() {
+        if (!this.canSavePermission()) return;
+
+        try {
+            const md = new Metadata();
+            const entity = this.editingPermission ||
+                await md.GetEntityObject<AIAgentPermissionEntity>('MJ: AI Agent Permissions');
+
+            entity.AgentID = this.agent.ID;
+            entity.UserID = this.grantType === 'user' ? this.selectedUserId : null;
+            entity.RoleID = this.grantType === 'role' ? this.selectedRoleId : null;
+            entity.CanView = this.newPermission.CanView;
+            entity.CanRun = this.newPermission.CanRun;
+            entity.CanEdit = this.newPermission.CanEdit;
+            entity.CanDelete = this.newPermission.CanDelete;
+            entity.Comments = this.newPermission.Comments || null;
+
+            const saved = await entity.Save();
+            if (saved) {
+                this.isAddingPermission = false;
+                this.editingPermission = null;
+                await this.loadPermissions();
+            } else {
+                console.error('Failed to save permission');
+                alert('Failed to save permission. Please try again.');
+            }
+        } catch (error) {
+            console.error('Error saving permission:', error);
+            alert('Error saving permission: ' + (error as Error).message);
+        }
+    }
+
+    public onCancel() {
+        this.dialogRef.close();
+    }
 }

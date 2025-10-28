@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, Output, EventEmitter } from '@angular/core';
-import { RunView, LogError } from '@memberjunction/global';
+import { RunView, LogError } from '@memberjunction/core';
 import { ActionCategoryEntity, ActionEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
@@ -87,8 +87,7 @@ interface CategoryWithStats extends ActionCategoryEntity {
       }
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .categories-list-view {
       display: flex;
       flex-direction: column;
@@ -297,11 +296,10 @@ interface CategoryWithStats extends ActionCategoryEntity {
         }
       }
     }
-  `,
-  ],
+  `]
 })
 export class CategoriesListViewComponent implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
 
   public isLoading = true;
   public categories: CategoryWithStats[] = [];
@@ -323,7 +321,11 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
   }
 
   private setupSearch(): void {
-    this.searchTerm$.pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$)).subscribe(() => {
+    this.searchTerm$.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
       this.applyFilter();
     });
   }
@@ -332,42 +334,43 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       console.log('Loading categories data...');
-
+      
       const rv = new RunView();
       const [categoriesResult, actionsResult] = await rv.RunViews([
         {
-          EntityName: 'Action Categories',
-          OrderBy: 'Name',
+          EntityName: 'Action Categories', 
+          OrderBy: 'Name' 
         },
         {
-          EntityName: 'Actions',
-          OrderBy: 'Name',
-        },
+          EntityName: 'Actions', 
+          OrderBy: 'Name'
+        }
       ]);
-
+      
       console.log('Categories result:', categoriesResult);
       console.log('Actions result for categories:', actionsResult);
-
+      
       if (!categoriesResult.Success) {
         throw new Error('Failed to load categories: ' + categoriesResult.ErrorMessage);
       }
-
+      
       const categories = (categoriesResult.Results || []) as ActionCategoryEntity[];
       const actions = (actionsResult.Results || []) as ActionEntity[];
-
+      
       console.log(`Loaded ${categories.length} categories and ${actions.length} actions`);
 
       // Calculate stats for each category
-      this.categories = categories.map((category) => {
-        const categoryActions = actions.filter((a) => a.CategoryID === category.ID);
+      this.categories = categories.map(category => {
+        const categoryActions = actions.filter(a => a.CategoryID === category.ID);
         return {
           ...category,
           actionCount: categoryActions.length,
-          activeActionCount: categoryActions.filter((a) => a.Status === 'Active').length,
+          activeActionCount: categoryActions.filter(a => a.Status === 'Active').length
         } as CategoryWithStats;
       });
 
       this.applyFilter();
+
     } catch (error) {
       console.error('Error loading categories data:', error);
       LogError('Failed to load categories data', undefined, error);
@@ -380,12 +383,13 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
 
   private applyFilter(): void {
     const searchTerm = this.searchTerm$.value.toLowerCase();
-
+    
     if (!searchTerm) {
       this.filteredCategories = [...this.categories];
     } else {
-      this.filteredCategories = this.categories.filter(
-        (category) => category.Name.toLowerCase().includes(searchTerm) || (category.Description || '').toLowerCase().includes(searchTerm)
+      this.filteredCategories = this.categories.filter(category => 
+        category.Name.toLowerCase().includes(searchTerm) ||
+        (category.Description || '').toLowerCase().includes(searchTerm)
       );
     }
   }
@@ -397,7 +401,7 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
   public openCategory(category: ActionCategoryEntity): void {
     this.openEntityRecord.emit({
       entityName: 'Action Categories',
-      recordId: category.ID,
+      recordId: category.ID
     });
   }
 

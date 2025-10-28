@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { UserInfo, Metadata } from '@memberjunction/global';
+import { UserInfo, Metadata } from '@memberjunction/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -68,8 +68,7 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
-  styles: [
-    `
+  styles: [`
     .collection-form {
       padding: 20px 0;
     }
@@ -123,8 +122,7 @@ import { CollectionPermissionService } from '../../services/collection-permissio
     .form-error i {
       flex-shrink: 0;
     }
-  `,
-  ],
+  `]
 })
 export class CollectionFormModalComponent implements OnChanges {
   @Input() isOpen: boolean = false;
@@ -138,7 +136,7 @@ export class CollectionFormModalComponent implements OnChanges {
 
   public formData = {
     name: '',
-    description: '',
+    description: ''
   };
 
   public isSaving: boolean = false;
@@ -175,7 +173,11 @@ export class CollectionFormModalComponent implements OnChanges {
       if (this.collection) {
         // Editing existing collection - need Edit permission
         if (this.collection.OwnerID && this.collection.OwnerID !== this.currentUser.ID) {
-          const permission = await this.permissionService.checkPermission(this.collection.ID, this.currentUser.ID, this.currentUser);
+          const permission = await this.permissionService.checkPermission(
+            this.collection.ID,
+            this.currentUser.ID,
+            this.currentUser
+          );
 
           if (!permission?.canEdit) {
             this.errorMessage = 'You do not have Edit permission for this collection.';
@@ -186,7 +188,11 @@ export class CollectionFormModalComponent implements OnChanges {
       } else if (this.parentCollection) {
         // Creating child collection - need Edit permission on parent
         if (this.parentCollection.OwnerID && this.parentCollection.OwnerID !== this.currentUser.ID) {
-          const permission = await this.permissionService.checkPermission(this.parentCollection.ID, this.currentUser.ID, this.currentUser);
+          const permission = await this.permissionService.checkPermission(
+            this.parentCollection.ID,
+            this.currentUser.ID,
+            this.currentUser
+          );
 
           if (!permission?.canEdit) {
             this.errorMessage = 'You do not have Edit permission for the parent collection.';
@@ -197,7 +203,8 @@ export class CollectionFormModalComponent implements OnChanges {
       }
 
       const md = new Metadata();
-      const collection = this.collection || (await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser));
+      const collection = this.collection ||
+        await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = this.formData.name.trim();
       collection.Description = this.formData.description.trim() || null;
@@ -224,14 +231,24 @@ export class CollectionFormModalComponent implements OnChanges {
         if (!this.collection) {
           if (this.parentCollection) {
             // Child collection - copy all permissions from parent (including owner)
-            await this.permissionService.copyParentPermissions(this.parentCollection.ID, collection.ID, this.currentUser);
+            await this.permissionService.copyParentPermissions(
+              this.parentCollection.ID,
+              collection.ID,
+              this.currentUser
+            );
           } else {
             // Root collection - create owner permission for current user
-            await this.permissionService.createOwnerPermission(collection.ID, this.currentUser.ID, this.currentUser);
+            await this.permissionService.createOwnerPermission(
+              collection.ID,
+              this.currentUser.ID,
+              this.currentUser
+            );
           }
         }
 
-        this.toastService.success(this.collection ? 'Collection updated successfully' : 'Collection created successfully');
+        this.toastService.success(
+          this.collection ? 'Collection updated successfully' : 'Collection created successfully'
+        );
         this.saved.emit(collection);
         this.resetForm();
       } else {
@@ -255,7 +272,7 @@ export class CollectionFormModalComponent implements OnChanges {
   private resetForm(): void {
     this.formData = {
       name: '',
-      description: '',
+      description: ''
     };
     this.errorMessage = '';
   }

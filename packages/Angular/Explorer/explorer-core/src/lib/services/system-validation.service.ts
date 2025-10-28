@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { LogError } from '@memberjunction/global';
+import { LogError } from '@memberjunction/core';
 
 /**
  * Represents a system validation issue with its severity level
@@ -18,14 +18,14 @@ export interface SystemValidationIssue {
  * Service for checking system validation issues and displaying error messages to users
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class SystemValidationService {
   private _validationIssues = new BehaviorSubject<SystemValidationIssue[]>([]);
-
+  
   public validationIssues$: Observable<SystemValidationIssue[]> = this._validationIssues.asObservable();
 
-  constructor() {}
+  constructor() { }
 
   /**
    * Adds a new validation issue to the list
@@ -34,13 +34,13 @@ export class SystemValidationService {
     try {
       const newIssue: SystemValidationIssue = {
         ...issue,
-        timestamp: new Date(),
+        timestamp: new Date()
       };
 
       const currentIssues = this._validationIssues.getValue();
-
+      
       // Don't add duplicates with the same ID
-      if (!currentIssues.some((i) => i.id === issue.id)) {
+      if (!currentIssues.some(i => i.id === issue.id)) {
         this._validationIssues.next([...currentIssues, newIssue]);
         LogError(`System Validation Issue: ${issue.message} (${issue.id})`);
       }
@@ -55,8 +55,8 @@ export class SystemValidationService {
   public removeIssue(id: string): void {
     try {
       const currentIssues = this._validationIssues.getValue();
-      const updatedIssues = currentIssues.filter((issue) => issue.id !== id);
-
+      const updatedIssues = currentIssues.filter(issue => issue.id !== id);
+      
       if (updatedIssues.length !== currentIssues.length) {
         this._validationIssues.next(updatedIssues);
       }
@@ -76,6 +76,6 @@ export class SystemValidationService {
    * Checks if there are any validation issues with error severity
    */
   public hasErrors(): boolean {
-    return this._validationIssues.getValue().some((issue) => issue.severity === 'error');
+    return this._validationIssues.getValue().some(issue => issue.severity === 'error');
   }
 }

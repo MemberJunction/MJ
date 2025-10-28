@@ -73,7 +73,7 @@ The library provides high-level utility functions that work with MemberJunction'
 ```typescript
 import { createUploadUrl, createDownloadUrl, deleteObject, moveObject } from '@memberjunction/storage';
 import { FileStorageProviderEntity } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 // Load a FileStorageProviderEntity from the database
 async function fileOperationsExample() {

@@ -1,24 +1,24 @@
 /**
  * @fileoverview Sandboxed code execution service for MemberJunction
- *
+ * 
  * Provides secure execution of JavaScript code in a controlled environment using vm2.
  * Supports a curated list of safe npm packages for data manipulation and analysis.
- *
+ * 
  * @module @memberjunction/code-execution
  * @author MemberJunction.com
  * @since 2.46.0
  */
 
-import { LogError, LogStatus } from '@memberjunction/global';
-import {
-    CodeExecutionParams,
-    CodeExecutionResult,
-    JavaScriptExecutionOptions
+import { LogError, LogStatus } from '@memberjunction/core';
+import { 
+    CodeExecutionParams, 
+    CodeExecutionResult, 
+    JavaScriptExecutionOptions 
 } from './types';
 
 /**
  * Service for executing code in a sandboxed environment
- *
+ * 
  * Security features:
  * - Isolated VM using vm2's NodeVM
  * - Timeout protection
@@ -26,7 +26,7 @@ import {
  * - No network access (http, https, net modules blocked)
  * - Allowlist-only npm package imports
  * - Memory limits (requires Node.js process flags)
- *
+ * 
  * Supported libraries:
  * - lodash: Data manipulation
  * - date-fns: Date utilities
@@ -34,7 +34,7 @@ import {
  * - papaparse: CSV parsing
  * - uuid: ID generation
  * - validator: Input validation
- *
+ * 
  * @example
  * ```typescript
  * const service = new CodeExecutionService();
@@ -63,7 +63,7 @@ export class CodeExecutionService {
 
     /**
      * Execute code in a sandboxed environment
-     *
+     * 
      * @param params - Execution parameters including code and input data
      * @returns Promise resolving to execution result
      */
@@ -108,20 +108,20 @@ export class CodeExecutionService {
 
     /**
      * Execute JavaScript code using vm2 NodeVM sandbox
-     *
+     * 
      * The code has access to:
      * - input: The inputData parameter
      * - output: Variable where code should store result
      * - console: Limited console API (log, error, warn, info)
      * - Safe libraries: Can require() packages from allowlist
      * - Safe built-ins: JSON, Math, Date, Array, Object, String, Number, Boolean
-     *
+     * 
      * The code does NOT have access to:
      * - File system (fs module is mocked)
      * - Network (http, https, net, axios, etc. are blocked)
      * - Process control (child_process, cluster blocked)
      * - Dangerous APIs (eval, Function constructor are disabled)
-     *
+     * 
      * @private
      */
     private async executeJavaScript(
@@ -179,18 +179,18 @@ export class CodeExecutionService {
             const vm = new NodeVM({
                 timeout: options.timeout * 1000, // Convert to milliseconds
                 sandbox,
-
+                
                 // Disable dangerous features
                 eval: false,        // Disable eval()
                 wasm: false,        // Disable WebAssembly
                 fixAsync: true,     // Prevent async abuse
-
+                
                 // Configure module imports
                 require: {
                     external: options.allowedLibraries || this.SAFE_LIBRARIES,
                     builtin: [],    // No built-in Node modules (like fs, path, etc.)
                     root: './node_modules',
-
+                    
                     // Mock dangerous modules
                     mock: {
                         fs: {},             // Block filesystem
@@ -253,7 +253,7 @@ export class CodeExecutionService {
             }
 
             // Check for security violations
-            if (error.message?.includes('not allowed') ||
+            if (error.message?.includes('not allowed') || 
                 error.message?.includes('access denied') ||
                 error.message?.includes('Cannot find module')) {
                 return {
@@ -278,13 +278,13 @@ export class CodeExecutionService {
     /**
      * Format console arguments for logging
      * Handles objects, arrays, and primitives
-     *
+     * 
      * @private
      */
     private formatConsoleArg(arg: any): string {
         if (arg === null) return 'null';
         if (arg === undefined) return 'undefined';
-
+        
         if (typeof arg === 'object') {
             try {
                 return JSON.stringify(arg, null, 2);
@@ -292,7 +292,7 @@ export class CodeExecutionService {
                 return String(arg);
             }
         }
-
+        
         return String(arg);
     }
 }

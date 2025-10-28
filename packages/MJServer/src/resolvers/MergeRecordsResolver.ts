@@ -1,4 +1,4 @@
-import { LogError, Metadata, CompositeKey } from '@memberjunction/global';
+import { LogError, Metadata, CompositeKey } from '@memberjunction/core';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, PubSub, PubSubEngine, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
@@ -31,7 +31,7 @@ export class EntityDependencyResolver {
     } catch (err) {
       LogError(err);
       const ctx = z.object({ message: z.string() }).catch(null).parse(err)?.message ?? JSON.stringify(err);
-
+      
       throw new Error(ctx);
     }
   }
@@ -65,13 +65,13 @@ export class RecordDependencyResolver {
       const md = GetReadOnlyProvider(providers);
       const ck = new CompositeKey(ckInput.KeyValuePairs);
       const result = await md.GetRecordDependencies(entityName, ck);
-
+      
       // Map PrimaryKey to CompositeKey for GraphQL response
-      return result.map((dep) => ({
+      return result.map(dep => ({
         EntityName: dep.EntityName,
         RelatedEntityName: dep.RelatedEntityName,
         FieldName: dep.FieldName,
-        CompositeKey: dep.PrimaryKey, // Map PrimaryKey to CompositeKey
+        CompositeKey: dep.PrimaryKey // Map PrimaryKey to CompositeKey
       }));
     } catch (e) {
       LogError(e);

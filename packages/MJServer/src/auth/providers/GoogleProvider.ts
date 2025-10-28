@@ -1,7 +1,8 @@
 import { JwtPayload } from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
-import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/global';
+import { AuthProviderConfig, AuthUserInfo } from '@memberjunction/core';
 import { BaseAuthProvider } from '../BaseAuthProvider.js';
+
 
 /**
  * Google Identity Platform authentication provider implementation
@@ -28,7 +29,7 @@ export class GoogleProvider extends BaseAuthProvider {
       firstName: firstName || fullName?.split(' ')[0],
       lastName: lastName || fullName?.split(' ')[1] || fullName?.split(' ')[0],
       fullName,
-      preferredUsername,
+      preferredUsername
     };
   }
 
@@ -38,7 +39,7 @@ export class GoogleProvider extends BaseAuthProvider {
   validateConfig(): boolean {
     const baseValid = super.validateConfig();
     const hasClientId = !!this.config.clientId;
-
+    
     return baseValid && hasClientId;
   }
 }

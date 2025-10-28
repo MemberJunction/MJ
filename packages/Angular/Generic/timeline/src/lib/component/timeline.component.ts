@@ -1,11 +1,11 @@
 import { Component, Input, AfterViewInit } from '@angular/core';
 
-import { BaseEntity, RunView, RunViewParams } from '@memberjunction/global';
+import { BaseEntity, RunView, RunViewParams } from '@memberjunction/core';
 
-import { Orientation, TimelineEvent } from '@progress/kendo-angular-layout';
+import { Orientation, TimelineEvent } from "@progress/kendo-angular-layout";
 
 /**
- *
+ * 
  */
 export class TimelineGroup {
   /**
@@ -19,7 +19,7 @@ export class TimelineGroup {
   /**
    * An optional filter that will be applied to the entity specified to reduce the number of records displayed
    */
-  Filter?: string;
+  Filter?: string
   /**
    * The actual data you want displayed in this group. This is an array of BaseEntity objects that will be displayed in the timeline. You can populate this array from a view or any other source.
    */
@@ -63,8 +63,8 @@ export class TimelineGroup {
   /**
    * Creates a new instance of the TimelineGroup class using the information from the RunViewParams provided.
    * After receiving back the new object, you can set other properties of the new instance as appropriate.
-   * @param params
-   * @returns
+   * @param params 
+   * @returns 
    */
   public static async FromView(params: RunViewParams): Promise<TimelineGroup> {
     const group = new TimelineGroup();
@@ -85,9 +85,9 @@ export class TimelineGroup {
 @Component({
   selector: 'mj-timeline',
   templateUrl: './timeline.component.html',
-  styleUrls: ['./timeline.component.css'],
+  styleUrls: ['./timeline.component.css']
 })
-export class TimelineComponent implements AfterViewInit {
+export class TimelineComponent implements AfterViewInit { 
   private _groups: TimelineGroup[] = [];
 
   @Input() DisplayOrientation: 'horizontal' | 'vertical' = 'vertical';
@@ -100,7 +100,8 @@ export class TimelineComponent implements AfterViewInit {
   }
   public set Groups(value: TimelineGroup[]) {
     this._groups = value;
-    if (this.AllowLoad) this.Refresh();
+    if (this.AllowLoad)
+      this.Refresh();
   }
 
   private _deferLoadCount: number = 0;
@@ -112,22 +113,24 @@ export class TimelineComponent implements AfterViewInit {
     return this._allowLoad;
   }
   public set AllowLoad(value: boolean) {
-    this._allowLoad = value;
+    this._allowLoad = value
     if (value === true && this._deferLoadCount === 0) {
-      this._deferLoadCount++; // only do this one time
+      this._deferLoadCount++; // only do this one time 
       this.Refresh();
     }
   }
 
   /*
-   * events is the array of timeline events that gets updated on each call of LoadSingleGroup.
-   * timelineGroupEvents is the array of total timeline events that will get called used by the timeline component.
-   */
+  * events is the array of timeline events that gets updated on each call of LoadSingleGroup. 
+  * timelineGroupEvents is the array of total timeline events that will get called used by the timeline component.
+  */
   public events: TimelineEvent[] = [];
 
   async ngAfterViewInit() {
-    if (this.AllowLoad) await this.Refresh();
+    if (this.AllowLoad)
+      await this.Refresh();
   }
+
 
   /**
    * This method refreshes the timeline with the data from the provided parameters.
@@ -143,7 +146,7 @@ export class TimelineComponent implements AfterViewInit {
 
   /**
    * This method loads the data for a single group and adds it to the timelineGroupEvents array.
-   * @param group
+   * @param group 
    */
   protected async LoadSingleGroup(group: TimelineGroup) {
     // load up the events for the specified group into the events array
@@ -152,7 +155,8 @@ export class TimelineComponent implements AfterViewInit {
     switch (group.DataSourceType) {
       case 'array':
         // use the provided array
-        if (!group.EntityObjects) throw new Error('No EntityObjects provided for group');
+        if (!group.EntityObjects)
+          throw new Error("No EntityObjects provided for group");
         newItems = this.mapEntityObjectsToEvents(group, group.EntityObjects!);
         break;
       case 'entity':
@@ -161,9 +165,10 @@ export class TimelineComponent implements AfterViewInit {
         const result = await rv.RunView({
           EntityName: group.EntityName,
           ExtraFilter: group.Filter,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         });
-        if (result && result.Success) newItems = this.mapEntityObjectsToEvents(group, result.Results);
+        if (result && result.Success)
+          newItems = this.mapEntityObjectsToEvents(group, result.Results);
         break;
     }
 
@@ -171,14 +176,14 @@ export class TimelineComponent implements AfterViewInit {
   }
 
   protected mapEntityObjectsToEvents(group: TimelineGroup, entityObjects: BaseEntity[]): TimelineEvent[] {
-    const ret: TimelineEvent[] = entityObjects.map((e) => {
+    const ret: TimelineEvent[] = entityObjects.map(e => {
       let date = new Date(e.Get(group.DateFieldName));
       let title = e.Get(group.TitleFieldName);
-      let summary = '';
+      let summary = "";
       if (group.SummaryMode == 'field') {
         summary = e.Get(group.TitleFieldName);
       } else if (group.SummaryMode == 'custom') {
-        summary = group.SummaryFunction ? group.SummaryFunction(e) : '';
+        summary = group.SummaryFunction ? group.SummaryFunction(e) : "";
       }
       return {
         description: summary,
@@ -188,7 +193,7 @@ export class TimelineComponent implements AfterViewInit {
         images: [],
         actions: [],
       };
-    });
+    })
     return ret;
   }
 }

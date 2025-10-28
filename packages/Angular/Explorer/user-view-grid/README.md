@@ -99,7 +99,7 @@ Component implementation:
 
 ```typescript
 import { Component } from '@angular/core';
-import { RunViewParams } from '@memberjunction/global';
+import { RunViewParams } from '@memberjunction/core';
 import { GridRowClickedEvent, GridRowEditedEvent } from '@memberjunction/ng-user-view-grid';
 
 @Component({
@@ -219,47 +219,47 @@ The main component for displaying entity data in a grid format.
 
 #### Inputs
 
-| Name                        | Type                          | Default     | Description                                                                                                            |
-| --------------------------- | ----------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `Params`                    | `RunViewParams`               | `undefined` | Parameters defining which view to display (either ViewID for saved views or EntityName with filters for dynamic views) |
-| `BottomMargin`              | `number`                      | `0`         | Bottom margin in pixels to apply to the grid container                                                                 |
-| `InEditMode`                | `boolean`                     | `false`     | Controls whether the grid is currently in edit mode                                                                    |
-| `EditMode`                  | `"None" \| "Save" \| "Queue"` | `"None"`    | Determines how edits are handled: None (no editing), Save (immediate), or Queue (batch)                                |
-| `AutoNavigate`              | `boolean`                     | `true`      | Whether to automatically navigate to a record's detail view when clicked                                               |
-| `NewRecordValues`           | `any`                         | `undefined` | Default values to populate when creating new records                                                                   |
-| `ShowCreateNewRecordButton` | `boolean`                     | `true`      | Whether to display the Create New Record button (if user has permission)                                               |
-| `ShowEntityActionButtons`   | `boolean`                     | `true`      | Whether to display entity action buttons for the current entity                                                        |
-| `ShowCommunicationButton`   | `boolean`                     | `true`      | Whether to display the communication button (if entity supports it)                                                    |
-| `CreateRecordMode`          | `"Dialog" \| "Tab"`           | `"Tab"`     | How to open the new record form: Dialog (modal) or Tab (new browser tab)                                               |
-| `AllowLoad`                 | `boolean`                     | `true`      | Controls whether the grid loads data. Set to false to defer loading until ready                                        |
+| Name | Type | Default | Description |
+|------|------|---------|-------------|
+| `Params` | `RunViewParams` | `undefined` | Parameters defining which view to display (either ViewID for saved views or EntityName with filters for dynamic views) |
+| `BottomMargin` | `number` | `0` | Bottom margin in pixels to apply to the grid container |
+| `InEditMode` | `boolean` | `false` | Controls whether the grid is currently in edit mode |
+| `EditMode` | `"None" \| "Save" \| "Queue"` | `"None"` | Determines how edits are handled: None (no editing), Save (immediate), or Queue (batch) |
+| `AutoNavigate` | `boolean` | `true` | Whether to automatically navigate to a record's detail view when clicked |
+| `NewRecordValues` | `any` | `undefined` | Default values to populate when creating new records |
+| `ShowCreateNewRecordButton` | `boolean` | `true` | Whether to display the Create New Record button (if user has permission) |
+| `ShowEntityActionButtons` | `boolean` | `true` | Whether to display entity action buttons for the current entity |
+| `ShowCommunicationButton` | `boolean` | `true` | Whether to display the communication button (if entity supports it) |
+| `CreateRecordMode` | `"Dialog" \| "Tab"` | `"Tab"` | How to open the new record form: Dialog (modal) or Tab (new browser tab) |
+| `AllowLoad` | `boolean` | `true` | Controls whether the grid loads data. Set to false to defer loading until ready |
 
 #### Outputs
 
-| Name         | Type                                | Description                                          |
-| ------------ | ----------------------------------- | ---------------------------------------------------- |
-| `rowClicked` | `EventEmitter<GridRowClickedEvent>` | Fired when a user clicks on a grid row               |
-| `rowEdited`  | `EventEmitter<GridRowEditedEvent>`  | Fired when a row edit is completed (saved or queued) |
+| Name | Type | Description |
+|------|------|-------------|
+| `rowClicked` | `EventEmitter<GridRowClickedEvent>` | Fired when a user clicks on a grid row |
+| `rowEdited` | `EventEmitter<GridRowEditedEvent>` | Fired when a row edit is completed (saved or queued) |
 
 #### Public Methods
 
-| Name                     | Parameters                                                                        | Return Type        | Description                                                  |
-| ------------------------ | --------------------------------------------------------------------------------- | ------------------ | ------------------------------------------------------------ |
-| `Refresh`                | `params: RunViewParams`                                                           | `Promise<void>`    | Refreshes the grid with new view parameters                  |
-| `RefreshFromSavedParams` | None                                                                              | `Promise<void>`    | Refreshes the grid using the currently stored parameters     |
-| `EditingComplete`        | None                                                                              | `Promise<boolean>` | Completes any in-progress editing and returns true when done |
-| `RevertPendingChanges`   | None                                                                              | `void`             | Reverts all pending changes in Queue mode                    |
-| `enableMergeOrCompare`   | `cancel: boolean, type: 'merge' \| 'compare'`                                     | `void`             | Enables or disables merge/compare selection mode             |
-| `enableCheckbox`         | `cancel: boolean, type: 'merge' \| 'compare' \| 'duplicate' \| 'addToList' \| ''` | `void`             | Enables checkbox selection for various operations            |
-| `doExcelExport`          | None                                                                              | `Promise<void>`    | Exports the current view data to Excel format                |
+| Name | Parameters | Return Type | Description |
+|------|------------|-------------|-------------|
+| `Refresh` | `params: RunViewParams` | `Promise<void>` | Refreshes the grid with new view parameters |
+| `RefreshFromSavedParams` | None | `Promise<void>` | Refreshes the grid using the currently stored parameters |
+| `EditingComplete` | None | `Promise<boolean>` | Completes any in-progress editing and returns true when done |
+| `RevertPendingChanges` | None | `void` | Reverts all pending changes in Queue mode |
+| `enableMergeOrCompare` | `cancel: boolean, type: 'merge' \| 'compare'` | `void` | Enables or disables merge/compare selection mode |
+| `enableCheckbox` | `cancel: boolean, type: 'merge' \| 'compare' \| 'duplicate' \| 'addToList' \| ''` | `void` | Enables checkbox selection for various operations |
+| `doExcelExport` | None | `Promise<void>` | Exports the current view data to Excel format |
 
 #### Public Properties
 
-| Name                     | Type                      | Description                                                |
-| ------------------------ | ------------------------- | ---------------------------------------------------------- |
-| `PendingRecords`         | `GridPendingRecordItem[]` | Array of records with pending changes (readonly)           |
-| `ViewID`                 | `string`                  | The ID of the current view being displayed (readonly)      |
-| `UserCanCreateNewRecord` | `boolean`                 | Whether the current user can create new records (readonly) |
-| `UserCanEdit`            | `boolean`                 | Whether the current user can edit the view (readonly)      |
+| Name | Type | Description |
+|------|------|-------------|
+| `PendingRecords` | `GridPendingRecordItem[]` | Array of records with pending changes (readonly) |
+| `ViewID` | `string` | The ID of the current view being displayed (readonly) |
+| `UserCanCreateNewRecord` | `boolean` | Whether the current user can create new records (readonly) |
+| `UserCanEdit` | `boolean` | Whether the current user can edit the view (readonly) |
 
 ### Type Definitions
 

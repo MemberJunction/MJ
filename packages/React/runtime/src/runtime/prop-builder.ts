@@ -7,7 +7,7 @@
 import { ComponentStyles, ComponentCallbacks } from '@memberjunction/interactive-component-types';
 import { ComponentProps } from '../types';
 import { Subject, debounceTime, Subscription } from 'rxjs';
-import { LogStatus, GetProductionStatus } from '@memberjunction/global';
+import { LogStatus, GetProductionStatus } from '@memberjunction/core';
 
 /**
  * Options for building component props
@@ -43,7 +43,7 @@ export function buildComponentProps(
   callbacks: ComponentCallbacks = {
     OpenEntityRecord: () => {},
     RegisterMethod: () => {},
-    CreateSimpleNotification: () => {},
+    CreateSimpleNotification: () => {}
   },
   components: Record<string, any> = {},
   styles?: ComponentStyles,
@@ -54,7 +54,7 @@ export function buildComponentProps(
     validate = true,
     transformData,
     transformState,
-    debounceUpdateUserState = 3000, // Default 3 seconds
+    debounceUpdateUserState = 3000 // Default 3 seconds
   } = options;
 
   // Transform data if transformer provided
@@ -69,7 +69,7 @@ export function buildComponentProps(
     callbacks: normalizeCallbacks(callbacks, debounceUpdateUserState),
     components,
     styles: normalizeStyles(styles),
-    onStateChanged,
+    onStateChanged
   };
 
   // Validate if enabled
@@ -97,20 +97,20 @@ const loopDetectionStates = new WeakMap<Function, LoopDetectionState>();
 // Deep equality check for objects
 function deepEqual(obj1: any, obj2: any): boolean {
   if (obj1 === obj2) return true;
-
+  
   if (!obj1 || !obj2) return false;
   if (typeof obj1 !== 'object' || typeof obj2 !== 'object') return false;
-
+  
   const keys1 = Object.keys(obj1);
   const keys2 = Object.keys(obj2);
-
+  
   if (keys1.length !== keys2.length) return false;
-
+  
   for (const key of keys1) {
     if (!keys2.includes(key)) return false;
     if (!deepEqual(obj1[key], obj2[key])) return false;
   }
-
+  
   return true;
 }
 
@@ -125,12 +125,12 @@ export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): C
   const normalized: ComponentCallbacks = {
     OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
     RegisterMethod: callbacks?.RegisterMethod || (() => {}),
-    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {}),
+    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {})
   };
 
   // Copy any additional callbacks that might exist
   if (callbacks) {
-    Object.keys(callbacks).forEach((key) => {
+    Object.keys(callbacks).forEach(key => {
       if (typeof callbacks[key] === 'function' && !normalized.hasOwnProperty(key)) {
         (normalized as any)[key] = callbacks[key];
       }
@@ -198,7 +198,7 @@ export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentPr
     utilities: {},
     callbacks: {},
     components: {},
-    styles: {} as ComponentStyles,
+    styles: {} as ComponentStyles
   };
 
   for (const props of propsList) {
@@ -229,20 +229,22 @@ export function mergeProps(...propsList: Partial<ComponentProps>[]): ComponentPr
 
   return merged;
 }
-
+ 
 /**
  * Creates a props transformer function
  * @param transformations - Map of prop paths to transformer functions
  * @returns Props transformer
  */
-export function createPropsTransformer(transformations: Record<string, (value: any) => any>): (props: ComponentProps) => ComponentProps {
+export function createPropsTransformer(
+  transformations: Record<string, (value: any) => any>
+): (props: ComponentProps) => ComponentProps {
   return (props: ComponentProps) => {
     const transformed = { ...props };
 
     for (const [path, transformer] of Object.entries(transformations)) {
       const pathParts = path.split('.');
       let current: any = transformed;
-
+      
       // Navigate to the parent of the target property
       for (let i = 0; i < pathParts.length - 1; i++) {
         if (!current[pathParts[i]]) {
@@ -268,21 +270,19 @@ export function createPropsTransformer(transformations: Record<string, (value: a
  * @param componentName - Component name for logging
  * @returns Wrapped callbacks
  */
-export function wrapCallbacksWithLogging(callbacks: ComponentCallbacks, componentName: string): ComponentCallbacks {
+export function wrapCallbacksWithLogging(
+  callbacks: ComponentCallbacks,
+  componentName: string
+): ComponentCallbacks {
   const wrapped: ComponentCallbacks = {
     OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
     RegisterMethod: callbacks?.RegisterMethod || (() => {}),
-    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {}),
+    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {})
   };
 
   // Wrap any additional callbacks that might exist
-  Object.keys(callbacks).forEach((key) => {
-    if (
-      key !== 'OpenEntityRecord' &&
-      key !== 'RegisterMethod' &&
-      key !== 'CreateSimpleNotification' &&
-      typeof (callbacks as any)[key] === 'function'
-    ) {
+  Object.keys(callbacks).forEach(key => {
+    if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && key !== 'CreateSimpleNotification' && typeof (callbacks as any)[key] === 'function') {
       (wrapped as any)[key] = (...args: any[]) => {
         if (!GetProductionStatus()) {
           LogStatus(`[${componentName}] ${key} called with args:`, undefined, args);
@@ -311,7 +311,7 @@ export function wrapCallbacksWithLogging(callbacks: ComponentCallbacks, componen
   }
 
   if (callbacks.CreateSimpleNotification) {
-    wrapped.CreateSimpleNotification = (message: string, style: 'none' | 'success' | 'error' | 'warning' | 'info', hideAfter?: number) => {
+    wrapped.CreateSimpleNotification = (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
       if (!GetProductionStatus()) {
         LogStatus(`[${componentName}] CreateSimpleNotification called:`, undefined, { message, style, hideAfter });
       }
@@ -329,9 +329,14 @@ export function wrapCallbacksWithLogging(callbacks: ComponentCallbacks, componen
  */
 export function extractPropPaths(componentCode: string): string[] {
   const paths: string[] = [];
-
+  
   // Simple regex patterns to find prop access
-  const patterns = [/props\.data\.(\w+)/g, /props\.userState\.(\w+)/g, /props\.utilities\.(\w+)/g, /props\.callbacks\.(\w+)/g];
+  const patterns = [
+    /props\.data\.(\w+)/g,
+    /props\.userState\.(\w+)/g,
+    /props\.utilities\.(\w+)/g,
+    /props\.callbacks\.(\w+)/g
+  ];
 
   for (const pattern of patterns) {
     let match;

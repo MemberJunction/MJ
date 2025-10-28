@@ -3,21 +3,21 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 import { ButtonModule } from '@progress/kendo-angular-buttons';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService, CollectionPermission, PermissionSet } from '../../services/collection-permission.service';
 import { UserPickerComponent, UserSearchResult } from '../shared/user-picker.component';
 
 interface PermissionDisplay extends CollectionPermission {
-  isEditing: boolean;
-  editingPermissions: PermissionSet;
+    isEditing: boolean;
+    editingPermissions: PermissionSet;
 }
 
 @Component({
-  selector: 'mj-collection-share-modal',
-  standalone: true,
-  imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
-  template: `
+    selector: 'mj-collection-share-modal',
+    standalone: true,
+    imports: [CommonModule, FormsModule, WindowModule, ButtonModule, UserPickerComponent],
+    template: `
         @if (isOpen && collection) {
             <kendo-window
                 [title]="'Share: ' + collection.Name"
@@ -218,224 +218,228 @@ interface PermissionDisplay extends CollectionPermission {
             </kendo-window>
         }
     `,
-  styleUrls: ['./collection-share-modal.component.scss'],
+    styleUrls: ['./collection-share-modal.component.scss']
 })
 export class CollectionShareModalComponent implements OnInit, OnChanges {
-  @Input() isOpen: boolean = false;
-  @Input() collection: CollectionEntity | null = null;
-  @Input() currentUser!: UserInfo;
-  @Input() currentUserPermissions: CollectionPermission | null = null;
+    @Input() isOpen: boolean = false;
+    @Input() collection: CollectionEntity | null = null;
+    @Input() currentUser!: UserInfo;
+    @Input() currentUserPermissions: CollectionPermission | null = null;
 
-  @Output() saved = new EventEmitter<void>();
-  @Output() cancelled = new EventEmitter<void>();
+    @Output() saved = new EventEmitter<void>();
+    @Output() cancelled = new EventEmitter<void>();
 
-  permissions: PermissionDisplay[] = [];
-  selectedUser: UserSearchResult | null = null;
-  availablePermissions: string[] = [];
-  canModifyPermissions: boolean = false;
+    permissions: PermissionDisplay[] = [];
+    selectedUser: UserSearchResult | null = null;
+    availablePermissions: string[] = [];
+    canModifyPermissions: boolean = false;
 
-  newPermissions: PermissionSet = {
-    canRead: true,
-    canShare: false,
-    canEdit: false,
-    canDelete: false,
-  };
-
-  constructor(
-    private permissionService: CollectionPermissionService,
-    private cdr: ChangeDetectorRef
-  ) {}
-
-  async ngOnInit(): Promise<void> {
-    if (this.collection) {
-      await this.loadPermissions();
-      this.updateAvailablePermissions();
-    }
-  }
-
-  async ngOnChanges(changes: SimpleChanges): Promise<void> {
-    // Reload permissions when modal opens or collection/permissions change
-    const modalOpened = changes['isOpen']?.currentValue === true && changes['isOpen']?.previousValue === false;
-    const collectionChanged = changes['collection'] && !changes['collection'].isFirstChange();
-    const permissionsChanged = changes['currentUserPermissions'] && !changes['currentUserPermissions'].isFirstChange();
-
-    if ((modalOpened || collectionChanged || permissionsChanged) && this.collection) {
-      await this.loadPermissions();
-      this.updateAvailablePermissions();
-    }
-  }
-
-  private async loadPermissions(): Promise<void> {
-    if (!this.collection) return;
-
-    const perms = await this.permissionService.loadPermissions(this.collection.ID, this.currentUser);
-    this.permissions = perms.map((p) => ({
-      ...p,
-      isEditing: false,
-      editingPermissions: {
-        canRead: p.canRead,
-        canShare: p.canShare,
-        canEdit: p.canEdit,
-        canDelete: p.canDelete,
-      },
-    }));
-    this.cdr.detectChanges();
-  }
-
-  private updateAvailablePermissions(): void {
-    // User is owner if:
-    // 1. OwnerID is null/undefined (backwards compatibility with old collections)
-    // 2. OwnerID matches current user ID
-    const isOwner = !this.collection?.OwnerID || this.collection.OwnerID === this.currentUser.ID;
-
-    // Allow modification if user is owner OR has Share permission
-    this.canModifyPermissions = isOwner || this.currentUserPermissions?.canShare || false;
-
-    const userPerms = this.currentUserPermissions || {
-      canRead: true,
-      canShare: false,
-      canEdit: false,
-      canDelete: false,
-    };
-
-    this.availablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
-    console.log('Share modal permissions:', {
-      collectionId: this.collection?.ID,
-      ownerId: this.collection?.OwnerID,
-      currentUserId: this.currentUser.ID,
-      isOwner,
-      availablePermissions: this.availablePermissions,
-    });
-  }
-
-  getExcludedUserIds(): string[] {
-    const ids = this.permissions.map((p) => p.userId);
-    ids.push(this.currentUser.ID); // Can't share with yourself
-    if (this.collection?.OwnerID) {
-      ids.push(this.collection.OwnerID); // Owner already has all permissions
-    }
-    return ids;
-  }
-
-  onUserSelected(user: UserSearchResult): void {
-    this.selectedUser = user;
-    this.cdr.detectChanges();
-  }
-
-  onClearSelection(): void {
-    this.selectedUser = null;
-    this.newPermissions = {
-      canRead: true,
-      canShare: false,
-      canEdit: false,
-      canDelete: false,
-    };
-    this.cdr.detectChanges();
-  }
-
-  async onAddUser(): Promise<void> {
-    if (!this.selectedUser || !this.collection) return;
-
-    try {
-      // User is owner if OwnerID is null (old collections) or matches current user
-      const isOwner = !this.collection.OwnerID || this.collection.OwnerID === this.currentUser.ID;
-      const userPerms = this.currentUserPermissions || {
+    newPermissions: PermissionSet = {
         canRead: true,
         canShare: false,
         canEdit: false,
-        canDelete: false,
-      };
-
-      // Validate permissions
-      if (!this.permissionService.validatePermissions(this.newPermissions, userPerms, isOwner)) {
-        alert('You cannot grant permissions you do not have');
-        return;
-      }
-
-      // Use cascade grant to apply permissions to all child collections
-      await this.permissionService.grantPermissionCascade(
-        this.collection.ID,
-        this.selectedUser.id,
-        this.newPermissions,
-        this.currentUser.ID,
-        this.currentUser
-      );
-
-      await this.loadPermissions();
-      this.onClearSelection();
-      this.saved.emit();
-    } catch (error) {
-      console.error('Error adding user:', error);
-      alert('Failed to add user. Please try again.');
-    }
-  }
-
-  onEditPermission(permission: PermissionDisplay): void {
-    permission.isEditing = true;
-    this.cdr.detectChanges();
-  }
-
-  onCancelEdit(permission: PermissionDisplay): void {
-    permission.isEditing = false;
-    permission.editingPermissions = {
-      canRead: permission.canRead,
-      canShare: permission.canShare,
-      canEdit: permission.canEdit,
-      canDelete: permission.canDelete,
+        canDelete: false
     };
-    this.cdr.detectChanges();
-  }
 
-  async onSavePermission(permission: PermissionDisplay): Promise<void> {
-    try {
-      // User is owner if OwnerID is null (old collections) or matches current user
-      const isOwner = !this.collection?.OwnerID || this.collection?.OwnerID === this.currentUser.ID;
-      const userPerms = this.currentUserPermissions || {
-        canRead: true,
-        canShare: false,
-        canEdit: false,
-        canDelete: false,
-      };
+    constructor(
+        private permissionService: CollectionPermissionService,
+        private cdr: ChangeDetectorRef
+    ) {}
 
-      // Validate permissions
-      if (!this.permissionService.validatePermissions(permission.editingPermissions, userPerms, isOwner)) {
-        alert('You cannot grant permissions you do not have');
-        return;
-      }
-
-      // Use cascade update to apply changes to all child collections
-      await this.permissionService.updatePermissionCascade(
-        this.collection!.ID,
-        permission.userId,
-        permission.editingPermissions,
-        this.currentUser
-      );
-
-      await this.loadPermissions();
-      this.saved.emit();
-    } catch (error) {
-      console.error('Error updating permission:', error);
-      alert('Failed to update permissions. Please try again.');
-    }
-  }
-
-  async onRevokePermission(permission: PermissionDisplay): Promise<void> {
-    if (!confirm(`Remove ${permission.userName}'s access to this collection and all its child collections?`)) {
-      return;
+    async ngOnInit(): Promise<void> {
+        if (this.collection) {
+            await this.loadPermissions();
+            this.updateAvailablePermissions();
+        }
     }
 
-    try {
-      // Use cascade revoke to remove access from all child collections
-      await this.permissionService.revokePermissionCascade(this.collection!.ID, permission.userId, this.currentUser);
-      await this.loadPermissions();
-      this.saved.emit();
-    } catch (error) {
-      console.error('Error revoking permission:', error);
-      alert('Failed to revoke permission. Please try again.');
-    }
-  }
+    async ngOnChanges(changes: SimpleChanges): Promise<void> {
+        // Reload permissions when modal opens or collection/permissions change
+        const modalOpened = changes['isOpen']?.currentValue === true && changes['isOpen']?.previousValue === false;
+        const collectionChanged = changes['collection'] && !changes['collection'].isFirstChange();
+        const permissionsChanged = changes['currentUserPermissions'] && !changes['currentUserPermissions'].isFirstChange();
 
-  onCancel(): void {
-    this.cancelled.emit();
-  }
+        if ((modalOpened || collectionChanged || permissionsChanged) && this.collection) {
+            await this.loadPermissions();
+            this.updateAvailablePermissions();
+        }
+    }
+
+    private async loadPermissions(): Promise<void> {
+        if (!this.collection) return;
+
+        const perms = await this.permissionService.loadPermissions(this.collection.ID, this.currentUser);
+        this.permissions = perms.map(p => ({
+            ...p,
+            isEditing: false,
+            editingPermissions: {
+                canRead: p.canRead,
+                canShare: p.canShare,
+                canEdit: p.canEdit,
+                canDelete: p.canDelete
+            }
+        }));
+        this.cdr.detectChanges();
+    }
+
+    private updateAvailablePermissions(): void {
+        // User is owner if:
+        // 1. OwnerID is null/undefined (backwards compatibility with old collections)
+        // 2. OwnerID matches current user ID
+        const isOwner = !this.collection?.OwnerID || this.collection.OwnerID === this.currentUser.ID;
+
+        // Allow modification if user is owner OR has Share permission
+        this.canModifyPermissions = isOwner || (this.currentUserPermissions?.canShare || false);
+
+        const userPerms = this.currentUserPermissions || {
+            canRead: true,
+            canShare: false,
+            canEdit: false,
+            canDelete: false
+        };
+
+        this.availablePermissions = this.permissionService.getAvailablePermissions(userPerms, isOwner);
+        console.log('Share modal permissions:', {
+            collectionId: this.collection?.ID,
+            ownerId: this.collection?.OwnerID,
+            currentUserId: this.currentUser.ID,
+            isOwner,
+            availablePermissions: this.availablePermissions
+        });
+    }
+
+    getExcludedUserIds(): string[] {
+        const ids = this.permissions.map(p => p.userId);
+        ids.push(this.currentUser.ID); // Can't share with yourself
+        if (this.collection?.OwnerID) {
+            ids.push(this.collection.OwnerID); // Owner already has all permissions
+        }
+        return ids;
+    }
+
+    onUserSelected(user: UserSearchResult): void {
+        this.selectedUser = user;
+        this.cdr.detectChanges();
+    }
+
+    onClearSelection(): void {
+        this.selectedUser = null;
+        this.newPermissions = {
+            canRead: true,
+            canShare: false,
+            canEdit: false,
+            canDelete: false
+        };
+        this.cdr.detectChanges();
+    }
+
+    async onAddUser(): Promise<void> {
+        if (!this.selectedUser || !this.collection) return;
+
+        try {
+            // User is owner if OwnerID is null (old collections) or matches current user
+            const isOwner = !this.collection.OwnerID || this.collection.OwnerID === this.currentUser.ID;
+            const userPerms = this.currentUserPermissions || {
+                canRead: true,
+                canShare: false,
+                canEdit: false,
+                canDelete: false
+            };
+
+            // Validate permissions
+            if (!this.permissionService.validatePermissions(this.newPermissions, userPerms, isOwner)) {
+                alert('You cannot grant permissions you do not have');
+                return;
+            }
+
+            // Use cascade grant to apply permissions to all child collections
+            await this.permissionService.grantPermissionCascade(
+                this.collection.ID,
+                this.selectedUser.id,
+                this.newPermissions,
+                this.currentUser.ID,
+                this.currentUser
+            );
+
+            await this.loadPermissions();
+            this.onClearSelection();
+            this.saved.emit();
+        } catch (error) {
+            console.error('Error adding user:', error);
+            alert('Failed to add user. Please try again.');
+        }
+    }
+
+    onEditPermission(permission: PermissionDisplay): void {
+        permission.isEditing = true;
+        this.cdr.detectChanges();
+    }
+
+    onCancelEdit(permission: PermissionDisplay): void {
+        permission.isEditing = false;
+        permission.editingPermissions = {
+            canRead: permission.canRead,
+            canShare: permission.canShare,
+            canEdit: permission.canEdit,
+            canDelete: permission.canDelete
+        };
+        this.cdr.detectChanges();
+    }
+
+    async onSavePermission(permission: PermissionDisplay): Promise<void> {
+        try {
+            // User is owner if OwnerID is null (old collections) or matches current user
+            const isOwner = !this.collection?.OwnerID || this.collection?.OwnerID === this.currentUser.ID;
+            const userPerms = this.currentUserPermissions || {
+                canRead: true,
+                canShare: false,
+                canEdit: false,
+                canDelete: false
+            };
+
+            // Validate permissions
+            if (!this.permissionService.validatePermissions(permission.editingPermissions, userPerms, isOwner)) {
+                alert('You cannot grant permissions you do not have');
+                return;
+            }
+
+            // Use cascade update to apply changes to all child collections
+            await this.permissionService.updatePermissionCascade(
+                this.collection!.ID,
+                permission.userId,
+                permission.editingPermissions,
+                this.currentUser
+            );
+
+            await this.loadPermissions();
+            this.saved.emit();
+        } catch (error) {
+            console.error('Error updating permission:', error);
+            alert('Failed to update permissions. Please try again.');
+        }
+    }
+
+    async onRevokePermission(permission: PermissionDisplay): Promise<void> {
+        if (!confirm(`Remove ${permission.userName}'s access to this collection and all its child collections?`)) {
+            return;
+        }
+
+        try {
+            // Use cascade revoke to remove access from all child collections
+            await this.permissionService.revokePermissionCascade(
+                this.collection!.ID,
+                permission.userId,
+                this.currentUser
+            );
+            await this.loadPermissions();
+            this.saved.emit();
+        } catch (error) {
+            console.error('Error revoking permission:', error);
+            alert('Failed to revoke permission. Please try again.');
+        }
+    }
+
+    onCancel(): void {
+        this.cancelled.emit();
+    }
 }

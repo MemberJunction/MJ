@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
-import { UserInfo, Metadata, RunView } from '@memberjunction/global';
+import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { ArtifactEntity, ArtifactTypeEntity, ArtifactVersionEntity, CollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
 import { CollectionPermissionService } from '../../services/collection-permission.service';
@@ -89,8 +89,7 @@ import { CollectionPermissionService } from '../../services/collection-permissio
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
-  styles: [
-    `
+  styles: [`
     .artifact-form {
       padding: 20px 0;
     }
@@ -153,8 +152,7 @@ import { CollectionPermissionService } from '../../services/collection-permissio
     .form-error i {
       flex-shrink: 0;
     }
-  `,
-  ],
+  `]
 })
 export class ArtifactCreateModalComponent implements OnChanges {
   @Input() isOpen: boolean = false;
@@ -169,7 +167,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
     name: '',
     description: '',
     content: '',
-    selectedType: null as ArtifactTypeEntity | null,
+    selectedType: null as ArtifactTypeEntity | null
   };
 
   public artifactTypes: ArtifactTypeEntity[] = [];
@@ -190,7 +188,9 @@ export class ArtifactCreateModalComponent implements OnChanges {
   }
 
   get canSave(): boolean {
-    return this.formData.name.trim().length > 0 && this.formData.content.trim().length > 0 && this.formData.selectedType !== null;
+    return this.formData.name.trim().length > 0 &&
+           this.formData.content.trim().length > 0 &&
+           this.formData.selectedType !== null;
   }
 
   private async loadArtifactTypes(): Promise<void> {
@@ -203,7 +203,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
           ExtraFilter: 'IsEnabled=1',
           OrderBy: 'Name ASC',
           MaxRows: 1000,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -211,7 +211,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       if (result.Success && result.Results) {
         this.artifactTypes = result.Results;
         // Default to "Text" or first type
-        const textType = this.artifactTypes.find((t) => t.Name === 'Text' || t.Name === 'Markdown');
+        const textType = this.artifactTypes.find(t => t.Name === 'Text' || t.Name === 'Markdown');
         if (textType) {
           this.formData.selectedType = textType;
         } else if (this.artifactTypes.length > 0) {
@@ -240,7 +240,11 @@ export class ArtifactCreateModalComponent implements OnChanges {
 
       // Check if user has Edit permission on collection
       if (collection.OwnerID && collection.OwnerID !== this.currentUser.ID) {
-        const permission = await this.permissionService.checkPermission(this.collectionId, this.currentUser.ID, this.currentUser);
+        const permission = await this.permissionService.checkPermission(
+          this.collectionId,
+          this.currentUser.ID,
+          this.currentUser
+        );
 
         if (!permission?.canEdit) {
           this.errorMessage = 'You do not have Edit permission to add artifacts to this collection.';
@@ -319,7 +323,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       name: '',
       description: '',
       content: '',
-      selectedType: this.artifactTypes.length > 0 ? this.artifactTypes[0] : null,
+      selectedType: this.artifactTypes.length > 0 ? this.artifactTypes[0] : null
     };
     this.errorMessage = '';
   }

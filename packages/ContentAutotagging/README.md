@@ -62,7 +62,7 @@ The package follows a modular architecture with these key components:
 
 ```typescript
 import { AutotagRSSFeed } from '@memberjunction/content-autotagging';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 const rssTagger = new AutotagRSSFeed();
 const userContext: UserInfo = { /* your user context */ };
@@ -75,7 +75,7 @@ await rssTagger.Autotag(userContext);
 
 ```typescript
 import { AutotagWebsite } from '@memberjunction/content-autotagging';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 const websiteTagger = new AutotagWebsite();
 const userContext: UserInfo = { /* your user context */ };
@@ -88,7 +88,7 @@ await websiteTagger.Autotag(userContext);
 
 ```typescript
 import { AutotagLocalFileSystem } from '@memberjunction/content-autotagging';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 const fileTagger = new AutotagLocalFileSystem();
 const userContext: UserInfo = { /* your user context */ };
@@ -101,7 +101,7 @@ await fileTagger.Autotag(userContext);
 
 ```typescript
 import { AutotagAzureBlob } from '@memberjunction/content-autotagging';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 const blobTagger = new AutotagAzureBlob(
   process.env.AZURE_STORAGE_CONNECTION_STRING,
@@ -179,7 +179,7 @@ For website sources, these parameters can be configured:
 import { AutotagBase } from '@memberjunction/content-autotagging';
 import { RegisterClass } from '@memberjunction/global';
 import { ContentSourceEntity, ContentItemEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 @RegisterClass(AutotagBase, 'AutotagCustomSource')
 export class AutotagCustomSource extends AutotagBase {

@@ -1,9 +1,10 @@
 import { Component, Input, Output, ViewChild, ViewContainerRef, EventEmitter } from '@angular/core';
 
-import { BaseEntity } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseEntity } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared'
 import { ClassRegistration, MJGlobal } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-base-forms';
+ 
 
 /**
  * This dialog will display the form for a given entity. Using the configuration settings you can display the entire form
@@ -13,7 +14,7 @@ import { BaseFormComponent, BaseFormSectionComponent } from '@memberjunction/ng-
 @Component({
   selector: 'mj-entity-form-dialog',
   templateUrl: './entity-form-dialog.component.html',
-  styleUrls: ['./entity-form-dialog.component.css'],
+  styleUrls: ['./entity-form-dialog.component.css']
 })
 export class EntityFormDialogComponent {
   /**
@@ -76,7 +77,7 @@ export class EntityFormDialogComponent {
       Promise.resolve().then(() => {
         // At this point, the DOM should be updated, and `this.container` should be available.
         this.ShowForm();
-      });
+      });  
     }
   }
   get Visible(): boolean {
@@ -86,16 +87,18 @@ export class EntityFormDialogComponent {
   @ViewChild('dynamicFormContainer', { read: ViewContainerRef }) container!: ViewContainerRef;
 
   /**
-   * This method can be called to show the form.
+   * This method can be called to show the form.  
    */
   public ShowForm() {
     if (!this.Visible) {
       this.Visible = true; // set to visible and bail as the rest will end up calling this function again but after a promise which will allow Angular to update the DOM
       return;
     }
-
-    if (!this.container) throw new Error('Container not found');
-    if (!this.Record) throw new Error('Record is a required property');
+    
+    if (!this.container) 
+      throw new Error('Container not found');
+    if (!this.Record)
+      throw new Error('Record is a required property');
 
     // Ensure the container is clear before inserting a new component
     this.container.clear();
@@ -115,7 +118,8 @@ export class EntityFormDialogComponent {
       if (this.Record && component.instance instanceof BaseFormSectionComponent) {
         component.instance.record = this.Record;
         component.instance.EditMode = true;
-      } else if (this.Record && component.instance instanceof BaseFormComponent) {
+      }
+      else if (this.Record && component.instance instanceof BaseFormComponent) {
         component.instance.record = this.Record;
         component.instance.EditMode = true;
       }
@@ -124,18 +128,15 @@ export class EntityFormDialogComponent {
 
   /**
    * This method can be called to close the dialog. It will emit the 'close' event with the status of the dialog.
-   * @param status
+   * @param status 
    */
   public async CloseWindow(status: 'Save' | 'Cancel') {
     this.Visible = false;
     if (this.Record) {
       if (this.HandleSave && status === 'Save') {
-        if (!(await this.Record.Save())) {
-          SharedService.Instance.CreateSimpleNotification(
-            `Error saving ${this.Record.EntityInfo.Name} record, rolling back changes`,
-            'error'
-          );
-          this.Record.Revert();
+        if (!await this.Record.Save()) {
+          SharedService.Instance.CreateSimpleNotification(`Error saving ${this.Record.EntityInfo.Name} record, rolling back changes`, 'error');
+          this.Record.Revert();  
         }
       }
       if (this.AutoRevertOnCancel && status === 'Cancel') {

@@ -1,5 +1,5 @@
 import { Component, Output, EventEmitter, OnInit } from '@angular/core';
-import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/global';
+import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import { AIConfigurationEntity } from '@memberjunction/core-entities';
 
 interface SystemConfigFilter {
@@ -11,23 +11,23 @@ interface SystemConfigFilter {
 @Component({
   selector: 'app-system-configuration',
   templateUrl: './system-configuration.component.html',
-  styleUrls: ['./system-configuration.component.scss'],
+  styleUrls: ['./system-configuration.component.scss']
 })
 export class SystemConfigurationComponent implements OnInit {
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string, recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
 
   public isLoading = false;
   public error: string | null = null;
   public filterPanelVisible = true;
-
+  
   public configurations: AIConfigurationEntity[] = [];
   public filteredConfigurations: AIConfigurationEntity[] = [];
-
+  
   public currentFilters: SystemConfigFilter = {
     searchTerm: '',
     status: 'all',
-    isDefault: 'all',
+    isDefault: 'all'
   };
 
   ngOnInit(): void {
@@ -42,7 +42,7 @@ export class SystemConfigurationComponent implements OnInit {
       const rv = new RunView();
       const result = await rv.RunView({
         EntityName: 'MJ: AI Configurations',
-        OrderBy: 'Name',
+        OrderBy: 'Name' 
       });
 
       if (result && result.Success && result.Results) {
@@ -82,7 +82,7 @@ export class SystemConfigurationComponent implements OnInit {
     this.currentFilters = {
       searchTerm: '',
       status: 'all',
-      isDefault: 'all',
+      isDefault: 'all'
     };
     this.applyFilters();
   }
@@ -93,20 +93,21 @@ export class SystemConfigurationComponent implements OnInit {
     // Apply search filter
     if (this.currentFilters.searchTerm) {
       const searchTerm = this.currentFilters.searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (config) => config.Name.toLowerCase().includes(searchTerm) || (config.Description || '').toLowerCase().includes(searchTerm)
+      filtered = filtered.filter(config => 
+        config.Name.toLowerCase().includes(searchTerm) ||
+        (config.Description || '').toLowerCase().includes(searchTerm)
       );
     }
 
     // Apply status filter
     if (this.currentFilters.status !== 'all') {
-      filtered = filtered.filter((config) => config.Status === this.currentFilters.status);
+      filtered = filtered.filter(config => config.Status === this.currentFilters.status);
     }
 
     // Apply default configuration filter
     if (this.currentFilters.isDefault !== 'all') {
       const isDefault = this.currentFilters.isDefault === 'true';
-      filtered = filtered.filter((config) => config.IsDefault === isDefault);
+      filtered = filtered.filter(config => config.IsDefault === isDefault);
     }
 
     this.filteredConfigurations = filtered;
@@ -115,27 +116,22 @@ export class SystemConfigurationComponent implements OnInit {
   private emitStateChange(): void {
     const state = {
       filterPanelVisible: this.filterPanelVisible,
-      filters: this.currentFilters,
+      filters: this.currentFilters
     };
     this.stateChange.emit(state);
   }
 
   public onOpenEntityRecord(entityName: string, recordId: string): void {
-    this.openEntityRecord.emit({ entityName, recordId });
+    this.openEntityRecord.emit({entityName, recordId});
   }
 
   public getStatusColor(status: string): string {
     switch (status) {
-      case 'Active':
-        return 'success';
-      case 'Preview':
-        return 'warning';
-      case 'Inactive':
-        return 'error';
-      case 'Deprecated':
-        return 'error';
-      default:
-        return 'info';
+      case 'Active': return 'success';
+      case 'Preview': return 'warning';
+      case 'Inactive': return 'error';
+      case 'Deprecated': return 'error';
+      default: return 'info';
     }
   }
 

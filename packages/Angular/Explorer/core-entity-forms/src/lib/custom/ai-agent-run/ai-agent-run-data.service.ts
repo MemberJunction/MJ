@@ -1,5 +1,5 @@
 import { BehaviorSubject, Observable } from 'rxjs';
-import { RunView } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
 import { AIAgentRunEntity, AIAgentRunStepEntity, ActionExecutionLogEntity, AIPromptRunEntity } from '@memberjunction/core-entities';
 
 export interface AgentRunData {
@@ -21,7 +21,7 @@ export class AIAgentRunDataHelper {
   private promptRunsSubject$ = new BehaviorSubject<AIPromptRunEntity[]>([]);
   private loadingSubject$ = new BehaviorSubject<boolean>(false);
   private errorSubject$ = new BehaviorSubject<string | null>(null);
-
+  
   // Public observables
   steps$ = this.stepsSubject$.asObservable();
   subRuns$ = this.subRunsSubject$.asObservable();
@@ -29,27 +29,24 @@ export class AIAgentRunDataHelper {
   promptRuns$ = this.promptRunsSubject$.asObservable();
   loading$ = this.loadingSubject$.asObservable();
   error$ = this.errorSubject$.asObservable();
-
+  
   // Cache for sub-agent data with size limit
   private readonly MAX_CACHE_SIZE = 100; // Maximum 100 sub-agent entries
   private readonly CACHE_TTL_MS = 15 * 60 * 1000; // 15 minute TTL
-
-  private subAgentDataCache = new Map<
-    string,
-    {
-      steps: AIAgentRunStepEntity[];
-      promptRuns: AIPromptRunEntity[];
-      timestamp: number;
-    }
-  >();
-
+  
+  private subAgentDataCache = new Map<string, {
+    steps: AIAgentRunStepEntity[];
+    promptRuns: AIPromptRunEntity[];
+    timestamp: number;
+  }>();
+  
   // Track cache access order for LRU eviction
   private cacheAccessOrder: string[] = [];
-
+  
   private currentAgentRunId: string | null = null;
-
+  
   constructor() {}
-
+  
   /**
    * Load all data for an agent run
    */
@@ -58,19 +55,19 @@ export class AIAgentRunDataHelper {
       this.errorSubject$.next('No agent run ID provided');
       return;
     }
-
+    
     // Skip cache check when force reloading
     if (!forceReload && this.currentAgentRunId === agentRunId && this.stepsSubject$.value.length > 0) {
       return;
     }
-
+    
     this.currentAgentRunId = agentRunId;
     this.loadingSubject$.next(true);
     this.errorSubject$.next(null);
-
+    
     // Clear cache when loading new run
     this.subAgentDataCache.clear();
-
+    
     try {
       await this.loadStepsAndSubRuns(agentRunId);
     } catch (error) {
@@ -80,102 +77,104 @@ export class AIAgentRunDataHelper {
       this.loadingSubject$.next(false);
     }
   }
-
+  
   private async loadStepsAndSubRuns(agentRunId: string) {
     const rv = new RunView();
-
+    
     // First, get all steps to determine what additional data we need
     const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID='${agentRunId}'`,
-      OrderBy: '__mj_CreatedAt, StepNumber',
+      OrderBy: '__mj_CreatedAt, StepNumber'
     });
-
+    
     if (!stepsResult.Success) {
       throw new Error('Failed to load agent run steps');
     }
-
-    const steps = (stepsResult.Results as AIAgentRunStepEntity[]) || [];
-
+    
+    const steps = stepsResult.Results as AIAgentRunStepEntity[] || [];
+    
     // Build filters for batch loading
     const actionLogIds = steps
-      .filter((s) => s.StepType === 'Actions' && s.TargetLogID)
-      .map((s) => s.TargetLogID)
-      .filter((id) => id != null);
-
+      .filter(s => s.StepType === 'Actions' && s.TargetLogID)
+      .map(s => s.TargetLogID)
+      .filter(id => id != null);
+      
     const promptRunIds = steps
-      .filter((s) => s.StepType === 'Prompt' && s.TargetLogID)
-      .map((s) => s.TargetLogID)
-      .filter((id) => id != null);
-
+      .filter(s => s.StepType === 'Prompt' && s.TargetLogID)
+      .map(s => s.TargetLogID)
+      .filter(id => id != null);
+    
     // Build batch queries array
     const batchQueries: any[] = [
       // Sub-runs query
       {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ParentRunID='${agentRunId}'`,
-        OrderBy: 'StartedAt',
+        OrderBy: 'StartedAt'
       },
       // Current run query
       {
         EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `ID='${agentRunId}'`,
-      },
+        ExtraFilter: `ID='${agentRunId}'`
+      }
     ];
-
+    
     // Add action logs query if needed
     if (actionLogIds.length > 0) {
       batchQueries.push({
         EntityName: 'Action Execution Logs',
         ExtraFilter: `ID IN ('${actionLogIds.join("','")}')`,
-        OrderBy: 'StartedAt',
+        OrderBy: 'StartedAt'
       });
     }
-
+    
     // Add prompt runs query if needed
     if (promptRunIds.length > 0) {
       batchQueries.push({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID IN ('${promptRunIds.join("','")}')`,
-        OrderBy: '__mj_CreatedAt',
+        OrderBy: '__mj_CreatedAt'
       });
     }
-
+    
     // Execute all queries in one batch
     const batchResults = await rv.RunViews(batchQueries);
-
+    
     // Process results
     let resultIndex = 0;
-
+    
     // Sub-runs
-    const subRuns = batchResults[resultIndex].Success ? (batchResults[resultIndex].Results as AIAgentRunEntity[]) || [] : [];
+    const subRuns = batchResults[resultIndex].Success 
+      ? (batchResults[resultIndex].Results as AIAgentRunEntity[] || [])
+      : [];
     resultIndex++;
-
+    
     // Skip current run result
     resultIndex++;
-
+    
     // Action logs
-    const actionLogs =
-      actionLogIds.length > 0 && batchResults[resultIndex]?.Success
-        ? (batchResults[resultIndex].Results as ActionExecutionLogEntity[]) || []
-        : [];
+    const actionLogs = actionLogIds.length > 0 && batchResults[resultIndex]?.Success
+      ? (batchResults[resultIndex].Results as ActionExecutionLogEntity[] || [])
+      : [];
     if (actionLogIds.length > 0) resultIndex++;
-
+    
     // Prompt runs
-    const promptRuns =
-      promptRunIds.length > 0 && batchResults[resultIndex]?.Success ? (batchResults[resultIndex].Results as AIPromptRunEntity[]) || [] : [];
-
+    const promptRuns = promptRunIds.length > 0 && batchResults[resultIndex]?.Success
+      ? (batchResults[resultIndex].Results as AIPromptRunEntity[] || [])
+      : [];
+    
     // Update all subjects
     this.stepsSubject$.next(steps);
     this.subRunsSubject$.next(subRuns);
     this.actionLogsSubject$.next(actionLogs);
     this.promptRunsSubject$.next(promptRuns);
   }
-
+  
   /**
    * Load sub-agent data (for expanding sub-agent nodes)
    */
-  async loadSubAgentData(subAgentRunId: string): Promise<{ steps: AIAgentRunStepEntity[]; promptRuns: AIPromptRunEntity[] }> {
+  async loadSubAgentData(subAgentRunId: string): Promise<{ steps: AIAgentRunStepEntity[], promptRuns: AIPromptRunEntity[] }> {
     // Check cache first
     const cachedData = this.subAgentDataCache.get(subAgentRunId);
     if (cachedData) {
@@ -190,46 +189,46 @@ export class AIAgentRunDataHelper {
         this.removeCacheEntry(subAgentRunId);
       }
     }
-
+    
     const rv = new RunView();
-
+    
     // Load steps first to determine what else we need
     const stepsResult = await rv.RunView<AIAgentRunStepEntity>({
       EntityName: 'MJ: AI Agent Run Steps',
       ExtraFilter: `AgentRunID = '${subAgentRunId}'`,
-      OrderBy: '__mj_CreatedAt, StepNumber',
+      OrderBy: '__mj_CreatedAt, StepNumber'
     });
-
+    
     if (!stepsResult.Success || !stepsResult.Results) {
       return { steps: [], promptRuns: [] };
     }
-
+    
     const steps = stepsResult.Results;
-
+    
     // Get prompt run IDs
     const promptRunIds = steps
-      .filter((s) => s.StepType === 'Prompt' && s.TargetLogID)
-      .map((s) => s.TargetLogID)
-      .filter((id) => id != null);
-
+      .filter(s => s.StepType === 'Prompt' && s.TargetLogID)
+      .map(s => s.TargetLogID)
+      .filter(id => id != null);
+    
     let promptRuns: AIPromptRunEntity[] = [];
-
+    
     // Load prompt runs if needed
     if (promptRunIds.length > 0) {
       const promptResult = await rv.RunView<AIPromptRunEntity>({
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID IN ('${promptRunIds.join("','")}')`,
-        OrderBy: '__mj_CreatedAt',
+        OrderBy: '__mj_CreatedAt'
       });
-
+      
       if (promptResult.Success) {
         promptRuns = promptResult.Results || [];
       }
     }
-
+    
     // Cache the data with timestamp
     const data = { steps, promptRuns, timestamp: Date.now() };
-
+    
     // Enforce cache size limit
     if (this.subAgentDataCache.size >= this.MAX_CACHE_SIZE) {
       // Remove least recently used entry
@@ -238,13 +237,13 @@ export class AIAgentRunDataHelper {
         this.removeCacheEntry(lruKey);
       }
     }
-
+    
     this.subAgentDataCache.set(subAgentRunId, data);
     this.updateCacheAccessOrder(subAgentRunId);
-
+    
     return data;
   }
-
+  
   /**
    * Clear all data
    */
@@ -256,7 +255,7 @@ export class AIAgentRunDataHelper {
     this.clearCache();
     this.currentAgentRunId = null;
   }
-
+  
   /**
    * Clear just the cache for the current agent run
    */
@@ -268,10 +267,10 @@ export class AIAgentRunDataHelper {
         // You might want to add logic here to identify related entries
         keysToRemove.push(key);
       }
-      keysToRemove.forEach((key) => this.removeCacheEntry(key));
+      keysToRemove.forEach(key => this.removeCacheEntry(key));
     }
   }
-
+  
   /**
    * Clear entire cache
    */
@@ -279,7 +278,7 @@ export class AIAgentRunDataHelper {
     this.subAgentDataCache.clear();
     this.cacheAccessOrder = [];
   }
-
+  
   /**
    * Update cache access order for LRU eviction
    */
@@ -290,7 +289,7 @@ export class AIAgentRunDataHelper {
     }
     this.cacheAccessOrder.push(key);
   }
-
+  
   /**
    * Remove a cache entry
    */
@@ -301,7 +300,7 @@ export class AIAgentRunDataHelper {
       this.cacheAccessOrder.splice(index, 1);
     }
   }
-
+  
   /**
    * Get cache statistics for monitoring
    */
@@ -310,10 +309,10 @@ export class AIAgentRunDataHelper {
       size: this.subAgentDataCache.size,
       maxSize: this.MAX_CACHE_SIZE,
       ttlMs: this.CACHE_TTL_MS,
-      accessOrder: [...this.cacheAccessOrder],
+      accessOrder: [...this.cacheAccessOrder]
     };
   }
-
+  
   /**
    * Get current data snapshot
    */
@@ -322,7 +321,7 @@ export class AIAgentRunDataHelper {
       steps: this.stepsSubject$.value,
       subRuns: this.subRunsSubject$.value,
       actionLogs: this.actionLogsSubject$.value,
-      promptRuns: this.promptRunsSubject$.value,
+      promptRuns: this.promptRunsSubject$.value
     };
   }
 }

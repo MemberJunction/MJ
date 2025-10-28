@@ -1,4 +1,4 @@
-import { Metadata, KeyValuePair, CompositeKey, UserInfo } from '@memberjunction/global';
+import { Metadata, KeyValuePair, CompositeKey, UserInfo } from '@memberjunction/core';
 import {
   AppContext,
   Arg,
@@ -70,25 +70,19 @@ export class UserFavoriteResult {
 export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
   @Query(() => [MJUserFavorite_])
   async UserFavoritesByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { providers, userPayload }: AppContext) {
-    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
     return await this.findBy(provider, 'User Favorites', { UserID }, userPayload.userRecord);
   }
 
   @Query(() => [MJUserFavorite_])
-  async UserFavoriteSearchByParams(
-    @Arg('params', () => Int) params: UserFavoriteSearchParams,
-    @Ctx() { providers, userPayload }: AppContext
-  ) {
-    const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+  async UserFavoriteSearchByParams(@Arg('params', () => Int) params: UserFavoriteSearchParams, @Ctx() { providers, userPayload }: AppContext) {
+    const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
     return await this.findBy(provider, 'User Favorites', params, userPayload.userRecord);
   }
 
   @Query(() => UserFavoriteResult)
-  async GetRecordFavoriteStatus(
-    @Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams,
-    @Ctx() { providers, userPayload }: AppContext
-  ) {
-    const p = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+  async GetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSearchParams) params: UserFavoriteSearchParams, @Ctx() {providers, userPayload}: AppContext) {
+    const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
 
     const e = p.Entities.find((e) => e.ID === params.EntityID);
@@ -104,11 +98,8 @@ export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
   }
 
   @Mutation(() => UserFavoriteResult)
-  async SetRecordFavoriteStatus(
-    @Arg('params', () => UserFavoriteSetParams) params: UserFavoriteSetParams,
-    @Ctx() { userPayload, providers }: AppContext
-  ) {
-    const p = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+  async SetRecordFavoriteStatus(@Arg('params', () => UserFavoriteSetParams) params: UserFavoriteSetParams, @Ctx() { userPayload, providers }: AppContext) {
+    const p = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true});
     const pk = new CompositeKey(params.CompositeKey.KeyValuePairs);
     const e = p.Entities.find((e) => e.ID === params.EntityID);
     const u = UserCache.Users.find((u) => u.ID === userPayload.userRecord.ID);

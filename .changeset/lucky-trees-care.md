@@ -1,0 +1,5 @@
+---
+"@memberjunction/storage": minor
+---
+
+migration

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, RunView } from '@memberjunction/global';
+import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
@@ -20,7 +20,7 @@ export interface MentionSuggestion {
  * Service for autocomplete suggestions when typing @mentions
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class MentionAutocompleteService {
   private agentsCache: AIAgentEntityExtended[] = [];
@@ -39,13 +39,10 @@ export class MentionAutocompleteService {
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
       this.agentsCache = AIEngineBase.Instance.Agents.filter(
-        (a) => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent'
+        a => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent'
       );
 
-      console.log(
-        '[MentionAutocomplete] Initialized with agents:',
-        this.agentsCache.map((a) => a.Name)
-      );
+      console.log('[MentionAutocomplete] Initialized with agents:', this.agentsCache.map(a => a.Name));
       console.log('[MentionAutocomplete] Total active agents:', this.agentsCache.length);
 
       // Load users from the system (optional - can be expanded later)
@@ -78,7 +75,7 @@ export class MentionAutocompleteService {
           name: agent.Name || 'Unknown',
           displayName: agent.Name || 'Unknown',
           description: agent.Description || undefined,
-          icon: this.getAgentIcon(agent),
+          icon: this.getAgentIcon(agent)
         });
       }
     }
@@ -94,7 +91,7 @@ export class MentionAutocompleteService {
             name: user.Name,
             displayName: user.Name,
             description: user.Email || undefined,
-            avatarUrl: undefined, // Future: load user avatars
+            avatarUrl: undefined // Future: load user avatars
           });
         }
       }

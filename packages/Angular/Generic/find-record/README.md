@@ -74,7 +74,7 @@ export class YourModule { }
 
 ```typescript
 import { Component, OnInit } from '@angular/core';
-import { BaseEntity, EntityFieldInfo, Metadata } from '@memberjunction/global';
+import { BaseEntity, EntityFieldInfo, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'app-user-finder',
@@ -154,16 +154,16 @@ Standalone component for searching and selecting records. This component provide
 
 #### Inputs
 
-| Property             | Type                | Default | Description                                                                                                                                                                 |
-| -------------------- | ------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `EntityName`         | `string`            | `''`    | **Required.** The name of the MemberJunction entity to search                                                                                                               |
-| `DisplayFields`      | `EntityFieldInfo[]` | `[]`    | Optional. Fields to display in the results grid. If not specified, defaults to fields marked as `DefaultInView`, `IsPrimaryKey`, `IsNameField`, or `IncludeInUserSearchAPI` |
-| `SearchDebounceTime` | `number`            | `300`   | Optional. Debounce time in milliseconds for search input                                                                                                                    |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `EntityName` | `string` | `''` | **Required.** The name of the MemberJunction entity to search |
+| `DisplayFields` | `EntityFieldInfo[]` | `[]` | Optional. Fields to display in the results grid. If not specified, defaults to fields marked as `DefaultInView`, `IsPrimaryKey`, `IsNameField`, or `IncludeInUserSearchAPI` |
+| `SearchDebounceTime` | `number` | `300` | Optional. Debounce time in milliseconds for search input |
 
 #### Outputs
 
-| Event              | Type                       | Description                                                       |
-| ------------------ | -------------------------- | ----------------------------------------------------------------- |
+| Event | Type | Description |
+|-------|------|-------------|
 | `OnRecordSelected` | `EventEmitter<BaseEntity>` | Emitted when a user selects a record from the search results grid |
 
 ### FindRecordDialogComponent
@@ -175,22 +175,22 @@ Dialog wrapper for the FindRecordComponent. Provides a modal dialog containing t
 
 #### Inputs
 
-| Property         | Type                 | Default         | Description                                                            |
-| ---------------- | -------------------- | --------------- | ---------------------------------------------------------------------- |
-| `EntityName`     | `string`             | `''`            | **Required.** The name of the MemberJunction entity to search          |
-| `DisplayFields`  | `EntityFieldInfo[]`  | `[]`            | Optional. Fields to display in the results grid                        |
-| `DialogTitle`    | `string`             | `'Find Record'` | Optional. Title displayed in the dialog header                         |
-| `DialogWidth`    | `string`             | `'700px'`       | Optional. Width of the dialog                                          |
-| `DialogHeight`   | `string`             | `'450px'`       | Optional. Height of the dialog                                         |
-| `DialogVisible`  | `boolean`            | `false`         | **Required.** Controls the visibility of the dialog                    |
-| `SelectedRecord` | `BaseEntity \| null` | `null`          | Optional. Currently selected record. Can be set to pre-select a record |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `EntityName` | `string` | `''` | **Required.** The name of the MemberJunction entity to search |
+| `DisplayFields` | `EntityFieldInfo[]` | `[]` | Optional. Fields to display in the results grid |
+| `DialogTitle` | `string` | `'Find Record'` | Optional. Title displayed in the dialog header |
+| `DialogWidth` | `string` | `'700px'` | Optional. Width of the dialog |
+| `DialogHeight` | `string` | `'450px'` | Optional. Height of the dialog |
+| `DialogVisible` | `boolean` | `false` | **Required.** Controls the visibility of the dialog |
+| `SelectedRecord` | `BaseEntity \| null` | `null` | Optional. Currently selected record. Can be set to pre-select a record |
 
 #### Outputs
 
-| Event              | Type                       | Description                                                                       |
-| ------------------ | -------------------------- | --------------------------------------------------------------------------------- |
-| `DialogClosed`     | `EventEmitter<boolean>`    | Emitted when the dialog is closed. `true` if OK was clicked, `false` if cancelled |
-| `OnRecordSelected` | `EventEmitter<BaseEntity>` | Emitted when a user selects a record from the search results                      |
+| Event | Type | Description |
+|-------|------|-------------|
+| `DialogClosed` | `EventEmitter<boolean>` | Emitted when the dialog is closed. `true` if OK was clicked, `false` if cancelled |
+| `OnRecordSelected` | `EventEmitter<BaseEntity>` | Emitted when a user selects a record from the search results |
 
 ## Search Behavior
 

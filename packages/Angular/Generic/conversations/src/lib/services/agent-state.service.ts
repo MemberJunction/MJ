@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
-import { RunView, UserInfo } from '@memberjunction/global';
+import { RunView, UserInfo } from '@memberjunction/core';
 import { AIAgentRunEntity } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
@@ -17,7 +17,7 @@ export interface AgentWithStatus {
  * Polls for agent status changes and provides reactive streams
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class AgentStateService implements OnDestroy {
   private _activeAgents$ = new BehaviorSubject<AgentWithStatus[]>([]);
@@ -69,7 +69,7 @@ export class AgentStateService implements OnDestroy {
   getActiveAgents(conversationId?: string): Observable<AgentWithStatus[]> {
     if (conversationId) {
       return this.activeAgents$.pipe(
-        map((agents) => agents.filter((a) => a.run.ConversationID === conversationId)),
+        map(agents => agents.filter(a => a.run.ConversationID === conversationId)),
         shareReplay(1)
       );
     }
@@ -81,7 +81,7 @@ export class AgentStateService implements OnDestroy {
    * @param agentRunId The agent run ID
    */
   getAgent(agentRunId: string): AgentWithStatus | undefined {
-    return this._activeAgents$.value.find((a) => a.run.ID === agentRunId);
+    return this._activeAgents$.value.find(a => a.run.ID === agentRunId);
   }
 
   /**
@@ -101,9 +101,7 @@ export class AgentStateService implements OnDestroy {
     }
 
     const timestamp = new Date().toISOString();
-    console.log(
-      `[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'})`
-    );
+    console.log(`[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'})`);
 
     try {
       const rv = new RunView();
@@ -121,7 +119,7 @@ export class AgentStateService implements OnDestroy {
           ExtraFilter: filter,
           OrderBy: 'StartedAt DESC',
           MaxRows: 50,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -129,7 +127,7 @@ export class AgentStateService implements OnDestroy {
       if (result.Success) {
         const runs = result.Results || [];
         console.log(`[${timestamp}] 🤖 AgentStateService - Found ${runs.length} active agent(s)`);
-        const agentsWithStatus = runs.map((run) => this.mapRunToAgentWithStatus(run));
+        const agentsWithStatus = runs.map(run => this.mapRunToAgentWithStatus(run));
         this._activeAgents$.next(agentsWithStatus);
 
         // Stop polling if no active agents (optimization to reduce DB load)
@@ -153,7 +151,7 @@ export class AgentStateService implements OnDestroy {
     return {
       run,
       status,
-      confidence,
+      confidence
     };
   }
 

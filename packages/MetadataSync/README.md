@@ -212,7 +212,7 @@ Entity classes are located in:
 
 3. **Runtime Metadata Discovery**:
    ```typescript
-   import { Metadata } from '@memberjunction/global';
+   import { Metadata } from '@memberjunction/core';
    
    const md = new Metadata();
    const entityInfo = md.EntityByName('Templates');
@@ -474,13 +474,13 @@ With `"filePattern": ".*.json"`:
 
 ### Troubleshooting Quick Reference
 
-| Error Message                            | Cause                                      | Solution                                               |
-| ---------------------------------------- | ------------------------------------------ | ------------------------------------------------------ |
-| `No entity directories found`            | Missing .mj-sync.json or wrong filePattern | Check .mj-sync.json exists and uses `"*.json"`         |
-| `Field 'X' does not exist on entity 'Y'` | Using non-existent field                   | Check BaseEntity class in entity_subclasses.ts         |
-| `User ID cannot be null`                 | Missing required UserID                    | Add `"UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"` |
-| `Processing 0 records`                   | Files don't match filePattern              | Check files match pattern in .mj-sync.json             |
-| Failed validation                        | Wrong data type or format                  | Check BaseEntity class for field types                 |
+| Error Message | Cause | Solution |
+|---------------|-------|----------|
+| `No entity directories found` | Missing .mj-sync.json or wrong filePattern | Check .mj-sync.json exists and uses `"*.json"` |
+| `Field 'X' does not exist on entity 'Y'` | Using non-existent field | Check BaseEntity class in entity_subclasses.ts |
+| `User ID cannot be null` | Missing required UserID | Add `"UserID": "ECAFCCEC-6A37-EF11-86D4-000D3A4E707E"` |
+| `Processing 0 records` | Files don't match filePattern | Check files match pattern in .mj-sync.json |
+| Failed validation | Wrong data type or format | Check BaseEntity class for field types |
 
 ### System User ID Reference
 
@@ -1510,13 +1510,13 @@ SQL logging is configured in the root-level `.mj-sync.json` file only (not inher
 
 #### SQL Logging Options
 
-| Option              | Type                   | Default         | Description                                                                    |
-| ------------------- | ---------------------- | --------------- | ------------------------------------------------------------------------------ |
-| `enabled`           | boolean                | false           | Whether to enable SQL logging during push operations                           |
-| `outputDirectory`   | string                 | "./sql_logging" | Directory to output SQL log files (relative to command execution directory)    |
-| `formatAsMigration` | boolean                | false           | Whether to format SQL as migration-ready files with Flyway schema placeholders |
-| `filterPatterns`    | string[]               | undefined       | Array of patterns to filter SQL statements (see below)                         |
-| `filterType`        | "exclude" \| "include" | "exclude"       | How to apply filter patterns                                                   |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | false | Whether to enable SQL logging during push operations |
+| `outputDirectory` | string | "./sql_logging" | Directory to output SQL log files (relative to command execution directory) |
+| `formatAsMigration` | boolean | false | Whether to format SQL as migration-ready files with Flyway schema placeholders |
+| `filterPatterns` | string[] | undefined | Array of patterns to filter SQL statements (see below) |
+| `filterType` | "exclude" \| "include" | "exclude" | How to apply filter patterns |
 
 #### SQL Log File Format
 
@@ -1633,11 +1633,11 @@ Add the `userRoleValidation` configuration to your root `.mj-sync.json` file:
 
 #### Configuration Options
 
-| Option                   | Type     | Default | Description                                   |
-| ------------------------ | -------- | ------- | --------------------------------------------- |
-| `enabled`                | boolean  | false   | Enable user role validation for UserID fields |
-| `allowedRoles`           | string[] | []      | List of role names that are allowed           |
-| `allowUsersWithoutRoles` | boolean  | false   | Allow users without any assigned roles        |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enabled` | boolean | false | Enable user role validation for UserID fields |
+| `allowedRoles` | string[] | [] | List of role names that are allowed |
+| `allowUsersWithoutRoles` | boolean | false | Allow users without any assigned roles |
 
 #### How It Works
 
@@ -1864,10 +1864,10 @@ When `recursive: true` is set:
 
 ### Configuration Options
 
-| Option      | Type    | Default | Description                                       |
-| ----------- | ------- | ------- | ------------------------------------------------- |
-| `recursive` | boolean | false   | Enable automatic recursive fetching               |
-| `maxDepth`  | number  | 10      | Maximum recursion depth to prevent infinite loops |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `recursive` | boolean | false | Enable automatic recursive fetching |
+| `maxDepth` | number | 10 | Maximum recursion depth to prevent infinite loops |
 
 ### Safeguards
 
@@ -1934,24 +1934,24 @@ The pull command now supports smart update capabilities with extensive configura
 
 #### Pull Configuration Options
 
-| Option                        | Type         | Default            | Description                                                                     |
-| ----------------------------- | ------------ | ------------------ | ------------------------------------------------------------------------------- |
-| `filePattern`                 | string       | Entity filePattern | Pattern for finding existing files to update                                    |
-| `createNewFileIfNotFound`     | boolean      | true               | Create files for records not found locally                                      |
-| `newFileName`                 | string       | -                  | Filename for new records when appending (see warning below)                     |
-| `appendRecordsToExistingFile` | boolean      | false              | Append new records to a single file                                             |
-| `updateExistingRecords`       | boolean      | true               | Update existing records found in local files                                    |
-| `preserveFields`              | string[]     | []                 | Fields that retain local values during updates (see detailed explanation below) |
-| `mergeStrategy`               | string       | "merge"            | How to merge updates: "merge", "overwrite", or "skip"                           |
-| `backupBeforeUpdate`          | boolean      | false              | Create timestamped backups before updating files                                |
-| `backupDirectory`             | string       | ".backups"         | Directory name for backup files (relative to entity directory)                  |
-| `filter`                      | string       | -                  | SQL WHERE clause for filtering records                                          |
-| `externalizeFields`           | array/object | -                  | Fields to save as external files with optional patterns                         |
-| `excludeFields`               | string[]     | []                 | Fields to completely omit from pulled data (see detailed explanation below)     |
-| `lookupFields`                | object       | -                  | Foreign keys to convert to @lookup references                                   |
-| `relatedEntities`             | object       | -                  | Related entities to pull as embedded collections                                |
-| `ignoreNullFields`            | boolean      | false              | Exclude fields with null values from pulled data                                |
-| `ignoreVirtualFields`         | boolean      | false              | Exclude virtual fields (view-only fields) from pulled data                      |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `filePattern` | string | Entity filePattern | Pattern for finding existing files to update |
+| `createNewFileIfNotFound` | boolean | true | Create files for records not found locally |
+| `newFileName` | string | - | Filename for new records when appending (see warning below) |
+| `appendRecordsToExistingFile` | boolean | false | Append new records to a single file |
+| `updateExistingRecords` | boolean | true | Update existing records found in local files |
+| `preserveFields` | string[] | [] | Fields that retain local values during updates (see detailed explanation below) |
+| `mergeStrategy` | string | "merge" | How to merge updates: "merge", "overwrite", or "skip" |
+| `backupBeforeUpdate` | boolean | false | Create timestamped backups before updating files |
+| `backupDirectory` | string | ".backups" | Directory name for backup files (relative to entity directory) |
+| `filter` | string | - | SQL WHERE clause for filtering records |
+| `externalizeFields` | array/object | - | Fields to save as external files with optional patterns |
+| `excludeFields` | string[] | [] | Fields to completely omit from pulled data (see detailed explanation below) |
+| `lookupFields` | object | - | Foreign keys to convert to @lookup references |
+| `relatedEntities` | object | - | Related entities to pull as embedded collections |
+| `ignoreNullFields` | boolean | false | Exclude fields with null values from pulled data |
+| `ignoreVirtualFields` | boolean | false | Exclude virtual fields (view-only fields) from pulled data |
 
 > **⚠️ Important Configuration Warning**
 > 
@@ -2459,14 +2459,14 @@ When using virtual properties, related required fields are skipped:
 
 ### Common Validation Errors
 
-| Error                      | Cause                  | Solution                                   |
-| -------------------------- | ---------------------- | ------------------------------------------ |
-| `Field "X" does not exist` | Typo or wrong entity   | Check entity definition in generated files |
-| `Entity "X" not found`     | Wrong entity name      | Use exact entity name from database        |
-| `File not found`           | Bad @file: reference   | Check file path is relative and exists     |
-| `Lookup not found`         | No matching record     | Verify lookup value or use ?create         |
-| `Circular dependency`      | A→B→A references       | Restructure to avoid cycles                |
-| `Required field missing`   | Missing required field | Add field with appropriate value           |
+| Error | Cause | Solution |
+|-------|-------|----------|
+| `Field "X" does not exist` | Typo or wrong entity | Check entity definition in generated files |
+| `Entity "X" not found` | Wrong entity name | Use exact entity name from database |
+| `File not found` | Bad @file: reference | Check file path is relative and exists |
+| `Lookup not found` | No matching record | Verify lookup value or use ?create |
+| `Circular dependency` | A→B→A references | Restructure to avoid cycles |
+| `Required field missing` | Missing required field | Add field with appropriate value |
 
 ### Validation Configuration
 

@@ -3,7 +3,7 @@ import { AppContext } from '../types.js';
 import { RunViewByIDInput } from '../generic/RunViewResolver.js';
 import { Message } from '@memberjunction/communication-types';
 import { EntityCommunicationsEngine } from '@memberjunction/entity-communications-server';
-import { RunViewParams } from '@memberjunction/global';
+import { RunViewParams } from '@memberjunction/core';
 import { GraphQLJSONObject } from 'graphql-type-json';
 import { TemplateEngineServer } from '@memberjunction/templates';
 import { EntityCommunicationParams } from '@memberjunction/entity-communications-base';

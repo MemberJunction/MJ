@@ -412,7 +412,7 @@ Example workflow:
 
 4. **Logging**: The framework automatically logs action executions, but include additional logging for debugging:
    ```typescript
-   import { LogError, LogStatus } from '@memberjunction/global';
+   import { LogError, LogStatus } from '@memberjunction/core';
    
    LogStatus('Starting custom action processing...');
    ```

@@ -1,14 +1,14 @@
 import { Component, OnInit, Input, EventEmitter, Output, AfterViewInit } from '@angular/core';
 
-import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/global';
-import { SharedService } from '@memberjunction/ng-shared';
+import { BaseEntity, Metadata, RunView, RunViewParams } from '@memberjunction/core';
+import { SharedService } from '@memberjunction/ng-shared'
 import { Router } from '@angular/router';
 
 import { SchedulerEvent } from '@progress/kendo-angular-scheduler';
 import { sampleData, displayDate } from './dummy-data';
 
 /**
- *
+ * 
  */
 export class TimelineGroup {
   /**
@@ -58,8 +58,8 @@ export class TimelineGroup {
   /**
    * Creates a new instance of the TimelineGroup class using the information from the RunViewParams provided.
    * After receiving back the new object, you can set other properties of the new instance as appropriate.
-   * @param params
-   * @returns
+   * @param params 
+   * @returns 
    */
   public static async FromView(params: RunViewParams): Promise<TimelineGroup> {
     const group = new TimelineGroup();
@@ -80,9 +80,9 @@ export class TimelineGroup {
 @Component({
   selector: 'mj-timeline',
   templateUrl: './timeline.component.html',
-  styleUrls: ['./timeline.component.css'],
+  styleUrls: ['./timeline.component.css']
 })
-export class TimelineComponent implements AfterViewInit {
+export class TimelineComponent implements AfterViewInit { 
   private _groups: TimelineGroup[] = [];
 
   /**
@@ -93,7 +93,8 @@ export class TimelineComponent implements AfterViewInit {
   }
   public set Groups(value: TimelineGroup[]) {
     this._groups = value;
-    if (this.AllowLoad) this.Refresh();
+    if (this.AllowLoad)
+      this.Refresh();
   }
 
   private _deferLoadCount: number = 0;
@@ -105,46 +106,49 @@ export class TimelineComponent implements AfterViewInit {
     return this._allowLoad;
   }
   public set AllowLoad(value: boolean) {
-    this._allowLoad = value;
+    this._allowLoad = value
     if (value === true && this._deferLoadCount === 0) {
-      this._deferLoadCount++; // only do this one time
+      this._deferLoadCount++; // only do this one time 
       this.Refresh();
     }
   }
+
 
   public selectedDate: Date = new Date();
   public events: SchedulerEvent[] = [];
 
   ngAfterViewInit(): void {
-    if (this.AllowLoad) this.Refresh();
+    if (this.AllowLoad)
+      this.Refresh();
   }
+
 
   /**
    * This method refreshes the timeline with the data from the provided parameters.
    */
   public Refresh() {
     if (this.Groups && this.Groups.length > 0) {
-      this.Groups.forEach((g) => this.LoadSingleGroup(g));
+      this.Groups.forEach(g => this.LoadSingleGroup(g));
 
       // now get the highest date from the events array and set that into the selectedDate
       if (this.events.length > 0) {
-        this.selectedDate = this.events.reduce((a, b) => (a.start > b.start ? a : b)).start;
+        this.selectedDate = this.events.reduce((a, b) => a.start > b.start ? a : b).start;
       }
     }
   }
 
   protected LoadSingleGroup(group: TimelineGroup) {
-    this.events = group.EntityObjects.map((e) => {
+    this.events = group.EntityObjects.map(e => {
       let date = new Date(e.Get(group.DateFieldName));
       let title = e.Get(group.TitleFieldName);
-      let summary = '';
+      let summary = "";
       if (group.SummaryMode == 'field') {
         summary = e.Get(group.TitleFieldName);
       } else if (group.SummaryMode == 'custom' && group.SummaryFunction) {
         summary = group.SummaryFunction(e);
       }
       return {
-        id: e.Get('ID'),
+        id: e.Get("ID"),
         title: title,
         start: date,
         end: date,
@@ -155,4 +159,5 @@ export class TimelineComponent implements AfterViewInit {
       };
     });
   }
+  
 }

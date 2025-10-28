@@ -4,7 +4,7 @@ dotenv.config();
 
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError } from '@memberjunction/global';
+import { LogError } from '@memberjunction/core';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 

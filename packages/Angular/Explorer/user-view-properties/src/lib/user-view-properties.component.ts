@@ -1,34 +1,15 @@
-import {
-  Component,
-  EventEmitter,
-  Input,
-  Output,
-  AfterViewInit,
-  OnDestroy,
-  ViewChild,
-  ElementRef,
-  Renderer2,
-  ChangeDetectorRef,
-} from '@angular/core';
-import { ActivatedRoute, Router } from '@angular/router';
-import { FormBuilder } from '@angular/forms';
+import { Component, EventEmitter, Input, Output,  AfterViewInit, OnDestroy, ViewChild, ElementRef, Renderer2, ChangeDetectorRef} from '@angular/core';
+import { ActivatedRoute, Router } from "@angular/router";
+import { FormBuilder } from "@angular/forms";
 
-import {
-  Metadata,
-  EntityFieldInfo,
-  EntityInfo,
-  EntityFieldTSType,
-  ValidationResult,
-  LogError,
-  getAnsiColorCode,
-} from '@memberjunction/global';
+import { Metadata, EntityFieldInfo, EntityInfo, EntityFieldTSType, ValidationResult, LogError, getAnsiColorCode } from "@memberjunction/core";
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import { ListEntity, ResourcePermissionEngine, UserViewEntityExtended, ViewGridState } from '@memberjunction/core-entities';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 
 import { ResourceData } from '@memberjunction/core-entities';
-import { DragEndEvent } from '@progress/kendo-angular-sortable';
+import { DragEndEvent} from '@progress/kendo-angular-sortable';
 import { WindowComponent } from '@progress/kendo-angular-dialog';
 import { TabComponent } from '@progress/kendo-angular-layout';
 import { CompositeFilterDescriptor } from '@progress/kendo-data-query';
@@ -36,10 +17,11 @@ import { TextBoxComponent, TextAreaComponent } from '@progress/kendo-angular-inp
 import { FindRecordDialogComponent } from '@memberjunction/ng-find-record';
 import { ResourcePermissionsComponent } from '@memberjunction/ng-resource-permissions';
 
+
 @Component({
   selector: 'mj-user-view-properties-dialog',
   templateUrl: './user-view-properties.component.html',
-  styleUrls: ['./user-view-properties.component.scss'],
+  styleUrls: ['./user-view-properties.component.scss']
 })
 export class UserViewPropertiesDialogComponent extends BaseFormComponent implements AfterViewInit, OnDestroy {
   @Input() public ViewID: string | undefined;
@@ -47,22 +29,24 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   /**
    * View Category ID, optional
    */
-  @Input() public CategoryID: string | null = null;
+  @Input() public CategoryID: string | null = null; 
   @Input() public ShowPropertiesButton: boolean = true;
 
   @Output() dialogClosed = new EventEmitter();
+
 
   public isDialogOpened: boolean = false;
   public showloader: boolean = true;
 
   // public  localViewColumns: ViewColumnInfo[] = [];
-  public localGridState: any = {};
-  public localFilterState: any = {};
-  public defaultFilterState: any = {};
+  public localGridState: any = {}
+  public localFilterState: any = {}
+  public defaultFilterState: any = {}
   public record!: UserViewEntityExtended;
 
   public ViewEntityInfo!: EntityInfo;
   public ViewResourceTypeID!: string;
+
 
   private _userCanEdit: boolean | undefined = undefined;
   /**
@@ -80,10 +64,14 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   public sortFields: any[] = [];
   public sortState: any[] = [];
-  public sortDirections = [
-    { Name: 'Up', Value: 'asc' },
-    { Name: 'Down', Value: 'desc' },
+  public sortDirections= [
+    { Name: 'Up', Value: 'asc' }, 
+    { Name: 'Down', Value: 'desc' }
   ];
+
+
+ 
+
 
   @ViewChild(WindowComponent) kendoWindow!: WindowComponent;
   @ViewChild(TabComponent) kendoTab!: TabComponent;
@@ -94,18 +82,13 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   @ViewChild('findRecordDialog') private findRecordDialog!: FindRecordDialogComponent;
   @ViewChild('resourcePermissions') private resourcePermissions!: ResourcePermissionsComponent;
 
-  constructor(
-    protected override route: ActivatedRoute,
-    private elRef: ElementRef,
-    private ss: SharedService,
-    private formBuilder: FormBuilder,
-    protected override router: Router,
-    private renderer: Renderer2,
-    protected cdr: ChangeDetectorRef
-  ) {
+
+  constructor (protected override route: ActivatedRoute, private elRef: ElementRef, private ss: SharedService, private formBuilder: FormBuilder, protected override router: Router, private renderer: Renderer2, protected cdr: ChangeDetectorRef) {
     super(elRef, ss, router, route, cdr);
-    this.BottomMargin = 75;
+    this.BottomMargin = 75; 
+
   }
+
 
   onKeyPress(event: KeyboardEvent) {
     const activeElement = document.activeElement as HTMLElement;
@@ -123,10 +106,12 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
       if (this.findRecordDialog.EntityName === 'User Views') {
         const record = <UserViewEntityExtended>selectedRecord;
         text = `View(Name: "${record.Name}", ID: "${record.ID}")`;
-      } else if (this.findRecordDialog.EntityName === 'Lists') {
+      }
+      else if (this.findRecordDialog.EntityName === 'Lists') {
         const record = <ListEntity>selectedRecord;
         text = `List(Name: "${record.Name}", ID: "${record.ID}")`;
-      } else {
+      }
+      else {
         const error = `Unknown entity name ${this.findRecordDialog.EntityName}`;
         LogError(error);
         throw new Error(error);
@@ -137,7 +122,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   }
 
   public smartFilterPrompt_insertViewReference() {
-    this.showFindRecordDialog('User Views', ['ID', 'Name', 'Entity', 'UserName']);
+    this.showFindRecordDialog('User Views', ['ID', 'Name', 'Entity','UserName']);
   }
   public smartFilterPrompt_insertListReference() {
     this.showFindRecordDialog('Lists', ['ID', 'Name', 'Entity', 'User']);
@@ -159,7 +144,11 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     const currentValue = this.record.SmartFilterPrompt ? this.record.SmartFilterPrompt : '';
 
     // Insert the new text at the cursor position
-    this.record.SmartFilterPrompt = [currentValue.slice(0, cursorPosition), text, currentValue.slice(selectionEnd)].join('');
+    this.record.SmartFilterPrompt = [
+      currentValue.slice(0, cursorPosition),
+      text,
+      currentValue.slice(selectionEnd)
+    ].join('');
 
     // Update the value in the TextArea
     textareaElement.value = this.record.SmartFilterPrompt;
@@ -169,14 +158,14 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     textareaElement.setSelectionRange(newCursorPosition, newCursorPosition);
     textareaElement.focus();
   }
-
+ 
   override GetTabTopPosition(): number {
     return 50; // for this dialog, we don't want to offset the tab position related to where it is on the page, this is relative to top of dialog
   }
 
   /**
    * Displays a dialog to create a new view
-   * @param entityName
+   * @param entityName 
    */
   public CreateView(entityName: string) {
     this.EntityName = entityName;
@@ -186,8 +175,8 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
 
   /**
    * Displays a dialog to create a new view, if the user saves the view, it will be created in the specified category
-   * @param entityName
-   * @param viewCategoryID
+   * @param entityName 
+   * @param viewCategoryID 
    */
   public CreateViewInCategory(entityName: string, viewCategoryID: string) {
     this.CategoryID = viewCategoryID;
@@ -206,10 +195,10 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this._userCanEdit = undefined; // reset this so it recalculates on the next call to UserCanEdit
 
     const md = new Metadata();
-    this.record = <UserViewEntityExtended>await md.GetEntityObject('User Views');
+    this.record = <UserViewEntityExtended> await md.GetEntityObject('User Views');
 
     // load up the ResourceType ID for User Views
-    const rt = this.sharedService.ResourceTypeByName('User Views');
+    const rt = this.sharedService.ResourceTypeByName("User Views")
     if (rt) {
       this.ViewResourceTypeID = rt.ID;
     }
@@ -217,13 +206,15 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     if (this.ViewID) {
       // load the view
       await this.record.Load(this.ViewID);
-    } else if (this.EntityName) {
+    }
+    else if (this.EntityName) {
       // We don't have a View ID, we are creating a NEW view, so do NewRecord()
       this.record.NewRecord();
-      const e = md.Entities.find((e) => e.Name == this.EntityName);
-      if (e) {
+      const e = md.Entities.find (e => e.Name == this.EntityName);
+      if (e){
         this.record.SetDefaultsFromEntity(e);
-      } else {
+      }
+      else {
         throw new Error(`Entity ${this.EntityName} not found in metadata`);
       }
     }
@@ -239,40 +230,43 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   public closePropertiesDialog() {
     this.dialogClosed.emit({});
     this.isDialogOpened = false; // binding causes the kendo window to close from this method call
-    if (this.keyPressListener) {
-      // removing the keypress listener when the dialog closes
+    if (this.keyPressListener) { // removing the keypress listener when the dialog closes
       this.dialogContainer.nativeElement.removeEventListener('keypress', this.keyPressListener);
     }
   }
 
   public async FinishLoad(md: Metadata) {
-    this.ViewEntityInfo = md.Entities.find((e) => e.ID == this.record.EntityID)!;
+    this.ViewEntityInfo = md.Entities.find(e => e.ID == this.record.EntityID)!;
     // using all these local variables because the VSCode debugger doesn't know what "this" is all of a sudden
-    if (!this.ViewEntityInfo) throw new Error(`Entity ${this.record.EntityID} not found in metadata`);
-
+    if (!this.ViewEntityInfo) 
+      throw new Error(`Entity ${this.record.EntityID} not found in metadata`);
+    
     // prepare the sorting state
-    this.sortFields = this.ViewEntityInfo.Fields;
-    if (this.record.SortState === null || this.record.SortState === undefined || this.record.SortState.trim().length === 0)
+    this.sortFields = this.ViewEntityInfo.Fields;    
+    if (this.record.SortState === null || this.record.SortState === undefined || this.record.SortState.trim().length === 0) 
       this.sortState = [];
-    else this.sortState = JSON.parse(this.record.SortState);
+    else
+      this.sortState = JSON.parse(this.record.SortState);
 
     // now translate the sortState into the UI format by swapping out the primitve field names and sort direction with the data objects that the kendo ui will bind to
     this.sortState = this.sortState.map((s: any) => {
       let dir: string;
       if (typeof s.direction === 'string') {
         dir = s.direction;
-      } else if (typeof s.direction === 'number' && s.direction === 1) {
-        // some legacy views have 1 and 2 for asc and desc
+      }
+      else if (typeof s.direction === 'number' && s.direction === 1) { // some legacy views have 1 and 2 for asc and desc
         dir = 'asc';
-      } else if (typeof s.direction === 'number' && s.direction === 2) {
+      }
+      else if (typeof s.direction === 'number' && s.direction === 2) {
         dir = 'desc';
-      } else {
+      }
+      else {
         dir = '';
       }
       return {
         field: this.ViewEntityInfo?.Fields.find((f: EntityFieldInfo) => f.Name === s.field),
-        direction: this.sortDirections.find((d: any) => d.Value.trim().toLowerCase() === dir),
-      };
+        direction: this.sortDirections.find((d: any) => d.Value.trim().toLowerCase() === dir)
+      }
     });
 
     this.localGridState = JSON.parse(this.record.GridState!);
@@ -280,14 +274,14 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.localFilterState = JSON.parse(this.record.FilterState!);
     this.defaultFilterState = this.localFilterState; // adding a duplicate filter state for populating the default filter state
     this.appendUnusedColumnsToColumnSettings(this.localGridState);
-    this.localGridState.columnSettings.sort((a: any, b: any) => {
+    this.localGridState.columnSettings.sort((a: any,b:any) => {
       if (a.hidden && !b.hidden) return 1;
       if (!a.hidden && b.hidden) return -1;
-
+      
       // if we get here, they're both hidden, or both not hidden, so sort by orderIndex
       return a.orderIndex - b.orderIndex;
     });
-
+    
     setTimeout(() => {
       this.keyPressListener = this.onKeyPress.bind(this);
       this.dialogContainer.nativeElement.addEventListener('keypress', this.onKeyPress.bind(this));
@@ -298,10 +292,11 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   private appendUnusedColumnsToColumnSettings(gridState: ViewGridState) {
     // we go through our EntityFields and add any that aren't already in the columnSettings
     // this is so that we can add new columns to the view that were not previously used in this view
-    const unusedFields = this.ViewEntityInfo?.Fields.filter((f) => {
-      if (gridState.columnSettings.find((col: any) => col.Name.trim().toLowerCase() === f.Name.trim().toLowerCase()))
+    const unusedFields = this.ViewEntityInfo?.Fields.filter(f => {
+      if (gridState.columnSettings.find((col: any) => col.Name.trim().toLowerCase() === f.Name.trim().toLowerCase())) 
         return false; // this entity field is already in the columnSettings
-      else return true; // this entity field is not in the columnSettings
+      else
+        return true; // this entity field is not in the columnSettings
     });
 
     // now we add the unused fields to the columnSettings
@@ -313,7 +308,7 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
         orderIndex: gridState.columnSettings.length,
         width: f.DefaultColumnWidth ? f.DefaultColumnWidth : 100,
         EntityField: f,
-        hidden: true,
+        hidden: true
       });
     });
   }
@@ -335,13 +330,13 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   protected updateRecordGridState() {
     const temp = JSON.stringify(this.localGridState);
     const tempO = JSON.parse(temp); // make sure we have a clean object that is NOT linked in memory to the localGridState
-
+    
     // now strip the EntityField from the columnSettings in the tempO object
     tempO.columnSettings.forEach((col: any) => {
       delete col.EntityField;
     });
 
-    this.record.GridState = JSON.stringify(tempO); // stringify the state into the record
+    this.record.GridState = JSON.stringify(tempO); // stringify the state into the record  
   }
 
   public onFilterChange(value: CompositeFilterDescriptor): void {
@@ -351,24 +346,25 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
   public async toggleColumn(column: any) {
     column.hidden = !column.hidden; // do the toggle
 
-    if (this.localGridState) {
-      this.updateRecordGridState();
-    }
+     if (this.localGridState){
+      this.updateRecordGridState(); 
+     }
   }
 
-  public async saveProperties(): Promise<void> {
+  public async saveProperties() : Promise<void> {
+
     const bNewRecord = !this.record.IsSaved;
     this.showloader = true;
     const lfs = JSON.stringify(this.localFilterState);
     // pass this along as as string, not directly bound since Kendo Filter is bound to a local object we need to translate to a string
     this.record.FilterState = JSON.stringify(this.localFilterState);
 
-    // need to convert the UI format to the data format.
+    // need to convert the UI format to the data format.  
     const sortMap = this.sortState.map((s: any) => {
       return {
         field: s.field.Name,
-        direction: s.direction.Value,
-      };
+        direction: s.direction.Value
+      }
     });
     this.record.SortState = JSON.stringify(sortMap);
 
@@ -376,30 +372,22 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     const valResults: ValidationResult = this.record.Validate();
     if (valResults.Success === false) {
       this.showloader = false;
-      this.sharedService.CreateSimpleNotification(
-        'Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'),
-        'warning',
-        7500
-      );
+      this.sharedService.CreateSimpleNotification('Validation Errors: ' + valResults.Errors.map((e) => e.Message).join('\n'), 'warning', 7500);
       return;
     }
 
     // make sure the view category is set into the record if provided
     this.record.CategoryID = this.CategoryID;
-    let saveResult: boolean = await this.record.Save();
-    if (!saveResult) {
+    let saveResult: boolean = await this.record.Save(); 
+    if(!saveResult){
       // it failed, so don't close the dialog
       this.showloader = false;
-      this.sharedService.CreateSimpleNotification(
-        'Saving the view failed, please try again and if this persists contact your administrator.',
-        'error',
-        5000
-      );
+      this.sharedService.CreateSimpleNotification('Saving the view failed, please try again and if this persists contact your administrator.', 'error', 5000);
       LogError(this.record.LatestResult);
-    } else {
+    }
+    else {
       // it saved, no save sharing
-      if (this.resourcePermissions.ResourceRecordID !== this.record.ID) {
-        // update the resource record id
+      if (this.resourcePermissions.ResourceRecordID !== this.record.ID) { // update the resource record id
         await this.resourcePermissions.UpdateResourceRecordID(this.record.ID);
       }
       await this.resourcePermissions.SavePermissions();
@@ -410,112 +398,122 @@ export class UserViewPropertiesDialogComponent extends BaseFormComponent impleme
     this.showloader = false;
 
     let event: any = {
-      Saved: true,
+      Saved: true, 
       ViewEntity: this.record,
       Cancel: false,
-      bNewRecord: bNewRecord,
-    };
+      bNewRecord: bNewRecord
+    }
 
-    this.dialogClosed.emit(event);
+    this.dialogClosed.emit(event); 
 
-    if (bNewRecord) {
+    if(bNewRecord){
       //navigate to the newly created view
       //for reasons (currently) unkown, immediately navigating away from the page
       //prevents this dialog from closing or responding to any events
       setTimeout(() => {
-        this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value]);
+        this.router.navigate(['resource', 'view', this.record.FirstPrimaryKey.Value])
       }, 100);
-    } else {
+    }
+    else{
       MJGlobal.Instance.RaiseEvent({
         event: MJEventType.ComponentEvent,
         eventCode: EventCodes.ViewUpdated,
-        args: new ResourceData({
-          ResourceTypeID: this.sharedService.ViewResourceType.ID,
-          ResourceRecordID: this.record.FirstPrimaryKey.Value,
-          Configuration: {
-            ViewEntity: this.record,
-          },
-        }),
-        component: this,
+        args: new ResourceData({ 
+                                ResourceTypeID: this.sharedService.ViewResourceType.ID,
+                                ResourceRecordID: this.record.FirstPrimaryKey.Value, 
+                                Configuration: {
+                                  ViewEntity: this.record
+                                }
+                              }),
+        component: this
       });
     }
   }
-
+ 
   public defaultOperators: any = {
-    string: ['contains', 'doesnotcontain', 'eq', 'neq', 'startswith', 'endswith', 'isnull', 'isnotnull', 'isempty', 'isnotempty'],
-    number: ['neq', 'eq', 'gte', 'gt', 'lte', 'lt', 'isnull', 'isnotnull'],
-    date: ['neq', 'eq', 'gte', 'gt', 'lte', 'lt', 'isnull', 'isnotnull'],
-    boolean: ['eq', 'neq'],
+    string: ["contains", "doesnotcontain", "eq", "neq", "startswith", "endswith", "isnull", "isnotnull", "isempty", "isnotempty"],
+    number: ["neq", "eq", "gte", "gt", "lte", "lt", "isnull", "isnotnull"],
+    date: ["neq", "eq", "gte", "gt", "lte", "lt", "isnull", "isnotnull"],
+    boolean: ["eq", "neq"]
   };
+
 
   private _savedFilters: any = null;
   public setupFilters() {
     if (this._savedFilters === null) {
-      const filters = this.ViewEntityInfo!.Fields.map((f: EntityFieldInfo) => this.toKendoFilterField(f));
-      this._savedFilters = filters;
-      return filters;
-    } else return this._savedFilters;
+        const filters = this.ViewEntityInfo!.Fields.map((f: EntityFieldInfo) =>  this.toKendoFilterField(f));
+        this._savedFilters = filters;
+        return filters;
+    }
+    else
+        return this._savedFilters;
   }
-
+ 
   public toKendoFilterField = (f: EntityFieldInfo): any => {
     return {
       field: f.Name,
       title: f.DisplayName ?? f.Name,
       editor: this.getKendoEditor(f),
-      operators: this.getKendoOperators(f),
-    };
-  };
-
-  public getKendoEditor(field: EntityFieldInfo) {
+      operators: this.getKendoOperators(f)
+    }
+  }
+ 
+  public getKendoEditor (field: EntityFieldInfo)  {
     switch (field.TSType) {
-      case EntityFieldTSType.Boolean:
-        return 'boolean';
-      case EntityFieldTSType.Date:
-        return 'date';
-      case EntityFieldTSType.Number:
-        return 'number';
-      default:
-        return 'string';
+        case EntityFieldTSType.Boolean:
+            return 'boolean';
+        case EntityFieldTSType.Date:
+            return 'date';
+        case EntityFieldTSType.Number:
+            return 'number';
+        default:
+            return 'string';
     }
   }
 
-  public getKendoOperators(field: EntityFieldInfo) {
+  public getKendoOperators (field: EntityFieldInfo) {
     switch (field.TSType) {
-      case EntityFieldTSType.Boolean:
-        return this.defaultOperators.boolean;
-      case EntityFieldTSType.Date:
-        return this.defaultOperators.date;
-      case EntityFieldTSType.Number:
-        return this.defaultOperators.number;
-      default:
-        return this.defaultOperators.string;
+        case EntityFieldTSType.Boolean:
+            return this.defaultOperators.boolean;
+        case EntityFieldTSType.Date:
+            return this.defaultOperators.date;
+        case EntityFieldTSType.Number:
+            return this.defaultOperators.number;
+        default:
+            return this.defaultOperators.string;
     }
   }
 
+  
   protected override get ContainerObjectHeight(): number {
-    if (this.kendoWindow) return this.kendoWindow.height;
-    else return 0;
+    if (this.kendoWindow)
+      return this.kendoWindow.height;
+    else
+      return 0;
   }
 
   addSort() {
-    this.sortState = this.sortState.concat({ field: this.ViewEntityInfo?.Fields[0], direction: this.sortDirections[0] }); // add a new sort item
+    this.sortState = this.sortState.concat({field: this.ViewEntityInfo?.Fields[0], direction: this.sortDirections[0]}); // add a new sort item
   }
 
   removeSort(item: any) {
     this.sortState = this.sortState.filter((i) => i !== item);
   }
-
-  sortColumnValueChange(sortItem: any, newValue: EntityFieldInfo) {
+ 
+  sortColumnValueChange(sortItem: any, newValue: EntityFieldInfo) { 
     const idx = this.sortState.findIndex((i: any) => i === sortItem);
 
-    console.log(this.sortState);
-    console.log(newValue);
+    console.log(this.sortState)
+    console.log(newValue)
   }
-  sortDirectionValueChange(sortItem: any, newValue: any) {}
+  sortDirectionValueChange(sortItem: any, newValue: any) {
+  }
+
 
   private _movedToBody: boolean = false;
   moveDialogToBody() {
-    if (this._movedToBody) return;
+    if (this._movedToBody)
+      return;
     const dialogElement = this.outerDialogContainer.nativeElement;
     this.renderer.appendChild(document.body, dialogElement);
 

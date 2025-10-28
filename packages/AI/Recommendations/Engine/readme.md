@@ -49,7 +49,7 @@ Abstract base class for implementing recommendation providers:
 
 ```typescript
 import { RecommendationProviderBase, RecommendationRequest, RecommendationResult } from '@memberjunction/ai-recommendations';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { RecommendationItemEntity } from '@memberjunction/core-entities';
 
 export class MyRecommendationProvider extends RecommendationProviderBase {

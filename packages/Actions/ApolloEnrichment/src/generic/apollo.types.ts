@@ -1,351 +1,352 @@
-import { Metadata, UserInfo } from '@memberjunction/global';
+import { Metadata, UserInfo } from "@memberjunction/core";
 
 export type ProcessPersonRecordGroupParams = {
-  Records: Record<string, any>[];
-  Startrow: number;
-  GroupLength: number;
-  Md: Metadata;
-  CurrentUser: UserInfo;
-  EntityName: string;
-  EmailField: string;
-  FirstNameField: string;
-  LastNameField: string;
-  TitleField: string;
-  EnrichedAtField: string;
-  ProfilePictureURLField?: string;
-  AccountNameField?: string;
-  DomainField?: string;
-  LinkedInField?: string;
-  TwitterField?: string;
-  FacebookField?: string;
-  EmploymentHistoryEntityName?: string;
-  EmploymentHistoryContactIDFieldName?: string;
-  EmploymentHistoryOrganizationFieldName?: string;
-  EmploymentHistoryTitleFieldName?: string;
-  EducationHistoryEntityName?: string;
-  EducationHistoryContactIDFieldName?: string;
-  EducationHistoryInstitutionFieldName?: string;
-  EducationHistoryDegreeFieldName?: string;
+    Records: Record<string, any>[];
+    Startrow: number;
+    GroupLength: number;
+    Md: Metadata;
+    CurrentUser: UserInfo;
+    EntityName: string;
+    EmailField: string;
+    FirstNameField: string;
+    LastNameField: string;
+    TitleField: string;
+    EnrichedAtField: string;
+    ProfilePictureURLField?: string;
+    AccountNameField?: string;
+    DomainField?: string;  
+    LinkedInField?: string;
+    TwitterField?: string;
+    FacebookField?: string;
+    EmploymentHistoryEntityName?: string;
+    EmploymentHistoryContactIDFieldName?: string;
+    EmploymentHistoryOrganizationFieldName?: string;
+    EmploymentHistoryTitleFieldName?: string;
+    EducationHistoryEntityName?: string;
+    EducationHistoryContactIDFieldName?: string;
+    EducationHistoryInstitutionFieldName?: string;
+    EducationHistoryDegreeFieldName?: string;
 };
 
 export type ApolloBulkPeopleRequest = {
-  /**
-   * The API key for the Apollo.io request (required)
-   */
-  api_key: string;
 
-  /**
-   * The list of people to enrich (required)
-   */
-  details: ApolloBulkPeopleRequestDetail[];
+    /**
+     * The API key for the Apollo.io request (required)
+     */
+    api_key: string;
 
-  /**
-   * Flag to reveal personal emails (optional)
-   *
-   * Default false
-   *
-   * Note: Personal emails will not be revealed for GDPR compliant regions
-   */
-  reveal_personal_emails?: boolean;
+    /**
+     * The list of people to enrich (required)
+     */
+    details: ApolloBulkPeopleRequestDetail[];
 
-  /**
-   * Flag to reveal phone number (optional)
-   *
-   *  Default false.
-   *
-   * If you set to this true, Apollo will asynchronously verify direct dials for you, and you must specify a Webhook callback URL.
-   */
-  reveal_phone_numbers?: boolean;
+    /**
+     * Flag to reveal personal emails (optional) 
+     * 
+     * Default false
+     * 
+     * Note: Personal emails will not be revealed for GDPR compliant regions
+     */
+    reveal_personal_emails?: boolean;
 
-  /**
-   * Webhook callback URL for sending 'reveal_phone_number' response (optional)
-   *
-   * This parameter is required if you request direct dials via "reveal_phone_number"
-   */
-  webhook_url?: string;
+    /**
+     * Flag to reveal phone number (optional)
+     * 
+     *  Default false. 
+     * 
+     * If you set to this true, Apollo will asynchronously verify direct dials for you, and you must specify a Webhook callback URL.
+     */
+    reveal_phone_numbers?: boolean;
+    
+    /**
+     * Webhook callback URL for sending 'reveal_phone_number' response (optional) 
+     * 
+     * This parameter is required if you request direct dials via "reveal_phone_number"
+     */
+    webhook_url?: string;
 };
 
 export type ApolloBulkPeopleRequestDetail = {
-  /**
-   * The person's first name (optional)
-   */
-  first_name?: string;
+    /**
+    * The person's first name (optional)
+    */
+    first_name?: string;
 
-  /**
-   * The person's last name (optional)
-   */
-  last_name?: string;
+    /**
+     * The person's last name (optional)
+     */
+    last_name?: string;
 
-  /**
-   * The person's full name (optional)
-   */
-  name?: string;
+    /**
+     * The person's full name (optional)
+     */
+    name?: string;
 
-  /**
-   * The person's email (optional)
-   */
-  email?: string;
+    /**
+     * The person's email (optional)
+     */
+    email?: string;
 
-  /**
-   * The person's md5 or sha256 hashed email (optional)
-   */
-  hased_email?: string;
+    /**
+     * The person's md5 or sha256 hashed email (optional)
+     */
+    hased_email?: string;
 
-  /**
-   * The person's company name (optional)
-   */
-  organization_name?: string;
+    /**
+     * The person's company name (optional)
+     */
+    organization_name?: string;
 
-  /**
-   * The person's company domain (optional)
-   */
-  domain?: string;
+    /**
+     * The person's company domain (optional)
+     */
+    domain?: string;
 
-  /**
-   * The person's ID obtained from the search endpoint (optional)
-   */
-  id?: string;
+    /**
+     * The person's ID obtained from the search endpoint (optional)
+     */
+    id?: string;
 
-  /**
-   * The person's linkedin URL (optional)
-   */
-  linkedin_url?: string;
+    /**
+     * The person's linkedin URL (optional)
+     */
+    linkedin_url?: string;
 };
 
 export type ApolloBulkPeopleResponse = {
-  status: string;
-  error_code: number;
-  error_message: string;
-  total_requested_enrichments: number;
-  unique_enriched_records: number;
-  missing_records: number;
-  credits_consumed: number;
-  matches: Array<SearchPeopleResponsePerson | null>;
+    status: string;
+    error_code: number,
+    error_message: string,
+    total_requested_enrichments: number,
+    unique_enriched_records: number,
+    missing_records: number,
+    credits_consumed: number,
+    matches: Array<SearchPeopleResponsePerson | null>;
 };
 
 export type ContactEntityFields = {
-  EntityName: string;
-  EmailField: string;
-  AccountIDField: string;
-  EnrichedAtField: string;
-  FirstNameField: string;
-  LastNameField: string;
-  TitleField: string;
-  EmailSourceField: string;
-  ActivityCountField: string;
-  FacebookField?: string;
-  LinkedInField?: string;
-  TwitterField?: string;
-  ProfilePictureURLField?: string;
+    EntityName: string;
+    EmailField: string;
+    AccountIDField: string;
+    EnrichedAtField: string;
+    FirstNameField: string;
+    LastNameField: string;
+    TitleField: string;
+    EmailSourceField: string;
+    ActivityCountField: string;
+    FacebookField?: string;
+    LinkedInField?: string;
+    TwitterField?: string;
+    ProfilePictureURLField?: string;
 };
 
 export type ContactEducationHistoryEntityFields = {
-  EntityName: string;
-  ContactIDField: string;
-  InstitutionField: string;
-  DegreeField: string;
-  GradeLevelField: string;
-  StartDateField: string;
-  EndDateField: string;
-  IsCurrentField: string;
+    EntityName: string;
+    ContactIDField: string;
+    InstitutionField: string;
+    DegreeField: string;
+    GradeLevelField: string;
+    StartDateField: string;
+    EndDateField: string;
+    IsCurrentField: string;
 };
 
 export type TechnologyCategoryEntityFields = {
-  EntityName: string;
-  NameField: string;
-  IDField: string;
+    EntityName: string;
+    NameField: string;
+    IDField: string;
 };
 
 export type AccountTechnologyEntityFields = {
-  EntityName: string;
-  AccountIDField: string;
-  TechnologyIDField: string;
-  TechnologyField: string;
-  CategoryField: string;
-  EndedUseAtField: string;
+    EntityName: string;
+    AccountIDField: string;
+    TechnologyIDField: string;
+    TechnologyField: string;
+    CategoryField: string;
+    EndedUseAtField: string;
 };
 
 export type AccountEntityFields = {
-  EntityName: string;
-  DomainField: string;
-  AccountIDField: string;
-  EnrichedAtField: string;
-  Filter: string;
-  CityField?: string;
-  StateProvinceField?: string;
-  PostalCodeField?: string;
-  DescriptionField?: string;
-  PhoneNumberField?: string;
-  CountryField?: string;
-  LinkedInField?: string;
-  LogoURLField?: string;
-  FacebookField?: string;
-  TwitterField?: string;
-  AddressField?: string;
-};
+    EntityName: string;
+    DomainField: string;
+    AccountIDField: string;
+    EnrichedAtField: string;
+    Filter: string;
+    CityField?: string;
+    StateProvinceField?: string;
+    PostalCodeField?: string;
+    DescriptionField?: string;
+    PhoneNumberField?: string;
+    CountryField?: string;
+    LinkedInField?: string;
+    LogoURLField?: string;
+    FacebookField?: string;
+    TwitterField?: string;
+    AddressField?: string;
+}
 
 export type ProcessSingleDomainParams = {
-  Record: Record<string, any>;
-  AccountEntity: AccountEntityFields;
-  AccountTechnologyEntity: AccountTechnologyEntityFields | null;
-  TechnologyCategoryEntity: TechnologyCategoryEntityFields | null;
-  ContactEntity: ContactEntityFields | null;
-  ContactEducationHistoryEntity: ContactEducationHistoryEntityFields | null;
+    Record: Record<string, any>;
+    AccountEntity: AccountEntityFields;
+    AccountTechnologyEntity: AccountTechnologyEntityFields | null;
+    TechnologyCategoryEntity: TechnologyCategoryEntityFields | null;
+    ContactEntity: ContactEntityFields | null;
+    ContactEducationHistoryEntity: ContactEducationHistoryEntityFields | null;
 };
 
 export type OrganizationEnrichmentRequest = {
-  /**
-   * The company domain
-   * @example "apollo.io"
-   */
-  domain: string;
+    /**
+     * The company domain
+     * @example "apollo.io"
+     */
+    domain: string;
 };
 
 export type OrganizationEnrichmentResponse = {
-  /**
-   * The company domain
-   * @example "apollo.io"
-   */
-  organization: OrganizationEnrichmentOrganization;
+    /**
+     * The company domain
+     * @example "apollo.io"
+     */
+    organization: OrganizationEnrichmentOrganization
 };
 
 export type OrganizationEnrichmentOrganization = {
-  id: string;
-  name: string;
-  website_url: string;
-  blog_url: string;
-  angellist_url: string;
-  linkedin_url: string;
-  twitter_url: string;
-  facebook_url: string;
-  primary_phone: Record<'number' | 'source', string>;
-  languages: string[];
-  alexa_ranking: number;
-  phone: string;
-  linkedin_uid: string;
-  founded_year: number;
-  publicly_traded_symbol: string;
-  publicly_traded_exchange: string;
-  logo_url: string;
-  crunchbase_url: string;
-  primary_domain: string;
-  industry: string;
-  keywords: string[];
-  estimated_num_employees: number;
-  snippets_loaded: boolean;
-  industry_tag_id: string;
-  retail_location_count: number;
-  raw_address: string;
-  street_address: string;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-  owned_by_organization_id: string;
-  suborganizations: string[];
-  num_suborganizations: number;
-  seo_description: string;
-  short_description: string;
-  annual_revenue_printed: string;
-  annual_revenue: number;
-  total_funding: number;
-  total_funding_printed: string;
-  latest_funding_round_date: string;
-  latest_funding_stage: string;
-  funding_events: Record<'id' | 'date' | 'news_url' | 'type' | 'investors' | 'amount' | 'currency', string>[];
-  technology_names: string[];
-  current_technologies: Record<'uid' | 'name' | 'category', string>[];
-  account_id: string;
-  account: Record<string, any>;
-  departmental_head_count: Record<string, number>;
+    id: string, 
+    name: string,
+    website_url: string,
+    blog_url: string,
+    angellist_url: string,
+    linkedin_url: string,
+    twitter_url: string,
+    facebook_url: string,
+    primary_phone: Record<'number' | 'source', string>,
+    languages: string[],
+    alexa_ranking: number,
+    phone: string,
+    linkedin_uid: string,
+    founded_year: number,
+    publicly_traded_symbol: string,
+    publicly_traded_exchange: string,
+    logo_url: string,
+    crunchbase_url: string,
+    primary_domain: string,
+    industry: string,
+    keywords: string[],
+    estimated_num_employees: number,
+    snippets_loaded: boolean,
+    industry_tag_id: string,
+    retail_location_count: number,
+    raw_address: string,
+    street_address: string,
+    city: string,
+    state: string,
+    postal_code: string,
+    country: string,
+    owned_by_organization_id: string,
+    suborganizations: string[],
+    num_suborganizations: number,
+    seo_description: string,
+    short_description: string,
+    annual_revenue_printed: string,
+    annual_revenue: number,
+    total_funding: number,
+    total_funding_printed: string,
+    latest_funding_round_date: string,
+    latest_funding_stage: string,
+    funding_events: Record<'id' | 'date' | 'news_url' | 'type' | 'investors' | 'amount' | 'currency', string>[],
+    technology_names: string[],
+    current_technologies: Record<'uid' | 'name' | 'category', string>[],
+    account_id: string,
+    account: Record<string, any>,
+    departmental_head_count: Record<string, number>
 };
 
 export type OrganizationEnrichmentOrganizationAccount = {
-  id: string;
-  domain: string;
-  name: string;
-  team_id: string;
-  organization_id: string;
-  account_stage_id: string;
-  source: string;
-  original_source: string;
-  owner_id: string;
-  created_at: string;
-  phone: string;
-  phone_status: string;
-  test_predictive_score: string;
-  hubspot_id: string;
-  salesforce_id: string;
-  crm_owner_id: string;
-  parent_account_id: string;
-  sanitized_phone: string;
-  account_playbook_statuses: string[];
-  existence_level: string;
-  label_ids: string[];
-  typed_custom_fields: Record<string, any>;
-  modality: string;
-  persona_counts: Record<string, number>;
+    id: string,
+    domain: string,
+    name: string,
+    team_id: string,
+    organization_id: string,
+    account_stage_id: string,
+    source: string,
+    original_source: string,
+    owner_id: string,
+    created_at: string,
+    phone: string,
+    phone_status: string,
+    test_predictive_score: string,
+    hubspot_id: string,
+    salesforce_id: string,
+    crm_owner_id: string,
+    parent_account_id: string,
+    sanitized_phone: string,
+    account_playbook_statuses: string[],
+    existence_level: string,
+    label_ids: string[],
+    typed_custom_fields: Record<string, any>,
+    modality: string,
+    persona_counts: Record<string, number>
 };
 
 export type TechnologyMap = {
-  category: string;
-  name: string;
-  uid: string;
+    category: string;
+    name: string;
+    uid: string;
 };
 
 export type SearchPeopleResponse = {
-  breadcrumbs: Record<string, any>[];
-  partial_results_only: boolean;
-  disable_eu_prospecting: boolean;
-  partial_results_limit: number;
-  pagination: {
-    page: number;
-    per_page: number;
-    total_entries: number;
-    total_pages: number;
-  };
-  contacts: Record<string, any>[];
-  people: SearchPeopleResponsePerson[];
+    breadcrumbs: Record<string, any>[];
+    partial_results_only: boolean;
+    disable_eu_prospecting: boolean;
+    partial_results_limit: number;
+    pagination: {
+        page: number;
+        per_page: number;
+        total_entries: number;
+        total_pages: number;
+    };
+    contacts: Record<string, any>[];
+    people: SearchPeopleResponsePerson[];
 };
 
 export type SearchPeopleResponsePerson = {
-  id: string;
-  first_name: string;
-  last_name: string;
-  name: string;
-  linkedin_url: string;
-  title: string;
-  email_status: string;
-  photo_url: string;
-  twitter_url: string;
-  github_url: string;
-  facebook_url: string;
-  extrapolated_email_confidence: string;
-  headline: string;
-  email: string;
-  employment_history: EmploymentHistory[];
-  state: string;
-  city: string;
-  country: string;
-  organization_id: string;
-  organization: OrganizationEnrichmentOrganization;
-  account_id: string;
-  account: OrganizationEnrichmentOrganizationAccount;
-  departments: string[];
-  subdepartments: string[];
-  functions: string[];
-  seniority: string;
+    id: string;
+    first_name: string;
+    last_name: string;
+    name: string;
+    linkedin_url: string;
+    title: string;
+    email_status: string;
+    photo_url: string;
+    twitter_url: string;
+    github_url: string;
+    facebook_url: string;
+    extrapolated_email_confidence: string;
+    headline: string;
+    email: string;
+    employment_history: EmploymentHistory[];
+    state: string;
+    city: string;
+    country: string;
+    organization_id: string;
+    organization: OrganizationEnrichmentOrganization;
+    account_id: string;
+    account: OrganizationEnrichmentOrganizationAccount;
+    departments: string[];
+    subdepartments: string[];
+    functions: string[];
+    seniority: string;
 };
 
 export type EmploymentHistory = {
-  current: boolean;
-  degree: string;
-  description: string;
-  emails: any;
-  end_date: string;
-  start_date: string;
-  grade_level: string;
-  organization_id: string;
-  organization_name: string;
-  title: string;
+    current: boolean;
+    degree: string;
+    description: string;
+    emails: any;
+    end_date: string;
+    start_date: string;
+    grade_level: string;
+    organization_id: string;
+    organization_name: string;
+    title: string;    
 };

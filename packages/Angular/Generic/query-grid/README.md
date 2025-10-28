@@ -73,7 +73,7 @@ export class YourModule { }
 
 ```typescript
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { RunQueryParams } from '@memberjunction/global';
+import { RunQueryParams } from '@memberjunction/core';
 import { GridRowClickedEvent, QueryGridComponent } from '@memberjunction/ng-query-grid';
 
 @Component({
@@ -237,28 +237,28 @@ export class CustomerOrdersComponent implements OnInit {
 
 ### Inputs
 
-| Input          | Type                          | Default     | Description                              |
-| -------------- | ----------------------------- | ----------- | ---------------------------------------- |
-| `Params`       | `RunQueryParams \| undefined` | `undefined` | Query parameters for data loading        |
-| `BottomMargin` | `number`                      | `0`         | Bottom margin in pixels                  |
-| `InEditMode`   | `boolean`                     | `false`     | Whether the grid is in edit mode         |
-| `EditMode`     | `"None" \| "Save" \| "Queue"` | `"None"`    | Type of edit mode                        |
-| `AutoNavigate` | `boolean`                     | `true`      | Whether to auto-navigate on row click    |
-| `AllowLoad`    | `boolean`                     | `true`      | Controls whether data loading is allowed |
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `Params` | `RunQueryParams \| undefined` | `undefined` | Query parameters for data loading |
+| `BottomMargin` | `number` | `0` | Bottom margin in pixels |
+| `InEditMode` | `boolean` | `false` | Whether the grid is in edit mode |
+| `EditMode` | `"None" \| "Save" \| "Queue"` | `"None"` | Type of edit mode |
+| `AutoNavigate` | `boolean` | `true` | Whether to auto-navigate on row click |
+| `AllowLoad` | `boolean` | `true` | Controls whether data loading is allowed |
 
 ### Outputs
 
-| Output       | Type                                | Description                        |
-| ------------ | ----------------------------------- | ---------------------------------- |
+| Output | Type | Description |
+|--------|------|-------------|
 | `rowClicked` | `EventEmitter<GridRowClickedEvent>` | Emitted when a grid row is clicked |
 
 ### Public Methods
 
-| Method                   | Parameters               | Return Type     | Description                                      |
-| ------------------------ | ------------------------ | --------------- | ------------------------------------------------ |
-| `Refresh`                | `params: RunQueryParams` | `Promise<void>` | Refreshes grid data with new query parameters    |
-| `RefreshFromSavedParams` | none                     | `Promise<void>` | Refreshes grid using previously saved parameters |
-| `doExcelExport`          | none                     | `Promise<void>` | Exports current grid data to Excel file          |
+| Method | Parameters | Return Type | Description |
+|--------|------------|-------------|-------------|
+| `Refresh` | `params: RunQueryParams` | `Promise<void>` | Refreshes grid data with new query parameters |
+| `RefreshFromSavedParams` | none | `Promise<void>` | Refreshes grid using previously saved parameters |
+| `doExcelExport` | none | `Promise<void>` | Exports current grid data to Excel file |
 
 ### Types
 

@@ -55,7 +55,7 @@ The email link directive converts text into a mailto: link when the field has an
 
 ```typescript
 // In your component
-import { EntityField } from '@memberjunction/global';
+import { EntityField } from '@memberjunction/core';
 
 export class YourComponent {
   field: EntityField; // EntityField with ExtendedType = "email"
@@ -74,7 +74,7 @@ The web link directive converts text into an external URL link when the field ha
 
 ```typescript
 // In your component
-import { EntityField } from '@memberjunction/global';
+import { EntityField } from '@memberjunction/core';
 
 export class YourComponent {
   field: EntityField; // EntityField with ExtendedType = "url"
@@ -101,7 +101,7 @@ The field link directive creates a link to another entity record when the field 
 
 ```typescript
 // In your component
-import { BaseEntity } from '@memberjunction/global';
+import { BaseEntity } from '@memberjunction/core';
 
 export class YourComponent {
   customerRecord: BaseEntity; // Entity record containing the foreign key field
@@ -120,28 +120,28 @@ The directive:
 
 **Selector**: `[mjEmailLink]`
 
-| Input   | Type          | Required | Description                                                                     |
-| ------- | ------------- | -------- | ------------------------------------------------------------------------------- |
-| `field` | `EntityField` | Yes      | The entity field object containing email data. Must have ExtendedType = "email" |
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| `field` | `EntityField` | Yes | The entity field object containing email data. Must have ExtendedType = "email" |
 
 ### WebLink Directive
 
 **Selector**: `[mjWebLink]`
 
-| Input   | Type          | Required | Description                                                                 |
-| ------- | ------------- | -------- | --------------------------------------------------------------------------- |
-| `field` | `EntityField` | Yes      | The entity field object containing URL data. Must have ExtendedType = "url" |
+| Input | Type | Required | Description |
+|-------|------|----------|-------------|
+| `field` | `EntityField` | Yes | The entity field object containing URL data. Must have ExtendedType = "url" |
 
 ### FieldLink Directive
 
 **Selector**: `[mjFieldLink]`
 
-| Input         | Type         | Default | Required | Description                                                       |
-| ------------- | ------------ | ------- | -------- | ----------------------------------------------------------------- |
-| `mjFieldLink` | `boolean`    | -       | Yes      | Enable the directive (must be set to true)                        |
-| `record`      | `BaseEntity` | -       | Yes      | The entity record object containing the field                     |
-| `fieldName`   | `string`     | -       | Yes      | The name of the field that contains the foreign key               |
-| `replaceText` | `boolean`    | `true`  | No       | Whether to replace the field value with the related entity's name |
+| Input | Type | Default | Required | Description |
+|-------|------|---------|----------|-------------|
+| `mjFieldLink` | `boolean` | - | Yes | Enable the directive (must be set to true) |
+| `record` | `BaseEntity` | - | Yes | The entity record object containing the field |
+| `fieldName` | `string` | - | Yes | The name of the field that contains the foreign key |
+| `replaceText` | `boolean` | `true` | No | Whether to replace the field value with the related entity's name |
 
 **Events**: The directive handles click events internally to navigate using Angular Router.
 
@@ -225,7 +225,7 @@ Here's a complete example showing all three directives in action:
 ```typescript
 // component.ts
 import { Component, OnInit } from '@angular/core';
-import { BaseEntity, Metadata } from '@memberjunction/global';
+import { BaseEntity, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'app-contact-details',

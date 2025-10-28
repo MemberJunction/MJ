@@ -1,28 +1,6 @@
-import {
-  Component,
-  Input,
-  OnInit,
-  OnChanges,
-  SimpleChanges,
-  ViewChild,
-  ViewContainerRef,
-  ComponentRef,
-  AfterViewInit,
-  ComponentFactoryResolver,
-  Injector,
-  Output,
-  EventEmitter,
-  ChangeDetectorRef,
-  OnDestroy,
-  ElementRef,
-} from '@angular/core';
-import {
-  ConversationArtifactEntity,
-  ArtifactTypeEntity,
-  ConversationArtifactVersionEntity,
-  ConversationDetailEntity,
-} from '@memberjunction/core-entities';
-import { RunView, LogError, LogStatus } from '@memberjunction/global';
+import { Component, Input, OnInit, OnChanges, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, AfterViewInit, ComponentFactoryResolver, Injector, Output, EventEmitter, ChangeDetectorRef, OnDestroy, ElementRef } from '@angular/core';
+import { ConversationArtifactEntity, ArtifactTypeEntity, ConversationArtifactVersionEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { RunView, LogError, LogStatus } from '@memberjunction/core';
 import { DataContext } from '@memberjunction/data-context';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -36,13 +14,13 @@ import { GraphQLComponentRegistryClient } from '@memberjunction/graphql-dataprov
 @Component({
   selector: 'skip-artifact-viewer',
   templateUrl: './skip-artifact-viewer.component.html',
-  styleUrls: ['./skip-artifact-viewer.component.css'],
+  styleUrls: ['./skip-artifact-viewer.component.css']
 })
 export class SkipArtifactViewerComponent extends BaseAngularComponent implements OnInit, OnChanges, AfterViewInit, OnDestroy {
   @Input() public ArtifactID: string = '';
   @Input() public ArtifactVersionID: string = '';
   @Input() public DataContext: DataContext | null = null;
-
+  
   @ViewChild('reportContainer', { read: ViewContainerRef, static: false }) reportContainer!: ViewContainerRef;
   @ViewChild('reportContainer', { read: ElementRef, static: false }) reportContainerElement!: ElementRef;
 
@@ -60,7 +38,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
    * This event fires whenever a drill down is requested within a given report.
    */
   @Output() DrillDownEvent = new EventEmitter<DrillDownInfo>();
-
+  
   /**
    * Event that emits the artifact info for display in parent components
    */
@@ -69,10 +47,10 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
     type: string;
     date: Date | null;
     version: string;
-    versionList?: Array<{ ID: string; Version: string | number; __mj_CreatedAt: Date }>;
+    versionList?: Array<{ID: string, Version: string | number, __mj_CreatedAt: Date}>;
     selectedVersionId?: string;
   }>();
-
+  
   public isLoading: boolean = false;
   public artifact: ConversationArtifactEntity | null = null;
   public artifactVersion: ConversationArtifactVersionEntity | null = null;
@@ -95,8 +73,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
     private notificationService: MJNotificationService,
     private componentFactoryResolver: ComponentFactoryResolver,
     private cdRef: ChangeDetectorRef,
-    private injector: Injector
-  ) {
+    private injector: Injector) {
     super();
   }
 
@@ -107,10 +84,8 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (
-      (changes['ArtifactID'] && !changes['ArtifactID'].firstChange) ||
-      (changes['ArtifactVersionID'] && !changes['ArtifactVersionID'].firstChange)
-    ) {
+    if ((changes['ArtifactID'] && !changes['ArtifactID'].firstChange) || 
+        (changes['ArtifactVersionID'] && !changes['ArtifactVersionID'].firstChange)) {
       this.loadArtifact();
     }
   }
@@ -148,18 +123,18 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
     try {
       const provider = this.ProviderToUse;
-
+      
       // Load the artifact
       const artifactEntity = await provider.GetEntityObject<ConversationArtifactEntity>('MJ: Conversation Artifacts', provider.CurrentUser);
-      if (!(await artifactEntity.Load(this.ArtifactID))) {
+      if (!await artifactEntity.Load(this.ArtifactID)) {
         throw new Error(`Failed to load artifact: ${artifactEntity.LatestResult.Message}`);
       }
 
       this.artifact = artifactEntity;
-
+      
       // Load the artifact type
       const artifactTypeEntity = await provider.GetEntityObject<ArtifactTypeEntity>('MJ: Artifact Types', provider.CurrentUser);
-      if (!(await artifactTypeEntity.Load(this.artifact.ArtifactTypeID))) {
+      if (!await artifactTypeEntity.Load(this.artifact.ArtifactTypeID)) {
         throw new Error(`Failed to load artifact type: ${artifactTypeEntity.LatestResult.Message}`);
       }
 
@@ -179,10 +154,10 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       } else {
         throw new Error('No artifact versions found');
       }
-
+      
       // Emit artifact info for parent components
       this.emitArtifactInfo();
-
+      
       // Create the report component after a short delay to ensure Angular has time to initialize the view
       this.isLoading = false;
       this.cdRef.detectChanges(); // Trigger change detection to update the view
@@ -198,7 +173,11 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
     } catch (err) {
       LogError('Error loading artifact', err instanceof Error ? err.message : String(err));
       this.error = err instanceof Error ? err.message : 'Unknown error loading artifact';
-      this.notificationService.CreateSimpleNotification('Error loading artifact', 'error', 3000);
+      this.notificationService.CreateSimpleNotification(
+        'Error loading artifact', 
+        'error',
+        3000
+      );
     } finally {
       this.isLoading = false;
     }
@@ -213,7 +192,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       EntityName: 'MJ: Conversation Artifact Versions',
       ResultType: 'entity_object',
       OrderBy: 'Version DESC',
-      ExtraFilter: `ConversationArtifactID = '${this.ArtifactID}'`,
+      ExtraFilter: `ConversationArtifactID = '${this.ArtifactID}'`
     });
 
     if (versionResult && versionResult.Success && versionResult.Results.length > 0) {
@@ -248,7 +227,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
 
         // Load the selected version
         this.loadSpecificArtifactVersion(this.selectedVersionId);
-
+        
         // Emit updated artifact info
         this.emitArtifactInfo();
 
@@ -273,7 +252,11 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       } catch (err) {
         LogError('Error changing artifact version', err instanceof Error ? err.message : String(err));
         this.error = err instanceof Error ? err.message : 'Unknown error loading artifact version';
-        this.notificationService.CreateSimpleNotification('Error loading artifact version', 'error', 3000);
+        this.notificationService.CreateSimpleNotification(
+          'Error loading artifact version', 
+          'error',
+          3000
+        );
         this.isLoading = false;
       }
     }
@@ -300,11 +283,11 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       this.reportComponentRef = this.reportContainer.createComponent(componentFactory);
 
       if (this.reportComponentRef) {
-        const instance = this.reportComponentRef.instance as SkipDynamicReportWrapperComponent;
-
+        const instance = this.reportComponentRef.instance as SkipDynamicReportWrapperComponent
+        
         // Initialize from AI message or Configuration
         let configData = null;
-
+        
         try {
           if (typeof this.artifactVersion.Configuration === 'string') {
             configData = JSON.parse(this.artifactVersion.Configuration);
@@ -318,15 +301,13 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         }
 
         // If we couldn't get data from Artifact Version, try to get it from AI message
-        if (
-          !configData &&
-          this.conversationDetailRecord &&
-          this.conversationDetailRecord.Role.trim().toLowerCase() === 'ai' &&
-          this.conversationDetailRecord.ID?.length > 0
-        ) {
+        if (!configData && 
+            this.conversationDetailRecord && 
+            this.conversationDetailRecord.Role.trim().toLowerCase() === 'ai' &&
+            this.conversationDetailRecord.ID?.length > 0) {
           try {
             const resultObject = <SkipAPIResponse>JSON.parse(this.conversationDetailRecord.Message);
-
+            
             if (resultObject.success && resultObject.responsePhase === SkipResponsePhase.analysis_complete) {
               // Use the Skip API response data directly
               configData = <SkipAPIAnalysisCompleteResponse>resultObject;
@@ -335,7 +316,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
             LogError('Error parsing AI message', parseErr instanceof Error ? parseErr.message : String(parseErr));
           }
         }
-
+        
         if (!configData) {
           throw new Error('No valid configuration data found');
         }
@@ -349,11 +330,11 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         instance.NavigateToMatchingReport.subscribe((reportID: string) => {
           this.NavigateToMatchingReport.emit(reportID); // bubble up
         });
-
+        
         instance.NewReportCreated.subscribe((reportID: string) => {
           this.NewReportCreated.emit(reportID); // bubble up
         });
-
+        
         instance.DrillDownEvent.subscribe((drillDownInfo: any) => {
           this.DrillDownEvent.emit(drillDownInfo); // bubble up
         });
@@ -362,9 +343,9 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         if (this.DataContext) {
           instance.DataContext = this.DataContext;
         }
-
+        
         instance.AllowDrillDown = false; // Disable drill-down in artifact viewer for simplicity
-
+        
         // Set conversation info if available
         if (this.conversationDetailRecord) {
           instance.ConversationID = this.conversationDetailRecord.ConversationID;
@@ -381,7 +362,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       this.error = 'Failed to create artifact viewer component: ' + (err instanceof Error ? err.message : String(err));
     }
   }
-
+  
   /**
    * Loads the conversation detail record associated with this artifact
    */
@@ -389,7 +370,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
     if (!this.artifact || !this.artifact.ID) {
       return;
     }
-
+    
     try {
       // Get the conversation detail record
       const runView = new RunView(this.RunViewToUse);
@@ -397,9 +378,9 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         EntityName: 'Conversation Details',
         ResultType: 'entity_object',
         ExtraFilter: `ArtifactID = '${this.artifact.ID}' ${this.artifactVersion ? `AND ArtifactVersionID = '${this.artifactVersion.ID}'` : ''}`,
-        OrderBy: '__mj_CreatedAt DESC', // Get most recent first
+        OrderBy: '__mj_CreatedAt DESC' // Get most recent first
       });
-
+      
       if (detailsResult && detailsResult.Success && detailsResult.Results.length > 0) {
         this.conversationDetailRecord = detailsResult.Results[0];
       }
@@ -436,14 +417,12 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   }
 
   public get isCode(): boolean {
-    return (
-      this.contentType.includes('javascript') ||
-      this.contentType.includes('python') ||
-      this.contentType.includes('java') ||
-      this.contentType.includes('csharp') ||
-      this.contentType.includes('sql') ||
-      this.contentType.includes('typescript')
-    );
+    return this.contentType.includes('javascript') || 
+           this.contentType.includes('python') || 
+           this.contentType.includes('java') || 
+           this.contentType.includes('csharp') || 
+           this.contentType.includes('sql') ||
+           this.contentType.includes('typescript');
   }
 
   public get isHtml(): boolean {
@@ -484,12 +463,12 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         type: this.artifactTypeName,
         date: this.artifactVersion?.__mj_CreatedAt || null,
         version: this.getCurrentVersionNumber(),
-        versionList: this.artifactVersions.map((v) => ({
+        versionList: this.artifactVersions.map(v => ({
           ID: v.ID,
           Version: v.Version,
-          __mj_CreatedAt: v.__mj_CreatedAt,
+          __mj_CreatedAt: v.__mj_CreatedAt
         })),
-        selectedVersionId: this.artifactVersion?.ID || '',
+        selectedVersionId: this.artifactVersion?.ID || ''
       });
     }
   }
@@ -564,7 +543,7 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
       description: spec.description,
       location: spec.location || 'embedded',
       namespace: spec.namespace,
-      registry: spec.registry,
+      registry: spec.registry
     };
 
     // Recursively build dependency nodes
@@ -604,23 +583,35 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
         conversationID: feedback.conversationID,
         conversationDetailID: feedback.conversationDetailID,
         reportID: feedback.reportID,
-        dashboardID: feedback.dashboardID,
+        dashboardID: feedback.dashboardID
       });
 
       if (result?.success) {
-        this.notificationService.CreateSimpleNotification('Feedback submitted successfully!', 'success', 3000);
+        this.notificationService.CreateSimpleNotification(
+          'Feedback submitted successfully!',
+          'success',
+          3000
+        );
         LogStatus('Component feedback submitted successfully', result.feedbackID);
 
         // Close the feedback panel after successful submission
         this.closeFeedbackPanel();
       } else {
         const errorMsg = result?.error || 'Failed to submit feedback';
-        this.notificationService.CreateSimpleNotification(`Error: ${errorMsg}`, 'error', 5000);
+        this.notificationService.CreateSimpleNotification(
+          `Error: ${errorMsg}`,
+          'error',
+          5000
+        );
         LogError('Failed to submit component feedback', errorMsg);
       }
     } catch (error) {
       LogError('Error submitting component feedback', error instanceof Error ? error.message : String(error));
-      this.notificationService.CreateSimpleNotification('An unexpected error occurred while submitting feedback', 'error', 5000);
+      this.notificationService.CreateSimpleNotification(
+        'An unexpected error occurred while submitting feedback',
+        'error',
+        5000
+      );
     }
   }
 
@@ -635,12 +626,12 @@ export class SkipArtifactViewerComponent extends BaseAngularComponent implements
   ngOnDestroy(): void {
     // CRITICAL: Clean up dynamically created report component to prevent zombie components
     this.destroyReportComponent();
-
+    
     // Clear the view container to ensure no lingering references
     if (this.reportContainer) {
       this.reportContainer.clear();
     }
-
+    
     // Reset state
     this.artifact = null;
     this.artifactVersion = null;

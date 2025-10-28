@@ -34,7 +34,7 @@ npm install @memberjunction/scheduled-actions
 
 ```typescript
 import { ScheduledActionEngine } from '@memberjunction/scheduled-actions';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 // Get the singleton instance
 const engine = ScheduledActionEngine.Instance;

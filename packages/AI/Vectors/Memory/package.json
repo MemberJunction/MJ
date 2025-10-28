@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-vectors-memory",
-  "version": "2.111.1",
+  "version": "2.111.4",
   "description": "MemberJunction: AI Vectors In-Memory Utilities",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -15,7 +15,8 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/global": "2.111.1"
+    "@memberjunction/core": "2.111.4",
+    "@memberjunction/global": "2.111.4"
   },
   "devDependencies": {
     "@types/node": "20.14.2",

@@ -1,13 +1,13 @@
-import { Resolver, Mutation, Arg, Ctx } from 'type-graphql';
-import { ActionEngineServer } from '@memberjunction/actions';
-import { EntityActionEngineServer } from '@memberjunction/actions';
-import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError } from '@memberjunction/global';
-import { ActionParam, ActionResult } from '@memberjunction/actions-base';
-import { Field, InputType, ObjectType } from 'type-graphql';
-import { KeyValuePairInput } from '../generic/KeyValuePairInput.js';
-import { AppContext, ProviderInfo } from '../types.js';
-import { CopyScalarsAndArrays } from '@memberjunction/global';
-import { GetReadOnlyProvider } from '../util.js';
+import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
+import { ActionEngineServer } from "@memberjunction/actions";
+import { EntityActionEngineServer } from "@memberjunction/actions";
+import { Metadata, UserInfo, BaseEntity, CompositeKey, KeyValuePair, LogError } from "@memberjunction/core";
+import { ActionParam, ActionResult } from "@memberjunction/actions-base";
+import { Field, InputType, ObjectType } from "type-graphql";
+import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
+import { AppContext, ProviderInfo } from "../types.js";
+import { CopyScalarsAndArrays } from "@memberjunction/global";
+import { GetReadOnlyProvider } from "../util.js";
 
 /**
  * Input type for action parameters
@@ -60,7 +60,7 @@ export class RunActionInput {
   @Field(() => Boolean, { nullable: true })
   SkipActionLog?: boolean;
 }
-
+ 
 /**
  * Represents a collection of key-value pairs that make up a composite key
  * Used for both primary keys and foreign keys
@@ -97,7 +97,7 @@ export class EntityActionInput {
    */
   @Field(() => String, { nullable: true })
   EntityName?: string;
-
+  
   /**
    * The ID of the entity
    * Use EntityName instead when possible for better code readability
@@ -179,12 +179,15 @@ export class ActionResolver {
    * @returns The result of running the action
    */
   @Mutation(() => ActionResultOutput)
-  async RunAction(@Arg('input') input: RunActionInput, @Ctx() ctx: AppContext): Promise<ActionResultOutput> {
+  async RunAction(
+    @Arg("input") input: RunActionInput,
+    @Ctx() ctx: AppContext
+  ): Promise<ActionResultOutput> {
     try {
       // Get the user from context
       const user = ctx.userPayload.userRecord;
       if (!user) {
-        throw new Error('User is not authenticated');
+        throw new Error("User is not authenticated");
       }
 
       // Initialize the action engine
@@ -214,7 +217,7 @@ export class ActionResolver {
    * @private
    */
   private findActionById(actionID: string): any {
-    const action = ActionEngineServer.Instance.Actions.find((a) => a.ID === actionID);
+    const action = ActionEngineServer.Instance.Actions.find(a => a.ID === actionID);
     if (!action) {
       throw new Error(`Action with ID ${actionID} not found`);
     }
@@ -232,9 +235,9 @@ export class ActionResolver {
       return [];
     }
 
-    return inputParams.map((p) => {
+    return inputParams.map(p => {
       let value: any = p.Value;
-
+      
       // Try to parse JSON for complex values
       try {
         if (p.Value && (p.Type === 'object' || p.Type === 'array')) {
@@ -245,11 +248,11 @@ export class ActionResolver {
         const error = e as Error;
         LogError(`Failed to parse parameter value as JSON: ${error.message}`);
       }
-
+      
       return {
         Name: p.Name,
         Value: value,
-        Type: 'Input', // Default to Input type since we're sending parameters
+        Type: 'Input' // Default to Input type since we're sending parameters
       };
     });
   }
@@ -263,13 +266,18 @@ export class ActionResolver {
    * @returns The action result
    * @private
    */
-  private async executeAction(action: any, user: UserInfo, params: ActionParam[], skipActionLog?: boolean): Promise<ActionResult> {
+  private async executeAction(
+    action: any, 
+    user: UserInfo, 
+    params: ActionParam[], 
+    skipActionLog?: boolean
+  ): Promise<ActionResult> {
     return await ActionEngineServer.Instance.RunAction({
       Action: action,
       ContextUser: user,
       Params: params,
       SkipActionLog: skipActionLog,
-      Filters: [],
+      Filters: []
     });
   }
 
@@ -280,14 +288,14 @@ export class ActionResolver {
    * @private
    */
   private createActionResult(result: ActionResult): ActionResultOutput {
-    const x = (result.Params || result.RunParams.Params || []).filter(
-      (p) => p.Type.trim().toLowerCase() === 'output' || p.Type.trim().toLowerCase() === 'both'
-    );
+    const x =(result.Params || result.RunParams.Params || [])
+              .filter(p => p.Type.trim().toLowerCase() === 'output' ||
+                           p.Type.trim().toLowerCase() === 'both')     ;
     return {
       Success: result.Success,
       Message: result.Message,
       ResultCode: result.Result?.ResultCode,
-      ResultData: x && x.length > 0 ? JSON.stringify(CopyScalarsAndArrays(x)) : undefined,
+      ResultData: x && x.length > 0 ? JSON.stringify(CopyScalarsAndArrays(x)) : undefined
     };
   }
 
@@ -302,7 +310,7 @@ export class ActionResolver {
     LogError(`Error in RunAction resolver: ${error}`);
     return {
       Success: false,
-      Message: `Error executing action: ${error.message}`,
+      Message: `Error executing action: ${error.message}`
     };
   }
 
@@ -313,11 +321,14 @@ export class ActionResolver {
    * @returns The result of running the entity action
    */
   @Mutation(() => ActionResultOutput)
-  async RunEntityAction(@Arg('input') input: EntityActionInput, @Ctx() ctx: AppContext): Promise<ActionResultOutput> {
+  async RunEntityAction(
+    @Arg("input") input: EntityActionInput,
+    @Ctx() ctx: AppContext
+  ): Promise<ActionResultOutput> {
     try {
       const user = ctx.userPayload.userRecord;
       if (!user) {
-        throw new Error('User is not authenticated');
+        throw new Error("User is not authenticated");
       }
 
       // Initialize the entity action engine
@@ -344,13 +355,13 @@ export class ActionResolver {
       return {
         Success: result.Success,
         Message: result.Message,
-        ResultData: JSON.stringify(result),
+        ResultData: JSON.stringify(result)
       };
     } catch (e) {
       return this.handleError(e);
     }
   }
-
+ 
   /**
    * Gets an entity action by ID
    * @param actionID The ID of the entity action
@@ -359,7 +370,7 @@ export class ActionResolver {
    * @private
    */
   private getEntityAction(actionID: string): any {
-    const entityAction = EntityActionEngineServer.Instance.EntityActions.find((ea) => ea.ID === actionID);
+    const entityAction = EntityActionEngineServer.Instance.EntityActions.find(ea => ea.ID === actionID);
     if (!entityAction) {
       throw new Error(`EntityAction with ID ${actionID} not found`);
     }
@@ -392,23 +403,23 @@ export class ActionResolver {
    */
   private async addEntityObject(providers: Array<ProviderInfo>, params: any, input: EntityActionInput, user: UserInfo): Promise<void> {
     const md = GetReadOnlyProvider(providers);
-
+    
     // Find the entity by ID or name
     let entity;
     if (input.EntityName) {
-      entity = md.Entities.find((e) => e.Name === input.EntityName);
+      entity = md.Entities.find(e => e.Name === input.EntityName);
       if (!entity) {
         throw new Error(`Entity with name ${input.EntityName} not found`);
       }
     } else if (input.EntityID) {
-      entity = md.Entities.find((e) => e.ID === input.EntityID);
+      entity = md.Entities.find(e => e.ID === input.EntityID);
       if (!entity) {
         throw new Error(`Entity with ID ${input.EntityID} not found`);
       }
     }
 
     if (!entity) {
-      throw new Error('Entity information is required');
+      throw new Error("Entity information is required");
     }
 
     // Create a composite key and load the entity object
@@ -427,24 +438,24 @@ export class ActionResolver {
    */
   private createCompositeKey(entity: any, primaryKey: CompositeKeyInput): CompositeKey {
     const compositeKey = new CompositeKey();
-
+    
     for (const kvp of primaryKey.KeyValuePairs) {
       // Convert value based on the field type if necessary
-      const field = entity.Fields.find((f) => f.Name === kvp.Key);
+      const field = entity.Fields.find(f => f.Name === kvp.Key);
       let value: any = kvp.Value;
-
+      
       // If the field is found, try to convert to proper type
       if (field) {
         value = this.convertValueToProperType(value, field);
       }
-
+      
       // Add to composite key
       const kvPair = new KeyValuePair();
       kvPair.FieldName = kvp.Key;
       kvPair.Value = value;
       compositeKey.KeyValuePairs.push(kvPair);
     }
-
+    
     return compositeKey;
   }
 
@@ -484,7 +495,7 @@ export class ActionResolver {
 
     // Add additional parameters if provided
     if (input.Params && input.Params.length > 0) {
-      params.Params = input.Params.map((p) => this.convertParameterValue(p));
+      params.Params = input.Params.map(p => this.convertParameterValue(p));
     }
   }
 
@@ -496,7 +507,7 @@ export class ActionResolver {
    */
   private convertParameterValue(p: ActionParamInput): any {
     let value: any = p.Value;
-
+    
     // Try to parse JSON for complex values
     try {
       if (p.Value && (p.Type === 'object' || p.Type === 'array')) {
@@ -507,11 +518,11 @@ export class ActionResolver {
       const error = e as Error;
       LogError(`Failed to parse parameter value as JSON: ${error.message}`);
     }
-
+    
     return {
       Name: p.Name,
       Value: value,
-      Type: 'Input', // Default to Input type since we're sending parameters
+      Type: 'Input' // Default to Input type since we're sending parameters
     };
   }
 
@@ -526,7 +537,7 @@ export class ActionResolver {
     LogError(`Error in RunEntityAction resolver: ${error}`);
     return {
       Success: false,
-      Message: `Error executing entity action: ${error.message}`,
+      Message: `Error executing entity action: ${error.message}`
     };
   }
 }

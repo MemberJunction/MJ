@@ -1,6 +1,15 @@
-import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck, ChangeDetectorRef } from '@angular/core';
+import {
+  Component,
+  Input,
+  Output,
+  EventEmitter,
+  OnInit,
+  OnDestroy,
+  DoCheck,
+  ChangeDetectorRef
+} from '@angular/core';
 import { ConversationEntity, ArtifactEntity, TaskEntity } from '@memberjunction/core-entities';
-import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/global';
+import { UserInfo, CompositeKey, KeyValuePair, Metadata } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
@@ -19,7 +28,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 @Component({
   selector: 'mj-conversation-workspace',
   templateUrl: './conversation-workspace.component.html',
-  styleUrls: ['./conversation-workspace.component.css'],
+  styleUrls: ['./conversation-workspace.component.css']
 })
 export class ConversationWorkspaceComponent extends BaseAngularComponent implements OnInit, OnDestroy, DoCheck {
   @Input() environmentId!: string;
@@ -82,7 +91,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   @Output() conversationChanged = new EventEmitter<ConversationEntity>();
   @Output() artifactOpened = new EventEmitter<ArtifactEntity>();
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
   @Output() navigationChanged = new EventEmitter<{
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
@@ -160,26 +169,32 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
 
     // Subscribe to artifact panel state
-    this.artifactState.isPanelOpen$.pipe(takeUntil(this.destroy$)).subscribe((isOpen) => {
-      this.isArtifactPanelOpen = isOpen;
-    });
+    this.artifactState.isPanelOpen$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(isOpen => {
+        this.isArtifactPanelOpen = isOpen;
+      });
 
     // Subscribe to active artifact ID
-    this.artifactState.activeArtifactId$.pipe(takeUntil(this.destroy$)).subscribe(async (id) => {
-      this.activeArtifactId = id;
-      // Load permissions when artifact changes
-      if (id) {
-        await this.loadArtifactPermissions(id);
-      } else {
-        this.canShareActiveArtifact = false;
-        this.canEditActiveArtifact = false;
-      }
-    });
+    this.artifactState.activeArtifactId$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(async id => {
+        this.activeArtifactId = id;
+        // Load permissions when artifact changes
+        if (id) {
+          await this.loadArtifactPermissions(id);
+        } else {
+          this.canShareActiveArtifact = false;
+          this.canEditActiveArtifact = false;
+        }
+      });
 
     // Subscribe to active version number
-    this.artifactState.activeVersionNumber$.pipe(takeUntil(this.destroy$)).subscribe((versionNumber) => {
-      this.activeVersionNumber = versionNumber;
-    });
+    this.artifactState.activeVersionNumber$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(versionNumber => {
+        this.activeVersionNumber = versionNumber;
+      });
 
     // Set initial conversation if provided
     if (this.initialConversationId) {
@@ -237,7 +252,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
           Promise.resolve().then(() => {
             this.navigationChanged.emit({
               tab: 'conversations',
-              conversationId: currentId,
+              conversationId: currentId
             });
           });
         }
@@ -254,7 +269,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
           Promise.resolve().then(() => {
             this.navigationChanged.emit({
               tab: 'tasks',
-              taskId: currentTaskId,
+              taskId: currentTaskId
             });
           });
         }
@@ -272,7 +287,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
           this.navigationChanged.emit({
             tab: 'collections',
             collectionId: this.collectionState.activeCollectionId || undefined,
-            artifactId: currentArtifactId || undefined,
+            artifactId: currentArtifactId || undefined
           });
         });
       }
@@ -293,7 +308,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
     // Emit navigation change event with current state
     const navEvent: any = {
-      tab: tab as 'conversations' | 'collections' | 'tasks',
+      tab: tab as 'conversations' | 'collections' | 'tasks'
     };
 
     if (tab === 'conversations') {
@@ -351,7 +366,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         this.conversationState.setActiveConversation(result.id);
         this.navigationChanged.emit({
           tab: 'conversations',
-          conversationId: result.id,
+          conversationId: result.id
         });
         break;
 
@@ -362,7 +377,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
           this.conversationState.setActiveConversation(result.conversationId);
           this.navigationChanged.emit({
             tab: 'conversations',
-            conversationId: result.conversationId,
+            conversationId: result.conversationId
             // TODO: Add messageId for scroll-to support in future
           });
         }
@@ -379,7 +394,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         this.navigationChanged.emit({
           tab: 'collections',
           collectionId,
-          artifactId: result.id,
+          artifactId: result.id
         });
         break;
 
@@ -390,7 +405,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
         this.navigationChanged.emit({
           tab: 'collections',
-          collectionId: result.id,
+          collectionId: result.id
         });
         break;
 
@@ -400,7 +415,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         this._activeTaskId = result.id;
         this.navigationChanged.emit({
           tab: 'tasks',
-          taskId: result.id,
+          taskId: result.id
         });
         break;
     }
@@ -517,7 +532,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
-  onConversationRenamed(event: { conversationId: string; name: string; description: string }): void {
+  onConversationRenamed(event: {conversationId: string; name: string; description: string}): void {
     console.log('✨ Workspace received rename event:', event);
     // Trigger animation in sidebar by setting the ID
     this.renamedConversationId = event.conversationId;
@@ -528,17 +543,19 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }, 1500);
   }
 
-  onOpenEntityRecord(event: { entityName: string; compositeKey: CompositeKey }): void {
+  onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
     // Pass the event up to the parent component (chat-wrapper in explorer-core)
     this.openEntityRecord.emit(event);
   }
 
-  onOpenEntityRecordFromTasks(event: { entityName: string; recordId: string }): void {
+  onOpenEntityRecordFromTasks(event: {entityName: string; recordId: string}): void {
     // Convert from tasks format (recordId) to workspace format (compositeKey)
-    const compositeKey = new CompositeKey([new KeyValuePair('ID', event.recordId)]);
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', event.recordId)
+    ]);
     this.openEntityRecord.emit({
       entityName: event.entityName,
-      compositeKey,
+      compositeKey
     });
   }
 
@@ -550,7 +567,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     // Emit navigation change
     this.navigationChanged.emit({
       tab: 'tasks',
-      taskId: task.ID,
+      taskId: task.ID
     });
   }
 
@@ -568,13 +585,13 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.navigationChanged.emit({
         tab: 'collections',
         collectionId: event.collectionId || undefined,
-        artifactId: event.artifactId || undefined,
+        artifactId: event.artifactId || undefined
       });
     } else if (!this.activeArtifactId) {
       // No artifact currently open, safe to emit collection-only navigation
       this.navigationChanged.emit({
         tab: 'collections',
-        collectionId: event.collectionId || undefined,
+        collectionId: event.collectionId || undefined
       });
     }
     // Otherwise: artifact is open but event doesn't specify artifactId
@@ -584,7 +601,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   /**
    * Handle navigation from artifact links
    */
-  onArtifactLinkNavigation(event: { type: 'conversation' | 'collection'; id: string }): void {
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
     console.log('🔗 Navigating from artifact link:', event);
 
     if (event.type === 'conversation') {
@@ -592,14 +609,14 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       this.conversationState.setActiveConversation(event.id);
       this.navigationChanged.emit({
         tab: 'conversations',
-        conversationId: event.id,
+        conversationId: event.id
       });
     } else if (event.type === 'collection') {
       this.activeTab = 'collections';
       this.collectionState.setActiveCollection(event.id);
       this.navigationChanged.emit({
         tab: 'collections',
-        collectionId: event.id,
+        collectionId: event.id
       });
     }
   }

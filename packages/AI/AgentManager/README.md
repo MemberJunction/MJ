@@ -49,7 +49,7 @@ The `AgentSpec` class is the primary interface for working with AI agent metadat
 
 ```typescript
 import { AgentSpec } from '@memberjunction/ai-agent-manager';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 // Load an existing agent
 const spec = await AgentSpec.LoadFromDatabase('agent-uuid', contextUser);

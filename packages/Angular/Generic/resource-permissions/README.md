@@ -86,7 +86,7 @@ export class YourModule { }
 ```typescript
 import { Component, OnInit } from '@angular/core';
 import { ResourceData, ResourcePermissionEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
 @Component({
@@ -344,7 +344,7 @@ You can extend the permission validation logic by implementing custom checks in 
 
 ```typescript
 import { ResourcePermissionEngine } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 // Get the engine instance
 const engine = ResourcePermissionEngine.Instance;

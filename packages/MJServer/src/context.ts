@@ -5,29 +5,22 @@ import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
-import {
-  getSigningKeys,
-  getSystemUser,
-  getValidationOptions,
-  verifyUserRecord,
-  extractUserInfoFromPayload,
-  TokenExpiredError,
-} from './auth/index.js';
+import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload, TokenExpiredError } from './auth/index.js';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
 import { DataSourceInfo, UserPayload } from './types.js';
 import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
-import { DatabaseProviderBase } from '@memberjunction/global';
+import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { AuthProviderFactory } from './auth/AuthProviderFactory.js';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayload> =>
   new Promise((resolve, reject) => {
     const options = getValidationOptions(issuer);
-
+    
     if (!options) {
       reject(new Error(`No validation options found for issuer ${issuer}`));
       return;
@@ -53,7 +46,7 @@ export const getUserPayload = async (
   sessionId = 'default',
   dataSources: DataSourceInfo[],
   requestDomain?: string,
-  requestApiKey?: string
+  requestApiKey?: string 
 ): Promise<UserPayload> => {
   try {
     const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -112,8 +105,14 @@ export const getUserPayload = async (
     // Use provider to extract user information
     const userInfo = extractUserInfoFromPayload(payload);
     const email = userInfo.email ? ((userEmailMap ?? {})[userInfo.email] ?? userInfo.email) : userInfo.preferredUsername;
-
-    const userRecord = await verifyUserRecord(email, userInfo.firstName, userInfo.lastName, requestDomain, readWriteDataSource);
+    
+    const userRecord = await verifyUserRecord(
+      email, 
+      userInfo.firstName, 
+      userInfo.lastName, 
+      requestDomain, 
+      readWriteDataSource
+    );
 
     if (!userRecord) {
       console.error(`User ${email} not found`);
@@ -134,15 +133,7 @@ export const getUserPayload = async (
 };
 
 export const contextFunction =
-  ({
-    setupComplete$,
-    dataSource,
-    dataSources,
-  }: {
-    setupComplete$: Subject<unknown>;
-    dataSource: sql.ConnectionPool;
-    dataSources: DataSourceInfo[];
-  }) =>
+  ({ setupComplete$, dataSource, dataSources }: { setupComplete$: Subject<unknown>; dataSource: sql.ConnectionPool, dataSources: DataSourceInfo[] }) =>
   async ({ req }: { req: IncomingMessage }) => {
     await firstValueFrom(setupComplete$); // wait for setup to complete before processing the request
 
@@ -152,7 +143,7 @@ export const contextFunction =
     const sessionId = sessionIdRaw ? sessionIdRaw.toString() : '';
     const bearerToken = req.headers.authorization ?? '';
     const apiKey = String(req.headers['x-mj-api-key']);
-
+    
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const reqAny = req as any;
     const operationName: string | undefined = reqAny.body?.operationName;
@@ -165,13 +156,11 @@ export const contextFunction =
       sessionId,
       dataSources,
       requestDomain?.hostname ? requestDomain.hostname : undefined,
-      apiKey
+      apiKey 
     );
 
-    if (Metadata.Provider.Entities.length === 0) {
-      console.warn(
-        'WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!'
-      );
+    if (Metadata.Provider.Entities.length === 0 ) {
+      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
     }
 
     // now create a new instance of SQLServerDataProvider for each request
@@ -187,29 +176,28 @@ export const contextFunction =
         const rConfig = new SQLServerProviderConfigData(readOnlyDataSource, mj_core_schema, 0, undefined, undefined, false);
         await rp.Config(rConfig);
       }
-    } catch (e) {
+    }
+    catch (e) {
       // no read only data source available, so rp will remain null, this is OK!
     }
 
-    const providers = [
-      {
-        provider: p,
-        type: 'Read-Write' as 'Read-Write' | 'Read-Only',
-      },
-    ];
+    const providers = [{
+      provider: p,
+      type: 'Read-Write' as 'Read-Write' | 'Read-Only'
+    }];
     if (rp) {
       providers.push({
         provider: rp,
-        type: 'Read-Only' as 'Read-Write' | 'Read-Only',
+        type: 'Read-Only' as 'Read-Write' | 'Read-Only'
       });
     }
 
-    const contextResult = {
-      dataSource,
-      dataSources,
+    const contextResult = { 
+      dataSource, 
+      dataSources, 
       userPayload: userPayload,
       providers,
     };
-
+    
     return contextResult;
   };

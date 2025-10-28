@@ -104,7 +104,7 @@ Display only a specific section of a form:
 
 ```typescript
 import { Component } from '@angular/core';
-import { BaseEntity, Metadata } from '@memberjunction/global';
+import { BaseEntity, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'app-user-management',
@@ -155,24 +155,24 @@ export class UserManagementComponent {
 
 ### Input Properties
 
-| Property             | Type                      | Default      | Description                                                   |
-| -------------------- | ------------------------- | ------------ | ------------------------------------------------------------- |
-| `Title`              | `string`                  | `''`         | The title displayed in the dialog header                      |
-| `ShowSaveButton`     | `boolean`                 | `true`       | Whether to display the Save button                            |
-| `ShowCancelButton`   | `boolean`                 | `true`       | Whether to display the Cancel button                          |
-| `Width`              | `number`                  | `800`        | Initial dialog width in pixels                                |
-| `Height`             | `number`                  | `600`        | Initial dialog height in pixels                               |
-| `Mode`               | `'complete' \| 'section'` | `'complete'` | Display mode - entire form or specific section                |
-| `SectionName`        | `string`                  | `''`         | The section name to display (required when Mode is 'section') |
-| `Record`             | `BaseEntity \| null`      | `null`       | The entity record to edit (required)                          |
-| `HandleSave`         | `boolean`                 | `true`       | Automatically save the record when Save is clicked            |
-| `AutoRevertOnCancel` | `boolean`                 | `true`       | Automatically revert changes when Cancel is clicked           |
-| `Visible`            | `boolean`                 | `false`      | Controls dialog visibility                                    |
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `Title` | `string` | `''` | The title displayed in the dialog header |
+| `ShowSaveButton` | `boolean` | `true` | Whether to display the Save button |
+| `ShowCancelButton` | `boolean` | `true` | Whether to display the Cancel button |
+| `Width` | `number` | `800` | Initial dialog width in pixels |
+| `Height` | `number` | `600` | Initial dialog height in pixels |
+| `Mode` | `'complete' \| 'section'` | `'complete'` | Display mode - entire form or specific section |
+| `SectionName` | `string` | `''` | The section name to display (required when Mode is 'section') |
+| `Record` | `BaseEntity \| null` | `null` | The entity record to edit (required) |
+| `HandleSave` | `boolean` | `true` | Automatically save the record when Save is clicked |
+| `AutoRevertOnCancel` | `boolean` | `true` | Automatically revert changes when Cancel is clicked |
+| `Visible` | `boolean` | `false` | Controls dialog visibility |
 
 ### Output Events
 
-| Event          | Type                               | Description                                             |
-| -------------- | ---------------------------------- | ------------------------------------------------------- |
+| Event | Type | Description |
+|-------|------|-------------|
 | `DialogClosed` | `EventEmitter<'Save' \| 'Cancel'>` | Emitted when the dialog is closed with the action taken |
 
 ### Public Methods

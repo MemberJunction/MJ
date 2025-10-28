@@ -1,9 +1,9 @@
 import { ElementRef, Injectable } from '@angular/core';
-import { LogError, Metadata, RunView } from '@memberjunction/global';
+import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { UserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { NotificationService, NotificationSettings } from '@progress/kendo-angular-notification';
+import { NotificationService, NotificationSettings } from "@progress/kendo-angular-notification";
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 
 /**
@@ -11,7 +11,7 @@ import { BehaviorSubject, Observable, Subject } from 'rxjs';
  * in the database.
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class MJNotificationService {
   private static _instance: MJNotificationService;
@@ -29,24 +29,25 @@ export class MJNotificationService {
     // first time this has been called, so return ourselves since we're in the constructor
     MJNotificationService._instance = this;
 
-    MJGlobal.Instance.GetEventListener(true).subscribe((event) => {
+    MJGlobal.Instance.GetEventListener(true).subscribe( (event) => {
       switch (event.event) {
-        case MJEventType.DisplaySimpleNotificationRequest:
+        case MJEventType.DisplaySimpleNotificationRequest: 
           // received the message to display a notification to the user, so do that...
           const messageData: DisplaySimpleNotificationRequestData = <DisplaySimpleNotificationRequestData>event.args;
-          this.CreateSimpleNotification(messageData.message, messageData.style, messageData.DisplayDuration);
+          this.CreateSimpleNotification(messageData.message,messageData.style, messageData.DisplayDuration);
           break;
         case MJEventType.ComponentEvent:
-          if (event.eventCode === 'UserNotificationsUpdated') {
+          if (event.eventCode === "UserNotificationsUpdated") {
             // refresh the user notifications
             MJNotificationService.RefreshUserNotifications();
           }
           break;
         case MJEventType.LoggedIn:
-          if (MJNotificationService._loaded === false) MJNotificationService.RefreshUserNotifications();
+          if (MJNotificationService._loaded === false) 
+            MJNotificationService.RefreshUserNotifications();
 
           // got the login, now subscribe to push status updates here so we can then raise them as events in MJ Global locally
-          this.PushStatusUpdates().subscribe((message: string) => {
+          this.PushStatusUpdates().subscribe( (message: string) => {
             // Handle undefined/null messages gracefully
             if (!message) {
               return;
@@ -57,27 +58,28 @@ export class MJNotificationService {
             // pass along as an event so anyone else who wants to know about the push status update can do stuff
             MJGlobal.Instance.RaiseEvent({
               event: MJEventType.ComponentEvent,
-              eventCode: 'PushStatusUpdates',
+              eventCode: "PushStatusUpdates",
               args: statusObj,
-              component: this,
-            });
+              component: this
+            })
 
             if (statusObj.type?.trim().toLowerCase() === 'usernotifications') {
-              if (statusObj.details && statusObj.details.action?.trim().toLowerCase() === 'create') {
+              if (statusObj.details && statusObj.details.action?.trim().toLowerCase() === 'create') { 
                 // we have changes to user notifications, so refresh them
-                this.CreateSimpleNotification('New Notification Available', 'success', 2000);
+                this.CreateSimpleNotification('New Notification Available', "success", 2000)
                 MJNotificationService.RefreshUserNotifications();
               }
-            } else {
+            }
+            else {
               // otherwise just post it as a simple notification, except Skip messages, we will let Skip handle those
               const type = statusObj.type?.trim().toLowerCase();
-              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') {
-                this.CreateSimpleNotification(statusObj.message, 'success', 2500);
+              if (type !== 'askskip' && type !== 'entityobjectstatusmessage' && typeof statusObj.message === 'string') { 
+                this.CreateSimpleNotification(statusObj.message, "success", 2500);
               }
             }
           });
           break;
-      }
+      }      
     });
   }
 
@@ -89,51 +91,49 @@ export class MJNotificationService {
   public static get Instance(): MJNotificationService {
     return MJNotificationService._instance;
   }
-
+ 
   private static _userNotifications: UserNotificationEntity[] = [];
   public static get UserNotifications(): UserNotificationEntity[] {
     return MJNotificationService._userNotifications;
   }
   public static get UnreadUserNotifications(): UserNotificationEntity[] {
-    return MJNotificationService._userNotifications.filter((n) => n.Unread);
+    return MJNotificationService._userNotifications.filter(n => n.Unread);
   }
   public static get UnreadUserNotificationCount(): number {
     return MJNotificationService.UnreadUserNotifications.length;
   }
 
+
   /**
    * Creates a user notification in the database and refreshes the UI. Returns the notification object.
-   * @param title
-   * @param message
-   * @param resourceTypeId
-   * @param resourceRecordId
+   * @param title 
+   * @param message 
+   * @param resourceTypeId 
+   * @param resourceRecordId 
    * @param resourceConfiguration Any object, it is converted to a string by JSON.stringify and stored in the database
-   * @returns
+   * @returns 
    */
-  public async CreateNotification(
-    title: string,
-    message: string,
-    resourceTypeId: string | null,
-    resourceRecordId: string | null,
-    resourceConfiguration: any | null,
-    displayToUser: boolean = true
-  ): Promise<UserNotificationEntity> {
+  public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser: boolean = true): Promise<UserNotificationEntity> {
     const md = new Metadata();
     const notification = <UserNotificationEntity>await md.GetEntityObject('User Notifications');
     notification.Title = title;
     notification.Message = message;
-    if (resourceTypeId) notification.ResourceTypeID = resourceTypeId;
-    if (resourceRecordId) notification.ResourceRecordID = resourceRecordId;
-    if (resourceConfiguration) notification.ResourceConfiguration = JSON.stringify(resourceConfiguration);
-
+    if (resourceTypeId)
+      notification.ResourceTypeID = resourceTypeId;
+    if (resourceRecordId)
+      notification.ResourceRecordID = resourceRecordId;
+    if (resourceConfiguration)
+      notification.ResourceConfiguration = JSON.stringify(resourceConfiguration);
+  
     notification.UserID = md.CurrentUser.ID;
     notification.Unread = true;
     const result = await notification.Save();
     if (result) {
-      MJNotificationService.RefreshUserNotifications();
+        MJNotificationService.RefreshUserNotifications();
     }
 
-    if (displayToUser) this.CreateSimpleNotification(notification.Message, 'success', 2500);
+    if (displayToUser)
+        this.CreateSimpleNotification(notification.Message, "success", 2500);
 
     return notification;
   }
@@ -146,16 +146,16 @@ export class MJNotificationService {
       const rv = new RunView();
       const md = new Metadata();
       const result = await rv.RunView({
-        EntityName: 'User Notifications',
-        ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
-        OrderBy: '__mj_CreatedAt DESC',
-        ResultType:
-          'entity_object' /* we want the entity objects, this has a little bit of overhead cost, but since we'll want to be able to modify the unread state it is helpful to have these ready to go */,
-      });
+          EntityName: 'User Notifications',
+          ExtraFilter: `UserID='${md.CurrentUser.ID}'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'entity_object' /* we want the entity objects, this has a little bit of overhead cost, but since we'll want to be able to modify the unread state it is helpful to have these ready to go */
+      })
       if (result && result.Success) {
         MJNotificationService._userNotifications = result.Results;
       }
-    } catch (e) {
+    }
+    catch (e) {
       LogError(e);
     }
   }
@@ -166,20 +166,18 @@ export class MJNotificationService {
    * @param style - display styling
    * @param hideAfter - option to auto hide after the specified delay in milliseconds
    */
-  public CreateSimpleNotification(
-    message: string,
-    style: 'none' | 'success' | 'error' | 'warning' | 'info' = 'success',
-    hideAfter?: number
-  ) {
+  public CreateSimpleNotification(message: string, style: "none" | "success" | "error" | "warning" | "info" = "success", hideAfter?: number) {
     const props: NotificationSettings = {
       content: message,
-      cssClass: 'button-notification',
-      animation: { type: 'slide', duration: 400 },
-      position: { horizontal: 'center', vertical: 'top' },
-      type: { style: style, icon: true },
-    };
-    if (hideAfter) props.hideAfter = hideAfter;
-    else props.closable = true;
+      cssClass: "button-notification",
+      animation: { type: "slide", duration: 400 },
+      position: { horizontal: "center", vertical: "top" },
+      type: { style: style, icon: true }
+    }
+    if (hideAfter)
+      props.hideAfter = hideAfter;
+    else
+      props.closable = true;
 
     this.notificationService.show(props);
   }

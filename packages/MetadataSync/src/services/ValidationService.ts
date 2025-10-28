@@ -1,4 +1,4 @@
-import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/global';
+import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -100,13 +100,11 @@ export class ValidationService {
   /**
    * Validates a single entity directory
    */
-  private async validateEntityDirectory(
-    dir: string
-  ): Promise<{ files: number; entities: number; fileResults: Map<string, FileValidationResult> } | null> {
+  private async validateEntityDirectory(dir: string): Promise<{ files: number; entities: number; fileResults: Map<string, FileValidationResult> } | null> {
     // Check for .mj-folder.json first (new format)
     let configPath = path.join(dir, '.mj-folder.json');
     let config: any;
-
+    
     if (fs.existsSync(configPath)) {
       config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       // .mj-folder.json uses entityName field
@@ -212,7 +210,7 @@ export class ValidationService {
     filePath: string,
     config: EntitySyncConfig,
     parentContext?: { entity: string; field: string },
-    depth: number = 0
+    depth: number = 0,
   ): Promise<void> {
     // Check nesting depth
     if (depth > this.options.maxNestingDepth) {
@@ -251,14 +249,7 @@ export class ValidationService {
 
         const relatedEntities = Array.isArray(relatedData) ? relatedData : [relatedData];
         for (const relatedEntity of relatedEntities) {
-          await this.validateEntityData(
-            relatedEntity,
-            relatedEntityInfo,
-            filePath,
-            config,
-            { entity: entityInfo.Name, field: relatedEntityName },
-            depth + 1
-          );
+          await this.validateEntityData(relatedEntity, relatedEntityInfo, filePath, config, { entity: entityInfo.Name, field: relatedEntityName }, depth + 1);
         }
       }
     }
@@ -271,7 +262,7 @@ export class ValidationService {
     fields: Record<string, any>,
     entityInfo: EntityInfo,
     filePath: string,
-    parentContext?: { entity: string; field: string }
+    parentContext?: { entity: string; field: string },
   ): Promise<void> {
     const entityFields = entityInfo.Fields;
     const fieldMap = new Map(entityFields.map((f) => [f.Name, f]));
@@ -397,7 +388,7 @@ export class ValidationService {
     fieldInfo: EntityFieldInfo,
     entityInfo: EntityInfo,
     filePath: string,
-    parentContext?: { entity: string; field: string }
+    parentContext?: { entity: string; field: string },
   ): Promise<void> {
     if (typeof value === 'string' && this.isValidReference(value)) {
       await this.validateReference(value, fieldInfo, entityInfo, filePath, parentContext);
@@ -443,7 +434,12 @@ export class ValidationService {
   /**
    * Validates field value against the field's value list if applicable
    */
-  private async validateFieldValueList(value: any, fieldInfo: EntityFieldInfo, entityInfo: EntityInfo, filePath: string): Promise<void> {
+  private async validateFieldValueList(
+    value: any,
+    fieldInfo: EntityFieldInfo,
+    entityInfo: EntityInfo,
+    filePath: string
+  ): Promise<void> {
     // Skip validation if value is null/undefined (handled by required field check)
     if (value === null || value === undefined || value === '') {
       return;
@@ -463,15 +459,17 @@ export class ValidationService {
 
     // Extract the allowed values
     const allowedValues = entityFieldValues.map((efv: any) => efv.Value);
-
+    
     // Convert value to string for comparison (in case it's a number or boolean)
     const stringValue = String(value);
-
+    
     // Check if the value is in the allowed list
     if (!allowedValues.includes(stringValue)) {
       // Check case-insensitive match as a warning
-      const caseInsensitiveMatch = allowedValues.find((av: string) => av.toLowerCase() === stringValue.toLowerCase());
-
+      const caseInsensitiveMatch = allowedValues.find((av: string) => 
+        av.toLowerCase() === stringValue.toLowerCase()
+      );
+      
       if (caseInsensitiveMatch) {
         this.addWarning({
           type: 'validation',
@@ -484,11 +482,10 @@ export class ValidationService {
         });
       } else {
         // Format the allowed values list for display
-        const allowedValuesList =
-          allowedValues.length <= 10
-            ? allowedValues.join(', ')
-            : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
-
+        const allowedValuesList = allowedValues.length <= 10 
+          ? allowedValues.join(', ')
+          : allowedValues.slice(0, 10).join(', ') + `, ... (${allowedValues.length - 10} more)`;
+        
         this.addError({
           type: 'field',
           severity: 'error',
@@ -509,7 +506,7 @@ export class ValidationService {
     if (typeof value !== 'string' || !value.startsWith('@')) {
       return false;
     }
-
+    
     // List of valid reference prefixes
     const validPrefixes = [
       '@file:',
@@ -518,10 +515,10 @@ export class ValidationService {
       '@parent:',
       '@root:',
       '@env:',
-      '@include', // Can be @include or @include.
+      '@include',  // Can be @include or @include.
     ];
-
-    return validPrefixes.some((prefix) => value.startsWith(prefix));
+    
+    return validPrefixes.some(prefix => value.startsWith(prefix));
   }
 
   /**
@@ -532,7 +529,7 @@ export class ValidationService {
     fieldInfo: EntityFieldInfo,
     entityInfo: EntityInfo,
     filePath: string,
-    parentContext?: { entity: string; field: string }
+    parentContext?: { entity: string; field: string },
   ): Promise<void> {
     const parsed = this.parseReference(reference);
     if (!parsed) {
@@ -584,15 +581,15 @@ export class ValidationService {
       if (match) {
         if (type === '@lookup:') {
           const [, entity, remaining] = match;
-
+          
           // Check if this has ?create syntax
           const hasCreate = remaining.includes('?create');
           const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
-
+          
           // Parse all lookup fields (can be multiple with &)
           const lookupPairs = lookupPart.split('&');
-          const fields: Array<{ field: string; value: string }> = [];
-
+          const fields: Array<{field: string, value: string}> = [];
+          
           for (const pair of lookupPairs) {
             const fieldMatch = pair.match(/^(.+?)=(.+)$/);
             if (fieldMatch) {
@@ -600,10 +597,10 @@ export class ValidationService {
               fields.push({ field: field.trim(), value: value.trim() });
             }
           }
-
+          
           // For backward compatibility, use the first field as primary
           const primaryField = fields.length > 0 ? fields[0] : { field: '', value: '' };
-
+          
           // Parse additional fields for creation if ?create is present
           const additionalFields: Record<string, any> = {};
           if (hasCreate && remaining.includes('?create&')) {
@@ -617,14 +614,14 @@ export class ValidationService {
             }
           }
 
-          return {
-            type,
-            value: primaryField.value,
-            entity,
+          return { 
+            type, 
+            value: primaryField.value, 
+            entity, 
             field: primaryField.field,
             fields, // Include all fields for validation
-            createIfMissing: hasCreate,
-            additionalFields,
+            createIfMissing: hasCreate, 
+            additionalFields 
           };
         }
         return { type, value: match[1] };
@@ -637,19 +634,13 @@ export class ValidationService {
   /**
    * Validates @file: references
    */
-  private async validateFileReference(
-    filePath: string,
-    sourceFile: string,
-    entityName: string,
-    fieldName: string,
-    visitedFiles?: Set<string>
-  ): Promise<void> {
+  private async validateFileReference(filePath: string, sourceFile: string, entityName: string, fieldName: string, visitedFiles?: Set<string>): Promise<void> {
     const dir = path.dirname(sourceFile);
     const resolvedPath = path.resolve(dir, filePath);
 
     // Initialize visited files set if not provided (for circular reference detection)
     const visited = visitedFiles || new Set<string>();
-
+    
     // Check for circular references
     if (visited.has(resolvedPath)) {
       this.addError({
@@ -684,23 +675,23 @@ export class ValidationService {
     // Read the file and check for references
     try {
       const content = fs.readFileSync(resolvedPath, 'utf-8');
-
+      
       // Check for {@include} references in all file types
       await this.validateIncludeReferences(content, resolvedPath, new Set([resolvedPath]));
-
+      
       // If it's a JSON file, parse and validate nested @ references
       if (resolvedPath.endsWith('.json')) {
         try {
           const jsonContent = JSON.parse(content);
-
+          
           // Check if JSON contains @include directives that need preprocessing
           const jsonString = JSON.stringify(jsonContent);
           const hasIncludes = jsonString.includes('"@include"') || jsonString.includes('"@include.');
-
+          
           if (hasIncludes) {
             await this.validateJsonIncludes(jsonContent, resolvedPath);
           }
-
+          
           // Recursively validate all @ references in the JSON structure
           await this.validateJsonReferences(jsonContent, resolvedPath, entityName, visited);
         } catch (parseError) {
@@ -744,7 +735,7 @@ export class ValidationService {
 
     // For multi-field lookups, validate all fields
     if (parsed.fields && parsed.fields.length > 0) {
-      for (const { field } of parsed.fields) {
+      for (const {field} of parsed.fields) {
         const lookupField = lookupEntity.Fields.find((f: any) => f.Name === field);
         if (!lookupField) {
           this.addError({
@@ -822,7 +813,7 @@ export class ValidationService {
     parentContext: { entity: string; field: string } | undefined,
     sourceFile: string,
     entityName: string,
-    currentFieldName: string
+    currentFieldName: string,
   ): void {
     if (!parentContext) {
       this.addError({
@@ -845,7 +836,7 @@ export class ValidationService {
     parentContext: { entity: string; field: string } | undefined,
     sourceFile: string,
     entityName: string,
-    currentFieldName: string
+    currentFieldName: string,
   ): void {
     if (!parentContext) {
       this.addError({
@@ -893,7 +884,7 @@ export class ValidationService {
     if (from === to) {
       return;
     }
-
+    
     if (!this.entityDependencies.has(from)) {
       this.entityDependencies.set(from, {
         entityName: from,
@@ -1153,7 +1144,7 @@ export class ValidationService {
           OrderBy: 'UserID',
           MaxRows: 10000,
         },
-        systemUser
+        systemUser,
       );
 
       if (!result.Success) {
@@ -1242,12 +1233,12 @@ export class ValidationService {
 
   /**
    * Validates {@include} references within file content
-   *
+   * 
    * Recursively checks all {@include path} references in file content to ensure:
    * - Referenced files exist
    * - No circular references occur
    * - Include paths are valid
-   *
+   * 
    * @param content - The file content to validate
    * @param filePath - Path of the file being validated
    * @param visitedPaths - Set of already visited paths for circular reference detection
@@ -1256,15 +1247,15 @@ export class ValidationService {
     // Pattern to match {@include path} references
     const includePattern = /\{@include\s+([^\}]+)\s*\}/g;
     let match: RegExpExecArray | null;
-
+    
     while ((match = includePattern.exec(content)) !== null) {
       const [fullMatch, includePath] = match;
       const trimmedPath = includePath.trim();
-
+      
       // Resolve the include path relative to the current file's directory
       const currentDir = path.dirname(filePath);
       const resolvedPath = path.resolve(currentDir, trimmedPath);
-
+      
       // Check for circular reference
       if (visitedPaths.has(resolvedPath)) {
         this.addError({
@@ -1277,7 +1268,7 @@ export class ValidationService {
         });
         continue;
       }
-
+      
       // Check if the included file exists
       if (!fs.existsSync(resolvedPath)) {
         this.addError({
@@ -1289,7 +1280,7 @@ export class ValidationService {
         });
         continue;
       }
-
+      
       // Recursively validate the included file
       try {
         const includedContent = fs.readFileSync(resolvedPath, 'utf-8');
@@ -1354,7 +1345,7 @@ export class ValidationService {
   private async validateIncludeFile(includePath: string, sourceFile: string): Promise<void> {
     const dir = path.dirname(sourceFile);
     const resolvedPath = path.resolve(dir, includePath);
-
+    
     if (!fs.existsSync(resolvedPath)) {
       this.addError({
         type: 'reference',

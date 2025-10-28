@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { ConversationDetailEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata } from '@memberjunction/global';
+import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DataCacheService } from '../../services/data-cache.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -12,7 +12,7 @@ import { takeUntil } from 'rxjs/operators';
 @Component({
   selector: 'mj-thread-panel',
   templateUrl: './thread-panel.component.html',
-  styleUrls: ['./thread-panel.component.css'],
+  styleUrls: ['./thread-panel.component.css']
 })
 export class ThreadPanelComponent implements OnInit, OnDestroy {
   @Input() parentMessageId!: string;
@@ -86,7 +86,7 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
           EntityName: 'Conversation Details',
           ExtraFilter: `ParentID='${this.parentMessageId}'`,
           OrderBy: '__mj_CreatedAt ASC',
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );

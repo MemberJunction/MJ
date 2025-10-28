@@ -1,13 +1,13 @@
 import { Injectable } from '@angular/core';
 import { Mention, MentionParseResult } from '../models/conversation-state.model';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 /**
  * Service for parsing @mentions from message text
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class MentionParserService {
   // Regex to match @mentions - supports names with spaces if quoted: @"Agent Name" or @AgentName
@@ -22,7 +22,11 @@ export class MentionParserService {
    * @param availableUsers List of available users for matching (optional)
    * @returns Parsed mentions with agent and user separation
    */
-  parseMentions(text: string, availableAgents: AIAgentEntityExtended[], availableUsers?: UserInfo[]): MentionParseResult {
+  parseMentions(
+    text: string,
+    availableAgents: AIAgentEntityExtended[],
+    availableUsers?: UserInfo[]
+  ): MentionParseResult {
     const mentions: Mention[] = [];
     const matches = Array.from(text.matchAll(this.MENTION_REGEX));
 
@@ -37,7 +41,7 @@ export class MentionParserService {
         mentions.push({
           type: 'agent',
           id: agent.ID,
-          name: agent.Name || 'Unknown',
+          name: agent.Name || 'Unknown'
         });
         continue;
       }
@@ -49,20 +53,20 @@ export class MentionParserService {
           mentions.push({
             type: 'user',
             id: user.ID,
-            name: user.Name,
+            name: user.Name
           });
         }
       }
     }
 
     // Extract first agent mention and all user mentions
-    const agentMention = mentions.find((m) => m.type === 'agent') || null;
-    const userMentions = mentions.filter((m) => m.type === 'user');
+    const agentMention = mentions.find(m => m.type === 'agent') || null;
+    const userMentions = mentions.filter(m => m.type === 'user');
 
     return {
       mentions,
       agentMention,
-      userMentions,
+      userMentions
     };
   }
 
@@ -76,13 +80,13 @@ export class MentionParserService {
     const lowerName = cleanName.toLowerCase();
 
     // Try exact match first
-    let agent = agents.find((a) => (a.Name?.toLowerCase() || '') === lowerName);
+    let agent = agents.find(a => (a.Name?.toLowerCase() || '') === lowerName);
     if (agent) {
       return agent;
     }
 
     // Try starts with match
-    agent = agents.find((a) => (a.Name?.toLowerCase() || '').startsWith(lowerName));
+    agent = agents.find(a => (a.Name?.toLowerCase() || '').startsWith(lowerName));
     if (agent) {
       return agent;
     }
@@ -102,15 +106,15 @@ export class MentionParserService {
     const lowerName = name.toLowerCase().trim();
 
     // Try exact match first
-    let user = users.find((u) => u.Name.toLowerCase() === lowerName);
+    let user = users.find(u => u.Name.toLowerCase() === lowerName);
     if (user) return user;
 
     // Try email match
-    user = users.find((u) => u.Email?.toLowerCase() === lowerName);
+    user = users.find(u => u.Email?.toLowerCase() === lowerName);
     if (user) return user;
 
     // Try starts with match
-    user = users.find((u) => u.Name.toLowerCase().startsWith(lowerName));
+    user = users.find(u => u.Name.toLowerCase().startsWith(lowerName));
     return user || null;
 
     // Note: Removed "contains" match for consistency with agent matching
@@ -120,7 +124,11 @@ export class MentionParserService {
    * Validate mentions - check if all mentions are valid
    * Returns array of invalid mention names
    */
-  validateMentions(text: string, availableAgents: AIAgentEntityExtended[], availableUsers?: UserInfo[]): string[] {
+  validateMentions(
+    text: string,
+    availableAgents: AIAgentEntityExtended[],
+    availableUsers?: UserInfo[]
+  ): string[] {
     const invalidMentions: string[] = [];
     const matches = Array.from(text.matchAll(this.MENTION_REGEX));
 
@@ -144,19 +152,25 @@ export class MentionParserService {
    */
   extractMentionNames(text: string): string[] {
     const matches = Array.from(text.matchAll(this.MENTION_REGEX));
-    return matches.map((match) => match[1] || match[2]).filter(Boolean);
+    return matches.map(match => match[1] || match[2]).filter(Boolean);
   }
 
   /**
    * Replace mentions in text with formatted versions
    * Example: "@agent" -> "@Agent Name" (with proper casing)
    */
-  formatMentions(text: string, mentions: Mention[]): string {
+  formatMentions(
+    text: string,
+    mentions: Mention[]
+  ): string {
     let formattedText = text;
 
     for (const mention of mentions) {
       // Find the mention in the text and replace with proper name
-      const patterns = [new RegExp(`@"${mention.name}"`, 'gi'), new RegExp(`@${mention.name.replace(/\s+/g, '\\s*')}`, 'gi')];
+      const patterns = [
+        new RegExp(`@"${mention.name}"`, 'gi'),
+        new RegExp(`@${mention.name.replace(/\s+/g, '\\s*')}`, 'gi')
+      ];
 
       for (const pattern of patterns) {
         formattedText = formattedText.replace(pattern, `@${mention.name}`);

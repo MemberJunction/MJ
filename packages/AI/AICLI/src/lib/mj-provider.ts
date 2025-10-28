@@ -1,4 +1,4 @@
-import { SetProvider, Metadata } from '@memberjunction/global';
+import { SetProvider, Metadata } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { loadAIConfig } from '../config';
@@ -9,8 +9,8 @@ import path from 'path';
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 // Import action and agent registrations
-import '@memberjunction/core-actions'; // Register core actions
-import '@memberjunction/ai-agents'; // Register agent types
+import '@memberjunction/core-actions';  // Register core actions
+import '@memberjunction/ai-agents';     // Register agent types
 
 // Import LLM providers to register them with ClassFactory
 import '@memberjunction/ai-openai';
@@ -34,7 +34,7 @@ export async function initializeMJProvider(): Promise<void> {
 
   try {
     const config = await loadAIConfig();
-
+    
     // Validate required configuration
     if (!config.dbDatabase) {
       throw new Error(`❌ Database configuration missing
@@ -66,7 +66,7 @@ For security, consider using environment variables:
   dbUsername: process.env.DB_USERNAME
   dbPassword: process.env.DB_PASSWORD`);
     }
-
+    
     // Create SQL Server connection
     const sqlConfig: sql.config = {
       server: config.dbHost || 'localhost',
@@ -89,10 +89,15 @@ For security, consider using environment variables:
     connectionPool = new sql.ConnectionPool(sqlConfig);
     await connectionPool.connect();
 
-    const providerConfig = new SQLServerProviderConfigData(connectionPool, config.coreSchema || '__mj', 180000);
+    const providerConfig = new SQLServerProviderConfigData(
+      connectionPool,
+      config.coreSchema || '__mj',
+      180000
+    );
 
     await setupSQLServerClient(providerConfig);
     isInitialized = true;
+    
   } catch (error: any) {
     if (error?.message?.startsWith('❌')) {
       // Already formatted error, re-throw as is

@@ -1,6 +1,6 @@
 import { Component, OnInit, Input, ViewChild, ChangeDetectorRef } from '@angular/core';
 
-import { BaseEntity, Metadata } from '@memberjunction/global';
+import { BaseEntity, Metadata } from '@memberjunction/core';
 import { RoleEntity, UserRoleEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { EntityFormDialogComponent } from '@memberjunction/ng-entity-form-dialog';
@@ -24,7 +24,7 @@ export class UserRoleEntity_Ext extends UserRoleEntity {
     this._userName = value;
   }
 
-  private _userID: string = '';
+  private _userID: string = "";
   public get SavedUserID(): string {
     return this._userID;
   }
@@ -40,11 +40,11 @@ export class UserRoleEntity_Ext extends UserRoleEntity {
     this._savedRoleID = value;
   }
 }
-
+ 
 @Component({
   selector: 'mj-single-role',
   templateUrl: './single-role.component.html',
-  styleUrls: ['./single-role.component.css'],
+  styleUrls: ['./single-role.component.css']
 })
 export class SingleRoleComponent implements OnInit {
   @Input() RoleID!: string;
@@ -55,14 +55,16 @@ export class SingleRoleComponent implements OnInit {
   public isLoading: boolean = false;
   public RoleRecord: RoleEntity | null = null;
 
+
   public showEntityEditingForm: boolean = false;
 
-  constructor(private cdRef: ChangeDetectorRef) {}
+  constructor(private cdRef: ChangeDetectorRef) { 
+  } 
 
   public InvokeManualResize() {
     SharedService.Instance.InvokeManualResize();
   }
-
+      
   ngOnInit(): void {
     this.Refresh();
   }
@@ -70,18 +72,20 @@ export class SingleRoleComponent implements OnInit {
   protected async Refresh() {
     this.isLoading = true;
     const md = new Metadata();
-    let r = md.Roles.find((r) => r.ID === this.RoleID);
+    let r = md.Roles.find(r => r.ID === this.RoleID);
     if (!r) {
       // sometime we are creating a new role, so attempt to refresh our metadata
       await md.Refresh();
-      r = md.Roles.find((r) => r.ID === this.RoleID);
-      if (!r) throw new Error(`Role ${this.RoleID} not found`);
+      r = md.Roles.find(r => r.ID === this.RoleID);
+      if (!r)
+        throw new Error(`Role ${this.RoleID} not found`);
     }
 
     this.RoleRecord = await md.GetEntityObject<RoleEntity>('Roles');
-    await this.RoleRecord.Load(r.ID);
+    await this.RoleRecord.Load(r.ID);  
     this.isLoading = false;
   }
+ 
 
   public async EditRecord() {
     // show the dialog
@@ -90,5 +94,5 @@ export class SingleRoleComponent implements OnInit {
 
   public async onEntityFormClosed(result: 'Save' | 'Cancel') {
     this.showEntityEditingForm = false;
-  }
+  }    
 }

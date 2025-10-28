@@ -1,19 +1,7 @@
-import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy,
-  OnChanges,
-  SimpleChanges,
-  inject,
-  HostListener,
-  ViewEncapsulation,
-} from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 import { RoleEntity } from '@memberjunction/core-entities';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 
@@ -33,7 +21,7 @@ export interface RoleDialogResult {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './role-dialog.component.html',
-  styleUrls: ['./role-dialog.component.css'],
+  styleUrls: ['./role-dialog.component.css']
 })
 export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: RoleDialogData | null = null;
@@ -51,7 +39,7 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.roleForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(50)]],
       description: [''],
-      directoryId: [''],
+      directoryId: ['']
     });
   }
 
@@ -63,7 +51,7 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
     if (changes['data'] && this.data?.role && this.isEditMode) {
       this.loadRoleData();
     }
-
+    
     // Reset form if switching to create mode or dialog becomes visible
     if (changes['visible'] && this.visible && !this.isEditMode) {
       this.resetForm();
@@ -78,7 +66,7 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.roleForm.reset({
       name: '',
       description: '',
-      directoryId: '',
+      directoryId: ''
     });
     this.error = null;
   }
@@ -111,7 +99,7 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
     this.roleForm.patchValue({
       name: role.Name,
       description: role.Description,
-      directoryId: role.DirectoryID,
+      directoryId: role.DirectoryID
     });
 
     // Disable name editing for system roles
@@ -143,12 +131,12 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
 
       // Update role properties
       const formValue = this.roleForm.value;
-
+      
       // Only update name if not a system role
       if (!this.isSystemRole) {
         role.Name = formValue.name;
       }
-
+      
       role.Description = formValue.description;
       role.DirectoryID = formValue.directoryId || null;
 
@@ -159,6 +147,7 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
       }
 
       this.result.emit({ action: 'save', role });
+
     } catch (error: any) {
       console.error('Error saving role:', error);
       this.error = error.message || 'An unexpected error occurred';
@@ -172,7 +161,7 @@ export class RoleDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private markFormGroupTouched(formGroup: FormGroup): void {
-    Object.keys(formGroup.controls).forEach((key) => {
+    Object.keys(formGroup.controls).forEach(key => {
       const control = formGroup.get(key);
       control?.markAsTouched();
     });

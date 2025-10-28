@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormGroup, FormBuilder, Validators } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, takeUntil } from 'rxjs';
-import { RunView, Metadata } from '@memberjunction/global';
+import { RunView, Metadata } from '@memberjunction/core';
 import { AIAgentPromptEntity, AIConfigurationEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -22,25 +22,26 @@ export interface AgentPromptAdvancedSettingsFormData {
 @Component({
   selector: 'mj-agent-prompt-advanced-settings-dialog',
   templateUrl: './agent-prompt-advanced-settings-dialog.component.html',
-  styleUrls: ['./agent-prompt-advanced-settings-dialog.component.css'],
+  styleUrls: ['./agent-prompt-advanced-settings-dialog.component.css']
 })
 export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
+  
   // Input properties set by service
   agentPrompt!: AIAgentPromptEntity;
   allAgentPrompts: AIAgentPromptEntity[] = []; // For execution order validation
-
+  
   // Reactive state management
   private destroy$ = new Subject<void>();
   public result = new Subject<AgentPromptAdvancedSettingsFormData | null>();
-
+  
   // Form and data
   advancedForm!: FormGroup;
   isLoading$ = new BehaviorSubject<boolean>(false);
   isSaving$ = new BehaviorSubject<boolean>(false);
-
+  
   // Dropdown data
   configurations$ = new BehaviorSubject<AIConfigurationEntity[]>([]);
-
+  
   // Available options
   contextBehaviorOptions = [
     { text: 'Complete Context', value: 'Complete', description: 'Include entire conversation context' },
@@ -48,14 +49,14 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
     { text: 'No Context', value: 'None', description: 'No conversation context included' },
     { text: 'Recent Messages', value: 'RecentMessages', description: 'Include only recent messages' },
     { text: 'Initial Messages', value: 'InitialMessages', description: 'Include only conversation start' },
-    { text: 'Custom Context', value: 'Custom', description: 'Custom context filtering logic' },
+    { text: 'Custom Context', value: 'Custom', description: 'Custom context filtering logic' }
   ];
 
   statusOptions = [
     { text: 'Active', value: 'Active' },
     { text: 'Inactive', value: 'Inactive' },
     { text: 'Deprecated', value: 'Deprecated' },
-    { text: 'Preview', value: 'Preview' },
+    { text: 'Preview', value: 'Preview' }
   ];
 
   // Execution order validation
@@ -84,7 +85,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
       configurationID: [this.agentPrompt.ConfigurationID],
       contextBehavior: [this.agentPrompt.ContextBehavior || 'Complete', [Validators.required]],
       contextMessageCount: [this.agentPrompt.ContextMessageCount],
-      status: [this.agentPrompt.Status || 'Active', [Validators.required]],
+      status: [this.agentPrompt.Status || 'Active', [Validators.required]]
     });
 
     this.setupValidationLogic();
@@ -95,7 +96,9 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
     const contextBehaviorControl = this.advancedForm.get('contextBehavior');
     const contextMessageCountControl = this.advancedForm.get('contextMessageCount');
 
-    contextBehaviorControl?.valueChanges.pipe(takeUntil(this.destroy$)).subscribe((behavior) => {
+    contextBehaviorControl?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(behavior => {
       if (behavior === 'RecentMessages' || behavior === 'InitialMessages') {
         contextMessageCountControl?.setValidators([Validators.required, Validators.min(1)]);
       } else {
@@ -109,7 +112,9 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
 
     // Execution order validation
     const executionOrderControl = this.advancedForm.get('executionOrder');
-    executionOrderControl?.valueChanges.pipe(takeUntil(this.destroy$)).subscribe((order) => {
+    executionOrderControl?.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(order => {
       this.validateExecutionOrder(order);
     });
   }
@@ -121,7 +126,10 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
     }
 
     // Check for conflicts with other prompts (excluding current one)
-    const conflictingPrompt = this.allAgentPrompts.find((p) => p.ID !== this.agentPrompt.ID && p.ExecutionOrder === order);
+    const conflictingPrompt = this.allAgentPrompts.find(p => 
+      p.ID !== this.agentPrompt.ID && 
+      p.ExecutionOrder === order
+    );
 
     if (conflictingPrompt) {
       this.executionOrderError = `Execution order ${order} is already used by another prompt. Please choose a different order.`;
@@ -134,25 +142,30 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
 
   private async loadDropdownData() {
     this.isLoading$.next(true);
-
+    
     try {
       const rv = new RunView();
-
+      
       // Load AI Configurations
       const configurationsResult = await rv.RunView<AIConfigurationEntity>({
         EntityName: 'MJ: AI Configurations',
         ExtraFilter: "Status = 'Active'",
         OrderBy: 'Name',
         ResultType: 'entity_object',
-        MaxRows: 1000,
+        MaxRows: 1000
       });
 
       if (configurationsResult.Success) {
         this.configurations$.next(configurationsResult.Results || []);
       }
+
     } catch (error) {
       console.error('Error loading dropdown data:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error loading form data. Please try again.', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error loading form data. Please try again.',
+        'error',
+        3000
+      );
     } finally {
       this.isLoading$.next(false);
     }
@@ -186,7 +199,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   }
 
   getContextBehaviorDescription(value: string): string {
-    const option = this.contextBehaviorOptions.find((opt) => opt.value === value);
+    const option = this.contextBehaviorOptions.find(opt => opt.value === value);
     return option?.description || '';
   }
 
@@ -200,12 +213,16 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   async save() {
     if (this.advancedForm.invalid || this.hasExecutionOrderError()) {
       this.advancedForm.markAllAsTouched();
-      MJNotificationService.Instance.CreateSimpleNotification('Please fix validation errors before saving', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Please fix validation errors before saving',
+        'error',
+        3000
+      );
       return;
     }
 
     this.isSaving$.next(true);
-
+    
     try {
       const formData: AgentPromptAdvancedSettingsFormData = {
         executionOrder: this.advancedForm.get('executionOrder')?.value,
@@ -213,14 +230,19 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
         configurationID: this.advancedForm.get('configurationID')?.value || null,
         contextBehavior: this.advancedForm.get('contextBehavior')?.value,
         contextMessageCount: this.advancedForm.get('contextMessageCount')?.value || null,
-        status: this.advancedForm.get('status')?.value,
+        status: this.advancedForm.get('status')?.value
       };
 
       this.result.next(formData);
       this.dialogRef.close();
+      
     } catch (error) {
       console.error('Error saving advanced settings:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error saving settings. Please try again.', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error saving settings. Please try again.',
+        'error',
+        3000
+      );
     } finally {
       this.isSaving$.next(false);
     }

@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, HostListener } from '@angular/core';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { DialogService } from '../../services/dialog.service';
@@ -133,8 +133,7 @@ import { ToastService } from '../../services/toast.service';
       </div>
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: #092340; }
     .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
     .search-input {
@@ -398,8 +397,7 @@ import { ToastService } from '../../services/toast.service';
         box-shadow: none;
       }
     }
-  `,
-  ],
+  `]
 })
 export class ConversationListComponent implements OnInit {
   @Input() environmentId!: string;
@@ -418,11 +416,11 @@ export class ConversationListComponent implements OnInit {
   ) {}
 
   get pinnedConversations() {
-    return this.conversationState.filteredConversations.filter((c) => c.IsPinned);
+    return this.conversationState.filteredConversations.filter(c => c.IsPinned);
   }
 
   get unpinnedConversations() {
-    return this.conversationState.filteredConversations.filter((c) => !c.IsPinned);
+    return this.conversationState.filteredConversations.filter(c => !c.IsPinned);
   }
 
   ngOnInit() {
@@ -456,7 +454,11 @@ export class ConversationListComponent implements OnInit {
     try {
       // Create conversation directly with default name
       // Name will be updated automatically after first message
-      const conversation = await this.conversationState.createConversation('New Chat', this.environmentId, this.currentUser);
+      const conversation = await this.conversationState.createConversation(
+        'New Chat',
+        this.environmentId,
+        this.currentUser
+      );
       this.conversationState.setActiveConversation(conversation.ID);
     } catch (error) {
       console.error('Error creating conversation:', error);
@@ -478,7 +480,7 @@ export class ConversationListComponent implements OnInit {
         secondInputPlaceholder: 'Optional description',
         secondInputRequired: false,
         okText: 'Save',
-        cancelText: 'Cancel',
+        cancelText: 'Cancel'
       });
 
       if (result) {
@@ -505,7 +507,7 @@ export class ConversationListComponent implements OnInit {
         title: 'Delete Conversation',
         message: `Are you sure you want to delete "${conversation.Name}"? This action cannot be undone.`,
         okText: 'Delete',
-        cancelText: 'Cancel',
+        cancelText: 'Cancel'
       });
 
       if (confirmed) {

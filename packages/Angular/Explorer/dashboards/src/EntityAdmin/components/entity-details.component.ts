@@ -1,11 +1,11 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/global';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-entity-details',
   templateUrl: './entity-details.component.html',
-  styleUrls: ['./entity-details.component.scss'],
+  styleUrls: ['./entity-details.component.scss']
 })
 export class EntityDetailsComponent implements OnInit, OnChanges {
   @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;
@@ -21,7 +21,7 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
   @Output() fieldsSectionToggle = new EventEmitter<void>();
   @Output() relationshipsSectionToggle = new EventEmitter<void>();
   @Output() entitySelected = new EventEmitter<EntityInfo>();
-  @Output() openRecord = new EventEmitter<{ EntityName: string; RecordID: string }>();
+  @Output() openRecord = new EventEmitter<{EntityName: string, RecordID: string}>();
 
   public fieldFilter: 'all' | 'keys' | 'foreign_keys' | 'regular' = 'all';
   public expandedFieldDescriptions = new Set<string>();
@@ -36,12 +36,12 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['selectedEntity'] && !changes['selectedEntity'].firstChange) {
       const currentEntityId = this.selectedEntity?.ID || null;
-
+      
       // Check if entity actually changed
       if (currentEntityId !== this.previousSelectedEntityId) {
         // Reset scroll positions when entity changes
         this.resetScrollPositions();
-
+        
         this.previousSelectedEntityId = currentEntityId;
       }
     }
@@ -63,7 +63,7 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
     if (this.selectedEntity) {
       this.openRecord.emit({
         EntityName: 'Entities',
-        RecordID: this.selectedEntity.ID,
+        RecordID: this.selectedEntity.ID
       });
     }
   }
@@ -86,16 +86,16 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
 
   public getEntityFields(entityId: string): EntityFieldInfo[] {
     if (!entityId) return [];
-
-    let fields = this.allEntityFields.filter((f) => f.EntityID === entityId);
-
+    
+    let fields = this.allEntityFields.filter(f => f.EntityID === entityId);
+    
     switch (this.fieldFilter) {
       case 'keys':
-        return fields.filter((f) => f.IsPrimaryKey || f.Name.toLowerCase().includes('id'));
+        return fields.filter(f => f.IsPrimaryKey || f.Name.toLowerCase().includes('id'));
       case 'foreign_keys':
-        return fields.filter((f) => f.RelatedEntityID && !f.IsPrimaryKey);
+        return fields.filter(f => f.RelatedEntityID && !f.IsPrimaryKey);
       case 'regular':
-        return fields.filter((f) => !f.IsPrimaryKey && !f.RelatedEntityID);
+        return fields.filter(f => !f.IsPrimaryKey && !f.RelatedEntityID);
       default:
         return fields;
     }
@@ -103,26 +103,28 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
 
   public getRelatedEntities(entityId: string): EntityInfo[] {
     if (!entityId) return [];
-
+    
     const relatedEntityIds = new Array<string>();
-
+    
     // Get entities that this entity references (foreign keys)
     this.allEntityFields
-      .filter((f) => f.EntityID === entityId && f.RelatedEntityID)
-      .forEach((f) => relatedEntityIds.push(f.RelatedEntityID!));
-
+      .filter(f => f.EntityID === entityId && f.RelatedEntityID)
+      .forEach(f => relatedEntityIds.push(f.RelatedEntityID!));
+    
     // Get entities that reference this entity
-    this.allEntityFields.filter((f) => f.RelatedEntityID === entityId).forEach((f) => relatedEntityIds.push(f.EntityID));
-
+    this.allEntityFields
+      .filter(f => f.RelatedEntityID === entityId)
+      .forEach(f => relatedEntityIds.push(f.EntityID));
+    
     // Convert to actual EntityInfo objects (would need entities list passed in)
     // For now, returning empty array as we'd need the full entities list
     const md = new Metadata();
     const allEntities = md.Entities;
     const retVals: EntityInfo[] = [];
-    relatedEntityIds.forEach((id) => {
+    relatedEntityIds.forEach(id => {
       if (id !== entityId) {
         // don't return the current entity itself
-        const entity = allEntities.find((e) => e.ID === id);
+        const entity = allEntities.find(e => e.ID === id);
         if (entity) {
           retVals.push(entity);
         }
@@ -177,7 +179,7 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
 
   public getFieldPossibleValues(field: EntityFieldInfo): string[] {
     if (!field.EntityFieldValues) return [];
-    return field.EntityFieldValues.map((v) => v.Value).slice(0, 10);
+    return field.EntityFieldValues.map(v => v.Value).slice(0, 10);
   }
 
   public getSortedEntityFieldValues(field: EntityFieldInfo): EntityFieldValueInfo[] {
@@ -195,7 +197,7 @@ export class EntityDetailsComponent implements OnInit, OnChanges {
     if (field.RelatedEntityID) {
       // Find the related entity and select it in the ERD
       const md = new Metadata();
-      const relatedEntity = md.Entities.find((e) => e.ID === field.RelatedEntityID);
+      const relatedEntity = md.Entities.find(e => e.ID === field.RelatedEntityID);
       if (relatedEntity) {
         this.entitySelected.emit(relatedEntity);
       }

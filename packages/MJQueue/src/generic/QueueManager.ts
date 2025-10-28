@@ -1,8 +1,8 @@
 //import { QueueEntity, QueueTaskEntity, QueueTypeEntity } from "mj_generatedentities";
-import { TaskBase, QueueBase } from './QueueBase';
-import { LogError, Metadata, RunView, UserInfo, BaseEntity } from '@memberjunction/global';
-import { QueueEntity, QueueTaskEntity, QueueTypeEntity } from '@memberjunction/core-entities';
-import { MJGlobal } from '@memberjunction/global';
+import { TaskBase, QueueBase } from "./QueueBase";
+import { LogError, Metadata, RunView, UserInfo, BaseEntity } from "@memberjunction/core";
+import { QueueEntity, QueueTaskEntity, QueueTypeEntity } from "@memberjunction/core-entities";
+import { MJGlobal } from "@memberjunction/global";
 import os from 'os';
 
 /**
@@ -15,10 +15,10 @@ import os from 'os';
  *to the queue that is responsible for processing that type of task.
  *
  *The queue manager is also responseible for updating all of its active Queues in the DB with heartbeat
- *information. Heartbeat information is used to determine if a queue has crashed or not by other processes
+ *information. Heartbeat information is used to determine if a queue has crashed or not by other processes 
  *or not. After a heartbeat timeout is reached, other queues can pick up tasks from a crashed process.
  */
-export class QueueManager {
+export class QueueManager { 
   private _queueTypes: QueueTypeEntity[] = [];
   private _queues: QueueBase[] = [];
   private static _instance: QueueManager | null = null;
@@ -29,7 +29,8 @@ export class QueueManager {
   }
 
   public static get Instance(): QueueManager {
-    if (QueueManager._instance === null) QueueManager._instance = new QueueManager();
+    if (QueueManager._instance === null)
+      QueueManager._instance = new QueueManager();
 
     return QueueManager._instance;
   }
@@ -56,12 +57,9 @@ export class QueueManager {
   protected async loadQueueTypes(contextUser: UserInfo): Promise<void> {
     // load all of the queue types from the database
     const rv = new RunView();
-    const queueTypes = await rv.RunView(
-      {
-        EntityName: 'Queue Types',
-      },
-      contextUser
-    );
+    const queueTypes = await rv.RunView({
+      EntityName: 'Queue Types',
+    }, contextUser);
     QueueManager.Instance._queueTypes = queueTypes.Results;
   }
 
@@ -72,8 +70,10 @@ export class QueueManager {
       const g = MJGlobal.Instance.GetGlobalObjectStore();
       if (g && g[QueueManager._globalInstanceKey]) {
         QueueManager._instance = g[QueueManager._globalInstanceKey];
-      } else {
-        if (g) g[QueueManager._globalInstanceKey] = this; // save the instance to the global object store if we have a global object store
+      } 
+      else {
+        if (g)
+          g[QueueManager._globalInstanceKey] = this; // save the instance to the global object store if we have a global object store
 
         QueueManager._instance = this; // and save our new instance to the static member for future use
       }
@@ -84,19 +84,22 @@ export class QueueManager {
 
   public static async AddTask(QueueType: string, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {
     await QueueManager.Config(contextUser);
-    const queueType = QueueManager.QueueTypes.find((qt) => qt.Name == QueueType);
-    if (queueType == null) throw new Error(`Queue Type ${QueueType} not found.`);
-
+    const queueType = QueueManager.QueueTypes.find(qt => qt.Name == QueueType);
+    if (queueType == null)
+      throw new Error(`Queue Type ${QueueType} not found.`)
+    
     return QueueManager.Instance.AddTask(queueType.ID, data, options, contextUser);
   }
 
   public async AddTask(QueueTypeID: string, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {
     try {
       // STEP 1: Find the queue type
-      const queueType = QueueManager.QueueTypes.find((qt) => qt.ID == QueueTypeID);
-      if (queueType == null) throw new Error(`Queue Type ID ${QueueTypeID} not found.`);
+      const queueType = QueueManager.QueueTypes.find(qt => qt.ID == QueueTypeID);
+      if (queueType == null) 
+        throw new Error(`Queue Type ID ${QueueTypeID} not found.`)
 
-      if (queueType.IsActive === false) throw new Error(`Queue Type ID ${QueueTypeID} is not active.`);
+      if (queueType.IsActive === false)
+        throw new Error(`Queue Type ID ${QueueTypeID} is not active.`)
 
       // STEP 2: Find the queue for this type, create it if we don't have one running yet for the specified queue type
       const queue = await this.CheckCreateQueue(queueType, contextUser);
@@ -113,18 +116,22 @@ export class QueueManager {
           const task = new TaskBase(taskRecord, data, options);
           queue.AddTask(task);
           return task;
-        } else throw new Error(`Failed to save new task to the database.`);
+        }
+        else
+          throw new Error(`Failed to save new task to the database.`);
       }
-    } catch (e: any) {
+    }
+    catch (e: any) {
       LogError(e.message);
     }
   }
+
 
   // Initialize a map to hold ongoing queue creation promises
   private ongoingQueueCreations = new Map<string, Promise<QueueBase>>();
 
   protected async CheckCreateQueue(queueType: QueueTypeEntity, contextUser: UserInfo): Promise<QueueBase | undefined> {
-    let queue = this._queues.find((q) => q.QueueTypeID == queueType.ID);
+    let queue = this._queues.find(q => q.QueueTypeID == queueType.ID);
 
     if (queue === null || queue === undefined) {
       // If a queue creation for this type is not already in progress, start one
@@ -148,6 +155,7 @@ export class QueueManager {
     return queue;
   }
 
+
   protected async CreateQueue(queueType: QueueTypeEntity, contextUser: UserInfo): Promise<QueueBase | null | undefined> {
     try {
       // create a new queue, based on the Queue Type metadata and process info
@@ -164,7 +172,7 @@ export class QueueManager {
 
       const networkInterfaces = os.networkInterfaces();
       const interfaceNames = Object.keys(networkInterfaces);
-
+      
       if (interfaceNames.length > 0) {
         const firstInterfaceName = interfaceNames[0];
         const firstInterface = networkInterfaces[firstInterfaceName];
@@ -178,22 +186,20 @@ export class QueueManager {
       newQueueRecord.Set('ProcessOSVersion', os.release());
       newQueueRecord.Set('ProcessHostName', os.hostname());
       newQueueRecord.Set('ProcessUserID', os.userInfo().uid.toString());
-      newQueueRecord.Set('ProcessUserName', os.userInfo().username);
+      newQueueRecord.Set('ProcessUserName', os.userInfo().username); 
 
       newQueueRecord.Set('LastHeartbeat', new Date());
 
       if (await newQueueRecord.Save()) {
-        const newQueue = MJGlobal.Instance.ClassFactory.CreateInstance<QueueBase>(
-          QueueBase,
-          queueType.Name,
-          newQueueRecord,
-          queueType.ID,
-          contextUser
-        );
-        if (newQueue) this._queues.push(newQueue);
+        const newQueue = MJGlobal.Instance.ClassFactory.CreateInstance<QueueBase>(QueueBase, queueType.Name, newQueueRecord, queueType.ID, contextUser)   
+        if (newQueue) 
+          this._queues.push(newQueue);
         return newQueue;
-      } else throw new Error(`Unable to create new queue for Queue Type ID ${queueType.ID}.`);
-    } catch (e: any) {
+      }
+      else
+        throw new Error(`Unable to create new queue for Queue Type ID ${queueType.ID}.`);
+    }
+    catch (e: any) {
       LogError(e.message);
       return null;
     }
@@ -203,3 +209,4 @@ export class QueueManager {
     return this._queues;
   }
 }
+  

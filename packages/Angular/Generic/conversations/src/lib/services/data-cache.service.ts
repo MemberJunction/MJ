@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ConversationEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
-import { Metadata, UserInfo, BaseEntity } from '@memberjunction/global';
+import { Metadata, UserInfo, BaseEntity } from '@memberjunction/core';
 
 /**
  * Global singleton cache for conversation-related entities.
@@ -13,7 +13,7 @@ import { Metadata, UserInfo, BaseEntity } from '@memberjunction/global';
  * see that change immediately without needing to reload from the database.
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class DataCacheService {
   // Separate arrays for each entity type
@@ -34,7 +34,7 @@ export class DataCacheService {
    */
   async getConversation(id: string, currentUser: UserInfo): Promise<ConversationEntity | null> {
     // Check cache first
-    const cached = this.conversations.find((c) => c.ID === id);
+    const cached = this.conversations.find(c => c.ID === id);
     if (cached) {
       return cached;
     }
@@ -76,7 +76,7 @@ export class DataCacheService {
    * @param id The conversation ID to remove
    */
   removeConversation(id: string): void {
-    this.conversations = this.conversations.filter((c) => c.ID !== id);
+    this.conversations = this.conversations.filter(c => c.ID !== id);
   }
 
   /**
@@ -99,7 +99,7 @@ export class DataCacheService {
    */
   async getConversationDetail(id: string, currentUser: UserInfo): Promise<ConversationDetailEntity | null> {
     // Check cache first
-    const cached = this.conversationDetails.find((d) => d.ID === id);
+    const cached = this.conversationDetails.find(d => d.ID === id);
     if (cached) {
       return cached;
     }
@@ -132,7 +132,7 @@ export class DataCacheService {
     // Note: Detail has no ID yet (not saved), so we can't deduplicate
     // After Save(), the ID will be populated and future getConversationDetail() calls will find it
 
-    detail.UserRating = 1; // TO-DO - temp fix for a BUG - remove this after 2.105.0 makes this field optional again, right now it requires a value even though column is nullable
+    detail.UserRating = 1 // TO-DO - temp fix for a BUG - remove this after 2.105.0 makes this field optional again, right now it requires a value even though column is nullable
 
     this.conversationDetails.push(detail);
 
@@ -151,7 +151,7 @@ export class DataCacheService {
     console.log(`[${timestamp}] 💾 DataCacheService.loadConversationDetails - Loading messages for conversation ${conversationId}`);
 
     const md = new Metadata();
-    const rv = new (await import('@memberjunction/global')).RunView();
+    const rv = new (await import('@memberjunction/core')).RunView();
 
     console.log(`[${timestamp}] 💾 DataCacheService - Executing RunView for Conversation Details`);
     const result = await rv.RunView<ConversationDetailEntity>(
@@ -159,7 +159,7 @@ export class DataCacheService {
         EntityName: 'Conversation Details',
         ExtraFilter: `ConversationID='${conversationId}'`,
         OrderBy: '__mj_CreatedAt ASC',
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       },
       currentUser
     );
@@ -170,7 +170,7 @@ export class DataCacheService {
 
       // Add all to cache (avoid duplicates by checking ID)
       for (const detail of details) {
-        const existingIndex = this.conversationDetails.findIndex((d) => d.ID === detail.ID);
+        const existingIndex = this.conversationDetails.findIndex(d => d.ID === detail.ID);
         if (existingIndex >= 0) {
           // Replace existing (ensures we keep the same object reference)
           this.conversationDetails[existingIndex] = detail;
@@ -193,7 +193,7 @@ export class DataCacheService {
    * @returns Array of cached conversation details
    */
   getCachedConversationDetails(conversationId: string): ConversationDetailEntity[] {
-    return this.conversationDetails.filter((d) => d.ConversationID === conversationId);
+    return this.conversationDetails.filter(d => d.ConversationID === conversationId);
   }
 
   /**
@@ -201,7 +201,7 @@ export class DataCacheService {
    * @param id The conversation detail ID to remove
    */
   removeConversationDetail(id: string): void {
-    this.conversationDetails = this.conversationDetails.filter((d) => d.ID !== id);
+    this.conversationDetails = this.conversationDetails.filter(d => d.ID !== id);
   }
 
   // =============================================================================
@@ -222,8 +222,8 @@ export class DataCacheService {
    * @param conversationId The conversation ID
    */
   clearConversation(conversationId: string): void {
-    this.conversations = this.conversations.filter((c) => c.ID !== conversationId);
-    this.conversationDetails = this.conversationDetails.filter((d) => d.ConversationID !== conversationId);
+    this.conversations = this.conversations.filter(c => c.ID !== conversationId);
+    this.conversationDetails = this.conversationDetails.filter(d => d.ConversationID !== conversationId);
   }
 
   /**
@@ -233,7 +233,7 @@ export class DataCacheService {
   getStats(): { conversations: number; conversationDetails: number } {
     return {
       conversations: this.conversations.length,
-      conversationDetails: this.conversationDetails.length,
+      conversationDetails: this.conversationDetails.length
     };
   }
 }

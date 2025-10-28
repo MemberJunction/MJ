@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ElementRef, OnInit, AfterViewInit, OnDestroy } from '@angular/core';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { MentionAutocompleteService, MentionSuggestion } from '../../services/mention-autocomplete.service';
 
 /**
@@ -19,7 +19,7 @@ import { MentionAutocompleteService, MentionSuggestion } from '../../services/me
 @Component({
   selector: 'mj-message-input-box',
   templateUrl: './message-input-box.component.html',
-  styleUrls: ['./message-input-box.component.scss'],
+  styleUrls: ['./message-input-box.component.scss']
 })
 export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestroy {
   @Input() placeholder: string = 'Type your message to start a new conversation...';
@@ -43,7 +43,9 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
   private mentionStartIndex: number = -1;
   private mentionQuery: string = '';
 
-  constructor(private mentionAutocomplete: MentionAutocompleteService) {}
+  constructor(
+    private mentionAutocomplete: MentionAutocompleteService
+  ) {}
 
   async ngOnInit() {
     // Initialize mention autocomplete if enabled and currentUser is available
@@ -89,14 +91,7 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
     this.value = textarea.value;
     this.valueChange.emit(this.value);
 
-    console.log(
-      '[MessageInputBox] onInput - value:',
-      this.value,
-      'enableMentions:',
-      this.enableMentions,
-      'currentUser:',
-      !!this.currentUser
-    );
+    console.log('[MessageInputBox] onInput - value:', this.value, 'enableMentions:', this.enableMentions, 'currentUser:', !!this.currentUser);
 
     // Handle @mention autocomplete
     if (this.enableMentions && this.currentUser) {
@@ -187,22 +182,17 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
       // Show above the textarea - anchor to top of textarea
       this.mentionDropdownPosition = {
         top: textareaRect.top + window.scrollY - 4,
-        left: textareaRect.left + window.scrollX,
+        left: textareaRect.left + window.scrollX
       };
     } else {
       // Show below the textarea (default) - anchor to bottom of textarea
       this.mentionDropdownPosition = {
         top: textareaRect.bottom + window.scrollY + 4,
-        left: textareaRect.left + window.scrollX,
+        left: textareaRect.left + window.scrollX
       };
     }
 
-    console.log(
-      '[MessageInputBox] Dropdown position calculated (viewport coords):',
-      this.mentionDropdownPosition,
-      'showAbove:',
-      this.mentionDropdownShowAbove
-    );
+    console.log('[MessageInputBox] Dropdown position calculated (viewport coords):', this.mentionDropdownPosition, 'showAbove:', this.mentionDropdownShowAbove);
   }
 
   /**

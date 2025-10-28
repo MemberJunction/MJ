@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, Output, EventEmitter, Input } from '@angu
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { AIModelEntityExtended, AIVendorEntity, AIModelTypeEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 
 interface ModelDisplayData extends AIModelEntityExtended {
@@ -17,10 +17,10 @@ interface ModelDisplayData extends AIModelEntityExtended {
 @Component({
   selector: 'app-model-management-v2',
   templateUrl: './model-management-v2.component.html',
-  styleUrls: ['./model-management-v2.component.scss'],
+  styleUrls: ['./model-management-v2.component.scss']
 })
 export class ModelManagementV2Component implements OnInit, OnDestroy {
-  @Output() openEntityRecord = new EventEmitter<{ entityName: string; recordId: string }>();
+  @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
   @Output() stateChange = new EventEmitter<any>();
   @Input() initialState: any = null;
 
@@ -56,7 +56,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     { value: 'speedRank', label: 'Speed Rank' },
     { value: 'costRank', label: 'Cost Rank' },
     { value: 'created', label: 'Created Date' },
-    { value: 'updated', label: 'Updated Date' },
+    { value: 'updated', label: 'Updated Date' }
   ];
 
   // Max rank values calculated from all models
@@ -65,20 +65,27 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   public maxCostRank = 10;
 
   // Loading messages
-  public loadingMessages = ['Loading AI models...', 'Fetching vendor information...', 'Calculating rankings...', 'Almost ready...'];
+  public loadingMessages = [
+    'Loading AI models...',
+    'Fetching vendor information...',
+    'Calculating rankings...',
+    'Almost ready...'
+  ];
   public currentLoadingMessage = this.loadingMessages[0];
   private loadingMessageIndex = 0;
   private loadingMessageInterval: any;
 
   private destroy$ = new Subject<void>();
 
-  constructor(private sharedService: SharedService) {}
+  constructor(
+    private sharedService: SharedService
+  ) {}
 
   ngOnInit(): void {
     this.setupSearchListener();
     this.startLoadingMessages();
     this.loadInitialData();
-
+    
     if (this.initialState) {
       this.applyInitialState(this.initialState);
     }
@@ -93,7 +100,11 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   }
 
   private setupSearchListener(): void {
-    this.searchSubject.pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$)).subscribe((searchTerm) => {
+    this.searchSubject.pipe(
+      debounceTime(300),
+      distinctUntilChanged(),
+      takeUntil(this.destroy$)
+    ).subscribe(searchTerm => {
       this.searchTerm = searchTerm;
       this.applyFilters();
     });
@@ -114,7 +125,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       const modelResults = await rv.RunView<AIModelEntityExtended>({
         EntityName: 'AI Models',
         OrderBy: 'Name',
-        MaxRows: 1000,
+        MaxRows: 1000 
       });
 
       // Load vendors and types in parallel
@@ -122,48 +133,49 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
         rv.RunView<AIVendorEntity>({
           EntityName: 'MJ: AI Vendors',
           OrderBy: 'Name',
-          MaxRows: 1000,
+          MaxRows: 1000 
         }),
         rv.RunView<AIModelTypeEntity>({
           EntityName: 'AI Model Types',
           OrderBy: 'Name',
-          MaxRows: 1000,
-        }),
+          MaxRows: 1000 
+        })
       ]);
 
       // Results are now properly typed, no casting needed
       this.vendors = vendorResults.Results;
       this.modelTypes = typeResults.Results;
-
+      
       // Log summary data
-
+      
       // Create lookup maps
-      const vendorMap = new Map(this.vendors.map((v) => [v.ID, v.Name]));
-      const typeMap = new Map(this.modelTypes.map((t) => [t.ID, t.Name]));
+      const vendorMap = new Map(this.vendors.map(v => [v.ID, v.Name]));
+      const typeMap = new Map(this.modelTypes.map(t => [t.ID, t.Name]));
 
       // Transform models to display format - Results already typed as AIModelEntityExtended[]
       this.models = modelResults.Results.map((model, index) => {
+        
         // Find vendor ID by matching vendor name
         let vendorId: string | undefined;
         if (model.Vendor) {
-          const vendor = this.vendors.find((v) => v.Name === model.Vendor);
+          const vendor = this.vendors.find(v => v.Name === model.Vendor);
           vendorId = vendor?.ID;
         }
-
+        
         // Don't spread the model - it loses getter properties!
         // Instead, augment the model with display properties
         const modelWithDisplay = model as ModelDisplayData;
         modelWithDisplay.VendorID = vendorId;
         modelWithDisplay.VendorName = model.Vendor || 'No Vendor';
         modelWithDisplay.ModelTypeName = model.AIModelTypeID ? typeMap.get(model.AIModelTypeID) || 'Unknown' : 'No Type';
-
+        
         return model;
       });
 
       // Calculate max values for each rank type from ALL models
-      this.maxPowerRank = Math.max(...this.models.map((m) => m.PowerRank || 0), 10);
-      this.maxSpeedRank = Math.max(...this.models.map((m) => m.SpeedRank || 0), 10);
-      this.maxCostRank = Math.max(...this.models.map((m) => m.CostRank || 0), 10);
+      this.maxPowerRank = Math.max(...this.models.map(m => m.PowerRank || 0), 10);
+      this.maxSpeedRank = Math.max(...this.models.map(m => m.SpeedRank || 0), 10);
+      this.maxCostRank = Math.max(...this.models.map(m => m.CostRank || 0), 10);
 
       // Update filter ranges based on actual max values
       this.powerRankRange = { min: 0, max: this.maxPowerRank };
@@ -187,7 +199,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
 
   public formatRank(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
     if (rank === null) return 'N/A';
-
+    
     // Determine which max value to use
     let maxValue = 10;
     if (rankType === 'power') {
@@ -197,7 +209,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     } else if (rankType === 'cost') {
       maxValue = this.maxCostRank;
     }
-
+    
     return `${rank}/${maxValue}`;
   }
 
@@ -239,17 +251,17 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   }
 
   public applyFilters(): void {
-    this.filteredModels = this.models.filter((m) => {
+    this.filteredModels = this.models.filter(m => {
       const model = m as ModelDisplayData;
       // Search filter
       if (this.searchTerm) {
         const searchLower = this.searchTerm.toLowerCase();
-        const matchesSearch =
+        const matchesSearch = 
           model.Name?.toLowerCase().includes(searchLower) ||
           model.Description?.toLowerCase().includes(searchLower) ||
           model.VendorName?.toLowerCase().includes(searchLower) ||
           model.ModelTypeName?.toLowerCase().includes(searchLower);
-
+        
         if (!matchesSearch) return false;
       }
 
@@ -338,11 +350,15 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
 
   public async toggleModelStatus(model: ModelDisplayData, event: Event): Promise<void> {
     event.stopPropagation();
-
+    
     try {
       model.IsActive = !model.IsActive;
       if (await model.Save()) {
-        this.sharedService.CreateSimpleNotification(`Model ${model.IsActive ? 'activated' : 'deactivated'} successfully`, 'success', 3000);
+        this.sharedService.CreateSimpleNotification(
+          `Model ${model.IsActive ? 'activated' : 'deactivated'} successfully`,
+          'success',
+          3000
+        );
       } else {
         // Revert on failure
         model.IsActive = !model.IsActive;
@@ -357,7 +373,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
   public openModel(modelId: string): void {
     this.openEntityRecord.emit({
       entityName: 'AI Models',
-      recordId: modelId,
+      recordId: modelId
     });
   }
 
@@ -365,17 +381,17 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     try {
       const md = new Metadata();
       const newModel = await md.GetEntityObject<AIModelEntityExtended>('AI Models');
-
+      
       if (newModel) {
         newModel.Name = 'New AI Model';
         newModel.IsActive = true;
-
+        
         if (await newModel.Save()) {
           this.openEntityRecord.emit({
             entityName: 'AI Models',
-            recordId: newModel.ID,
+            recordId: newModel.ID
           });
-
+          
           // Reload the data
           await this.loadInitialData();
         }
@@ -402,7 +418,7 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
 
   public getRankClass(rank: number | null, rankType?: 'power' | 'speed' | 'cost'): string {
     if (rank === null || rank === 0) return 'rank-none';
-
+    
     // Determine which max value to use
     let maxValue = 10;
     if (rankType === 'power') {
@@ -412,10 +428,10 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
     } else if (rankType === 'cost') {
       maxValue = this.maxCostRank;
     }
-
+    
     // Calculate percentage of max
     const percentage = (rank / maxValue) * 100;
-
+    
     if (percentage >= 70) return 'rank-high';
     if (percentage >= 40) return 'rank-medium';
     return 'rank-low';
@@ -433,23 +449,21 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       powerRankRange: this.powerRankRange,
       speedRankRange: this.speedRankRange,
       costRankRange: this.costRankRange,
-      modelCount: this.filteredModels.length,
+      modelCount: this.filteredModels.length
     });
   }
 
   public get hasActiveFilters(): boolean {
-    return (
-      this.searchTerm !== '' ||
-      this.selectedVendor !== 'all' ||
-      this.selectedType !== 'all' ||
-      this.selectedStatus !== 'all' ||
-      this.powerRankRange.min > 0 ||
-      this.powerRankRange.max < this.maxPowerRank ||
-      this.speedRankRange.min > 0 ||
-      this.speedRankRange.max < this.maxSpeedRank ||
-      this.costRankRange.min > 0 ||
-      this.costRankRange.max < this.maxCostRank
-    );
+    return this.searchTerm !== '' || 
+           this.selectedVendor !== 'all' || 
+           this.selectedType !== 'all' || 
+           this.selectedStatus !== 'all' ||
+           this.powerRankRange.min > 0 ||
+           this.powerRankRange.max < this.maxPowerRank ||
+           this.speedRankRange.min > 0 ||
+           this.speedRankRange.max < this.maxSpeedRank ||
+           this.costRankRange.min > 0 ||
+           this.costRankRange.max < this.maxCostRank;
   }
 
   public clearFilters(): void {
@@ -475,10 +489,14 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
 
   public validateAndApplyRankFilters(rankType: 'power' | 'speed' | 'cost'): void {
     // Get the appropriate range and max value based on type
-    let range = rankType === 'power' ? this.powerRankRange : rankType === 'speed' ? this.speedRankRange : this.costRankRange;
-
-    let maxValue = rankType === 'power' ? this.maxPowerRank : rankType === 'speed' ? this.maxSpeedRank : this.maxCostRank;
-
+    let range = rankType === 'power' ? this.powerRankRange : 
+                 rankType === 'speed' ? this.speedRankRange : 
+                 this.costRankRange;
+    
+    let maxValue = rankType === 'power' ? this.maxPowerRank :
+                   rankType === 'speed' ? this.maxSpeedRank :
+                   this.maxCostRank;
+    
     // Ensure min is not greater than max
     if (range.min > range.max) {
       // Swap the values
@@ -486,11 +504,11 @@ export class ModelManagementV2Component implements OnInit, OnDestroy {
       range.min = range.max;
       range.max = temp;
     }
-
+    
     // Ensure values are within bounds
     range.min = Math.max(0, Math.min(maxValue, range.min));
     range.max = Math.max(0, Math.min(maxValue, range.max));
-
+    
     // Apply the filters
     this.applyFilters();
   }

@@ -232,7 +232,7 @@ const generatedCode: GeneratedCode = {
 
 ```typescript
 import { ActionEngineBase } from '@memberjunction/actions-base';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 async function initializeActionEngine(user: UserInfo) {
     const engine = ActionEngineBase.Instance;

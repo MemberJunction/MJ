@@ -15,7 +15,7 @@ import {
   RunViewParams,
   RunViewResult,
   UserInfo,
-} from '@memberjunction/global';
+} from '@memberjunction/core';
 import { AuditLogEntity, ErrorLogEntity, UserViewEntityExtended } from '@memberjunction/core-entities';
 import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { PubSubEngine } from 'type-graphql';
@@ -41,9 +41,7 @@ export class ResolverBase {
     // could actually be duplicated and we'd end up with multiple instances of the same map, which would be bad.
     const g = MJGlobal.Instance.GetGlobalObjectStore();
     if (!g[ResolverBase._eventSubscriptionKey]) {
-      LogDebug(
-        `>>>>> MJServer.ResolverBase.EventSubscriptions: Creating new Map - this should only happen once per server instance <<<<<<`
-      );
+      LogDebug(`>>>>> MJServer.ResolverBase.EventSubscriptions: Creating new Map - this should only happen once per server instance <<<<<<`);
       g[ResolverBase._eventSubscriptionKey] = new Map<string, Subscription>();
     }
     return g[ResolverBase._eventSubscriptionKey];
@@ -91,7 +89,7 @@ export class ResolverBase {
     const e = provider.Entities.find((e) => e.Name === entity);
     if (!e) throw new Error(`Entity ${entity} not found in metadata`);
     // now build a SQL string using the entityInfo and using the properties in the params object
-    let extraFilter = '';
+    let extraFilter = "";
     const keys = Object.keys(params);
     keys.forEach((k, i) => {
       if (i > 0) extraFilter += ' AND ';
@@ -104,35 +102,25 @@ export class ResolverBase {
 
     // ok, now we have a SQL string, run it and return the results
     // use the SQLServerDataProvider
-    const result = await rv.RunView(
-      {
-        EntityName: entity,
-        ExtraFilter: extraFilter,
-      },
-      contextUser
-    );
+    const result = await rv.RunView({
+      EntityName: entity,
+      ExtraFilter: extraFilter,
+    }, contextUser)
     if (result && result.Success && result.Results.length > 0) {
       return result.Results;
-    } else {
+    }
+    else {
       return [];
     }
   }
 
-  async RunViewByNameGeneric(
-    viewInput: RunViewByNameInput,
-    provider: DatabaseProviderBase,
-    userPayload: UserPayload,
-    pubSub: PubSubEngine
-  ) {
+  async RunViewByNameGeneric(viewInput: RunViewByNameInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       const rv = provider as any as IRunViewProvider;
-      const result = await rv.RunView<UserViewEntityExtended>(
-        {
-          EntityName: 'User Views',
-          ExtraFilter: "Name='" + viewInput.ViewName + "'",
-        },
-        userPayload.userRecord
-      );
+      const result = await rv.RunView<UserViewEntityExtended>({
+        EntityName: 'User Views',
+        ExtraFilter: "Name='" + viewInput.ViewName + "'",
+      }, userPayload.userRecord);
       if (result && result.Success && result.Results.length > 0) {
         const viewInfo = result.Results[0];
         return this.RunViewGenericInternal(
@@ -154,7 +142,8 @@ export class ResolverBase {
           viewInput.MaxRows,
           viewInput.StartRow
         );
-      } else {
+      }
+      else {
         LogError(`RunViewByNameGeneric: View ${viewInput.ViewName} not found or no results returned`);
         return null;
       }
@@ -194,12 +183,7 @@ export class ResolverBase {
     }
   }
 
-  async RunDynamicViewGeneric(
-    viewInput: RunDynamicViewInput,
-    provider: DatabaseProviderBase,
-    userPayload: UserPayload,
-    pubSub: PubSubEngine
-  ) {
+  async RunDynamicViewGeneric(viewInput: RunDynamicViewInput, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     try {
       const md = provider;
       const entity = md.Entities.find((e) => e.Name === viewInput.EntityName);
@@ -250,9 +234,7 @@ export class ResolverBase {
         let viewInfo: UserViewEntityExtended | null = null;
 
         if (viewInput.ViewName) {
-          viewInfo = this.safeFirstArrayElement(
-            await this.findBy(provider, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord)
-          );
+          viewInfo = this.safeFirstArrayElement(await this.findBy(provider, 'User Views', { Name: viewInput.ViewName }, userPayload.userRecord));
         } else if (viewInput.ViewID) {
           viewInfo = await provider.GetEntityObject<UserViewEntityExtended>('User Views', contextUser);
           await viewInfo.Load(viewInput.ViewID);
@@ -290,7 +272,7 @@ export class ResolverBase {
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
           resultType: viewInput.ResultType,
-          userPayload,
+          userPayload, 
         });
       } catch (err) {
         LogError(err);
@@ -302,7 +284,7 @@ export class ResolverBase {
     return results;
   }
 
-  private static _priorEmittedData: { Entity: string; PKey: CompositeKey }[] = [];
+  private static _priorEmittedData: {Entity: string, PKey: CompositeKey}[] = [];
   protected async EmitCloudEvent({ component, event, eventCode, args }: MJEvent) {
     if (ResolverBase._emit && event === MJEventType.ComponentEvent && eventCode === BaseEntity.BaseEventCode) {
       const extendedType = args instanceof BaseEntityEvent ? `.${args.type}` : '';
@@ -317,20 +299,20 @@ export class ResolverBase {
         // check to see if the combination of Entity and pkey was already emitted, if so, Log that condtion next
         const pkey = args.baseEntity.PrimaryKeys as CompositeKey;
         const emittedData = { Entity: args.baseEntity.EntityInfo.Name, PKey: pkey };
-        if (
-          ResolverBase._priorEmittedData.find((e) => {
-            if (e.Entity !== emittedData.Entity) return false;
-            // if we get here compare the pkeys
-            const pkey2 = e.PKey as CompositeKey;
-            if (pkey.KeyValuePairs.length !== pkey2.KeyValuePairs.length) return false;
-            for (const kv of pkey.KeyValuePairs) {
-              // find the match by field name
-              const kv2 = pkey2.KeyValuePairs.find((k) => k.FieldName === kv.FieldName);
-              if (!kv2 || kv2.Value !== kv.Value) return false;
-            }
-            return true; // if we get here, all the keys matched
-          })
-        ) {
+        if (ResolverBase._priorEmittedData.find((e) => {
+          if (e.Entity !== emittedData.Entity) return false;
+          // if we get here compare the pkeys
+          const pkey2 = e.PKey as CompositeKey;
+          if (pkey.KeyValuePairs.length !== pkey2.KeyValuePairs.length) 
+            return false;
+          for (const kv of pkey.KeyValuePairs) {
+            // find the match by field name
+            const kv2 = pkey2.KeyValuePairs.find((k) => k.FieldName === kv.FieldName);
+            if (!kv2 || kv2.Value !== kv.Value) 
+              return false;
+          }
+          return true; // if we get here, all the keys matched
+        })) {
           console.log(`IMPORTANT: CloudEvent already emitted for ${JSON.stringify(emittedData)}`);
         }
 
@@ -352,7 +334,7 @@ export class ResolverBase {
     if (!userPayload) {
       throw new Error(`userPayload is null`);
     }
-
+    
     // first check permissions, the logged in user must have read permissions on the entity to run the view
     if (entityInfo) {
       const userInfo = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim()); // get the user record from MD so we have ROLES attached, don't use the one from payload directly
@@ -364,7 +346,8 @@ export class ResolverBase {
       if (!userPermissions.CanRead) {
         throw new Error(`User ${userPayload.email} does not have read permissions on ${entityInfo.Name}`);
       }
-    } else {
+    } 
+    else {
       throw new Error(`Entity not found in metadata`);
     }
   }
@@ -396,7 +379,7 @@ export class ResolverBase {
     try {
       if (!viewInfo || !userPayload) return null;
 
-      const md = provider;
+      const md = provider
       const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
       if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
@@ -416,9 +399,11 @@ export class ResolverBase {
       let optimizedFields = fields;
       if (fields?.length) {
         // Always ensure primary keys are included for proper record handling
-        const primaryKeys = entityInfo.PrimaryKeys.map((pk) => pk.Name);
-        const missingPrimaryKeys = primaryKeys.filter((pk) => !fields.find((f) => f.toLowerCase() === pk.toLowerCase()));
-
+        const primaryKeys = entityInfo.PrimaryKeys.map(pk => pk.Name);
+        const missingPrimaryKeys = primaryKeys.filter(pk => 
+          !fields.find(f => f.toLowerCase() === pk.toLowerCase())
+        );
+        
         if (missingPrimaryKeys.length) {
           optimizedFields = [...fields, ...missingPrimaryKeys];
         }
@@ -431,7 +416,7 @@ export class ResolverBase {
           EntityName: viewInfo.Entity,
           ExtraFilter: extraFilter,
           OrderBy: orderBy,
-          Fields: optimizedFields, // Use optimized fields list
+          Fields: optimizedFields,  // Use optimized fields list
           UserSearchString: userSearchString,
           ExcludeUserViewRunID: excludeUserViewRunID,
           OverrideExcludeFilter: overrideExcludeFilter,
@@ -454,7 +439,7 @@ export class ResolverBase {
           mapper.MapFields(r);
         }
       }
-
+      
       return result;
     } catch (err) {
       // Fix #9: Improved error handling with structured logging
@@ -466,7 +451,7 @@ export class ResolverBase {
         entityName: viewInfo?.Entity,
         errorType: error.constructor.name,
         // Only include stack trace for non-validation errors
-        stack: error.message?.includes('not found in metadata') ? undefined : error.stack,
+        stack: error.message?.includes('not found in metadata') ? undefined : error.stack
       });
       throw err;
     }
@@ -486,18 +471,18 @@ export class ResolverBase {
       let md: Metadata | null = null;
       const rv = params[0].provider as any as IRunViewProvider;
       let runViewParams: RunViewParams[] = [];
-
+      
       // Fix #1: Get user info only once for all queries
       let contextUser: UserInfo | null = null;
       if (params[0]?.userPayload?.email) {
         const userEmail = params[0].userPayload.email.toLowerCase().trim();
-        const user = UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userEmail);
+        const user = UserCache.Users.find(u => u.Email.toLowerCase().trim() === userEmail);
         if (!user) {
           throw new Error(`User ${userEmail} not found in metadata`);
         }
         contextUser = user;
       }
-
+      
       // Create a map of entities to validate only once per entity
       const validatedEntities = new Set<string>();
       md = new Metadata();
@@ -508,7 +493,7 @@ export class ResolverBase {
           // Validate entity only once per entity type
           const entityName = param.viewInfo.Entity;
           if (!validatedEntities.has(entityName)) {
-            const entityInfo = md.Entities.find((e) => e.Name === entityName);
+            const entityInfo = md.Entities.find(e => e.Name === entityName);
             if (!entityInfo) {
               throw new Error(`Entity ${entityName} not found in metadata`);
             }
@@ -565,12 +550,7 @@ export class ResolverBase {
     }
   }
 
-  protected async createRecordAccessAuditLogRecord(
-    provider: DatabaseProviderBase,
-    userPayload: UserPayload,
-    entityName: string,
-    recordId: any
-  ): Promise<any> {
+  protected async createRecordAccessAuditLogRecord(provider: DatabaseProviderBase, userPayload: UserPayload, entityName: string, recordId: any): Promise<any> {
     try {
       const md = provider;
       const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
@@ -591,13 +571,7 @@ export class ResolverBase {
     }
   }
 
-  protected getRowLevelSecurityWhereClause(
-    provider: DatabaseProviderBase,
-    entityName: string,
-    userPayload: UserPayload,
-    type: EntityPermissionType,
-    returnPrefix: string
-  ) {
+  protected getRowLevelSecurityWhereClause(provider: DatabaseProviderBase, entityName: string, userPayload: UserPayload, type: EntityPermissionType, returnPrefix: string) {
     const md = provider;
     const entityInfo = md.Entities.find((e) => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
     if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
@@ -646,8 +620,10 @@ export class ResolverBase {
 
       if (recordId) auditLog.RecordID = recordId;
 
-      if (await auditLog.Save()) return auditLog;
-      else throw new Error(`Error saving audit log record`);
+      if (await auditLog.Save()) 
+        return auditLog;
+      else 
+        throw new Error(`Error saving audit log record`);
     } catch (err) {
       console.log(err);
       return null;
@@ -669,11 +645,14 @@ export class ResolverBase {
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === email.toLowerCase().trim());
   }
   protected GetUserFromPayload(userPayload: UserPayload): UserInfo | undefined {
-    if (!userPayload) return undefined;
+    if (!userPayload) 
+      return undefined;
 
-    if (userPayload.userRecord) return userPayload.userRecord; // if we have a user record, use that directly
+    if (userPayload.userRecord)
+      return userPayload.userRecord; // if we have a user record, use that directly
 
-    if (!userPayload.email) return undefined;
+    if (!userPayload.email) 
+      return undefined;
 
     return UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload.email.toLowerCase().trim());
   }
@@ -690,24 +669,15 @@ export class ResolverBase {
 
     if (!this.EventSubscriptions.has(uniqueKey)) {
       // listen for events from the entityObject in case it is a long running task and we can push messages back to the client via pubSub
-      LogDebug(
-        `ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`
-      );
+      LogDebug(`ResolverBase.ListenForEntityMessages: About to call MJGlobal.Instance.GetEventListener() to get the event listener subscription for ${uniqueKey}`);
       const theSub = MJGlobal.Instance.GetEventListener(false).subscribe(async (event: MJEvent) => {
         if (event) {
           const baseEntity = <BaseEntity>event.args?.baseEntity;
           const baseEntityValues = baseEntity ? baseEntity.GetAll() : null;
-          const eventToLog = {
-            entityName: entityObject.EntityInfo.Name,
-            baseEntity: baseEntityValues,
-            event: event.event,
-            eventCode: event.eventCode,
-          };
-          LogDebug(
-            `ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`
-          );
+          const eventToLog = { entityName: entityObject.EntityInfo.Name, baseEntity: baseEntityValues, event: event.event, eventCode: event.eventCode };
+          LogDebug(`ResolverBase.ListenForEntityMessages: Received Event from within MJGlobal.Instance.GetEventListener() callback. Will call EmitCloudEvent() next\nEvent data:\n${JSON.stringify(eventToLog)}`);
           await this.EmitCloudEvent(event);
-          LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);
+          LogDebug(`ResolverBase.ListenForEntityMessages: EmitCloudEvent() completed successfully`);  
 
           if (event.args && event.args instanceof BaseEntityEvent) {
             const baseEntityEvent = event.args as BaseEntityEvent;
@@ -730,13 +700,7 @@ export class ResolverBase {
     }
   }
 
-  protected async CreateRecord(
-    entityName: string,
-    input: any,
-    provider: DatabaseProviderBase,
-    userPayload: UserPayload,
-    pubSub: PubSubEngine
-  ) {
+  protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeCreate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
@@ -762,13 +726,7 @@ export class ResolverBase {
   }
   protected async AfterCreate(provider: DatabaseProviderBase, input: any) {}
 
-  protected async UpdateRecord(
-    entityName: string,
-    input: any,
-    provider: DatabaseProviderBase,
-    userPayload: UserPayload,
-    pubSub: PubSubEngine
-  ) {
+  protected async UpdateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     if (await this.BeforeUpdate(provider, input)) {
       // fire event and proceed if it wasn't cancelled
       const userInfo = this.GetUserFromPayload(userPayload);
@@ -821,11 +779,11 @@ export class ResolverBase {
       }
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
-
+      
       if (await entityObject.Save()) {
         // save worked, fire afterevent and return all the data
         await this.AfterUpdate(provider, input); // fire event
-
+        
         return this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll());
       } else {
         throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
@@ -837,7 +795,7 @@ export class ResolverBase {
         extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
       });
   }
-
+  
   /**
    * This routine compares the OldValues property in the input object to the values in the DB that we just loaded. If there are differences, we need to check to see if the client
    * is trying to update any of those fields (e.g. overlap). If there is overlap, we throw an error. If there is no overlap, we can proceed with the update even if the DB Values
@@ -861,7 +819,8 @@ export class ResolverBase {
           case EntityFieldTSType.Number:
             if (val == null && val == undefined) {
               val = null;
-            } else {
+            }
+            else {
               let typeLowered = (field.Type as string).toLowerCase();
 
               switch (typeLowered) {
@@ -962,7 +921,7 @@ export class ResolverBase {
           DBDifferences: dbDifferences,
           Overlap: overlap,
         };
-
+        
         // Log as warning to console and ErrorLog table instead of throwing error
         console.warn('Entity save inconsistency detected but allowing save to continue:', JSON.stringify(msg));
         LogError({
@@ -973,8 +932,8 @@ export class ResolverBase {
             entityName: entityObject.EntityInfo.Name,
             clientDifferences: clientDifferences,
             dbDifferences: dbDifferences,
-            overlap: overlap,
-          },
+            overlap: overlap
+          }
         });
 
         // Create ErrorLog record in the database
@@ -986,7 +945,7 @@ export class ResolverBase {
           errorLogEntity.Status = 'Warning';
           errorLogEntity.Category = 'Entity Save';
           errorLogEntity.CreatedBy = contextUser.Email || contextUser.Name;
-
+          
           const saveResult = await errorLogEntity.Save();
           if (!saveResult) {
             console.error('Failed to save ErrorLog record');
@@ -1017,7 +976,7 @@ export class ResolverBase {
       const returnValue = entityObject.GetAll(); // grab the values before we delete so we can return last state before delete if we are successful.
 
       this.ListenForEntityMessages(entityObject, pubSub, userPayload);
-
+      
       if (await entityObject.Delete(options)) {
         await this.AfterDelete(provider, key); // fire event
         return returnValue;

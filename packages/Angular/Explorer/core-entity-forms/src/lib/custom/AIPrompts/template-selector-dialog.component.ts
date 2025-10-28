@@ -3,7 +3,7 @@ import { DialogRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, debounceTime, distinctUntilChanged, takeUntil } from 'rxjs';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { CommonModule } from '@angular/common';
-import { RunView } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
 import { TemplateEntity, TemplateCategoryEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -38,27 +38,28 @@ export interface TemplateSelectorResult {
   templateUrl: './template-selector-dialog.component.html',
   styleUrls: ['./template-selector-dialog.component.css'],
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, ReactiveFormsModule]
 })
 export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
+  
   // Input configuration
   config: TemplateSelectorConfig = { title: 'Select Template' };
-
+  
   // State management
   private destroy$ = new Subject<void>();
   public result = new Subject<TemplateSelectorResult | null>();
-
+  
   // Data and UI state
   isLoading$ = new BehaviorSubject<boolean>(false);
   templates$ = new BehaviorSubject<TemplateEntity[]>([]);
   filteredTemplates$ = new BehaviorSubject<TemplateEntity[]>([]);
   categories$ = new BehaviorSubject<TemplateCategoryEntity[]>([]);
-
+  
   // Search and filtering
   searchControl = new FormControl('');
   selectedCategory: string | null = null;
   selectedTemplates: Set<string> = new Set();
-
+  
   // View mode
   viewMode: 'grid' | 'list' = 'list';
 
@@ -70,7 +71,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   ngOnInit() {
     this.setupSearch();
     this.loadData();
-
+    
     // Initialize selected templates if provided
     if (this.config.selectedTemplateIds) {
       this.selectedTemplates = new Set(this.config.selectedTemplateIds);
@@ -83,20 +84,33 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   private setupSearch() {
-    this.searchControl.valueChanges.pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$)).subscribe((searchTerm) => {
-      this.filterTemplates(searchTerm || '');
-    });
+    this.searchControl.valueChanges
+      .pipe(
+        debounceTime(300),
+        distinctUntilChanged(),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(searchTerm => {
+        this.filterTemplates(searchTerm || '');
+      });
   }
 
   private async loadData() {
     this.isLoading$.next(true);
-
+    
     try {
       // Load both templates and categories in parallel
-      await Promise.all([this.loadTemplates(), this.loadCategories()]);
+      await Promise.all([
+        this.loadTemplates(),
+        this.loadCategories()
+      ]);
     } catch (error) {
       console.error('Error loading template data:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error loading templates. Please try again.', 'error', 3000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error loading templates. Please try again.',
+        'error',
+        3000
+      );
     } finally {
       this.isLoading$.next(false);
     }
@@ -105,22 +119,22 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   private async loadTemplates() {
     try {
       const rv = new RunView();
-
+      
       // Build filter
       let filter = '';
       if (this.config.showActiveOnly !== false) {
-        filter = 'IsActive = 1';
+        filter = "IsActive = 1";
       }
       if (this.config.extraFilter) {
         filter += filter ? ` AND ${this.config.extraFilter}` : this.config.extraFilter;
       }
-
+      
       const result = await rv.RunView<TemplateEntity>({
         EntityName: 'Templates',
         ExtraFilter: filter,
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',
-        MaxRows: 1000,
+        MaxRows: 1000
       });
 
       if (result.Success) {
@@ -140,13 +154,13 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   private async loadCategories() {
     try {
       const rv = new RunView();
-
+      
       const result = await rv.RunView<TemplateCategoryEntity>({
         EntityName: 'Template Categories',
         ExtraFilter: '',
         OrderBy: 'Name ASC',
         ResultType: 'entity_object',
-        MaxRows: 1000,
+        MaxRows: 1000
       });
 
       if (result.Success) {
@@ -164,21 +178,22 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   private filterTemplates(searchTerm: string) {
     const allTemplates = this.templates$.value;
     let filtered = allTemplates;
-
+    
     // Apply search filter
     if (searchTerm.trim()) {
-      filtered = filtered.filter(
-        (template) =>
-          template.Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          template.Description?.toLowerCase().includes(searchTerm.toLowerCase())
+      filtered = filtered.filter(template => 
+        template.Name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        template.Description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-
+    
     // Apply category filter
     if (this.selectedCategory) {
-      filtered = filtered.filter((template) => template.CategoryID === this.selectedCategory);
+      filtered = filtered.filter(template => 
+        template.CategoryID === this.selectedCategory
+      );
     }
-
+    
     this.filteredTemplates$.next(filtered);
   }
 
@@ -190,7 +205,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   getCategoryDisplayName(categoryId: string): string {
-    const category = this.categories$.value.find((c) => c.ID === categoryId);
+    const category = this.categories$.value.find(c => c.ID === categoryId);
     return category?.Name || 'Unknown Category';
   }
 
@@ -216,7 +231,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
 
   getSelectedTemplateObjects(): TemplateEntity[] {
     const allTemplates = this.templates$.value;
-    return allTemplates.filter((template) => this.selectedTemplates.has(template.ID));
+    return allTemplates.filter(template => this.selectedTemplates.has(template.ID));
   }
 
   // === UI Helpers ===
@@ -241,7 +256,9 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
 
   getTemplatePreview(template: TemplateEntity): string {
     if (!template.Description) return 'No description available';
-    return template.Description.length > 100 ? template.Description.substring(0, 100) + '...' : template.Description;
+    return template.Description.length > 100 
+      ? template.Description.substring(0, 100) + '...' 
+      : template.Description;
   }
 
   formatDate(date: Date | string | null): string {
@@ -254,14 +271,18 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
 
   selectTemplates() {
     const selectedTemplateObjects = this.getSelectedTemplateObjects();
-
+    
     if (selectedTemplateObjects.length === 0) {
-      MJNotificationService.Instance.CreateSimpleNotification('Please select at least one template', 'warning', 2000);
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Please select at least one template',
+        'warning',
+        2000
+      );
       return;
     }
 
     const result: TemplateSelectorResult = {
-      selectedTemplates: selectedTemplateObjects,
+      selectedTemplates: selectedTemplateObjects
     };
 
     this.result.next(result);
@@ -271,7 +292,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
   createNew() {
     const result: TemplateSelectorResult = {
       selectedTemplates: [],
-      createNew: true,
+      createNew: true
     };
 
     this.result.next(result);

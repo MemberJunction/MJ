@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { ConversationEntity, ResourcePermissionEntity, UserEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata } from '@memberjunction/global';
+import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
 
@@ -103,8 +103,7 @@ interface SharePermission {
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
-  styles: [
-    `
+  styles: [`
     .share-content { display: flex; flex-direction: column; gap: 24px; }
 
     .add-user-section h4,
@@ -134,8 +133,7 @@ interface SharePermission {
     .link-controls label { font-size: 13px; }
 
     .link-display { display: flex; gap: 8px; }
-  `,
-  ],
+  `]
 })
 export class ShareModalComponent implements OnInit {
   @Input() conversation!: ConversationEntity;
@@ -152,7 +150,7 @@ export class ShareModalComponent implements OnInit {
   public accessLevels = [
     { label: 'Can View', value: 'View' },
     { label: 'Can Edit', value: 'Edit' },
-    { label: 'Owner', value: 'Owner' },
+    { label: 'Owner', value: 'Owner' }
   ];
 
   private readonly CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
@@ -175,7 +173,7 @@ export class ShareModalComponent implements OnInit {
       const result = await rv.RunView<ResourcePermissionEntity>({
         EntityName: 'Resource Permissions',
         ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.conversation.ID}' AND Status='Approved'`,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       });
 
       if (result.Success && result.Results) {
@@ -185,7 +183,7 @@ export class ShareModalComponent implements OnInit {
             const userResult = await userRv.RunView<UserEntity>({
               EntityName: 'Users',
               ExtraFilter: `ID='${perm.UserID}'`,
-              ResultType: 'entity_object',
+              ResultType: 'entity_object'
             });
 
             if (userResult.Success && userResult.Results && userResult.Results.length > 0) {
@@ -195,7 +193,7 @@ export class ShareModalComponent implements OnInit {
                 userId: perm.UserID,
                 userEmail: user.Email,
                 userName: user.Name,
-                permissionLevel: perm.PermissionLevel || 'View',
+                permissionLevel: perm.PermissionLevel || 'View'
               } as SharePermission;
             }
           }
@@ -203,7 +201,7 @@ export class ShareModalComponent implements OnInit {
         });
 
         const resolvedPermissions = await Promise.all(permissionPromises);
-        this.permissions = resolvedPermissions.filter((p) => p !== null) as SharePermission[];
+        this.permissions = resolvedPermissions.filter(p => p !== null) as SharePermission[];
       }
     } catch (error) {
       console.error('Failed to load permissions:', error);
@@ -230,7 +228,7 @@ export class ShareModalComponent implements OnInit {
     }
 
     // Check if user already has access
-    if (this.permissions.some((p) => p.userEmail === email)) {
+    if (this.permissions.some(p => p.userEmail === email)) {
       await this.dialogService.alert('User Already Has Access', 'This user already has access');
       return;
     }
@@ -241,7 +239,7 @@ export class ShareModalComponent implements OnInit {
       const userResult = await rv.RunView<UserEntity>({
         EntityName: 'Users',
         ExtraFilter: `Email='${email}'`,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       });
 
       if (!userResult.Success || !userResult.Results || userResult.Results.length === 0) {
@@ -255,7 +253,7 @@ export class ShareModalComponent implements OnInit {
         userId: user.ID,
         userEmail: user.Email,
         userName: user.Name,
-        permissionLevel: 'View',
+        permissionLevel: 'View'
       };
 
       await this.savePermission(newPermission);
@@ -273,7 +271,7 @@ export class ShareModalComponent implements OnInit {
       title: 'Remove Access',
       message: `Remove access for ${permission.userEmail}?`,
       okText: 'Remove',
-      cancelText: 'Cancel',
+      cancelText: 'Cancel'
     });
 
     if (!confirmed) return;
@@ -290,7 +288,7 @@ export class ShareModalComponent implements OnInit {
         }
       }
 
-      this.permissions = this.permissions.filter((p) => p.userId !== permission.userId);
+      this.permissions = this.permissions.filter(p => p.userId !== permission.userId);
       this.toastService.success(`Access removed for ${permission.userEmail}`);
     } catch (error) {
       console.error('Failed to remove user:', error);

@@ -551,7 +551,7 @@ Entity AI Actions connected AI actions to specific entity types, defining:
 ```typescript
 // Deprecated - use AI Agents instead
 import { EntityAIActionParams } from '@memberjunction/aiengine';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 // Load an entity record
 const md = new Metadata();

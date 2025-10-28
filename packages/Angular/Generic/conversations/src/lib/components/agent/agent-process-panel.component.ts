@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, OnDestroy } from '@angular/core';
-import { UserInfo, RunView } from '@memberjunction/global';
+import { UserInfo, RunView } from '@memberjunction/core';
 import { AIAgentRunEntity } from '@memberjunction/core-entities';
 import { Subscription, interval } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
@@ -93,8 +93,7 @@ interface AgentProcess extends AgentWithStatus {
       </div>
     }
   `,
-  styles: [
-    `
+  styles: [`
     .agent-panel {
       position: fixed;
       bottom: 24px;
@@ -311,8 +310,7 @@ interface AgentProcess extends AgentWithStatus {
       background: #DC2626;
       box-shadow: 0 2px 4px rgba(239, 68, 68, 0.3);
     }
-  `,
-  ],
+  `]
 })
 export class AgentProcessPanelComponent implements OnInit, OnDestroy {
   @Input() conversationId?: string;
@@ -333,16 +331,18 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
     this.agentStateService.startPolling(this.currentUser, this.conversationId);
 
     // Subscribe to active agents
-    this.subscription = this.agentStateService.getActiveAgents(this.conversationId).subscribe((agents) => {
-      // Preserve expanded state for existing processes
-      this.activeProcesses = agents.map((agent) => {
-        const existing = this.activeProcesses.find((p) => p.run.ID === agent.run.ID);
-        return {
-          ...agent,
-          expanded: existing ? existing.expanded : false,
-        };
+    this.subscription = this.agentStateService
+      .getActiveAgents(this.conversationId)
+      .subscribe(agents => {
+        // Preserve expanded state for existing processes
+        this.activeProcesses = agents.map(agent => {
+          const existing = this.activeProcesses.find(p => p.run.ID === agent.run.ID);
+          return {
+            ...agent,
+            expanded: existing ? existing.expanded : false
+          };
+        });
       });
-    });
   }
 
   ngOnDestroy(): void {
@@ -356,18 +356,12 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
 
   getStatusText(status: AgentStatus): string {
     switch (status) {
-      case 'acknowledging':
-        return 'Acknowledging';
-      case 'working':
-        return 'Working';
-      case 'completing':
-        return 'Completing';
-      case 'completed':
-        return 'Completed';
-      case 'error':
-        return 'Error';
-      default:
-        return 'Active';
+      case 'acknowledging': return 'Acknowledging';
+      case 'working': return 'Working';
+      case 'completing': return 'Completing';
+      case 'completed': return 'Completed';
+      case 'error': return 'Error';
+      default: return 'Active';
     }
   }
 
@@ -396,7 +390,7 @@ export class AgentProcessPanelComponent implements OnInit, OnDestroy {
       title: 'Cancel Agent',
       message: `Cancel agent "${process.run.Agent || 'Agent'}"?`,
       okText: 'Cancel Agent',
-      cancelText: 'Keep Running',
+      cancelText: 'Keep Running'
     });
 
     if (!confirmed) return;

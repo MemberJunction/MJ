@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewContainerRef } from '@angular/core';
 import { ProjectEntity, ConversationEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata } from '@memberjunction/global';
+import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService as KendoDialogService } from '@progress/kendo-angular-dialog';
 import { DialogService } from '../../services/dialog.service';
 import { ProjectFormModalComponent } from './project-form-modal.component';
@@ -72,8 +72,7 @@ export interface ProjectWithStats extends ProjectEntity {
       </div>
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .project-selector {
       display: flex;
       gap: 8px;
@@ -115,8 +114,7 @@ export interface ProjectWithStats extends ProjectEntity {
       border-color: #F44336;
       color: white;
     }
-  `,
-  ],
+  `]
 })
 export class ProjectSelectorComponent implements OnInit {
   @Input() environmentId!: string;
@@ -148,39 +146,36 @@ export class ProjectSelectorComponent implements OnInit {
       const rv = new RunView();
 
       // Load projects and conversation counts in parallel
-      const [projectsResult, conversationsResult] = await rv.RunViews(
-        [
-          {
-            EntityName: 'MJ: Projects',
-            ExtraFilter: `EnvironmentID='${this.environmentId}' AND IsArchived=0`,
-            OrderBy: 'Name ASC',
-            ResultType: 'entity_object',
-          },
-          {
-            EntityName: 'Conversations',
-            ExtraFilter: `EnvironmentID='${this.environmentId}'`,
-            ResultType: 'entity_object',
-          },
-        ],
-        this.currentUser
-      );
+      const [projectsResult, conversationsResult] = await rv.RunViews([
+        {
+          EntityName: 'MJ: Projects',
+          ExtraFilter: `EnvironmentID='${this.environmentId}' AND IsArchived=0`,
+          OrderBy: 'Name ASC',
+          ResultType: 'entity_object'
+        },
+        {
+          EntityName: 'Conversations',
+          ExtraFilter: `EnvironmentID='${this.environmentId}'`,
+          ResultType: 'entity_object'
+        }
+      ], this.currentUser);
 
       if (projectsResult.Success && conversationsResult.Success) {
-        const projects = (projectsResult.Results as ProjectEntity[]) || [];
-        const conversations = (conversationsResult.Results as ConversationEntity[]) || [];
+        const projects = projectsResult.Results as ProjectEntity[] || [];
+        const conversations = conversationsResult.Results as ConversationEntity[] || [];
 
         // Calculate conversation counts per project
         const conversationCounts = this.calculateConversationCounts(conversations);
 
         // Merge projects with stats
-        this.projectsWithStats = projects.map((p) => {
+        this.projectsWithStats = projects.map(p => {
           const projectWithStats = p as ProjectWithStats;
           projectWithStats.conversationCount = conversationCounts.get(p.ID) || 0;
           return projectWithStats;
         });
 
         if (this.selectedProjectId) {
-          this.selectedProject = this.projectsWithStats.find((p) => p.ID === this.selectedProjectId) || null;
+          this.selectedProject = this.projectsWithStats.find(p => p.ID === this.selectedProjectId) || null;
         }
       }
     } catch (error) {
@@ -209,7 +204,7 @@ export class ProjectSelectorComponent implements OnInit {
     const dialogRef = this.kendoDialogService.open({
       content: ProjectFormModalComponent,
       width: 600,
-      minWidth: 400,
+      minWidth: 400
     });
 
     const modalInstance = dialogRef.content.instance as ProjectFormModalComponent;
@@ -231,7 +226,7 @@ export class ProjectSelectorComponent implements OnInit {
     const dialogRef = this.kendoDialogService.open({
       content: ProjectFormModalComponent,
       width: 600,
-      minWidth: 400,
+      minWidth: 400
     });
 
     const modalInstance = dialogRef.content.instance as ProjectFormModalComponent;
@@ -265,7 +260,7 @@ export class ProjectSelectorComponent implements OnInit {
       message: message,
       okText: 'Delete',
       cancelText: 'Cancel',
-      dangerous: true,
+      dangerous: true
     });
 
     if (!confirmed) return;

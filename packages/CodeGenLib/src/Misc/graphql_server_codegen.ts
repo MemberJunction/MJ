@@ -1,11 +1,4 @@
-import {
-  EntityInfo,
-  EntityFieldInfo,
-  EntityRelationshipInfo,
-  TypeScriptTypeFromSQLType,
-  Metadata,
-  TypeScriptTypeFromSQLTypeWithNullableOption,
-} from '@memberjunction/global';
+import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
@@ -132,8 +125,9 @@ export class GraphQLServerGeneratorBase {
    */
   protected getServerGraphQLTypeNameBase(entity: EntityInfo): string {
     // Special case for MJ core schema - use "MJ" instead of the schema name
-    const schemaPrefix =
-      entity.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase() ? 'MJ' : this.sanitizeGraphQLName(entity.SchemaName);
+    const schemaPrefix = entity.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
+      ? 'MJ'
+      : this.sanitizeGraphQLName(entity.SchemaName);
 
     const sanitizedBaseTable = this.sanitizeGraphQLName(entity.BaseTable);
     return `${schemaPrefix}${sanitizedBaseTable}`;
@@ -224,7 +218,7 @@ import { Arg, Ctx, Int, Query, Resolver, Field, Float, ObjectType, FieldResolver
             AppContext, KeyValuePairInput, DeleteOptionsInput, GraphQLTimestamp as Timestamp,
             GetReadOnlyDataSource, GetReadWriteDataSource, GetReadOnlyProvider, GetReadWriteProvider } from '@memberjunction/server';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
-import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/global'
+import { Metadata, EntityPermissionType, CompositeKey, UserInfo } from '@memberjunction/core'
 
 import { MaxLength } from 'class-validator';
 ${
@@ -284,7 +278,7 @@ import { ${`${entity.ClassName}Entity`} } from '${importLibrary}';
 //****************************************************************************
 // ENTITY CLASS for ${entity.Name}
 //****************************************************************************
-@ObjectType(${sDescription.length > 0 ? `{ description: \`${sDescription.replace(/`/g, '\\`')}\` }` : ''})
+@ObjectType(${sDescription.length > 0 ? `{ description: \`${sDescription.replace(/`/g, "\\`")}\` }` : ''})
 export class ${serverGraphQLTypeName} {`;
   }
 
@@ -301,7 +295,7 @@ export class ${serverGraphQLTypeName} {`;
     let fieldOptions: string = '';
     if (fieldInfo.AllowsNull) fieldOptions += 'nullable: true';
     if (fieldInfo.Description !== null && fieldInfo.Description.trim().length > 0)
-      fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, '\\`')}\``;
+      fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, "\\`")}\``;
 
     return `
     @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.Length > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.Length + ')' : ''}
@@ -522,11 +516,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
     return sRet;
   }
 
-  protected generateServerGraphQLInputTypeInner(
-    entity: EntityInfo,
-    classPrefix: 'Create' | 'Update',
-    nonPKEYFieldsOptional: boolean
-  ): string {
+  protected generateServerGraphQLInputTypeInner(entity: EntityInfo, classPrefix: 'Create' | 'Update', nonPKEYFieldsOptional: boolean): string {
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     let sRet: string = '';
     sRet += `\n
@@ -539,7 +529,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
     const fieldsToInclude = entity.Fields.filter((f) => {
       // include primary key for updates and also for creates if it is not an autoincrement field
       const includePrimaryKey = classPrefix === 'Update' || !f.AutoIncrement;
-      return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly;
+      return (includePrimaryKey && f.IsPrimaryKey) || !f.ReadOnly
     });
 
     // sort the fields by sequence and created date for consistent ordering
@@ -554,13 +544,12 @@ export class ${classPrefix}${typeNameBase}Input {`;
       // next - decide if we allow this field to be undefined or not - for UPDATES, we only allow undefined if the field is not a primary key and the param to this function is on,
       // for CREATES, we allow undefined if the field is not a primary key and either the field allows null or has a default value
       // ALSO, for CREATES, primary keys that are not auto-increment should be nullable to allow optional override
-      const fieldUndefined =
-        classPrefix === 'Update'
-          ? nonPKEYFieldsOptional && !f.IsPrimaryKey
-          : (f.IsPrimaryKey && !f.AutoIncrement) || (nonPKEYFieldsOptional && !f.IsPrimaryKey && (!f.AllowsNull || f.HasDefaultValue));
+      const fieldUndefined = classPrefix === 'Update' ? 
+        nonPKEYFieldsOptional && !f.IsPrimaryKey : 
+        (f.IsPrimaryKey && !f.AutoIncrement) || (nonPKEYFieldsOptional && !f.IsPrimaryKey && (!f.AllowsNull || f.HasDefaultValue));
       const sNull: string = f.AllowsNull || fieldUndefined ? '{ nullable: true }' : '';
       const sFullTypeGraphQLString: string = sTypeGraphQLString + (sNull === '' || sTypeGraphQLString === '' ? '' : ', ') + sNull;
-      sRet += `
+        sRet += `
     @Field(${sFullTypeGraphQLString})
     ${codeName}${fieldUndefined ? '?' : ''}: ${TypeScriptTypeFromSQLTypeWithNullableOption(f.Type, f.AllowsNull)};
 `;

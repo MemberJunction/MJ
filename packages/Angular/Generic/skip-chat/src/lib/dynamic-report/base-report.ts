@@ -1,5 +1,5 @@
 import { AfterViewInit, ChangeDetectorRef, Component, Directive, EventEmitter, Input, OnInit, Output } from "@angular/core";
-import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from "@memberjunction/global";
+import { IMetadataProvider, IRunViewProvider, LogError, Metadata, RunView } from "@memberjunction/core";
 import { ReportEntity } from "@memberjunction/core-entities";
 import { DataContext } from "@memberjunction/data-context";
 import { ConvertMarkdownStringToHtmlList } from "@memberjunction/global";

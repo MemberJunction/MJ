@@ -1,7 +1,7 @@
 /**
  * @fileoverview Core synchronization engine for MemberJunction metadata
  * @module sync-engine
- *
+ * 
  * This module provides the core functionality for synchronizing metadata between
  * the MemberJunction database and local file system representations. It handles
  * special reference types (@file, @url, @lookup, @env, @parent, @root, @template),
@@ -12,7 +12,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
-import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/global';
+import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
 
@@ -46,12 +46,12 @@ export interface RecordData {
 
 /**
  * Core engine for synchronizing MemberJunction metadata between database and files
- *
+ * 
  * @class SyncEngine
  * @example
  * ```typescript
  * const syncEngine = new SyncEngine(systemUser);
- *
+ * 
  * // Process a field value with special references
  * const value = await syncEngine.processFieldValue('@lookup:Users.Email=admin@example.com', '/path/to/base');
  * ```
@@ -68,7 +68,7 @@ export class SyncEngine {
     this.metadata = new Metadata();
     this.contextUser = contextUser;
   }
-
+  
   /**
    * Initializes the sync engine by refreshing metadata cache
    * @returns Promise that resolves when initialization is complete
@@ -77,14 +77,14 @@ export class SyncEngine {
     // Currently no initialization needed as metadata is managed globally
     // Keeping this method for backward compatibility and future use
   }
-
+  
   /**
    * Process special references in field values and handle complex objects
-   *
+   * 
    * Automatically handles:
    * - Arrays and objects are converted to JSON strings
    * - Scalars (strings, numbers, booleans, null) pass through unchanged
-   *
+   * 
    * Handles the following reference types for string values:
    * - `@parent:fieldName` - References a field from the parent record
    * - `@root:fieldName` - References a field from the root record
@@ -92,35 +92,28 @@ export class SyncEngine {
    * - `@url:address` - Fetches content from a URL
    * - `@lookup:Entity.Field=Value` - Looks up an entity ID by field value
    * - `@env:VARIABLE` - Reads an environment variable
-   *
+   * 
    * @param value - The field value to process
    * @param baseDir - Base directory for resolving relative file paths
    * @param parentRecord - Optional parent entity for @parent references
    * @param rootRecord - Optional root entity for @root references
    * @returns The processed value with all references resolved
    * @throws Error if a reference cannot be resolved
-   *
+   * 
    * @example
    * ```typescript
    * // File reference
    * const content = await processFieldValue('@file:template.md', '/path/to/dir');
-   *
+   * 
    * // Lookup with auto-create
    * const userId = await processFieldValue('@lookup:Users.Email=john@example.com?create', '/path');
-   *
+   * 
    * // Complex object - automatically stringified
    * const jsonStr = await processFieldValue({items: [{id: 1}, {id: 2}]}, '/path');
    * // Returns: '{\n  "items": [\n    {\n      "id": 1\n    },\n    {\n      "id": 2\n    }\n  ]\n}'
    * ```
    */
-  async processFieldValue(
-    value: any,
-    baseDir: string,
-    parentRecord?: BaseEntity | null,
-    rootRecord?: BaseEntity | null,
-    depth: number = 0,
-    batchContext?: Map<string, BaseEntity>
-  ): Promise<any> {
+  async processFieldValue(value: any, baseDir: string, parentRecord?: BaseEntity | null, rootRecord?: BaseEntity | null, depth: number = 0, batchContext?: Map<string, BaseEntity>): Promise<any> {
     // Check recursion depth limit
     const MAX_RECURSION_DEPTH = 50;
     if (depth > MAX_RECURSION_DEPTH) {
@@ -136,22 +129,22 @@ export class SyncEngine {
         return JSON.stringify(value, null, 2);
       }
     }
-
+    
     // If not a string, return as-is (numbers, booleans, null, etc.)
     if (typeof value !== 'string') {
       return value;
     }
-
+    
     // If string starts with @ but isn't one of our known reference types, return as-is
     // This handles cases like npm package names (@mui/material, @angular/core, etc.)
     if (value.startsWith('@')) {
       const knownPrefixes = ['@parent:', '@root:', '@file:', '@lookup:', '@env:', '@template:', '@include'];
-      const isKnownReference = knownPrefixes.some((prefix) => value.startsWith(prefix));
+      const isKnownReference = knownPrefixes.some(prefix => value.startsWith(prefix));
       if (!isKnownReference) {
         return value; // Not a MetadataSync reference, just a string that happens to start with @
       }
     }
-
+    
     // Check for @parent: reference
     if (value.startsWith('@parent:')) {
       if (!parentRecord) {
@@ -160,7 +153,7 @@ export class SyncEngine {
       const fieldName = value.substring(8);
       return parentRecord.Get(fieldName);
     }
-
+    
     // Check for @root: reference
     if (value.startsWith('@root:')) {
       if (!rootRecord) {
@@ -169,23 +162,23 @@ export class SyncEngine {
       const fieldName = value.substring(6);
       return rootRecord.Get(fieldName);
     }
-
+    
     // Check for @file: reference
     if (value.startsWith('@file:')) {
       const filePath = value.substring(6);
       const fullPath = path.resolve(baseDir, filePath);
-
+      
       if (await fs.pathExists(fullPath)) {
         // Check if this is a JSON file that might contain @include directives
         if (fullPath.endsWith('.json')) {
           try {
             // Parse as JSON and check for @include directives
             const jsonContent = await fs.readJson(fullPath);
-
+            
             // Check if the JSON contains any @include directives
             const jsonString = JSON.stringify(jsonContent);
             const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
-
+            
             let processedJson: any;
             if (hasIncludes) {
               // Process @include directives with a fresh preprocessor instance
@@ -194,11 +187,11 @@ export class SyncEngine {
             } else {
               processedJson = jsonContent;
             }
-
+            
             // Now recursively process any @file references within the JSON
             const fileDir = path.dirname(fullPath);
             processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext);
-
+            
             // Return the processed JSON object directly without stringifying
             // Let BaseEntity handle serialization when saving to database
             // This ensures proper escaping of embedded code/scripts
@@ -219,11 +212,11 @@ export class SyncEngine {
         throw new Error(`File not found: ${fullPath}`);
       }
     }
-
+    
     // Check for @url: reference
     if (value.startsWith('@url:')) {
       const url = value.substring(5);
-
+      
       try {
         const response = await axios.get(url);
         return response.data;
@@ -231,46 +224,53 @@ export class SyncEngine {
         throw new Error(`Failed to fetch URL: ${url} - ${error}`);
       }
     }
-
+    
     // Check for @lookup: reference
     if (value.startsWith('@lookup:')) {
       const lookupStr = value.substring(8);
-
+      
       // Parse lookup with optional create syntax
       // Format: EntityName.Field1=Value1&Field2=Value2?create&OtherField=Value
       const entityMatch = lookupStr.match(/^([^.]+)\./);
       if (!entityMatch) {
         throw new Error(`Invalid lookup format: ${value}`);
       }
-
+      
       const entityName = entityMatch[1];
       const remaining = lookupStr.substring(entityName.length + 1);
-
+      
       // Check if this has ?create syntax
       const hasCreate = remaining.includes('?create');
       const lookupPart = hasCreate ? remaining.split('?')[0] : remaining;
-
+      
       // Parse all lookup fields (can be multiple with &)
-      const lookupFields: Array<{ fieldName: string; fieldValue: string }> = [];
+      const lookupFields: Array<{fieldName: string, fieldValue: string}> = [];
       const lookupPairs = lookupPart.split('&');
-
+      
       for (const pair of lookupPairs) {
         const fieldMatch = pair.match(/^(.+?)=(.+)$/);
         if (!fieldMatch) {
           throw new Error(`Invalid lookup field format: ${pair} in ${value}`);
         }
         const [, fieldName, fieldValue] = fieldMatch;
-
+        
         // Recursively process the field value to resolve any nested @ commands
-        const processedValue = await this.processFieldValue(fieldValue.trim(), baseDir, parentRecord, rootRecord, depth + 1, batchContext);
-
+        const processedValue = await this.processFieldValue(
+          fieldValue.trim(), 
+          baseDir, 
+          parentRecord, 
+          rootRecord,
+          depth + 1,
+          batchContext
+        );
+        
         lookupFields.push({ fieldName: fieldName.trim(), fieldValue: processedValue });
       }
-
+      
       if (lookupFields.length === 0) {
         throw new Error(`No lookup fields specified: ${value}`);
       }
-
+      
       // Parse additional fields for creation if ?create is present
       let createFields: Record<string, any> = {};
       if (hasCreate && remaining.includes('?create&')) {
@@ -281,32 +281,39 @@ export class SyncEngine {
           if (key && val) {
             const decodedVal = decodeURIComponent(val);
             // Recursively process the field value to resolve any nested @ commands
-            createFields[key] = await this.processFieldValue(decodedVal, baseDir, parentRecord, rootRecord, depth + 1, batchContext);
+            createFields[key] = await this.processFieldValue(
+              decodedVal, 
+              baseDir, 
+              parentRecord, 
+              rootRecord,
+              depth + 1,
+              batchContext
+            );
           }
         }
       }
-
+      
       return await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext);
     }
-
+    
     // Check for @env: reference
     if (value.startsWith('@env:')) {
       const envVar = value.substring(5);
       const envValue = process.env[envVar];
-
+      
       if (envValue === undefined) {
         throw new Error(`Environment variable not found: ${envVar}`);
       }
-
+      
       return envValue;
     }
-
+    
     return value;
   }
-
+  
   /**
    * Resolve a lookup reference to an ID, optionally creating the record if it doesn't exist
-   *
+   * 
    * @param entityName - Name of the entity to search in
    * @param fieldName - Field to match against
    * @param fieldValue - Value to search for
@@ -314,12 +321,12 @@ export class SyncEngine {
    * @param createFields - Additional fields to set when creating
    * @returns The ID of the found or created record
    * @throws Error if lookup fails and autoCreate is false
-   *
+   * 
    * @example
    * ```typescript
    * // Simple lookup
    * const categoryId = await resolveLookup('Categories', 'Name', 'Technology');
-   *
+   * 
    * // Lookup with auto-create
    * const tagId = await resolveLookup('Tags', 'Name', 'New Tag', true, {
    *   Description: 'Auto-created tag',
@@ -328,8 +335,8 @@ export class SyncEngine {
    * ```
    */
   async resolveLookup(
-    entityName: string,
-    lookupFields: Array<{ fieldName: string; fieldValue: string }>,
+    entityName: string, 
+    lookupFields: Array<{fieldName: string, fieldValue: string}>,
     autoCreate: boolean = false,
     createFields: Record<string, any> = {},
     batchContext?: Map<string, BaseEntity>
@@ -342,17 +349,17 @@ export class SyncEngine {
         if (entity.EntityInfo?.Name === entityName) {
           // Check if all lookup fields match
           let allMatch = true;
-          for (const { fieldName, fieldValue } of lookupFields) {
+          for (const {fieldName, fieldValue} of lookupFields) {
             const entityValue = entity.Get(fieldName);
             const normalizedEntityValue = entityValue?.toString() || '';
             const normalizedLookupValue = fieldValue?.toString() || '';
-
+            
             if (normalizedEntityValue !== normalizedLookupValue) {
               allMatch = false;
               break;
             }
           }
-
+          
           if (allMatch) {
             // Found in batch context, return primary key
             const entityInfo = this.metadata.EntityByName(entityName);
@@ -364,22 +371,22 @@ export class SyncEngine {
         }
       }
     }
-
+    
     // Not found in batch context, check database
     const rv = new RunView();
     const entityInfo = this.metadata.EntityByName(entityName);
     if (!entityInfo) {
       throw new Error(`Entity not found: ${entityName}`);
     }
-
+    
     // Build compound filter for all lookup fields
     const filterParts: string[] = [];
-    for (const { fieldName, fieldValue } of lookupFields) {
-      const field = entityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
+    for (const {fieldName, fieldValue} of lookupFields) {
+      const field = entityInfo.Fields.find(f => f.Name.trim().toLowerCase() === fieldName.trim().toLowerCase());
       if (!field) {
         throw new Error(`Field '${fieldName}' not found in entity '${entityName}'`);
       }
-
+      
       // Handle null values properly
       if (fieldValue.trim().toLowerCase() === 'null') {
         filterParts.push(`${fieldName} IS NULL`);
@@ -388,17 +395,14 @@ export class SyncEngine {
         filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
       }
     }
-
+    
     const extraFilter = filterParts.join(' AND ');
-    const result = await rv.RunView(
-      {
-        EntityName: entityName,
-        ExtraFilter: extraFilter,
-        MaxRows: 1,
-      },
-      this.contextUser
-    );
-
+    const result = await rv.RunView({
+      EntityName: entityName,
+      ExtraFilter: extraFilter,
+      MaxRows: 1
+    }, this.contextUser);
+    
     if (result.Success && result.Results.length > 0) {
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
@@ -406,20 +410,21 @@ export class SyncEngine {
         return id;
       }
     }
-
+    
     // If not found and auto-create is enabled, create the record
     if (autoCreate) {
+      
       const newEntity = await this.metadata.GetEntityObject(entityName, this.contextUser);
       if (!newEntity) {
         throw new Error(`Failed to create entity object for: ${entityName}`);
       }
-
+      
       newEntity.NewRecord();
-
+      
       // UUID generation now happens automatically in BaseEntity.NewRecord()
-
+      
       // Set all lookup fields
-      for (const { fieldName, fieldValue } of lookupFields) {
+      for (const {fieldName, fieldValue} of lookupFields) {
         if (fieldName in newEntity) {
           // Handle null values properly
           if (fieldValue.toLowerCase() === 'null') {
@@ -429,16 +434,16 @@ export class SyncEngine {
           }
         }
       }
-
+      
       // Set any additional fields provided
       for (const [key, value] of Object.entries(createFields)) {
         if (key in newEntity) {
           (newEntity as any)[key] = value;
         }
       }
-
+      
       // Save the new record (new records are always dirty)
-      const filterDesc = lookupFields.map(({ fieldName, fieldValue }) => `${fieldName}='${fieldValue}'`).join(' AND ');
+      const filterDesc = lookupFields.map(({fieldName, fieldValue}) => `${fieldName}='${fieldValue}'`).join(' AND ');
       console.log(`📝 Auto-creating ${entityName} record where ${filterDesc}`);
       const saved = await newEntity.Save();
       if (!saved) {
@@ -446,13 +451,13 @@ export class SyncEngine {
         if (message) {
           throw new Error(`Failed to auto-create ${entityName}: ${message}`);
         }
-
-        const errors =
-          newEntity.LatestResult?.Errors?.map((err) => (typeof err === 'string' ? err : err?.message || JSON.stringify(err)))?.join(', ') ||
-          'Unknown error';
+        
+        const errors = newEntity.LatestResult?.Errors?.map(err => 
+          typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
+        )?.join(', ') || 'Unknown error';
         throw new Error(`Failed to auto-create ${entityName}: ${errors}`);
       }
-
+      
       // Return the new ID
       if (entityInfo.PrimaryKeys.length > 0) {
         const pkeyField = entityInfo.PrimaryKeys[0].Name;
@@ -460,18 +465,18 @@ export class SyncEngine {
         return newId;
       }
     }
-
-    const filterDesc = lookupFields.map(({ fieldName, fieldValue }) => `${fieldName}='${fieldValue}'`).join(' AND ');
+    
+    const filterDesc = lookupFields.map(({fieldName, fieldValue}) => `${fieldName}='${fieldValue}'`).join(' AND ');
     throw new Error(`Lookup failed: No record found in '${entityName}' where ${filterDesc}`);
   }
-
+  
   /**
    * Build cascading defaults for a file path and process field values
-   *
+   * 
    * Walks up the directory tree from the file location, collecting defaults from
    * entity config and folder configs, with deeper folders overriding parent values.
    * All default values are processed for special references.
-   *
+   * 
    * @param filePath - Path to the file being processed
    * @param entityConfig - Entity configuration containing base defaults
    * @returns Processed defaults with all references resolved
@@ -480,22 +485,22 @@ export class SyncEngine {
   async buildDefaults(filePath: string, entityConfig: EntityConfig): Promise<Record<string, any>> {
     const parts = path.dirname(filePath).split(path.sep);
     let defaults: Record<string, any> = { ...entityConfig.defaults };
-
+    
     // Walk up the directory tree building defaults
     let currentPath = '';
     for (const part of parts) {
       currentPath = path.join(currentPath, part);
       const folderConfig = await this.loadFolderConfig(currentPath);
-
+      
       if (folderConfig?.defaults) {
         defaults = { ...defaults, ...folderConfig.defaults };
       }
     }
-
+    
     // Process all default values (lookups, file references, etc.)
     const processedDefaults: Record<string, any> = {};
     const baseDir = path.dirname(filePath);
-
+    
     for (const [field, value] of Object.entries(defaults)) {
       try {
         processedDefaults[field] = await this.processFieldValue(value, baseDir, null, null, 0);
@@ -503,20 +508,20 @@ export class SyncEngine {
         throw new Error(`Failed to process default for field '${field}': ${error}`);
       }
     }
-
+    
     return processedDefaults;
   }
-
+  
   /**
    * Load folder configuration from .mj-folder.json file
-   *
+   * 
    * @param dir - Directory to check for configuration
    * @returns Folder configuration or null if not found/invalid
    * @private
    */
   private async loadFolderConfig(dir: string): Promise<FolderConfig | null> {
     const configPath = path.join(dir, '.mj-folder.json');
-
+    
     if (await fs.pathExists(configPath)) {
       try {
         return await fs.readJson(configPath);
@@ -525,20 +530,20 @@ export class SyncEngine {
         return null;
       }
     }
-
+    
     return null;
   }
-
+  
   /**
    * Calculate SHA256 checksum for data
-   *
+   * 
    * Generates a deterministic hash of the provided data by converting it to
    * formatted JSON and calculating a SHA256 digest. Used for change detection
    * in sync operations.
-   *
+   * 
    * @param data - Any data structure to calculate checksum for
    * @returns Hexadecimal string representation of the SHA256 hash
-   *
+   * 
    * @example
    * ```typescript
    * const checksum = syncEngine.calculateChecksum({
@@ -557,11 +562,11 @@ export class SyncEngine {
 
   /**
    * Calculate checksum including resolved file content
-   *
+   * 
    * Enhanced checksum calculation that resolves @file references and includes
    * the actual file content (with @include directives processed) in the checksum.
    * This ensures that changes to referenced files are detected.
-   *
+   * 
    * @param data - Fields object that may contain @file references
    * @param entityDir - Directory for resolving relative file paths
    * @returns Promise resolving to checksum string
@@ -573,11 +578,11 @@ export class SyncEngine {
 
   /**
    * Resolve @file references for checksum calculation
-   *
+   * 
    * Recursively processes an object and replaces @file references with their
    * actual content (including resolved @include directives). This ensures the
    * checksum reflects the actual content, not just the reference.
-   *
+   * 
    * @param obj - Object to process
    * @param entityDir - Directory for resolving relative paths
    * @returns Promise resolving to processed object
@@ -589,7 +594,7 @@ export class SyncEngine {
     }
 
     if (Array.isArray(obj)) {
-      return Promise.all(obj.map((item) => this.resolveFileReferencesForChecksum(item, entityDir)));
+      return Promise.all(obj.map(item => this.resolveFileReferencesForChecksum(item, entityDir)));
     }
 
     const result: any = {};
@@ -599,17 +604,17 @@ export class SyncEngine {
         try {
           const filePath = value.substring(6);
           const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
-
+          
           if (await fs.pathExists(fullPath)) {
             let processedContent: string;
-
+            
             // Check if this is a JSON file that might contain @include directives
             if (fullPath.endsWith('.json')) {
               try {
                 const jsonContent = await fs.readJson(fullPath);
                 const jsonString = JSON.stringify(jsonContent);
                 const hasIncludes = jsonString.includes('"@include') || jsonString.includes('"@include.');
-
+                
                 if (hasIncludes) {
                   // Process @include directives
                   const preprocessor = new JsonPreprocessor();
@@ -628,11 +633,11 @@ export class SyncEngine {
               const content = await fs.readFile(fullPath, 'utf-8');
               processedContent = await this.processFileContentWithIncludes(content, fullPath);
             }
-
+            
             result[key] = {
               _checksumType: 'file',
               _reference: value,
-              _content: processedContent,
+              _content: processedContent
             };
           } else {
             // File doesn't exist, keep the reference
@@ -650,16 +655,16 @@ export class SyncEngine {
     }
     return result;
   }
-
+  
   /**
    * Get entity metadata information by name
-   *
+   * 
    * Retrieves the EntityInfo object containing schema metadata for the specified entity.
    * Returns null if the entity is not found in the metadata cache.
-   *
+   * 
    * @param entityName - Name of the entity to look up
    * @returns EntityInfo object with schema details or null if not found
-   *
+   * 
    * @example
    * ```typescript
    * const entityInfo = syncEngine.getEntityInfo('AI Prompts');
@@ -671,17 +676,17 @@ export class SyncEngine {
   getEntityInfo(entityName: string): EntityInfo | null {
     return this.metadata.EntityByName(entityName);
   }
-
+  
   /**
    * Create a new entity object instance
-   *
+   * 
    * Uses the MemberJunction metadata system to properly instantiate an entity object.
    * This ensures correct class registration and respects any custom entity subclasses.
-   *
+   * 
    * @param entityName - Name of the entity to create
    * @returns Promise resolving to the new BaseEntity instance
    * @throws Error if entity creation fails
-   *
+   * 
    * @example
    * ```typescript
    * const entity = await syncEngine.createEntityObject('AI Prompts');
@@ -697,25 +702,25 @@ export class SyncEngine {
     }
     return entity;
   }
-
+  
   /**
    * Load an entity record by primary key
-   *
+   * 
    * Retrieves an existing entity record from the database using its primary key values.
    * Supports both single and composite primary keys. Returns null if the record is not found.
-   *
+   * 
    * @param entityName - Name of the entity to load
    * @param primaryKey - Object containing primary key field names and values
    * @returns Promise resolving to the loaded entity or null if not found
    * @throws Error if entity metadata is not found
-   *
+   * 
    * @example
    * ```typescript
    * // Single primary key
    * const entity = await syncEngine.loadEntity('Users', { ID: '123-456' });
-   *
+   * 
    * // Composite primary key
-   * const entity = await syncEngine.loadEntity('UserRoles', {
+   * const entity = await syncEngine.loadEntity('UserRoles', { 
    *   UserID: '123-456',
    *   RoleID: '789-012'
    * });
@@ -723,15 +728,15 @@ export class SyncEngine {
    */
   async loadEntity(entityName: string, primaryKey: Record<string, any>): Promise<BaseEntity | null> {
     const entityInfo = this.getEntityInfo(entityName);
-
+    
     if (!entityInfo) {
       throw new Error(`Entity not found: ${entityName}`);
     }
-
+    
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
     // when records don't exist (which is a normal scenario during sync operations)
     const rv = new RunView();
-
+    
     // Build filter for primary key(s)
     const filters: string[] = [];
     for (const pk of entityInfo.PrimaryKeys) {
@@ -739,103 +744,104 @@ export class SyncEngine {
       if (value === undefined || value === null) {
         throw new Error(`Missing primary key value for ${pk.Name} in entity ${entityName}`);
       }
-
+      
       // Check if field needs quotes
-      const field = entityInfo.Fields.find((f) => f.Name === pk.Name);
+      const field = entityInfo.Fields.find(f => f.Name === pk.Name);
       const quotes = field?.NeedsQuotes ? "'" : '';
       const escapedValue = field?.NeedsQuotes && typeof value === 'string' ? value.replace(/'/g, "''") : value;
       filters.push(`${pk.Name} = ${quotes}${escapedValue}${quotes}`);
     }
-
-    const result = await rv.RunView(
-      {
-        EntityName: entityName,
-        ExtraFilter: filters.join(' AND '),
-        MaxRows: 1,
-      },
-      this.contextUser
-    );
-
+    
+    const result = await rv.RunView({
+      EntityName: entityName,
+      ExtraFilter: filters.join(' AND '),
+      MaxRows: 1
+    }, this.contextUser);
+    
     // If no record found, return null without attempting to load
     if (!result.Success || result.Results.length === 0) {
       return null;
     }
-
+    
     // Record exists, now load it properly through the entity
     const entity = await this.createEntityObject(entityName);
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromSimpleObject(primaryKey);
     const loaded = await entity.InnerLoad(compositeKey);
-
+    
     return loaded ? entity : null;
   }
-
+  
   /**
    * Process file content with {@include} references
-   *
+   * 
    * Recursively processes a file's content to resolve `{@include path}` references.
    * Include references use JSDoc-style syntax and support:
    * - Relative paths resolved from the containing file's directory
    * - Recursive includes (includes within included files)
    * - Circular reference detection to prevent infinite loops
    * - Seamless content substitution maintaining surrounding text
-   *
+   * 
    * @param content - The file content to process
    * @param filePath - Path to the file being processed
    * @param visitedPaths - Set of already visited file paths for circular reference detection
    * @returns Promise resolving to the content with all includes resolved
    * @throws Error if circular reference detected or included file not found
-   *
+   * 
    * @example
    * ```typescript
    * // Content with include reference
    * const content = 'This is a {@include ./shared/header.md} example';
-   *
+   * 
    * // Resolves to:
    * const result = await processFileContentWithIncludes('/path/to/file.md', content);
    * // 'This is a [contents of header.md] example'
    * ```
    */
-  private async processFileContentWithIncludes(content: string, filePath: string, visitedPaths: Set<string> = new Set()): Promise<string> {
+  private async processFileContentWithIncludes(
+    content: string,
+    filePath: string, 
+    visitedPaths: Set<string> = new Set()
+  ): Promise<string> {
     // Add current file to visited set
     const absolutePath = path.resolve(filePath);
     if (visitedPaths.has(absolutePath)) {
       throw new Error(`Circular reference detected: ${absolutePath} is already being processed`);
     }
     visitedPaths.add(absolutePath);
-
+    
     // Pattern to match {@include path} references
     // Supports whitespace around the path for flexibility
     const includePattern = /\{@include\s+([^\}]+)\s*\}/g;
-
+    
     let processedContent = content;
     let match: RegExpExecArray | null;
-
+    
     // Process all {@include} references
     while ((match = includePattern.exec(content)) !== null) {
       const [fullMatch, includePath] = match;
       const trimmedPath = includePath.trim();
-
+      
       // Resolve the include path relative to the current file's directory
       const currentDir = path.dirname(filePath);
       const resolvedPath = path.resolve(currentDir, trimmedPath);
-
+      
       try {
         // Check if the included file exists
-        if (!(await fs.pathExists(resolvedPath))) {
+        if (!await fs.pathExists(resolvedPath)) {
           throw new Error(`Included file not found: ${resolvedPath}`);
         }
-
+        
         // Read the included file
         const includedContent = await fs.readFile(resolvedPath, 'utf-8');
-
+        
         // Recursively process the included content for nested includes
         const processedInclude = await this.processFileContentWithIncludes(
           includedContent,
-          resolvedPath,
+          resolvedPath, 
           new Set(visitedPaths) // Pass a copy to allow the same file in different branches
         );
-
+        
         // Replace the {@include} reference with the processed content
         processedContent = processedContent.replace(fullMatch, processedInclude);
       } catch (error) {
@@ -843,17 +849,17 @@ export class SyncEngine {
         throw new Error(`Failed to process {@include ${trimmedPath}} in ${filePath}: ${error}`);
       }
     }
-
+    
     return processedContent;
   }
 
   /**
    * Recursively process field values in a JSON object
-   *
+   * 
    * Processes all string values in a JSON object through processFieldValue,
    * which handles @file, @lookup, @parent, @root references. This ensures
    * that nested @file references within JSON files are properly resolved.
-   *
+   * 
    * @param obj - JSON object to process
    * @param baseDir - Base directory for resolving relative file paths
    * @param parentRecord - Parent entity record for @parent references
@@ -878,7 +884,11 @@ export class SyncEngine {
 
     // Handle arrays
     if (Array.isArray(obj)) {
-      return Promise.all(obj.map((item) => this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext)));
+      return Promise.all(
+        obj.map(item => 
+          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext)
+        )
+      );
     }
 
     // Handle objects
@@ -889,15 +899,10 @@ export class SyncEngine {
         if (typeof value === 'string') {
           // Check if this looks like a reference that needs processing
           // Only process known reference types, ignore other @ strings (like npm packages)
-          if (
-            value.startsWith('@file:') ||
-            value.startsWith('@lookup:') ||
-            value.startsWith('@parent:') ||
-            value.startsWith('@root:') ||
-            value.startsWith('@env:') ||
-            value.startsWith('@template:') ||
-            value.startsWith('@include')
-          ) {
+          if (value.startsWith('@file:') || value.startsWith('@lookup:') || 
+              value.startsWith('@parent:') || value.startsWith('@root:') ||
+              value.startsWith('@env:') || value.startsWith('@template:') ||
+              value.startsWith('@include')) {
             result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext);
           } else {
             result[key] = value;
@@ -916,4 +921,5 @@ export class SyncEngine {
     // Return primitive values as-is
     return obj;
   }
+  
 }

@@ -11,16 +11,10 @@ import {
   SimpleChanges,
   ChangeDetectorRef,
   ElementRef,
-  AfterViewChecked,
+  AfterViewChecked
 } from '@angular/core';
-import {
-  ConversationDetailEntity,
-  ConversationEntity,
-  AIAgentRunEntityExtended,
-  ArtifactEntity,
-  ArtifactVersionEntity,
-} from '@memberjunction/core-entities';
-import { UserInfo, CompositeKey } from '@memberjunction/global';
+import { ConversationDetailEntity, ConversationEntity, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
+import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
@@ -33,7 +27,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 @Component({
   selector: 'mj-conversation-message-list',
   templateUrl: './message-list.component.html',
-  styleUrls: ['./message-list.component.css'],
+  styleUrls: ['./message-list.component.css']
 })
 export class MessageListComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
   @Input() public messages: ConversationDetailEntity[] = [];
@@ -42,18 +36,18 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
-  @Input() public userAvatarMap: Map<string, { imageUrl: string | null; iconClass: string | null }> = new Map();
+  @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public editMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteMessage = new EventEmitter<ConversationDetailEntity>();
   @Output() public retryMessage = new EventEmitter<ConversationDetailEntity>();
-  @Output() public artifactClicked = new EventEmitter<{ artifactId: string; versionId?: string }>();
+  @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
   @Output() public replyInThread = new EventEmitter<ConversationDetailEntity>();
   @Output() public viewThread = new EventEmitter<ConversationDetailEntity>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
-  @Output() public openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
-  @Output() public suggestedResponseSelected = new EventEmitter<{ text: string; customInput?: string }>();
+  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
 
   @ViewChild('messageContainer', { read: ViewContainerRef }) messageContainerRef!: ViewContainerRef;
   @ViewChild('scrollContainer') scrollContainer!: ElementRef;
@@ -79,7 +73,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     this.showDateNav = false;
 
     // Update display based on period
-    switch (period) {
+    switch(period) {
       case 'today':
         this.currentDateDisplay = 'Today';
         break;
@@ -157,7 +151,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
     try {
       // Remove messages that no longer exist
-      const currentIds = new Set(messages.map((m) => this.getMessageKey(m)));
+      const currentIds = new Set(messages.map(m => this.getMessageKey(m)));
       this._renderedMessages.forEach((componentRef, key) => {
         if (!currentIds.has(key)) {
           componentRef.destroy();
@@ -185,20 +179,23 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
           // Use LAST artifact (most recent) instead of first for display
-          const lastArtifact = artifactList && artifactList.length > 0 ? artifactList[artifactList.length - 1] : undefined;
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
 
           // Trigger lazy load and set properties
           if (lastArtifact) {
             // Lazy load in background - don't block UI
-            Promise.all([lastArtifact.getArtifact(), lastArtifact.getVersion()])
-              .then(([artifact, version]) => {
-                instance.artifact = artifact;
-                instance.artifactVersion = version;
-                this.cdRef.detectChanges();
-              })
-              .catch((err) => {
-                console.error('Failed to lazy-load artifact:', err);
-              });
+            Promise.all([
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
+            ]).then(([artifact, version]) => {
+              instance.artifact = artifact;
+              instance.artifactVersion = version;
+              this.cdRef.detectChanges();
+            }).catch(err => {
+              console.error('Failed to lazy-load artifact:', err);
+            });
           } else {
             instance.artifact = undefined;
             instance.artifactVersion = undefined;
@@ -230,20 +227,23 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
           // Use LAST artifact (most recent) instead of first for display
-          const lastArtifact = artifactList && artifactList.length > 0 ? artifactList[artifactList.length - 1] : undefined;
+          const lastArtifact = artifactList && artifactList.length > 0
+            ? artifactList[artifactList.length - 1]
+            : undefined;
 
           // Trigger lazy load and set properties
           if (lastArtifact) {
             // Lazy load in background - don't block UI
-            Promise.all([lastArtifact.getArtifact(), lastArtifact.getVersion()])
-              .then(([artifact, version]) => {
-                instance.artifact = artifact;
-                instance.artifactVersion = version;
-                this.cdRef.detectChanges();
-              })
-              .catch((err) => {
-                console.error('Failed to lazy-load artifact:', err);
-              });
+            Promise.all([
+              lastArtifact.getArtifact(),
+              lastArtifact.getVersion()
+            ]).then(([artifact, version]) => {
+              instance.artifact = artifact;
+              instance.artifactVersion = version;
+              this.cdRef.detectChanges();
+            }).catch(err => {
+              console.error('Failed to lazy-load artifact:', err);
+            });
           }
 
           // Pass agent run from map (loaded once per conversation)
@@ -254,18 +254,14 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.editClicked.subscribe((msg: ConversationDetailEntity) => this.editMessage.emit(msg));
           instance.deleteClicked.subscribe((msg: ConversationDetailEntity) => this.deleteMessage.emit(msg));
           instance.retryClicked.subscribe((msg: ConversationDetailEntity) => this.retryMessage.emit(msg));
-          instance.artifactClicked.subscribe((data: { artifactId: string; versionId?: string }) => this.artifactClicked.emit(data));
+          instance.artifactClicked.subscribe((data: {artifactId: string; versionId?: string}) => this.artifactClicked.emit(data));
           instance.messageEdited.subscribe((msg: ConversationDetailEntity) => this.messageEdited.emit(msg));
-          instance.openEntityRecord.subscribe((data: { entityName: string; compositeKey: CompositeKey }) =>
-            this.openEntityRecord.emit(data)
-          );
-          instance.suggestedResponseSelected.subscribe((data: { text: string; customInput?: string }) =>
-            this.suggestedResponseSelected.emit(data)
-          );
+          instance.openEntityRecord.subscribe((data: {entityName: string; compositeKey: CompositeKey}) => this.openEntityRecord.emit(data));
+          instance.suggestedResponseSelected.subscribe((data: {text: string; customInput?: string}) => this.suggestedResponseSelected.emit(data));
 
           // Handle artifact actions if the output exists
           if (instance.artifactActionPerformed) {
-            instance.artifactActionPerformed.subscribe((data: { action: string; artifactId: string }) => {
+            instance.artifactActionPerformed.subscribe((data: {action: string; artifactId: string}) => {
               // Parent can handle artifact actions (save, fork, history, share)
               console.log('Artifact action:', data);
             });
@@ -295,7 +291,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
    * Uses ID if available, otherwise uses a temporary key
    */
   private getMessageKey(message: ConversationDetailEntity): string {
-    return message.ID && message.ID.length > 0 ? message.ID : `temp_${message.__mj_CreatedAt?.getTime() || Date.now()}`;
+    return message.ID && message.ID.length > 0
+      ? message.ID
+      : `temp_${message.__mj_CreatedAt?.getTime() || Date.now()}`;
   }
 
   /**
@@ -310,9 +308,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
     // Check if messages span more than 2 days
     const dates = this.messages
-      .map((m) => m.__mj_CreatedAt)
-      .filter((d) => d != null)
-      .map((d) => new Date(d!).setHours(0, 0, 0, 0));
+      .map(m => m.__mj_CreatedAt)
+      .filter(d => d != null)
+      .map(d => new Date(d!).setHours(0, 0, 0, 0));
 
     if (dates.length === 0) {
       this.shouldShowDateFilter = false;

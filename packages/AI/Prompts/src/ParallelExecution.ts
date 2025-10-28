@@ -1,10 +1,5 @@
-import {
-  AIPromptEntityExtended,
-  AIPromptModelEntity,
-  AIModelEntityExtended,
-  AIPromptRunEntityExtended,
-} from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/global';
+import { AIPromptEntityExtended, AIPromptModelEntity, AIModelEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
+import { UserInfo } from '@memberjunction/core';
 import { ValidationResult } from '@memberjunction/global';
 import { ChatResult, ChatMessage, StreamingChatCallbacks } from '@memberjunction/ai';
 
@@ -53,12 +48,7 @@ export interface ExecutionTask {
   cancellationToken?: AbortSignal;
 
   /** Optional callback for task-specific progress updates */
-  onProgress?: (progress: {
-    taskId: string;
-    step: 'initializing' | 'executing' | 'validating' | 'completed';
-    percentage: number;
-    message: string;
-  }) => void;
+  onProgress?: (progress: { taskId: string; step: 'initializing' | 'executing' | 'validating' | 'completed'; percentage: number; message: string }) => void;
 
   /** Optional callback for task-specific streaming updates */
   onStreaming?: (chunk: { taskId: string; content: string; isComplete: boolean }) => void;

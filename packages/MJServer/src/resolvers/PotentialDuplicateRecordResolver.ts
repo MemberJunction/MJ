@@ -6,7 +6,7 @@ import {
   Metadata,
   CompositeKey,
   PotentialDuplicateResult,
-} from '@memberjunction/global';
+} from '@memberjunction/core';
 import { AppContext } from '../types.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 

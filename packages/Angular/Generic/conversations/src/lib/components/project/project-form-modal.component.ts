@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 import { ProjectEntity } from '@memberjunction/core-entities';
-import { UserInfo, Metadata } from '@memberjunction/global';
+import { UserInfo, Metadata } from '@memberjunction/core';
 
 export interface ProjectFormData {
   name: string;
@@ -30,7 +30,7 @@ const DEFAULT_PROJECT_COLORS = [
   '#FF5722', // Deep Orange
   '#795548', // Brown
   '#607D8B', // Blue Grey
-  '#9E9E9E', // Grey
+  '#9E9E9E'  // Grey
 ];
 
 const DEFAULT_PROJECT_ICONS = [
@@ -53,7 +53,7 @@ const DEFAULT_PROJECT_ICONS = [
   'fa-mobile-alt',
   'fa-desktop',
   'fa-globe',
-  'fa-users',
+  'fa-users'
 ];
 
 @Component({
@@ -158,8 +158,7 @@ const DEFAULT_PROJECT_ICONS = [
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
-  styles: [
-    `
+  styles: [`
     .project-form {
       padding: 16px;
     }
@@ -339,8 +338,7 @@ const DEFAULT_PROJECT_ICONS = [
     .icon-grid::-webkit-scrollbar-thumb:hover {
       background: #BFBFBF;
     }
-  `,
-  ],
+  `]
 })
 export class ProjectFormModalComponent implements OnInit {
   @Input() dialogRef!: DialogRef;
@@ -354,7 +352,7 @@ export class ProjectFormModalComponent implements OnInit {
     name: '',
     description: '',
     color: '#0076B6',
-    icon: 'fa-folder',
+    icon: 'fa-folder'
   };
 
   public showNameError = false;
@@ -379,7 +377,7 @@ export class ProjectFormModalComponent implements OnInit {
       name: this.project.Name || '',
       description: this.project.Description || '',
       color: this.project.Color || '#0076B6',
-      icon: this.project.Icon || 'fa-folder',
+      icon: this.project.Icon || 'fa-folder'
     };
   }
 
@@ -405,7 +403,7 @@ export class ProjectFormModalComponent implements OnInit {
 
     try {
       const md = new Metadata();
-      const project = this.project || (await md.GetEntityObject<ProjectEntity>('MJ: Projects', this.currentUser));
+      const project = this.project || await md.GetEntityObject<ProjectEntity>('MJ: Projects', this.currentUser);
 
       project.Name = this.formData.name.trim();
       project.Description = this.formData.description.trim() || null;

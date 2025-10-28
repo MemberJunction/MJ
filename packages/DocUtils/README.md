@@ -38,7 +38,7 @@ External dependencies:
 
 ```typescript
 import { DocumentationEngine } from '@memberjunction/doc-utils';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 // Get the singleton instance
 const docEngine = DocumentationEngine.Instance;

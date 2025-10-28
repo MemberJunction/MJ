@@ -1,30 +1,8 @@
-import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnChanges,
-  OnDestroy,
-  SimpleChanges,
-  ViewChild,
-  SecurityContext,
-} from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, SecurityContext } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/global';
+import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
-import {
-  ArtifactEntity,
-  ArtifactVersionEntity,
-  ArtifactVersionAttributeEntity,
-  ArtifactTypeEntity,
-  CollectionEntity,
-  CollectionArtifactEntity,
-  ArtifactMetadataEngine,
-  ConversationEntity,
-  ConversationDetailArtifactEntity,
-  ConversationDetailEntity,
-} from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -35,7 +13,7 @@ import { marked } from 'marked';
 @Component({
   selector: 'mj-artifact-viewer-panel',
   templateUrl: './artifact-viewer-panel.component.html',
-  styleUrls: ['./artifact-viewer-panel.component.css'],
+  styleUrls: ['./artifact-viewer-panel.component.css']
 })
 export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestroy {
   @Input() artifactId!: string;
@@ -43,14 +21,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() environmentId!: string;
   @Input() versionNumber?: number; // Version to display
   @Input() showSaveToCollection: boolean = true; // Control whether Save to Collection button is shown
-  @Input() refreshTrigger?: Subject<{ artifactId: string; versionNumber: number }>;
+  @Input() refreshTrigger?: Subject<{artifactId: string; versionNumber: number}>;
   @Input() viewContext: 'conversation' | 'collection' | null = null; // Where artifact is being viewed
   @Input() contextCollectionId?: string; // If viewing in collection, which collection
   @Input() canShare?: boolean; // Whether user can share this artifact
   @Input() canEdit?: boolean; // Whether user can edit this artifact
   @Output() closed = new EventEmitter<void>();
-  @Output() saveToCollectionRequested = new EventEmitter<{ artifactId: string; excludedCollectionIds: string[] }>();
-  @Output() navigateToLink = new EventEmitter<{ type: 'conversation' | 'collection'; id: string }>();
+  @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
+  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
@@ -94,7 +72,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     // Get tabs to remove from plugin (case-insensitive)
     const removals = this.pluginViewer?.pluginInstance?.GetStandardTabRemovals?.() || [];
-    const removalsLower = removals.map((r) => r.toLowerCase());
+    const removalsLower = removals.map(r => r.toLowerCase());
 
     // Add standard tabs (unless plugin removed them)
     if (!removalsLower.includes('json')) {
@@ -116,15 +94,19 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     // Check if this is a plugin-provided tab (query directly from plugin - no cache needed)
     if (this.pluginViewer?.pluginInstance?.GetAdditionalTabs) {
       const pluginTabs = this.pluginViewer.pluginInstance.GetAdditionalTabs();
-      const pluginTab = pluginTabs.find((t: ArtifactViewerTab) => t.label.toLowerCase() === tabName.toLowerCase());
+      const pluginTab = pluginTabs.find((t: ArtifactViewerTab) =>
+        t.label.toLowerCase() === tabName.toLowerCase()
+      );
 
       if (pluginTab) {
-        const content = typeof pluginTab.content === 'function' ? pluginTab.content() : pluginTab.content;
+        const content = typeof pluginTab.content === 'function'
+          ? pluginTab.content()
+          : pluginTab.content;
 
         return {
           type: pluginTab.contentType,
           content: content,
-          language: pluginTab.language,
+          language: pluginTab.language
         };
       }
     }
@@ -173,7 +155,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       if (newVersionNumber != null) {
         console.log(`📦 Version number changed to ${newVersionNumber}, switching version`);
         // Check if we already have this version loaded (avoid reload if possible)
-        const targetVersion = this.allVersions.find((v) => v.VersionNumber === newVersionNumber);
+        const targetVersion = this.allVersions.find(v => v.VersionNumber === newVersionNumber);
         if (targetVersion) {
           // Just switch to the version we already have
           this.artifactVersion = targetVersion;
@@ -218,22 +200,19 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
       // Load ALL versions
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionEntity>(
-        {
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID='${this.artifactId}'`,
-          OrderBy: 'VersionNumber DESC',
-          ResultType: 'entity_object',
-        },
-        this.currentUser
-      );
+      const result = await rv.RunView<ArtifactVersionEntity>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        OrderBy: 'VersionNumber DESC',
+        ResultType: 'entity_object'
+      }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
         this.allVersions = result.Results;
 
         // If target version specified, try to load it
         if (targetVersionNumber) {
-          const targetVersion = this.allVersions.find((v) => v.VersionNumber === targetVersionNumber);
+          const targetVersion = this.allVersions.find(v => v.VersionNumber === targetVersionNumber);
           if (targetVersion) {
             console.log(`📦 Loading specified version ${targetVersionNumber}`);
             this.artifactVersion = targetVersion;
@@ -262,9 +241,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         // Load links data
         await this.loadLinksData();
 
-        console.log(
-          `📦 Loaded ${this.allVersions.length} versions for artifact ${this.artifactId}, showing v${this.selectedVersionNumber}`
-        );
+        console.log(`📦 Loaded ${this.allVersions.length} versions for artifact ${this.artifactId}, showing v${this.selectedVersionNumber}`);
       } else {
         this.error = 'No artifact version found';
       }
@@ -301,21 +278,18 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionAttributeEntity>(
-        {
-          EntityName: 'MJ: Artifact Version Attributes',
-          ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
-          ResultType: 'entity_object',
-        },
-        this.currentUser
-      );
+      const result = await rv.RunView<ArtifactVersionAttributeEntity>({
+        EntityName: 'MJ: Artifact Version Attributes',
+        ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
 
       if (result.Success && result.Results) {
         this.versionAttributes = result.Results;
 
         // Check for displayMarkdown or displayHtml attributes
-        const displayMarkdownAttr = this.versionAttributes.find((a) => a.Name?.toLowerCase() === 'displaymarkdown');
-        const displayHtmlAttr = this.versionAttributes.find((a) => a.Name?.toLowerCase() === 'displayhtml');
+        const displayMarkdownAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displaymarkdown');
+        const displayHtmlAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displayhtml');
 
         // Parse values - they might be JSON-encoded strings
         this.displayMarkdown = this.parseAttributeValue(displayMarkdownAttr?.Value);
@@ -336,9 +310,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           this.activeTab = 'details';
         }
 
-        console.log(
-          `📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, hasDisplayTab=${this.hasDisplayTab}, activeTab=${this.activeTab}`
-        );
+        console.log(`📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, hasDisplayTab=${this.hasDisplayTab}, activeTab=${this.activeTab}`);
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
@@ -384,13 +356,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
   get contentType(): string | undefined {
     // Try to get content type from artifact type or attributes
-    const contentTypeAttr = this.versionAttributes.find((a) => a.Name?.toLowerCase() === 'contenttype');
+    const contentTypeAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'contenttype');
     return contentTypeAttr?.Value || undefined;
   }
 
   get filteredAttributes(): ArtifactVersionAttributeEntity[] {
     // Filter out displayMarkdown and displayHtml as they're shown in the Display tab
-    return this.versionAttributes.filter((attr) => {
+    return this.versionAttributes.filter(attr => {
       const name = attr.Name?.toLowerCase();
       return name !== 'displaymarkdown' && name !== 'displayhtml';
     });
@@ -442,14 +414,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<CollectionArtifactEntity>(
-        {
-          EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `ArtifactID='${this.artifactId}'`,
-          ResultType: 'entity_object',
-        },
-        this.currentUser
-      );
+      const result = await rv.RunView<CollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
 
       if (result.Success && result.Results) {
         this.artifactCollections = result.Results;
@@ -489,14 +458,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   onCopyDisplayContent(): void {
     const content = this.displayHtml || this.displayMarkdown;
     if (content) {
-      navigator.clipboard
-        .writeText(content)
-        .then(() => {
-          console.log('✅ Copied display content to clipboard');
-        })
-        .catch((err) => {
-          console.error('Failed to copy to clipboard:', err);
-        });
+      navigator.clipboard.writeText(content).then(() => {
+        console.log('✅ Copied display content to clipboard');
+      }).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+      });
     }
   }
 
@@ -566,13 +532,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     // Artifacts can be saved to multiple collections
     this.saveToCollectionRequested.emit({
       artifactId: this.artifactId,
-      excludedCollectionIds: this.excludedCollectionIds,
+      excludedCollectionIds: this.excludedCollectionIds
     });
   }
 
   get excludedCollectionIds(): string[] {
     // Return IDs of collections that already contain this artifact
-    return this.artifactCollections.map((ca) => ca.CollectionID);
+    return this.artifactCollections.map(ca => ca.CollectionID);
   }
 
   /**
@@ -592,14 +558,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       for (const collectionId of collectionIds) {
         // Double check it doesn't already exist
         const rv = new RunView();
-        const existingResult = await rv.RunView<CollectionArtifactEntity>(
-          {
-            EntityName: 'MJ: Collection Artifacts',
-            ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${this.artifactId}'`,
-            ResultType: 'entity_object',
-          },
-          this.currentUser
-        );
+        const existingResult = await rv.RunView<CollectionArtifactEntity>({
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${this.artifactId}'`,
+          ResultType: 'entity_object'
+        }, this.currentUser);
 
         if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
           console.log(`Artifact already in collection ${collectionId}, skipping`);
@@ -632,13 +595,19 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         await this.loadCollectionAssociations();
         return true;
       } else {
-        MJNotificationService.Instance.CreateSimpleNotification('Failed to save artifact to any collections', 'error');
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'Failed to save artifact to any collections',
+          'error'
+        );
         return false;
       }
     } catch (err) {
       console.error('Error saving to collections:', err);
       LogError(err);
-      MJNotificationService.Instance.CreateSimpleNotification('Error saving artifact to collections. Please try again.', 'error');
+      MJNotificationService.Instance.CreateSimpleNotification(
+        'Error saving artifact to collections. Please try again.',
+        'error'
+      );
       return false;
     }
   }
@@ -654,29 +623,23 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       const rv = new RunView();
 
       // Load all collections containing this artifact
-      const collArtifactsResult = await rv.RunView<CollectionArtifactEntity>(
-        {
-          EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `ArtifactID='${this.artifactId}'`,
-          ResultType: 'entity_object',
-        },
-        this.currentUser
-      );
+      const collArtifactsResult = await rv.RunView<CollectionArtifactEntity>({
+        EntityName: 'MJ: Collection Artifacts',
+        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        ResultType: 'entity_object'
+      }, this.currentUser);
 
       if (collArtifactsResult.Success && collArtifactsResult.Results) {
         // Get unique collection IDs
-        const collectionIds = [...new Set(collArtifactsResult.Results.map((ca) => ca.CollectionID))];
+        const collectionIds = [...new Set(collArtifactsResult.Results.map(ca => ca.CollectionID))];
 
         if (collectionIds.length > 0) {
-          const collectionsFilter = collectionIds.map((id) => `ID='${id}'`).join(' OR ');
-          const collectionsResult = await rv.RunView<CollectionEntity>(
-            {
-              EntityName: 'MJ: Collections',
-              ExtraFilter: collectionsFilter,
-              ResultType: 'entity_object',
-            },
-            this.currentUser
-          );
+          const collectionsFilter = collectionIds.map(id => `ID='${id}'`).join(' OR ');
+          const collectionsResult = await rv.RunView<CollectionEntity>({
+            EntityName: 'MJ: Collections',
+            ExtraFilter: collectionsFilter,
+            ResultType: 'entity_object'
+          }, this.currentUser);
 
           if (collectionsResult.Success && collectionsResult.Results) {
             this.allCollections = collectionsResult.Results;
@@ -687,19 +650,16 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       // Load origin conversation (if artifact came from conversation)
       // Artifacts are linked to conversations via ConversationDetailArtifact -> ConversationDetail -> Conversation
       // Get all version IDs for this artifact
-      const versionIds = this.allVersions.map((v) => v.ID);
+      const versionIds = this.allVersions.map(v => v.ID);
 
       if (versionIds.length > 0) {
-        const versionFilter = versionIds.map((id) => `ArtifactVersionID='${id}'`).join(' OR ');
-        const convDetailArtifactsResult = await rv.RunView<ConversationDetailArtifactEntity>(
-          {
-            EntityName: 'MJ: Conversation Detail Artifacts',
-            ExtraFilter: versionFilter,
-            MaxRows: 1,
-            ResultType: 'entity_object',
-          },
-          this.currentUser
-        );
+        const versionFilter = versionIds.map(id => `ArtifactVersionID='${id}'`).join(' OR ');
+        const convDetailArtifactsResult = await rv.RunView<ConversationDetailArtifactEntity>({
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: versionFilter,
+          MaxRows: 1,
+          ResultType: 'entity_object'
+        }, this.currentUser);
 
         if (convDetailArtifactsResult.Success && convDetailArtifactsResult.Results && convDetailArtifactsResult.Results.length > 0) {
           const conversationDetailId = convDetailArtifactsResult.Results[0].ConversationDetailID;
@@ -719,17 +679,16 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
               const userIsOwner = conversation.UserID === this.currentUser.ID;
 
               // Check if user is a participant
-              const participantResult = await rv.RunView(
-                {
-                  EntityName: 'Conversation Details',
-                  ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.currentUser.ID}'`,
-                  MaxRows: 1,
-                  ResultType: 'simple',
-                },
-                this.currentUser
-              );
+              const participantResult = await rv.RunView({
+                EntityName: 'Conversation Details',
+                ExtraFilter: `ConversationID='${conversation.ID}' AND UserID='${this.currentUser.ID}'`,
+                MaxRows: 1,
+                ResultType: 'simple'
+              }, this.currentUser);
 
-              const userIsParticipant = participantResult.Success && participantResult.Results && participantResult.Results.length > 0;
+              const userIsParticipant = participantResult.Success &&
+                                         participantResult.Results &&
+                                         participantResult.Results.length > 0;
 
               this.hasAccessToOriginConversation = userIsOwner || userIsParticipant;
             }
@@ -737,16 +696,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         }
       }
 
-      console.log(
-        `🔗 Loaded links: ${this.allCollections.length} collections, origin conversation: ${this.originConversation?.Name || 'none'}, viewContext: ${this.viewContext}`
-      );
+      console.log(`🔗 Loaded links: ${this.allCollections.length} collections, origin conversation: ${this.originConversation?.Name || 'none'}, viewContext: ${this.viewContext}`);
     } catch (error) {
       console.error('Error loading links data:', error);
     }
   }
 
-  get linksToShow(): Array<{ type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean }> {
-    const links: Array<{ type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean }> = [];
+  get linksToShow(): Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> {
+    const links: Array<{type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}> = [];
 
     // Add origin conversation if viewing in collection
     if (this.viewContext === 'collection' && this.originConversation) {
@@ -754,7 +711,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         type: 'conversation',
         id: this.originConversation.ID,
         name: this.originConversation.Name || 'Untitled Conversation',
-        hasAccess: this.hasAccessToOriginConversation,
+        hasAccess: this.hasAccessToOriginConversation
       });
     }
 
@@ -769,7 +726,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         type: 'collection',
         id: collection.ID,
         name: collection.Name,
-        hasAccess: true, // User can see it, so they have access
+        hasAccess: true // User can see it, so they have access
       });
     }
 
@@ -779,14 +736,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   /**
    * Navigate to a linked conversation or collection
    */
-  onNavigateToLink(link: { type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean }): void {
+  onNavigateToLink(link: {type: 'conversation' | 'collection'; id: string; name: string; hasAccess: boolean}): void {
     if (!link.hasAccess) {
       return;
     }
 
     this.navigateToLink.emit({
       type: link.type,
-      id: link.id,
+      id: link.id
     });
   }
 
@@ -859,7 +816,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       const parseOptions: ParseJSONOptions = {
         extractInlineJson: true,
         maxDepth: 100,
-        debug: false,
+        debug: false
       };
       const parsed = ParseJSONRecursive(obj, parseOptions);
 
@@ -883,11 +840,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public GetTabIcon(tabName: string): string | null {
     // Base tabs
     const baseIcons: Record<string, string> = {
-      Display: 'fas fa-eye',
-      Code: 'fas fa-code',
-      JSON: 'fas fa-file-code',
-      Details: 'fas fa-info-circle',
-      Links: 'fas fa-link',
+      'Display': 'fas fa-eye',
+      'Code': 'fas fa-code',
+      'JSON': 'fas fa-file-code',
+      'Details': 'fas fa-info-circle',
+      'Links': 'fas fa-link'
     };
 
     if (baseIcons[tabName]) {

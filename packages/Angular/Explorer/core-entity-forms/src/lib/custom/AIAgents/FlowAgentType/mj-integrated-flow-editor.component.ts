@@ -1,21 +1,9 @@
-import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy,
-  AfterViewInit,
-  OnChanges,
-  SimpleChanges,
-  ViewChild,
-  ChangeDetectorRef,
-} from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, AfterViewInit, OnChanges, SimpleChanges, ViewChild, ChangeDetectorRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject, takeUntil, debounceTime } from 'rxjs';
 import { AIAgentStepEntity, AIAgentStepPathEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 
 // Import standalone flow editor components
 import { FlowEditorComponent } from './flow-editor-integration/components/flow-editor/flow-editor.component';
@@ -36,7 +24,14 @@ import { MJStep, MJConnection } from './flow-editor-integration/models/mj-extend
 @Component({
   selector: 'mj-integrated-flow-editor',
   standalone: true,
-  imports: [CommonModule, FormsModule, FlowEditorComponent, PropertiesPanelComponent, ExecutionPanelComponent, ToolbarComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    FlowEditorComponent,
+    PropertiesPanelComponent,
+    ExecutionPanelComponent,
+    ToolbarComponent
+  ],
   template: `
     <div class="mj-integrated-flow-editor">
       <!-- Header with mode toggle -->
@@ -102,8 +97,7 @@ import { MJStep, MJConnection } from './flow-editor-integration/models/mj-extend
       </div>
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     :host {
       display: block;
       width: 100%;
@@ -291,21 +285,20 @@ import { MJStep, MJConnection } from './flow-editor-integration/models/mj-extend
     .status-item i {
       font-size: 11px;
     }
-  `,
-  ],
-  providers: [FlowEditorService, FlowExecutorService, MJFlowTransformerService],
+  `],
+  providers: [FlowEditorService, FlowExecutorService, MJFlowTransformerService]
 })
 export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, AfterViewInit, OnChanges {
   @ViewChild('flowEditor') flowEditorComponent!: FlowEditorComponent;
-
+  
   @Input() agentId: string | null = null;
   @Input() steps: AIAgentStepEntity[] = [];
   @Input() paths: AIAgentStepPathEntity[] = [];
   @Input() EditMode: boolean = false;
-
+  
   @Output() stepsChanged = new EventEmitter<void>();
   @Output() pathsChanged = new EventEmitter<void>();
-
+  
   // UI state
   showExecutionPanel = false;
   selectedStep: MJStep | null = null;
@@ -314,63 +307,73 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
   lastSaved: Date | null = null;
   hasUnsavedChanges = false;
   saving = false;
-
+  
   private destroy$ = new Subject<void>();
   private changeDebounce$ = new Subject<void>();
-
+  
   constructor(
     private flowEditorService: FlowEditorService,
     private flowExecutorService: FlowExecutorService,
     private transformerService: MJFlowTransformerService,
     private cdr: ChangeDetectorRef
   ) {}
-
+  
   ngOnChanges(changes: SimpleChanges) {
     // When input data changes, reload the flow
     if ((changes['steps'] || changes['paths']) && this.flowEditorComponent) {
       this.loadFlowData();
     }
   }
-
+  
   ngOnInit() {
     // Subscribe to flow editor changes
     if (this.flowEditorService && (this.flowEditorService as any).selectedNode) {
-      (this.flowEditorService as any).selectedNode.pipe(takeUntil(this.destroy$)).subscribe((node: MJStep | null) => {
-        this.selectedStep = node;
+      (this.flowEditorService as any).selectedNode
+        .pipe(takeUntil(this.destroy$))
+        .subscribe((node: MJStep | null) => {
+          this.selectedStep = node;
+          this.cdr.detectChanges();
+        });
+    }
+    
+    // Track changes for auto-save indication
+    this.changeDebounce$
+      .pipe(
+        debounceTime(1000),
+        takeUntil(this.destroy$)
+      )
+      .subscribe(() => {
+        this.hasUnsavedChanges = true;
         this.cdr.detectChanges();
       });
-    }
-
-    // Track changes for auto-save indication
-    this.changeDebounce$.pipe(debounceTime(1000), takeUntil(this.destroy$)).subscribe(() => {
-      this.hasUnsavedChanges = true;
-      this.cdr.detectChanges();
-    });
-
+    
     // Subscribe to flow changes
     this.subscribeToFlowChanges();
   }
-
+  
   ngAfterViewInit() {
     // Load flow data after view is initialized
     // This ensures the flow editor component is ready
     this.loadFlowData();
   }
-
+  
   ngOnDestroy() {
     this.destroy$.next();
     this.destroy$.complete();
   }
-
+  
   private loadFlowData() {
     // Transform MJ entities to standalone models
-    const { steps: transformedSteps, connections } = this.transformerService.transformToStandaloneModels(this.steps, this.paths);
-
+    const { steps: transformedSteps, connections } = this.transformerService.transformToStandaloneModels(
+      this.steps,
+      this.paths
+    );
+    
     // Load saved positions from LocalStorage if available
     if (this.agentId) {
       const savedPositions = this.loadPositionsFromLocalStorage();
       if (savedPositions) {
-        transformedSteps.forEach((step) => {
+        transformedSteps.forEach(step => {
           const savedPos = savedPositions[step.id];
           if (savedPos) {
             step.position = [savedPos.x, savedPos.y];
@@ -378,18 +381,18 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
         });
       }
     }
-
+    
     // Load transformed data into the flow editor
-
+    
     // Load into flow editor service
     this.flowEditorService.setAllSteps(transformedSteps);
     // Store connections in a property for now
     (this.flowEditorService as any).connections = connections;
-
+    
     // Update counts
     this.stepCount = transformedSteps.length;
     this.connectionCount = connections.length;
-
+    
     // Initialize the flow editor component if it exists
     // We need to wait for the component to be ready
     setTimeout(() => {
@@ -401,94 +404,102 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
       }
     }, 100);
   }
-
+  
   private subscribeToFlowChanges() {
     // For now, we'll track changes through the component itself
     // since the service doesn't have observables for these
     this.stepCount = this.steps.length;
     this.connectionCount = this.paths.length;
   }
-
+  
   async saveAllChanges() {
     if (!this.EditMode || this.saving) return;
-
+    
     this.saving = true;
-
+    
     try {
       // Get current state from flow editor
       const currentSteps = this.flowEditorService.getAllSteps() as MJStep[];
       const currentConnections = ((this.flowEditorService as any).connections || []) as MJConnection[];
-
+      
       // Transform back to MJ entities
-      const { stepsToUpdate, pathsToUpdate, stepsToCreate, pathsToCreate } = this.transformerService.transformToMJEntities(
+      const {
+        stepsToUpdate,
+        pathsToUpdate,
+        stepsToCreate,
+        pathsToCreate
+      } = this.transformerService.transformToMJEntities(
         currentSteps,
         currentConnections,
         this.steps,
         this.paths
       );
-
+      
       // Save all updates
       const md = new Metadata();
-
+      
       // Update existing steps
       for (const step of stepsToUpdate) {
         await step.Save();
       }
-
+      
       // Create new steps
       for (const stepData of stepsToCreate) {
         const newStep = await md.GetEntityObject<AIAgentStepEntity>('MJ: AI Agent Steps');
         Object.assign(newStep, stepData);
         newStep.AgentID = this.agentId!;
         await newStep.Save();
-
+        
         // Add to our steps array and update the standalone model
         this.steps.push(newStep);
-
+        
         // Update the mjEntityId in the standalone model
         const standaloneStep = currentSteps.find((s: MJStep) => s.name === stepData.Name);
         if (standaloneStep) {
           (standaloneStep as any).mjEntityId = newStep.ID;
         }
       }
-
+      
       // Update existing paths
       for (const path of pathsToUpdate) {
         await path.Save();
       }
-
+      
       // Create new paths
       for (const pathData of pathsToCreate) {
         const newPath = await md.GetEntityObject<AIAgentStepPathEntity>('MJ: AI Agent Step Paths');
         Object.assign(newPath, pathData);
         await newPath.Save();
-
+        
         // Add to our paths array
         this.paths.push(newPath);
-
+        
         // Update the mjEntityId in the standalone model
         // Note: We need to find by comparing the original step IDs, not the numeric IDs
-        const standaloneConnection = currentConnections.find((c: MJConnection) => {
-          // Find source and target steps by their MJ entity IDs
-          const sourceStep = currentSteps.find((s) => s.mjEntityId === pathData.OriginStepID);
-          const targetStep = currentSteps.find((s) => s.mjEntityId === pathData.DestinationStepID);
-          return sourceStep && targetStep && c.source === sourceStep.id && c.target === targetStep.id;
-        });
+        const standaloneConnection = currentConnections.find(
+          (c: MJConnection) => {
+            // Find source and target steps by their MJ entity IDs
+            const sourceStep = currentSteps.find(s => s.mjEntityId === pathData.OriginStepID);
+            const targetStep = currentSteps.find(s => s.mjEntityId === pathData.DestinationStepID);
+            return sourceStep && targetStep && c.source === sourceStep.id && c.target === targetStep.id;
+          }
+        );
         if (standaloneConnection) {
           (standaloneConnection as any).mjEntityId = newPath.ID;
         }
       }
-
+      
       // Handle deletions (steps/paths that exist in MJ but not in current editor state)
       await this.handleDeletions(currentSteps, currentConnections);
-
+      
       // Update state
       this.lastSaved = new Date();
       this.hasUnsavedChanges = false;
-
+      
       // Emit change events
       this.stepsChanged.emit();
       this.pathsChanged.emit();
+      
     } catch (error) {
       console.error('Failed to save changes:', error);
       alert('Failed to save changes. Please check the console for details.');
@@ -497,16 +508,16 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
       this.cdr.detectChanges();
     }
   }
-
+  
   private async handleDeletions(currentSteps: MJStep[], currentConnections: MJConnection[]) {
     // Find steps that exist in MJ but not in current state
-    const currentStepIds = new Set(currentSteps.map((s) => s.mjEntityId).filter((id) => id));
-    const stepsToDelete = this.steps.filter((mjStep) => !currentStepIds.has(mjStep.ID));
-
+    const currentStepIds = new Set(currentSteps.map(s => s.mjEntityId).filter(id => id));
+    const stepsToDelete = this.steps.filter(mjStep => !currentStepIds.has(mjStep.ID));
+    
     // Find paths that exist in MJ but not in current state
-    const currentPathIds = new Set(currentConnections.map((c) => c.mjEntityId).filter((id) => id));
-    const pathsToDelete = this.paths.filter((mjPath) => !currentPathIds.has(mjPath.ID));
-
+    const currentPathIds = new Set(currentConnections.map(c => c.mjEntityId).filter(id => id));
+    const pathsToDelete = this.paths.filter(mjPath => !currentPathIds.has(mjPath.ID));
+    
     // Delete removed paths first (due to foreign key constraints)
     for (const path of pathsToDelete) {
       await path.Delete();
@@ -515,7 +526,7 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
         this.paths.splice(index, 1);
       }
     }
-
+    
     // Delete removed steps
     for (const step of stepsToDelete) {
       await step.Delete();
@@ -525,67 +536,67 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
       }
     }
   }
-
+  
   toggleExecutionPanel() {
     this.showExecutionPanel = !this.showExecutionPanel;
     this.cdr.detectChanges();
   }
-
+  
   onStepDragStart(event: any) {
     // Handle drag start from toolbar
   }
-
+  
   onStepDragEnd() {
     // Handle drag end
     // Save positions when step dragging ends
     this.savePositionsToLocalStorage();
   }
-
+  
   onStepMoved(step: Step) {
     // Save positions to LocalStorage when a step is moved
     this.savePositionsToLocalStorage();
   }
-
+  
   onStepUpdated(updatedStep: MJStep) {
     // Handle step updates from properties panel
-
+    
     // Find and update the step in our local array
     const index = this.flowEditorService.getAllSteps().findIndex((s: any) => s.id === updatedStep.id);
     if (index !== -1) {
       const steps = this.flowEditorService.getAllSteps();
       steps[index] = updatedStep;
       this.flowEditorService.setAllSteps(steps);
-
+      
       // Mark as having unsaved changes
       this.hasUnsavedChanges = true;
       this.changeDebounce$.next();
       this.cdr.detectChanges();
     }
   }
-
+  
   // Public methods for parent component interaction
   public refreshFlow() {
     this.loadFlowData();
   }
-
+  
   public async executeFlow() {
     if (!this.showExecutionPanel) {
       this.showExecutionPanel = true;
     }
-
+    
     // Execute using the flow executor service
     const steps = this.flowEditorService.getAllSteps() as MJStep[];
     const connections = ((this.flowEditorService as any).connections || []) as MJConnection[];
-
+    
     await this.flowExecutorService.executeFlow(steps, connections);
   }
-
-  private loadPositionsFromLocalStorage(): { [stepId: string]: { x: number; y: number } } | null {
+  
+  private loadPositionsFromLocalStorage(): { [stepId: string]: { x: number, y: number } } | null {
     if (!this.agentId) return null;
-
+    
     const storageKey = `flow-positions-${this.agentId}`;
     const savedData = localStorage.getItem(storageKey);
-
+    
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
@@ -595,28 +606,28 @@ export class MJIntegratedFlowEditorComponent implements OnInit, OnDestroy, After
         return null;
       }
     }
-
+    
     return null;
   }
-
+  
   private savePositionsToLocalStorage() {
     if (!this.agentId || !this.flowEditorComponent) return;
-
-    const positions: { [stepId: string]: { x: number; y: number } } = {};
-
-    this.flowEditorComponent.steps.forEach((step) => {
+    
+    const positions: { [stepId: string]: { x: number, y: number } } = {};
+    
+    this.flowEditorComponent.steps.forEach(step => {
       positions[step.id] = {
         x: step.position[0],
-        y: step.position[1],
+        y: step.position[1]
       };
     });
-
+    
     const storageKey = `flow-positions-${this.agentId}`;
     const dataToSave = {
       steps: positions,
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toISOString()
     };
-
+    
     localStorage.setItem(storageKey, JSON.stringify(dataToSave));
   }
 }

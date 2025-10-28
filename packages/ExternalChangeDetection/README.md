@@ -35,7 +35,7 @@ This package relies on the following MemberJunction packages:
 
 ```typescript
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 async function detectAndReplayChanges() {
   // Get the engine instance
@@ -252,7 +252,7 @@ if (result.Success && result.Changes.length > 0) {
 
 ```typescript
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 async function runScheduledChangeDetection(contextUser: UserInfo) {
   const detector = ExternalChangeDetectorEngine.Instance;

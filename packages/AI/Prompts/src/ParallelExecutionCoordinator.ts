@@ -1,4 +1,4 @@
-import { LogError, LogStatus, Metadata } from '@memberjunction/global';
+import { LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
 import { AIPromptEntityExtended, AIPromptRunEntityExtended } from '@memberjunction/core-entities';
@@ -169,7 +169,7 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressCallbacks?: ProgressCallbacksInterface, // Using interface to avoid circular dependency
-    agentRunId?: string
+    agentRunId?: string,
   ): Promise<ParallelExecutionResult> {
     const startTime = new Date();
     const executionConfig = { ...this._defaultConfig, ...config };
@@ -209,20 +209,13 @@ export class ParallelExecutionCoordinator {
       const progressTracker = new ParallelProgressTracker(tasks.length, executionGroups.length, progressCallbacks);
 
       // Execute groups sequentially, tasks within groups in parallel
-      const allResults = await this.executeGroupsSequentially(
-        executionGroups,
-        executionConfig,
-        parentPromptRunId,
-        cancellationToken,
-        progressTracker,
-        agentRunId
-      );
+      const allResults = await this.executeGroupsSequentially(executionGroups, executionConfig, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
 
       // Aggregate results and calculate metrics
       const result = this.aggregateResults(allResults, startTime, new Date());
 
       LogStatus(
-        `Parallel execution completed: ${result.successCount}/${tasks.length} tasks successful, ${result.failureCount} failed, ${result.cancelledCount} cancelled`
+        `Parallel execution completed: ${result.successCount}/${tasks.length} tasks successful, ${result.failureCount} failed, ${result.cancelledCount} cancelled`,
       );
       return result;
     } catch (error) {
@@ -259,7 +252,7 @@ export class ParallelExecutionCoordinator {
     results: ExecutionTaskResult[],
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
-    cancellationToken?: AbortSignal
+    cancellationToken?: AbortSignal,
   ): Promise<ExecutionTaskResult | null> {
     if (results.length === 0) {
       return null;
@@ -345,7 +338,7 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
-    agentRunId?: string
+    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const allResults: ExecutionTaskResult[] = [];
 
@@ -372,14 +365,7 @@ export class ParallelExecutionCoordinator {
       // Update progress tracker for current group
       progressTracker?.updateProgress(group.groupNumber);
 
-      const groupResults = await this.executeGroupInParallel(
-        group,
-        config,
-        parentPromptRunId,
-        cancellationToken,
-        progressTracker,
-        agentRunId
-      );
+      const groupResults = await this.executeGroupInParallel(group, config, parentPromptRunId, cancellationToken, progressTracker, agentRunId);
       allResults.push(...groupResults);
 
       // Check if we should fail fast
@@ -410,7 +396,7 @@ export class ParallelExecutionCoordinator {
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
     progressTracker?: ParallelProgressTracker,
-    agentRunId?: string
+    agentRunId?: string,
   ): Promise<ExecutionTaskResult[]> {
     const maxConcurrent = Math.min(config.maxConcurrentExecutions, group.tasks.length);
     const results: ExecutionTaskResult[] = [];
@@ -466,9 +452,7 @@ export class ParallelExecutionCoordinator {
 
     const successfulResults = results.filter((r) => r.success);
     const cancelledResults = results.filter((r) => r.cancelled);
-    LogStatus(
-      `Group ${group.groupNumber} completed: ${successfulResults.length}/${results.length} successful, ${cancelledResults.length} cancelled`
-    );
+    LogStatus(`Group ${group.groupNumber} completed: ${successfulResults.length}/${results.length} successful, ${cancelledResults.length} cancelled`);
     return results;
   }
 
@@ -487,7 +471,7 @@ export class ParallelExecutionCoordinator {
     config: ParallelExecutionConfig,
     parentPromptRunId?: string,
     executionOrder?: number,
-    agentRunId?: string
+    agentRunId?: string,
   ): Promise<ExecutionTaskResult> {
     const startTime = new Date();
     let lastError: Error | null = null;
@@ -554,13 +538,7 @@ export class ParallelExecutionCoordinator {
    * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<ExecutionTaskResult> - Result of the task execution
    */
-  private async executeSingleTask(
-    task: ExecutionTask,
-    timeoutMS: number,
-    parentPromptRunId?: string,
-    executionOrder?: number,
-    agentRunId?: string
-  ): Promise<ExecutionTaskResult> {
+  private async executeSingleTask(task: ExecutionTask, timeoutMS: number, parentPromptRunId?: string, executionOrder?: number, agentRunId?: string): Promise<ExecutionTaskResult> {
     // TODO: This will need to integrate with AIPromptRunner's execution logic
     // For now, implementing a simplified version
 
@@ -575,11 +553,11 @@ export class ParallelExecutionCoordinator {
       // Create LLM instance using vendor-specific driver class if available
       const driverClass = task.vendorDriverClass || task.model.DriverClass;
       const apiName = task.vendorApiName || task.model.APIName;
-
+      
       if (!driverClass) {
         throw new Error(`No driver class available for model ${task.model.Name}. Vendor selection may have failed.`);
       }
-
+      
       const apiKey = GetAIAPIKey(driverClass);
       const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(BaseLLM, driverClass, apiKey);
 
@@ -623,7 +601,7 @@ export class ParallelExecutionCoordinator {
                 reject(new Error('Task execution cancelled'));
               });
             }
-          })
+          }),
         );
       }
 
@@ -767,7 +745,7 @@ export class ParallelExecutionCoordinator {
     results: ExecutionTaskResult[],
     selectorPromptId: string,
     parentPromptRunId?: string,
-    _cancellationToken?: AbortSignal
+    _cancellationToken?: AbortSignal,
   ): Promise<ExecutionTaskResult> {
     try {
       // Import AIPromptRunner here to avoid circular dependency
@@ -805,7 +783,7 @@ export class ParallelExecutionCoordinator {
           judgePrompt,
           judgeData,
           parentPromptRunId,
-          results.length // execution order after all parallel children
+          results.length, // execution order after all parallel children
         );
       }
 
@@ -931,10 +909,7 @@ export class ParallelExecutionCoordinator {
    * @param results - Array of execution results to rank
    * @param rankings - Rankings from the judge
    */
-  private applyRankingsToResults(
-    results: ExecutionTaskResult[],
-    rankings: Array<{ candidateId: string; rank: number; rationale: string }>
-  ): void {
+  private applyRankingsToResults(results: ExecutionTaskResult[], rankings: Array<{ candidateId: string; rank: number; rationale: string }>): void {
     for (const result of results) {
       const ranking = rankings.find((r) => r.candidateId === result.task.taskId);
       if (ranking) {
@@ -980,7 +955,7 @@ export class ParallelExecutionCoordinator {
   private buildMessageArray(
     renderedPrompt: string,
     conversationMessages?: ChatMessage[],
-    templateMessageRole: 'system' | 'user' | 'none' = 'system'
+    templateMessageRole: 'system' | 'user' | 'none' = 'system',
   ): ChatMessage[] {
     const messages: ChatMessage[] = [];
 
@@ -1028,13 +1003,7 @@ export class ParallelExecutionCoordinator {
    * @param agentRunId - Optional agent run ID to link prompt executions to parent agent run
    * @returns Promise<AIPromptRunEntityExtended> - The created child prompt run
    */
-  private async createChildPromptRun(
-    task: ExecutionTask,
-    startTime: Date,
-    parentPromptRunId: string,
-    executionOrder?: number,
-    agentRunId?: string
-  ): Promise<AIPromptRunEntityExtended> {
+  private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<AIPromptRunEntityExtended> {
     try {
       const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
       promptRun.NewRecord();
@@ -1097,12 +1066,7 @@ export class ParallelExecutionCoordinator {
    * @param endTime - When the execution completed
    * @param executionTimeMS - Total execution time in milliseconds
    */
-  private async updateChildPromptRun(
-    promptRun: AIPromptRunEntityExtended,
-    modelResult: ChatResult,
-    endTime: Date,
-    executionTimeMS: number
-  ): Promise<void> {
+  private async updateChildPromptRun(promptRun: AIPromptRunEntityExtended, modelResult: ChatResult, endTime: Date, executionTimeMS: number): Promise<void> {
     try {
       promptRun.CompletedAt = endTime;
       promptRun.ExecutionTimeMS = executionTimeMS;
@@ -1144,7 +1108,7 @@ export class ParallelExecutionCoordinator {
     judgePrompt: AIPromptEntityExtended,
     judgeData: Record<string, unknown>,
     parentPromptRunId: string,
-    executionOrder: number
+    executionOrder: number,
   ): Promise<AIPromptRunEntityExtended> {
     try {
       const promptRun = await this._metadata.GetEntityObject<AIPromptRunEntityExtended>('MJ: AI Prompt Runs');

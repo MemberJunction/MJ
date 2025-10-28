@@ -1,20 +1,7 @@
-import {
-  Component,
-  Input,
-  Output,
-  EventEmitter,
-  OnInit,
-  OnDestroy,
-  OnChanges,
-  SimpleChanges,
-  inject,
-  HostListener,
-  ChangeDetectorRef,
-  ViewEncapsulation,
-} from '@angular/core';
+import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, inject, HostListener, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup } from '@angular/forms';
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 import { EntityPermissionEntity, EntityEntity, RoleEntity } from '@memberjunction/core-entities';
 import { WindowModule } from '@progress/kendo-angular-dialog';
 
@@ -42,7 +29,7 @@ interface RolePermissions {
   imports: [CommonModule, FormsModule, ReactiveFormsModule, WindowModule],
   encapsulation: ViewEncapsulation.None,
   templateUrl: './permission-dialog.component.html',
-  styleUrls: ['./permission-dialog.component.css'],
+  styleUrls: ['./permission-dialog.component.css']
 })
 export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: PermissionDialogData | null = null;
@@ -69,7 +56,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
   ngOnChanges(changes: SimpleChanges): void {
     console.log('Permission dialog ngOnChanges called:', changes);
-
+    
     if (changes['visible'] && this.visible) {
       this.resetDialog();
       // Load data when dialog becomes visible and we have data
@@ -78,7 +65,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
         this.loadPermissionData();
       }
     }
-
+    
     if (changes['data'] && this.data && this.visible) {
       console.log('Data changed while dialog is visible, reloading permission data');
       this.loadPermissionData();
@@ -102,7 +89,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   public get hasChanges(): boolean {
-    return this.rolePermissions.some((rp) => rp.isNew || rp.entityPermission.Dirty);
+    return this.rolePermissions.some(rp => rp.isNew || rp.entityPermission.Dirty);
   }
 
   public hasEntityChanges(rolePermission: RolePermissions): boolean {
@@ -122,20 +109,20 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
 
     // Process existing permissions
     for (const permission of this.data.existingPermissions) {
-      const role = this.data.roles.find((r) => r.ID === permission.RoleID);
+      const role = this.data.roles.find(r => r.ID === permission.RoleID);
       if (role) {
         console.log(`Processing permission for role ${role.Name}:`, {
           canCreate: permission.CanCreate,
           canRead: permission.CanRead,
           canUpdate: permission.CanUpdate,
-          canDelete: permission.CanDelete,
+          canDelete: permission.CanDelete
         });
-
+        
         this.rolePermissions.push({
           roleId: role.ID,
           roleName: role.Name || '',
           entityPermission: permission,
-          isNew: false,
+          isNew: false
         });
         existingRoleIds.add(role.ID);
       }
@@ -144,13 +131,10 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
     console.log('Loaded role permissions:', this.rolePermissions);
 
     // Set available roles (those not already configured)
-    this.availableRoles = this.data.roles.filter((role) => !existingRoleIds.has(role.ID));
-
-    console.log(
-      'Available roles for adding:',
-      this.availableRoles.map((r) => r.Name)
-    );
-
+    this.availableRoles = this.data.roles.filter(role => !existingRoleIds.has(role.ID));
+    
+    console.log('Available roles for adding:', this.availableRoles.map(r => r.Name));
+    
     // Trigger change detection to update the UI
     this.cdr.detectChanges();
   }
@@ -171,25 +155,25 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
       roleId: role.ID,
       roleName: role.Name || '',
       entityPermission: entityPermission,
-      isNew: true,
+      isNew: true
     });
 
     // Remove from available roles
-    this.availableRoles = this.availableRoles.filter((r) => r.ID !== role.ID);
+    this.availableRoles = this.availableRoles.filter(r => r.ID !== role.ID);
     this.cdr.detectChanges();
   }
 
   public removeRolePermission(rolePermission: RolePermissions): void {
     // Add back to available roles if not new
     if (!rolePermission.isNew) {
-      const role = this.data?.roles.find((r) => r.ID === rolePermission.roleId);
+      const role = this.data?.roles.find(r => r.ID === rolePermission.roleId);
       if (role) {
         this.availableRoles.push(role);
         this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
       }
     } else {
       // Add back to available roles
-      const role = this.data?.roles.find((r) => r.ID === rolePermission.roleId);
+      const role = this.data?.roles.find(r => r.ID === rolePermission.roleId);
       if (role) {
         this.availableRoles.push(role);
         this.availableRoles.sort((a, b) => (a.Name || '').localeCompare(b.Name || ''));
@@ -197,7 +181,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
     }
 
     // Remove from role permissions
-    this.rolePermissions = this.rolePermissions.filter((rp) => rp.roleId !== rolePermission.roleId);
+    this.rolePermissions = this.rolePermissions.filter(rp => rp.roleId !== rolePermission.roleId);
     this.cdr.detectChanges();
   }
 
@@ -216,6 +200,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
       }
 
       this.result.emit({ action: 'save', entity: this.data.entity });
+
     } catch (error: any) {
       console.error('Error saving permissions:', error);
       this.error = error.message || 'An unexpected error occurred while saving permissions';
@@ -228,9 +213,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
     // Save the entity directly - it already has all the values bound
     const saveResult = await rolePermission.entityPermission.Save();
     if (!saveResult) {
-      throw new Error(
-        rolePermission.entityPermission.LatestResult?.Message || `Failed to save permissions for role ${rolePermission.roleName}`
-      );
+      throw new Error(rolePermission.entityPermission.LatestResult?.Message || `Failed to save permissions for role ${rolePermission.roleName}`);
     }
   }
 

@@ -1,5 +1,5 @@
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { UserInfo, Metadata, RunView } from '@memberjunction/global';
+import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
 import { ExecutionLogger } from '../lib/execution-logger';
@@ -37,15 +37,12 @@ export class AgentService {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntityExtended>(
-        {
-          EntityName: 'AI Agents',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          ResultType: 'entity_object',
-        },
-        this.contextUser
-      );
+      const result = await rv.RunView<AIAgentEntityExtended>({
+        EntityName: 'AI Agents',
+        ExtraFilter: '',
+        OrderBy: 'Name',
+        ResultType: 'entity_object'
+      }, this.contextUser);
 
       if (!result.Success) {
         throw new Error(`Failed to load agents: ${result.ErrorMessage}`);
@@ -53,13 +50,14 @@ export class AgentService {
 
       const agents = result.Results || [];
       return agents
-        .filter((agent) => agent.Name) // Filter out agents without names
-        .map((agent) => ({
+        .filter(agent => agent.Name) // Filter out agents without names
+        .map(agent => ({
           name: agent.Name!,
           description: agent.Description || undefined,
           status: 'available' as const, // For now, assume all agents are available
-          lastUsed: undefined, // We could track this in the future
+          lastUsed: undefined // We could track this in the future
         }));
+
     } catch (error: any) {
       throw new Error(`❌ Failed to list agents
 
@@ -80,41 +78,44 @@ For help with agent configuration, see the MJ documentation.`);
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<AIAgentEntityExtended>(
-        {
-          EntityName: 'AI Agents',
-          ExtraFilter: `Name = '${agentName.replace(/'/g, "''")}'`,
-          ResultType: 'entity_object',
-        },
-        this.contextUser
-      );
+      const result = await rv.RunView<AIAgentEntityExtended>({
+        EntityName: 'AI Agents',
+        ExtraFilter: `Name = '${agentName.replace(/'/g, "''")}'`,
+        ResultType: 'entity_object'
+      }, this.contextUser);
 
       if (!result.Success) {
         throw new Error(result.ErrorMessage || 'Unknown error');
       }
 
       return result.Results && result.Results.length > 0 ? result.Results[0] : null;
+
     } catch (error: any) {
       throw new Error(`Failed to find agent "${agentName}": ${error?.message || 'Unknown error'}`);
     }
   }
 
-  async executeAgent(agentName: string, prompt: string, options: AgentExecutionOptions = {}): Promise<ExecutionResult> {
+  async executeAgent(
+    agentName: string, 
+    prompt: string, 
+    options: AgentExecutionOptions = {}
+  ): Promise<ExecutionResult> {
     await this.ensureInitialized();
 
     const startTime = Date.now();
     const logger = new ExecutionLogger(`agents:run`, agentName, undefined, prompt);
-
+    
     try {
       // Find the agent
       logger.logStep('INFO', 'SYSTEM', 'Finding agent', { agentName });
       const agent = await this.findAgent(agentName);
-
+      
       if (!agent) {
         const suggestions = await this.getSimilarAgentNames(agentName);
-        const suggestionText =
-          suggestions.length > 0 ? `\n\nDid you mean one of these?\n${suggestions.map((s) => `  - ${s}`).join('\n')}` : '';
-
+        const suggestionText = suggestions.length > 0 
+          ? `\n\nDid you mean one of these?\n${suggestions.map(s => `  - ${s}`).join('\n')}`
+          : '';
+        
         throw new Error(`❌ Agent not found: "${agentName}"
 
 Problem: No agent exists with the specified name
@@ -126,57 +127,52 @@ Next steps:
 3. Verify the agent is deployed and enabled`);
       }
 
-      logger.logStep('SUCCESS', 'SYSTEM', 'Agent found', {
-        agentId: agent.ID,
-        agentName: agent.Name,
+      logger.logStep('SUCCESS', 'SYSTEM', 'Agent found', { 
+        agentId: agent.ID, 
+        agentName: agent.Name 
       });
 
       // Execute the agent
-      logger.logStep('INFO', 'AGENT', 'Starting agent execution', {
-        prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+      logger.logStep('INFO', 'AGENT', 'Starting agent execution', { 
+        prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '')
       });
 
       const agentRunner = new AgentRunner();
-
+      
       // Build conversation messages - always include the conversation history plus current message
       let conversationMessages: Array<{ role: 'user' | 'assistant'; content: string }>;
-
+      
       if (options.conversationMessages) {
         // We have conversation history - clone it and append current message
-        conversationMessages = [
-          ...options.conversationMessages,
-          {
-            role: 'user' as const,
-            content: prompt,
-          },
-        ];
+        conversationMessages = [...options.conversationMessages, {
+          role: 'user' as const,
+          content: prompt
+        }];
       } else {
         // No conversation history - create new conversation with just current message
-        conversationMessages = [
-          {
-            role: 'user' as const,
-            content: prompt,
-          },
-        ];
+        conversationMessages = [{
+          role: 'user' as const,
+          content: prompt
+        }];
       }
-
+      
       // Prepare progress callbacks
       let lastProgressOutput = '';
       const callbacks = {
         onProgress: ((progress) => {
           const stepIcons: Record<string, string> = {
-            initialization: '🚀',
-            validation: '✓',
-            prompt_execution: '💭',
-            action_execution: '⚙️',
-            subagent_execution: '🤖',
-            decision_processing: '🧠',
-            finalization: '✨',
+            'initialization': '🚀',
+            'validation': '✓',
+            'prompt_execution': '💭',
+            'action_execution': '⚙️',
+            'subagent_execution': '🤖',
+            'decision_processing': '🧠',
+            'finalization': '✨'
           };
-
+          
           const icon = stepIcons[progress.step] || '→';
           const percentage = progress.percentage.toFixed(0).padStart(3, ' ');
-
+          
           if (options.verbose) {
             // In verbose mode, show full progress updates
             console.log(
@@ -184,7 +180,7 @@ Next steps:
               chalk.bold(progress.step.replace(/_/g, ' ')),
               chalk.dim(`- ${progress.message}`)
             );
-
+            
             if (progress.metadata && Object.keys(progress.metadata).length > 0) {
               console.log(chalk.dim(`     ${JSON.stringify(progress.metadata)}`));
             }
@@ -193,21 +189,21 @@ Next steps:
             const display = `${icon} [${percentage}%] ${progress.step.replace(/_/g, ' ')}: ${progress.message}`;
             const truncated = display.substring(0, 80);
             const finalDisplay = truncated + (display.length > 80 ? '...' : '');
-
+            
             // Clear previous line and write new content
             if (lastProgressOutput) {
               process.stdout.write('\r' + ' '.repeat(lastProgressOutput.length) + '\r');
             }
             process.stdout.write(finalDisplay);
             lastProgressOutput = finalDisplay;
-
+            
             // Add newline when we reach 100%
             if (progress.percentage >= 100 && lastProgressOutput) {
               process.stdout.write('\n');
               lastProgressOutput = '';
             }
           }
-        }) as AgentExecutionProgressCallback,
+        }) as AgentExecutionProgressCallback
       };
 
       // Suppress console output during agent execution unless verbose
@@ -217,7 +213,7 @@ Next steps:
           agent: agent,
           conversationMessages,
           contextUser: this.contextUser!,
-          onProgress: callbacks.onProgress,
+          onProgress: callbacks.onProgress
         });
       } else {
         executionResult = await ConsoleManager.withSuppressedOutput(async () => {
@@ -225,7 +221,7 @@ Next steps:
             agent: agent,
             conversationMessages,
             contextUser: this.contextUser!,
-            onProgress: callbacks.onProgress,
+            onProgress: callbacks.onProgress
           });
         });
       }
@@ -240,7 +236,7 @@ Next steps:
       if (executionResult && executionResult.success) {
         // Get the result from Message field first, then FinalPayload if Message is empty
         let resultContent: any = executionResult.agentRun.Message;
-
+        
         if (!resultContent && executionResult.agentRun.FinalPayload) {
           // Parse FinalPayload if Message is not available
           try {
@@ -250,15 +246,16 @@ Next steps:
             resultContent = executionResult.agentRun.FinalPayload;
           }
         }
-
+        
         // Use payload if neither Message nor FinalPayload has content
         if (!resultContent && executionResult.payload) {
           resultContent = executionResult.payload;
         }
 
         logger.logStep('SUCCESS', 'AGENT', 'Agent execution completed', {
-          result:
-            typeof resultContent === 'string' ? resultContent.substring(0, 200) + (resultContent.length > 200 ? '...' : '') : resultContent,
+          result: typeof resultContent === 'string' 
+            ? resultContent.substring(0, 200) + (resultContent.length > 200 ? '...' : '')
+            : resultContent
         });
 
         const result: ExecutionResult = {
@@ -268,11 +265,12 @@ Next steps:
           result: resultContent,
           duration,
           executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath(),
+          logFilePath: logger.getLogFilePath()
         };
 
         logger.finalize('SUCCESS', resultContent);
         return result;
+
       } else {
         const errorMessage = executionResult?.agentRun?.ErrorMessage || 'Unknown execution error';
         logger.logError(errorMessage, 'AGENT');
@@ -284,20 +282,23 @@ Next steps:
           error: errorMessage,
           duration,
           executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath(),
+          logFilePath: logger.getLogFilePath()
         };
 
         logger.finalize('FAILED', undefined, errorMessage);
         return result;
       }
+
     } catch (error: any) {
       const duration = Date.now() - startTime;
       const errorMessage = error?.message || 'Unknown error';
-
+      
       logger.logError(error, 'SYSTEM');
 
       // Include stack trace in verbose mode
-      const errorDetails = options.verbose && error?.stack ? `${errorMessage}\n\nStack trace:\n${error.stack}` : errorMessage;
+      const errorDetails = options.verbose && error?.stack 
+        ? `${errorMessage}\n\nStack trace:\n${error.stack}`
+        : errorMessage;
 
       const result: ExecutionResult = {
         success: false,
@@ -306,7 +307,7 @@ Next steps:
         error: errorDetails,
         duration,
         executionId: logger.getExecutionId(),
-        logFilePath: logger.getLogFilePath(),
+        logFilePath: logger.getLogFilePath()
       };
 
       logger.finalize('FAILED', undefined, errorMessage);
@@ -315,8 +316,10 @@ Next steps:
       if (errorMessage.startsWith('❌')) {
         throw error;
       } else {
-        const stackInfo = options.verbose && error?.stack ? `\n\nStack trace:\n${error.stack}` : '';
-
+        const stackInfo = options.verbose && error?.stack
+          ? `\n\nStack trace:\n${error.stack}`
+          : '';
+        
         throw new Error(`❌ Agent execution failed
 
 Problem: ${errorMessage}
@@ -338,15 +341,14 @@ Log file: ${logger.getLogFilePath()}${stackInfo}`);
     try {
       const agents = await this.listAgents();
       const searchLower = searchName.toLowerCase();
-
+      
       return agents
-        .filter(
-          (agent) =>
-            agent.name.toLowerCase().includes(searchLower) ||
-            searchLower.includes(agent.name.toLowerCase()) ||
-            this.calculateSimilarity(agent.name.toLowerCase(), searchLower) > 0.6
+        .filter(agent => 
+          agent.name.toLowerCase().includes(searchLower) ||
+          searchLower.includes(agent.name.toLowerCase()) ||
+          this.calculateSimilarity(agent.name.toLowerCase(), searchLower) > 0.6
         )
-        .map((agent) => agent.name)
+        .map(agent => agent.name)
         .slice(0, 3); // Limit to 3 suggestions
     } catch {
       return [];
@@ -356,40 +358,44 @@ Log file: ${logger.getLogFilePath()}${stackInfo}`);
   private calculateSimilarity(str1: string, str2: string): number {
     const longer = str1.length > str2.length ? str1 : str2;
     const shorter = str1.length > str2.length ? str2 : str1;
-
+    
     if (longer.length === 0) return 1.0;
-
+    
     const editDistance = this.levenshteinDistance(longer, shorter);
     return (longer.length - editDistance) / longer.length;
   }
 
   private levenshteinDistance(str1: string, str2: string): number {
     const matrix = [];
-
+    
     for (let i = 0; i <= str2.length; i++) {
       matrix[i] = [i];
     }
-
+    
     for (let j = 0; j <= str1.length; j++) {
       matrix[0][j] = j;
     }
-
+    
     for (let i = 1; i <= str2.length; i++) {
       for (let j = 1; j <= str1.length; j++) {
         if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
           matrix[i][j] = matrix[i - 1][j - 1];
         } else {
-          matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
         }
       }
     }
-
+    
     return matrix[str2.length][str1.length];
   }
 
   private async getContextUser(): Promise<UserInfo> {
     const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
-
+    
     if (!UserCache.Users || UserCache.Users.length === 0) {
       throw new Error(`❌ No users found in UserCache
 
@@ -407,7 +413,7 @@ This is typically a configuration or database setup issue.`);
     // For CLI usage, we'll use the first available user
     // In a real application, you might want to configure which user to use
     const user = UserCache.Users[0];
-
+    
     if (!user) {
       throw new Error('No valid user found for execution context');
     }

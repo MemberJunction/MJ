@@ -1,5 +1,5 @@
 import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
-import { Metadata, UserInfo } from '@memberjunction/global';
+import { Metadata, UserInfo } from '@memberjunction/core';
 
 /**
  * Represents artifact information with lazy-loading capabilities.
@@ -132,7 +132,10 @@ export class LazyArtifactInfo {
       const md = new Metadata();
 
       // Load both entities in parallel to minimize database round trips
-      const [artifact, version] = await Promise.all([this.loadArtifact(md), this.loadVersion(md)]);
+      const [artifact, version] = await Promise.all([
+        this.loadArtifact(md),
+        this.loadVersion(md)
+      ]);
 
       this._artifact = artifact;
       this._version = version;

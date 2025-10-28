@@ -70,7 +70,7 @@ In your component:
 
 ```typescript
 import { Component } from '@angular/core';
-import { BaseEntity, Metadata } from '@memberjunction/global';
+import { BaseEntity, Metadata } from '@memberjunction/core';
 
 @Component({
   selector: 'app-record-detail',
@@ -105,27 +105,27 @@ export class RecordDetailComponent {
 
 #### Inputs
 
-| Name     | Type         | Description                                       |
-| -------- | ------------ | ------------------------------------------------- |
+| Name | Type | Description |
+|------|------|-------------|
 | `record` | `BaseEntity` | The entity record whose change history to display |
 
 #### Outputs
 
-| Name           | Type                 | Description                       |
-| -------------- | -------------------- | --------------------------------- |
+| Name | Type | Description |
+|------|------|-------------|
 | `dialogClosed` | `EventEmitter<void>` | Emitted when the dialog is closed |
 
 #### Component Properties
 
-| Property         | Type                   | Description                    |
-| ---------------- | ---------------------- | ------------------------------ |
-| `showloader`     | `boolean`              | Loading state indicator        |
-| `viewData`       | `RecordChangeEntity[]` | All change records             |
-| `filteredData`   | `RecordChangeEntity[]` | Filtered change records        |
-| `expandedItems`  | `Set<string>`          | IDs of expanded timeline items |
-| `searchTerm`     | `string`               | Current search filter          |
-| `selectedType`   | `string`               | Selected change type filter    |
-| `selectedSource` | `string`               | Selected source filter         |
+| Property | Type | Description |
+|----------|------|-------------|
+| `showloader` | `boolean` | Loading state indicator |
+| `viewData` | `RecordChangeEntity[]` | All change records |
+| `filteredData` | `RecordChangeEntity[]` | Filtered change records |
+| `expandedItems` | `Set<string>` | IDs of expanded timeline items |
+| `searchTerm` | `string` | Current search filter |
+| `selectedType` | `string` | Selected change type filter |
+| `selectedSource` | `string` | Selected source filter |
 
 ## Features in Detail
 

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError, LogStatus } from '@memberjunction/global';
+import { LogError, LogStatus } from '@memberjunction/core';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -27,28 +27,24 @@ const apiIntegrationsSchema = z.object({
    * Google services configuration (nested structure)
    * Follows MJStorage pattern for better organization and scalability
    */
-  google: z
-    .object({
+  google: z.object({
+    /**
+     * Google Custom Search configuration
+     * Used by: Google Custom Search action
+     * Get your API key from: https://developers.google.com/custom-search/v1/overview
+     * Get your CX from: https://programmablesearchengine.google.com/
+     */
+    customSearch: z.object({
       /**
-       * Google Custom Search configuration
-       * Used by: Google Custom Search action
-       * Get your API key from: https://developers.google.com/custom-search/v1/overview
-       * Get your CX from: https://programmablesearchengine.google.com/
+       * Google Custom Search API key
        */
-      customSearch: z
-        .object({
-          /**
-           * Google Custom Search API key
-           */
-          apiKey: z.string().optional(),
-          /**
-           * Google Custom Search engine identifier (CX)
-           */
-          cx: z.string().optional(),
-        })
-        .optional(),
-    })
-    .optional(),
+      apiKey: z.string().optional(),
+      /**
+       * Google Custom Search engine identifier (CX)
+       */
+      cx: z.string().optional(),
+    }).optional(),
+  }).optional(),
 });
 
 /**
@@ -90,14 +86,12 @@ export function getCoreActionsConfig(): CoreActionsConfig {
         gammaApiKey: result.config?.gammaApiKey || process.env.GAMMA_API_KEY,
         google: {
           customSearch: {
-            apiKey:
-              result.config?.google?.customSearch?.apiKey ||
-              result.config?.googleCustomSearchApiKey || // Backwards compatibility
-              process.env.GOOGLE_CUSTOM_SEARCH_API_KEY,
-            cx:
-              result.config?.google?.customSearch?.cx ||
-              result.config?.googleCustomSearchCx || // Backwards compatibility
-              process.env.GOOGLE_CUSTOM_SEARCH_CX,
+            apiKey: result.config?.google?.customSearch?.apiKey ||
+                    result.config?.googleCustomSearchApiKey ||  // Backwards compatibility
+                    process.env.GOOGLE_CUSTOM_SEARCH_API_KEY,
+            cx: result.config?.google?.customSearch?.cx ||
+                result.config?.googleCustomSearchCx ||  // Backwards compatibility
+                process.env.GOOGLE_CUSTOM_SEARCH_CX,
           },
         },
       },

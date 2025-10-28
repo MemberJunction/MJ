@@ -14,7 +14,7 @@ import {
   ConversationEntity,
   ConversationDetailEntity
 } from '@memberjunction/ng-conversations';
-import { UserInfo, RunView } from '@memberjunction/global';
+import { UserInfo, RunView } from '@memberjunction/core';
 ```
 
 ## Step 2: Set Up the Chat Component

@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, DoCheck } from '@angular/core';
-import { UserInfo, RunView } from '@memberjunction/global';
+import { UserInfo, RunView } from '@memberjunction/core';
 import { TaskEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { ActiveTasksService, ActiveTask } from '../../services/active-tasks.service';
@@ -83,8 +83,7 @@ import { takeUntil } from 'rxjs/operators';
       </div>
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .tasks-dropdown-container {
       position: relative;
     }
@@ -297,8 +296,7 @@ import { takeUntil } from 'rxjs/operators';
     mj-task-widget:last-child {
       margin-bottom: 0;
     }
-  `,
-  ],
+  `]
 })
 export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
   @Input() currentUser!: UserInfo;
@@ -345,10 +343,12 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
 
   ngOnInit() {
     // Subscribe to active tasks from the service
-    this.activeTasksService.tasks$.pipe(takeUntil(this.destroy$)).subscribe((tasks) => {
-      this.activeTasks = tasks;
-      this.updateTotalCount();
-    });
+    this.activeTasksService.tasks$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(tasks => {
+        this.activeTasks = tasks;
+        this.updateTotalCount();
+      });
 
     // Initial load if there's an active conversation
     if (this.conversationState.activeConversationId) {
@@ -432,7 +432,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
           EntityName: 'Conversation Details',
           ExtraFilter: `ConversationID='${activeId}'`,
           OrderBy: '__mj_CreatedAt ASC',
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -444,7 +444,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
       }
 
       // Get all conversation detail IDs
-      const detailIds = detailsResult.Results.map((d) => `'${d.ID}'`).join(',');
+      const detailIds = detailsResult.Results.map(d => `'${d.ID}'`).join(',');
 
       // Load tasks for these conversation details (only top-level active ones)
       const result = await rv.RunView<TaskEntity>(
@@ -453,7 +453,7 @@ export class TasksDropdownComponent implements OnInit, OnDestroy, DoCheck {
           ExtraFilter: `ConversationDetailID IN (${detailIds}) AND Status IN ('Pending', 'In Progress') AND ParentID IS NULL`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 50,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );

@@ -1,4 +1,4 @@
-import { CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, Metadata, RunView } from '@memberjunction/global';
+import { CompositeKey, EntityDeleteOptions, EntityPermissionType, EntitySaveOptions, Metadata, RunView } from '@memberjunction/core';
 import { FileCategoryEntity, FileEntity } from '@memberjunction/core-entities';
 import { AppContext, Arg, Ctx, DeleteOptionsInput, Int, Mutation } from '@memberjunction/server';
 import { mj_core_schema } from '../config.js';
@@ -16,7 +16,7 @@ export class FileResolver extends FileCategoryResolverBase {
   ) {
     const key = new CompositeKey();
     key.LoadFromSingleKeyValuePair('ID', ID);
-    const p = GetReadWriteProvider(providers);
+    const p = GetReadWriteProvider(providers);    
 
     if (!(await this.BeforeDelete(p, key))) {
       return null;

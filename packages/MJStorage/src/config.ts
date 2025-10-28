@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
-import { LogError, LogStatus } from '@memberjunction/global';
+import { LogError, LogStatus } from '@memberjunction/core';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -12,105 +12,91 @@ const storageProvidersSchema = z.object({
    * AWS S3 Configuration
    * Used by: AWSFileStorage driver
    */
-  aws: z
-    .object({
-      accessKeyID: z.string().optional(),
-      secretAccessKey: z.string().optional(),
-      region: z.string().optional(),
-      defaultBucket: z.string().optional(),
-      keyPrefix: z.string().optional(),
-    })
-    .optional(),
+  aws: z.object({
+    accessKeyID: z.string().optional(),
+    secretAccessKey: z.string().optional(),
+    region: z.string().optional(),
+    defaultBucket: z.string().optional(),
+    keyPrefix: z.string().optional(),
+  }).optional(),
 
   /**
    * Azure Blob Storage Configuration
    * Used by: AzureFileStorage driver
    */
-  azure: z
-    .object({
-      accountName: z.string().optional(),
-      accountKey: z.string().optional(),
-      connectionString: z.string().optional(),
-      defaultContainer: z.string().optional(),
-    })
-    .optional(),
+  azure: z.object({
+    accountName: z.string().optional(),
+    accountKey: z.string().optional(),
+    connectionString: z.string().optional(),
+    defaultContainer: z.string().optional(),
+  }).optional(),
 
   /**
    * Google Cloud Storage Configuration
    * Used by: GoogleFileStorage driver
    */
-  googleCloud: z
-    .object({
-      projectID: z.string().optional(),
-      keyFilename: z.string().optional(),
-      keyJSON: z.string().optional(), // JSON string of service account credentials
-      defaultBucket: z.string().optional(),
-    })
-    .optional(),
+  googleCloud: z.object({
+    projectID: z.string().optional(),
+    keyFilename: z.string().optional(),
+    keyJSON: z.string().optional(), // JSON string of service account credentials
+    defaultBucket: z.string().optional(),
+  }).optional(),
 
   /**
    * Google Drive Configuration
    * Used by: GoogleDriveFileStorage driver
    * Supports BOTH service account auth (keyFile, credentialsJSON) AND OAuth2 (clientID, etc.)
    */
-  googleDrive: z
-    .object({
-      // Service Account Auth (legacy)
-      keyFile: z.string().optional(),
-      credentialsJSON: z.string().optional(), // JSON string of service account credentials
-      // OAuth2 Auth (new)
-      clientID: z.string().optional(),
-      clientSecret: z.string().optional(),
-      refreshToken: z.string().optional(),
-      redirectURI: z.string().optional(),
-      rootFolderID: z.string().optional(),
-    })
-    .optional(),
+  googleDrive: z.object({
+    // Service Account Auth (legacy)
+    keyFile: z.string().optional(),
+    credentialsJSON: z.string().optional(), // JSON string of service account credentials
+    // OAuth2 Auth (new)
+    clientID: z.string().optional(),
+    clientSecret: z.string().optional(),
+    refreshToken: z.string().optional(),
+    redirectURI: z.string().optional(),
+    rootFolderID: z.string().optional(),
+  }).optional(),
 
   /**
    * Dropbox Configuration
    * Used by: DropboxFileStorage driver
    */
-  dropbox: z
-    .object({
-      accessToken: z.string().optional(),
-      refreshToken: z.string().optional(),
-      clientID: z.string().optional(), // Also called appKey
-      clientSecret: z.string().optional(), // Also called appSecret
-      rootPath: z.string().optional(),
-    })
-    .optional(),
+  dropbox: z.object({
+    accessToken: z.string().optional(),
+    refreshToken: z.string().optional(),
+    clientID: z.string().optional(),  // Also called appKey
+    clientSecret: z.string().optional(), // Also called appSecret
+    rootPath: z.string().optional(),
+  }).optional(),
 
   /**
    * Box.com Configuration
    * Used by: BoxFileStorage driver
    * Supports access token, refresh token, AND JWT/client credentials auth
    */
-  box: z
-    .object({
-      clientID: z.string().optional(),
-      clientSecret: z.string().optional(),
-      accessToken: z.string().optional(),
-      refreshToken: z.string().optional(),
-      enterpriseID: z.string().optional(), // For JWT/client credentials flow
-      rootFolderID: z.string().optional(),
-    })
-    .optional(),
+  box: z.object({
+    clientID: z.string().optional(),
+    clientSecret: z.string().optional(),
+    accessToken: z.string().optional(),
+    refreshToken: z.string().optional(),
+    enterpriseID: z.string().optional(), // For JWT/client credentials flow
+    rootFolderID: z.string().optional(),
+  }).optional(),
 
   /**
    * SharePoint Configuration
    * Used by: SharePointFileStorage driver
    */
-  sharePoint: z
-    .object({
-      clientID: z.string().optional(),
-      clientSecret: z.string().optional(),
-      tenantID: z.string().optional(),
-      siteID: z.string().optional(),
-      driveID: z.string().optional(),
-      rootFolderID: z.string().optional(),
-    })
-    .optional(),
+  sharePoint: z.object({
+    clientID: z.string().optional(),
+    clientSecret: z.string().optional(),
+    tenantID: z.string().optional(),
+    siteID: z.string().optional(),
+    driveID: z.string().optional(),
+    rootFolderID: z.string().optional(),
+  }).optional(),
 });
 
 /**
@@ -167,10 +153,7 @@ export function getStorageConfig(): StorageConfig {
           projectID: result.config.googleCloudProjectID || process.env.STORAGE_GOOGLE_CLOUD_PROJECT_ID,
           keyFilename: result.config.googleCloudKeyFilename || process.env.STORAGE_GOOGLE_CLOUD_KEY_FILENAME,
           keyJSON: result.config.googleCloudKeyJSON || process.env.STORAGE_GOOGLE_KEY_JSON,
-          defaultBucket:
-            result.config.googleCloudDefaultBucket ||
-            process.env.STORAGE_GOOGLE_CLOUD_DEFAULT_BUCKET ||
-            process.env.STORAGE_GOOGLE_BUCKET_NAME,
+          defaultBucket: result.config.googleCloudDefaultBucket || process.env.STORAGE_GOOGLE_CLOUD_DEFAULT_BUCKET || process.env.STORAGE_GOOGLE_BUCKET_NAME,
         },
         googleDrive: {
           // Service account auth
@@ -187,8 +170,7 @@ export function getStorageConfig(): StorageConfig {
           accessToken: result.config.dropboxAccessToken || process.env.STORAGE_DROPBOX_ACCESS_TOKEN,
           refreshToken: result.config.dropboxRefreshToken || process.env.STORAGE_DROPBOX_REFRESH_TOKEN,
           clientID: result.config.dropboxClientID || process.env.STORAGE_DROPBOX_CLIENT_ID || process.env.STORAGE_DROPBOX_APP_KEY,
-          clientSecret:
-            result.config.dropboxClientSecret || process.env.STORAGE_DROPBOX_CLIENT_SECRET || process.env.STORAGE_DROPBOX_APP_SECRET,
+          clientSecret: result.config.dropboxClientSecret || process.env.STORAGE_DROPBOX_CLIENT_SECRET || process.env.STORAGE_DROPBOX_APP_SECRET,
           rootPath: result.config.dropboxRootPath || process.env.STORAGE_DROPBOX_ROOT_PATH,
         },
         box: {
@@ -232,7 +214,9 @@ export function getStorageProvidersConfig(): StorageProvidersConfig {
  * @param provider - The provider name ('aws', 'azure', 'googleCloud', etc.)
  * @returns The provider configuration or undefined if not configured
  */
-export function getProviderConfig<T extends keyof StorageProvidersConfig>(provider: T): StorageProvidersConfig[T] {
+export function getProviderConfig<T extends keyof StorageProvidersConfig>(
+  provider: T
+): StorageProvidersConfig[T] {
   const config = getStorageProvidersConfig();
   return config[provider];
 }

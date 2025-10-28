@@ -1,5 +1,5 @@
 import { ActionEngineServer } from '@memberjunction/actions';
-import { UserInfo, Metadata, RunView } from '@memberjunction/global';
+import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { ActionEntity, ActionParamEntity } from '@memberjunction/core-entities';
 import { ExecutionLogger } from '../lib/execution-logger';
 import { initializeMJProvider } from '../lib/mj-provider';
@@ -32,15 +32,12 @@ export class ActionService {
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ActionEntity>(
-        {
-          EntityName: 'Actions',
-          ExtraFilter: '',
-          OrderBy: 'Name',
-          ResultType: 'entity_object',
-        },
-        this.contextUser
-      );
+      const result = await rv.RunView<ActionEntity>({
+        EntityName: 'Actions',
+        ExtraFilter: '',
+        OrderBy: 'Name',
+        ResultType: 'entity_object'
+      }, this.contextUser);
 
       if (!result.Success) {
         throw new Error(`Failed to load actions: ${result.ErrorMessage}`);
@@ -52,17 +49,18 @@ export class ActionService {
       for (const action of actions) {
         // Get parameters for this action
         const actionParameters = await this.getActionParameters(action.ID);
-
+        
         actionInfos.push({
           name: action.Name,
           description: action.Description || undefined,
           status: 'available' as const,
           lastUsed: undefined,
-          parameters: actionParameters,
+          parameters: actionParameters
         });
       }
 
       return actionInfos;
+
     } catch (error: any) {
       throw new Error(`❌ Failed to list actions
 
@@ -83,41 +81,43 @@ For help with action configuration, see the MJ documentation.`);
 
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ActionEntity>(
-        {
-          EntityName: 'Actions',
-          ExtraFilter: `Name = '${actionName.replace(/'/g, "''")}'`,
-          ResultType: 'entity_object',
-        },
-        this.contextUser
-      );
+      const result = await rv.RunView<ActionEntity>({
+        EntityName: 'Actions',
+        ExtraFilter: `Name = '${actionName.replace(/'/g, "''")}'`,
+        ResultType: 'entity_object'
+      }, this.contextUser);
 
       if (!result.Success) {
         throw new Error(result.ErrorMessage || 'Unknown error');
       }
 
       return result.Results && result.Results.length > 0 ? result.Results[0] : null;
+
     } catch (error: any) {
       throw new Error(`Failed to find action "${actionName}": ${error?.message || 'Unknown error'}`);
     }
   }
 
-  async executeAction(actionName: string, options: ActionExecutionOptions = {}): Promise<ExecutionResult> {
+  async executeAction(
+    actionName: string,
+    options: ActionExecutionOptions = {}
+  ): Promise<ExecutionResult> {
     await this.ensureInitialized();
 
     const startTime = Date.now();
     const logger = new ExecutionLogger(`actions:run`, undefined, actionName);
-
+    
     try {
       // Find the action
       logger.logStep('INFO', 'SYSTEM', 'Finding action', { actionName });
       const action = await this.findAction(actionName);
-
+      
       if (!action) {
         const suggestions = await this.getSimilarActionNames(actionName);
-        const suggestionText =
-          suggestions.length > 0 ? `\n\nDid you mean one of these?\n${suggestions.map((s) => `  - ${s}`).join('\n')}` : '';
-
+        const suggestionText = suggestions.length > 0 
+          ? `\n\nDid you mean one of these?\n${suggestions.map(s => `  - ${s}`).join('\n')}`
+          : '';
+        
         throw new Error(`❌ Action not found: "${actionName}"
 
 Problem: No action exists with the specified name
@@ -129,53 +129,55 @@ Next steps:
 3. Verify the action is deployed and enabled`);
       }
 
-      logger.logStep('SUCCESS', 'SYSTEM', 'Action found', {
-        actionId: action.ID,
-        actionName: action.Name,
+      logger.logStep('SUCCESS', 'SYSTEM', 'Action found', { 
+        actionId: action.ID, 
+        actionName: action.Name 
       });
 
       // Get and validate parameters
       const actionParameterDefs = await this.getActionParameters(action.ID);
       const validatedParams = this.validateAndPrepareParameters(actionParameterDefs, options.parameters || {});
-
-      logger.logStep('INFO', 'SYSTEM', 'Parameters validated', {
+      
+      logger.logStep('INFO', 'SYSTEM', 'Parameters validated', { 
         providedParams: Object.keys(options.parameters || {}),
-        requiredParams: actionParameterDefs.filter((p) => p.required).map((p) => p.name),
+        requiredParams: actionParameterDefs.filter(p => p.required).map(p => p.name)
       });
 
       // Execute the action
-      logger.logStep('INFO', 'AGENT', 'Starting action execution', {
-        parameters: validatedParams,
+      logger.logStep('INFO', 'AGENT', 'Starting action execution', { 
+        parameters: validatedParams
       });
 
       const actionEngine = ActionEngineServer.Instance;
-
+      
       // Configure the action engine with the context user
       await actionEngine.Config(false, this.contextUser!);
-
+      
       // Convert parameters to ActionParam array
       const actionParams = Object.entries(validatedParams).map(([name, value]) => ({
         Name: name,
         Value: value,
-        Type: 'Input' as const,
+        Type: 'Input' as const
       }));
 
       const executionResult = await actionEngine.RunAction({
         Action: action,
         ContextUser: this.contextUser!,
         Params: actionParams,
-        Filters: [],
+        Filters: []
       });
 
       const duration = Date.now() - startTime;
 
       if (executionResult && executionResult.Success) {
         // Extract output parameters as the result
-        const outputParams = executionResult.Params?.filter((p) => p.Type === 'Output' || p.Type === 'Both') || [];
+        const outputParams = executionResult.Params?.filter(p => p.Type === 'Output' || p.Type === 'Both') || [];
         const resultData = outputParams.length > 0 ? outputParams : executionResult.Message || 'Action completed successfully';
 
         logger.logStep('SUCCESS', 'AGENT', 'Action execution completed', {
-          result: typeof resultData === 'string' ? resultData.substring(0, 200) + (resultData.length > 200 ? '...' : '') : resultData,
+          result: typeof resultData === 'string' 
+            ? resultData.substring(0, 200) + (resultData.length > 200 ? '...' : '')
+            : resultData
         });
 
         const result: ExecutionResult = {
@@ -184,11 +186,12 @@ Next steps:
           result: resultData,
           duration,
           executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath(),
+          logFilePath: logger.getLogFilePath()
         };
 
         logger.finalize('SUCCESS', resultData);
         return result;
+
       } else {
         const errorMessage = executionResult?.Message || 'Unknown execution error';
         logger.logError(errorMessage, 'AGENT');
@@ -199,16 +202,17 @@ Next steps:
           error: errorMessage,
           duration,
           executionId: logger.getExecutionId(),
-          logFilePath: logger.getLogFilePath(),
+          logFilePath: logger.getLogFilePath()
         };
 
         logger.finalize('FAILED', undefined, errorMessage);
         return result;
       }
+
     } catch (error: any) {
       const duration = Date.now() - startTime;
       const errorMessage = error?.message || 'Unknown error';
-
+      
       logger.logError(error, 'SYSTEM');
       logger.finalize('FAILED', undefined, errorMessage);
 
@@ -233,36 +237,32 @@ Log file: ${logger.getLogFilePath()}`);
     }
   }
 
-  private async getActionParameters(actionId: string): Promise<
-    Array<{
-      name: string;
-      type: string;
-      required: boolean;
-      description?: string;
-    }>
-  > {
+  private async getActionParameters(actionId: string): Promise<Array<{
+    name: string;
+    type: string;
+    required: boolean;
+    description?: string;
+  }>> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ActionParamEntity>(
-        {
-          EntityName: 'Action Params',
-          ExtraFilter: `ActionID = '${actionId}'`,
-          OrderBy: 'Name',
-          ResultType: 'entity_object',
-        },
-        this.contextUser
-      );
+      const result = await rv.RunView<ActionParamEntity>({
+        EntityName: 'Action Params',
+        ExtraFilter: `ActionID = '${actionId}'`,
+        OrderBy: 'Name',
+        ResultType: 'entity_object'
+      }, this.contextUser);
 
       if (!result.Success) {
         throw new Error(result.ErrorMessage || 'Failed to load action parameters');
       }
 
-      return (result.Results || []).map((param) => ({
+      return (result.Results || []).map(param => ({
         name: param.Name,
         type: param.Type || 'string',
         required: param.IsRequired || false,
-        description: param.Description || undefined,
+        description: param.Description || undefined
       }));
+
     } catch (error: any) {
       // If we can't load parameters, assume none are required
       console.warn(`Warning: Could not load parameters for action ${actionId}: ${error.message}`);
@@ -299,10 +299,7 @@ Next steps:
 3. Example: mj-ai actions:run -n "${actionParams[0]?.name || 'ActionName'}" --param "ParamName=value"
 
 Required parameters:
-${actionParams
-  .filter((p) => p.required)
-  .map((p) => `  - ${p.name} (${p.type}): ${p.description || 'No description'}`)
-  .join('\n')}`);
+${actionParams.filter(p => p.required).map(p => `  - ${p.name} (${p.type}): ${p.description || 'No description'}`).join('\n')}`);
     }
 
     // Add any extra provided parameters (they might be valid even if not in schema)
@@ -329,7 +326,7 @@ ${actionParams
           throw new Error(`Parameter value "${value}" cannot be converted to number`);
         }
         return num;
-
+      
       case 'boolean':
       case 'bool':
         if (typeof value === 'boolean') return value;
@@ -338,7 +335,7 @@ ${actionParams
           return lower === 'true' || lower === '1' || lower === 'yes';
         }
         return Boolean(value);
-
+      
       case 'json':
       case 'object':
         if (typeof value === 'object') return value;
@@ -347,7 +344,7 @@ ${actionParams
         } catch {
           throw new Error(`Parameter value "${value}" is not valid JSON`);
         }
-
+      
       default:
         return String(value);
     }
@@ -357,15 +354,14 @@ ${actionParams
     try {
       const actions = await this.listActions();
       const searchLower = searchName.toLowerCase();
-
+      
       return actions
-        .filter(
-          (action) =>
-            action.name.toLowerCase().includes(searchLower) ||
-            searchLower.includes(action.name.toLowerCase()) ||
-            this.calculateSimilarity(action.name.toLowerCase(), searchLower) > 0.6
+        .filter(action => 
+          action.name.toLowerCase().includes(searchLower) ||
+          searchLower.includes(action.name.toLowerCase()) ||
+          this.calculateSimilarity(action.name.toLowerCase(), searchLower) > 0.6
         )
-        .map((action) => action.name)
+        .map(action => action.name)
         .slice(0, 3); // Limit to 3 suggestions
     } catch {
       return [];
@@ -375,43 +371,47 @@ ${actionParams
   private calculateSimilarity(str1: string, str2: string): number {
     const longer = str1.length > str2.length ? str1 : str2;
     const shorter = str1.length > str2.length ? str2 : str1;
-
+    
     if (longer.length === 0) return 1.0;
-
+    
     const editDistance = this.levenshteinDistance(longer, shorter);
     return (longer.length - editDistance) / longer.length;
   }
 
   private levenshteinDistance(str1: string, str2: string): number {
     const matrix = [];
-
+    
     for (let i = 0; i <= str2.length; i++) {
       matrix[i] = [i];
     }
-
+    
     for (let j = 0; j <= str1.length; j++) {
       matrix[0][j] = j;
     }
-
+    
     for (let i = 1; i <= str2.length; i++) {
       for (let j = 1; j <= str1.length; j++) {
         if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
           matrix[i][j] = matrix[i - 1][j - 1];
         } else {
-          matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
         }
       }
     }
-
+    
     return matrix[str2.length][str1.length];
   }
 
   private async getContextUser(): Promise<UserInfo> {
     const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
-
+    
     // Try to get the System user like MetadataSync does
-    let user = UserCache.Instance.UserByName('System', false);
-
+    let user = UserCache.Instance.UserByName("System", false);
+    
     if (!user) {
       // Fallback to first available user if System user doesn't exist
       if (!UserCache.Instance.Users || UserCache.Instance.Users.length === 0) {
@@ -427,10 +427,10 @@ Next steps:
 
 This is typically a configuration or database setup issue.`);
       }
-
+      
       user = UserCache.Instance.Users[0];
     }
-
+    
     if (!user) {
       throw new Error('No valid user found for execution context');
     }

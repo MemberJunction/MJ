@@ -4,7 +4,7 @@
  */
 
 import { ComponentLibraryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import * as t from '@babel/types';
 
 export interface CompiledValidator {
@@ -45,7 +45,7 @@ export class LibraryLintCache {
     if (this.isLoaded) {
       return Promise.resolve();
     }
-
+    
     // If we have manually added rules, consider it loaded
     if (this.compiledRules.size > 0) {
       this.isLoaded = true;
@@ -59,7 +59,7 @@ export class LibraryLintCache {
 
     // Start loading
     this.loadingPromise = this.performLoad(contextUser);
-
+    
     try {
       await this.loadingPromise;
       this.isLoaded = true;
@@ -71,29 +71,31 @@ export class LibraryLintCache {
   private async performLoad(contextUser?: UserInfo): Promise<void> {
     // Initialize ComponentMetadataEngine if needed
     await ComponentMetadataEngine.Instance.Config(false, contextUser);
-
+    
     // Get all libraries
     const allLibraries = ComponentMetadataEngine.Instance.ComponentLibraries;
-
+    
     // Process each library
     for (const library of allLibraries) {
       if (library.LintRules) {
         try {
           // Parse the LintRules JSON
-          const lintRules = typeof library.LintRules === 'string' ? JSON.parse(library.LintRules) : library.LintRules;
-
+          const lintRules = typeof library.LintRules === 'string' 
+            ? JSON.parse(library.LintRules) 
+            : library.LintRules;
+          
           // Compile validators if they exist
           const compiledRules: CompiledLibraryRules = {
             library,
             initialization: lintRules.initialization,
             lifecycle: lintRules.lifecycle,
-            options: lintRules.options,
+            options: lintRules.options
           };
-
+          
           // Compile validator functions
           if (lintRules.validators) {
             compiledRules.validators = {};
-
+            
             for (const [name, validator] of Object.entries(lintRules.validators)) {
               if (validator && typeof validator === 'object') {
                 const validatorDef = validator as any;
@@ -101,11 +103,7 @@ export class LibraryLintCache {
                   try {
                     // The validate property already contains the resolved JavaScript code from the DB
                     // The validator returns a violation object, so we need to push it to context.violations
-                    const validateFn = new Function(
-                      'ast',
-                      'path',
-                      't',
-                      'context',
+                    const validateFn = new Function('ast', 'path', 't', 'context', 
                       `const result = (${validatorDef.validate})(ast, path, t, context);
                        if (result) {
                          // If the validator returned a violation, push it to context
@@ -113,11 +111,11 @@ export class LibraryLintCache {
                        }
                        return result;`
                     ) as any;
-
+                    
                     compiledRules.validators[name] = {
                       description: validatorDef.description,
                       severity: validatorDef.severity,
-                      validateFn,
+                      validateFn
                     };
                   } catch (error) {
                     console.warn(`Failed to compile validator ${name} for library ${library.Name}:`, error);
@@ -126,9 +124,10 @@ export class LibraryLintCache {
               }
             }
           }
-
+          
           // Cache the compiled rules
           this.compiledRules.set(library.Name || '', compiledRules);
+          
         } catch (error) {
           console.warn(`Failed to parse LintRules for library ${library.Name}:`, error);
         }
@@ -169,13 +168,13 @@ export class LibraryLintCache {
         library: { Name: libraryName } as ComponentLibraryEntity,
         initialization: lintRules.initialization,
         lifecycle: lintRules.lifecycle,
-        options: lintRules.options,
+        options: lintRules.options
       };
-
+      
       // Compile validator functions
       if (lintRules.validators) {
         compiledRules.validators = {};
-
+        
         for (const [name, validator] of Object.entries(lintRules.validators)) {
           if (validator && typeof validator === 'object') {
             const validatorDef = validator as any;
@@ -183,11 +182,7 @@ export class LibraryLintCache {
               try {
                 // The validate property already contains the resolved JavaScript code
                 // The validator returns a violation object, so we need to push it to context.violations
-                const validateFn = new Function(
-                  'ast',
-                  'path',
-                  't',
-                  'context',
+                const validateFn = new Function('ast', 'path', 't', 'context', 
                   `const result = (${validatorDef.validate})(ast, path, t, context);
                    if (result) {
                      // If the validator returned a violation, push it to context
@@ -195,11 +190,11 @@ export class LibraryLintCache {
                    }
                    return result;`
                 ) as any;
-
+                
                 compiledRules.validators[name] = {
                   description: validatorDef.description,
                   severity: validatorDef.severity,
-                  validateFn,
+                  validateFn
                 };
               } catch (error) {
                 console.warn(`Failed to compile validator ${name} for library ${libraryName}:`, error);
@@ -208,9 +203,10 @@ export class LibraryLintCache {
           }
         }
       }
-
+      
       // Cache the compiled rules
       this.compiledRules.set(libraryName, compiledRules);
+      
     } catch (error) {
       console.warn(`Failed to add test rules for library ${libraryName}:`, error);
     }

@@ -1,5 +1,5 @@
 import { RecommendationEntity, RecommendationItemEntity } from '@memberjunction/core-entities';
-import { LogError, Metadata, UserInfo } from '@memberjunction/global';
+import { LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { RecommendationRequest, RecommendationResult } from './generic/types';
 
 /**
@@ -17,7 +17,7 @@ export abstract class RecommendationProviderBase {
   public get ContextUser(): UserInfo {
     return this._ContextUser;
   }
-
+  
   /**
    * For each entry in the request.Recommendations array, the provider's external API is called to
    * produce zero or more {@link RecommendationItemEntity} records.
@@ -29,17 +29,13 @@ export abstract class RecommendationProviderBase {
   /**
    * This method is used by subclasses to update a Recommendation record in the database to set the RecommendationRunID column. In addition,
    * this method will save all the RecommendationItem records associated with the Recommendation record and link them to the Recommendation record.
-   * @param recommendation
-   * @param RunID
+   * @param recommendation 
+   * @param RunID 
    */
-  protected async SaveRecommendation(
-    recommendation: RecommendationEntity,
-    RunID: string,
-    items: RecommendationItemEntity[]
-  ): Promise<boolean> {
+  protected async SaveRecommendation(recommendation: RecommendationEntity, RunID: string, items: RecommendationItemEntity[]): Promise<boolean> {
     recommendation.RecommendationRunID = RunID;
     const recommendationSaveResult: boolean = await recommendation.Save();
-    if (!recommendationSaveResult) {
+    if(!recommendationSaveResult) {
       LogError(`Error saving recommendation for ${recommendation.ID}`, undefined, recommendation.LatestResult);
       return false;
     }
@@ -48,12 +44,12 @@ export abstract class RecommendationProviderBase {
     for (const item of items) {
       item.RecommendationID = recommendation.ID;
       const saveResult: boolean = await item.Save();
-      if (!saveResult) {
+      if(!saveResult) {
         LogError(`Error saving recommendation item for recommendation ${recommendation.ID}`, undefined, item.LatestResult);
         allSaved = false;
       }
     }
 
     return allSaved;
-  }
+  } 
 }

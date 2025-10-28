@@ -1,5 +1,7 @@
-import { KeyValuePair } from '@memberjunction/global';
-import { Field, InputType, ObjectType } from 'type-graphql';
+import { KeyValuePair } from "@memberjunction/core";
+import { Field, InputType, ObjectType } from "type-graphql";
+
+
 
 @InputType()
 export class KeyValuePairInputType {
@@ -18,6 +20,7 @@ export class KeyValuePairOutputType {
   @Field(() => String)
   Value: string;
 }
+ 
 
 @InputType()
 export class CompositeKeyInputType {

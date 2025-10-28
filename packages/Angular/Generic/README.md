@@ -220,7 +220,7 @@ export class AppModule { }
 ### Working with Entities
 
 ```typescript
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 export class MyComponent {
   async loadEntity(entityName: string, id: string) {

@@ -54,7 +54,7 @@ mj_generatedentities/
 **Never directly instantiate entity classes**. Always use the Metadata system to ensure proper class registration:
 
 ```typescript
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 // ❌ Wrong - bypasses MJ class system
 const entity = new UserEntity();
@@ -78,7 +78,7 @@ LoadGeneratedEntities();
 ### Working with Entity Classes
 
 ```typescript
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 
 // Load a single entity by ID
 async function getUserById(userId: string): Promise<UserEntity | null> {
@@ -125,7 +125,7 @@ async function updateUser(userId: string, updates: Partial<UserEntity>): Promise
 ### Entity Relationships
 
 ```typescript
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 
 async function getUserWithRoles(userId: string) {
   const md = new Metadata();
@@ -156,7 +156,7 @@ You can extend the generated entities with custom business logic. Use the `@Regi
 
 ```typescript
 import { RegisterClass } from '@memberjunction/global';
-import { BaseEntity } from '@memberjunction/global';
+import { BaseEntity } from '@memberjunction/core';
 
 // Example from demo/demoContactEntitySubclass.ts
 @RegisterClass(BaseEntity, 'Contacts', 1)
@@ -242,16 +242,16 @@ async function createUserFromData(userData: unknown) {
 
 All generated entities inherit from `BaseEntity` and provide these key methods:
 
-| Method                                         | Description                                    |
-| ---------------------------------------------- | ---------------------------------------------- |
-| `Load(id: CompositeKey)`                       | Loads an entity by its primary key             |
-| `LoadFromData(data: any)`                      | Populates entity from a data object            |
-| `Save(options?: EntitySaveOptions)`            | Saves changes to the database                  |
-| `Delete()`                                     | Deletes the entity from the database           |
-| `Validate()`                                   | Validates the entity, returns ValidationResult |
-| `GetFieldValue(fieldName: string)`             | Gets the value of a specific field             |
-| `SetFieldValue(fieldName: string, value: any)` | Sets the value of a specific field             |
-| `TransactionMode`                              | Property to control transaction behavior       |
+| Method | Description |
+|--------|-------------|
+| `Load(id: CompositeKey)` | Loads an entity by its primary key |
+| `LoadFromData(data: any)` | Populates entity from a data object |
+| `Save(options?: EntitySaveOptions)` | Saves changes to the database |
+| `Delete()` | Deletes the entity from the database |
+| `Validate()` | Validates the entity, returns ValidationResult |
+| `GetFieldValue(fieldName: string)` | Gets the value of a specific field |
+| `SetFieldValue(fieldName: string, value: any)` | Sets the value of a specific field |
+| `TransactionMode` | Property to control transaction behavior |
 
 ## Build Scripts
 

@@ -1,23 +1,18 @@
 /**
  * @fileoverview Type definitions for AI prompt execution results.
- *
+ * 
  * This module contains type definitions for prompt execution results that are
  * shared between AI packages to avoid circular dependencies.
- *
+ * 
  * @module @memberjunction/ai
  * @author MemberJunction.com
  * @since 2.50.0
  */
 
-import {
-  AIPromptRunEntity,
-  AIConfigurationEntity,
-  AIModelEntityExtended,
-  AIVendorEntity,
-  AIPromptEntityExtended,
-} from '@memberjunction/core-entities';
+import { AIPromptRunEntity, AIConfigurationEntity, AIModelEntityExtended, AIVendorEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
+
 
 /**
  * Execution status enumeration for better type safety
@@ -278,9 +273,9 @@ export class AIModelSelectionInfo {
    * @returns Array of models considered that are available (have API keys)
    */
   extractValidCandidates() {
-    return this.modelsConsidered.filter((m) => m.available);
+    return this.modelsConsidered.filter(m => m.available);
   }
-}
+}  
 
 /**
  * Parameters for executing an AI prompt
@@ -372,24 +367,25 @@ export class AIPromptParams {
    */
   systemPromptOverride?: string;
 
+
   /**
    * Optional array of child prompts to execute before this prompt.
-   *
+   * 
    * When provided, the AIPromptRunner will:
    * 1. Execute all child prompts in a depth-first manner
    * 2. At each level, execute sibling prompts in parallel for performance
    * 3. Collect all child prompt results
    * 4. Replace the corresponding placeholders in the parent template with child results
    * 5. Execute the parent prompt with all child results embedded
-   *
+   * 
    * This enables hierarchical prompt architectures where:
    * - Child prompts can contain their own nested child prompts (unlimited depth)
    * - Each child result is embedded at a specific placeholder in the parent template
    * - Parallel execution optimizes performance at each level
    * - Complex multi-step reasoning can be decomposed into manageable units
-   *
+   * 
    * Each child prompt can specify its own execution parameters including models, validation, etc.
-   *
+   * 
    * @example
    * ```typescript
    * const params = new AIPromptParams();
@@ -430,7 +426,7 @@ export class AIPromptParams {
    * When specified, these values take precedence over any model selection
    * configuration in the prompt or modelSelectionPrompt.
    * Currently supports model and vendor overrides, but can be extended for future needs.
-   *
+   * 
    * Model selection precedence (highest to lowest):
    * 1. override (this parameter) - Runtime override, highest priority
    * 2. modelSelectionPrompt - If specified, uses this prompt's model configuration
@@ -439,11 +435,11 @@ export class AIPromptParams {
    *    - AIModelTypeID filtering (if specified)
    *    - SelectionStrategy ('Default', 'Specific', or 'ByPower')
    *    - PowerPreference and MinPowerRank settings
-   *
+   * 
    * For agents, the modelSelectionPrompt is determined by the agent's ModelSelectionMode:
    * - "Agent": Uses the agent's specific prompt for model selection
    * - "Agent Type": Uses the agent type's system prompt for model selection
-   *
+   * 
    * @example
    * ```typescript
    * // Override model at runtime
@@ -473,7 +469,7 @@ export class AIPromptParams {
    * When provided, these keys will override the global API keys for the specified driver classes.
    * This allows for runtime API key configuration without modifying environment variables
    * or global settings.
-   *
+   * 
    * @example
    * ```typescript
    * const params = new AIPromptParams();
@@ -490,14 +486,14 @@ export class AIPromptParams {
    * Whether to clean validation syntax from the AI result.
    * When true, the AIPromptRunner will automatically remove validation syntax
    * (like ?, *, :type, :[N+], :!empty) from JSON keys in the AI's response.
-   *
+   * 
    * Note: For JSON outputs with an OutputExample defined, validation syntax
    * is ALWAYS cleaned automatically before validation, regardless of this setting.
    * This parameter is only needed for edge cases where you want cleaning
    * without an OutputExample.
-   *
+   * 
    * Default: false
-   *
+   * 
    * @example
    * ```typescript
    * // If AI returns: { "name?": "John", "items:[2+]": ["a", "b"] }
@@ -507,9 +503,10 @@ export class AIPromptParams {
    */
   cleanValidationSyntax?: boolean;
 
+
   /**
    * NOTE: Only applies when prompt.OutputType is 'object'
-   *
+   * 
    * If this parameter is set to true, the runner will attempt to repair JSON parsing errors with a two
    * step process, after a normal attempt to parse the JSON as-is where an error occurs:
    * 1. We will use the JSON5 library to attempt to parse the JSON as-is. This is a fast
@@ -518,7 +515,7 @@ export class AIPromptParams {
    *    - Unquoted keys
    *    - Single quotes around strings
    *    - Unescaped control characters
-   *    - Comments
+   *    - Comments    
    * 2. If Step 1 fails, we will use a small LLM using a prompt called 'Repair JSON' within the `MJ: System` category
    *    This prompt will attempt to fix the JSON with a small LLM that knows how to emit proper JSON
    */
@@ -527,18 +524,18 @@ export class AIPromptParams {
   /**
    * Optional callback fired immediately after the PromptRun record is created and saved.
    * Provides the PromptRun ID for immediate tracking/monitoring purposes.
-   *
+   * 
    * This callback is useful for:
    * - Linking the PromptRun to parent records (e.g., AIAgentRunStep.TargetLogID)
    * - Real-time monitoring and tracking
    * - Early logging and debugging
-   *
+   * 
    * The callback is invoked after the PromptRun is successfully saved but before
    * the actual AI model execution begins. If the callback throws an error, it will
    * be logged but won't fail the prompt execution.
-   *
+   * 
    * @param promptRunId - The ID of the newly created AIPromptRun record
-   *
+   * 
    * @example
    * ```typescript
    * const params = new AIPromptParams();
@@ -601,6 +598,10 @@ export class AIPromptParams {
   maxErrorLength?: number;
 }
 
+
+
+
+
 /**
  * Callback function type for execution progress updates
  */
@@ -653,3 +654,4 @@ export class ChildPromptParam {
     this.parentPlaceholder = parentPlaceholder;
   }
 }
+ 

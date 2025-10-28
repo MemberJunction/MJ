@@ -244,7 +244,7 @@ await setupGraphQLClient(config);
 Access entity metadata and system information:
 
 ```typescript
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 const md = new Metadata();
 const entities = md.Entities;
@@ -308,7 +308,7 @@ The project includes `staticwebapp.config.json` for Azure Static Web Apps deploy
 Enable detailed logging:
 
 ```typescript
-import { SetProductionStatus, LogStatus } from '@memberjunction/global';
+import { SetProductionStatus, LogStatus } from '@memberjunction/core';
 SetProductionStatus(false); // Enable debug logging
 ```
 

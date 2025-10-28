@@ -1,6 +1,6 @@
 import { Component } from '@angular/core';
-import { Router } from '@angular/router';
-import { ApplicationInfo, Metadata, RunView } from '@memberjunction/global';
+import { Router } from '@angular/router'
+import { ApplicationInfo, Metadata, RunView } from '@memberjunction/core';
 import { ApplicationEntity, UserApplicationEntity } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-shared';
@@ -8,7 +8,7 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
 @Component({
   selector: 'app-data-browser',
   templateUrl: './data-browser.component.html',
-  styleUrls: ['./data-browser.component.css', '../../shared/first-tab-styles.css'],
+  styleUrls: ['./data-browser.component.css', '../../shared/first-tab-styles.css']
 })
 @RegisterClass(BaseNavigationComponent, 'Data')
 export class DataBrowserComponent extends BaseNavigationComponent {
@@ -18,10 +18,7 @@ export class DataBrowserComponent extends BaseNavigationComponent {
   public SelectedApplications: ApplicationEntity[] = [];
   public UnselectedApplications: ApplicationEntity[] = [];
 
-  constructor(
-    public sharedService: SharedService,
-    private router: Router
-  ) {
+  constructor(public sharedService: SharedService, private router: Router) {
     super();
   }
 
@@ -34,8 +31,8 @@ export class DataBrowserComponent extends BaseNavigationComponent {
     const results = await rv.RunView<ApplicationEntity>({
       EntityName: 'Applications',
       ResultType: 'entity_object',
-      OrderBy: 'Name',
-    });
+      OrderBy: 'Name'
+    })
     if (results && results.Success) {
       this.AllApplications = results.Results;
     }
@@ -44,23 +41,22 @@ export class DataBrowserComponent extends BaseNavigationComponent {
       EntityName: 'User Applications',
       ResultType: 'entity_object',
       ExtraFilter: `UserID = '${new Metadata().CurrentUser.ID}'`,
-      OrderBy: 'Sequence, Application',
-    });
+      OrderBy: 'Sequence, Application'
+    })
     if (userApps && userApps.Success) {
-      const apps = userApps.Results.map((ua) => this.AllApplications.find((a) => a.ID === ua.ApplicationID && ua.IsActive)).filter(
-        (a) => a
-      ); // filter out null entries
-      if (!apps.some((a) => !a)) this.SelectedApplications = <ApplicationEntity[]>apps; // forced typecast as we know now that all are non-null
+      const apps = userApps.Results.map(ua => this.AllApplications.find(a => a.ID === ua.ApplicationID && ua.IsActive)).filter(a => a)// filter out null entries
+      if (!apps.some(a => !a))
+        this.SelectedApplications = <ApplicationEntity[]>apps; // forced typecast as we know now that all are non-null
 
       // now populate the unselected applications
-      this.UnselectedApplications = this.AllApplications.filter((a) => !this.SelectedApplications.some((sa) => sa.ID === a.ID));
+      this.UnselectedApplications = this.AllApplications.filter(a => !this.SelectedApplications.some(sa => sa.ID === a.ID));
     }
 
     this.showLoader = false;
   }
   public appItemClick(info: ApplicationEntity) {
     if (info) {
-      this.router.navigate(['app', info.Name]);
+      this.router.navigate(['app', info.Name])
     }
   }
 
@@ -90,21 +86,21 @@ export class DataBrowserComponent extends BaseNavigationComponent {
       });
       // userApps.results is the current DB state, we need to now compare it to the SelectedApplications array
       // and if there are changes either update sequence values or set IsActive=false for records that are not selected anyomre. We
-      // don't ever actually delete existing UserApplication records becaue we want to retain the UserApplicationEntities in case the
+      // don't ever actually delete existing UserApplication records becaue we want to retain the UserApplicationEntities in case the 
       // user selects the app again in the future
       const existingUserApps = userApps.Results;
       const userAppsToSave: UserApplicationEntity[] = [];
       // first we need to update the sequence values for the selected applications
       for (let index = 0; index < this.SelectedApplications.length; index++) {
         const app = this.SelectedApplications[index];
-        const existing = existingUserApps.find((ua) => ua.ApplicationID === app.ID);
+        const existing = existingUserApps.find(ua => ua.ApplicationID === app.ID);
         if (existing) {
           existing.IsActive = true;
           existing.Sequence = index;
           userAppsToSave.push(existing);
         } else {
           // this is a new app that the user has selected
-          const newApp = await md.GetEntityObject<UserApplicationEntity>('User Applications');
+          const newApp = await md.GetEntityObject<UserApplicationEntity>("User Applications");
           newApp.ApplicationID = app.ID;
           newApp.UserID = md.CurrentUser.ID;
           newApp.Sequence = index;
@@ -114,7 +110,7 @@ export class DataBrowserComponent extends BaseNavigationComponent {
       // now we need to set IsActive=false for any records that are not selected anymore
       for (let index = 0; index < existingUserApps.length; index++) {
         const existing = existingUserApps[index];
-        if (!this.SelectedApplications.some((sa) => sa.ID === existing.ApplicationID)) {
+        if (!this.SelectedApplications.some(sa => sa.ID === existing.ApplicationID)) {
           existing.IsActive = false;
           userAppsToSave.push(existing);
         }
@@ -124,16 +120,12 @@ export class DataBrowserComponent extends BaseNavigationComponent {
       for (let index = 0; index < userAppsToSave.length; index++) {
         const ua = userAppsToSave[index];
         ua.TransactionGroup = tg;
-        await ua.Save();
+        await ua.Save();  
       }
-      if (!(await tg.Submit())) {
+      if (!await tg.Submit()) {
         // the data doesn't need to be updated when we are succesful because we're all bound to the same data which is cool
         // but in this case we need to notify the user it failed
-        this.sharedService.CreateSimpleNotification(
-          'There was an error saving your application selections. Please try again later or notify a system administrator.',
-          'error',
-          3500
-        );
+        this.sharedService.CreateSimpleNotification('There was an error saving your application selections. Please try again later or notify a system administrator.', "error", 3500);
       }
     }
   }

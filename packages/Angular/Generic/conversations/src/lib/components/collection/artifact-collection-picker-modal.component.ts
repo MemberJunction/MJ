@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { UserInfo, RunView, Metadata } from '@memberjunction/global';
+import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { CollectionEntity } from '@memberjunction/core-entities';
 import { DialogModule } from '@progress/kendo-angular-dialog';
 import { ButtonsModule } from '@progress/kendo-angular-buttons';
@@ -28,7 +28,13 @@ interface CollectionNode {
 @Component({
   selector: 'mj-artifact-collection-picker-modal',
   standalone: true,
-  imports: [CommonModule, FormsModule, DialogModule, ButtonsModule, InputsModule],
+  imports: [
+    CommonModule,
+    FormsModule,
+    DialogModule,
+    ButtonsModule,
+    InputsModule
+  ],
   template: `
     <kendo-dialog
       *ngIf="isOpen"
@@ -189,8 +195,7 @@ interface CollectionNode {
       </kendo-dialog-actions>
     </kendo-dialog>
   `,
-  styles: [
-    `
+  styles: [`
     .picker-modal {
       display: flex;
       flex-direction: column;
@@ -482,8 +487,7 @@ interface CollectionNode {
       padding: 8px 16px;
       font-size: 14px;
     }
-  `,
-  ],
+  `]
 })
 export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges {
   @Input() isOpen: boolean = false;
@@ -550,15 +554,12 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
       // Load all collections in environment
       const rv = new RunView();
-      const result = await rv.RunView<CollectionEntity>(
-        {
-          EntityName: 'MJ: Collections',
-          ExtraFilter: `EnvironmentID='${this.environmentId}'`,
-          OrderBy: 'Name ASC',
-          ResultType: 'entity_object',
-        },
-        this.currentUser
-      );
+      const result = await rv.RunView<CollectionEntity>({
+        EntityName: 'MJ: Collections',
+        ExtraFilter: `EnvironmentID='${this.environmentId}'`,
+        OrderBy: 'Name ASC',
+        ResultType: 'entity_object'
+      }, this.currentUser);
 
       if (!result.Success) {
         this.errorMessage = result.ErrorMessage || 'Failed to load collections';
@@ -572,12 +573,13 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
       // Filter to collections with Edit permission
       // Include collections that already contain the artifact (will be shown as disabled)
-      const editableCollections = this.allCollections.filter((c) => {
+      const editableCollections = this.allCollections.filter(c => {
         return this.canEdit(c);
       });
 
       // Show root collections initially
       this.displayRootCollections(editableCollections);
+
     } catch (error) {
       console.error('Error loading collections:', error);
       this.errorMessage = 'An error occurred while loading collections';
@@ -588,14 +590,20 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   private async loadUserPermissions(): Promise<void> {
     // Load permissions for collections not owned by current user
-    const nonOwnedCollections = this.allCollections.filter((c) => c.OwnerID && c.OwnerID !== this.currentUser.ID);
+    const nonOwnedCollections = this.allCollections.filter(
+      c => c.OwnerID && c.OwnerID !== this.currentUser.ID
+    );
 
     if (nonOwnedCollections.length === 0) {
       return;
     }
 
-    const collectionIds = nonOwnedCollections.map((c) => c.ID);
-    const permissions = await this.permissionService.checkBulkPermissions(collectionIds, this.currentUser.ID, this.currentUser);
+    const collectionIds = nonOwnedCollections.map(c => c.ID);
+    const permissions = await this.permissionService.checkBulkPermissions(
+      collectionIds,
+      this.currentUser.ID,
+      this.currentUser
+    );
 
     permissions.forEach((permission, collectionId) => {
       this.userPermissions.set(collectionId, permission);
@@ -603,23 +611,23 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
   }
 
   private displayRootCollections(editableCollections: CollectionEntity[]): void {
-    const rootCollections = editableCollections.filter((c) => !c.ParentID);
-    this.displayedCollections = rootCollections.map((c) => this.createNode(c, editableCollections));
+    const rootCollections = editableCollections.filter(c => !c.ParentID);
+    this.displayedCollections = rootCollections.map(c => this.createNode(c, editableCollections));
   }
 
   private displayChildCollections(parentId: string, editableCollections: CollectionEntity[]): void {
-    const childCollections = editableCollections.filter((c) => c.ParentID === parentId);
-    this.displayedCollections = childCollections.map((c) => this.createNode(c, editableCollections));
+    const childCollections = editableCollections.filter(c => c.ParentID === parentId);
+    this.displayedCollections = childCollections.map(c => this.createNode(c, editableCollections));
   }
 
   private createNode(collection: CollectionEntity, allEditableCollections: CollectionEntity[]): CollectionNode {
-    const hasChildren = allEditableCollections.some((c) => c.ParentID === collection.ID);
+    const hasChildren = allEditableCollections.some(c => c.ParentID === collection.ID);
     const alreadyContainsArtifact = this.excludeCollectionIds.includes(collection.ID);
     return {
       collection,
-      selected: this.selectedCollections.some((sc) => sc.ID === collection.ID),
+      selected: this.selectedCollections.some(sc => sc.ID === collection.ID),
       hasChildren,
-      alreadyContainsArtifact,
+      alreadyContainsArtifact
     };
   }
 
@@ -640,7 +648,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       return;
     }
 
-    const index = this.selectedCollections.findIndex((c) => c.ID === node.collection.ID);
+    const index = this.selectedCollections.findIndex(c => c.ID === node.collection.ID);
     if (index >= 0) {
       this.selectedCollections.splice(index, 1);
       node.selected = false;
@@ -652,7 +660,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   drillIntoCollection(collection: CollectionEntity): void {
     // Add current location to navigation path
-    const editableCollections = this.allCollections.filter((c) => {
+    const editableCollections = this.allCollections.filter(c => {
       return this.canEdit(c);
     });
 
@@ -674,7 +682,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     this.currentParentId = null;
     this.currentParentCollection = undefined;
 
-    const editableCollections = this.allCollections.filter((c) => {
+    const editableCollections = this.allCollections.filter(c => {
       return this.canEdit(c);
     });
 
@@ -684,7 +692,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
   navigateToCollection(collection: CollectionEntity): void {
     // Find the index of this collection in the navigation path
-    const index = this.navigationPath.findIndex((n) => n.collection.ID === collection.ID);
+    const index = this.navigationPath.findIndex(n => n.collection.ID === collection.ID);
 
     if (index >= 0) {
       // Trim navigation path to this level
@@ -692,7 +700,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       this.currentParentId = collection.ID;
       this.currentParentCollection = collection;
 
-      const editableCollections = this.allCollections.filter((c) => {
+      const editableCollections = this.allCollections.filter(c => {
         return this.canEdit(c);
       });
 
@@ -705,12 +713,12 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     if (!this.searchQuery.trim()) {
       // Reset to current navigation context
       if (this.currentParentId) {
-        const editableCollections = this.allCollections.filter((c) => {
+        const editableCollections = this.allCollections.filter(c => {
           return this.canEdit(c);
         });
         this.displayChildCollections(this.currentParentId, editableCollections);
       } else {
-        const editableCollections = this.allCollections.filter((c) => {
+        const editableCollections = this.allCollections.filter(c => {
           return this.canEdit(c);
         });
         this.displayRootCollections(editableCollections);
@@ -720,11 +728,11 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
     // Search across all editable collections
     const query = this.searchQuery.toLowerCase();
-    const editableCollections = this.allCollections.filter((c) => {
+    const editableCollections = this.allCollections.filter(c => {
       return this.canEdit(c) && c.Name.toLowerCase().includes(query);
     });
 
-    this.displayedCollections = editableCollections.map((c) => this.createNode(c, editableCollections));
+    this.displayedCollections = editableCollections.map(c => this.createNode(c, editableCollections));
   }
 
   async createCollection(): Promise<void> {
@@ -757,10 +765,18 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
         // Create owner permission or copy parent permissions
         if (this.currentParentCollection) {
           // Copy permissions from parent
-          await this.permissionService.copyParentPermissions(this.currentParentCollection.ID, collection.ID, this.currentUser);
+          await this.permissionService.copyParentPermissions(
+            this.currentParentCollection.ID,
+            collection.ID,
+            this.currentUser
+          );
         } else {
           // Create owner permission
-          await this.permissionService.createOwnerPermission(collection.ID, this.currentUser.ID, this.currentUser);
+          await this.permissionService.createOwnerPermission(
+            collection.ID,
+            this.currentUser.ID,
+            this.currentUser
+          );
         }
 
         this.toastService.success('Collection created successfully');
@@ -794,7 +810,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     this.isSaving = true;
 
     // Emit the selected collection IDs
-    const collectionIds = this.selectedCollections.map((c) => c.ID);
+    const collectionIds = this.selectedCollections.map(c => c.ID);
     this.saved.emit(collectionIds);
 
     // Note: Parent component will handle the actual saving and close the modal

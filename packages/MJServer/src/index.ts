@@ -4,7 +4,7 @@ dotenv.config();
 
 import { expressMiddleware } from '@apollo/server/express4';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -22,18 +22,7 @@ import { BuildSchemaOptions, buildSchemaSync, GraphQLTimestamp } from 'type-grap
 import sql from 'mssql';
 import { WebSocketServer } from 'ws';
 import buildApolloServer from './apolloServer/index.js';
-import {
-  configInfo,
-  dbDatabase,
-  dbHost,
-  dbPort,
-  dbUsername,
-  graphqlPort,
-  graphqlRootPath,
-  mj_core_schema,
-  websiteRunFromPackage,
-  RESTApiOptions,
-} from './config.js';
+import { configInfo, dbDatabase, dbHost, dbPort, dbUsername, graphqlPort, graphqlRootPath, mj_core_schema, websiteRunFromPackage, RESTApiOptions } from './config.js';
 import { contextFunction, getUserPayload } from './context.js';
 import { requireSystemUserDirective, publicDirective } from './directives/index.js';
 import createMSSQLConfig from './orm.js';
@@ -41,7 +30,7 @@ import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 
 import { LoadAllCoreActions } from '@memberjunction/core-actions';
 LoadAllCoreActions(); // prevent tree shaking for this dynamic module
-import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo';
+import { LoadApolloAccountsEnrichmentAction, LoadApolloContactsEnrichmentAction } from '@memberjunction/actions-apollo'
 LoadApolloAccountsEnrichmentAction();
 LoadApolloContactsEnrichmentAction();
 
@@ -60,6 +49,7 @@ LoadSchedulingEngine(); // This also loads drivers
 
 import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
 LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
+
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -116,6 +106,7 @@ export { GetReadOnlyDataSource, GetReadWriteDataSource, GetReadWriteProvider, Ge
 
 export * from './generated/generated.js';
 
+
 export type MJServerOptions = {
   onBeforeServe?: () => void | Promise<void>;
   restApiOptions?: Partial<RESTApiOptions>; // Options for REST API configuration
@@ -153,10 +144,8 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
   const md = new Metadata();
   console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
-  const dataSources = [
-    new DataSourceInfo({ dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername }),
-  ];
-
+  const dataSources = [new DataSourceInfo({dataSource: pool, type: 'Read-Write', host: dbHost, port: dbPort, database: dbDatabase, userName: dbUsername})];
+  
   // Establish a second read-only connection to the database if dbReadOnlyUsername and dbReadOnlyPassword exist
   let readOnlyPool: sql.ConnectionPool | null = null;
   if (configInfo.dbReadOnlyUsername && configInfo.dbReadOnlyPassword) {
@@ -169,21 +158,12 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
     await readOnlyPool.connect();
 
     // since we created a read-only pool, add it to the list of data sources
-    dataSources.push(
-      new DataSourceInfo({
-        dataSource: readOnlyPool,
-        type: 'Read-Only',
-        host: dbHost,
-        port: dbPort,
-        database: dbDatabase,
-        userName: configInfo.dbReadOnlyUsername,
-      })
-    );
+    dataSources.push(new DataSourceInfo({dataSource: readOnlyPool, type: 'Read-Only', host: dbHost, port: dbPort, database: dbDatabase, userName: configInfo.dbReadOnlyUsername}));
     console.log('Read-only Connection Pool has been initialized.');
   }
 
   setupComplete$.next(true);
-  raiseEvent('setupComplete', dataSources, null, this);
+  raiseEvent('setupComplete', dataSources, null,  this);
 
   /******TEST HARNESS FOR CHANGE DETECTION */
   /******TEST HARNESS FOR CHANGE DETECTION */
@@ -245,45 +225,41 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
 
   const apolloServer = buildApolloServer({ schema }, { httpServer, serverCleanup });
   await apolloServer.start();
-
+  
   // Fix #8: Add compression for better throughput performance
-  app.use(
-    compression({
-      // Don't compress responses smaller than 1KB
-      threshold: 1024,
-      // Skip compression for images, videos, and other binary files
-      filter: (req, res) => {
-        if (req.headers['content-type']) {
-          const contentType = req.headers['content-type'];
-          if (
-            contentType.includes('image/') ||
+  app.use(compression({
+    // Don't compress responses smaller than 1KB
+    threshold: 1024,
+    // Skip compression for images, videos, and other binary files
+    filter: (req, res) => {
+      if (req.headers['content-type']) {
+        const contentType = req.headers['content-type'];
+        if (contentType.includes('image/') || 
             contentType.includes('video/') ||
             contentType.includes('audio/') ||
-            contentType.includes('application/octet-stream')
-          ) {
-            return false;
-          }
+            contentType.includes('application/octet-stream')) {
+          return false;
         }
-        return compression.filter(req, res);
-      },
-      // High compression level (good balance between CPU and compression ratio)
-      level: 6,
-    })
-  );
+      }
+      return compression.filter(req, res);
+    },
+    // High compression level (good balance between CPU and compression ratio)
+    level: 6
+  }));
 
   app.use(
     graphqlRootPath,
     cors<cors.CorsRequest>(),
     BodyParser.json({ limit: '50mb' }),
     expressMiddleware(apolloServer, {
-      context: contextFunction({
-        setupComplete$,
-        dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
-        dataSources, // all data source
-      }),
+      context: contextFunction({ 
+                                 setupComplete$, 
+                                 dataSource: extendConnectionPoolWithQuery(pool), // default read-write data source
+                                 dataSources // all data source
+                               }),
     })
   );
-
+  
   // Setup REST API endpoints
   const authMiddleware = async (req, res, next) => {
     try {
@@ -297,7 +273,7 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
       if (!userPayload) {
         return res.status(401).json({ error: 'Invalid token' });
       }
-
+      
       req.user = userPayload;
       next();
     } catch (error) {
@@ -305,19 +281,19 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
       return res.status(401).json({ error: 'Authentication failed' });
     }
   };
-
+  
   // Get REST API configuration from the config file
   const restApiConfig: RESTApiOptions = {
     enabled: configInfo.restApiOptions?.enabled ?? true,
     includeEntities: configInfo.restApiOptions?.includeEntities,
-    excludeEntities: configInfo.restApiOptions?.excludeEntities,
+    excludeEntities: configInfo.restApiOptions?.excludeEntities
   };
-
+  
   // Apply options from server options if provided (these override the config file)
   if (options?.restApiOptions) {
     Object.assign(restApiConfig, options.restApiOptions);
   }
-
+  
   // Get REST API configuration from environment variables if present (env vars override everything)
   if (process.env.MJ_REST_API_ENABLED !== undefined) {
     restApiConfig.enabled = process.env.MJ_REST_API_ENABLED === 'true';
@@ -325,15 +301,15 @@ export const serve = async (resolverPaths: Array<string>, app = createApp(), opt
       console.log('REST API is enabled via environment variable');
     }
   }
-
+  
   if (process.env.MJ_REST_API_INCLUDE_ENTITIES) {
-    restApiConfig.includeEntities = process.env.MJ_REST_API_INCLUDE_ENTITIES.split(',').map((e) => e.trim());
+    restApiConfig.includeEntities = process.env.MJ_REST_API_INCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
-
+  
   if (process.env.MJ_REST_API_EXCLUDE_ENTITIES) {
-    restApiConfig.excludeEntities = process.env.MJ_REST_API_EXCLUDE_ENTITIES.split(',').map((e) => e.trim());
+    restApiConfig.excludeEntities = process.env.MJ_REST_API_EXCLUDE_ENTITIES.split(',').map(e => e.trim());
   }
-
+  
   // Set up REST endpoints with the configured options and auth middleware
   setupRESTEndpoints(app, restApiConfig, authMiddleware);
 

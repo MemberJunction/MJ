@@ -9,18 +9,10 @@ import {
   OnInit,
   OnChanges,
   SimpleChanges,
-  DoCheck,
+  DoCheck
 } from '@angular/core';
-import {
-  ConversationDetailEntity,
-  ConversationEntity,
-  AIAgentEntityExtended,
-  AIAgentRunEntityExtended,
-  ArtifactEntity,
-  ArtifactVersionEntity,
-  TaskEntity,
-} from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/global';
+import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
+import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
@@ -35,7 +27,10 @@ import { SuggestedResponse } from '../../models/conversation-state.model';
 @Component({
   selector: 'mj-conversation-message-item',
   templateUrl: './message-item.component.html',
-  styleUrls: ['./message-item.component.css', '../../styles/custom-agent-icons.css'],
+  styleUrls: [
+    './message-item.component.css',
+    '../../styles/custom-agent-icons.css'
+  ]
 })
 export class MessageItemComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy, OnChanges, DoCheck {
   @Input() public message!: ConversationDetailEntity;
@@ -46,17 +41,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public artifact?: ArtifactEntity;
   @Input() public artifactVersion?: ArtifactVersionEntity;
   @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
-  @Input() public userAvatarMap: Map<string, { imageUrl: string | null; iconClass: string | null }> = new Map();
+  @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public deleteClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public retryClicked = new EventEmitter<ConversationDetailEntity>();
-  @Output() public artifactClicked = new EventEmitter<{ artifactId: string; versionId?: string }>();
-  @Output() public artifactActionPerformed = new EventEmitter<{ action: string; artifactId: string }>();
+  @Output() public artifactClicked = new EventEmitter<{artifactId: string; versionId?: string}>();
+  @Output() public artifactActionPerformed = new EventEmitter<{action: string; artifactId: string}>();
   @Output() public messageEdited = new EventEmitter<ConversationDetailEntity>();
-  @Output() public openEntityRecord = new EventEmitter<{ entityName: string; compositeKey: CompositeKey }>();
-  @Output() public suggestedResponseSelected = new EventEmitter<{ text: string; customInput?: string }>();
+  @Output() public openEntityRecord = new EventEmitter<{entityName: string; compositeKey: CompositeKey}>();
+  @Output() public suggestedResponseSelected = new EventEmitter<{text: string; customInput?: string}>();
 
   private _loadTime: number = Date.now();
   private _elapsedTimeInterval: any = null;
@@ -189,8 +184,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     seconds = seconds % 60;
     let hours = Math.floor(minutes / 60);
     minutes = minutes % 60;
-    let formattedTime =
-      (hours > 0 ? hours + ':' : '') + (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+    let formattedTime = (hours > 0 ? hours + ':' : '') +
+      (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' +
+      (seconds < 10 ? '0' : '') + seconds;
     return formattedTime;
   }
 
@@ -204,8 +200,9 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     seconds = seconds % 60;
     let hours = Math.floor(minutes / 60);
     minutes = minutes % 60;
-    let formattedTime =
-      (hours > 0 ? hours + ':' : '') + (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+    let formattedTime = (hours > 0 ? hours + ':' : '') +
+      (minutes < 10 && hours > 0 ? '0' : '') + minutes + ':' +
+      (seconds < 10 ? '0' : '') + seconds;
     return formattedTime;
   }
 
@@ -225,12 +222,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Look up agent from AIEngineBase cache
     if (agentID && AIEngineBase.Instance?.Agents) {
-      const agent = AIEngineBase.Instance.Agents.find((a) => a.ID === agentID);
+      const agent = AIEngineBase.Instance.Agents.find(a => a.ID === agentID);
       if (agent) {
         return {
           name: agent.Name || 'AI Assistant',
           iconClass: agent.IconClass || 'fa-robot',
-          role: agent.Description || 'AI Assistant',
+          role: agent.Description || 'AI Assistant'
         };
       } else {
         // Only log if the message is complete (should have AgentID by then)
@@ -245,7 +242,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     return {
       name: 'AI Assistant',
       iconClass: 'fa-robot',
-      role: 'AI Assistant',
+      role: 'AI Assistant'
     };
   }
 
@@ -590,17 +587,17 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     if (this.hasArtifact && this.artifact) {
       this.artifactClicked.emit({
         artifactId: this.artifact.ID,
-        versionId: this.artifactVersion?.ID,
+        versionId: this.artifactVersion?.ID
       });
     }
   }
 
-  public onArtifactActionPerformed(event: { action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity }): void {
+  public onArtifactActionPerformed(event: {action: string; artifact: ArtifactEntity; version?: ArtifactVersionEntity}): void {
     // Handle artifact actions from inline-artifact component
     if (event.action === 'open') {
       this.artifactClicked.emit({
         artifactId: event.artifact.ID,
-        versionId: event.version?.ID,
+        versionId: event.version?.ID
       });
     } else {
       // Emit other actions to parent
@@ -668,7 +665,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
           EntityName: 'MJ: Tasks',
           ExtraFilter: `ConversationDetailID='${this.message.ID}'`,
           OrderBy: '__mj_CreatedAt DESC',
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -767,11 +764,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public openAgentRunRecord(): void {
     if (!this.agentRun?.ID) return;
 
-    const compositeKey = new CompositeKey([new KeyValuePair('ID', this.agentRun.ID)]);
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', this.agentRun.ID)
+    ]);
 
     this.openEntityRecord.emit({
       entityName: 'MJ: AI Agent Runs',
-      compositeKey,
+      compositeKey
     });
   }
 
@@ -781,11 +780,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   public openAgentRecord(): void {
     if (!this.agentRun?.AgentID) return;
 
-    const compositeKey = new CompositeKey([new KeyValuePair('ID', this.agentRun.AgentID)]);
+    const compositeKey = new CompositeKey([
+      new KeyValuePair('ID', this.agentRun.AgentID)
+    ]);
 
     this.openEntityRecord.emit({
       entityName: 'AI Agents',
-      compositeKey,
+      compositeKey
     });
   }
 
@@ -818,7 +819,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * Handle suggested response selection
    */
-  public onSuggestedResponseSelected(event: { text: string; customInput?: string }): void {
+  public onSuggestedResponseSelected(event: {text: string; customInput?: string}): void {
     this.suggestedResponseSelected.emit(event);
   }
+
 }

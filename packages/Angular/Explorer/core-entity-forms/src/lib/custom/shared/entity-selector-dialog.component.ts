@@ -1,22 +1,22 @@
 import { Component, Input, OnInit } from '@angular/core';
 import { SharedService } from '@memberjunction/ng-shared';
-import { RunView } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
 import { DialogRef } from '@progress/kendo-angular-dialog';
 
 export interface EntitySelectorConfig {
-  entityName: string;
-  title: string;
-  displayField: string;
-  descriptionField?: string;
-  statusField?: string;
-  filters?: string;
-  orderBy?: string;
-  icon?: string;
+    entityName: string;
+    title: string;
+    displayField: string;
+    descriptionField?: string;
+    statusField?: string;
+    filters?: string;
+    orderBy?: string;
+    icon?: string;
 }
 
 @Component({
-  selector: 'mj-entity-selector-dialog',
-  template: `
+    selector: 'mj-entity-selector-dialog',
+    template: `
         <div class="dialog-wrapper">
             <div class="dialog-header">
                 <h3><i *ngIf="config.icon" [class]="config.icon"></i> {{ config.title }}</h3>
@@ -89,8 +89,7 @@ export interface EntitySelectorConfig {
             </div>
         </div>
     `,
-  styles: [
-    `
+    styles: [`
         .dialog-wrapper {
             display: flex;
             flex-direction: column;
@@ -242,76 +241,76 @@ export interface EntitySelectorConfig {
             background: #d4edda;
             color: #28a745;
         }
-    `,
-  ],
+    `]
 })
 export class EntitySelectorDialogComponent implements OnInit {
-  @Input() config!: EntitySelectorConfig;
+    @Input() config!: EntitySelectorConfig;
 
-  public entities: any[] = [];
-  public filteredEntities: any[] = [];
-  public selectedEntity: any = null;
-  public searchText: string = '';
-  public isLoading: boolean = true;
+    public entities: any[] = [];
+    public filteredEntities: any[] = [];
+    public selectedEntity: any = null;
+    public searchText: string = '';
+    public isLoading: boolean = true;
 
-  constructor(
-    private sharedService: SharedService,
-    public dialogRef: DialogRef
-  ) {}
+    constructor(
+        private sharedService: SharedService,
+        public dialogRef: DialogRef
+    ) {}
 
-  async ngOnInit() {
-    await this.loadEntities();
-  }
-
-  async loadEntities() {
-    this.isLoading = true;
-    try {
-      const rv = new RunView();
-      const result = await rv.RunView({
-        EntityName: this.config.entityName,
-        ExtraFilter: this.config.filters,
-        OrderBy: this.config.orderBy,
-      });
-
-      this.entities = result.Results;
-      this.filteredEntities = [...this.entities];
-    } catch (error) {
-      console.error('Error loading entities:', error);
-      this.entities = [];
-      this.filteredEntities = [];
-    } finally {
-      this.isLoading = false;
+    async ngOnInit() {
+        await this.loadEntities();
     }
-  }
 
-  onSearchChange() {
-    if (!this.searchText) {
-      this.filteredEntities = [...this.entities];
-    } else {
-      const searchLower = this.searchText.toLowerCase();
-      this.filteredEntities = this.entities.filter((entity) => {
-        const displayValue = entity[this.config.displayField] || '';
-        const descriptionValue = this.config.descriptionField ? entity[this.config.descriptionField] || '' : '';
-        return displayValue.toLowerCase().includes(searchLower) || descriptionValue.toLowerCase().includes(searchLower);
-      });
+    async loadEntities() {
+        this.isLoading = true;
+        try {
+            const rv = new RunView();
+            const result = await rv.RunView({
+                EntityName: this.config.entityName,
+                ExtraFilter: this.config.filters,
+                OrderBy: this.config.orderBy 
+            });
+
+            this.entities = result.Results;
+            this.filteredEntities = [...this.entities];
+        } catch (error) {
+            console.error('Error loading entities:', error);
+            this.entities = [];
+            this.filteredEntities = [];
+        } finally {
+            this.isLoading = false;
+        }
     }
-  }
 
-  selectEntity(entity: any) {
-    this.selectedEntity = entity;
-  }
-
-  onSelect() {
-    if (this.selectedEntity) {
-      this.dialogRef.close({ entity: this.selectedEntity });
+    onSearchChange() {
+        if (!this.searchText) {
+            this.filteredEntities = [...this.entities];
+        } else {
+            const searchLower = this.searchText.toLowerCase();
+            this.filteredEntities = this.entities.filter(entity => {
+                const displayValue = entity[this.config.displayField] || '';
+                const descriptionValue = this.config.descriptionField ? (entity[this.config.descriptionField] || '') : '';
+                return displayValue.toLowerCase().includes(searchLower) || 
+                       descriptionValue.toLowerCase().includes(searchLower);
+            });
+        }
     }
-  }
 
-  createNew() {
-    this.dialogRef.close({ createNew: true });
-  }
+    selectEntity(entity: any) {
+        this.selectedEntity = entity;
+    }
 
-  onCancel() {
-    this.dialogRef.close(null);
-  }
+    onSelect() {
+        if (this.selectedEntity) {
+            this.dialogRef.close({ entity: this.selectedEntity });
+        }
+    }
+
+    createNew() {
+        this.dialogRef.close({ createNew: true });
+    }
+
+    onCancel() {
+        this.dialogRef.close(null);
+    }
 }

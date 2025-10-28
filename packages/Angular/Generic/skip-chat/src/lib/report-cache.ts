@@ -1,4 +1,4 @@
-import { IRunViewProvider, RunView } from "@memberjunction/global";
+import { IRunViewProvider, RunView } from "@memberjunction/core";
 import { ReportEntity } from "@memberjunction/core-entities";
 import { BaseSingleton } from "@memberjunction/global";
 import { BehaviorSubject, firstValueFrom, Observable, of, shareReplay, switchMap } from "rxjs";

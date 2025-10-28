@@ -1,16 +1,16 @@
 import { Injectable } from '@angular/core';
-import { Metadata, UserInfo } from '@memberjunction/global';
+import { Metadata, UserInfo } from '@memberjunction/core';
 import { SystemValidationService } from './system-validation.service';
 
 /**
  * Service that performs validation checks during application startup
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class StartupValidationService {
-  constructor(private validationService: SystemValidationService) {}
-
+  constructor(private validationService: SystemValidationService) { }
+  
   /**
    * Runs all validation checks
    */
@@ -18,7 +18,7 @@ export class StartupValidationService {
     this.validateUserRoles();
     // Add more validation checks here as needed
   }
-
+  
   /**
    * Directly adds a validation issue for no user roles
    * This is used when we detect the missing roles error during GraphQL setup
@@ -28,9 +28,8 @@ export class StartupValidationService {
       id: 'no-user-roles',
       message: 'Missing User Roles - Cannot Access Application',
       severity: 'error',
-      details:
-        'Your account does not have any roles assigned, which is required to use the application. This is preventing the system from loading core resources and metadata.',
-      help: 'Please contact your system administrator to have appropriate roles assigned to your account. At minimum, a "UI" role is required.',
+      details: 'Your account does not have any roles assigned, which is required to use the application. This is preventing the system from loading core resources and metadata.',
+      help: 'Please contact your system administrator to have appropriate roles assigned to your account. At minimum, a "UI" role is required.'
     });
   }
 
@@ -42,9 +41,9 @@ export class StartupValidationService {
       console.log('StartupValidationService: Validating user roles');
       const md = new Metadata();
       const currentUser = md.CurrentUser;
-
+      
       console.log('StartupValidationService: Current user:', currentUser);
-
+      
       if (!currentUser) {
         console.log('StartupValidationService: No current user found');
         this.validationService.addIssue({
@@ -52,13 +51,13 @@ export class StartupValidationService {
           message: 'User account not found',
           severity: 'error',
           details: 'Your user account could not be found in the system.',
-          help: 'Contact your system administrator to ensure your account is properly set up.',
+          help: 'Contact your system administrator to ensure your account is properly set up.'
         });
         return;
       }
-
+      
       console.log('StartupValidationService: User roles:', currentUser.UserRoles);
-
+      
       if (!currentUser.UserRoles || currentUser.UserRoles.length === 0) {
         console.log('StartupValidationService: No user roles found, adding validation issue');
         this.validationService.addIssue({
@@ -66,7 +65,7 @@ export class StartupValidationService {
           message: 'No roles assigned to your account',
           severity: 'error',
           details: 'Your user account does not have any roles assigned. This will prevent you from accessing most functionality.',
-          help: 'Contact your system administrator to have appropriate roles assigned to your account.',
+          help: 'Contact your system administrator to have appropriate roles assigned to your account.'
         });
       }
     } catch (err) {
@@ -76,7 +75,7 @@ export class StartupValidationService {
         message: 'Failed to check user roles',
         severity: 'error',
         details: 'An error occurred while checking your user roles.',
-        help: 'Try refreshing the page. If the problem persists, contact your system administrator.',
+        help: 'Try refreshing the page. If the problem persists, contact your system administrator.'
       });
     }
   }

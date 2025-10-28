@@ -50,7 +50,7 @@ Create a test file `test-google-search.ts`:
 
 ```typescript
 import { ActionEngineServer } from '@memberjunction/actions';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 async function testGoogleSearch() {
   const engine = new ActionEngineServer();

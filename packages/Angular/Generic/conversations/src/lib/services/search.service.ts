@@ -8,9 +8,9 @@ import {
   CollectionEntity,
   CollectionArtifactEntity,
   TaskEntity,
-  ArtifactEntity,
+  ArtifactEntity
 } from '@memberjunction/core-entities';
-import { RunView, UserInfo, Metadata } from '@memberjunction/global';
+import { RunView, UserInfo, Metadata } from '@memberjunction/core';
 
 /**
  * Types of searchable content
@@ -65,7 +65,7 @@ export interface DateRange {
  * Provides debounced search with result ranking and filtering
  */
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 export class SearchService {
   private _searchQuery$ = new Subject<string>();
@@ -78,7 +78,7 @@ export class SearchService {
     artifacts: [],
     collections: [],
     tasks: [],
-    total: 0,
+    total: 0
   });
 
   // Recent searches stored in memory (could be persisted to localStorage)
@@ -101,7 +101,10 @@ export class SearchService {
    * Initialize debounced search
    */
   private initializeSearch(): void {
-    this._searchQuery$.pipe(debounceTime(300), distinctUntilChanged()).subscribe((query) => {
+    this._searchQuery$.pipe(
+      debounceTime(300),
+      distinctUntilChanged()
+    ).subscribe(query => {
       if (query && query.trim().length > 0) {
         this.addToRecentSearches(query);
       }
@@ -111,7 +114,11 @@ export class SearchService {
   /**
    * Search across all content types
    */
-  public async search(query: string, environmentId: string, currentUser: UserInfo): Promise<GroupedSearchResults> {
+  public async search(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo
+  ): Promise<GroupedSearchResults> {
     if (!query || query.trim().length === 0) {
       const emptyResults: GroupedSearchResults = {
         conversations: [],
@@ -119,7 +126,7 @@ export class SearchService {
         artifacts: [],
         collections: [],
         tasks: [],
-        total: 0,
+        total: 0
       };
       this._searchResults$.next(emptyResults);
       return emptyResults;
@@ -137,14 +144,18 @@ export class SearchService {
         filter === 'all' || filter === 'conversations'
           ? this.searchConversations(query, environmentId, currentUser, dateRange)
           : Promise.resolve([]),
-        filter === 'all' || filter === 'messages' ? this.searchMessages(query, environmentId, currentUser, dateRange) : Promise.resolve([]),
+        filter === 'all' || filter === 'messages'
+          ? this.searchMessages(query, environmentId, currentUser, dateRange)
+          : Promise.resolve([]),
         filter === 'all' || filter === 'artifacts'
           ? this.searchArtifacts(query, environmentId, currentUser, dateRange)
           : Promise.resolve([]),
         filter === 'all' || filter === 'collections'
           ? this.searchCollections(query, environmentId, currentUser, dateRange)
           : Promise.resolve([]),
-        filter === 'all' || filter === 'tasks' ? this.searchTasks(query, environmentId, currentUser, dateRange) : Promise.resolve([]),
+        filter === 'all' || filter === 'tasks'
+          ? this.searchTasks(query, environmentId, currentUser, dateRange)
+          : Promise.resolve([])
       ]);
 
       const results: GroupedSearchResults = {
@@ -153,7 +164,7 @@ export class SearchService {
         artifacts,
         collections,
         tasks,
-        total: conversations.length + messages.length + artifacts.length + collections.length + tasks.length,
+        total: conversations.length + messages.length + artifacts.length + collections.length + tasks.length
       };
 
       this._searchResults$.next(results);
@@ -191,7 +202,7 @@ export class SearchService {
         ExtraFilter: filter,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 100,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       },
       currentUser
     );
@@ -201,13 +212,18 @@ export class SearchService {
       return [];
     }
 
-    return result.Results.map((conv) => this.mapConversationToSearchResult(conv, query));
+    return result.Results.map(conv => this.mapConversationToSearchResult(conv, query));
   }
 
   /**
    * Search message content
    */
-  private async searchMessages(query: string, environmentId: string, currentUser: UserInfo, dateRange: DateRange): Promise<SearchResult[]> {
+  private async searchMessages(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo,
+    dateRange: DateRange
+  ): Promise<SearchResult[]> {
     const rv = new RunView();
     const lowerQuery = query.toLowerCase();
 
@@ -229,7 +245,7 @@ export class SearchService {
         ExtraFilter: filter,
         OrderBy: '__mj_CreatedAt DESC',
         MaxRows: 100,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       },
       currentUser
     );
@@ -239,7 +255,7 @@ export class SearchService {
       return [];
     }
 
-    return result.Results.map((msg) => this.mapMessageToSearchResult(msg, query));
+    return result.Results.map(msg => this.mapMessageToSearchResult(msg, query));
   }
 
   /**
@@ -272,7 +288,7 @@ export class SearchService {
         ExtraFilter: `${filter} AND (Visibility IS NULL OR Visibility='Always')`,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 100,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       },
       currentUser
     );
@@ -292,14 +308,21 @@ export class SearchService {
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `ArtifactID='${artifact.ID}'`,
           MaxRows: 1,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         currentUser
       );
 
       if (collResult.Success && collResult.Results && collResult.Results.length > 0) {
         const collArtifact = collResult.Results[0];
-        searchResults.push(this.mapArtifactToSearchResult(artifact, query, collArtifact.CollectionID, collArtifact.Collection));
+        searchResults.push(
+          this.mapArtifactToSearchResult(
+            artifact,
+            query,
+            collArtifact.CollectionID,
+            collArtifact.Collection
+          )
+        );
       } else {
         // No collection association
         searchResults.push(this.mapArtifactToSearchResult(artifact, query));
@@ -346,7 +369,7 @@ export class SearchService {
         ExtraFilter: filter,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 100,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       },
       currentUser
     );
@@ -356,14 +379,19 @@ export class SearchService {
       return [];
     }
 
-    return result.Results.map((coll) => this.mapCollectionToSearchResult(coll, query));
+    return result.Results.map(coll => this.mapCollectionToSearchResult(coll, query));
   }
 
   /**
    * Search tasks by name, description, and notes
    * Only includes tasks in conversations user has access to
    */
-  private async searchTasks(query: string, environmentId: string, currentUser: UserInfo, dateRange: DateRange): Promise<SearchResult[]> {
+  private async searchTasks(
+    query: string,
+    environmentId: string,
+    currentUser: UserInfo,
+    dateRange: DateRange
+  ): Promise<SearchResult[]> {
     const rv = new RunView();
     const lowerQuery = query.toLowerCase();
 
@@ -401,7 +429,7 @@ export class SearchService {
         ExtraFilter: filter,
         OrderBy: '__mj_UpdatedAt DESC',
         MaxRows: 100,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       },
       currentUser
     );
@@ -411,7 +439,7 @@ export class SearchService {
       return [];
     }
 
-    return result.Results.map((task) => this.mapTaskToSearchResult(task, query));
+    return result.Results.map(task => this.mapTaskToSearchResult(task, query));
   }
 
   /**
@@ -428,7 +456,10 @@ export class SearchService {
     if (description.toLowerCase().includes(lowerQuery)) score += 5;
 
     // Find matched text
-    const matchedText = this.extractMatchContext(name.toLowerCase().includes(lowerQuery) ? name : description, query);
+    const matchedText = this.extractMatchContext(
+      name.toLowerCase().includes(lowerQuery) ? name : description,
+      query
+    );
 
     return {
       id: conversation.ID,
@@ -439,7 +470,7 @@ export class SearchService {
       conversationId: conversation.ID,
       conversationName: name,
       createdAt: conversation.__mj_CreatedAt,
-      relevanceScore: score,
+      relevanceScore: score
     };
   }
 
@@ -459,14 +490,19 @@ export class SearchService {
       conversationId: message.ConversationID,
       conversationName: message.Conversation || undefined,
       createdAt: message.__mj_CreatedAt,
-      relevanceScore: 5,
+      relevanceScore: 5
     };
   }
 
   /**
    * Map artifact entity to search result
    */
-  private mapArtifactToSearchResult(artifact: ArtifactEntity, query: string, collectionId?: string, collectionName?: string): SearchResult {
+  private mapArtifactToSearchResult(
+    artifact: ArtifactEntity,
+    query: string,
+    collectionId?: string,
+    collectionName?: string
+  ): SearchResult {
     const name = artifact.Name || 'Untitled Artifact';
     const description = artifact.Description || '';
     const lowerQuery = query.toLowerCase();
@@ -475,7 +511,10 @@ export class SearchService {
     if (name.toLowerCase().includes(lowerQuery)) score += 10;
     if (description.toLowerCase().includes(lowerQuery)) score += 5;
 
-    const matchedText = this.extractMatchContext(name.toLowerCase().includes(lowerQuery) ? name : description, query);
+    const matchedText = this.extractMatchContext(
+      name.toLowerCase().includes(lowerQuery) ? name : description,
+      query
+    );
 
     return {
       id: artifact.ID,
@@ -487,7 +526,7 @@ export class SearchService {
       collectionName,
       artifactType: artifact.Type || undefined,
       createdAt: artifact.__mj_CreatedAt,
-      relevanceScore: score,
+      relevanceScore: score
     };
   }
 
@@ -503,7 +542,10 @@ export class SearchService {
     if (name.toLowerCase().includes(lowerQuery)) score += 10;
     if (description.toLowerCase().includes(lowerQuery)) score += 5;
 
-    const matchedText = this.extractMatchContext(name.toLowerCase().includes(lowerQuery) ? name : description, query);
+    const matchedText = this.extractMatchContext(
+      name.toLowerCase().includes(lowerQuery) ? name : description,
+      query
+    );
 
     return {
       id: collection.ID,
@@ -514,7 +556,7 @@ export class SearchService {
       collectionId: collection.ID,
       collectionName: name,
       createdAt: collection.__mj_CreatedAt,
-      relevanceScore: score,
+      relevanceScore: score
     };
   }
 
@@ -530,7 +572,10 @@ export class SearchService {
     if (name.toLowerCase().includes(lowerQuery)) score += 10;
     if (description.toLowerCase().includes(lowerQuery)) score += 5;
 
-    const matchedText = this.extractMatchContext(name.toLowerCase().includes(lowerQuery) ? name : description, query);
+    const matchedText = this.extractMatchContext(
+      name.toLowerCase().includes(lowerQuery) ? name : description,
+      query
+    );
 
     return {
       id: task.ID,
@@ -539,7 +584,7 @@ export class SearchService {
       preview: description || 'No description',
       matchedText,
       createdAt: task.__mj_CreatedAt,
-      relevanceScore: score,
+      relevanceScore: score
     };
   }
 
@@ -610,7 +655,7 @@ export class SearchService {
       artifacts: [],
       collections: [],
       tasks: [],
-      total: 0,
+      total: 0
     });
   }
 
@@ -629,7 +674,7 @@ export class SearchService {
     if (!trimmed) return;
 
     // Remove if already exists
-    this.recentSearches = this.recentSearches.filter((q) => q !== trimmed);
+    this.recentSearches = this.recentSearches.filter(q => q !== trimmed);
 
     // Add to front
     this.recentSearches.unshift(trimmed);

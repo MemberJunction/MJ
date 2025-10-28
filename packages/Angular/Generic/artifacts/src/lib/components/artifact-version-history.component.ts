@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
 import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView } from '@memberjunction/global';
+import { UserInfo, RunView } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-artifact-version-history',
@@ -64,8 +64,7 @@ import { UserInfo, RunView } from '@memberjunction/global';
       </div>
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .version-history { display: flex; flex-direction: column; height: 100%; background: white; }
     .history-header { padding: 16px; border-bottom: 1px solid #D9D9D9; display: flex; justify-content: space-between; align-items: center; }
     .history-header h3 { margin: 0; font-size: 16px; }
@@ -102,8 +101,7 @@ import { UserInfo, RunView } from '@memberjunction/global';
     .btn-close-diff:hover { background: rgba(0,0,0,0.1); }
     .diff-content { flex: 1; overflow-y: auto; padding: 16px; }
     .diff-content pre { margin: 0; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; }
-  `,
-  ],
+  `]
 })
 export class ArtifactVersionHistoryComponent implements OnInit {
   @Input() artifact!: ArtifactEntity;
@@ -126,15 +124,12 @@ export class ArtifactVersionHistoryComponent implements OnInit {
   private async loadVersions(): Promise<void> {
     try {
       const rv = new RunView();
-      const result = await rv.RunView<ArtifactVersionEntity>(
-        {
-          EntityName: 'MJ: Artifact Versions',
-          ExtraFilter: `ArtifactID='${this.artifact.ID}'`,
-          OrderBy: 'VersionNumber DESC',
-          ResultType: 'entity_object',
-        },
-        this.currentUser
-      );
+      const result = await rv.RunView<ArtifactVersionEntity>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ArtifactID='${this.artifact.ID}'`,
+        OrderBy: 'VersionNumber DESC',
+        ResultType: 'entity_object'
+      }, this.currentUser);
 
       if (result.Success) {
         this.versions = result.Results || [];
@@ -172,7 +167,7 @@ export class ArtifactVersionHistoryComponent implements OnInit {
       this.currentVersionContent = version.Content || '';
 
       // Load previous version
-      const previousVersion = this.versions.find((v) => v.VersionNumber === version.VersionNumber - 1);
+      const previousVersion = this.versions.find(v => v.VersionNumber === version.VersionNumber - 1);
       if (previousVersion) {
         this.previousVersionContent = previousVersion.Content || '';
         this.showDiff = true;

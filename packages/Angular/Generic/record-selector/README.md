@@ -89,7 +89,7 @@ export class YourModule { }
 
 ```typescript
 import { Component, OnInit } from '@angular/core';
-import { BaseEntity, Metadata, RunView } from '@memberjunction/global';
+import { BaseEntity, Metadata, RunView } from '@memberjunction/core';
 import { UserEntity } from '@memberjunction/core-entities';
 import { ListBoxToolbarConfig } from '@progress/kendo-angular-listbox';
 
@@ -197,15 +197,15 @@ The base component that provides the dual listbox functionality for selecting re
 
 #### Inputs
 
-| Input               | Type                   | Default   | Description                                              |
-| ------------------- | ---------------------- | --------- | -------------------------------------------------------- |
-| `EntityName`        | `string`               | `''`      | The name of the entity to show records for               |
-| `DisplayField`      | `string`               | `''`      | The field name to display in the list items              |
-| `DisplayIconField`  | `string`               | `''`      | The field name containing CSS class for icons (optional) |
-| `AvailableRecords`  | `BaseEntity[]`         | `[]`      | List of all available records                            |
-| `SelectedRecords`   | `BaseEntity[]`         | `[]`      | List of currently selected records                       |
-| `UnselectedRecords` | `BaseEntity[]`         | `[]`      | List of currently unselected records                     |
-| `ToolbarSettings`   | `ListBoxToolbarConfig` | See below | Configuration for the listbox toolbar                    |
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `EntityName` | `string` | `''` | The name of the entity to show records for |
+| `DisplayField` | `string` | `''` | The field name to display in the list items |
+| `DisplayIconField` | `string` | `''` | The field name containing CSS class for icons (optional) |
+| `AvailableRecords` | `BaseEntity[]` | `[]` | List of all available records |
+| `SelectedRecords` | `BaseEntity[]` | `[]` | List of currently selected records |
+| `UnselectedRecords` | `BaseEntity[]` | `[]` | List of currently unselected records |
+| `ToolbarSettings` | `ListBoxToolbarConfig` | See below | Configuration for the listbox toolbar |
 
 Default toolbar settings:
 ```typescript
@@ -217,9 +217,9 @@ Default toolbar settings:
 
 #### Outputs
 
-| Output             | Type                         | Description                                           |
-| ------------------ | ---------------------------- | ----------------------------------------------------- |
-| `RecordSelected`   | `EventEmitter<BaseEntity[]>` | Emitted when records are moved to the selected list   |
+| Output | Type | Description |
+|--------|------|-------------|
+| `RecordSelected` | `EventEmitter<BaseEntity[]>` | Emitted when records are moved to the selected list |
 | `RecordUnselected` | `EventEmitter<BaseEntity[]>` | Emitted when records are moved to the unselected list |
 
 #### Methods
@@ -236,19 +236,19 @@ A dialog wrapper that contains the RecordSelectorComponent with OK/Cancel functi
 
 Inherits all inputs from `RecordSelectorComponent`, plus:
 
-| Input           | Type      | Default            | Description                           |
-| --------------- | --------- | ------------------ | ------------------------------------- |
-| `DialogTitle`   | `string`  | `'Select Records'` | Title displayed in the dialog header  |
-| `DialogWidth`   | `string`  | `'700px'`          | Width of the dialog                   |
-| `DialogHeight`  | `string`  | `'450px'`          | Height of the dialog                  |
-| `DialogVisible` | `boolean` | `false`            | Controls the visibility of the dialog |
+| Input | Type | Default | Description |
+|-------|------|---------|-------------|
+| `DialogTitle` | `string` | `'Select Records'` | Title displayed in the dialog header |
+| `DialogWidth` | `string` | `'700px'` | Width of the dialog |
+| `DialogHeight` | `string` | `'450px'` | Height of the dialog |
+| `DialogVisible` | `boolean` | `false` | Controls the visibility of the dialog |
 
 #### Outputs
 
 Inherits all outputs from `RecordSelectorComponent`, plus:
 
-| Output         | Type                    | Description                                                                                                                    |
-| -------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Output | Type | Description |
+|--------|------|-------------|
 | `DialogClosed` | `EventEmitter<boolean>` | Emitted when the dialog is closed. `true` if OK was clicked, `false` if Cancel was clicked or dialog was closed by other means |
 
 #### Behavior

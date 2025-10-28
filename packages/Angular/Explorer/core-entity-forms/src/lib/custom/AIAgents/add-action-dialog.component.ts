@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { FormControl } from '@angular/forms';
 import { DialogRef, WindowRef } from '@progress/kendo-angular-dialog';
 import { Subject, BehaviorSubject, combineLatest, debounceTime, distinctUntilChanged, takeUntil, startWith } from 'rxjs';
-import { RunView, Metadata } from '@memberjunction/global';
+import { RunView, Metadata } from '@memberjunction/core';
 import { ActionEntity, ActionCategoryEntity } from '@memberjunction/core-entities';
 
 export interface CategoryTreeNode {
@@ -26,9 +26,10 @@ export interface ActionDisplayItem extends ActionEntity {
 @Component({
   selector: 'mj-add-action-dialog',
   templateUrl: './add-action-dialog.component.html',
-  styleUrls: ['./add-action-dialog.component.css'],
+  styleUrls: ['./add-action-dialog.component.css']
 })
 export class AddActionDialogComponent implements OnInit, OnDestroy {
+  
   // Input properties set by service
   agentId: string = '';
   agentName: string = '';
@@ -37,7 +38,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   // Reactive state management
   private destroy$ = new Subject<void>();
   public result = new Subject<ActionEntity[]>();
-
+  
   // Data streams
   allActions$ = new BehaviorSubject<ActionDisplayItem[]>([]);
   categories$ = new BehaviorSubject<ActionCategoryEntity[]>([]);
@@ -45,7 +46,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   categoryTree$ = new BehaviorSubject<CategoryTreeNode[]>([]);
   selectedActions$ = new BehaviorSubject<Set<string>>(new Set());
   isLoading$ = new BehaviorSubject<boolean>(false);
-
+  
   // UI state
   searchControl = new FormControl('');
   selectedCategoryId$ = new BehaviorSubject<string>('all');
@@ -83,7 +84,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
 
   private async initializeData() {
     this.isLoading$.next(true);
-
+    
     try {
       await this.loadActionsAndCategories();
       this.buildCategoryTree();
@@ -96,49 +97,46 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
 
   private async loadActionsAndCategories() {
     const rv = new RunView();
-
+    
     const [actionsResult, categoriesResult] = await rv.RunViews([
       {
         EntityName: 'Actions',
-        ExtraFilter: "Status = 'Active'",
+        ExtraFilter: 'Status = \'Active\'',
         OrderBy: 'Category, Name',
         ResultType: 'entity_object',
-        MaxRows: 5000,
+        MaxRows: 5000
       },
       {
         EntityName: 'Action Categories',
-        ExtraFilter: "Status = 'Active'",
+        ExtraFilter: 'Status = \'Active\'',
         OrderBy: 'Name',
         ResultType: 'entity_object',
-        MaxRows: 1000,
-      },
+        MaxRows: 1000
+      }
     ]);
 
     if (actionsResult.Success) {
-      const actions = ((actionsResult.Results as ActionEntity[]) || []).map(
-        (action) =>
-          ({
-            ...action.GetAll(),
-            selected: false,
-            categoryName: action.Category || 'Uncategorized',
-          }) as ActionDisplayItem
-      );
-
+      const actions = (actionsResult.Results as ActionEntity[] || []).map(action => ({
+        ...action.GetAll(),
+        selected: false,
+        categoryName: action.Category || 'Uncategorized'
+      } as ActionDisplayItem));
+      
       this.allActions$.next(actions);
     }
 
     if (categoriesResult.Success) {
-      this.categories$.next((categoriesResult.Results as ActionCategoryEntity[]) || []);
+      this.categories$.next(categoriesResult.Results as ActionCategoryEntity[] || []);
     }
   }
 
   private buildCategoryTree() {
     const actions = this.allActions$.value;
     const categories = this.categories$.value;
-
+    
     // Count actions per category
     const categoryCounts = new Map<string, number>();
-    actions.forEach((action) => {
+    actions.forEach(action => {
       const categoryName = action.categoryName || 'Uncategorized';
       categoryCounts.set(categoryName, (categoryCounts.get(categoryName) || 0) + 1);
     });
@@ -149,19 +147,19 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
         id: 'all',
         name: 'All Actions',
         count: actions.length,
-        icon: 'fa-th',
-      },
+        icon: 'fa-th'
+      }
     ];
 
     // Add category nodes
-    categories.forEach((category) => {
+    categories.forEach(category => {
       const count = categoryCounts.get(category.Name) || 0;
       if (count > 0) {
         treeNodes.push({
           id: category.ID,
           name: category.Name,
           count,
-          icon: this.getCategoryIcon(category.Name),
+          icon: this.getCategoryIcon(category.Name)
         });
       }
     });
@@ -173,7 +171,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
         id: 'uncategorized',
         name: 'Uncategorized',
         count: uncategorizedCount,
-        icon: 'fa-question-circle',
+        icon: 'fa-question-circle'
       });
     }
 
@@ -182,16 +180,16 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
 
   private getCategoryIcon(categoryName: string): string {
     const iconMap: { [key: string]: string } = {
-      Data: 'fa-database',
-      Communication: 'fa-envelope',
-      Integration: 'fa-plug',
-      Security: 'fa-shield-alt',
-      Workflow: 'fa-project-diagram',
-      AI: 'fa-brain',
-      Files: 'fa-file-alt',
-      Utilities: 'fa-tools',
-      System: 'fa-cog',
-      Analytics: 'fa-chart-line',
+      'Data': 'fa-database',
+      'Communication': 'fa-envelope',
+      'Integration': 'fa-plug',
+      'Security': 'fa-shield-alt',
+      'Workflow': 'fa-project-diagram',
+      'AI': 'fa-brain',
+      'Files': 'fa-file-alt',
+      'Utilities': 'fa-tools',
+      'System': 'fa-cog',
+      'Analytics': 'fa-chart-line'
     };
     return iconMap[categoryName] || 'fa-folder';
   }
@@ -202,14 +200,14 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
       this.searchControl.valueChanges.pipe(
         debounceTime(300),
         distinctUntilChanged(),
-        startWith('') // Emit initial empty value
+        startWith('')  // Emit initial empty value
       ),
-      this.selectedCategoryId$,
-    ])
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(([actions, searchTerm, categoryId]) => {
-        this.filterActions(actions, searchTerm || '', categoryId);
-      });
+      this.selectedCategoryId$
+    ]).pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(([actions, searchTerm, categoryId]) => {
+      this.filterActions(actions, searchTerm || '', categoryId);
+    });
   }
 
   private filterActions(actions: ActionDisplayItem[], searchTerm: string, categoryId: string) {
@@ -218,21 +216,20 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     // Category filter
     if (categoryId !== 'all') {
       if (categoryId === 'uncategorized') {
-        filtered = filtered.filter((action) => !action.Category);
+        filtered = filtered.filter(action => !action.Category);
       } else {
         const categoryName = this.getCategoryNameById(categoryId);
-        filtered = filtered.filter((action) => action.categoryName === categoryName);
+        filtered = filtered.filter(action => action.categoryName === categoryName);
       }
     }
 
     // Search filter
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(
-        (action) =>
-          action.Name.toLowerCase().includes(term) ||
-          (action.Description && action.Description.toLowerCase().includes(term)) ||
-          (action.categoryName && action.categoryName.toLowerCase().includes(term))
+      filtered = filtered.filter(action =>
+        action.Name.toLowerCase().includes(term) ||
+        (action.Description && action.Description.toLowerCase().includes(term)) ||
+        (action.categoryName && action.categoryName.toLowerCase().includes(term))
       );
     }
 
@@ -240,7 +237,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   }
 
   private getCategoryNameById(categoryId: string): string {
-    const category = this.categories$.value.find((c) => c.ID === categoryId);
+    const category = this.categories$.value.find(c => c.ID === categoryId);
     return category?.Name || '';
   }
 
@@ -248,10 +245,10 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     if (this.existingActionIds.length > 0) {
       const selected = new Set(this.existingActionIds);
       this.selectedActions$.next(selected);
-
+      
       // Update action selection state
       const actions = this.allActions$.value;
-      actions.forEach((action) => {
+      actions.forEach(action => {
         action.selected = selected.has(action.ID);
       });
       this.allActions$.next(actions);
@@ -272,24 +269,24 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   toggleActionSelection(action: ActionDisplayItem) {
     const selected = this.selectedActions$.value;
     const actions = this.allActions$.value;
-
+    
     // Find the action and toggle its selection
-    const actionToUpdate = actions.find((a) => a.ID === action.ID);
+    const actionToUpdate = actions.find(a => a.ID === action.ID);
     if (actionToUpdate) {
       actionToUpdate.selected = !actionToUpdate.selected;
-
+      
       if (actionToUpdate.selected) {
         selected.add(action.ID);
       } else {
         selected.delete(action.ID);
       }
-
+      
       this.selectedActions$.next(new Set(selected));
       this.allActions$.next(actions);
-
+      
       // Update filtered actions to reflect selection state
       const filtered = this.filteredActions$.value;
-      const filteredAction = filtered.find((a) => a.ID === action.ID);
+      const filteredAction = filtered.find(a => a.ID === action.ID);
       if (filteredAction) {
         filteredAction.selected = actionToUpdate.selected;
         this.filteredActions$.next(filtered);
@@ -317,7 +314,7 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
     if (name.includes('import')) return 'fa-file-import';
     if (name.includes('report')) return 'fa-file-alt';
     if (name.includes('api')) return 'fa-plug';
-
+    
     return 'fa-bolt'; // Default action icon
   }
 
@@ -331,13 +328,14 @@ export class AddActionDialogComponent implements OnInit, OnDestroy {
   addSelectedActions() {
     const selectedIds = this.selectedActions$.value;
     const allActions = this.allActions$.value;
-
+    
     // Get the selected action display items (excluding existing ones)
-    const selectedDisplayItems = allActions.filter((action) => selectedIds.has(action.ID) && !this.existingActionIds.includes(action.ID));
-
+    const selectedDisplayItems = allActions
+      .filter(action => selectedIds.has(action.ID) && !this.existingActionIds.includes(action.ID));
+    
     // Convert ActionDisplayItem to ActionEntity by casting (they have the same structure)
-    const selectedActions: ActionEntity[] = selectedDisplayItems.map((item) => item as ActionEntity);
-
+    const selectedActions: ActionEntity[] = selectedDisplayItems.map(item => item as ActionEntity);
+    
     this.result.next(selectedActions);
     this.dialogRef.close();
   }

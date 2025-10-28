@@ -1,20 +1,8 @@
-import {
-  BaseCommunicationProvider,
-  CreateDraftParams,
-  CreateDraftResult,
-  ForwardMessageParams,
-  ForwardMessageResult,
-  GetMessagesParams,
-  GetMessagesResult,
-  MessageResult,
-  ProcessedMessage,
-  ReplyToMessageParams,
-  ReplyToMessageResult,
-} from '@memberjunction/communication-types';
-import { RegisterClass } from '@memberjunction/global';
-import { LogError, LogStatus } from '@memberjunction/global';
+import { BaseCommunicationProvider, CreateDraftParams, CreateDraftResult, ForwardMessageParams, ForwardMessageResult, GetMessagesParams, GetMessagesResult, MessageResult, ProcessedMessage, ReplyToMessageParams, ReplyToMessageResult } from "@memberjunction/communication-types";
+import { RegisterClass } from "@memberjunction/global";
+import { LogError, LogStatus } from "@memberjunction/core";
 import twilio from 'twilio';
-import * as Config from './config';
+import * as Config from "./config";
 
 /**
  * Implementation of the Twilio provider for sending and receiving messages (SMS, WhatsApp, Facebook Messenger)
@@ -22,7 +10,7 @@ import * as Config from './config';
 @RegisterClass(BaseCommunicationProvider, 'Twilio')
 export class TwilioProvider extends BaseCommunicationProvider {
   private twilioClient: any;
-
+  
   constructor() {
     super();
     this.twilioClient = twilio(Config.TWILIO_ACCOUNT_SID, Config.TWILIO_AUTH_TOKEN);
@@ -64,7 +52,7 @@ export class TwilioProvider extends BaseCommunicationProvider {
     if (to.startsWith('whatsapp:') || to.startsWith('messenger:')) {
       return to;
     }
-
+    
     // Format based on channel type
     switch (channelType) {
       case 'whatsapp':
@@ -86,23 +74,23 @@ export class TwilioProvider extends BaseCommunicationProvider {
         return {
           Message: message,
           Success: false,
-          Error: 'Recipient not specified',
+          Error: 'Recipient not specified'
         };
       }
 
       // Determine channel type (SMS, WhatsApp, Messenger)
       const channelType = this.getChannelType(message.To);
-
+      
       // Format sender and recipient
       const from = message.From || this.formatFrom(channelType);
       const to = this.formatTo(message.To, channelType);
-
+      
       // Ensure from is configured for this channel
       if (!from) {
         return {
           Message: message,
           Success: false,
-          Error: `${channelType.toUpperCase()} sender not configured`,
+          Error: `${channelType.toUpperCase()} sender not configured`
         };
       }
 
@@ -110,31 +98,31 @@ export class TwilioProvider extends BaseCommunicationProvider {
       // For SMS and messaging channels, we use plain text
       // HTML is not supported, so we use the text body
       const body = message.ProcessedBody || '';
-
+      
       // Optional media URLs if specified in context data
-      const mediaUrls = (message.ContextData?.mediaUrls as string[]) || [];
+      const mediaUrls = message.ContextData?.mediaUrls as string[] || [];
 
       // Send the message
       const result = await this.twilioClient.messages.create({
         body,
         from,
         to,
-        ...(mediaUrls.length > 0 && { mediaUrl: mediaUrls }),
+        ...(mediaUrls.length > 0 && { mediaUrl: mediaUrls })
       });
 
       LogStatus(`${channelType.toUpperCase()} message sent via Twilio (SID: ${result.sid})`);
-
+      
       return {
         Message: message,
         Success: true,
-        Error: '',
+        Error: ''
       };
     } catch (error: any) {
       LogError('Error sending message via Twilio', undefined, error);
       return {
         Message: message,
         Success: false,
-        Error: error.message || 'Error sending message',
+        Error: error.message || 'Error sending message'
       };
     }
   }
@@ -146,7 +134,7 @@ export class TwilioProvider extends BaseCommunicationProvider {
     try {
       // Build query parameters
       const queryParams: any = {
-        limit: params.NumMessages,
+        limit: params.NumMessages
       };
 
       // Filter options
@@ -155,12 +143,12 @@ export class TwilioProvider extends BaseCommunicationProvider {
         if (params.ContextData.dateSent) {
           queryParams.dateSent = params.ContextData.dateSent;
         }
-
+        
         // Filter by sender
         if (params.ContextData.from) {
           queryParams.from = params.ContextData.from;
         }
-
+        
         // Filter by recipient
         if (params.ContextData.to) {
           queryParams.to = params.ContextData.to;
@@ -169,7 +157,7 @@ export class TwilioProvider extends BaseCommunicationProvider {
 
       // Fetch messages
       const messages = await this.twilioClient.messages.list(queryParams);
-
+      
       // Format messages into standard structure
       const formattedMessages = messages.map((message: any) => {
         return {
@@ -178,21 +166,21 @@ export class TwilioProvider extends BaseCommunicationProvider {
           Body: message.body || '',
           ExternalSystemRecordID: message.sid,
           Subject: '', // SMS doesn't have subject
-          ThreadID: message.sid, // Using message SID as thread ID as Twilio doesn't have thread concept
+          ThreadID: message.sid // Using message SID as thread ID as Twilio doesn't have thread concept
         };
       });
 
       return {
         Success: true,
         Messages: formattedMessages,
-        SourceData: messages,
+        SourceData: messages
       };
     } catch (error: any) {
       LogError('Error fetching messages from Twilio', undefined, error);
       return {
         Success: false,
         Messages: [],
-        ErrorMessage: error.message || 'Error fetching messages',
+        ErrorMessage: error.message || 'Error fetching messages'
       };
     }
   }
@@ -205,17 +193,17 @@ export class TwilioProvider extends BaseCommunicationProvider {
       if (!params.MessageID) {
         return {
           Success: false,
-          ErrorMessage: 'Message ID not provided',
+          ErrorMessage: 'Message ID not provided'
         };
       }
 
       // Get original message to determine recipient and channel
       const originalMessage = await this.twilioClient.messages(params.MessageID).fetch();
-
+      
       if (!originalMessage) {
         return {
           Success: false,
-          ErrorMessage: 'Original message not found',
+          ErrorMessage: 'Original message not found'
         };
       }
 
@@ -224,39 +212,39 @@ export class TwilioProvider extends BaseCommunicationProvider {
       if (!to) {
         return {
           Success: false,
-          ErrorMessage: 'Could not determine recipient for reply',
+          ErrorMessage: 'Could not determine recipient for reply'
         };
       }
 
       // Determine channel type
       const channelType = this.getChannelType(to);
-
+      
       // Format sender
       const from = params.Message.From || this.formatFrom(channelType);
 
       // Prepare message content
       const body = params.Message.ProcessedBody || '';
-
+      
       // Optional media URLs
-      const mediaUrls = (params.Message.ContextData?.mediaUrls as string[]) || [];
+      const mediaUrls = params.Message.ContextData?.mediaUrls as string[] || [];
 
       // Send the reply
       const result = await this.twilioClient.messages.create({
         body,
         from,
         to,
-        ...(mediaUrls.length > 0 && { mediaUrl: mediaUrls }),
+        ...(mediaUrls.length > 0 && { mediaUrl: mediaUrls })
       });
 
       return {
         Success: true,
-        Result: result,
+        Result: result
       };
     } catch (error: any) {
       LogError('Error replying to message via Twilio', undefined, error);
       return {
         Success: false,
-        ErrorMessage: error.message || 'Error replying to message',
+        ErrorMessage: error.message || 'Error replying to message'
       };
     }
   }
@@ -271,17 +259,17 @@ export class TwilioProvider extends BaseCommunicationProvider {
       if (!params.MessageID || !params.ToRecipients || params.ToRecipients.length === 0) {
         return {
           Success: false,
-          ErrorMessage: 'Message ID or recipients not provided',
+          ErrorMessage: 'Message ID or recipients not provided'
         };
       }
 
       // Get the original message
       const originalMessage = await this.twilioClient.messages(params.MessageID).fetch();
-
+      
       if (!originalMessage) {
         return {
           Success: false,
-          ErrorMessage: 'Original message not found',
+          ErrorMessage: 'Original message not found'
         };
       }
 
@@ -293,31 +281,29 @@ export class TwilioProvider extends BaseCommunicationProvider {
       const body = `${forwardComment}${forwardPrefix}${originalSender}${originalContent}`;
 
       // Send to all recipients
-      const results = await Promise.all(
-        params.ToRecipients.map(async (recipient) => {
-          const channelType = this.getChannelType(recipient);
-          const from = this.formatFrom(channelType);
-          const to = this.formatTo(recipient, channelType);
-
-          return this.twilioClient.messages.create({
-            body,
-            from,
-            to,
-            // If original had media, we can forward it
-            ...(originalMessage.numMedia !== '0' && { mediaUrl: [originalMessage.uri] }),
-          });
-        })
-      );
+      const results = await Promise.all(params.ToRecipients.map(async (recipient) => {
+        const channelType = this.getChannelType(recipient);
+        const from = this.formatFrom(channelType);
+        const to = this.formatTo(recipient, channelType);
+        
+        return this.twilioClient.messages.create({
+          body,
+          from,
+          to,
+          // If original had media, we can forward it
+          ...(originalMessage.numMedia !== '0' && { mediaUrl: [originalMessage.uri] })
+        });
+      }));
 
       return {
         Success: true,
-        Result: results,
+        Result: results
       };
     } catch (error: any) {
       LogError('Error forwarding message via Twilio', undefined, error);
       return {
         Success: false,
-        ErrorMessage: error.message || 'Error forwarding message',
+        ErrorMessage: error.message || 'Error forwarding message'
       };
     }
   }
@@ -328,8 +314,7 @@ export class TwilioProvider extends BaseCommunicationProvider {
   public async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
     return {
       Success: false,
-      ErrorMessage:
-        'Twilio does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).',
+      ErrorMessage: 'Twilio does not support creating draft messages. Drafts are only supported by email providers with mailbox access (Gmail, MS Graph).'
     };
   }
 }

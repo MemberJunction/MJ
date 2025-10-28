@@ -119,7 +119,7 @@ Create specialized vector operation classes by extending `VectorBase`:
 
 ```typescript
 import { VectorBase, PageRecordsParams } from '@memberjunction/ai-vectors';
-import { BaseEntity } from '@memberjunction/global';
+import { BaseEntity } from '@memberjunction/core';
 
 export class MyVectorProcessor extends VectorBase {
   async processEntityRecords(entityId: string): Promise<void> {
@@ -175,7 +175,7 @@ The package provides utilities for working with MemberJunction entities:
 
 ```typescript
 import { VectorBase, PageRecordsParams } from '@memberjunction/ai-vectors';
-import { BaseEntity } from '@memberjunction/global';
+import { BaseEntity } from '@memberjunction/core';
 import { AIModelEntityExtended, VectorDatabaseEntity } from '@memberjunction/core-entities';
 
 class EntityVectorizer extends VectorBase {
@@ -226,7 +226,7 @@ Use composite keys for complex filtering scenarios:
 
 ```typescript
 import { VectorBase } from '@memberjunction/ai-vectors';
-import { CompositeKey } from '@memberjunction/global';
+import { CompositeKey } from '@memberjunction/core';
 
 class AdvancedVectorProcessor extends VectorBase {
   async getSpecificRecords(entityId: string): Promise<void> {
@@ -260,7 +260,7 @@ This package works in harmony with other MemberJunction packages:
 ```typescript
 import { VectorBase } from '@memberjunction/ai-vectors';
 import { AIEngine } from '@memberjunction/aiengine';
-import { Metadata, RunView } from '@memberjunction/global';
+import { Metadata, RunView } from '@memberjunction/core';
 
 // Your vector processing will have access to:
 // - Entity metadata

@@ -2,30 +2,18 @@ import { Injectable, OnDestroy } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { BehaviorSubject, Observable, Subject, catchError, filter, from, map, of, throwError, takeUntil, take, firstValueFrom } from 'rxjs';
-import {
-  MsalBroadcastService,
-  MsalService,
-  MSAL_INSTANCE,
-  MSAL_GUARD_CONFIG,
-  MSAL_INTERCEPTOR_CONFIG,
-  MsalGuard,
-} from '@azure/msal-angular';
+import { MsalBroadcastService, MsalService, MSAL_INSTANCE, MSAL_GUARD_CONFIG, MSAL_INTERCEPTOR_CONFIG, MsalGuard } from '@azure/msal-angular';
 import { AccountInfo, AuthenticationResult } from '@azure/msal-common';
-import {
-  CacheLookupPolicy,
-  InteractionRequiredAuthError,
-  InteractionStatus,
-  PublicClientApplication,
-  InteractionType,
-} from '@azure/msal-browser';
-import { LogError } from '@memberjunction/global';
+import { CacheLookupPolicy, InteractionRequiredAuthError, InteractionStatus, PublicClientApplication, InteractionType } from '@azure/msal-browser';
+import { LogError } from '@memberjunction/core';
 import { AngularAuthProviderConfig } from '../IAuthProvider';
 
 // Prevent tree-shaking by explicitly referencing the class
-export function LoadMJMSALProvider() {}
+export function LoadMJMSALProvider() {
+}
 
 @Injectable({
-  providedIn: 'root',
+  providedIn: 'root'
 })
 @RegisterClass(MJAuthBase, 'msal')
 export class MJMSALProvider extends MJAuthBase implements OnDestroy {
@@ -73,16 +61,13 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     },
     MsalService,
     MsalGuard,
-    MsalBroadcastService,
+    MsalBroadcastService
   ];
 
-  constructor(
-    public auth: MsalService,
-    private msalBroadcastService: MsalBroadcastService
-  ) {
-    const config: AngularAuthProviderConfig = {
-      name: MJMSALProvider.PROVIDER_TYPE,
-      type: MJMSALProvider.PROVIDER_TYPE,
+  constructor(public auth: MsalService, private msalBroadcastService: MsalBroadcastService) {
+    const config: AngularAuthProviderConfig = { 
+      name: MJMSALProvider.PROVIDER_TYPE, 
+      type: MJMSALProvider.PROVIDER_TYPE 
     };
     super(config);
     // Defer initialization to avoid blocking app startup
@@ -94,14 +79,15 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     if (this._initPromise) {
       return this._initPromise;
     }
-
+    
     this._initPromise = this._performInitialization();
     return this._initPromise;
   }
-
+  
   private async _performInitialization(): Promise<void> {
+    
     await this.auth.instance.initialize();
-
+    
     // Handle redirect immediately after initialization
     const redirectResponse = await this.auth.instance.handleRedirectPromise();
     if (redirectResponse && redirectResponse.account) {
@@ -110,7 +96,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       this.updateAuthState(true);
       this.authenticated = true;
       this._initializationCompleted$.next(true); // Signal initialization complete
-
+      
       // Do a controlled reload after successful login
       // This ensures the app fully reinitializes with the authenticated state
       setTimeout(() => {
@@ -120,7 +106,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     } else {
       // Set active account if we have one
       const accounts = this.auth.instance.getAllAccounts();
-
+      
       if (accounts.length > 0) {
         this.auth.instance.setActiveAccount(accounts[0]);
         this.updateAuthState(true);
@@ -129,13 +115,10 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       } else {
       }
     }
-
+    
     // Subscribe to broadcast service for ongoing auth state changes
     this.msalBroadcastService.inProgress$
-      .pipe(
-        filter((status: InteractionStatus) => status === InteractionStatus.None),
-        takeUntil(this._destroying$)
-      )
+      .pipe(filter((status: InteractionStatus) => status === InteractionStatus.None), takeUntil(this._destroying$))
       .subscribe(() => {
         const isAuth = this.auth.instance.getAllAccounts().length > 0;
         this.updateAuthState(isAuth);
@@ -160,20 +143,20 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
 
   override login(options?: any): Observable<void> {
     const silentRequest: any = {
-      scopes: ['User.Read', 'email', 'profile'],
-      ...options,
+      scopes: ['User.Read','email', 'profile'],
+      ...options
     };
-
-    this.auth.loginRedirect(silentRequest).subscribe({
+    
+    this.auth.loginRedirect(silentRequest).subscribe({ 
       next: () => {
         this.auth.instance.setActiveAccount(this.auth.instance.getAllAccounts()[0] || null);
         // Don't reload here - let the redirect handler manage the flow
-      },
+      }, 
       error: (error) => {
         LogError(error);
-      },
+      }
     });
-
+    
     return of(void 0);
   }
 
@@ -206,29 +189,27 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   async getUserClaims(): Promise<Observable<any>> {
     await this.ensureInitialized();
     const account = this.auth.instance.getActiveAccount();
-
+    
     if (!account) {
       // No account, return null observable
       return of(null);
     }
-
+    
     const silentRequest: any = {
       scopes: ['User.Read', 'email', 'profile'],
       account: account,
-      cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork,
+      cacheLookupPolicy: CacheLookupPolicy.RefreshTokenAndNetwork
     };
-
+    
     return from(this.auth.instance.acquireTokenSilent(silentRequest)).pipe(
       map((response: AuthenticationResult) => response),
       catchError((error) => {
         LogError(error);
         if (error instanceof InteractionRequiredAuthError) {
           // Try popup as fallback
-          return from(
-            this.auth.instance.acquireTokenPopup({
-              scopes: ['User.Read', 'email', 'profile'],
-            })
-          );
+          return from(this.auth.instance.acquireTokenPopup({
+            scopes: ['User.Read', 'email', 'profile']
+          }));
         }
         this.authenticated = false;
         return throwError(() => error);
@@ -248,19 +229,19 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
   protected async loginInternal(options?: any): Promise<void> {
     await this.ensureInitialized();
     const silentRequest: any = {
-      scopes: ['User.Read', 'email', 'profile'],
-      ...options,
+      scopes: ['User.Read','email', 'profile'],
+      ...options
     };
-
+    
     return new Promise((resolve, reject) => {
-      this.auth.loginRedirect(silentRequest).subscribe({
+      this.auth.loginRedirect(silentRequest).subscribe({ 
         next: () => {
           resolve();
-        },
+        }, 
         error: (error) => {
           LogError(error);
           reject(error);
-        },
+        }
       });
     });
   }
@@ -272,11 +253,11 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
       if (!account) {
         return null;
       }
-
+      
       const response = await this.auth.instance.acquireTokenSilent({
         scopes: ['User.Read'],
         account: account,
-        forceRefresh: false,
+        forceRefresh: false
       });
       return response.accessToken;
     } catch (error: any) {
@@ -284,7 +265,7 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
         // Try interactive login if silent acquisition fails
         try {
           const response = await this.auth.instance.acquireTokenPopup({
-            scopes: ['User.Read'],
+            scopes: ['User.Read']
           });
           return response.accessToken;
         } catch (popupError) {
@@ -309,15 +290,15 @@ export class MJMSALProvider extends MJAuthBase implements OnDestroy {
     // MSAL configuration is handled by Angular module providers
     return true;
   }
-
+  
   ngOnDestroy(): void {
     // Complete the destroying subject to clean up subscriptions
     this._destroying$.next();
     this._destroying$.complete();
-
+    
     // Clear any cached promises
     this._initPromise = null;
-
+    
     // Complete behavior subjects
     this._initializationCompleted$.complete();
     this.isAuthenticated$.complete();

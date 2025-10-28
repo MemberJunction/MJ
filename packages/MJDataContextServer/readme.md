@@ -39,7 +39,7 @@ LoadDataContextItemsServer();
 ```typescript
 import { DataContext } from '@memberjunction/data-context';
 import { DataSource } from 'typeorm';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 
 // Assume you have a TypeORM DataSource configured
 const dataSource: DataSource = /* your configured data source */;
@@ -176,7 +176,7 @@ The package uses a standard TypeScript configuration that compiles to ES modules
 import { DataContext } from '@memberjunction/data-context';
 import { LoadDataContextItemsServer } from '@memberjunction/data-context-server';
 import { createConnection, DataSource } from 'typeorm';
-import { Metadata } from '@memberjunction/global';
+import { Metadata } from '@memberjunction/core';
 
 // Initialize the server-side data context support
 LoadDataContextItemsServer();

@@ -1,5 +1,5 @@
-import { Directive, Input } from '@angular/core';
-import { IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, Metadata } from '@memberjunction/global';
+import { Directive, Input } from "@angular/core";
+import { IMetadataProvider, IRunQueryProvider, IRunReportProvider, IRunViewProvider, Metadata } from "@memberjunction/core";
 
 /**
  * Base class for all Angular components in the MemberJunction system.
@@ -19,26 +19,26 @@ export abstract class BaseAngularComponent {
    */
   public get ProviderToUse(): IMetadataProvider {
     return this.Provider || Metadata.Provider;
-  }
+  }  
 
   /**
    * Returns either the default RunView provider or the one specified in the Provider property, if it was specified
    */
   public get RunViewToUse(): IRunViewProvider {
-    return <IRunViewProvider>(<any>this.ProviderToUse);
+    return <IRunViewProvider><any>this.ProviderToUse;
   }
 
   /**
    * Returns either the default RunQuery provider or the one specified in the Provider property, if it was specified
    */
   public get RunQueryToUse(): IRunQueryProvider {
-    return <IRunQueryProvider>(<any>this.ProviderToUse);
+    return <IRunQueryProvider><any>this.ProviderToUse;
   }
 
   /**
    * Returns either the default RunReport provider or the one specified in the Provider property, if it was specified
    */
   public get RunReportToUse(): IRunReportProvider {
-    return <IRunReportProvider>(<any>this.ProviderToUse);
+    return <IRunReportProvider><any>this.ProviderToUse;
   }
 }

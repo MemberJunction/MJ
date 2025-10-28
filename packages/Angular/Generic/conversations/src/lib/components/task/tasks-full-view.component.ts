@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { UserInfo, RunView } from '@memberjunction/global';
+import { UserInfo, RunView } from '@memberjunction/core';
 import { TaskEntity, TaskDependencyEntity, AIAgentRunEntity } from '@memberjunction/core-entities';
 import { TaskComponent } from '@memberjunction/ng-tasks';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -58,8 +58,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       }
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .tasks-full-view {
       display: flex;
       flex-direction: column;
@@ -132,8 +131,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
       font-weight: 600;
       color: #111827;
     }
-  `,
-  ],
+  `]
 })
 export class TasksFullViewComponent implements OnInit, OnChanges {
   @Input() environmentId!: string;
@@ -165,7 +163,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
     // Auto-drill into task if activeTaskId changes
     if (changes['activeTaskId'] && this.activeTaskId) {
-      const task = this.allTasks.find((t) => t.ID === this.activeTaskId);
+      const task = this.allTasks.find(t => t.ID === this.activeTaskId);
       if (task) {
         this.onTaskClick(task);
       }
@@ -193,7 +191,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
           ExtraFilter: this.baseFilter,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 1000,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -201,7 +199,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       console.log('📊 Tasks query result:', {
         success: tasksResult.Success,
         resultCount: tasksResult.Results?.length || 0,
-        errorMessage: tasksResult.ErrorMessage,
+        errorMessage: tasksResult.ErrorMessage
       });
 
       if (tasksResult.Success) {
@@ -215,7 +213,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
             id: this.allTasks[0].ID,
             name: this.allTasks[0].Name,
             status: this.allTasks[0].Status,
-            conversationDetailID: this.allTasks[0].ConversationDetailID,
+            conversationDetailID: this.allTasks[0].ConversationDetailID
           });
         }
       } else {
@@ -256,7 +254,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
           ExtraFilter: `RootParentID='${rootId}' OR ID='${rootId}'`,
           OrderBy: '__mj_CreatedAt ASC',
           MaxRows: 1000,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -265,7 +263,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         const allHierarchy = hierarchyResult.Results || [];
 
         // For list view: Filter out the clicked task itself - only show its children/descendants
-        this.subTasks = allHierarchy.filter((t) => t.ID !== task.ID);
+        this.subTasks = allHierarchy.filter(t => t.ID !== task.ID);
 
         // For Gantt view: Include the parent task so hierarchy works correctly
         this.subTasksWithParent = allHierarchy;
@@ -305,7 +303,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
             OR
             DependsOnTaskID IN (SELECT ID FROM [${schema}].[vwTasks] WHERE RootParentID='${rootId}' OR ID='${rootId}')
           `,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -329,7 +327,9 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
       this.agentRunMap.clear();
 
       // Get all unique ConversationDetailIDs from tasks (filter out nulls)
-      const conversationDetailIds = tasks.filter((t) => t.ConversationDetailID != null).map((t) => t.ConversationDetailID!);
+      const conversationDetailIds = tasks
+        .filter(t => t.ConversationDetailID != null)
+        .map(t => t.ConversationDetailID!);
 
       if (conversationDetailIds.length === 0) {
         console.log('💡 No tasks with ConversationDetailID');
@@ -341,7 +341,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
       // Build filter to find agent runs for these conversation details
       // Use a subquery to avoid passing large ID lists
-      const taskIds = tasks.map((t) => `'${t.ID}'`).join(',');
+      const taskIds = tasks.map(t => `'${t.ID}'`).join(',');
 
       const agentRunsResult = await rv.RunView<AIAgentRunEntity>(
         {
@@ -354,7 +354,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
               AND ConversationDetailID IS NOT NULL
             )
           `,
-          ResultType: 'entity_object',
+          ResultType: 'entity_object'
         },
         this.currentUser
       );
@@ -365,7 +365,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
 
         // Build map: ConversationDetailID -> AgentRunID
         const convoToRunMap = new Map<string, string>();
-        agentRuns.forEach((run) => {
+        agentRuns.forEach(run => {
           if (run.ConversationDetailID) {
             convoToRunMap.set(run.ConversationDetailID, run.ID);
             console.log(`📝 Mapping ConvoDetailID ${run.ConversationDetailID} -> RunID ${run.ID}`);
@@ -373,7 +373,7 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
         });
 
         // Map TaskID -> AgentRunID using ConversationDetailID as the link
-        tasks.forEach((task) => {
+        tasks.forEach(task => {
           console.log(`🔍 Task ${task.Name} - ConvoDetailID: ${task.ConversationDetailID}, AgentID: ${task.AgentID}`);
           if (task.ConversationDetailID) {
             const agentRunId = convoToRunMap.get(task.ConversationDetailID);
@@ -415,8 +415,8 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
   }
 
   public getDescription(): string {
-    const activeCount = this.allTasks.filter((t) => t.Status === 'Pending' || t.Status === 'In Progress').length;
-    const completedCount = this.allTasks.filter((t) => t.Status === 'Complete').length;
+    const activeCount = this.allTasks.filter(t => t.Status === 'Pending' || t.Status === 'In Progress').length;
+    const completedCount = this.allTasks.filter(t => t.Status === 'Complete').length;
     return `${activeCount} active, ${completedCount} completed, ${this.allTasks.length} total`;
   }
 
@@ -424,8 +424,8 @@ export class TasksFullViewComponent implements OnInit, OnChanges {
     if (this.subTasks.length === 0) {
       return 'No sub-tasks';
     }
-    const activeCount = this.subTasks.filter((t) => t.Status === 'Pending' || t.Status === 'In Progress').length;
-    const completedCount = this.subTasks.filter((t) => t.Status === 'Complete').length;
+    const activeCount = this.subTasks.filter(t => t.Status === 'Pending' || t.Status === 'In Progress').length;
+    const completedCount = this.subTasks.filter(t => t.Status === 'Complete').length;
     return `${activeCount} active, ${completedCount} completed, ${this.subTasks.length} sub-tasks`;
   }
 }

@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
 import { ArtifactEntity } from '@memberjunction/core-entities';
-import { UserInfo } from '@memberjunction/global';
+import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 
 @Component({
@@ -46,8 +46,7 @@ import { ArtifactPermissionService } from '../../services/artifact-permission.se
       </div>
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .artifact-card { display: flex; gap: 16px; padding: 16px; border: 1px solid #E8E8E8; border-radius: 8px; cursor: pointer; transition: all 150ms ease; background: white; }
     .artifact-card:hover { border-color: #0076B6; box-shadow: 0 2px 8px rgba(0,118,182,0.1); }
 
@@ -67,8 +66,7 @@ import { ArtifactPermissionService } from '../../services/artifact-permission.se
     .artifact-card:hover .card-actions { display: flex; }
     .action-btn { padding: 8px; background: transparent; border: none; cursor: pointer; border-radius: 4px; color: #666; transition: all 150ms ease; }
     .action-btn:hover { background: #F4F4F4; color: #0076B6; }
-  `,
-  ],
+  `]
 })
 export class CollectionArtifactCardComponent implements OnInit, OnChanges {
   @Input() artifact!: ArtifactEntity;
@@ -106,7 +104,12 @@ export class CollectionArtifactCardComponent implements OnInit, OnChanges {
         this.currentUser
       );
 
-      this.canEdit = await this.artifactPermissionService.checkPermission(this.artifact.ID, this.currentUser.ID, 'edit', this.currentUser);
+      this.canEdit = await this.artifactPermissionService.checkPermission(
+        this.artifact.ID,
+        this.currentUser.ID,
+        'edit',
+        this.currentUser
+      );
     } catch (err) {
       console.error('Error loading artifact permissions:', err);
     }

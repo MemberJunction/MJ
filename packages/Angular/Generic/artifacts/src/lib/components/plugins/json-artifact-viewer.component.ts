@@ -2,7 +2,7 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ElementRef 
 import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseArtifactViewerPluginComponent } from '../base-artifact-viewer.component';
-import { RunView } from '@memberjunction/global';
+import { RunView } from '@memberjunction/core';
 import { ArtifactVersionAttributeEntity } from '@memberjunction/core-entities';
 import { marked } from 'marked';
 
@@ -56,8 +56,7 @@ import { marked } from 'marked';
       </div>
     </div>
   `,
-  styles: [
-    `
+  styles: [`
     .json-artifact-viewer {
       display: flex;
       flex-direction: column;
@@ -119,8 +118,7 @@ import { marked } from 'marked';
       overflow: auto;
       min-height: 0;
     }
-  `,
-  ],
+  `]
 })
 @RegisterClass(BaseArtifactViewerPluginComponent, 'JsonArtifactViewerPlugin')
 export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginComponent implements OnInit, OnDestroy {
@@ -190,7 +188,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       const result = await rv.RunView<ArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
-        ResultType: 'entity_object',
+        ResultType: 'entity_object'
       });
 
       console.log(`📦 JSON Plugin: RunView completed. Success=${result.Success}, Results count=${result.Results?.length || 0}`);
@@ -199,24 +197,15 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         this.versionAttributes = result.Results;
 
         console.log(`📦 JSON Plugin: Loaded ${this.versionAttributes.length} attributes for version ${this.artifactVersion.ID}`);
-        console.log(
-          `📦 Attributes:`,
-          this.versionAttributes.map((a) => ({ name: a.Name, hasValue: !!a.Value }))
-        );
+        console.log(`📦 Attributes:`, this.versionAttributes.map(a => ({ name: a.Name, hasValue: !!a.Value })));
 
         // Check for displayHtml and displayMarkdown attributes (from extract rules)
         // Priority: displayHtml > displayMarkdown
-        const displayHtmlAttr = this.versionAttributes.find((a) => a.Name?.toLowerCase() === 'displayhtml');
-        const displayMarkdownAttr = this.versionAttributes.find((a) => a.Name?.toLowerCase() === 'displaymarkdown');
+        const displayHtmlAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displayhtml');
+        const displayMarkdownAttr = this.versionAttributes.find(a => a.Name?.toLowerCase() === 'displaymarkdown');
 
-        console.log(
-          `📦 displayHtmlAttr:`,
-          displayHtmlAttr ? { name: displayHtmlAttr.Name, valueLength: displayHtmlAttr.Value?.length } : 'not found'
-        );
-        console.log(
-          `📦 displayMarkdownAttr:`,
-          displayMarkdownAttr ? { name: displayMarkdownAttr.Name, valueLength: displayMarkdownAttr.Value?.length } : 'not found'
-        );
+        console.log(`📦 displayHtmlAttr:`, displayHtmlAttr ? { name: displayHtmlAttr.Name, valueLength: displayHtmlAttr.Value?.length } : 'not found');
+        console.log(`📦 displayMarkdownAttr:`, displayMarkdownAttr ? { name: displayMarkdownAttr.Name, valueLength: displayMarkdownAttr.Value?.length } : 'not found');
 
         // Parse attribute values - fix "null" string bug
         this.displayHtml = this.parseAttributeValue(displayHtmlAttr?.Value);
@@ -247,14 +236,10 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
           }
         }
 
-        console.log(
-          `📦 JSON Plugin: displayHtml=${!!this.displayHtml} (${this.displayHtml?.length || 0} chars), displayMarkdown=${!!this.displayMarkdown} (${this.displayMarkdown?.length || 0} chars)`
-        );
+        console.log(`📦 JSON Plugin: displayHtml=${!!this.displayHtml} (${this.displayHtml?.length || 0} chars), displayMarkdown=${!!this.displayMarkdown} (${this.displayMarkdown?.length || 0} chars)`);
         console.log(`📦 isShowingElevatedDisplay=${this.isShowingElevatedDisplay}`);
       } else {
-        console.log(
-          `📦 JSON Plugin: No attributes found or query failed. Success=${result.Success}, ResultsLength=${result.Results?.length}`
-        );
+        console.log(`📦 JSON Plugin: No attributes found or query failed. Success=${result.Success}, ResultsLength=${result.Results?.length}`);
       }
     } catch (err) {
       console.error('📦 JSON Plugin: Error loading version attributes:', err);
@@ -363,7 +348,7 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
         // Force body to use full iframe width with consistent margins
         if (iframeDoc.body) {
           const marginSize = 20; // 20px margins on each side
-          const bodyWidth = iframeWidth - marginSize * 2;
+          const bodyWidth = iframeWidth - (marginSize * 2);
 
           iframeDoc.body.style.width = `${bodyWidth}px`;
           iframeDoc.body.style.maxWidth = 'none';
@@ -402,14 +387,11 @@ export class JsonArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     // Copy based on what's being displayed - prioritize displayHtml
     const content = this.displayHtml || this.displayMarkdown || this.jsonContent;
     if (content) {
-      navigator.clipboard
-        .writeText(content)
-        .then(() => {
-          console.log('✅ Copied content to clipboard');
-        })
-        .catch((err) => {
-          console.error('Failed to copy to clipboard:', err);
-        });
+      navigator.clipboard.writeText(content).then(() => {
+        console.log('✅ Copied content to clipboard');
+      }).catch(err => {
+        console.error('Failed to copy to clipboard:', err);
+      });
     }
   }
 
