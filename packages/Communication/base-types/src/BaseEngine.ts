@@ -85,10 +85,10 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
       }
       else {
          if (run.LatestResult) {
-            console.error('Failed to save communication run:', run.LatestResult.Message);
+            console.error('Failed to save communication run:', run.LatestResult.CompleteMessage);
             
-            if (run.LatestResult.Error) {
-               console.error('  Original error:', run.LatestResult.Error);
+            if (run.LatestResult.CompleteMessage) {
+               console.error('  Original error:', run.LatestResult.CompleteMessage);
             }
          }
          else {
@@ -136,10 +136,10 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
       }
       else {
          if (log.LatestResult) {
-            console.error('Failed to save communication log:', log.LatestResult.Message);
+            console.error('Failed to save communication log:', log.LatestResult.CompleteMessage);
             
-            if (log.LatestResult.Error) {
-               console.error('  Original error:', log.LatestResult.Error);
+            if (log.LatestResult.CompleteMessage) {
+               console.error('  Original error:', log.LatestResult.CompleteMessage);
             }
          }
          else {

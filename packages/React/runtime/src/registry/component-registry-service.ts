@@ -654,7 +654,7 @@ export class ComponentRegistryService {
     // Save back to database
     const result = await componentEntity.Save();
     if (!result) {
-      throw new Error(`Failed to save cached component: ${componentEntity.Name}\n${componentEntity.LatestResult.Message || componentEntity.LatestResult.Error || componentEntity.LatestResult.Errors?.join(',')}`);
+      throw new Error(`Failed to save cached component: ${componentEntity.Name}\n${componentEntity.LatestResult.CompleteMessage || componentEntity.LatestResult.CompleteMessage || componentEntity.LatestResult.Errors?.join(',')}`);
     }
     
     if (this.debug) {

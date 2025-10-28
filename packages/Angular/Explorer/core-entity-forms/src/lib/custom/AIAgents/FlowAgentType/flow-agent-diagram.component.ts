@@ -1828,9 +1828,9 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
           if (path.LatestResult) {
             console.error('Failed to delete path:', {
               pathId: path.ID,
-              error: path.LatestResult.Error,
+              error: path.LatestResult.CompleteMessage,
               errors: path.LatestResult.Errors,
-              message: path.LatestResult.Message
+              message: path.LatestResult.CompleteMessage
             });
           }
           alert('Failed to delete connected paths. Cannot delete step.');
@@ -1863,9 +1863,9 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
           console.error('Failed to delete step:', {
             stepId: this.selectedStep.ID,
             stepName: this.selectedStep.Name,
-            error: this.selectedStep.LatestResult.Error,
+            error: this.selectedStep.LatestResult.CompleteMessage,
             errors: this.selectedStep.LatestResult.Errors,
-            message: this.selectedStep.LatestResult.Message
+            message: this.selectedStep.LatestResult.CompleteMessage
           });
         }
         alert('Failed to delete step. Please check the console for details.');
@@ -1907,9 +1907,9 @@ export class FlowAgentDiagramComponent implements OnInit, OnDestroy, OnChanges, 
             pathId: this.selectedPath.ID,
             originStepId: this.selectedPath.OriginStepID,
             destinationStepId: this.selectedPath.DestinationStepID,
-            error: this.selectedPath.LatestResult.Error,
+            error: this.selectedPath.LatestResult.CompleteMessage,
             errors: this.selectedPath.LatestResult.Errors,
-            message: this.selectedPath.LatestResult.Message
+            message: this.selectedPath.LatestResult.CompleteMessage
           });
         }
         alert('Failed to delete connection. Please check the console for details.');
