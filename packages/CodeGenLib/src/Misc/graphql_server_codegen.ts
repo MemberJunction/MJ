@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityRelationshipInfo, TypeScriptTypeFromSQLType, Metadata, TypeScriptTypeFromSQLTypeWithNullableOption, sanitizeGraphQLName, getGraphQLTypeNameBase, MJ_CORE_SCHEMA } from '@memberjunction/core';
 import fs from 'fs';
 import path from 'path';
 import { logError } from './status_logging';
@@ -43,80 +43,6 @@ export class GraphQLServerGeneratorBase {
   }
 
   /**
-   * Sanitizes a string to be a valid GraphQL name component, preserving original capitalization.
-   * GraphQL names must match the pattern [_A-Za-z][_0-9A-Za-z]* and cannot start with double underscore
-   *
-   * @param input - The string to sanitize
-   * @returns A valid GraphQL name component with special characters removed
-   *
-   * @example
-   * ```typescript
-   * // Input: Schema name with special characters
-   * sanitizeGraphQLName("my-schema")
-   * // Output: "myschema"
-   * ```
-   *
-   * @example
-   * ```typescript
-   * // Input: Name starting with double underscore (reserved)
-   * sanitizeGraphQLName("__mj_User")
-   * // Output: "mjUser"
-   * // (Removes __ prefix and underscores)
-   * ```
-   *
-   * @example
-   * ```typescript
-   * // Input: Name starting with a digit
-   * sanitizeGraphQLName("123Orders")
-   * // Output: "_123Orders"
-   * // (Prepends underscore since GraphQL names can't start with digits)
-   * ```
-   *
-   * @example
-   * ```typescript
-   * // Input: Preserves capitalization
-   * sanitizeGraphQLName("MyTable_Name")
-   * // Output: "MyTableName"
-   * // (Removes underscores but preserves case)
-   * ```
-   *
-   * @example
-   * ```typescript
-   * // Input: Empty or invalid input
-   * sanitizeGraphQLName("")
-   * // Output: ""
-   *
-   * sanitizeGraphQLName("!!!###")
-   * // Output: "_"
-   * // (All chars removed, so prepends underscore)
-   * ```
-   */
-  protected sanitizeGraphQLName(input: string): string {
-    if (!input || input.length === 0) {
-      return '';
-    }
-
-    // Replace any non-alphanumeric characters (except underscore) with nothing to preserve capitalization
-    let sanitized = input.replace(/[^A-Za-z0-9_]/g, '');
-
-    // If the name starts with two underscores, remove them
-    // (double underscore is reserved for GraphQL introspection)
-    if (sanitized.startsWith('__')) {
-      sanitized = sanitized.substring(2);
-    }
-
-    // Remove any remaining underscores
-    sanitized = sanitized.replace(/_/g, '');
-
-    // If the result starts with a digit or is empty, prepend an underscore
-    if (sanitized.length === 0 || /^[0-9]/.test(sanitized)) {
-      return '_' + sanitized;
-    }
-
-    return sanitized;
-  }
-
-  /**
    * Generates the base GraphQL type name for an entity using SchemaBaseTable pattern.
    * Preserves original capitalization. Special case: MJ core schema uses "MJ" prefix.
    * This ensures unique type names across different schemas.
@@ -124,13 +50,7 @@ export class GraphQLServerGeneratorBase {
    * @returns The base GraphQL type name (without suffix)
    */
   protected getServerGraphQLTypeNameBase(entity: EntityInfo): string {
-    // Special case for MJ core schema - use "MJ" instead of the schema name
-    const schemaPrefix = entity.SchemaName.trim().toLowerCase() === mjCoreSchema.trim().toLowerCase()
-      ? 'MJ'
-      : this.sanitizeGraphQLName(entity.SchemaName);
-
-    const sanitizedBaseTable = this.sanitizeGraphQLName(entity.BaseTable);
-    return `${schemaPrefix}${sanitizedBaseTable}`;
+    return getGraphQLTypeNameBase(entity);
   }
 
   /**
