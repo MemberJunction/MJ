@@ -6,9 +6,9 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo, RunView } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
-import { AIActionEntity, AIAgentEntityExtended, AIModelEntityExtended, ActionEntity, AIAgentNoteEntity, AIAgentExampleEntity } from "@memberjunction/core-entities";
+import { AIActionEntity, AIAgentEntityExtended, AIModelEntityExtended, ActionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
@@ -17,6 +17,7 @@ import { AgentEmbeddingMetadata, AgentMatchResult } from "./types/AgentMatchResu
 import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchResult";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
+import { ActionEngineBase } from "@memberjunction/actions-base";
 
 
 /**
@@ -328,24 +329,14 @@ export class AIEngine extends AIEngineBase {
      * @private
      */
     private async loadActions(contextUser?: UserInfo): Promise<void> {
-        const startTime = Date.now();
-        console.log('AIEngine: Loading actions...');
-
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<ActionEntity>({
-                EntityName: 'Actions',
-                ExtraFilter: "Status = 'Active'",
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            }, contextUser);
+            await ActionEngineBase.Instance.Config(false, contextUser);
+            const actions = ActionEngineBase.Instance.Actions.filter(a => a.Status === 'Active');
 
-            if (result.Success && result.Results) {
-                this._actions = result.Results;
-                const duration = Date.now() - startTime;
-                console.log(`AIEngine: Loaded ${this._actions.length} actions in ${duration}ms`);
+            if (actions && actions.length > 0) {
+                this._actions = actions;
             } else {
-                console.error(`Failed to load actions: ${result.ErrorMessage || 'Unknown error'}`);
+                console.error(`Failed to load actions`);
                 this._actions = [];
             }
 
@@ -417,25 +408,11 @@ export class AIEngine extends AIEngineBase {
      * @private
      */
     private async loadNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
-        const startTime = Date.now();
-        console.log('AIEngine: Loading note embeddings...');
-
         try {
-            const rv = this.RunViewProviderToUse;
-            const result = await rv.RunView<AIAgentNoteEntity>({
-                EntityName: 'AI Agent Notes',
-                ExtraFilter: `Status='Active' AND EmbeddingVector IS NOT NULL`,
-                ResultType: 'entity_object'
-            }, contextUser);
+            const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
 
-            if (!result.Success) {
-                console.error('Failed to load agent notes:', result.ErrorMessage);
-                return;
-            }
-
-            const notes = result.Results || [];
             if (notes.length === 0) {
-                console.log('AIEngine: No notes with embeddings found');
+                console.log('AIEngine: No active notes with embeddings found');
                 return;
             }
 
@@ -455,10 +432,6 @@ export class AIEngine extends AIEngineBase {
 
             this._noteVectorService = new SimpleVectorService();
             this._noteVectorService.LoadVectors(entries);
-
-            const duration = Date.now() - startTime;
-            console.log(`AIEngine: Loaded embeddings for ${entries.length} notes in ${duration}ms`);
-
         } catch (error) {
             console.error(`Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -470,23 +443,9 @@ export class AIEngine extends AIEngineBase {
      * @private
      */
     private async loadExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
-        const startTime = Date.now();
-        console.log('AIEngine: Loading example embeddings...');
-
         try {
-            const rv = this.RunViewProviderToUse;
-            const result = await rv.RunView<AIAgentExampleEntity>({
-                EntityName: 'AI Agent Examples',
-                ExtraFilter: `Status='Active' AND EmbeddingVector IS NOT NULL`,
-                ResultType: 'entity_object'
-            }, contextUser);
+            const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
 
-            if (!result.Success) {
-                console.error('Failed to load agent examples:', result.ErrorMessage);
-                return;
-            }
-
-            const examples = result.Results || [];
             if (examples.length === 0) {
                 console.log('AIEngine: No examples with embeddings found');
                 return;
@@ -510,10 +469,6 @@ export class AIEngine extends AIEngineBase {
 
             this._exampleVectorService = new SimpleVectorService();
             this._exampleVectorService.LoadVectors(entries);
-
-            const duration = Date.now() - startTime;
-            console.log(`AIEngine: Loaded embeddings for ${entries.length} examples in ${duration}ms`);
-
         } catch (error) {
             console.error(`Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
         }
