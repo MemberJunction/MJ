@@ -182,7 +182,7 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 ```html
 <div class="chart-container">
   <svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
-    <!-- Actual SVG content here -->
+    <!-- Actual SVG content here - USE AN ACTION TO GENERATE SVG, DO NOT DO YOURSELF!!! -->
   </svg>
 </div>
 ```
@@ -213,6 +213,7 @@ Create a sophisticated, self-contained HTML report in `payloadChangeRequest.newE
 1. **Call the SVG action** (e.g., "Create SVG Chart", "Create SVG Diagram", "Create SVG Network") - it returns the SVG as a string
 2. **Wrap the SVG in a scrollable container** - this ensures large diagrams/charts are fully accessible
 3. **Don't use template literal placeholders** - just paste the actual SVG markup
+4. Do **NOT** generate SVG yourself, always use an Action to generate SVG
 
 **Example workflow:**
 ```typescript
@@ -249,7 +250,7 @@ Large diagrams (especially network graphs, org charts, and infographics) may exc
 ```html
 <div class="svg-scroll-wrapper">
   <svg xmlns="http://www.w3.org/2000/svg" width="1200" height="2000">
-    <!-- SVG content -->
+    <!-- SVG content from an action - do not generate yourself -->
   </svg>
 </div>
 ```

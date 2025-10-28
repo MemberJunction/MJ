@@ -44,6 +44,31 @@ You will receive:
 1. **Previous Agent**: Name and description of the last agent that responded
 2. **Conversation History**: Last 10 messages for context (compact format)
 3. **Latest User Message**: The new message to evaluate
+{% if hasPriorArtifact %}
+4. **Previous Artifacts**: All artifacts created by this agent in this conversation:
+
+{% for artifact in priorArtifacts %}
+### {{ artifact.artifactName }} ({{ artifact.artifactType }})
+{% if artifact.artifactDescription %}{{ artifact.artifactDescription }}{% endif %}
+
+**Versions:**
+{% for version in artifact.versions %}
+  - **v{{ version.versionNumber }}**{% if loop.first %} **(Most Recent)**{% endif %}
+    - Created: {{ version.createdAt }}
+    {% if version.versionName %}- Name: {{ version.versionName }}{% endif %}
+    {% if version.versionDescription %}- Description: {{ version.versionDescription }}{% endif %}
+    - Run ID: {{ version.runId }}
+
+{% endfor %}
+
+{% endfor %}
+
+**Artifact Modification Guidance**:
+- If user says "modify this", "change that", "update it" → Assume most recent version (v1 of most recent artifact)
+- If user says "version 2", "v2", "the second one" → Match to specific version number
+- If user says "the [artifact name]" → Match by artifact name
+- Set `targetArtifactRunId` to the specific run ID if you can determine which version, or use the most recent
+{% endif %}
 
 ## Output Format
 
@@ -51,13 +76,17 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "YES",
-  "reasoning": "Brief explanation of your decision"
+  "reasoning": "Brief explanation of your decision",
+  "modifyingArtifact": false,
+  "targetArtifactRunId": null
 }
 ```
 
 **Fields**:
 - `continuesWith`: Must be exactly "YES", "NO", or "UNSURE" (case-sensitive)
 - `reasoning`: 1-2 sentences explaining your decision (for debugging/logging)
+- `modifyingArtifact`: Boolean - true if user intends to modify/refine an artifact, false otherwise
+- `targetArtifactRunId`: String (run ID) or null - the specific run ID if you determined which version, otherwise null (will use most recent)
 
 ## Examples
 
@@ -70,7 +99,8 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "YES",
-  "reasoning": "User is requesting refinements to the content the Marketing Agent just created. This is clearly iterative work on the same task."
+  "reasoning": "User is requesting refinements to the content the Marketing Agent just created. This is clearly iterative work on the same task.",
+  "modifyingArtifact": true
 }
 ```
 
@@ -83,7 +113,7 @@ Return a JSON object with this exact structure:
 ```json
 {
   "continuesWith": "NO",
-  "reasoning": "User is shifting from content creation to content distribution/publishing, which may require a different agent with publishing capabilities."
+  "reasoning": "User is shifting from content creation to content distribution/publishing, which may require a different agent with publishing capabilities.","modifyingArtifact": false
 }
 ```
 
@@ -147,3 +177,23 @@ Return a JSON object with this exact structure:
 - **Consider agent capabilities** - Does the previous agent have the skills for this request?
 - **Look for completion signals** - Words like "thanks", "good", "now" often indicate context shifts
 - **Always return valid JSON** with exactly "YES", "NO", or "UNSURE" (case matters!)
+
+## Artifact Modification Detection
+
+{% if hasPriorArtifact %}
+**IMPORTANT**: A previous artifact exists from this agent. When determining `modifyingArtifact`:
+
+- **Set to `true` if**:
+  - User wants to "change", "modify", "update", "fix", "improve" the artifact
+  - User is requesting refinements, adjustments, or iterations
+  - User is asking to "make it better", "add to it", "remove from it"
+  
+- **Set to `false` if**:
+  - User is asking for a completely new artifact
+  - User is asking to work on something different
+  - User has indicated the previous work is complete ("that's good, now...")
+  - User is requesting an action on the artifact (publish, share, deploy) rather than modification
+{% else %}
+**Note**: No prior artifact exists, so `modifyingArtifact` will always be `false` in this case.
+{% endif %}
+
