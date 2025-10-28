@@ -160,8 +160,10 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
       const result = await rv.RunView<ArtifactEntity>({
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `ID IN (
-          SELECT ArtifactID FROM __mj.vwCollectionArtifacts
-          WHERE CollectionID = '${collection.ID}'
+          SELECT DISTINCT av.ArtifactID
+          FROM __mj.vwArtifactVersions av
+          INNER JOIN __mj.vwCollectionArtifacts ca ON ca.ArtifactVersionID = av.ID
+          WHERE ca.CollectionID = '${collection.ID}'
         )`,
         OrderBy: 'Name',
         ResultType: 'entity_object'

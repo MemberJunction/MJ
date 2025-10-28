@@ -28,7 +28,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   @Input() canEdit?: boolean; // Whether user can edit this artifact
   @Output() closed = new EventEmitter<void>();
   @Output() saveToCollectionRequested = new EventEmitter<{artifactId: string; excludedCollectionIds: string[]}>();
-  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number}>();
+  @Output() navigateToLink = new EventEmitter<{type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}>();
   @Output() shareRequested = new EventEmitter<string>(); // Emits artifactId when share is clicked
 
   @ViewChild(ArtifactTypePluginViewerComponent) pluginViewer?: ArtifactTypePluginViewerComponent;
@@ -43,7 +43,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   public error: string | null = null;
   public jsonContent = '';
   public showVersionDropdown = false;
-  public artifactCollections: CollectionArtifactEntity[] = [];
+  public artifactCollections: CollectionArtifactEntity[] = []; // All collections for ALL versions
+  public currentVersionCollections: CollectionArtifactEntity[] = []; // Collections containing CURRENT version only
   public primaryCollection: CollectionEntity | null = null;
 
   // Tabbed interface
@@ -133,7 +134,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (this.refreshTrigger) {
       this.refreshTrigger.pipe(takeUntil(this.destroy$)).subscribe(async (data) => {
         if (data.artifactId === this.artifactId) {
-          console.log(`📦 Refreshing artifact viewer to version ${data.versionNumber}`);
           // Reload all versions to get any new ones
           await this.loadArtifact(data.versionNumber);
         }
@@ -154,7 +154,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (changes['versionNumber'] && !changes['versionNumber'].firstChange) {
       const newVersionNumber = changes['versionNumber'].currentValue;
       if (newVersionNumber != null) {
-        console.log(`📦 Version number changed to ${newVersionNumber}, switching version`);
         // Check if we already have this version loaded (avoid reload if possible)
         const targetVersion = this.allVersions.find(v => v.VersionNumber === newVersionNumber);
         if (targetVersion) {
@@ -163,10 +162,14 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           this.selectedVersionNumber = targetVersion.VersionNumber || 1;
           this.jsonContent = this.FormatJSON(targetVersion.Content || '{}');
 
-          console.log(`📦 Switched to cached version ${this.selectedVersionNumber}`);
-
           // Load version attributes
           await this.loadVersionAttributes();
+
+          // Reload collection associations for this version
+          await this.loadCollectionAssociations();
+
+          // Reload links data
+          await this.loadLinksData();
         } else {
           // Need to reload to get this version (shouldn't normally happen)
           await this.loadArtifact(newVersionNumber);
@@ -184,6 +187,9 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     try {
       this.isLoading = true;
       this.error = null;
+
+      // Clear links data from previous artifact to prevent stale Links tab
+      this.clearLinksData();
 
       const md = new Metadata();
 
@@ -215,12 +221,10 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         if (targetVersionNumber) {
           const targetVersion = this.allVersions.find(v => v.VersionNumber === targetVersionNumber);
           if (targetVersion) {
-            console.log(`📦 Loading specified version ${targetVersionNumber}`);
             this.artifactVersion = targetVersion;
             this.selectedVersionNumber = targetVersion.VersionNumber || 1;
             this.jsonContent = this.FormatJSON(targetVersion.Content || '{}');
           } else {
-            console.warn(`📦 Version ${targetVersionNumber} not found, defaulting to latest`);
             // Target version not found, default to latest
             this.artifactVersion = result.Results[0];
             this.selectedVersionNumber = this.artifactVersion.VersionNumber || 1;
@@ -241,8 +245,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
         // Load links data
         await this.loadLinksData();
-
-        console.log(`📦 Loaded ${this.allVersions.length} versions for artifact ${this.artifactId}, showing v${this.selectedVersionNumber}`);
       } else {
         this.error = 'No artifact version found';
       }
@@ -252,6 +254,16 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     } finally {
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Clear all links-related data to prevent stale data when switching artifacts
+   */
+  private clearLinksData(): void {
+    this.allCollections = [];
+    this.originConversation = null;
+    this.hasAccessToOriginConversation = false;
+    this.originConversationVersionId = null;
   }
 
   private async loadArtifactType(): Promise<void> {
@@ -266,7 +278,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       if (artifactType) {
         // Resolve DriverClass by traversing parent hierarchy if needed
         this.artifactTypeDriverClass = await this.resolveDriverClassForType(artifactType);
-        console.log(`📦 Loaded artifact type "${this.artifact.Type}", DriverClass: ${this.artifactTypeDriverClass || 'none'}`);
       }
     } catch (err) {
       console.error('Error loading artifact type:', err);
@@ -310,8 +321,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         } else {
           this.activeTab = 'details';
         }
-
-        console.log(`📦 Loaded ${this.versionAttributes.length} attributes, displayMarkdown=${!!this.displayMarkdown}, displayHtml=${!!this.displayHtml}, hasDisplayTab=${this.hasDisplayTab}, activeTab=${this.activeTab}`);
       }
     } catch (err) {
       console.error('Error loading version attributes:', err);
@@ -415,14 +424,31 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     try {
       const rv = new RunView();
+      // Load ALL collection associations for ALL versions of this artifact
       const result = await rv.RunView<CollectionArtifactEntity>({
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        ExtraFilter: `ArtifactVersionID IN (
+          SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+        )`,
         ResultType: 'entity_object'
       }, this.currentUser);
 
       if (result.Success && result.Results) {
         this.artifactCollections = result.Results;
+
+        // Filter to get only collections containing the CURRENT version
+        const currentVersionId = this.artifactVersion?.ID;
+        if (currentVersionId) {
+          // Type-safe comparison: ensure both IDs are strings and match exactly
+          const currentIdStr = String(currentVersionId).toLowerCase();
+
+          this.currentVersionCollections = result.Results.filter(ca => {
+            const versionIdStr = String(ca.ArtifactVersionID || '').toLowerCase();
+            return versionIdStr && currentIdStr && versionIdStr === currentIdStr;
+          });
+        } else {
+          this.currentVersionCollections = [];
+        }
 
         // Load the primary collection details if exists
         if (this.artifactCollections.length > 0) {
@@ -430,8 +456,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           const md = new Metadata();
           this.primaryCollection = await md.GetEntityObject<CollectionEntity>('MJ: Collections', this.currentUser);
           await this.primaryCollection.Load(collectionId);
-
-          console.log(`📦 Artifact is in ${this.artifactCollections.length} collection(s)`);
         } else {
           this.primaryCollection = null;
         }
@@ -442,7 +466,15 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   get isInCollection(): boolean {
-    return this.artifactCollections.length > 0;
+    return this.currentVersionCollections.length > 0;
+  }
+
+  /**
+   * Get collection IDs that already contain the current version
+   * Used to exclude them from the save picker
+   */
+  get currentVersionCollectionIds(): string[] {
+    return this.currentVersionCollections.map(ca => ca.CollectionID);
   }
 
   onCopyToClipboard(): void {
@@ -459,9 +491,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   onCopyDisplayContent(): void {
     const content = this.displayHtml || this.displayMarkdown;
     if (content) {
-      navigator.clipboard.writeText(content).then(() => {
-        console.log('✅ Copied display content to clipboard');
-      }).catch(err => {
+      navigator.clipboard.writeText(content).catch(err => {
         console.error('Failed to copy to clipboard:', err);
       });
     }
@@ -526,6 +556,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     // Load attributes for the selected version
     await this.loadVersionAttributes();
+
+    // CRITICAL FIX: Reload collection associations for this version
+    // This ensures bookmark button and Links tab reflect the correct state
+    await this.loadCollectionAssociations();
+
+    // Also reload links data to update conversation/collection links
+    await this.loadLinksData();
   }
 
   async onSaveToLibrary(): Promise<void> {
@@ -538,8 +575,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   get excludedCollectionIds(): string[] {
-    // Return IDs of collections that already contain this artifact
-    return this.artifactCollections.map(ca => ca.CollectionID);
+    // Return IDs of collections that already contain the CURRENT VERSION
+    // This allows saving different versions to the same collection
+    const excluded = this.currentVersionCollections
+      .filter(ca => ca.CollectionID)
+      .map(ca => String(ca.CollectionID));
+    return excluded;
   }
 
   /**
@@ -555,37 +596,46 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       const md = new Metadata();
       let successCount = 0;
 
-      // Save artifact to each selected collection
+      // Get current version ID - save the version being viewed
+      const currentVersionId = this.artifactVersion?.ID;
+      if (!currentVersionId) {
+        console.error('No current version ID available');
+        MJNotificationService.Instance.CreateSimpleNotification(
+          'Cannot save: no version selected',
+          'error'
+        );
+        return false;
+      }
+
+      // Save artifact version to each selected collection
       for (const collectionId of collectionIds) {
-        // Double check it doesn't already exist
+        // Double check this exact version doesn't already exist in the collection
         const rv = new RunView();
         const existingResult = await rv.RunView<CollectionArtifactEntity>({
           EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${this.artifactId}'`,
+          ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${currentVersionId}'`,
           ResultType: 'entity_object'
         }, this.currentUser);
 
         if (existingResult.Success && existingResult.Results && existingResult.Results.length > 0) {
-          console.log(`Artifact already in collection ${collectionId}, skipping`);
           continue;
         }
 
-        // Create junction record
+        // Create junction record with version ID
         const collectionArtifact = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
         collectionArtifact.CollectionID = collectionId;
-        collectionArtifact.ArtifactID = this.artifactId;
+        collectionArtifact.ArtifactVersionID = currentVersionId;
         collectionArtifact.Sequence = 0;
 
         const saved = await collectionArtifact.Save();
         if (saved) {
           successCount++;
         } else {
-          console.error(`Failed to save artifact to collection ${collectionId}`);
+          console.error(`Failed to save artifact version to collection ${collectionId}`);
         }
       }
 
       if (successCount > 0) {
-        console.log(`✅ Saved artifact to ${successCount} collection(s)`);
         MJNotificationService.Instance.CreateSimpleNotification(
           `Artifact saved to ${successCount} collection(s) successfully!`,
           'success',
@@ -619,14 +669,19 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   private async loadLinksData(): Promise<void> {
     if (!this.artifactId) return;
 
+    // Clear old links data first to prevent stale data from previous artifact
+    this.clearLinksData();
+
     try {
       const md = new Metadata();
       const rv = new RunView();
 
-      // Load all collections containing this artifact
+      // Load all collections containing any version of this artifact
       const collArtifactsResult = await rv.RunView<CollectionArtifactEntity>({
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `ArtifactID='${this.artifactId}'`,
+        ExtraFilter: `ArtifactVersionID IN (
+          SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${this.artifactId}'
+        )`,
         ResultType: 'entity_object'
       }, this.currentUser);
 
@@ -700,8 +755,6 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
           }
         }
       }
-
-      console.log(`🔗 Loaded links: ${this.allCollections.length} collections, origin conversation: ${this.originConversation?.Name || 'none'}, viewContext: ${this.viewContext}`);
     } catch (error) {
       console.error('Error loading links data:', error);
     }
@@ -713,10 +766,22 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     // Get current version ID being viewed
     const currentVersionId = this.artifactVersion?.ID;
 
-    // Add origin conversation if viewing in collection AND current version matches origin version
-    if (this.viewContext === 'collection' && this.originConversation && currentVersionId) {
-      // Only show link if the current version is the one that came from the conversation
-      if (currentVersionId === this.originConversationVersionId) {
+    // RULE: In conversation context, show ONLY collection links
+    // RULE: In collection context, show ONLY conversation links
+    if (this.viewContext === 'conversation') {
+      // Show all collections containing this artifact (any version)
+      for (const collection of this.allCollections) {
+        links.push({
+          type: 'collection',
+          id: collection.ID,
+          name: collection.Name,
+          hasAccess: true
+        });
+      }
+    } else if (this.viewContext === 'collection') {
+      // Show origin conversation if it exists
+      // Show for ALL versions of the artifact, not just the original version that was added
+      if (this.originConversation) {
         links.push({
           type: 'conversation',
           id: this.originConversation.ID,
@@ -725,23 +790,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         });
       }
     }
-
-    // Add all collections (excluding current context if applicable)
-    // NOTE: Collections currently save the base artifact (not version-specific),
-    // so all versions of an artifact show links to all collections containing it
-    for (const collection of this.allCollections) {
-      if (this.viewContext === 'collection' && collection.ID === this.contextCollectionId) {
-        // Skip current collection
-        continue;
-      }
-
-      links.push({
-        type: 'collection',
-        id: collection.ID,
-        name: collection.Name,
-        hasAccess: true // User can see it, so they have access
-      });
-    }
+    // If viewContext is null, show nothing (no links)
 
     return links;
   }
@@ -754,12 +803,13 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       return;
     }
 
-    // Include artifact ID and version number so destination can show the artifact
+    // Include artifact ID, version number, and version ID so destination can show the artifact with correct URL
     this.navigateToLink.emit({
       type: link.type,
       id: link.id,
       artifactId: this.artifactId,
-      versionNumber: this.selectedVersionNumber
+      versionNumber: this.selectedVersionNumber,
+      versionId: this.artifactVersion?.ID
     });
   }
 
@@ -778,25 +828,20 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   private async resolveDriverClassForType(artifactType: ArtifactTypeEntity): Promise<string | null> {
     // Check if current artifact type has a DriverClass
     if (artifactType.DriverClass) {
-      console.log(`✅ Found DriverClass '${artifactType.DriverClass}' on artifact type '${artifactType.Name}'`);
       return artifactType.DriverClass;
     }
 
     // No DriverClass on current type - check if it has a parent
     if (artifactType.ParentID) {
-      console.log(`🔍 No DriverClass on '${artifactType.Name}', checking parent...`);
       const parentType = await this.getArtifactTypeById(artifactType.ParentID);
 
       if (parentType) {
         // Recursively check parent
         return await this.resolveDriverClassForType(parentType);
-      } else {
-        console.warn(`⚠️ Parent artifact type '${artifactType.ParentID}' not found`);
       }
     }
 
     // Reached root with no DriverClass
-    console.log(`❌ No DriverClass found in hierarchy for '${artifactType.Name}'`);
     return null;
   }
 

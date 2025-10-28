@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { ArtifactEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 
@@ -13,14 +13,15 @@ import { ArtifactPermissionService } from '../../services/artifact-permission.se
       <div class="card-content">
         <div class="card-header">
           <h4 class="artifact-name">{{ artifact.Name }}</h4>
+          <span class="version-badge" *ngIf="version">v{{ version.VersionNumber }}</span>
           <span class="artifact-type">{{ artifact.Type }}</span>
         </div>
         <div class="artifact-description" *ngIf="artifact.Description">
           {{ artifact.Description }}
         </div>
         <div class="artifact-meta">
-          <span class="meta-item" *ngIf="artifact.__mj_UpdatedAt">
-            <i class="fas fa-clock"></i> {{ artifact.__mj_UpdatedAt | date:'short' }}
+          <span class="meta-item" *ngIf="version && version.__mj_UpdatedAt">
+            <i class="fas fa-clock"></i> {{ version.__mj_UpdatedAt | date:'short' }}
           </span>
         </div>
       </div>
@@ -55,6 +56,7 @@ import { ArtifactPermissionService } from '../../services/artifact-permission.se
     .card-content { flex: 1; min-width: 0; }
     .card-header { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
     .artifact-name { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .version-badge { padding: 2px 8px; background: #FFF3E0; color: #E65100; border-radius: 3px; font-size: 11px; font-weight: 600; font-family: monospace; }
     .artifact-type { padding: 2px 8px; background: #E3F2FD; color: #1976D2; border-radius: 3px; font-size: 11px; font-weight: 500; text-transform: uppercase; }
 
     .artifact-description { font-size: 13px; color: #666; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -70,13 +72,14 @@ import { ArtifactPermissionService } from '../../services/artifact-permission.se
 })
 export class CollectionArtifactCardComponent implements OnInit, OnChanges {
   @Input() artifact!: ArtifactEntity;
+  @Input() version?: ArtifactVersionEntity; // Optional version info
   @Input() currentUser!: UserInfo;
 
-  @Output() selected = new EventEmitter<ArtifactEntity>();
-  @Output() viewed = new EventEmitter<ArtifactEntity>();
-  @Output() shared = new EventEmitter<ArtifactEntity>();
-  @Output() edited = new EventEmitter<ArtifactEntity>();
-  @Output() removed = new EventEmitter<ArtifactEntity>();
+  @Output() selected = new EventEmitter<any>();
+  @Output() viewed = new EventEmitter<any>();
+  @Output() shared = new EventEmitter<any>();
+  @Output() edited = new EventEmitter<any>();
+  @Output() removed = new EventEmitter<any>();
 
   canShare: boolean = false;
   canEdit: boolean = false;

@@ -21,15 +21,6 @@ import { CollectionArtifactEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="ArtifactID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            LinkType="Record"
-            LinkComponentType="Search"
-        ></mj-form-field>
-        <mj-form-field 
-            [record]="record"
-            [ShowLabel]="true"
             FieldName="Sequence"
             Type="numerictextbox"
             [EditMode]="EditMode"
@@ -51,6 +42,15 @@ import { CollectionArtifactEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
+            FieldName="ArtifactVersionID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            LinkType="Record"
+            LinkComponentType="Search"
+        ></mj-form-field>
+        <mj-form-field 
+            [record]="record"
+            [ShowLabel]="true"
             FieldName="Collection"
             Type="textbox"
             [EditMode]="EditMode"
@@ -58,7 +58,7 @@ import { CollectionArtifactEntity } from '@memberjunction/core-entities';
         <mj-form-field 
             [record]="record"
             [ShowLabel]="true"
-            FieldName="Artifact"
+            FieldName="ArtifactVersion"
             Type="textbox"
             [EditMode]="EditMode"
         ></mj-form-field>

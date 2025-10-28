@@ -10,10 +10,12 @@
       }
     </div>
     <div class="panel-header-right">
-      <div class="version-selector" [class.clickable]="allVersions.length > 1" (click)="toggleVersionDropdown()">
+      <div class="version-selector"
+           [class.clickable]="allVersions.length > 1 && viewContext !== 'collection'"
+           (click)="viewContext !== 'collection' && toggleVersionDropdown()">
         <i class="fas fa-history"></i>
         <span class="version-label">v{{ selectedVersionNumber }}</span>
-        @if (allVersions.length > 1) {
+        @if (allVersions.length > 1 && viewContext !== 'collection') {
           <i class="fas fa-chevron-down dropdown-icon" [class.open]="showVersionDropdown"></i>
         }
         @if (showVersionDropdown) {
@@ -36,7 +38,7 @@
         <button class="save-to-collection-btn"
                 [class.in-collection]="isInCollection"
                 (click)="onSaveToLibrary()"
-                [title]="isInCollection ? 'Saved to ' + artifactCollections.length + ' collection(s)' : 'Save to Collection'">
+                [title]="isInCollection ? 'Current version saved to ' + currentVersionCollections.length + ' collection(s)' : 'Save to Collection'">
           <i [class]="isInCollection ? 'fas fa-bookmark' : 'far fa-bookmark'"></i>
         </button>
       }

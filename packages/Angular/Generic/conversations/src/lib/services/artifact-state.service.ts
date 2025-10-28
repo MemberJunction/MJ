@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
-import { ArtifactEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ArtifactPermissionService } from './artifact-permission.service';
 
@@ -75,6 +75,27 @@ export class ArtifactStateService {
     this._activeArtifactId$.next(id);
     this._activeVersionNumber$.next(versionNumber || null);
     this._isPanelOpen$.next(true);
+  }
+
+  /**
+   * Opens an artifact by version ID
+   * @param versionId The artifact version ID
+   */
+  async openArtifactByVersionId(versionId: string): Promise<void> {
+    try {
+      const md = new Metadata();
+      const version = await md.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions');
+      const loaded = await version.Load(versionId);
+
+      if (loaded) {
+        // Open the artifact with the specific version number
+        this.openArtifact(version.ArtifactID, version.VersionNumber);
+      } else {
+        console.error('Failed to load artifact version:', versionId);
+      }
+    } catch (error) {
+      console.error('Error loading artifact version:', error);
+    }
   }
 
   /**
@@ -170,41 +191,92 @@ export class ArtifactStateService {
   async loadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<ArtifactEntity[]> {
     try {
       const rv = new RunView();
-      // Need to load through Collection Artifacts junction table
-      const result = await rv.RunView<any>(
+      // Load artifacts through the collection join - use subquery to get artifact IDs from versions
+      const artifactsResult = await rv.RunView<ArtifactEntity>(
         {
-          EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `CollectionID='${collectionId}'`,
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID IN (
+            SELECT DISTINCT av.ArtifactID
+            FROM [__mj].[vwArtifactVersions] av
+            INNER JOIN [__mj].[vwCollectionArtifacts] ca ON ca.ArtifactVersionID = av.ID
+            WHERE ca.CollectionID = '${collectionId}'
+          )`,
           OrderBy: '__mj_CreatedAt DESC',
-          MaxRows: 1000,
           ResultType: 'entity_object'
         },
         currentUser
       );
 
-      if (result.Success && result.Results) {
-        // Load full artifact entities
-        const artifactIds = result.Results.map((ca: any) => ca.ArtifactID);
-        if (artifactIds.length === 0) return [];
-
-        const artifactsResult = await rv.RunView<ArtifactEntity>(
-          {
-            EntityName: 'MJ: Artifacts',
-            ExtraFilter: `ID IN ('${artifactIds.join("','")}')`,
-            OrderBy: '__mj_CreatedAt DESC',
-            ResultType: 'entity_object'
-          },
-          currentUser
-        );
-
-        if (artifactsResult.Success && artifactsResult.Results) {
-          artifactsResult.Results.forEach(artifact => this.cacheArtifact(artifact));
-          return artifactsResult.Results;
-        }
+      if (artifactsResult.Success && artifactsResult.Results) {
+        artifactsResult.Results.forEach(artifact => this.cacheArtifact(artifact));
+        return artifactsResult.Results;
       }
       return [];
     } catch (error) {
       console.error('Error loading collection artifacts:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Loads artifact VERSIONS for a collection (all versions, not deduplicated by artifact ID)
+   * This method returns each version as a separate item with its parent artifact metadata
+   * @param collectionId The collection ID
+   * @param currentUser The current user context
+   * @returns Array of objects containing version and parent artifact info
+   */
+  async loadArtifactVersionsForCollection(
+    collectionId: string,
+    currentUser: UserInfo
+  ): Promise<Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }>> {
+    try {
+      const rv = new RunView();
+
+      // Load ALL versions in collection (no DISTINCT - each version is separate)
+      const versionResult = await rv.RunView<ArtifactVersionEntity>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ID IN (
+          SELECT ca.ArtifactVersionID
+          FROM [__mj].[vwCollectionArtifacts] ca
+          WHERE ca.CollectionID='${collectionId}'
+        )`,
+        OrderBy: '__mj_UpdatedAt DESC',
+        ResultType: 'entity_object'
+      }, currentUser);
+
+      if (!versionResult.Success || !versionResult.Results) {
+        return [];
+      }
+
+      // Load parent artifacts for display metadata
+      const artifactIds = [...new Set(versionResult.Results.map(v => v.ArtifactID))];
+      const artifactMap = new Map<string, ArtifactEntity>();
+
+      if (artifactIds.length > 0) {
+        const artifactFilter = artifactIds.map(id => `ID='${id}'`).join(' OR ');
+        const artifactResult = await rv.RunView<ArtifactEntity>({
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: artifactFilter,
+          ResultType: 'entity_object'
+        }, currentUser);
+
+        if (artifactResult.Success && artifactResult.Results) {
+          artifactResult.Results.forEach(a => {
+            artifactMap.set(a.ID, a);
+            this.cacheArtifact(a); // Cache parent artifacts
+          });
+        }
+      }
+
+      // Combine version + artifact
+      return versionResult.Results
+        .map(version => ({
+          version,
+          artifact: artifactMap.get(version.ArtifactID)!
+        }))
+        .filter(item => item.artifact != null);
+    } catch (error) {
+      console.error('Error loading collection artifact versions:', error);
       return [];
     }
   }
@@ -320,23 +392,46 @@ export class ArtifactStateService {
   }
 
   /**
-   * Adds an artifact to a collection
-   * @param artifactId The artifact ID
+   * Adds an artifact version to a collection
+   * @param artifactId The artifact ID (for permission checking)
    * @param collectionId The collection ID
    * @param currentUser The current user context
+   * @param versionId Optional specific version ID. If not provided, uses latest version
    */
-  async addToCollection(artifactId: string, collectionId: string, currentUser: UserInfo): Promise<void> {
+  async addToCollection(artifactId: string, collectionId: string, currentUser: UserInfo, versionId?: string): Promise<void> {
     // Check edit permission (required to modify collection membership)
     const canEdit = await this.artifactPermissionService.checkPermission(artifactId, currentUser.ID, 'edit', currentUser);
     if (!canEdit) {
       throw new Error('You do not have permission to add this artifact to a collection');
     }
 
+    // Get version ID if not provided
+    let targetVersionId = versionId;
+    if (!targetVersionId) {
+      const rv = new RunView();
+      const versionResult = await rv.RunView<any>(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${artifactId}'`,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object'
+        },
+        currentUser
+      );
+
+      if (!versionResult.Success || !versionResult.Results || versionResult.Results.length === 0) {
+        throw new Error('No versions found for artifact');
+      }
+
+      targetVersionId = versionResult.Results[0].ID;
+    }
+
     const md = new Metadata();
     const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', currentUser);
 
     (collectionArtifact as any).CollectionID = collectionId;
-    (collectionArtifact as any).ArtifactID = artifactId;
+    (collectionArtifact as any).ArtifactVersionID = targetVersionId;
 
     const saved = await collectionArtifact.Save();
     if (!saved) {
@@ -345,7 +440,7 @@ export class ArtifactStateService {
   }
 
   /**
-   * Removes an artifact from a collection
+   * Removes all versions of an artifact from a collection
    * @param artifactId The artifact ID
    * @param collectionId The collection ID
    * @param currentUser The current user context
@@ -358,11 +453,13 @@ export class ArtifactStateService {
     }
 
     const rv = new RunView();
+    // Find all versions of this artifact in the collection
     const result = await rv.RunView<any>(
       {
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${collectionId}' AND ArtifactID='${artifactId}'`,
-        MaxRows: 1,
+        ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID IN (
+          SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
+        )`,
         ResultType: 'entity_object'
       },
       currentUser
@@ -376,11 +473,13 @@ export class ArtifactStateService {
       throw new Error('Collection artifact link not found');
     }
 
-    const collectionArtifact = result.Results[0];
-    const deleted = await collectionArtifact.Delete();
-    if (!deleted) {
-      const errorMsg = collectionArtifact.LatestResult?.Message || 'Failed to remove artifact from collection';
-      throw new Error(errorMsg);
+    // Delete all version associations
+    for (const collectionArtifact of result.Results) {
+      const deleted = await collectionArtifact.Delete();
+      if (!deleted) {
+        const errorMsg = collectionArtifact.LatestResult?.Message || 'Failed to remove artifact from collection';
+        throw new Error(errorMsg);
+      }
     }
   }
 }
