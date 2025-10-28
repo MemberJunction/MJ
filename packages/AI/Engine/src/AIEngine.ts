@@ -192,20 +192,25 @@ export class AIEngine extends AIEngineBase {
         // Call parent first (sets up prompt-category associations, agent relationships, etc.)
         await super.AdditionalLoading(contextUser);
 
+        // now load all the related embeddings and we can do this all in parallel as well
+        // since they are independent of each other
+        const promises = [];
         // Load Actions from database
-        await this.loadActions(contextUser);
+        promises.push(this.loadActions(contextUser));
 
         // Compute agent embeddings using agents already loaded by base class
-        await this.loadAgentEmbeddings();
+        promises.push(this.loadAgentEmbeddings());
 
         // Compute action embeddings using actions we just loaded
-        await this.loadActionEmbeddings();
+        promises.push(this.loadActionEmbeddings());
 
         // Load note embeddings
-        await this.loadNoteEmbeddings(contextUser);
+        promises.push(this.loadNoteEmbeddings(contextUser));
 
         // Load example embeddings
-        await this.loadExampleEmbeddings(contextUser);
+        promises.push(this.loadExampleEmbeddings(contextUser));
+
+        await Promise.all(promises);
     }
 
     /**
@@ -519,7 +524,7 @@ export class AIEngine extends AIEngineBase {
         minSimilarity: number = 0.5
     ): Promise<NoteMatchResult[]> {
         if (!this._noteVectorService) {
-            throw new Error('Note embeddings not loaded. Ensure AIEngine.Config() has completed.');
+            return []; // this is a valid state, we don't create the vector service unless there are notes in the DB
         }
 
         if (!queryText || queryText.trim().length === 0) {
@@ -579,7 +584,7 @@ export class AIEngine extends AIEngineBase {
         minSimilarity: number = 0.5
     ): Promise<ExampleMatchResult[]> {
         if (!this._exampleVectorService) {
-            throw new Error('Example embeddings not loaded. Ensure AIEngine.Config() has completed.');
+            return []; // this is a valid state, we don't create the vector service unless there are examples in the DB
         }
 
         if (!queryText || queryText.trim().length === 0) {
