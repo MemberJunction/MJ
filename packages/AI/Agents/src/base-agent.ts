@@ -3682,11 +3682,12 @@ The context is now within limits. Please retry your request with the recovered c
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
 
-            // Remove temporary loop results message if present
-            const loopMsgIndex = params.conversationMessages.findIndex(m => (m as any).metadata?._loopResults === true);
-            if (loopMsgIndex !== -1) {
-                params.conversationMessages.splice(loopMsgIndex, 1);
-            }
+            // Remove temporary messages before processing prompt results
+            // This includes loop results and sub-agent completion messages
+            params.conversationMessages = params.conversationMessages.filter(m => {
+                const metadata = (m as any).metadata;
+                return !metadata?._loopResults && !metadata?._subAgentResult;
+            });
 
             // Update step entity with AIPromptRun ID if available
             if (promptResult.promptRun?.ID) {
@@ -4173,10 +4174,16 @@ The context is now within limits. Please retry your request with the recovered c
             const resultMessage = subAgentResult.success
                 ? `Sub-agent completed successfully:\n${JSON.stringify(subAgentSummary, null, 2)}`
                 : `Sub-agent failed:\n${JSON.stringify(subAgentSummary, null, 2)}`;
-                
+
             params.conversationMessages.push({
                 role: 'user',
-                content: resultMessage
+                content: resultMessage,
+                metadata: {
+                    _temporary: true,
+                    _subAgentResult: true,
+                    subAgentName: subAgentRequest.name,
+                    subAgentId: subAgentEntity.ID
+                }
             });
             
             // Set PayloadAtEnd with the merged payload
