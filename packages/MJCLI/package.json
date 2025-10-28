@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/cli",
-  "version": "2.110.1",
+  "version": "2.112.0",
   "description": "MemberJunction command line tools",
   "keywords": [
     "oclif"
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/MemberJunction/MJ.git"
+    "url": "https://github.com/MemberJunction/MJ"
   },
   "license": "ISC",
   "author": "MemberJunction",
@@ -51,11 +51,11 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^5.0.1",
-    "@memberjunction/ai-cli": "2.110.1",
-    "@memberjunction/codegen-lib": "2.110.1",
-    "@memberjunction/db-auto-doc": "2.110.1",
-    "@memberjunction/metadata-sync": "2.110.1",
-    "@memberjunction/sqlserver-dataprovider": "2.110.1",
+    "@memberjunction/ai-cli": "2.112.0",
+    "@memberjunction/codegen-lib": "2.112.0",
+    "@memberjunction/db-auto-doc": "2.112.0",
+    "@memberjunction/metadata-sync": "2.112.0",
+    "@memberjunction/sqlserver-dataprovider": "2.112.0",
     "@oclif/core": "^3",
     "@oclif/plugin-help": "^6",
     "@oclif/plugin-version": "^2.0.17",

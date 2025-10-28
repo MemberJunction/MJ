@@ -43,7 +43,10 @@
     "mergemain:update-lock": "node ci/merge_main_and_update_lock.mjs",
     "commitpush": "node ci/commit_push.mjs"
   },
-  "repository": "https://github.com/MemberJunction/MJ.git",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "dependencies": {
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",

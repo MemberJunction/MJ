@@ -450,7 +450,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   onCopyToClipboard(): void {
-    if (this.jsonContent) {
+    // Get content from the currently active tab instead of always copying jsonContent
+    const tabData = this.GetTabContent(this.activeTab);
+    if (tabData?.content) {
+      navigator.clipboard.writeText(tabData.content);
+    } else if (this.jsonContent) {
+      // Fallback to jsonContent if tab content not found
       navigator.clipboard.writeText(this.jsonContent);
     }
   }

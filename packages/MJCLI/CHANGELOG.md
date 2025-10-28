@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/cli
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [e237ca9]
+  - @memberjunction/sqlserver-dataprovider@2.112.0
+  - @memberjunction/ai-cli@2.112.0
+  - @memberjunction/codegen-lib@2.112.0
+  - @memberjunction/metadata-sync@2.112.0
+  - @memberjunction/db-auto-doc@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes
