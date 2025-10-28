@@ -874,3 +874,156 @@
   border-radius: 4px;
   vertical-align: middle;
 }
+
+/* Mobile adjustments: 481px - 768px */
+@media (max-width: 768px) {
+  .message-item {
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .avatar-circle {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  .artifact-card {
+    max-width: 90vw;
+    padding: 12px;
+  }
+
+  .artifact-card-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .artifact-card-icon i {
+    font-size: 16px;
+  }
+
+  .message-header {
+    font-size: 12px;
+  }
+
+  .message-sender {
+    font-size: 12px;
+  }
+
+  .message-time {
+    font-size: 11px;
+  }
+
+  .agent-badge {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  .time-pill {
+    font-size: 10px;
+    padding: 2px 6px;
+  }
+
+  .message-actions {
+    gap: 1px;
+    padding: 3px;
+  }
+
+  .message-action-btn {
+    min-width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+}
+
+/* Small Phone adjustments: <= 480px */
+@media (max-width: 480px) {
+  .message-item {
+    padding: 6px 8px;
+    gap: 6px;
+  }
+
+  .avatar-circle {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .avatar-circle.ai-avatar {
+    border-radius: 6px;
+  }
+
+  .artifact-card {
+    padding: 10px;
+    margin-top: 8px;
+  }
+
+  .artifact-card-header {
+    gap: 8px;
+  }
+
+  .artifact-card-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .artifact-card-icon i {
+    font-size: 14px;
+  }
+
+  .artifact-card-label {
+    font-size: 13px;
+  }
+
+  .artifact-card-description {
+    font-size: 12px;
+  }
+
+  .message-header {
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .message-sender {
+    font-size: 11px;
+  }
+
+  .message-time {
+    font-size: 10px;
+  }
+
+  .agent-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  .time-pill {
+    font-size: 9px;
+    padding: 1px 5px;
+  }
+
+  .thread-indicator {
+    padding: 4px 8px;
+    font-size: 11px;
+    margin-top: 6px;
+  }
+
+  .agent-details-panel {
+    padding: 12px;
+    margin-top: 8px;
+  }
+
+  .agent-details-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .detail-row {
+    padding: 6px 8px;
+  }
+
+  .detail-label,
+  .detail-value {
+    font-size: 11px;
+  }
+}
