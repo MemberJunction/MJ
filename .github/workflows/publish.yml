@@ -73,9 +73,9 @@ jobs:
           fetch-tags: true
 
       - name: Set up node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
@@ -125,6 +125,8 @@ jobs:
 
       - name: Publish to npm
         run: npm run change publish
+        env:
+          NPM_TOKEN: ''
 
       - name: Get version string
         if: ${{ env.BRANCH == 'main' }}

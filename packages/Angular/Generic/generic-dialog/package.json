@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-generic-dialog",
-  "version": "2.110.1",
+  "version": "2.112.0",
   "description": "MemberJunction: Angular component for a generic dialog",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -27,5 +27,9 @@
   "dependencies": {
     "tslib": "^2.3.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }
