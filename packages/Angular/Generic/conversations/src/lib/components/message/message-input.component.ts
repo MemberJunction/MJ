@@ -765,18 +765,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       taskId = null; // Clear reference but don't remove from service
 
       if (!result || !result.success) {
-        // Evaluation failed - mark as complete to stop progress updates
-        this.markMessageComplete(conversationManagerMessage);
+        // Evaluation failed - use updateConversationDetail to ensure task cleanup
+        const errorMsg = result?.agentRun?.ErrorMessage || 'Agent evaluation failed';
+        conversationManagerMessage.Error = errorMsg;
+        await this.updateConversationDetail(conversationManagerMessage, `❌ Evaluation failed`, 'Error');
 
-        conversationManagerMessage.Status = 'Error';
-        conversationManagerMessage.Message = `❌ Evaluation failed`;
-        conversationManagerMessage.Error = result?.agentRun?.ErrorMessage || 'Agent evaluation failed';
-        await conversationManagerMessage.Save();
-        this.messageSent.emit(conversationManagerMessage);
-
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         console.warn('⚠️ Sage failed:', result?.agentRun?.ErrorMessage);
 
         // Clean up completion timestamp
@@ -834,9 +828,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           this.messageSent.emit(conversationManagerMessage);
         }
 
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
 
         // Remove CM from active tasks
         if (taskId) {
@@ -895,23 +887,16 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       // Update conversationManagerMessage status to Error
       if (conversationManagerMessage && conversationManagerMessage.ID) {
-        // Mark as complete to stop progress updates
-        this.markMessageComplete(conversationManagerMessage);
-
-        conversationManagerMessage.Status = 'Error';
-        conversationManagerMessage.Message = `❌ Error: ${String(error)}`;
+        // Use updateConversationDetail to ensure task cleanup
         conversationManagerMessage.Error = String(error);
-        await conversationManagerMessage.Save();
-        this.messageSent.emit(conversationManagerMessage);
+        await this.updateConversationDetail(conversationManagerMessage, `❌ Error: ${String(error)}`, 'Error');
 
         // Clean up completion timestamp
         this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
       }
 
       // Mark user message as complete
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
 
       // Clean up active task
       if (taskId) {
@@ -1050,24 +1035,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       // ExecuteGQL returns data directly (not wrapped in {data, errors})
       if (result?.ExecuteTaskGraph?.success) {
         console.log('✅ Task graph execution completed successfully');
-        taskExecutionMessage.Message = `✅ **${workflowName}** completed successfully`;
-        taskExecutionMessage.Status = 'Complete';
-
-        // Mark as complete to trigger task cleanup and toast notification
-        this.markMessageComplete(taskExecutionMessage);
+        await this.updateConversationDetail(taskExecutionMessage, `✅ **${workflowName}** completed successfully`, 'Complete');
       } else {
         const errorMsg = result?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
         console.error('❌ Task graph execution failed:', errorMsg);
-        taskExecutionMessage.Message = `❌ **${workflowName}** failed: ${errorMsg}`;
-        taskExecutionMessage.Status = 'Error';
         taskExecutionMessage.Error = errorMsg;
-
-        // Mark as complete (error) to trigger task cleanup
-        this.markMessageComplete(taskExecutionMessage);
+        await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** failed: ${errorMsg}`, 'Error');
       }
-
-      await taskExecutionMessage.Save();
-      this.messageSent.emit(taskExecutionMessage);
 
       // Trigger artifact reload for this message
       // Artifacts were created on server during task execution and linked to this message
@@ -1083,22 +1057,16 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       // Unregister from real-time updates (task complete)
       this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
 
+      // Mark agent response message as complete (removes task from active tasks)
+      await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete');
+
       // Mark user message as complete
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
 
     } catch (error) {
       console.error('❌ Error executing task graph:', error);
-      taskExecutionMessage.Message = `❌ **${workflowName}** - Error: ${String(error)}`;
-      taskExecutionMessage.Status = 'Error';
       taskExecutionMessage.Error = String(error);
-
-      // Mark as complete (error) to trigger task cleanup
-      this.markMessageComplete(taskExecutionMessage);
-
-      await taskExecutionMessage.Save();
-      this.messageSent.emit(taskExecutionMessage);
+      await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** - Error: ${String(error)}`, 'Error');
 
       // Trigger artifact reload even on error - partial artifacts may have been created
       this.artifactCreated.emit({
@@ -1112,20 +1080,25 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       // Unregister from real-time updates (task failed)
       this.activeTaskExecutionMessageIds.delete(taskExecutionMessage.ID);
 
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      // Mark agent response message as complete (removes task from active tasks)
+      conversationManagerMessage.Error = String(error);
+      await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Error');
+
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
   protected async updateConversationDetail(convoDetail: ConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', suggestedResponses?: BaseAgentSuggestedResponse[]): Promise<void> {
-    if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
-      return; // Do not update completed or errored messages
-    }
-
-    // Mark as completing BEFORE updating if status is Complete or Error
+    // Mark as completing FIRST if status is Complete or Error
+    // This ensures task cleanup happens even if we return early due to guard clause
     if (status === 'Complete' || status === 'Error') {
       this.markMessageComplete(convoDetail);
+    }
+
+    // Guard clause: Don't re-save if already complete/errored (prevents duplicate saves)
+    // Task has already been removed by markMessageComplete() above
+    if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
+      return; // Already complete, no need to save again
     }
 
     const maxAttempts = 2;
@@ -1231,24 +1204,16 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       } else {
         // Handle failure
         const errorMsg = agentResult?.agentRun?.ErrorMessage || 'Agent execution failed';
-        agentResponseMessage.Message = `❌ **${agentName}** failed: ${errorMsg}`;
-        agentResponseMessage.Status = 'Error';
         agentResponseMessage.Error = errorMsg;
-
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** failed: ${errorMsg}`, 'Error');
       }
 
       // Mark user message as complete
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
 
     } catch (error) {
       console.error('❌ Error in single task execution:', error);
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -1338,9 +1303,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         }
 
         // Mark user message as complete
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
         // Sub-agent failed - attempt auto-retry once
         console.log(`⚠️ ${agentName} failed, attempting auto-retry...`);
@@ -1382,34 +1345,22 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
             this.messageSent.emit(agentResponseMessage);
           }
 
-          userMessage.Status = 'Complete';
-          await userMessage.Save();
-          this.messageSent.emit(userMessage);
+          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         } else {
           // Retry also failed - show error with manual retry option
-          conversationManagerMessage.Status = 'Error';
-          conversationManagerMessage.Message = `❌ **${agentName}** failed after retry\n\n${retryResult?.agentRun?.ErrorMessage || 'Unknown error'}`;
           conversationManagerMessage.Error = retryResult?.agentRun?.ErrorMessage || null;
-          await conversationManagerMessage.Save();
-          this.messageSent.emit(conversationManagerMessage);
+          await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** failed after retry\n\n${retryResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
 
-          userMessage.Status = 'Complete'; // Don't mark user message as error
-          await userMessage.Save();
-          this.messageSent.emit(userMessage);
+          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         }
       }
     } catch (error) {
       console.error(`❌ Error invoking sub-agent ${agentName}:`, error);
 
-      conversationManagerMessage.Status = 'Error';
-      conversationManagerMessage.Message = `❌ **${agentName}** encountered an error\n\n${String(error)}`;
       conversationManagerMessage.Error = String(error);
-      await conversationManagerMessage.Save();
-      this.messageSent.emit(conversationManagerMessage);
+      await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
 
-      userMessage.Status = 'Complete'; // Don't mark user message as error
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -1434,9 +1385,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     if (!lastAIMessage || !lastAIMessage.AgentID) {
       // No previous specialist agent - just mark user message as complete
       console.log('🔇 No previous specialist agent found - marking complete');
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       return;
     }
 
@@ -1444,9 +1393,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     const previousAgent = AIEngineBase.Instance.Agents.find(a => a.ID === lastAIMessage.AgentID);
     if (!previousAgent) {
       console.warn('⚠️ Could not load previous agent - marking complete');
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       return;
     }
 
@@ -1551,35 +1498,23 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         }
 
         // Mark user message as complete
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
         // Agent failed
-        statusMessage.Status = 'Error';
-        statusMessage.Message = `❌ **${agentName}** failed during refinement\n\n${continuityResult?.agentRun?.ErrorMessage || 'Unknown error'}`;
         statusMessage.Error = continuityResult?.agentRun?.ErrorMessage || null;
-        await statusMessage.Save();
-        this.messageSent.emit(statusMessage);
+        await this.updateConversationDetail(statusMessage, `❌ **${agentName}** failed during refinement\n\n${continuityResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
 
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
     } catch (error) {
       console.error(`❌ Error in agent continuity with ${agentName}:`, error);
 
       // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
 
-      statusMessage.Status = 'Error';
-      statusMessage.Message = `❌ **${agentName}** encountered an error\n\n${String(error)}`;
       statusMessage.Error = String(error);
-      await statusMessage.Save();
-      this.messageSent.emit(statusMessage);
+      await this.updateConversationDetail(statusMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
 
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
  
@@ -1683,24 +1618,14 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           }
 
           // Mark user message as complete
-          userMessage.Status = 'Complete';
-          await userMessage.Save();
-          this.messageSent.emit(userMessage);
+          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         }
       } else {
         // Agent failed - update the existing message instead of creating a new one
-        this.markMessageComplete(agentResponseMessage);
-
-        agentResponseMessage.Status = 'Error';
-        agentResponseMessage.Message = `❌ **@${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`;
         agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
+        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
 
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
-
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
     } catch (error) {
       console.error(`❌ Error invoking mentioned agent ${agentName}:`, error);
@@ -1709,19 +1634,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        this.markMessageComplete(agentResponseMessage);
-
-        agentResponseMessage.Status = 'Error';
-        agentResponseMessage.Message = `❌ **@${agentName}** encountered an error\n\n${String(error)}`;
         agentResponseMessage.Error = String(error);
-
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** encountered an error\n\n${String(error)}`, 'Error');
       }
 
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -1880,23 +1797,13 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         }
 
         // Mark user message as complete
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
         // Agent failed - update the existing message instead of creating a new one
-        this.markMessageComplete(agentResponseMessage);
-
-        agentResponseMessage.Status = 'Error';
-        agentResponseMessage.Message = `❌ **${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`;
         agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
+        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
 
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
-
-        userMessage.Status = 'Complete';
-        await userMessage.Save();
-        this.messageSent.emit(userMessage);
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
     } catch (error) {
       console.error(`❌ Error continuing with agent ${agentName}:`, error);
@@ -1905,19 +1812,11 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        this.markMessageComplete(agentResponseMessage);
-
-        agentResponseMessage.Status = 'Error';
-        agentResponseMessage.Message = `❌ **${agentName}** encountered an error\n\n${String(error)}`;
         agentResponseMessage.Error = String(error);
-
-        await agentResponseMessage.Save();
-        this.messageSent.emit(agentResponseMessage);
+        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
       }
 
-      userMessage.Status = 'Complete';
-      await userMessage.Save();
-      this.messageSent.emit(userMessage);
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 

@@ -898,7 +898,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       }
 
       const md = new Metadata();
-      const usage = await md.GetEntityObject<ArtifactUseEntity>('Artifact Uses');
+      const usage = await md.GetEntityObject<ArtifactUseEntity>('MJ: Artifact Uses');
 
       usage.ArtifactVersionID = this.artifactVersion.ID;
       usage.UserID = this.currentUser.ID;

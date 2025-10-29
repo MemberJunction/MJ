@@ -86,6 +86,10 @@ export class ActiveTasksService {
       this.updateConversationIdsSet();
     }
 
+    console.log(`➕ Task added:`, {id, conversationId: fullTask.conversationId, agentName: fullTask.agentName});
+    console.log(`📊 Total tasks:`, this._tasks$.value.size);
+    console.log(`🗂️ Conversation IDs with tasks:`, Array.from(this._conversationIdsWithTasks$.value));
+
     return id;
   }
 
@@ -103,6 +107,10 @@ export class ActiveTasksService {
     if (task?.conversationId) {
       this.updateConversationIdsSet();
     }
+
+    console.log(`➖ Task removed:`, {id, conversationId: task?.conversationId, agentName: task?.agentName});
+    console.log(`📊 Total tasks remaining:`, this._tasks$.value.size);
+    console.log(`🗂️ Conversation IDs with tasks:`, Array.from(this._conversationIdsWithTasks$.value));
   }
 
   /**
