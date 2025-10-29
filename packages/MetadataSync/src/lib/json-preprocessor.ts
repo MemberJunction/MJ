@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'path';
+import { METADATA_KEYWORDS, extractKeywordValue } from '../constants/metadata-keywords';
 
 /**
  * Include directive configuration
@@ -55,8 +56,8 @@ export class JsonPreprocessor {
     
     for (const item of arr) {
       // Check for string-based include in array (default element mode)
-      if (typeof item === 'string' && item.startsWith('@include:')) {
-        const includePath = item.substring(9).trim();
+      if (typeof item === 'string' && item.startsWith(`${METADATA_KEYWORDS.INCLUDE}:`)) {
+        const includePath = (extractKeywordValue(item) as string).trim();
         const resolvedPath = this.resolvePath(includePath, currentFilePath);
         const includedContent = await this.loadAndProcessInclude(resolvedPath);
         
@@ -91,7 +92,7 @@ export class JsonPreprocessor {
     
     // First pass: identify all @include keys (both @include and @include.*)
     for (const key of Object.keys(obj)) {
-      if (key === '@include' || key.startsWith('@include.')) {
+      if (key === METADATA_KEYWORDS.INCLUDE || key.startsWith(`${METADATA_KEYWORDS.INCLUDE}.`)) {
         includeKeys.push(key);
         const includeValue = obj[key];
         
@@ -112,7 +113,7 @@ export class JsonPreprocessor {
     
     // Second pass: process all properties in order, spreading includes when encountered
     for (const [key, value] of Object.entries(obj)) {
-      if (key === '@include' || key.startsWith('@include.')) {
+      if (key === METADATA_KEYWORDS.INCLUDE || key.startsWith(`${METADATA_KEYWORDS.INCLUDE}.`)) {
         // Process this include directive
         const includeDirective = includeDirectives.get(key);
         if (includeDirective) {
@@ -142,9 +143,9 @@ export class JsonPreprocessor {
         }
       } else {
         // Regular property - process recursively and handle @file references
-        if (typeof value === 'string' && value.startsWith('@file:')) {
+        if (typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.FILE)) {
           // Process @file reference
-          const filePath = value.substring(6); // Remove '@file:' prefix
+          const filePath = extractKeywordValue(value) as string;
           const resolvedPath = this.resolvePath(filePath, currentFilePath);
           result[key] = await this.loadFileContent(resolvedPath);
         } else if (value && typeof value === 'object') {

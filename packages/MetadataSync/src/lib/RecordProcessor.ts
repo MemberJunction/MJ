@@ -5,6 +5,7 @@ import { JsonWriteHelper } from './json-write-helper';
 import { EntityPropertyExtractor } from './EntityPropertyExtractor';
 import { FieldExternalizer } from './FieldExternalizer';
 import { RelatedEntityHandler } from './RelatedEntityHandler';
+import { METADATA_KEYWORDS, createKeywordReference } from '../constants/metadata-keywords';
 
 /**
  * Handles the core processing of individual record data into the sync format
@@ -338,7 +339,7 @@ export class RecordProcessor {
     if (externalizeConfig.length > 0 && typeof externalizeConfig[0] === 'string') {
       // Simple string array format
       if ((externalizeConfig as string[]).includes(fieldName)) {
-        return `@file:{Name}.${fieldName.toLowerCase()}.md`;
+        return createKeywordReference('file', `{Name}.${fieldName.toLowerCase()}.md`);
       }
     } else {
       // Array of objects format
@@ -361,7 +362,7 @@ export class RecordProcessor {
     const fieldConfig = externalizeConfig[fieldName];
     if (fieldConfig) {
       const extension = fieldConfig.extension || '.md';
-      return `@file:{Name}.${fieldName.toLowerCase()}${extension}`;
+      return createKeywordReference('file', `{Name}.${fieldName.toLowerCase()}${extension}`);
     }
     return null;
   }
@@ -462,9 +463,9 @@ export class RecordProcessor {
    * Checks if the record has externalized fields
    */
   private hasExternalizedFields(fields: Record<string, any>, entityConfig: EntityConfig): boolean {
-    return !!entityConfig.pull?.externalizeFields && 
-           Object.values(fields).some(value => 
-             typeof value === 'string' && value.startsWith('@file:')
+    return !!entityConfig.pull?.externalizeFields &&
+           Object.values(fields).some(value =>
+             typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.FILE)
            );
   }
 
@@ -493,7 +494,7 @@ export class RecordProcessor {
         const lookupValue = targetRecord[lookupConfig.field];
         
         if (lookupValue != null) {
-          return `@lookup:${lookupConfig.entity}.${lookupConfig.field}=${lookupValue}`;
+          return createKeywordReference('lookup', `${lookupConfig.entity}.${lookupConfig.field}=${lookupValue}`);
         }
       }
 

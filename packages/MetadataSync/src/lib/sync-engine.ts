@@ -15,6 +15,13 @@ import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
+import {
+  METADATA_KEYWORDS,
+  METADATA_KEYWORD_PREFIXES,
+  isMetadataKeyword,
+  isNonKeywordAtSymbol,
+  extractKeywordValue
+} from '../constants/metadata-keywords';
 
 /**
  * Represents the structure of a metadata record with optional sync tracking
@@ -139,35 +146,31 @@ export class SyncEngine {
     
     // If string starts with @ but isn't one of our known reference types, return as-is
     // This handles cases like npm package names (@mui/material, @angular/core, etc.)
-    if (value.startsWith('@')) {
-      const knownPrefixes = ['@parent:', '@root:', '@file:', '@lookup:', '@env:', '@template:', '@include'];
-      const isKnownReference = knownPrefixes.some(prefix => value.startsWith(prefix));
-      if (!isKnownReference) {
-        return value; // Not a MetadataSync reference, just a string that happens to start with @
-      }
+    if (isNonKeywordAtSymbol(value)) {
+      return value; // Not a MetadataSync reference, just a string that happens to start with @
     }
     
     // Check for @parent: reference
-    if (value.startsWith('@parent:')) {
+    if (value.startsWith(METADATA_KEYWORDS.PARENT)) {
       if (!parentRecord) {
         throw new Error(`@parent reference used but no parent record available: ${value}`);
       }
-      const fieldName = value.substring(8);
+      const fieldName = extractKeywordValue(value) || '';
       return parentRecord.Get(fieldName);
     }
-    
+
     // Check for @root: reference
-    if (value.startsWith('@root:')) {
+    if (value.startsWith(METADATA_KEYWORDS.ROOT)) {
       if (!rootRecord) {
         throw new Error(`@root reference used but no root record available: ${value}`);
       }
-      const fieldName = value.substring(6);
+      const fieldName = extractKeywordValue(value) || '';
       return rootRecord.Get(fieldName);
     }
-    
+
     // Check for @file: reference
-    if (value.startsWith('@file:')) {
-      const filePath = value.substring(6);
+    if (value.startsWith(METADATA_KEYWORDS.FILE)) {
+      const filePath = extractKeywordValue(value) as string;
       const fullPath = path.resolve(baseDir, filePath);
       
       if (await fs.pathExists(fullPath)) {
@@ -216,8 +219,8 @@ export class SyncEngine {
     }
     
     // Check for @url: reference
-    if (value.startsWith('@url:')) {
-      const url = value.substring(5);
+    if (value.startsWith(METADATA_KEYWORDS.URL)) {
+      const url = extractKeywordValue(value) as string;
       
       try {
         const response = await axios.get(url);
@@ -228,8 +231,8 @@ export class SyncEngine {
     }
     
     // Check for @lookup: reference
-    if (value.startsWith('@lookup:')) {
-      const lookupStr = value.substring(8);
+    if (value.startsWith(METADATA_KEYWORDS.LOOKUP)) {
+      const lookupStr = extractKeywordValue(value) as string;
       
       // Parse lookup with optional create syntax
       // Format: EntityName.Field1=Value1&Field2=Value2?create&OtherField=Value
@@ -299,8 +302,8 @@ export class SyncEngine {
     }
     
     // Check for @env: reference
-    if (value.startsWith('@env:')) {
-      const envVar = value.substring(5);
+    if (value.startsWith(METADATA_KEYWORDS.ENV)) {
+      const envVar = extractKeywordValue(value) as string;
       const envValue = process.env[envVar];
       
       if (envValue === undefined) {
@@ -601,10 +604,10 @@ export class SyncEngine {
 
     const result: any = {};
     for (const [key, value] of Object.entries(obj)) {
-      if (typeof value === 'string' && value.startsWith('@file:')) {
+      if (typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.FILE)) {
         // Process @file reference and include actual content
         try {
-          const filePath = value.substring(6);
+          const filePath = extractKeywordValue(value) as string;
           const fullPath = path.isAbsolute(filePath) ? filePath : path.join(entityDir, filePath);
           
           if (await fs.pathExists(fullPath)) {
@@ -901,10 +904,7 @@ export class SyncEngine {
         if (typeof value === 'string') {
           // Check if this looks like a reference that needs processing
           // Only process known reference types, ignore other @ strings (like npm packages)
-          if (value.startsWith('@file:') || value.startsWith('@lookup:') || 
-              value.startsWith('@parent:') || value.startsWith('@root:') ||
-              value.startsWith('@env:') || value.startsWith('@template:') ||
-              value.startsWith('@include')) {
+          if (isMetadataKeyword(value)) {
             result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext);
           } else {
             result[key] = value;

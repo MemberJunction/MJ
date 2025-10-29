@@ -143,6 +143,49 @@ export type AgentAction = {
  * };
  * ```
  */
+/**
+ * Configuration for how conversation messages should be prepared for sub-agent execution.
+ *
+ * This type defines strategies for filtering and selecting which conversation messages
+ * from the parent agent should be passed to sub-agents.
+ *
+ * @since 2.113.0
+ */
+export type SubAgentMessageStrategy = {
+    /**
+     * Message passing mode:
+     * - 'fresh': Start with clean slate (only task message)
+     * - 'full': Pass all parent conversation history
+     * - 'filtered': Apply custom filtering logic
+     * - 'custom': Use custom filter function
+     */
+    mode: 'fresh' | 'full' | 'filtered' | 'custom';
+
+    /**
+     * Custom filter function for 'custom' mode.
+     * Return true to include the message, false to exclude.
+     */
+    filter?: (msg: ChatMessage, index: number, allMessages: ChatMessage[]) => boolean;
+
+    /**
+     * Maximum number of messages to include.
+     * Applied after filtering. Most recent messages are kept.
+     */
+    maxMessages?: number;
+
+    /**
+     * Filter by message roles.
+     * Only messages with these roles will be included.
+     */
+    includeRoles?: ('user' | 'assistant' | 'system')[];
+
+    /**
+     * Exclude messages with these metadata flags.
+     * Example: ['_temporary', '_loopResults']
+     */
+    excludeMetadata?: string[];
+};
+
 export type AgentSubAgentRequest<TContext = any> = {
     /** Name of the sub-agent */
     name: string;
@@ -152,7 +195,7 @@ export type AgentSubAgentRequest<TContext = any> = {
     terminateAfter: boolean;
     /** Optional template parameters for sub-agent invocation */
     templateParameters?: Record<string, string>;
-    /** 
+    /**
      * Context data passed to the sub-agent by the parent agent.
      * This context flows through the entire execution hierarchy,
      * allowing sub-agents to access runtime-specific configuration,
@@ -160,6 +203,13 @@ export type AgentSubAgentRequest<TContext = any> = {
      * Optional because AI determines sub-agent invocation, context comes from execution params.
      */
     context?: TContext;
+    /**
+     * Optional strategy for preparing conversation messages for the sub-agent.
+     * If not specified, the agent type's default behavior is used.
+     *
+     * @since 2.113.0
+     */
+    messageStrategy?: SubAgentMessageStrategy;
 }
 
 /**

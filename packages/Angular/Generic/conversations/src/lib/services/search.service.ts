@@ -306,7 +306,9 @@ export class SearchService {
       const collResult = await rv.RunView<CollectionArtifactEntity>(
         {
           EntityName: 'MJ: Collection Artifacts',
-          ExtraFilter: `ArtifactID='${artifact.ID}'`,
+          ExtraFilter: `ArtifactVersionID IN (
+            SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifact.ID}'
+          )`,
           MaxRows: 1,
           ResultType: 'entity_object'
         },

@@ -1,5 +1,5 @@
-import { Component, Input, OnInit, OnChanges, SimpleChanges } from '@angular/core';
-import { CollectionEntity, ArtifactEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
+import { Component, Input, OnInit, OnChanges, OnDestroy, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity, CollectionArtifactEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -47,7 +47,7 @@ type SortBy = 'name' | 'date' | 'type';
       </div>
 
       <div class="view-content" [class.grid-mode]="viewMode === 'grid'" [class.list-mode]="viewMode === 'list'">
-        <div *ngIf="artifacts.length === 0" class="empty-state">
+        <div *ngIf="artifactVersions.length === 0" class="empty-state">
           <i class="fas fa-folder-open"></i>
           <p>This collection is empty</p>
           <button class="btn-add-primary" (click)="onAddArtifact()" *ngIf="canEdit">
@@ -55,14 +55,16 @@ type SortBy = 'name' | 'date' | 'type';
           </button>
         </div>
 
-        <mj-collection-artifact-card
-          *ngFor="let artifact of artifacts"
-          [artifact]="artifact"
-          (selected)="onArtifactSelected($event)"
-          (viewed)="onViewArtifact($event)"
-          (edited)="onEditArtifact($event)"
-          (removed)="onRemoveArtifact($event)">
-        </mj-collection-artifact-card>
+        @for (item of artifactVersions; track item.version.ID) {
+          <mj-collection-artifact-card
+            [artifact]="item.artifact"
+            [version]="item.version"
+            (selected)="onArtifactSelected(item)"
+            (viewed)="onViewArtifact(item)"
+            (edited)="onEditArtifact(item)"
+            (removed)="onRemoveArtifact(item)">
+          </mj-collection-artifact-card>
+        }
       </div>
     </div>
 
@@ -71,8 +73,11 @@ type SortBy = 'name' | 'date' | 'type';
       <div class="artifact-viewer-container" (click)="$event.stopPropagation()">
         <mj-artifact-viewer-panel
           [artifactId]="selectedArtifactId"
+          [versionNumber]="selectedVersionNumber"
           [currentUser]="currentUser"
           [environmentId]="environmentId"
+          [viewContext]="'collection'"
+          [contextCollectionId]="collection.ID"
           (closed)="onCloseArtifactViewer()">
         </mj-artifact-viewer-panel>
       </div>
@@ -109,16 +114,21 @@ type SortBy = 'name' | 'date' | 'type';
     .artifact-viewer-container { width: 90%; max-width: 1200px; height: 90vh; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3); }
   `]
 })
-export class CollectionViewComponent implements OnInit, OnChanges {
+export class CollectionViewComponent implements OnInit, OnChanges, OnDestroy {
   @Input() collection!: CollectionEntity;
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
   @Input() canEdit: boolean = true;
 
-  public artifacts: ArtifactEntity[] = [];
+  // Store versions with parent artifact info for display
+  public artifactVersions: Array<{
+    version: ArtifactVersionEntity;
+    artifact: ArtifactEntity;
+  }> = [];
   public viewMode: ViewMode = 'grid';
   public sortBy: SortBy = 'date';
   public selectedArtifactId: string | null = null;
+  public selectedVersionNumber: number | undefined = undefined;
   public showArtifactViewer = false;
 
   public sortOptions = [
@@ -126,6 +136,8 @@ export class CollectionViewComponent implements OnInit, OnChanges {
     { label: 'Date Modified', value: 'date' },
     { label: 'Type', value: 'type' }
   ];
+
+  constructor(private cdr: ChangeDetectorRef) {}
 
   ngOnInit() {
     this.loadArtifacts();
@@ -137,35 +149,74 @@ export class CollectionViewComponent implements OnInit, OnChanges {
     }
   }
 
+  ngOnDestroy() {
+    // Close artifact viewer when navigating away from collection
+    if (this.showArtifactViewer) {
+      this.onCloseArtifactViewer();
+    }
+  }
+
   private async loadArtifacts(): Promise<void> {
     if (!this.collection) return;
 
     try {
       const rv = new RunView();
+      const md = new Metadata();
 
-      // Load artifacts through the CollectionArtifacts join table
-      // Filter out System Only artifacts
-      const result = await rv.RunView<ArtifactEntity>({
-        EntityName: 'MJ: Artifacts',
-        ExtraFilter: `ID IN (SELECT ArtifactID FROM [__mj].[MJ: Collection Artifacts] WHERE CollectionID='${this.collection.ID}') AND (Visibility IS NULL OR Visibility='Always')`,
-        OrderBy: this.getOrderBy(),
+      // Load ALL VERSIONS in this collection (no DISTINCT - each version is separate)
+      const versionResult = await rv.RunView<ArtifactVersionEntity>({
+        EntityName: 'MJ: Artifact Versions',
+        ExtraFilter: `ID IN (
+          SELECT ca.ArtifactVersionID
+          FROM [__mj].[vwCollectionArtifacts] ca
+          WHERE ca.CollectionID='${this.collection.ID}'
+        )`,
+        OrderBy: this.getVersionOrderBy(),
         ResultType: 'entity_object'
       }, this.currentUser);
 
-      if (result.Success) {
-        this.artifacts = result.Results || [];
+      if (versionResult.Success && versionResult.Results) {
+        // Get unique artifact IDs
+        const artifactIds = [...new Set(versionResult.Results.map(v => v.ArtifactID))];
+
+        // Load parent artifact info (just for display metadata - no visibility filtering)
+        const artifactMap = new Map<string, ArtifactEntity>();
+        if (artifactIds.length > 0) {
+          const artifactFilter = artifactIds.map(id => `ID='${id}'`).join(' OR ');
+          const artifactResult = await rv.RunView<ArtifactEntity>({
+            EntityName: 'MJ: Artifacts',
+            ExtraFilter: artifactFilter,
+            ResultType: 'entity_object'
+          }, this.currentUser);
+
+          if (artifactResult.Success && artifactResult.Results) {
+            artifactResult.Results.forEach(a => artifactMap.set(a.ID, a));
+          }
+        }
+
+        // Combine version + artifact info
+        this.artifactVersions = versionResult.Results
+          .map(version => ({
+            version,
+            artifact: artifactMap.get(version.ArtifactID)!
+          }))
+          .filter(item => item.artifact != null); // Filter out any without parent artifact
+      } else {
+        this.artifactVersions = [];
       }
     } catch (error) {
       console.error('Failed to load collection artifacts:', error);
+      this.artifactVersions = [];
     }
   }
 
-  private getOrderBy(): string {
+  private getVersionOrderBy(): string {
     switch (this.sortBy) {
       case 'name':
-        return 'Name ASC';
+        return 'Name ASC, VersionNumber DESC';
       case 'type':
-        return 'Type ASC, Name ASC';
+        // Will sort by parent artifact type (handled in template)
+        return 'ArtifactID ASC, VersionNumber DESC';
       case 'date':
       default:
         return '__mj_UpdatedAt DESC';
@@ -176,53 +227,57 @@ export class CollectionViewComponent implements OnInit, OnChanges {
     this.loadArtifacts();
   }
 
-  onArtifactSelected(artifact: ArtifactEntity): void {
-    console.log('Artifact selected:', artifact.ID);
+  onArtifactSelected(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
     // TODO: Emit event or navigate to artifact detail view
   }
 
-  onViewArtifact(artifact: ArtifactEntity): void {
-    console.log('View artifact:', artifact.ID);
-    this.selectedArtifactId = artifact.ID;
+  onViewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+    this.selectedArtifactId = item.artifact.ID;
+    this.selectedVersionNumber = item.version.VersionNumber;
+    // Force change detection to ensure Input bindings propagate before component creation
+    this.cdr.detectChanges();
     this.showArtifactViewer = true;
   }
 
   onCloseArtifactViewer(): void {
     this.showArtifactViewer = false;
     this.selectedArtifactId = null;
+    this.selectedVersionNumber = undefined;
   }
 
-  onEditArtifact(artifact: ArtifactEntity): void {
-    console.log('Edit artifact:', artifact.ID);
+  onEditArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
     // TODO: Open artifact editor
   }
 
-  async onRemoveArtifact(artifact: ArtifactEntity): Promise<void> {
-    if (!confirm(`Remove "${artifact.Name}" from this collection?`)) return;
+  async onRemoveArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): Promise<void> {
+    const versionLabel = `"${item.artifact.Name}" v${item.version.VersionNumber}`;
+    if (!confirm(`Remove ${versionLabel} from this collection?`)) return;
 
     try {
-      // Find and delete the CollectionArtifact join record
+      // Delete THIS SPECIFIC VERSION from the collection
       const rv = new RunView();
       const result = await rv.RunView({
         EntityName: 'MJ: Collection Artifacts',
-        ExtraFilter: `CollectionID='${this.collection.ID}' AND ArtifactID='${artifact.ID}'`,
+        ExtraFilter: `CollectionID='${this.collection.ID}' AND ArtifactVersionID='${item.version.ID}'`,
         ResultType: 'entity_object'
       }, this.currentUser);
 
       if (result.Success && result.Results && result.Results.length > 0) {
-        const joinRecord = result.Results[0];
-        await joinRecord.Delete();
+        // Delete this version association
+        for (const joinRecord of result.Results) {
+          await joinRecord.Delete();
+        }
         await this.loadArtifacts();
         MJNotificationService.Instance.CreateSimpleNotification(
-          `Removed "${artifact.Name}" from collection`,
+          `Removed ${versionLabel} from collection`,
           'success',
           3000
         );
       }
     } catch (error) {
-      console.error('Failed to remove artifact from collection:', error);
+      console.error('Failed to remove artifact version from collection:', error);
       MJNotificationService.Instance.CreateSimpleNotification(
-        'Failed to remove artifact from collection',
+        'Failed to remove artifact version from collection',
         'error'
       );
     }
@@ -245,10 +300,25 @@ export class CollectionViewComponent implements OnInit, OnChanges {
 
       const saved = await artifact.Save();
       if (saved) {
-        // Add to collection via join table
+        // Get the latest version of this artifact to add to collection
+        const rv = new RunView();
+        const versionResult = await rv.RunView({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID='${artifact.ID}'`,
+          OrderBy: 'VersionNumber DESC',
+          MaxRows: 1,
+          ResultType: 'entity_object'
+        }, this.currentUser);
+
+        if (!versionResult.Success || !versionResult.Results || versionResult.Results.length === 0) {
+          alert('Failed to get artifact version');
+          return;
+        }
+
+        // Add to collection via join table using version ID
         const joinRecord = await md.GetEntityObject<CollectionArtifactEntity>('MJ: Collection Artifacts', this.currentUser);
         joinRecord.CollectionID = this.collection.ID;
-        joinRecord.ArtifactID = artifact.ID;
+        joinRecord.ArtifactVersionID = versionResult.Results[0].ID;
 
         await joinRecord.Save();
         await this.loadArtifacts();

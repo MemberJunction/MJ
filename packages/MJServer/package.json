@@ -46,6 +46,8 @@
     "@memberjunction/data-context-server": "2.112.0",
     "@memberjunction/doc-utils": "2.112.0",
     "@memberjunction/entity-communications-server": "2.112.0",
+    "@memberjunction/communication-ms-graph": "2.112.0",
+    "@memberjunction/communication-sendgrid": "2.112.0",
     "@memberjunction/external-change-detection": "2.112.0",
     "@memberjunction/global": "2.112.0",
     "@memberjunction/graphql-dataprovider": "2.112.0",

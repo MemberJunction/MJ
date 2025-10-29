@@ -1,4 +1,4 @@
-<div [class]="messageClasses">
+<div [class]="messageClasses" [attr.data-message-id]="message.ID">
   <div class="message-avatar">
     <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
       @if (isUserMessage) {

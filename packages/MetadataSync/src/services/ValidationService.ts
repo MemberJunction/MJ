@@ -13,6 +13,13 @@ import {
 } from '../types/validation';
 import { RecordData } from '../lib/sync-engine';
 import { getSystemUser } from '../lib/provider-utils';
+import {
+  METADATA_KEYWORDS,
+  METADATA_KEYWORD_PREFIXES,
+  isMetadataKeyword,
+  getMetadataKeywordType,
+  extractKeywordValue
+} from '../constants/metadata-keywords';
 
 // Type aliases for clarity
 type EntityData = RecordData;
@@ -503,22 +510,7 @@ export class ValidationService {
    * Check if a string is actually a MetadataSync reference (not just any @ string)
    */
   private isValidReference(value: string): boolean {
-    if (typeof value !== 'string' || !value.startsWith('@')) {
-      return false;
-    }
-    
-    // List of valid reference prefixes
-    const validPrefixes = [
-      '@file:',
-      '@lookup:',
-      '@template:',
-      '@parent:',
-      '@root:',
-      '@env:',
-      '@include',  // Can be @include or @include.
-    ];
-    
-    return validPrefixes.some(prefix => value.startsWith(prefix));
+    return isMetadataKeyword(value);
   }
 
   /**
@@ -545,19 +537,19 @@ export class ValidationService {
     }
 
     switch (parsed.type) {
-      case '@file:':
+      case METADATA_KEYWORDS.FILE:
         await this.validateFileReference(parsed.value, filePath, entityInfo.Name, fieldInfo.Name);
         break;
-      case '@lookup:':
+      case METADATA_KEYWORDS.LOOKUP:
         await this.validateLookupReference(parsed, filePath, entityInfo.Name, fieldInfo.Name);
         break;
-      case '@template:':
+      case METADATA_KEYWORDS.TEMPLATE:
         await this.validateTemplateReference(parsed.value, filePath, entityInfo.Name, fieldInfo.Name);
         break;
-      case '@parent:':
+      case METADATA_KEYWORDS.PARENT:
         this.validateParentReference(parsed.value, parentContext, filePath, entityInfo.Name, fieldInfo.Name);
         break;
-      case '@root:':
+      case METADATA_KEYWORDS.ROOT:
         this.validateRootReference(parsed.value, parentContext, filePath, entityInfo.Name, fieldInfo.Name);
         break;
     }
@@ -568,18 +560,18 @@ export class ValidationService {
    */
   private parseReference(reference: string): ParsedReference | null {
     const patterns: [ReferenceType, RegExp][] = [
-      ['@file:', /^@file:(.+)$/],
-      ['@lookup:', /^@lookup:([^.]+)\.(.+)$/],
-      ['@template:', /^@template:(.+)$/],
-      ['@parent:', /^@parent:(.+)$/],
-      ['@root:', /^@root:(.+)$/],
-      ['@env:', /^@env:(.+)$/],
+      [METADATA_KEYWORDS.FILE, /^@file:(.+)$/],
+      [METADATA_KEYWORDS.LOOKUP, /^@lookup:([^.]+)\.(.+)$/],
+      [METADATA_KEYWORDS.TEMPLATE, /^@template:(.+)$/],
+      [METADATA_KEYWORDS.PARENT, /^@parent:(.+)$/],
+      [METADATA_KEYWORDS.ROOT, /^@root:(.+)$/],
+      [METADATA_KEYWORDS.ENV, /^@env:(.+)$/],
     ];
 
     for (const [type, pattern] of patterns) {
       const match = reference.match(pattern);
       if (match) {
-        if (type === '@lookup:') {
+        if (type === METADATA_KEYWORDS.LOOKUP) {
           const [, entity, remaining] = match;
           
           // Check if this has ?create syntax
@@ -866,7 +858,7 @@ export class ValidationService {
     // Track dependencies from lookups in fields
     if (entityData.fields) {
       for (const value of Object.values(entityData.fields)) {
-        if (typeof value === 'string' && value.startsWith('@lookup:')) {
+        if (typeof value === 'string' && value.startsWith(METADATA_KEYWORDS.LOOKUP)) {
           const parsed = this.parseReference(value);
           if (parsed?.entity) {
             this.addEntityDependency(entityName, parsed.entity);
@@ -1306,16 +1298,16 @@ export class ValidationService {
     // Process based on data type
     if (Array.isArray(jsonContent)) {
       for (const item of jsonContent) {
-        if (typeof item === 'string' && item.startsWith('@include:')) {
-          const includePath = item.substring(9).trim();
-          await this.validateIncludeFile(includePath, sourceFile);
+        if (typeof item === 'string' && item.startsWith(`${METADATA_KEYWORDS.INCLUDE}:`)) {
+          const includePath = extractKeywordValue(item) as string;
+          await this.validateIncludeFile(includePath.trim(), sourceFile);
         } else if (item && typeof item === 'object') {
           await this.validateJsonIncludes(item, sourceFile);
         }
       }
     } else if (jsonContent && typeof jsonContent === 'object') {
       for (const [key, value] of Object.entries(jsonContent)) {
-        if (key === '@include' || key.startsWith('@include.')) {
+        if (key === METADATA_KEYWORDS.INCLUDE || key.startsWith(`${METADATA_KEYWORDS.INCLUDE}.`)) {
           let includeFile: string;
           if (typeof value === 'string') {
             includeFile = value;
@@ -1379,31 +1371,31 @@ export class ValidationService {
       for (const [key, value] of Object.entries(obj)) {
         if (typeof value === 'string' && this.isValidReference(value)) {
           // Process different reference types
-          if (value.startsWith('@file:')) {
-            const filePath = value.substring(6);
+          if (value.startsWith(METADATA_KEYWORDS.FILE)) {
+            const filePath = extractKeywordValue(value) as string;
             // Recursively validate the file reference (with circular detection)
             await this.validateFileReference(filePath, sourceFile, entityName, key, visitedFiles);
-          } else if (value.startsWith('@lookup:')) {
+          } else if (value.startsWith(METADATA_KEYWORDS.LOOKUP)) {
             // Parse and validate lookup reference
             const parsed = this.parseReference(value);
             if (parsed) {
               await this.validateLookupReference(parsed, sourceFile, entityName, key);
             }
-          } else if (value.startsWith('@template:')) {
-            const templatePath = value.substring(10);
+          } else if (value.startsWith(METADATA_KEYWORDS.TEMPLATE)) {
+            const templatePath = extractKeywordValue(value) as string;
             await this.validateTemplateReference(templatePath, sourceFile, entityName, key);
-          } else if (value.startsWith('@parent:')) {
+          } else if (value.startsWith(METADATA_KEYWORDS.PARENT)) {
             const parsed = this.parseReference(value);
             if (parsed) {
               this.validateParentReference(parsed.value, parentContext, sourceFile, entityName, key);
             }
-          } else if (value.startsWith('@root:')) {
+          } else if (value.startsWith(METADATA_KEYWORDS.ROOT)) {
             const parsed = this.parseReference(value);
             if (parsed) {
               this.validateRootReference(parsed.value, parentContext, sourceFile, entityName, key);
             }
-          } else if (value.startsWith('@env:')) {
-            const envVar = value.substring(5);
+          } else if (value.startsWith(METADATA_KEYWORDS.ENV)) {
+            const envVar = extractKeywordValue(value) as string;
             if (!process.env[envVar]) {
               this.addWarning({
                 type: 'validation',

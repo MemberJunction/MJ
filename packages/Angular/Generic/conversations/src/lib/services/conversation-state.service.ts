@@ -24,6 +24,10 @@ export class ConversationStateService {
   // New unsaved conversation state - delays DB creation until first message
   public isNewUnsavedConversation: boolean = false;
 
+  // Pending artifact navigation - used when jumping from collection to conversation
+  public pendingArtifactId: string | null = null;
+  public pendingArtifactVersionNumber: number | null = null;
+
   constructor() {}
 
   /**
