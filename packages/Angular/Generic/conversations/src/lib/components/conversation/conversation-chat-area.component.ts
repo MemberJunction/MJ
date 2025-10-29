@@ -798,15 +798,32 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
           // Clear existing artifacts for this detail and rebuild
           this.artifactsByDetailId.delete(conversationDetailId);
+          this.systemArtifactsByDetailId.delete(conversationDetailId);
 
           if (parsed.artifacts.length > 0) {
             const artifactList: LazyArtifactInfo[] = [];
+            const systemArtifactList: LazyArtifactInfo[] = [];
+
             for (const artifactData of parsed.artifacts) {
               const lazyInfo = new LazyArtifactInfo(artifactData, this.currentUser);
-              artifactList.push(lazyInfo);
+
+              // Separate system-only artifacts from user-visible artifacts
+              if (artifactData.Visibility === 'System Only') {
+                systemArtifactList.push(lazyInfo);
+              } else {
+                artifactList.push(lazyInfo);
+              }
+
               LogStatusEx({message: `✅ Loaded artifact ${artifactData.ArtifactID} v${artifactData.VersionNumber} for message ${conversationDetailId}`, verboseOnly: true});
             }
-            this.artifactsByDetailId.set(conversationDetailId, artifactList);
+
+            // Add to appropriate maps
+            if (artifactList.length > 0) {
+              this.artifactsByDetailId.set(conversationDetailId, artifactList);
+            }
+            if (systemArtifactList.length > 0) {
+              this.systemArtifactsByDetailId.set(conversationDetailId, systemArtifactList);
+            }
           }
 
           // Create new Map reference to trigger Angular change detection
