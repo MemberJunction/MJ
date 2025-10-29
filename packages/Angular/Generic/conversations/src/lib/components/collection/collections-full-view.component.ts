@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
-import { CollectionEntity, ArtifactEntity } from '@memberjunction/core-entities';
+import { CollectionEntity, ArtifactEntity, ArtifactVersionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
@@ -100,31 +100,33 @@ import { Subject, takeUntil } from 'rxjs';
           <div class="section" *ngIf="currentCollectionId">
             <div class="section-header">
               <h3>Artifacts</h3>
-              <span class="section-count">{{ filteredArtifacts.length }}</span>
+              <span class="section-count">{{ filteredArtifactVersions.length }}</span>
               <button class="btn-primary btn-sm" (click)="addArtifact()" *ngIf="canEditCurrent()">
                 <i class="fas fa-plus"></i>
                 Add Artifact
               </button>
             </div>
-            <div class="artifact-grid" *ngIf="filteredArtifacts.length > 0">
-              <div *ngFor="let artifact of filteredArtifacts"
-                   class="artifact-card"
-                   (click)="viewArtifact(artifact)">
-                <div class="card-icon artifact-icon">
-                  <i class="fas fa-file-alt"></i>
-                </div>
-                <div class="card-content">
-                  <div class="card-name">{{ artifact.Name }}</div>
-                  <div class="card-meta">
-                    <span class="artifact-type">{{ artifact.Type || 'Unknown' }}</span>
+            <div class="artifact-grid" *ngIf="filteredArtifactVersions.length > 0">
+              @for (item of filteredArtifactVersions; track item.version.ID) {
+                <div class="artifact-card"
+                     (click)="viewArtifact(item)">
+                  <div class="card-icon artifact-icon">
+                    <i class="fas fa-file-alt"></i>
+                  </div>
+                  <div class="card-content">
+                    <div class="card-name">{{ item.artifact.Name }}</div>
+                    <div class="card-meta">
+                      <span class="version-badge">v{{ item.version.VersionNumber }}</span>
+                      <span class="artifact-type">{{ item.artifact.Type || 'Unknown' }}</span>
+                    </div>
+                  </div>
+                  <div class="card-actions" (click)="$event.stopPropagation()">
+                    <button class="card-action-btn" (click)="removeArtifact(item)" title="Remove from collection" *ngIf="canDeleteCurrent()">
+                      <i class="fas fa-times"></i>
+                    </button>
                   </div>
                 </div>
-                <div class="card-actions" (click)="$event.stopPropagation()">
-                  <button class="card-action-btn" (click)="removeArtifact(artifact)" title="Remove from collection" *ngIf="canDeleteCurrent()">
-                    <i class="fas fa-times"></i>
-                  </button>
-                </div>
-              </div>
+              }
             </div>
           </div>
         </div>
@@ -535,13 +537,13 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   @Input() currentUser!: UserInfo;
   @Output() collectionNavigated = new EventEmitter<{
     collectionId: string | null;
-    artifactId?: string | null;
+    versionId?: string | null;
   }>();
 
   public collections: CollectionEntity[] = [];
-  public artifacts: ArtifactEntity[] = [];
+  public artifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
   public filteredCollections: CollectionEntity[] = [];
-  public filteredArtifacts: ArtifactEntity[] = [];
+  public filteredArtifactVersions: Array<{ version: ArtifactVersionEntity; artifact: ArtifactEntity }> = [];
   public isLoading: boolean = false;
   public breadcrumbs: Array<{ id: string; name: string }> = [];
   public currentCollectionId: string | null = null;
@@ -688,19 +690,19 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   private async loadArtifacts(): Promise<void> {
     if (!this.currentCollectionId) {
-      this.artifacts = [];
-      this.filteredArtifacts = [];
+      this.artifactVersions = [];
+      this.filteredArtifactVersions = [];
       return;
     }
 
     try {
-      this.artifacts = await this.artifactState.loadArtifactsForCollection(
+      this.artifactVersions = await this.artifactState.loadArtifactVersionsForCollection(
         this.currentCollectionId,
         this.currentUser
       );
-      this.filteredArtifacts = [...this.artifacts];
+      this.filteredArtifactVersions = [...this.artifactVersions];
     } catch (error) {
-      console.error('Failed to load artifacts:', error);
+      console.error('Failed to load artifact versions:', error);
     }
   }
 
@@ -718,7 +720,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       // Emit navigation event
       this.collectionNavigated.emit({
         collectionId: collection.ID,
-        artifactId: null
+        versionId: null
       });
     } finally {
       this.isNavigatingProgrammatically = false;
@@ -746,7 +748,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         // Emit navigation event
         this.collectionNavigated.emit({
           collectionId: crumb.id,
-          artifactId: null
+          versionId: null
         });
       }
     } finally {
@@ -768,7 +770,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       // Emit navigation event
       this.collectionNavigated.emit({
         collectionId: null,
-        artifactId: null
+        versionId: null
       });
     } finally {
       this.isNavigatingProgrammatically = false;
@@ -982,7 +984,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     this.isArtifactModalOpen = false;
   }
 
-  async removeArtifact(artifact: ArtifactEntity): Promise<void> {
+  async removeArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): Promise<void> {
     if (!this.currentCollectionId) return;
 
     // Validate user has delete permission on current collection
@@ -991,35 +993,47 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       if (!canDelete) return;
     }
 
+    const versionLabel = `"${item.artifact.Name}" v${item.version.VersionNumber}`;
     const confirmed = await this.dialogService.confirm({
-      title: 'Remove Artifact',
-      message: `Remove "${artifact.Name}" from this collection?`,
+      title: 'Remove Artifact Version',
+      message: `Remove ${versionLabel} from this collection?`,
       okText: 'Remove',
       cancelText: 'Cancel'
     });
 
     if (confirmed) {
       try {
-        await this.artifactState.removeFromCollection(
-          artifact.ID,
-          this.currentCollectionId,
-          this.currentUser
-        );
-        await this.loadArtifacts();
+        // Delete THIS SPECIFIC VERSION from the collection
+        const rv = new RunView();
+        const result = await rv.RunView({
+          EntityName: 'MJ: Collection Artifacts',
+          ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
+          ResultType: 'entity_object'
+        }, this.currentUser);
+
+        if (result.Success && result.Results && result.Results.length > 0) {
+          // Delete this version association
+          for (const joinRecord of result.Results) {
+            await joinRecord.Delete();
+          }
+          await this.loadArtifacts();
+        } else {
+          await this.dialogService.alert('Error', 'Collection artifact link not found.');
+        }
       } catch (error) {
-        console.error('Error removing artifact:', error);
-        await this.dialogService.alert('Error', 'Failed to remove artifact from collection.');
+        console.error('Error removing artifact version:', error);
+        await this.dialogService.alert('Error', 'Failed to remove artifact version from collection.');
       }
     }
   }
 
-  viewArtifact(artifact: ArtifactEntity): void {
-    this.artifactState.openArtifact(artifact.ID);
+  viewArtifact(item: { version: ArtifactVersionEntity; artifact: ArtifactEntity }): void {
+    this.artifactState.openArtifact(item.artifact.ID, item.version.VersionNumber);
 
-    // Emit navigation event with both collection and artifact
+    // Emit navigation event with collection and version ID
     this.collectionNavigated.emit({
       collectionId: this.currentCollectionId,
-      artifactId: artifact.ID
+      versionId: item.version.ID
     });
   }
 

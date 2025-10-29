@@ -334,7 +334,9 @@ export class ArtifactPermissionService {
         const rv = new RunView();
         const result = await rv.RunView<CollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',
-            ExtraFilter: `ArtifactID='${artifactId}'`,
+            ExtraFilter: `ArtifactVersionID IN (
+                SELECT ID FROM [__mj].[vwArtifactVersions] WHERE ArtifactID='${artifactId}'
+            )`,
             ResultType: 'entity_object'
         }, currentUser);
 

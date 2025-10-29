@@ -29,6 +29,19 @@
                         </mj-user-view-grid>                    
                     </mj-tab-body>
 
+                    <mj-tab Name="MJ: Collection Artifacts" [Visible]="record.IsSaved"> 
+                        MJ: Collection Artifacts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Artifacts','ArtifactVersionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collection Artifacts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
                     <mj-tab Name="MJ: Conversation Detail Artifacts" [Visible]="record.IsSaved"> 
                         MJ: Conversation Detail Artifacts
                     </mj-tab>
@@ -37,6 +50,19 @@
                             [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Detail Artifacts','ArtifactVersionID')"  
                             [NewRecordValues]="NewRecordValues('MJ: Conversation Detail Artifacts')"
                             [AllowLoad]="IsCurrentTab('MJ: Conversation Detail Artifacts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Artifact Uses" [Visible]="record.IsSaved"> 
+                        MJ: Artifact Uses
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Artifact Uses','ArtifactVersionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Artifact Uses')"
+                            [AllowLoad]="IsCurrentTab('MJ: Artifact Uses')"  
                             [EditMode]="GridEditMode()"  
                             >
                         </mj-user-view-grid>                    

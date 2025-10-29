@@ -1,5 +1,6 @@
 import { Metadata, EntityInfo } from '@memberjunction/core';
 import { RecordData } from './sync-engine';
+import { METADATA_KEYWORDS, isNonKeywordAtSymbol } from '../constants/metadata-keywords';
 
 /**
  * Represents a flattened record with its context and dependencies
@@ -153,14 +154,14 @@ export class RecordDependencyAnalyzer {
         for (const [fieldName, fieldValue] of Object.entries(record.record.fields)) {
           if (typeof fieldValue === 'string') {
             // Handle @lookup references
-            if (fieldValue.startsWith('@lookup:')) {
+            if (fieldValue.startsWith(METADATA_KEYWORDS.LOOKUP)) {
               const dependency = this.findLookupDependency(fieldValue, record);
               if (dependency) {
                 record.dependencies.add(dependency);
               }
             }
             // Handle @root references - these create dependencies on the root record
-            else if (fieldValue.startsWith('@root:')) {
+            else if (fieldValue.startsWith(METADATA_KEYWORDS.ROOT)) {
               const rootDependency = this.findRootDependency(record);
               if (rootDependency) {
                 record.dependencies.add(rootDependency);
@@ -235,7 +236,7 @@ export class RecordDependencyAnalyzer {
         
         // Special handling for nested @lookup references in lookup criteria
         // This creates a dependency on the looked-up record
-        if (resolvedValue.startsWith('@lookup:')) {
+        if (resolvedValue.startsWith(METADATA_KEYWORDS.LOOKUP)) {
           const nestedDependency = this.findLookupDependency(resolvedValue, currentRecord);
           if (nestedDependency) {
             // Add this as a dependency of the current record
@@ -245,7 +246,7 @@ export class RecordDependencyAnalyzer {
           }
         }
         // Special handling for @root references in lookup criteria
-        else if (resolvedValue.startsWith('@root:')) {
+        else if (resolvedValue.startsWith(METADATA_KEYWORDS.ROOT)) {
           // Add dependency on root record
           const rootDep = this.findRootDependency(currentRecord);
           if (rootDep) {
@@ -255,8 +256,8 @@ export class RecordDependencyAnalyzer {
         }
         // Special handling for @parent references in lookup criteria
         // If the value is @parent:field, we need to resolve it from the parent context
-        else if (resolvedValue.startsWith('@parent:') && currentRecord.parentContext) {
-          const parentField = resolvedValue.substring(8);
+        else if (resolvedValue.startsWith(METADATA_KEYWORDS.PARENT) && currentRecord.parentContext) {
+          const parentField = resolvedValue.substring(METADATA_KEYWORDS.PARENT.length);
           
           // Try to resolve from parent context
           const parentValue = currentRecord.parentContext.record.fields?.[parentField] ||
@@ -264,15 +265,15 @@ export class RecordDependencyAnalyzer {
           
           if (parentValue && typeof parentValue === 'string') {
             // Check if parent value is also a @parent reference (nested parent refs)
-            if (parentValue.startsWith('@parent:')) {
+            if (parentValue.startsWith(METADATA_KEYWORDS.PARENT)) {
               // Find the parent record to get its parent context
-              const parentRecord = this.flattenedRecords.find(r => 
-                r.record === currentRecord.parentContext!.record && 
+              const parentRecord = this.flattenedRecords.find(r =>
+                r.record === currentRecord.parentContext!.record &&
                 r.entityName === currentRecord.parentContext!.entityName
               );
-              
+
               if (parentRecord && parentRecord.parentContext) {
-                const grandParentField = parentValue.substring(8);
+                const grandParentField = parentValue.substring(METADATA_KEYWORDS.PARENT.length);
                 const grandParentValue = parentRecord.parentContext.record.fields?.[grandParentField] ||
                                         parentRecord.parentContext.record.primaryKey?.[grandParentField];
                 if (grandParentValue && typeof grandParentValue === 'string' && !grandParentValue.startsWith('@')) {
@@ -302,13 +303,13 @@ export class RecordDependencyAnalyzer {
         let lookupValue = value;
         
         // Resolve candidate value if it's a @parent reference
-        if (typeof candidateValue === 'string' && candidateValue.startsWith('@parent:') && candidate.parentContext) {
-          const parentField = candidateValue.substring(8);
+        if (typeof candidateValue === 'string' && candidateValue.startsWith(METADATA_KEYWORDS.PARENT) && candidate.parentContext) {
+          const parentField = candidateValue.substring(METADATA_KEYWORDS.PARENT.length);
           const parentRecord = candidate.parentContext.record;
           candidateValue = parentRecord.fields?.[parentField] || parentRecord.primaryKey?.[parentField];
-          
+
           // If the parent field is also a @parent reference, resolve it recursively
-          if (typeof candidateValue === 'string' && candidateValue.startsWith('@parent:')) {
+          if (typeof candidateValue === 'string' && candidateValue.startsWith(METADATA_KEYWORDS.PARENT)) {
             // Find the candidate's parent in our flattened list
             const candidateParent = this.flattenedRecords.find(r => 
               r.record === candidate.parentContext!.record && 
@@ -323,31 +324,31 @@ export class RecordDependencyAnalyzer {
         }
         
         // Resolve lookup value if it contains @parent reference
-        if (typeof lookupValue === 'string' && lookupValue.includes('@parent:')) {
+        if (typeof lookupValue === 'string' && lookupValue.includes(METADATA_KEYWORDS.PARENT)) {
           // Handle cases like "@parent:AgentID" or embedded references
-          if (lookupValue.startsWith('@parent:') && currentRecord.parentContext) {
-            const parentField = lookupValue.substring(8);
-            lookupValue = currentRecord.parentContext.record.fields?.[parentField] || 
+          if (lookupValue.startsWith(METADATA_KEYWORDS.PARENT) && currentRecord.parentContext) {
+            const parentField = lookupValue.substring(METADATA_KEYWORDS.PARENT.length);
+            lookupValue = currentRecord.parentContext.record.fields?.[parentField] ||
                          currentRecord.parentContext.record.primaryKey?.[parentField];
-            
+
             // If still a reference, try to resolve from the parent's parent
-            if (typeof lookupValue === 'string' && lookupValue.startsWith('@parent:')) {
-              const currentParent = this.flattenedRecords.find(r => 
-                r.record === currentRecord.parentContext!.record && 
+            if (typeof lookupValue === 'string' && lookupValue.startsWith(METADATA_KEYWORDS.PARENT)) {
+              const currentParent = this.flattenedRecords.find(r =>
+                r.record === currentRecord.parentContext!.record &&
                 r.entityName === currentRecord.parentContext!.entityName
               );
               if (currentParent?.parentContext) {
-                const grandParentField = lookupValue.substring(8);
-                lookupValue = currentParent.parentContext.record.fields?.[grandParentField] || 
+                const grandParentField = lookupValue.substring(METADATA_KEYWORDS.PARENT.length);
+                lookupValue = currentParent.parentContext.record.fields?.[grandParentField] ||
                              currentParent.parentContext.record.primaryKey?.[grandParentField];
               }
             }
           }
         }
-        
+
         // Special case: if both values are @parent references pointing to the same parent field,
         // and they have the same parent context, they match
-        if (value.startsWith('@parent:') && candidateValue === value && 
+        if (value.startsWith(METADATA_KEYWORDS.PARENT) && candidateValue === value && 
             currentRecord.parentContext && candidate.parentContext) {
           // Check if they share the same parent
           if (currentRecord.parentContext.record === candidate.parentContext.record) {

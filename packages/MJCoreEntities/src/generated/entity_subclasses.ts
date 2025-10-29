@@ -1065,6 +1065,17 @@ export const AIAgentNoteSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: Companies (vwCompanies.ID)
         * * Description: Optional company scope for this note. When populated with UserID, creates org+user specific notes.`),
+    EmbeddingVector: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVector
+        * * Display Name: Embedding Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of embedding vector for semantic search on Note field. Auto-generated when Note changes.`),
+    EmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Reference to the AI model used to generate the embedding vector.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -1084,6 +1095,10 @@ export const AIAgentNoteSchema = z.object({
     Company: z.string().nullable().describe(`
         * * Field Name: Company
         * * Display Name: Company
+        * * SQL Data Type: nvarchar(50)`),
+    EmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -1507,6 +1522,29 @@ if this limit is exceeded.`),
     *   * Recent
     *   * Semantic
         * * Description: Strategy for selecting which examples to inject: Semantic (vector similarity), Recent (most recent first), or Rated (highest success score first).`),
+    IsRestricted: z.boolean().describe(`
+        * * Field Name: IsRestricted
+        * * Display Name: Is Restricted
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When true, agent is restricted to system/scheduled use only and hidden from user selection, Agent Manager, and MCP/A2A discovery.`),
+    MessageMode: z.union([z.literal('All'), z.literal('Bookend'), z.literal('Latest'), z.literal('None')]).describe(`
+        * * Field Name: MessageMode
+        * * Display Name: Message Mode
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+        * * Description: Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.`),
+    MaxMessages: z.number().nullable().describe(`
+        * * Field Name: MaxMessages
+        * * Display Name: Max Messages
+        * * SQL Data Type: int
+        * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -8265,6 +8303,17 @@ export const AIAgentExampleSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    EmbeddingVector: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVector
+        * * Display Name: Embedding Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON array of embedding vector for semantic search on ExampleInput field. Auto-generated when ExampleInput changes.`),
+    EmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+        * * Description: Reference to the AI model used to generate the embedding vector.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -8281,6 +8330,10 @@ export const AIAgentExampleSchema = z.object({
         * * Field Name: SourceConversation
         * * Display Name: Source Conversation
         * * SQL Data Type: nvarchar(255)`),
+    EmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model
+        * * SQL Data Type: nvarchar(50)`),
 });
 
 export type AIAgentExampleEntityType = z.infer<typeof AIAgentExampleSchema>;
@@ -8518,6 +8571,23 @@ export const AIAgentRelationshipSchema = z.object({
         * * Display Name: Sub Agent Context Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`),
+    MessageMode: z.union([z.literal('All'), z.literal('Bookend'), z.literal('Latest'), z.literal('None')]).describe(`
+        * * Field Name: MessageMode
+        * * Display Name: Message Mode
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+        * * Description: Specifies how conversation messages are passed from parent agent to related sub-agent. Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on relationship because related sub-agents can have multiple parents with different message passing needs.`),
+    MaxMessages: z.number().nullable().describe(`
+        * * Field Name: MaxMessages
+        * * Display Name: Max Messages
+        * * SQL Data Type: int
+        * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -10570,6 +10640,66 @@ export const ArtifactTypeSchema = z.object({
 export type ArtifactTypeEntityType = z.infer<typeof ArtifactTypeSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Artifact Uses
+ */
+export const ArtifactUseSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ArtifactVersionID: z.string().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: The specific version of the artifact being used.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user performing the action.`),
+    UsageType: z.union([z.literal('Exported'), z.literal('Opened'), z.literal('Saved'), z.literal('Shared'), z.literal('Viewed')]).describe(`
+        * * Field Name: UsageType
+        * * Display Name: Usage Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exported
+    *   * Opened
+    *   * Saved
+    *   * Shared
+    *   * Viewed
+        * * Description: Type of usage: Viewed (artifact displayed), Opened (artifact accessed), Shared (artifact shared with others), Saved (artifact bookmarked), or Exported (artifact downloaded).`),
+    UsageContext: z.string().nullable().describe(`
+        * * Field Name: UsageContext
+        * * Display Name: Usage Context
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional JSON context with additional metadata about the usage event (e.g., source page, referrer, device info).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
+        * * SQL Data Type: nvarchar(255)`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ArtifactUseEntityType = z.infer<typeof ArtifactUseSchema>;
+
+/**
  * zod schema definition for the entity MJ: Artifact Version Attributes
  */
 export const ArtifactVersionAttributeSchema = z.object({
@@ -10794,11 +10924,6 @@ export const CollectionArtifactSchema = z.object({
         * * Display Name: Collection ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
-    ArtifactID: z.string().describe(`
-        * * Field Name: ArtifactID
-        * * Display Name: Artifact ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
     Sequence: z.number().describe(`
         * * Field Name: Sequence
         * * Display Name: Sequence
@@ -10815,13 +10940,19 @@ export const CollectionArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ArtifactVersionID: z.string().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.`),
     Collection: z.string().describe(`
         * * Field Name: Collection
         * * Display Name: Collection
         * * SQL Data Type: nvarchar(255)`),
-    Artifact: z.string().describe(`
-        * * Field Name: Artifact
-        * * Display Name: Artifact
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -11644,6 +11775,55 @@ export const ConversationDetailArtifactSchema = z.object({
 });
 
 export type ConversationDetailArtifactEntityType = z.infer<typeof ConversationDetailArtifactSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Conversation Detail Ratings
+ */
+export const ConversationDetailRatingSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ConversationDetailID: z.string().describe(`
+        * * Field Name: ConversationDetailID
+        * * Display Name: Conversation Detail ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+        * * Description: The conversation message being rated.`),
+    UserID: z.string().describe(`
+        * * Field Name: UserID
+        * * Display Name: User ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: Users (vwUsers.ID)
+        * * Description: The user providing the rating.`),
+    Rating: z.number().describe(`
+        * * Field Name: Rating
+        * * Display Name: Rating
+        * * SQL Data Type: int
+        * * Description: Rating on a 1-10 scale where 1 is thumbs down and 10 is thumbs up.`),
+    Comments: z.string().nullable().describe(`
+        * * Field Name: Comments
+        * * Display Name: Comments
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional textual feedback from the user about this message.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    User: z.string().describe(`
+        * * Field Name: User
+        * * Display Name: User
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type ConversationDetailRatingEntityType = z.infer<typeof ConversationDetailRatingSchema>;
 
 /**
  * zod schema definition for the entity MJ: Dashboard User Preferences
@@ -19170,6 +19350,33 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     }
 
     /**
+    * * Field Name: EmbeddingVector
+    * * Display Name: Embedding Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of embedding vector for semantic search on Note field. Auto-generated when Note changes.
+    */
+    get EmbeddingVector(): string | null {
+        return this.Get('EmbeddingVector');
+    }
+    set EmbeddingVector(value: string | null) {
+        this.Set('EmbeddingVector', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingModelID
+    * * Display Name: Embedding Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Reference to the AI model used to generate the embedding vector.
+    */
+    get EmbeddingModelID(): string | null {
+        return this.Get('EmbeddingModelID');
+    }
+    set EmbeddingModelID(value: string | null) {
+        this.Set('EmbeddingModelID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -19212,6 +19419,15 @@ export class AIAgentNoteEntity extends BaseEntity<AIAgentNoteEntityType> {
     */
     get Company(): string | null {
         return this.Get('Company');
+    }
+
+    /**
+    * * Field Name: EmbeddingModel
+    * * Display Name: Embedding Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EmbeddingModel(): string | null {
+        return this.Get('EmbeddingModel');
     }
 }
 
@@ -19469,6 +19685,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
+    * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
     * * Table-Level: This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
     * * Table-Level: This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
@@ -19481,6 +19698,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
         const result = super.Validate();
         this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMaxMessagesGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunNonNegative(result);
         this.ValidateContextCompressionFieldsWhenEnabled(result);
         this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
@@ -19511,6 +19729,18 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
     	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
     		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If specified, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum number of messages, if specified, must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "If a maximum number of messages is specified, it must be greater than zero.", this.MaxMessages, ValidationErrorType.Failure));
     	}
     }
 
@@ -20281,6 +20511,53 @@ if this limit is exceeded.
     }
     set ExampleInjectionStrategy(value: 'Rated' | 'Recent' | 'Semantic') {
         this.Set('ExampleInjectionStrategy', value);
+    }
+
+    /**
+    * * Field Name: IsRestricted
+    * * Display Name: Is Restricted
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When true, agent is restricted to system/scheduled use only and hidden from user selection, Agent Manager, and MCP/A2A discovery.
+    */
+    get IsRestricted(): boolean {
+        return this.Get('IsRestricted');
+    }
+    set IsRestricted(value: boolean) {
+        this.Set('IsRestricted', value);
+    }
+
+    /**
+    * * Field Name: MessageMode
+    * * Display Name: Message Mode
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+    * * Description: Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.
+    */
+    get MessageMode(): 'All' | 'Bookend' | 'Latest' | 'None' {
+        return this.Get('MessageMode');
+    }
+    set MessageMode(value: 'All' | 'Bookend' | 'Latest' | 'None') {
+        this.Set('MessageMode', value);
+    }
+
+    /**
+    * * Field Name: MaxMessages
+    * * Display Name: Max Messages
+    * * SQL Data Type: int
+    * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.
+    */
+    get MaxMessages(): number | null {
+        return this.Get('MaxMessages');
+    }
+    set MaxMessages(value: number | null) {
+        this.Set('MaxMessages', value);
     }
 
     /**
@@ -37698,6 +37975,33 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
     }
 
     /**
+    * * Field Name: EmbeddingVector
+    * * Display Name: Embedding Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON array of embedding vector for semantic search on ExampleInput field. Auto-generated when ExampleInput changes.
+    */
+    get EmbeddingVector(): string | null {
+        return this.Get('EmbeddingVector');
+    }
+    set EmbeddingVector(value: string | null) {
+        this.Set('EmbeddingVector', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingModelID
+    * * Display Name: Embedding Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: AI Models (vwAIModels.ID)
+    * * Description: Reference to the AI model used to generate the embedding vector.
+    */
+    get EmbeddingModelID(): string | null {
+        return this.Get('EmbeddingModelID');
+    }
+    set EmbeddingModelID(value: string | null) {
+        this.Set('EmbeddingModelID', value);
+    }
+
+    /**
     * * Field Name: Agent
     * * Display Name: Agent
     * * SQL Data Type: nvarchar(255)
@@ -37731,6 +38035,15 @@ export class AIAgentExampleEntity extends BaseEntity<AIAgentExampleEntityType> {
     */
     get SourceConversation(): string | null {
         return this.Get('SourceConversation');
+    }
+
+    /**
+    * * Field Name: EmbeddingModel
+    * * Display Name: Embedding Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EmbeddingModel(): string | null {
+        return this.Get('EmbeddingModel');
     }
 }
 
@@ -38245,6 +38558,33 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Relationships entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxMessages: This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxMessagesGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "MaxMessages must be greater than 0 when specified.", this.MaxMessages, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -38361,6 +38701,39 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     }
     set SubAgentContextPaths(value: string | null) {
         this.Set('SubAgentContextPaths', value);
+    }
+
+    /**
+    * * Field Name: MessageMode
+    * * Display Name: Message Mode
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+    * * Description: Specifies how conversation messages are passed from parent agent to related sub-agent. Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on relationship because related sub-agents can have multiple parents with different message passing needs.
+    */
+    get MessageMode(): 'All' | 'Bookend' | 'Latest' | 'None' {
+        return this.Get('MessageMode');
+    }
+    set MessageMode(value: 'All' | 'Bookend' | 'Latest' | 'None') {
+        this.Set('MessageMode', value);
+    }
+
+    /**
+    * * Field Name: MaxMessages
+    * * Display Name: Max Messages
+    * * SQL Data Type: int
+    * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.
+    */
+    get MaxMessages(): number | null {
+        return this.Get('MaxMessages');
+    }
+    set MaxMessages(value: number | null) {
+        this.Set('MaxMessages', value);
     }
 
     /**
@@ -43852,6 +44225,150 @@ export class ArtifactTypeEntity extends BaseEntity<ArtifactTypeEntityType> {
 
 
 /**
+ * MJ: Artifact Uses - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ArtifactUse
+ * * Base View: vwArtifactUses
+ * * @description Audit trail of artifact usage for security and analytics. Tracks each time an artifact is viewed, opened, shared, saved, or exported by users.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Artifact Uses')
+export class ArtifactUseEntity extends BaseEntity<ArtifactUseEntityType> {
+    /**
+    * Loads the MJ: Artifact Uses record from the database
+    * @param ID: string - primary key value to load the MJ: Artifact Uses record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ArtifactUseEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: The specific version of the artifact being used.
+    */
+    get ArtifactVersionID(): string {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user performing the action.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: UsageType
+    * * Display Name: Usage Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Exported
+    *   * Opened
+    *   * Saved
+    *   * Shared
+    *   * Viewed
+    * * Description: Type of usage: Viewed (artifact displayed), Opened (artifact accessed), Shared (artifact shared with others), Saved (artifact bookmarked), or Exported (artifact downloaded).
+    */
+    get UsageType(): 'Exported' | 'Opened' | 'Saved' | 'Shared' | 'Viewed' {
+        return this.Get('UsageType');
+    }
+    set UsageType(value: 'Exported' | 'Opened' | 'Saved' | 'Shared' | 'Viewed') {
+        this.Set('UsageType', value);
+    }
+
+    /**
+    * * Field Name: UsageContext
+    * * Display Name: Usage Context
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional JSON context with additional metadata about the usage event (e.g., source page, referrer, device info).
+    */
+    get UsageContext(): string | null {
+        return this.Get('UsageContext');
+    }
+    set UsageContext(value: string | null) {
+        this.Set('UsageContext', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
+    }
+}
+
+
+/**
  * MJ: Artifact Version Attributes - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: ArtifactVersionAttribute
@@ -44391,7 +44908,7 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
  * * Schema: __mj
  * * Base Table: CollectionArtifact
  * * Base View: vwCollectionArtifacts
- * * @description Join table that establishes many-to-many relationships between Collections and Artifacts, allowing artifacts to be organized within collections
+ * * @description Links collections to specific artifact versions. Each collection can contain multiple versions of the same artifact.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -44443,19 +44960,6 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
     }
 
     /**
-    * * Field Name: ArtifactID
-    * * Display Name: Artifact ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
-    */
-    get ArtifactID(): string {
-        return this.Get('ArtifactID');
-    }
-    set ArtifactID(value: string) {
-        this.Set('ArtifactID', value);
-    }
-
-    /**
     * * Field Name: Sequence
     * * Display Name: Sequence
     * * SQL Data Type: int
@@ -44490,6 +44994,20 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
     }
 
     /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.
+    */
+    get ArtifactVersionID(): string {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
     * * Field Name: Collection
     * * Display Name: Collection
     * * SQL Data Type: nvarchar(255)
@@ -44499,12 +45017,12 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
     }
 
     /**
-    * * Field Name: Artifact
-    * * Display Name: Artifact
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
     */
-    get Artifact(): string {
-        return this.Get('Artifact');
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
     }
 }
 
@@ -46618,6 +47136,161 @@ export class ConversationDetailArtifactEntity extends BaseEntity<ConversationDet
     */
     get ArtifactVersion(): string | null {
         return this.Get('ArtifactVersion');
+    }
+}
+
+
+/**
+ * MJ: Conversation Detail Ratings - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: ConversationDetailRating
+ * * Base View: vwConversationDetailRatings
+ * * @description Stores per-user ratings for conversation messages, supporting multi-user conversations where each user can independently rate messages.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Conversation Detail Ratings')
+export class ConversationDetailRatingEntity extends BaseEntity<ConversationDetailRatingEntityType> {
+    /**
+    * Loads the MJ: Conversation Detail Ratings record from the database
+    * @param ID: string - primary key value to load the MJ: Conversation Detail Ratings record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof ConversationDetailRatingEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Conversation Detail Ratings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rating: This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRatingWithinAllowedRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRatingWithinAllowedRange(result: ValidationResult) {
+    	if (this.Rating < 1 || this.Rating > 10) {
+    		result.Errors.push(new ValidationErrorInfo("Rating", "Rating must be between 1 and 10.", this.Rating, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ConversationDetailID
+    * * Display Name: Conversation Detail ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Conversation Details (vwConversationDetails.ID)
+    * * Description: The conversation message being rated.
+    */
+    get ConversationDetailID(): string {
+        return this.Get('ConversationDetailID');
+    }
+    set ConversationDetailID(value: string) {
+        this.Set('ConversationDetailID', value);
+    }
+
+    /**
+    * * Field Name: UserID
+    * * Display Name: User ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: Users (vwUsers.ID)
+    * * Description: The user providing the rating.
+    */
+    get UserID(): string {
+        return this.Get('UserID');
+    }
+    set UserID(value: string) {
+        this.Set('UserID', value);
+    }
+
+    /**
+    * * Field Name: Rating
+    * * Display Name: Rating
+    * * SQL Data Type: int
+    * * Description: Rating on a 1-10 scale where 1 is thumbs down and 10 is thumbs up.
+    */
+    get Rating(): number {
+        return this.Get('Rating');
+    }
+    set Rating(value: number) {
+        this.Set('Rating', value);
+    }
+
+    /**
+    * * Field Name: Comments
+    * * Display Name: Comments
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional textual feedback from the user about this message.
+    */
+    get Comments(): string | null {
+        return this.Get('Comments');
+    }
+    set Comments(value: string | null) {
+        this.Set('Comments', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: User
+    * * Display Name: User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get User(): string {
+        return this.Get('User');
     }
 }
 

@@ -17,6 +17,9 @@ export class LazyArtifactInfo {
   public readonly direction: string;
   public readonly artifactVersionId: string;
   public readonly versionNumber: number;
+  public readonly versionName: string | null;
+  public readonly versionDescription: string | null;
+  public readonly versionCreatedAt: Date;
   public readonly artifactId: string;
   public readonly artifactName: string;
   public readonly artifactType: string;
@@ -36,11 +39,14 @@ export class LazyArtifactInfo {
     preloadedVersion?: ArtifactVersionEntity
   ) {
     // Populate display data from query result
-    // These fields come from GetConversationArtifactsMap query
+    // These fields come from GetConversationComplete query
     this.conversationDetailId = queryResult.ConversationDetailID;
     this.direction = queryResult.Direction;
     this.artifactVersionId = queryResult.ArtifactVersionID;
     this.versionNumber = queryResult.VersionNumber;
+    this.versionName = queryResult.VersionName || null;
+    this.versionDescription = queryResult.VersionDescription || null;
+    this.versionCreatedAt = queryResult.VersionCreatedAt ? new Date(queryResult.VersionCreatedAt) : new Date();
     this.artifactId = queryResult.ArtifactID;
     this.artifactName = queryResult.ArtifactName;
     this.artifactType = queryResult.ArtifactType;
@@ -139,8 +145,6 @@ export class LazyArtifactInfo {
 
       this._artifact = artifact;
       this._version = version;
-
-      console.log(`📦 Lazy-loaded artifact "${this.artifactName}" (v${this.versionNumber})`);
     } catch (error) {
       console.error('Error lazy-loading artifact:', error);
       throw error;

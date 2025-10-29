@@ -458,6 +458,7 @@ export abstract class BaseAgentType {
         return null;
     }
 
+
     /**
      * Determines if loop results should be injected as a temporary user message
      * before the next prompt execution (for LLM reasoning).

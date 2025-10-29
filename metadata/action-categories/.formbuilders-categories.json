@@ -1,0 +1,17 @@
+[
+  {
+    "fields": {
+      "Name": "Form Builders",
+      "Description": "Integration actions for form builder and survey platforms including Typeform, Google Forms, and JotForm",
+      "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F0209686-E477-4C06-A082-B8FC1C9AD338"
+    },
+    "sync": {
+      "lastModified": "2025-10-29T15:24:47.992Z",
+      "checksum": "7df08ac02b95a635454bfdb7e1361e1e9f87e0911e4166fbaad3b469841ef6cd"
+    }
+  }
+]

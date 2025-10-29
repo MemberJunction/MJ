@@ -19,7 +19,8 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIAgentStepPathEntity,
          AIAgentRelationshipEntity,
          AIAgentPermissionEntity,
-         AIAgentDataSourceEntity} from "@memberjunction/core-entities";
+         AIAgentDataSourceEntity,
+         AIAgentExampleEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
  
 // this class handles execution of AI Actions
@@ -35,6 +36,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPrompts: AIAgentPromptEntity[] = [];
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
+    private _agentExamples: AIAgentExampleEntity[] = [];
     private _agentDataSources: AIAgentDataSourceEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
     private _agentRelationships: AIAgentRelationshipEntity[] = [];
@@ -93,6 +95,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'AI Agent Notes'
+            },
+            {
+                PropertyName: '_agentExamples',
+                EntityName: 'MJ: AI Agent Examples'
             },
             {
                 PropertyName: '_agents',
@@ -350,6 +356,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get AgentNotes(): AIAgentNoteEntity[] {
         return this._agentNotes;
+    }
+
+    public get AgentExamples(): AIAgentExampleEntity[] {
+        return this._agentExamples;
     }
 
     public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {

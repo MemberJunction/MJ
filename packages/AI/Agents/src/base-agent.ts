@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
@@ -20,6 +20,7 @@ import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import { AgentContextInjector } from './agent-context-injector';
 import {
     AIPromptParams,
     AIPromptRunResult,
@@ -35,7 +36,8 @@ import {
     MessageLifecycleCallback,
     MessageLifecycleEvent,
     AgentChatMessage,
-    AgentChatMessageMetadata
+    AgentChatMessageMetadata,
+    AIModelSelectionInfo
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -258,13 +260,18 @@ export class BaseAgent {
     private _validationRetryCount: number = 0;
 
     /**
-     * Flag indicating whether a context recovery attempt has been made in this run.
-     * Context recovery trims conversation messages when context length is exceeded,
-     * giving the agent ONE opportunity to adapt its approach.
+     * Counter tracking the number of context recovery attempts made in this run.
+     * Context recovery removes/compacts old messages when context length is exceeded.
      * Reset at the start of each agent run.
      * @private
      */
-    private _contextRecoveryAttempted: boolean = false;
+    private _contextRecoveryAttempts: number = 0;
+
+    /**
+     * Maximum number of context recovery attempts allowed per agent run.
+     * @private
+     */
+    private readonly MAX_RECOVERY_ATTEMPTS: number = 1;
 
     /**
      * Gets the current validation retry count for the agent run.
@@ -540,7 +547,7 @@ export class BaseAgent {
             // Reset validation retry counters for this run
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
-            this._contextRecoveryAttempted = false;
+            this._contextRecoveryAttempts = 0;
 
             // Store message lifecycle callback if provided
             this._messageLifecycleCallback = params.onMessageLifecycle;
@@ -587,6 +594,26 @@ export class BaseAgent {
             // now initialize the agent type which gets us the instance setup in our class plus also gets the agent type to initialize
             // its state
             await this.initializeAgentType(wrappedParams, config);
+
+            // Inject context memory (notes and examples) before execution
+            const userId = params.userId || params.contextUser?.ID;
+            const companyId = params.companyId;
+
+            // Extract input text from conversation messages (last user message)
+            const lastUserMessage = params.conversationMessages
+                .filter(m => m.role === 'user')
+                .pop();
+            const inputText = lastUserMessage?.content || '';
+
+            // Inject context memory (notes and examples) into conversation messages
+            await this.InjectContextMemory(
+                typeof inputText === 'string' ? inputText : '',
+                params.agent,
+                userId,
+                companyId,
+                params.contextUser,
+                wrappedParams.conversationMessages
+            );
 
             // Execute the agent's internal logic with wrapped parameters
             this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
@@ -718,6 +745,97 @@ export class BaseAgent {
     protected async initializeEngines(contextUser?: UserInfo): Promise<void> {
         await AIEngine.Instance.Config(false, contextUser);
         await ActionEngineServer.Instance.Config(false, contextUser);
+    }
+
+    /**
+     * Storage for injected memory context to prepend to prompts
+     */
+    private _memoryContext: string = '';
+
+    /**
+     * Storage for injected notes and examples to include in result
+     */
+    private _injectedMemory: { notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] } = { notes: [], examples: [] };
+
+    /**
+     * Inject notes and examples into agent context memory.
+     * Called automatically before agent execution if injection is enabled on the agent.
+     * Injects memory context directly into conversation messages array.
+     *
+     * @param input - The user input text for semantic search
+     * @param agent - The agent configuration entity
+     * @param userId - Optional user ID for scoping
+     * @param companyId - Optional company ID for scoping
+     * @param contextUser - User context
+     * @param conversationMessages - The conversation messages array to inject into
+     * @returns Object containing injected notes and examples
+     */
+    protected async InjectContextMemory(
+        input: string,
+        agent: AIAgentEntityExtended,
+        userId?: string,
+        companyId?: string,
+        contextUser?: UserInfo,
+        conversationMessages?: ChatMessage[]
+    ): Promise<{ notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] }> {
+        // Check if injection is enabled
+        if (!agent.InjectNotes && !agent.InjectExamples) {
+            return { notes: [], examples: [] };
+        }
+
+        const injector = new AgentContextInjector();
+
+        // Get notes if injection enabled
+        const notes = agent.InjectNotes
+            ? await injector.GetNotesForContext({
+                agentId: agent.ID,
+                userId,
+                companyId,
+                currentInput: input,
+                strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
+                maxNotes: agent.MaxNotesToInject || 5,
+                contextUser: contextUser!
+            })
+            : [];
+
+        // Get examples if injection enabled
+        const examples = agent.InjectExamples
+            ? await injector.GetExamplesForContext({
+                agentId: agent.ID,
+                userId,
+                companyId,
+                currentInput: input,
+                strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
+                maxExamples: agent.MaxExamplesToInject || 3,
+                contextUser: contextUser!
+            })
+            : [];
+
+        // Format and inject memory context into conversation messages
+        if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
+            const notesText = injector.FormatNotesForInjection(notes);
+            const examplesText = injector.FormatExamplesForInjection(examples);
+
+            this._memoryContext = '';
+            if (notesText) this._memoryContext += notesText + '\n\n';
+            if (examplesText) this._memoryContext += examplesText + '\n\n';
+
+            // Inject as system message at the start
+            conversationMessages.unshift({
+                role: 'system',
+                content: this._memoryContext
+            });
+
+            this.logStatus(
+                `💾 Injected ${notes.length} notes and ${examples.length} examples into conversation context`,
+                true
+            );
+        }
+
+        // Store for inclusion in result
+        this._injectedMemory = { notes, examples };
+
+        return { notes, examples };
     }
 
     /**
@@ -2031,47 +2149,388 @@ export class BaseAgent {
     }
 
     /**
-     * Attempts to recover from a context length exceeded error by trimming conversation messages.
-     * This gives the agent ONE opportunity to adapt its approach after receiving a large result
-     * that overflowed the context window.
+     * Recovery Strategy 1: Remove oldest action-result messages.
+     * Targets messages older than minAge turns for removal.
      *
-     * @param params - Agent execution parameters (conversationMessages will be modified)
-     * @param payload - Current payload to carry forward
-     * @param errorMessage - The original error message from the failed prompt
-     * @returns A Retry step with trimmed context and guidance for the agent
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn/step number
+     * @param minAge - Minimum age in turns for removal (default: 5)
+     * @returns Result with tokens saved and strategy description
      * @protected
      */
-    protected async attemptContextRecovery<P>(
+    protected recoveryStrategy_RemoveOldestActionResults(
         params: ExecuteAgentParams,
-        payload: P,
-        errorMessage: string
-    ): Promise<BaseAgentNextStep<P>> {
-        this.logStatus(
-            `⚠️ Context length exceeded - attempting recovery by trimming conversation messages`,
-            true,
-            params
-        );
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge: number = 5
+    ): { tokensSaved: number; strategyName: string } {
+        let tokensSaved = 0;
+        const removedIndices: number[] = [];
 
-        // Find the last user message (usually the action/sub-agent result)
-        const messages = params.conversationMessages;
+        // Find action-result messages older than minAge turns
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                age: (msg as AgentChatMessage).metadata?.turnAdded
+                    ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
+                    : 0,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result'
+            }))
+            .filter(c => c.isActionResult && c.age >= minAge)
+            .sort((a, b) => b.age - a.age); // Oldest first
+
+        // Remove messages until we've saved enough
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            removedIndices.push(candidate.index);
+            tokensSaved += candidate.tokens;
+
+            this.logStatus(
+                `Removing action-result from ${candidate.age} turns ago (${candidate.tokens} tokens)`,
+                true,
+                params
+            );
+        }
+
+        // Remove in reverse order to maintain indices
+        removedIndices.sort((a, b) => b - a).forEach(index => {
+            const removed = params.conversationMessages.splice(index, 1)[0];
+
+            // Emit lifecycle event
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentStepCount,
+                messageIndex: index,
+                message: removed as AgentChatMessage,
+                reason: 'Context recovery - oldest action results',
+                tokensSaved: this.estimateTokens(removed.content)
+            });
+        });
+
+        return {
+            tokensSaved,
+            strategyName: `Removed ${removedIndices.length} old action-results (${minAge}+ turns)`
+        };
+    }
+
+    /**
+     * Recovery Strategy 2: Compact old action-result messages.
+     * Uses smart trimming to reduce size while preserving some content.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn/step number
+     * @param minAge - Minimum age in turns for compaction (default: 3)
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected async recoveryStrategy_CompactOldActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge: number = 3
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        let tokensSaved = 0;
+        let compactedCount = 0;
+
+        // Find action-result messages to compact
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                age: (msg as AgentChatMessage).metadata?.turnAdded
+                    ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
+                    : 0,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
+            }))
+            .filter(c => c.isActionResult && c.age >= minAge && !c.alreadyCompacted)
+            .sort((a, b) => b.age - a.age); // Oldest first
+
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            const originalTokens = candidate.tokens;
+            const originalMessage = candidate.message as AgentChatMessage;
+            const originalContent = typeof originalMessage.content === 'string'
+                ? originalMessage.content
+                : JSON.stringify(originalMessage.content);
+
+            // Use smart trim (faster than AI summary, no API cost)
+            const compactedContent = await this.compactMessage(
+                originalMessage,
+                {
+                    compactMode: 'First N Chars',
+                    compactLength: 500,
+                    compactPromptId: '',
+                    originalLength: originalContent.length
+                },
+                params
+            );
+
+            const newTokens = this.estimateTokens(compactedContent);
+            const saved = originalTokens - newTokens;
+
+            if (saved > 0) {
+                // Update message in place with compacted content
+                params.conversationMessages[candidate.index] = {
+                    ...originalMessage,
+                    content: compactedContent,
+                    metadata: {
+                        ...originalMessage.metadata,
+                        wasCompacted: true,
+                        originalLength: originalContent.length,
+                        tokensSaved: saved
+                    }
+                };
+                tokensSaved += saved;
+                compactedCount++;
+
+                this.logStatus(
+                    `Compacted action-result from ${candidate.age} turns ago (saved ${saved} tokens)`,
+                    true,
+                    params
+                );
+            }
+        }
+
+        return {
+            tokensSaved,
+            strategyName: `Compacted ${compactedCount} old action-results (${minAge}+ turns)`
+        };
+    }
+
+    /**
+     * Recovery Strategy 3: Aggressively compact ALL action-result messages.
+     * Used when gentler strategies haven't freed enough space.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected async recoveryStrategy_CompactAllActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        let tokensSaved = 0;
+        let compactedCount = 0;
+
+        // Find ALL action-result messages that aren't already compacted
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
+            }))
+            .filter(c => c.isActionResult && !c.alreadyCompacted && c.tokens > 200)
+            .sort((a, b) => b.tokens - a.tokens); // Largest first
+
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            const originalTokens = candidate.tokens;
+            const originalMessage = candidate.message as AgentChatMessage;
+            const originalContent = typeof originalMessage.content === 'string'
+                ? originalMessage.content
+                : JSON.stringify(originalMessage.content);
+
+            // Aggressive compaction - keep only first 200 chars
+            const compactedContent = await this.compactMessage(
+                originalMessage,
+                {
+                    compactMode: 'First N Chars',
+                    compactLength: 200,
+                    compactPromptId: '',
+                    originalLength: originalContent.length
+                },
+                params
+            );
+
+            const newTokens = this.estimateTokens(compactedContent);
+            const saved = originalTokens - newTokens;
+
+            if (saved > 0) {
+                // Update message in place with compacted content
+                params.conversationMessages[candidate.index] = {
+                    ...originalMessage,
+                    content: compactedContent,
+                    metadata: {
+                        ...originalMessage.metadata,
+                        wasCompacted: true,
+                        originalLength: originalContent.length,
+                        tokensSaved: saved
+                    }
+                };
+                tokensSaved += saved;
+                compactedCount++;
+            }
+        }
+
+        return {
+            tokensSaved,
+            strategyName: `Aggressively compacted ${compactedCount} action-results`
+        };
+    }
+
+    /**
+     * Recovery Strategy 4: Preserve beginning of last user message (fallback).
+     * Keeps the first 200-300 tokens of the user's request (which usually contains the core ask)
+     * and adds a clear marker that content was trimmed due to context limits.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected recoveryStrategy_TrimLastUserMessage(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): { tokensSaved: number; strategyName: string } {
+        // Find the last user message (reverse search for compatibility)
         let lastUserMessageIndex = -1;
-
-        for (let i = messages.length - 1; i >= 0; i--) {
-            if (messages[i].role === 'user') {
+        for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
+            if (params.conversationMessages[i].role === 'user') {
                 lastUserMessageIndex = i;
                 break;
             }
         }
 
         if (lastUserMessageIndex === -1) {
-            // No user message to trim - can't recover
+            return { tokensSaved: 0, strategyName: 'No user message to trim' };
+        }
+
+        const lastUserMessage = params.conversationMessages[lastUserMessageIndex];
+        const originalTokens = this.estimateTokens(lastUserMessage.content);
+
+        // Keep first 200-300 tokens worth (approximately 800-1200 characters)
+        const contentString = this.contentToString(lastUserMessage.content);
+        const targetChars = 1000; // Roughly 250 tokens
+
+        if (contentString.length <= targetChars) {
+            // Message is already short enough
+            return { tokensSaved: 0, strategyName: 'User message already short' };
+        }
+
+        // Keep the beginning (most important part with the request)
+        const trimResult = this.smartTrimContent(contentString, targetChars);
+
+        // Add clear marker that we trimmed it
+        const newContent = trimResult.trimmed +
+            '\n\n<CONTEXT_LIMIT_REACHED>\n' +
+            'Note: The conversation has exceeded the model\'s context window. ' +
+            'The remainder of your message was trimmed to fit within the limit. ' +
+            'The beginning of your request (shown above) has been preserved.\n' +
+            '</CONTEXT_LIMIT_REACHED>';
+
+        const newTokens = this.estimateTokens(newContent);
+        const saved = originalTokens - newTokens;
+
+        if (saved > 0) {
+            params.conversationMessages[lastUserMessageIndex] = {
+                ...lastUserMessage,
+                content: newContent
+            };
+        }
+
+        return {
+            tokensSaved: saved,
+            strategyName: 'Preserved beginning of user message with context limit marker'
+        };
+    }
+
+    /**
+     * Attempts to recover from a context length exceeded error using multiple strategies.
+     * Uses escalating strategies: remove old results → compact old results → compact all → trim user message.
+     * This approach preserves the user's original request while removing stale action results.
+     *
+     * @param params - Agent execution parameters (conversationMessages will be modified)
+     * @param payload - Current payload to carry forward
+     * @param errorMessage - The original error message from the failed prompt
+     * @param modelSelectionInfo - Model selection information containing the model and vendor used
+     * @returns A Retry step with reduced context or Failed if recovery unsuccessful
+     * @protected
+     */
+    protected async attemptContextRecovery<P>(
+        params: ExecuteAgentParams,
+        payload: P,
+        errorMessage: string,
+        modelSelectionInfo?: AIModelSelectionInfo
+    ): Promise<BaseAgentNextStep<P>> {
+        this.logStatus(
+            `⚠️ Context length exceeded - attempting recovery with multi-strategy approach`,
+            true,
+            params
+        );
+
+        // Calculate how many tokens we need to save
+        const modelLimit = this.getModelContextLimit(modelSelectionInfo);
+        const currentTokens = this.estimateConversationTokens(params.conversationMessages);
+        const tokensToSave = currentTokens - Math.floor(modelLimit * 0.9); // Target 90% usage
+
+        this.logStatus(
+            `Need to save ~${tokensToSave} tokens (current: ${currentTokens}, limit: ${modelLimit})`,
+            true,
+            params
+        );
+
+        if (tokensToSave <= 0) {
+            // Already under limit, this shouldn't happen but handle gracefully
+            this.logStatus(`Already under context limit, retrying...`, true, params);
+            return {
+                step: 'Retry' as const,
+                retryReason: 'Context recovery - already under limit',
+                retryInstructions: 'The context is now within limits.',
+                terminate: false,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+
+        // Get current step count for age calculations
+        const currentStepCount = this._agentRun?.Steps?.length || 0;
+
+        // Try multiple recovery strategies in order
+        const strategies = [
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 5),
+            () => this.recoveryStrategy_CompactOldActionResults(params, tokensToSave, currentStepCount, 3),
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 2),
+            () => this.recoveryStrategy_CompactAllActionResults(params, tokensToSave),
+            () => Promise.resolve(this.recoveryStrategy_TrimLastUserMessage(params, tokensToSave))
+        ];
+
+        let tokensSaved = 0;
+        const strategiesUsed: string[] = [];
+
+        for (const strategy of strategies) {
+            const result = await strategy();
+            tokensSaved += result.tokensSaved;
+            if (result.tokensSaved > 0) {
+                strategiesUsed.push(result.strategyName);
+                this.logStatus(`${result.strategyName}: saved ${result.tokensSaved} tokens`, true, params);
+            }
+
+            if (tokensSaved >= tokensToSave) {
+                break;
+            }
+        }
+
+        // Check if we saved enough
+        if (tokensSaved < tokensToSave * 0.5) {
             this.logStatus(
-                `❌ Context recovery failed: No trimmable user messages found`,
+                `❌ Context recovery insufficient: only saved ${tokensSaved}/${tokensToSave} tokens`,
                 true,
                 params
             );
             return {
-                errorMessage: `Context overflow with no trimmable messages: ${errorMessage}`,
+                errorMessage: `Context recovery failed: only saved ${tokensSaved}/${tokensToSave} tokens. ${errorMessage}`,
                 step: 'Failed' as const,
                 terminate: true,
                 previousPayload: payload,
@@ -2079,45 +2538,26 @@ export class BaseAgent {
             };
         }
 
-        // Capture the original message for logging
-        const originalMessage = messages[lastUserMessageIndex];
-        const contentString = this.contentToString(originalMessage.content);
-        const trimResult = this.smartTrimContent(contentString, 1000);
-
         this.logStatus(
-            `✂️ Trimmed message from ${trimResult.originalLength.toLocaleString()} to ${trimResult.trimmed.length.toLocaleString()} characters using ${trimResult.strategy}`,
+            `✅ Context recovery successful: saved ${tokensSaved} tokens using ${strategiesUsed.length} strategies`,
             true,
             params
         );
 
-        // Replace the message with trimmed version + explanation
-        messages[lastUserMessageIndex] = {
-            role: 'user',
-            content: `⚠️ CONTEXT OVERFLOW RECOVERY ⚠️
-
-The previous step returned a result that exceeded the context window (${(trimResult.originalLength - trimResult.trimmed.length).toLocaleString()} characters truncated).
-
-Here is a PARTIAL result from the previous action:
----
-${trimResult.trimmed}
----
-
-❗ THE ABOVE IS INCOMPLETE - the full result was too large for the context window.
-
-RECOMMENDED ACTIONS:
-1. Use a different action with more specific filters to get smaller result sets
-2. Request data in batches or pages instead of all at once
-3. Ask the user to clarify scope to narrow the query
-4. If you need the full data, acknowledge the limitation and ask the user how to proceed
-
-Please choose an alternative approach to complete your task.`
-        };
+        // Build detailed description of what was done
+        const strategyDescriptions = strategiesUsed.map((strategy, index) =>
+            `${index + 1}. ${strategy}`
+        ).join('\n');
 
         // Return Retry step to give agent another chance
         return {
             step: 'Retry' as const,
-            retryReason: 'Context length recovery - previous result too large',
-            retryInstructions: 'The previous action result exceeded context limits. Use more specific filters or request data in smaller batches.',
+            retryReason: `Context recovery successful - ${tokensSaved} tokens freed`,
+            retryInstructions: `The conversation exceeded the model's context limit (${modelLimit} tokens). I've applied the following context recovery strategies to free up ${tokensSaved} tokens:
+
+${strategyDescriptions}
+
+The context is now within limits. Please retry your request with the recovered context.`,
             terminate: false,
             previousPayload: payload,
             newPayload: payload
@@ -2335,8 +2775,113 @@ Please choose an alternative approach to complete your task.`
     }
 
     /**
+     * Prepares conversation messages for sub-agent execution based on database-configured message mode.
+     *
+     * Message passing is controlled by MessageMode and MaxMessages fields stored in either:
+     * - AIAgentRelationship table (for related sub-agents via AgentRelationships)
+     * - AIAgent table (for child sub-agents via ParentID)
+     *
+     * **Message Modes:**
+     * - `'None'`: Fresh start - only context message and task message (default)
+     * - `'All'`: Pass complete parent conversation history
+     * - `'Latest'`: Pass most recent N messages (where N = MaxMessages)
+     * - `'Bookend'`: Pass first 2 messages + indicator + most recent (N-2) messages
+     *
+     * **Priority:** AIAgentRelationship.MessageMode takes precedence over AIAgent.MessageMode
+     * to allow different parent agents to pass messages differently to the same sub-agent.
+     *
+     * Subclasses can override this method to implement custom message preparation logic
+     * specific to their domain (e.g., Skip agents adding special context).
+     *
+     * @param {ExecuteAgentParams} params - Execution parameters with conversation history
+     * @param {AgentSubAgentRequest} subAgentRequest - Sub-agent request details
+     * @param {AIAgentEntityExtended} subAgent - The sub-agent entity
+     * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
+     * @returns {ChatMessage[]} Prepared message array for sub-agent execution
+     *
+     * @protected
+     */
+    protected prepareSubAgentMessages(
+        params: ExecuteAgentParams,
+        subAgentRequest: AgentSubAgentRequest,
+        subAgent: AIAgentEntityExtended,
+        contextMessage?: ChatMessage
+    ): ChatMessage[] {
+        const engine = AIEngine.Instance;
+        let messages: ChatMessage[] = [];
+
+        // Check for related sub-agent configuration (AIAgentRelationship)
+        const relationship = engine.AgentRelationships.find(
+            r => r.AgentID === params.agent.ID && r.SubAgentID === subAgent.ID
+        );
+
+        // Get MessageMode and MaxMessages from either relationship or child agent
+        let messageMode = relationship?.MessageMode || subAgent.MessageMode || 'None';
+        let maxMessages = relationship?.MaxMessages || subAgent.MaxMessages || null;
+
+        // Apply message mode
+        switch (messageMode) {
+            case 'None':
+                // Fresh start - no conversation history, only context and task
+                // Messages are added after the switch statement
+                break;
+
+            case 'All':
+                // Pass all parent conversation history
+                messages = [...params.conversationMessages];
+                break;
+
+            case 'Latest':
+                // Pass most recent N messages
+                if (maxMessages && maxMessages > 0) {
+                    messages = params.conversationMessages.slice(-maxMessages);
+                } else {
+                    messages = [...params.conversationMessages];
+                }
+                break;
+
+            case 'Bookend':
+                // Pass first 2 + most recent (N-2) with indicator message between
+                if (maxMessages && maxMessages > 2 && params.conversationMessages.length > maxMessages) {
+                    const firstTwo = params.conversationMessages.slice(0, 2);
+                    const remaining = params.conversationMessages.slice(-(maxMessages - 2));
+                    const omittedCount = params.conversationMessages.length - maxMessages;
+
+                    messages = [
+                        ...firstTwo,
+                        {
+                            role: 'system',
+                            content: `[${omittedCount} messages omitted for context management]`
+                        },
+                        ...remaining
+                    ];
+                } else {
+                    messages = [...params.conversationMessages];
+                }
+                break;
+
+            default:
+                // Fallback to 'None' for any unrecognized mode
+                break;
+        }
+
+        // Add context message if provided (for all modes)
+        if (contextMessage) {
+            messages.push(contextMessage);
+        }
+
+        // Always add the task message (for all modes)
+        messages.push({
+            role: 'user',
+            content: subAgentRequest.message
+        });
+
+        return messages;
+    }
+
+    /**
      * Executes a sub-agent synchronously.
-     * 
+     *
      * This method creates a new instance of AgentRunner to execute a sub-agent.
      * The sub-agent receives the provided message/context and runs to completion.
      * If terminateAfter is true, the parent agent will not continue after the
@@ -2374,20 +2919,13 @@ Please choose an alternative approach to complete your task.`
             // Create a new AgentRunner instance
             const runner = new AgentRunner();
 
-            // Prepare messages for sub-agent
-            // For related sub-agents, may include parent context message before the task message
-            const subAgentMessages: ChatMessage[] = [];
-
-            // Add context message first if provided (related sub-agents with SubAgentContextPaths)
-            if (contextMessage) {
-                subAgentMessages.push(contextMessage);
-            }
-
-            // Add the task message
-            subAgentMessages.push({
-                role: 'user',
-                content: subAgentRequest.message
-            });
+            // Prepare messages for sub-agent using database-configured message mode
+            const subAgentMessages = this.prepareSubAgentMessages(
+                params,
+                subAgentRequest,
+                subAgent,
+                contextMessage
+            );
             
             // Set parent run ID in the sub-agent's execution
             // This would need to be passed through the AgentRunner in a real implementation
@@ -3242,11 +3780,12 @@ Please choose an alternative approach to complete your task.`
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
 
-            // Remove temporary loop results message if present
-            const loopMsgIndex = params.conversationMessages.findIndex(m => (m as any).metadata?._loopResults === true);
-            if (loopMsgIndex !== -1) {
-                params.conversationMessages.splice(loopMsgIndex, 1);
-            }
+            // Remove temporary messages before processing prompt results
+            // This includes loop results and sub-agent completion messages
+            params.conversationMessages = params.conversationMessages.filter(m => {
+                const metadata = (m as any).metadata;
+                return !metadata?._loopResults && !metadata?._subAgentResult;
+            });
 
             // Update step entity with AIPromptRun ID if available
             if (promptResult.promptRun?.ID) {
@@ -3266,9 +3805,9 @@ Please choose an alternative approach to complete your task.`
                 const isContextOverflow = isFatal &&
                     promptResult.chatResult?.errorInfo?.errorType === 'ContextLengthExceeded';
 
-                if (isContextOverflow && !this._contextRecoveryAttempted) {
-                    // Attempt ONE-TIME context recovery
-                    this._contextRecoveryAttempted = true;
+                if (isContextOverflow && this._contextRecoveryAttempts < this.MAX_RECOVERY_ATTEMPTS) {
+                    // Attempt context recovery with multiple strategies
+                    this._contextRecoveryAttempts++;
 
                     this.logStatus(
                         `⚠️ Context length exceeded - attempting recovery by trimming conversation`,
@@ -3276,7 +3815,7 @@ Please choose an alternative approach to complete your task.`
                         params
                     );
 
-                    return await this.attemptContextRecovery(params, payload, promptResult.errorMessage || 'Context length exceeded');
+                    return await this.attemptContextRecovery(params, payload, promptResult.errorMessage || 'Context length exceeded', promptResult.modelSelectionInfo);
                 }
 
                 this.logStatus(
@@ -3733,10 +4272,16 @@ Please choose an alternative approach to complete your task.`
             const resultMessage = subAgentResult.success
                 ? `Sub-agent completed successfully:\n${JSON.stringify(subAgentSummary, null, 2)}`
                 : `Sub-agent failed:\n${JSON.stringify(subAgentSummary, null, 2)}`;
-                
+
             params.conversationMessages.push({
                 role: 'user',
-                content: resultMessage
+                content: resultMessage,
+                metadata: {
+                    _temporary: true,
+                    _subAgentResult: true,
+                    subAgentName: subAgentRequest.name,
+                    subAgentId: subAgentEntity.ID
+                }
             });
             
             // Set PayloadAtEnd with the merged payload
@@ -5407,7 +5952,10 @@ Please choose an alternative approach to complete your task.`
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
             agentRun: this._agentRun!,
-            suggestedResponses: finalStep.suggestedResponses
+            suggestedResponses: finalStep.suggestedResponses,
+            memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
+                ? this._injectedMemory
+                : undefined
         };
     }
 
@@ -5870,15 +6418,120 @@ Please choose an alternative approach to complete your task.`
     }
 
     /**
-     * Estimates token count from content (rough approximation).
-     * Uses 4 chars per token heuristic (conservative estimate).
+     * Estimates token count from content.
+     * Uses js-tiktoken for accurate counting when available and model info is provided,
+     * falls back to improved heuristic otherwise.
+     * @param content - The message content to estimate tokens for
+     * @param modelName - Optional model name for accurate tokenization
      * @protected
      */
-    protected estimateTokens(content: ChatMessage['content']): number {
+    protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
         const text = typeof content === 'string'
             ? content
             : JSON.stringify(content);
-        return Math.ceil(text.length / 4);
+
+        // Use heuristic token estimation (fast, good enough for context management)
+        // Avoids heavy tokenizer dependencies while providing ~10-20% accuracy
+        return this.heuristicTokenCount(text);
+    }
+
+    /**
+     * Provides an improved heuristic token count when tokenizer is unavailable.
+     * @param text - The text to estimate tokens for
+     * @returns Estimated token count
+     * @private
+     */
+    private heuristicTokenCount(text: string): number {
+        // More sophisticated heuristic
+        const charCount = text.length;
+
+        // Count structural tokens (JSON syntax adds overhead)
+        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
+        const whitespaceChars = (text.match(/\s/g) || []).length;
+
+        // Effective character count (whitespace counts less)
+        const effectiveChars = charCount - (whitespaceChars * 0.5);
+
+        // Base ratio: 4 chars per token
+        // Adjustment: +0.05 token for every structural char
+        const baseTokens = effectiveChars / 4;
+        const structuralTokens = structuralChars * 0.05;
+
+        return Math.ceil(baseTokens + structuralTokens);
+    }
+
+    /**
+     * Gets the context limit for the current model.
+     * Uses model selection info from the prompt result to determine the actual model's MaxInputTokens.
+     * @param modelSelectionInfo - Model selection information from the prompt execution
+     * @returns The maximum input tokens for the model
+     * @protected
+     */
+    protected getModelContextLimit(modelSelectionInfo?: AIModelSelectionInfo): number {
+        // Default conservative limit if we can't determine the actual limit
+        const DEFAULT_LIMIT = 8000;
+
+        if (!modelSelectionInfo) {
+            this.logStatus(`No model selection info available, using default limit: ${DEFAULT_LIMIT}`, true);
+            return DEFAULT_LIMIT;
+        }
+
+        try {
+            // Get the selected model and vendor from the model selection info
+            const modelSelected = modelSelectionInfo.modelSelected;
+            const vendorSelected = modelSelectionInfo.vendorSelected;
+
+            if (!modelSelected) {
+                this.logStatus(`No model selected in model selection info, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // If no vendor selected, can't determine model-specific limit
+            if (!vendorSelected) {
+                this.logStatus(`No vendor selected, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Find the ModelVendor entry that matches the selected vendor
+            const modelVendors = modelSelected.ModelVendors;
+            if (!modelVendors || modelVendors.length === 0) {
+                this.logStatus(`No ModelVendors array found on model, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Find the vendor-specific entry
+            const vendorEntry = modelVendors.find((mv: any) => mv.VendorID === vendorSelected.ID);
+            if (!vendorEntry) {
+                this.logStatus(`No matching vendor entry found in ModelVendors, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Get MaxInputTokens from the vendor-specific entry
+            const maxInputTokens = vendorEntry.MaxInputTokens;
+            if (!maxInputTokens || maxInputTokens <= 0) {
+                this.logStatus(`MaxInputTokens not set or invalid on vendor entry, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            this.logStatus(`Using vendor-specific MaxInputTokens: ${maxInputTokens} (Model: ${modelSelected.Name}, Vendor: ${vendorSelected.Name})`, true);
+            return maxInputTokens;
+
+        } catch (error) {
+            this.logStatus(`Error extracting model context limit: ${error}, using default limit: ${DEFAULT_LIMIT}`, true);
+            return DEFAULT_LIMIT;
+        }
+    }
+
+    /**
+     * Estimates total token count across all conversation messages.
+     * @param messages - Message array to estimate
+     * @returns Total estimated tokens
+     * @protected
+     */
+    protected estimateConversationTokens(messages: ChatMessage[]): number {
+        return messages.reduce((total, msg) => {
+            return total + this.estimateTokens(msg.content);
+        }, 0);
     }
 
     /**

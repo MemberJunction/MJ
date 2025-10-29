@@ -24,9 +24,10 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
         [activeTabInput]="activeTab"
         [activeConversationInput]="activeConversationId"
         [activeCollectionInput]="activeCollectionId"
-        [activeArtifactInput]="activeArtifactId"
+        [activeVersionIdInput]="activeVersionId"
         [activeTaskInput]="activeTaskId"
         (navigationChanged)="onNavigationChanged($event)"
+        (newConversationStarted)="onNewConversationStarted()"
         (openEntityRecord)="onOpenEntityRecord($event)">
       </mj-conversation-workspace>
     </div>
@@ -52,7 +53,7 @@ export class ChatWrapperComponent implements OnInit {
   public activeTab?: 'conversations' | 'collections' | 'tasks';
   public activeConversationId?: string;
   public activeCollectionId?: string;
-  public activeArtifactId?: string;
+  public activeVersionId?: string;
   public activeTaskId?: string;
 
   constructor(
@@ -102,8 +103,28 @@ export class ChatWrapperComponent implements OnInit {
       // Parse entity-specific IDs based on active tab
       this.activeConversationId = queryParams['activeConversationId'];
       this.activeCollectionId = queryParams['activeCollectionId'];
-      this.activeArtifactId = queryParams['activeArtifactId'];
+      this.activeVersionId = queryParams['activeVersionId'];
       this.activeTaskId = queryParams['activeTaskId'];
+    });
+  }
+
+  /**
+   * Handle new conversation started event
+   * Clears conversation-specific URL parameters when user clicks "New Conversation"
+   */
+  onNewConversationStarted(): void {
+    console.log('🆕 New conversation started - clearing URL params');
+
+    // Clear local state
+    this.activeConversationId = undefined;
+
+    // Update URL to remove conversation ID, keeping only tab parameter
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        tab: 'conversations'
+      },
+      replaceUrl: false // Add to browser history
     });
   }
 
@@ -115,14 +136,14 @@ export class ChatWrapperComponent implements OnInit {
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
     collectionId?: string;
-    artifactId?: string;
+    versionId?: string;
     taskId?: string;
   }): void {
     // Update local state
     this.activeTab = event.tab;
     this.activeConversationId = event.conversationId;
     this.activeCollectionId = event.collectionId;
-    this.activeArtifactId = event.artifactId;
+    this.activeVersionId = event.versionId;
     this.activeTaskId = event.taskId;
 
     // Build query params based on active tab
@@ -135,12 +156,12 @@ export class ChatWrapperComponent implements OnInit {
     if (event.tab === 'conversations' && event.conversationId) {
       queryParams.activeConversationId = event.conversationId;
     } else if (event.tab === 'collections') {
-      // Only add collection/artifact IDs if they exist
+      // Only add collection/version IDs if they exist
       if (event.collectionId) {
         queryParams.activeCollectionId = event.collectionId;
       }
-      if (event.artifactId) {
-        queryParams.activeArtifactId = event.artifactId;
+      if (event.versionId) {
+        queryParams.activeVersionId = event.versionId;
       }
     } else if (event.tab === 'tasks' && event.taskId) {
       queryParams.activeTaskId = event.taskId;
