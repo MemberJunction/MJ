@@ -7,7 +7,7 @@
 "@memberjunction/core-entities-server": patch
 "@memberjunction/global": patch
 "@memberjunction/metadata-sync": patch
-"@memberjunction/core": minor
+"@memberjunction/core": patch
 ---
 
 AI Agents and Component Specification Improvements
