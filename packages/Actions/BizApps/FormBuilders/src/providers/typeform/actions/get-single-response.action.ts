@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Single Typeform Response')
+@RegisterClass(BaseAction, 'GetSingleTypeformResponseAction')
 export class GetSingleTypeformResponseAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -157,4 +157,11 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSingleTypeformResponseAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

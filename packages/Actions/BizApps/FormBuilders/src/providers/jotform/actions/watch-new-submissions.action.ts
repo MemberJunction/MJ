@@ -27,7 +27,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Watch for New JotForm Submissions')
+@RegisterClass(BaseAction, 'WatchNewJotFormSubmissionsAction')
 export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -235,4 +235,11 @@ export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadWatchNewJotFormSubmissionsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

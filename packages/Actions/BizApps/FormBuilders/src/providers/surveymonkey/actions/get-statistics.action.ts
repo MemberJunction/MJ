@@ -26,7 +26,7 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get SurveyMonkey Response Statistics')
+@RegisterClass(BaseAction, 'GetSurveyMonkeyStatisticsAction')
 export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -277,4 +277,11 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSurveyMonkeyStatisticsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

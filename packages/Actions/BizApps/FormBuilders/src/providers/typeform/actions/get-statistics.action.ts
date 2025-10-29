@@ -27,7 +27,7 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Typeform Response Statistics')
+@RegisterClass(BaseAction, 'GetTypeformStatisticsAction')
 export class GetTypeformStatisticsAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -273,4 +273,11 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetTypeformStatisticsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

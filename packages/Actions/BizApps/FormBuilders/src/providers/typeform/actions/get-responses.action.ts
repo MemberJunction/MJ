@@ -30,7 +30,7 @@ import { FormResponse } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Typeform Responses')
+@RegisterClass(BaseAction, 'GetTypeformResponsesAction')
 export class GetTypeformResponsesAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -239,4 +239,11 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetTypeformResponsesAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

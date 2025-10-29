@@ -22,7 +22,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get SurveyMonkey Details')
+@RegisterClass(BaseAction, 'GetSurveyMonkeyAction')
 export class GetSurveyMonkeyDetailsAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -178,4 +178,11 @@ export class GetSurveyMonkeyDetailsAction extends SurveyMonkeyBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSurveyMonkeyAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

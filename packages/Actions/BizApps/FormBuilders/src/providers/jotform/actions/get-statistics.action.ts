@@ -27,7 +27,7 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get JotForm Submission Statistics')
+@RegisterClass(BaseAction, 'GetJotFormStatisticsAction')
 export class GetJotFormStatisticsAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -305,4 +305,11 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetJotFormStatisticsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

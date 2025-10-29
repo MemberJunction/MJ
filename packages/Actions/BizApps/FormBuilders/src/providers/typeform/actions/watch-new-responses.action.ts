@@ -27,7 +27,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Watch for New Typeform Responses')
+@RegisterClass(BaseAction, 'WatchNewTypeformResponsesAction')
 export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -219,4 +219,11 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadWatchNewTypeformResponsesAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

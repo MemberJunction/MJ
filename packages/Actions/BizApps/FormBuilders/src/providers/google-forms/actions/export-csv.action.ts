@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Export Google Forms Responses to CSV')
+@RegisterClass(BaseAction, 'ExportGoogleFormsCSVAction')
 export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
 
     public get Description(): string {
@@ -164,4 +164,11 @@ export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadExportGoogleFormsCSVAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

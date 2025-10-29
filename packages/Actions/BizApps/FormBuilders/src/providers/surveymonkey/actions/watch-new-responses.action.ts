@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Watch for New SurveyMonkey Responses')
+@RegisterClass(BaseAction, 'WatchNewSurveyMonkeyResponsesAction')
 export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -218,4 +218,11 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadWatchNewSurveyMonkeyResponsesAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }
