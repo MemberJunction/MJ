@@ -178,6 +178,7 @@ Once you've assigned agents to all tasks in your task graph, you're done. Don't 
 - Simple enough you can answer in 2-3 sentences
 
 **Specialized Work Needed** → Delegate to Agent
+- Create or modify existing agent: ALWAYS delegate to `Agent Manager`!
 - Domain expertise required (marketing, research, analysis, etc.)
 - Content creation
 - Data analysis or transformation
