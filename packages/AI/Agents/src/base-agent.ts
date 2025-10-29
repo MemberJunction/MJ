@@ -36,7 +36,8 @@ import {
     MessageLifecycleCallback,
     MessageLifecycleEvent,
     AgentChatMessage,
-    AgentChatMessageMetadata
+    AgentChatMessageMetadata,
+    AIModelSelectionInfo
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -2380,8 +2381,9 @@ export class BaseAgent {
     }
 
     /**
-     * Recovery Strategy 4: Trim last user message (fallback).
-     * This is the original recovery behavior, kept as a last resort.
+     * Recovery Strategy 4: Preserve beginning of last user message (fallback).
+     * Keeps the first 200-300 tokens of the user's request (which usually contains the core ask)
+     * and adds a clear marker that content was trimmed due to context limits.
      *
      * @param params - Agent execution parameters
      * @param tokensToSave - Target number of tokens to free
@@ -2408,12 +2410,26 @@ export class BaseAgent {
         const lastUserMessage = params.conversationMessages[lastUserMessageIndex];
         const originalTokens = this.estimateTokens(lastUserMessage.content);
 
-        // Keep at least 50% of the content
+        // Keep first 200-300 tokens worth (approximately 800-1200 characters)
         const contentString = this.contentToString(lastUserMessage.content);
-        const maxLength = Math.max(500, Math.floor(contentString.length * 0.5));
-        const trimResult = this.smartTrimContent(contentString, maxLength);
+        const targetChars = 1000; // Roughly 250 tokens
 
-        const newContent = trimResult.trimmed + '\n\n[Note: Original message was trimmed to fit context limit]';
+        if (contentString.length <= targetChars) {
+            // Message is already short enough
+            return { tokensSaved: 0, strategyName: 'User message already short' };
+        }
+
+        // Keep the beginning (most important part with the request)
+        const trimResult = this.smartTrimContent(contentString, targetChars);
+
+        // Add clear marker that we trimmed it
+        const newContent = trimResult.trimmed +
+            '\n\n<CONTEXT_LIMIT_REACHED>\n' +
+            'Note: The conversation has exceeded the model\'s context window. ' +
+            'The remainder of your message was trimmed to fit within the limit. ' +
+            'The beginning of your request (shown above) has been preserved.\n' +
+            '</CONTEXT_LIMIT_REACHED>';
+
         const newTokens = this.estimateTokens(newContent);
         const saved = originalTokens - newTokens;
 
@@ -2426,7 +2442,7 @@ export class BaseAgent {
 
         return {
             tokensSaved: saved,
-            strategyName: 'Trimmed last user message'
+            strategyName: 'Preserved beginning of user message with context limit marker'
         };
     }
 
@@ -2438,13 +2454,15 @@ export class BaseAgent {
      * @param params - Agent execution parameters (conversationMessages will be modified)
      * @param payload - Current payload to carry forward
      * @param errorMessage - The original error message from the failed prompt
+     * @param modelSelectionInfo - Model selection information containing the model and vendor used
      * @returns A Retry step with reduced context or Failed if recovery unsuccessful
      * @protected
      */
     protected async attemptContextRecovery<P>(
         params: ExecuteAgentParams,
         payload: P,
-        errorMessage: string
+        errorMessage: string,
+        modelSelectionInfo?: AIModelSelectionInfo
     ): Promise<BaseAgentNextStep<P>> {
         this.logStatus(
             `⚠️ Context length exceeded - attempting recovery with multi-strategy approach`,
@@ -2453,7 +2471,7 @@ export class BaseAgent {
         );
 
         // Calculate how many tokens we need to save
-        const modelLimit = this.getModelContextLimit();
+        const modelLimit = this.getModelContextLimit(modelSelectionInfo);
         const currentTokens = this.estimateConversationTokens(params.conversationMessages);
         const tokensToSave = currentTokens - Math.floor(modelLimit * 0.9); // Target 90% usage
 
@@ -2526,11 +2544,20 @@ export class BaseAgent {
             params
         );
 
+        // Build detailed description of what was done
+        const strategyDescriptions = strategiesUsed.map((strategy, index) =>
+            `${index + 1}. ${strategy}`
+        ).join('\n');
+
         // Return Retry step to give agent another chance
         return {
             step: 'Retry' as const,
-            retryReason: `Context recovered by ${strategiesUsed.join(', ')}`,
-            retryInstructions: `The conversation exceeded the model's context limit. I've removed/compacted ${strategiesUsed.length} older action results to free up ${tokensSaved} tokens. Continuing with remaining context.`,
+            retryReason: `Context recovery successful - ${tokensSaved} tokens freed`,
+            retryInstructions: `The conversation exceeded the model's context limit (${modelLimit} tokens). I've applied the following context recovery strategies to free up ${tokensSaved} tokens:
+
+${strategyDescriptions}
+
+The context is now within limits. Please retry your request with the recovered context.`,
             terminate: false,
             previousPayload: payload,
             newPayload: payload
@@ -3689,7 +3716,7 @@ export class BaseAgent {
                         params
                     );
 
-                    return await this.attemptContextRecovery(params, payload, promptResult.errorMessage || 'Context length exceeded');
+                    return await this.attemptContextRecovery(params, payload, promptResult.errorMessage || 'Context length exceeded', promptResult.modelSelectionInfo);
                 }
 
                 this.logStatus(
@@ -6330,15 +6357,64 @@ export class BaseAgent {
 
     /**
      * Gets the context limit for the current model.
-     * Uses agent run model info if available, otherwise returns conservative default.
+     * Uses model selection info from the prompt result to determine the actual model's MaxInputTokens.
+     * @param modelSelectionInfo - Model selection information from the prompt execution
      * @returns The maximum input tokens for the model
      * @protected
      */
-    protected getModelContextLimit(): number {
-        // Try to get from agent run's model override or configuration
-        // For now, use conservative default
-        // TODO: Get model info from AIEngine or agent configuration
-        return 8000;
+    protected getModelContextLimit(modelSelectionInfo?: AIModelSelectionInfo): number {
+        // Default conservative limit if we can't determine the actual limit
+        const DEFAULT_LIMIT = 8000;
+
+        if (!modelSelectionInfo) {
+            this.logStatus(`No model selection info available, using default limit: ${DEFAULT_LIMIT}`, true);
+            return DEFAULT_LIMIT;
+        }
+
+        try {
+            // Get the selected model and vendor from the model selection info
+            const modelSelected = modelSelectionInfo.modelSelected;
+            const vendorSelected = modelSelectionInfo.vendorSelected;
+
+            if (!modelSelected) {
+                this.logStatus(`No model selected in model selection info, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // If no vendor selected, can't determine model-specific limit
+            if (!vendorSelected) {
+                this.logStatus(`No vendor selected, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Find the ModelVendor entry that matches the selected vendor
+            const modelVendors = modelSelected.ModelVendors;
+            if (!modelVendors || modelVendors.length === 0) {
+                this.logStatus(`No ModelVendors array found on model, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Find the vendor-specific entry
+            const vendorEntry = modelVendors.find((mv: any) => mv.VendorID === vendorSelected.ID);
+            if (!vendorEntry) {
+                this.logStatus(`No matching vendor entry found in ModelVendors, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Get MaxInputTokens from the vendor-specific entry
+            const maxInputTokens = vendorEntry.MaxInputTokens;
+            if (!maxInputTokens || maxInputTokens <= 0) {
+                this.logStatus(`MaxInputTokens not set or invalid on vendor entry, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            this.logStatus(`Using vendor-specific MaxInputTokens: ${maxInputTokens} (Model: ${modelSelected.Name}, Vendor: ${vendorSelected.Name})`, true);
+            return maxInputTokens;
+
+        } catch (error) {
+            this.logStatus(`Error extracting model context limit: ${error}, using default limit: ${DEFAULT_LIMIT}`, true);
+            return DEFAULT_LIMIT;
+        }
     }
 
     /**
