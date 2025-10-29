@@ -1875,8 +1875,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             return () => {
               // Cleanup logic
-              console.log('would unsub here')
-              //unsubscribe();
+              unsubscribe();
             };
         });
         this._pushStatusRequests.push({sessionId, observable: newObservable});

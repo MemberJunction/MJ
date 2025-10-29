@@ -49,10 +49,8 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
 
   async ngOnInit() {
     // Initialize mention autocomplete if enabled and currentUser is available
-    console.log('[MessageInputBox] ngOnInit - enableMentions:', this.enableMentions, 'currentUser:', !!this.currentUser);
     if (this.enableMentions && this.currentUser) {
       await this.mentionAutocomplete.initialize(this.currentUser);
-      console.log('[MessageInputBox] Mention autocomplete initialized');
     }
   }
 
@@ -91,8 +89,6 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
     this.value = textarea.value;
     this.valueChange.emit(this.value);
 
-    console.log('[MessageInputBox] onInput - value:', this.value, 'enableMentions:', this.enableMentions, 'currentUser:', !!this.currentUser);
-
     // Handle @mention autocomplete
     if (this.enableMentions && this.currentUser) {
       this.handleMentionInput();
@@ -102,7 +98,6 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
   onSendClick(): void {
     if (this.canSend) {
       const textToSend = this.value.trim();
-      console.log('[MessageInputBox] onSendClick - emitting text:', textToSend);
       this.textSubmitted.emit(textToSend);
       this.value = ''; // Clear input after sending
       this.valueChange.emit(this.value);
@@ -116,14 +111,11 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
   private handleMentionInput(): void {
     const textarea = this.messageTextarea?.nativeElement;
     if (!textarea) {
-      console.log('[MessageInputBox] No textarea element');
       return;
     }
 
     const cursorPos = textarea.selectionStart;
     const textBeforeCursor = this.value.substring(0, cursorPos);
-
-    console.log('[MessageInputBox] handleMentionInput - textBeforeCursor:', textBeforeCursor);
 
     // Find the last @ before cursor
     const lastAtIndex = textBeforeCursor.lastIndexOf('@');
@@ -144,17 +136,12 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
     this.mentionQuery = textAfterAt;
     this.mentionStartIndex = lastAtIndex;
 
-    console.log('[MessageInputBox] Mention detected - query:', this.mentionQuery);
-
     // Get suggestions (include users if we have currentUser)
     this.mentionSuggestions = this.mentionAutocomplete.getSuggestions(this.mentionQuery, !!this.currentUser);
-
-    console.log('[MessageInputBox] Got suggestions:', this.mentionSuggestions.length, this.mentionSuggestions);
 
     if (this.mentionSuggestions.length > 0) {
       this.showMentionDropdown = true;
       this.positionMentionDropdown();
-      console.log('[MessageInputBox] Showing dropdown at position:', this.mentionDropdownPosition);
     } else {
       this.closeMentionDropdown();
     }
@@ -191,8 +178,6 @@ export class MessageInputBoxComponent implements OnInit, AfterViewInit, OnDestro
         left: textareaRect.left + window.scrollX
       };
     }
-
-    console.log('[MessageInputBox] Dropdown position calculated (viewport coords):', this.mentionDropdownPosition, 'showAbove:', this.mentionDropdownShowAbove);
   }
 
   /**

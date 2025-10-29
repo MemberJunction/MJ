@@ -37,6 +37,7 @@
   line-height: 1.5;
   resize: vertical;
   background: transparent;
+  border: 0 !important;
 
   &::placeholder {
     color: var(--text-tertiary, #999);
@@ -51,7 +52,6 @@
   &:focus,
   &:active,
   &:focus-visible {
-    border: 0 !important;
     outline: 0 !important;
     box-shadow: none !important;
   }

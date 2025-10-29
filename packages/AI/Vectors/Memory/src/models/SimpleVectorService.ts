@@ -155,43 +155,60 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
   
   /**
    * Finds the K nearest neighbors to a query vector using the specified similarity metric
-   * 
+   *
    * @param {number[]} queryVector - The vector to search for similar items
    * @param {number} [topK=10] - Number of nearest neighbors to return
    * @param {number} [threshold] - Optional minimum similarity threshold (0-1)
    * @param {DistanceMetric} [metric='cosine'] - The distance metric to use
+   * @param {(metadata: TMetadata) => boolean} [filter] - Optional filter to pre-filter vectors by metadata before similarity calculation
    * @returns {VectorSearchResult<TMetadata>[]} Array of search results sorted by similarity (highest first)
    * @throws {Error} If queryVector is null/undefined or empty
-   * 
+   *
    * @example
    * ```typescript
    * // Default cosine similarity
    * const nearestItems = service.FindNearest(queryEmbedding, 5);
-   * 
+   *
    * // Using Euclidean distance for numeric features
    * const similarProducts = service.FindNearest(productFeatures, 10, undefined, 'euclidean');
-   * 
+   *
    * // With threshold - only return items with similarity > 0.7
    * const highSimilarity = service.FindNearest(queryVector, 10, 0.7, 'cosine');
-   * 
+   *
    * // Using Jaccard for categorical data
    * const similarUsers = service.FindNearest(userPreferences, 5, undefined, 'jaccard');
+   *
+   * // Filter by metadata before searching (efficient pre-filtering)
+   * const agentNotes = service.FindNearest(
+   *   queryVector,
+   *   5,
+   *   0.5,
+   *   'cosine',
+   *   (metadata) => metadata.agentId === 'agent-123'
+   * );
    * ```
-   * 
+   *
    * @public
    * @method
    */
   public FindNearest(
-    queryVector: number[], 
-    topK: number = 10, 
+    queryVector: number[],
+    topK: number = 10,
     threshold?: number,
-    metric: DistanceMetric = 'cosine'
+    metric: DistanceMetric = 'cosine',
+    filter?: (metadata: TMetadata) => boolean
   ): VectorSearchResult<TMetadata>[] {
     if (!queryVector || queryVector.length === 0) {
       throw new Error('Query vector cannot be null, undefined, or empty');
     }
 
-    const results = Array.from(this.vectors.values())
+    // Pre-filter vectors by metadata BEFORE similarity calculation
+    const candidateVectors = filter
+      ? Array.from(this.vectors.values()).filter(entry => entry.metadata && filter(entry.metadata))
+      : Array.from(this.vectors.values());
+
+    // Calculate similarity ONLY for filtered candidates
+    const results = candidateVectors
       .map(entry => {
         try {
           return {
@@ -209,49 +226,60 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
       .filter(result => threshold == null || result!.score >= threshold)
       .sort((a, b) => b!.score - a!.score)
       .slice(0, topK) as VectorSearchResult<TMetadata>[];
-    
+
     return results;
   }
   
   /**
    * Finds vectors similar to an existing vector identified by its key.
    * The source vector itself is excluded from the results.
-   * 
+   *
    * @param {string} key - The key of the source vector
    * @param {number} [topK=10] - Number of similar vectors to return
    * @param {number} [threshold] - Optional minimum similarity threshold (0-1)
    * @param {DistanceMetric} [metric='cosine'] - The distance metric to use
+   * @param {(metadata: TMetadata) => boolean} [filter] - Optional filter to pre-filter vectors by metadata before similarity calculation
    * @returns {VectorSearchResult<TMetadata>[]} Array of similar vectors sorted by similarity
    * @throws {Error} If the key doesn't exist in the service
-   * 
+   *
    * @example
    * ```typescript
    * // Find items similar to 'product123'
    * const similarProducts = service.FindSimilar('product123', 5);
-   * 
+   *
    * // Find highly similar items (similarity > 0.8)
    * const verySimilar = service.FindSimilar('product123', 10, 0.8);
-   * 
+   *
    * // Find similar items using Euclidean distance
    * const similar = service.FindSimilar('product123', 5, undefined, 'euclidean');
+   *
+   * // Find similar items filtered by category
+   * const similarInCategory = service.FindSimilar(
+   *   'product123',
+   *   5,
+   *   0.7,
+   *   'cosine',
+   *   (metadata) => metadata.category === 'Electronics'
+   * );
    * ```
-   * 
+   *
    * @public
    * @method
    */
   public FindSimilar(
-    key: string, 
-    topK: number = 10, 
+    key: string,
+    topK: number = 10,
     threshold?: number,
-    metric: DistanceMetric = 'cosine'
+    metric: DistanceMetric = 'cosine',
+    filter?: (metadata: TMetadata) => boolean
   ): VectorSearchResult<TMetadata>[] {
     const sourceVector = this.vectors.get(key);
     if (!sourceVector) {
       throw new Error(`Vector with key "${key}" not found`);
     }
-    
+
     // Get topK + 1 to account for excluding self
-    return this.FindNearest(sourceVector.vector, topK + 1, threshold, metric)
+    return this.FindNearest(sourceVector.vector, topK + 1, threshold, metric, filter)
       .filter(result => result.key !== key)  // Exclude self
       .slice(0, topK);
   }
@@ -910,30 +938,40 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
 
   /**
    * Finds all vectors with similarity above a threshold
-   * 
+   *
    * @param {number[]} queryVector - The vector to search for similar items
    * @param {number} threshold - Minimum similarity threshold (0-1)
    * @param {DistanceMetric} [metric='cosine'] - The distance metric to use
+   * @param {(metadata: TMetadata) => boolean} [filter] - Optional filter to pre-filter vectors by metadata before similarity calculation
    * @returns {VectorSearchResult<TMetadata>[]} Array of search results sorted by similarity
-   * 
+   *
    * @example
    * ```typescript
    * // Find all highly similar items (similarity > 0.8)
    * const similar = service.FindAboveThreshold(queryVector, 0.8);
-   * 
+   *
    * // Find all items with Jaccard similarity > 0.5
    * const matches = service.FindAboveThreshold(features, 0.5, 'jaccard');
+   *
+   * // Find all similar items in a specific category
+   * const categoryMatches = service.FindAboveThreshold(
+   *   queryVector,
+   *   0.7,
+   *   'cosine',
+   *   (metadata) => metadata.status === 'Active'
+   * );
    * ```
-   * 
+   *
    * @public
    * @method
    */
   public FindAboveThreshold(
-    queryVector: number[], 
+    queryVector: number[],
     threshold: number,
-    metric: DistanceMetric = 'cosine'
+    metric: DistanceMetric = 'cosine',
+    filter?: (metadata: TMetadata) => boolean
   ): VectorSearchResult<TMetadata>[] {
-    return this.FindNearest(queryVector, this.vectors.size, threshold, metric);
+    return this.FindNearest(queryVector, this.vectors.size, threshold, metric, filter);
   }
 
   // ============================================================================
@@ -1154,19 +1192,19 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
 
   /**
    * Performs DBSCAN (Density-Based Spatial Clustering of Applications with Noise) clustering.
-   * 
+   *
    * ## What is DBSCAN?
    * DBSCAN groups together points that are closely packed together (high density),
    * marking points in low-density regions as outliers. Unlike K-Means, it doesn't require
    * specifying the number of clusters beforehand.
-   * 
+   *
    * ## Business Use Cases:
    * - **Fraud Detection**: Identify unusual transaction patterns
    * - **Anomaly Detection**: Find outliers in any dataset
    * - **Customer Behavior**: Find natural groupings without preconceptions
    * - **Geographic Clustering**: Find areas of high activity
    * - **Quality Control**: Identify defective products
-   * 
+   *
    * ## When to Use:
    * ✅ Unknown number of clusters
    * ✅ Non-spherical clusters
@@ -1175,27 +1213,37 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
    * ✅ Noise in the data
    * ❌ High-dimensional sparse data
    * ❌ Clusters of vastly different densities
-   * 
+   *
    * @param {number} epsilon - Maximum distance between two vectors to be considered neighbors
    * @param {number} minPoints - Minimum number of points to form a dense region
    * @param {DistanceMetric} [metric='euclidean'] - Distance metric to use
+   * @param {(metadata: TMetadata) => boolean} [filter] - Optional filter to pre-filter vectors by metadata before clustering
    * @returns {ClusterResult<TMetadata>} Clustering results with outliers identified
-   * 
+   *
    * @example
    * ```typescript
    * // epsilon=0.3 means similarity must be > 0.7
    * const result = service.DBSCANCluster(0.3, 3, 'cosine');
    * console.log(`Found ${result.clusters.size} clusters`);
    * console.log(`Outliers: ${result.outliers?.length || 0}`);
+   *
+   * // Cluster only active items
+   * const activeResult = service.DBSCANCluster(
+   *   0.3,
+   *   3,
+   *   'cosine',
+   *   (metadata) => metadata.status === 'Active'
+   * );
    * ```
-   * 
+   *
    * @public
    * @method
    */
   public DBSCANCluster(
     epsilon: number,
     minPoints: number,
-    metric: DistanceMetric = 'euclidean'
+    metric: DistanceMetric = 'euclidean',
+    filter?: (metadata: TMetadata) => boolean
   ): ClusterResult<TMetadata> {
     if (epsilon <= 0 || epsilon >= 1) {
       throw new Error('Epsilon must be between 0 and 1 (exclusive)');
@@ -1204,21 +1252,26 @@ export class SimpleVectorService<TMetadata = Record<string, unknown>> {
       throw new Error('MinPoints must be positive');
     }
 
-    const entries = Array.from(this.vectors.values());
+    // Pre-filter vectors if filter provided
+    const entries = filter
+      ? Array.from(this.vectors.values()).filter(entry => entry.metadata && filter(entry.metadata))
+      : Array.from(this.vectors.values());
+
     const visited = new Set<string>();
     const clustered = new Set<string>();
     const clusters = new Map<number, string[]>();
     const outliers: string[] = [];
     let clusterId = 0;
 
-    // Build neighborhood map for efficiency
+    // Build neighborhood map for efficiency (using filtered entries)
     const neighborhoods = new Map<string, string[]>();
     entries.forEach(entry => {
       const neighbors = this.FindNearest(
-        entry.vector, 
-        this.vectors.size, 
+        entry.vector,
+        entries.length,  // Search within filtered space
         1 - epsilon, // Convert epsilon to similarity threshold
-        metric
+        metric,
+        filter  // Apply same filter to neighborhood search
       ).map(r => r.key);
       neighborhoods.set(entry.key, neighbors);
     });

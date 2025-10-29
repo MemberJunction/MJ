@@ -16,6 +16,7 @@ import { ConversationStateService } from '../../services/conversation-state.serv
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
@@ -62,22 +63,16 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     }
   }
 
-  @Input() set activeArtifactInput(value: string | undefined) {
-    if (value && value !== this.activeArtifactId) {
-      console.log('🔗 Deep link to artifact:', value);
+  @Input() set activeVersionIdInput(value: string | undefined) {
+    if (value && value !== this.activeVersionId) {
+      console.log('🔗 Deep link to version:', value);
       this.activeTab = 'collections';
-      // Open artifact with version number if provided
-      this.artifactState.openArtifact(value, this._pendingVersionNumber);
-      this._pendingVersionNumber = undefined; // Clear after use
+      // Store the version ID immediately to prevent ngDoCheck from clearing it
+      this.activeVersionId = value;
+      // Open artifact by version ID
+      this.artifactState.openArtifactByVersionId(value);
     }
   }
-
-  @Input() set activeVersionNumberInput(value: number | undefined) {
-    // Store version number to use when artifact is opened
-    this._pendingVersionNumber = value;
-  }
-
-  private _pendingVersionNumber?: number;
 
   @Input() set activeTaskInput(value: string | undefined) {
     if (value && value !== this._activeTaskId) {
@@ -97,9 +92,10 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     tab: 'conversations' | 'collections' | 'tasks';
     conversationId?: string;
     collectionId?: string;
-    artifactId?: string;
+    versionId?: string;
     taskId?: string;
   }>();
+  @Output() newConversationStarted = new EventEmitter<void>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -108,6 +104,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   public renamedConversationId: string | null = null;
   public activeArtifactId: string | null = null;
   public activeVersionNumber: number | null = null;
+  public activeVersionId: string | null = null;
   public isMobileView: boolean = false;
 
   // Artifact permissions
@@ -132,7 +129,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
 
   private previousConversationId: string | null = null;
   private previousTaskId: string | undefined = undefined;
-  private previousArtifactId: string | null = null; // Used to track artifact changes in ngDoCheck
+  private previousVersionId: string | null = null; // Used to track version changes in ngDoCheck
+  private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
   // LocalStorage keys
@@ -147,6 +145,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
+    private notificationService: MJNotificationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -247,6 +246,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   ngDoCheck() {
+    // Detect new unsaved conversation state changes
+    const currentIsNewConversation = this.conversationState.isNewUnsavedConversation;
+    if (currentIsNewConversation !== this.previousIsNewConversation) {
+      this.previousIsNewConversation = currentIsNewConversation;
+      if (currentIsNewConversation) {
+        // Emit event to clear URL conversation parameter
+        Promise.resolve().then(() => {
+          this.newConversationStarted.emit();
+        });
+      }
+    }
+
     // Detect conversation changes and emit event
     const currentId = this.conversationState.activeConversationId;
     if (currentId !== this.previousConversationId) {
@@ -285,22 +296,8 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       }
     }
 
-    // Detect artifact changes (when on collections tab)
-    // This ensures URL stays in sync with artifact state even after async updates
-    if (this.activeTab === 'collections') {
-      const currentArtifactId = this.activeArtifactId;
-      if (currentArtifactId !== this.previousArtifactId) {
-        this.previousArtifactId = currentArtifactId;
-        // Defer emission until after change detection completes to avoid ExpressionChangedAfterItHasBeenCheckedError
-        Promise.resolve().then(() => {
-          this.navigationChanged.emit({
-            tab: 'collections',
-            collectionId: this.collectionState.activeCollectionId || undefined,
-            artifactId: currentArtifactId || undefined
-          });
-        });
-      }
-    }
+    // Version changes are handled by onCollectionNavigated and deep link inputs
+    // We don't need ngDoCheck to track them as it causes double navigation events
   }
 
   ngOnDestroy() {
@@ -331,6 +328,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   onTabChanged(tab: NavigationTab): void {
+    const wasOnDifferentTab = this.activeTab !== tab;
     this.activeTab = tab;
 
     // Emit navigation change event with current state
@@ -341,8 +339,20 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     if (tab === 'conversations') {
       navEvent.conversationId = this.conversationState.activeConversationId || undefined;
     } else if (tab === 'collections') {
-      navEvent.collectionId = this.collectionState.activeCollectionId || undefined;
-      navEvent.artifactId = this.activeArtifactId || undefined;
+      // If switching TO collections tab from another tab, clear to root level
+      if (wasOnDifferentTab) {
+        this.collectionState.setActiveCollection(null);
+        this.activeVersionId = null;
+        // Don't include collectionId or versionId - go to root
+      } else {
+        // Already on collections tab, preserve current state
+        if (this.collectionState.activeCollectionId) {
+          navEvent.collectionId = this.collectionState.activeCollectionId;
+        }
+        if (this.activeVersionId && this.collectionState.activeCollectionId) {
+          navEvent.versionId = this.activeVersionId;
+        }
+      }
     } else if (tab === 'tasks') {
       navEvent.taskId = this.activeTaskId || undefined;
     }
@@ -378,14 +388,14 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async onRefreshAgentCache(): Promise<void> {
-    console.log('🔄 Refreshing AI Engine cache...');
     try {
       await AIEngineBase.Instance.Config(true);
       const agentCount = AIEngineBase.Instance.Agents?.length || 0;
-      console.log(`✅ AI Engine cache refreshed with ${agentCount} agents`);
+      this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();
     } catch (error) {
-      console.error('❌ Failed to refresh AI Engine:', error);
+      this.notificationService.CreateSimpleNotification('Failed to refresh agent cache', 'error', 3000);
+      console.error('Failed to refresh AI Engine:', error);
     }
   }
 
@@ -424,10 +434,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
         // If artifact is in a collection, navigate to that collection
         const collectionId = result.collectionId || undefined;
 
+        // Search results don't have version ID, so just navigate to collection
+        // The artifact will open with latest version
         this.navigationChanged.emit({
           tab: 'collections',
-          collectionId,
-          artifactId: result.id
+          collectionId
         });
         break;
 
@@ -659,39 +670,59 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   /**
    * Handle collection navigation events
    */
-  onCollectionNavigated(event: { collectionId: string | null; artifactId?: string | null }): void {
+  onCollectionNavigated(event: { collectionId: string | null; versionId?: string | null }): void {
     console.log('📁 Collection navigated:', event);
 
+    // Store the version ID for URL sync
+    // CRITICAL: Only update activeVersionId if versionId was explicitly provided in the event
+    // If versionId is undefined (not provided), keep the current activeVersionId
+    if (event.versionId !== undefined) {
+      this.activeVersionId = event.versionId;
+    }
+    // Otherwise: versionId not provided in event, preserve current activeVersionId
+
     // IMPORTANT: Don't emit navigationChanged here when doing programmatic navigation (deep linking)
-    // The artifact state is managed separately and ngDoCheck will handle URL sync
-    // Only emit if the event explicitly includes an artifactId, or if we're intentionally closing the artifact
-    if (event.artifactId !== undefined) {
+    // The artifact state is managed separately
+    // Only emit if the event explicitly includes a versionId, or if we're intentionally closing the artifact
+    if (event.versionId !== undefined) {
       // Event explicitly specifies artifact state (user clicked artifact or intentionally closed it)
       this.navigationChanged.emit({
         tab: 'collections',
         collectionId: event.collectionId || undefined,
-        artifactId: event.artifactId || undefined
+        versionId: event.versionId || undefined
       });
-    } else if (!this.activeArtifactId) {
+    } else if (!this.activeVersionId) {
       // No artifact currently open, safe to emit collection-only navigation
       this.navigationChanged.emit({
         tab: 'collections',
         collectionId: event.collectionId || undefined
       });
     }
-    // Otherwise: artifact is open but event doesn't specify artifactId
-    // Don't emit - let ngDoCheck handle keeping the URL in sync with artifact state
+    // Otherwise: artifact is open but event doesn't specify versionId
+    // Don't emit - preserve current URL state with artifact
   }
 
   /**
    * Handle navigation from artifact links
    */
-  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string}): void {
+  onArtifactLinkNavigation(event: {type: 'conversation' | 'collection'; id: string; artifactId?: string; versionNumber?: number; versionId?: string}): void {
     console.log('🔗 Navigating from artifact link:', event);
 
     if (event.type === 'conversation') {
       this.activeTab = 'conversations';
+
+      // Close collection artifact viewer if it's open
+      this.artifactState.closeArtifact();
+
+      // Store pending artifact info so chat area can show it and scroll to message
+      if (event.artifactId) {
+        this.conversationState.pendingArtifactId = event.artifactId;
+        this.conversationState.pendingArtifactVersionNumber = event.versionNumber || null;
+        console.log('📦 Pending artifact set:', event.artifactId, 'v' + event.versionNumber);
+      }
+
       this.conversationState.setActiveConversation(event.id);
+
       this.navigationChanged.emit({
         tab: 'conversations',
         conversationId: event.id
@@ -699,9 +730,22 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     } else if (event.type === 'collection') {
       this.activeTab = 'collections';
       this.collectionState.setActiveCollection(event.id);
+
+      // Open the artifact automatically when navigating to the collection
+      if (event.artifactId) {
+        this.artifactState.openArtifact(event.artifactId, event.versionNumber);
+      }
+
+      // Store version ID for URL sync (same as viewArtifact does)
+      if (event.versionId) {
+        this.activeVersionId = event.versionId;
+      }
+
+      // Emit navigation with version ID so URL includes it
       this.navigationChanged.emit({
         tab: 'collections',
-        collectionId: event.id
+        collectionId: event.id,
+        versionId: event.versionId
       });
     }
   }

@@ -451,9 +451,6 @@ export class FlowAgentType extends BaseAgentType {
     ): Promise<BaseAgentNextStep<P>> {
         // Update flow state to mark this as current step
         flowState.currentStepId = node.ID;
-        const userMessages = params.conversationMessages.filter(m => m.role === 'user');
-        const latestUserMessage = userMessages ? userMessages[userMessages.length - 1].content : "";
-        const latestUserMessageString = typeof latestUserMessage === 'string' ? latestUserMessage : latestUserMessage[0].content;
 
         switch (node.StepType) {
             case 'Action':
@@ -506,7 +503,7 @@ export class FlowAgentType extends BaseAgentType {
                         previousPayload: payload
                     });
                 }
-                
+
                 // Need to get the sub-agent name
                 const subAgentName = await this.getAgentName(node.SubAgentID);
                 if (!subAgentName) {
@@ -516,11 +513,14 @@ export class FlowAgentType extends BaseAgentType {
                         previousPayload: payload
                     });
                 }
-                
+
+                // Use node description to define the sub-agent's task
+                // The full conversation history is preserved in params.conversationMessages
+                // and will be available to the sub-agent through BaseAgent.ExecuteSubAgent()
                 return this.createNextStep('Sub-Agent', {
                     subAgent: {
                         name: subAgentName,
-                        message: latestUserMessageString || node.Description || `Execute sub-agent: ${subAgentName}`,
+                        message: node.Description || `Execute sub-agent: ${subAgentName}`,
                         terminateAfter: false
                     },
                     terminate: false,
@@ -1195,6 +1195,7 @@ export class FlowAgentType extends BaseAgentType {
     public get InjectLoopResultsAsMessage(): boolean {
         return false;
     }
+
 
     /**
      * Flow agents apply ActionOutputMapping after each iteration

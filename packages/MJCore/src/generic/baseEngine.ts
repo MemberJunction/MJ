@@ -62,6 +62,12 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      * environment, and the same is true for MJAPI/Server based environments. If you need network based notification, additional infrastructure will be needed to implement that.
      */
     AutoRefresh?: boolean = true;
+    /**
+     * Optional debounce time in milliseconds for this specific config.
+     * If not specified, uses the engine's default EntityEventDebounceTime (5000ms).
+     * This allows different entities to have different debounce delays.
+     */
+    DebounceTime?: number;
 
     constructor(init?: Partial<BaseEnginePropertyConfig>) {
         super();
@@ -305,19 +311,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> {
     protected async DebounceIndividualBaseEntityEvent(event: BaseEntityEvent): Promise<boolean> {
         try {
             const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
-    
+
             if (!this._entityEventSubjects.has(entityName)) {
+                // Find matching config to get custom debounce time
+                const matchingConfig = this.Configs.find(c =>
+                    c.EntityName?.trim().toLowerCase() === entityName
+                );
+
+                // Use config-specific debounce time or fall back to default
+                const debounceTimeValue = matchingConfig?.DebounceTime ?? this.EntityEventDebounceTime;
+
                 const subject = new Subject<BaseEntityEvent>();
                 subject.pipe(
-                    debounceTime(this.EntityEventDebounceTime)
+                    debounceTime(debounceTimeValue)
                 ).subscribe(async (e) => {
                     await this.ProcessEntityEvent(e);
                 });
                 this._entityEventSubjects.set(entityName, subject);
             }
-    
+
             this._entityEventSubjects.get(entityName).next(event);
-    
+
             return true;
         } catch (e) {
             LogError(e);

@@ -1,4 +1,4 @@
-import { LogError } from "@memberjunction/core";
+import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
 import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
@@ -312,9 +312,9 @@ export class GraphQLAIClient {
                 subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
                     .subscribe((message: string) => {
                         try {
-                            console.log('[GraphQLAIClient] Received statusUpdate message:', message);
+                            LogStatusEx({message: '[GraphQLAIClient] Received statusUpdate message', verboseOnly: true, additionalArgs: [message]});
                             const parsed = JSON.parse(message);
-                            console.log('[GraphQLAIClient] Parsed message:', parsed);
+                            LogStatusEx({message: '[GraphQLAIClient] Parsed message', verboseOnly: true, additionalArgs: [parsed]});
 
                             // Filter for ExecutionProgress messages from RunAIAgentResolver
                             if (parsed.resolver === 'RunAIAgentResolver' &&
@@ -322,7 +322,7 @@ export class GraphQLAIClient {
                                 parsed.status === 'ok' &&
                                 parsed.data?.progress) {
 
-                                console.log('[GraphQLAIClient] Forwarding progress to callback:', parsed.data.progress);
+                                LogStatusEx({message: '[GraphQLAIClient] Forwarding progress to callback', verboseOnly: true, additionalArgs: [parsed.data.progress]});
                                 // Forward progress to callback with agentRunId in metadata
                                 const progressWithRunId = {
                                     ...parsed.data.progress,
@@ -333,12 +333,12 @@ export class GraphQLAIClient {
                                 };
                                 params.onProgress!(progressWithRunId);
                             } else {
-                                console.log('[GraphQLAIClient] Message does not match filter criteria:', {
+                                LogStatusEx({message: '[GraphQLAIClient] Message does not match filter criteria', verboseOnly: true, additionalArgs: [{
                                     resolver: parsed.resolver,
                                     type: parsed.type,
                                     status: parsed.status,
                                     hasProgress: !!parsed.data?.progress
-                                });
+                                }]});
                             }
                         } catch (e) {
                             // Log parsing errors for debugging

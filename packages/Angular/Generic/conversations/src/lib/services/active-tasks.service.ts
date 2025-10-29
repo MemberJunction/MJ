@@ -11,6 +11,8 @@ export interface ActiveTask {
   status: string;
   relatedMessageId: string;
   conversationDetailId?: string;  // The ConversationDetail that tracks this task
+  conversationId?: string; // The conversation this task belongs to
+  conversationName?: string | null; // Display name of the conversation
   startTime: number;
 }
 
@@ -23,6 +25,7 @@ export interface ActiveTask {
 })
 export class ActiveTasksService {
   private _tasks$ = new BehaviorSubject<Map<string, ActiveTask>>(new Map());
+  private _conversationIdsWithTasks$ = new BehaviorSubject<Set<string>>(new Set());
 
   /**
    * Observable of all active tasks as an array
@@ -39,19 +42,54 @@ export class ActiveTasksService {
   );
 
   /**
+   * Observable of conversation IDs that have 1+ active tasks
+   * Use this for quick lookups in conversation lists
+   */
+  public readonly conversationIdsWithTasks$: Observable<Set<string>> = this._conversationIdsWithTasks$.asObservable();
+
+  /**
+   * Observable of tasks grouped by conversation ID
+   * Returns Map<conversationId, ActiveTask[]>
+   */
+  public readonly tasksByConversationId$: Observable<Map<string, ActiveTask[]>> = this.tasks$.pipe(
+    map(tasks => {
+      const grouped = new Map<string, ActiveTask[]>();
+      for (const task of tasks) {
+        if (task.conversationId) {
+          const existing = grouped.get(task.conversationId) || [];
+          existing.push(task);
+          grouped.set(task.conversationId, existing);
+        }
+      }
+      return grouped;
+    })
+  );
+
+  /**
    * Add a new active task
    * @param task Task details (without id and startTime)
    * @returns The generated task ID
    */
   add(task: Omit<ActiveTask, 'id' | 'startTime'>): string {
     const id = `task-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    const current = this._tasks$.value;
-    current.set(id, {
+    const fullTask = {
       ...task,
       id,
       startTime: Date.now()
-    });
+    };
+    const current = this._tasks$.value;
+    current.set(id, fullTask);
     this._tasks$.next(new Map(current));
+
+    // Update conversation IDs set
+    if (fullTask.conversationId) {
+      this.updateConversationIdsSet();
+    }
+
+    console.log(`➕ Task added:`, {id, conversationId: fullTask.conversationId, agentName: fullTask.agentName});
+    console.log(`📊 Total tasks:`, this._tasks$.value.size);
+    console.log(`🗂️ Conversation IDs with tasks:`, Array.from(this._conversationIdsWithTasks$.value));
+
     return id;
   }
 
@@ -61,8 +99,32 @@ export class ActiveTasksService {
    */
   remove(id: string): void {
     const current = this._tasks$.value;
+    const task = current.get(id);
     current.delete(id);
     this._tasks$.next(new Map(current));
+
+    // Update conversation IDs set if this was the last task for a conversation
+    if (task?.conversationId) {
+      this.updateConversationIdsSet();
+    }
+
+    console.log(`➖ Task removed:`, {id, conversationId: task?.conversationId, agentName: task?.agentName});
+    console.log(`📊 Total tasks remaining:`, this._tasks$.value.size);
+    console.log(`🗂️ Conversation IDs with tasks:`, Array.from(this._conversationIdsWithTasks$.value));
+  }
+
+  /**
+   * Update the set of conversation IDs with active tasks
+   * @private
+   */
+  private updateConversationIdsSet(): void {
+    const conversationIds = new Set<string>();
+    for (const task of this._tasks$.value.values()) {
+      if (task.conversationId) {
+        conversationIds.add(task.conversationId);
+      }
+    }
+    this._conversationIdsWithTasks$.next(conversationIds);
   }
 
   /**

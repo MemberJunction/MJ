@@ -19,3 +19,5 @@ export * from './PayloadChangeAnalyzer';
 export * from './PayloadFeedbackManager';
 export * from './types/payload-operations';
 export * from './AgentDataPreloader';
+export * from './agent-context-injector';
+export * from './memory-manager-agent';

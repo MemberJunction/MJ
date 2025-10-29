@@ -60,23 +60,6 @@
   display: block;
 }
 
-/* Progress icon - positioned to the right of message, pushed down to avoid overlap */
-.message-item.in-progress .message-content::after {
-  content: '';
-  position: absolute;
-  right: 12px;
-  top: 22px;
-  width: 16px;
-  height: 16px;
-  border: 2px solid #3B82F6;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 /* Pulse effect for avatar */
 .message-item.in-progress .avatar-circle {
@@ -242,14 +225,12 @@
 .time-pill.in-progress {
   background: #F3E8FF;
   color: #7C3AED;
-  animation: pillPulse 2s ease-in-out infinite;
 }
 
 /* Active agent run state - indigo with subtle pulse */
 .time-pill.active {
   background: #E0E7FF;
   color: #4F46E5;
-  animation: pillPulse 2s ease-in-out infinite;
 }
 
 /* Failed state - red */

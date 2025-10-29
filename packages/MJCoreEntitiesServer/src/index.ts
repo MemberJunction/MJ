@@ -8,6 +8,8 @@ import { LoadReportEntityServerSubClass } from './custom/reportEntity.server';
 import { LoadTemplateContentEntityServerSubClass } from './custom/TemplateContentEntity.server';
 import { LoadUserViewEntityServerSubClass } from './custom/userViewEntity.server';
 import { LoadArtifactVersionExtendedServerSubClass } from './custom/ArtifactVersionExtended.server';
+import { LoadAIAgentNoteEntityServerSubClass } from './custom/AIAgentNoteEntity.server';
+import { LoadAIAgentExampleEntityServerSubClass } from './custom/AIAgentExampleEntity.server';
 
 LoadAIProviders(); // Ensure all AI providers are loaded
 
@@ -21,6 +23,8 @@ export * from './custom/userViewEntity.server';
 export * from './custom/ActionEntity.server';
 export * from './custom/ComponentEntity.server';
 export * from './custom/ArtifactVersionExtended.server';
+export * from './custom/AIAgentNoteEntity.server';
+export * from './custom/AIAgentExampleEntity.server';
 export * from './custom/util';
 
 // Call the stub functions to ensure that the custom subclasses are not tree shaken out.
@@ -34,5 +38,7 @@ export function LoadCoreEntitiesServerSubClasses(): void {
     LoadUserViewEntityServerSubClass();
     LoadActionEntityServer();
     LoadArtifactVersionExtendedServerSubClass();
+    LoadAIAgentNoteEntityServerSubClass();
+    LoadAIAgentExampleEntityServerSubClass();
 }
 LoadCoreEntitiesServerSubClasses();
