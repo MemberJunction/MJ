@@ -243,12 +243,12 @@ export class AIEngine extends AIEngineBase {
         // On subsequent auto-refreshes (when configs are updated), skip embedding generation
         // since the embeddings are still valid and expensive to regenerate
         if (!this._embeddingsGenerated) {
+            // Must load actions first since action embeddings depend on them
+            await this.loadActions(contextUser);
+
             // now load all the related embeddings and we can do this all in parallel as well
             // since they are independent of each other
             const promises = [];
-            // Load Actions from database
-            promises.push(this.loadActions(contextUser));
-
             // Compute agent embeddings using agents already loaded by base class
             promises.push(this.loadAgentEmbeddings());
 
