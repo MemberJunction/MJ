@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
-import { UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { UserInfo } from '@memberjunction/core';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 /**
@@ -39,7 +39,7 @@ export class MentionAutocompleteService {
       // Load agents from AIEngineBase
       await AIEngineBase.Instance.Config(false);
       this.agentsCache = AIEngineBase.Instance.Agents.filter(
-        a => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent'
+        a => !a.ParentID && a.Status === 'Active' && a.InvocationMode !== 'Sub-Agent' && !a.IsRestricted
       );
 
       console.log('[MentionAutocomplete] Initialized with agents:', this.agentsCache.map(a => a.Name));
