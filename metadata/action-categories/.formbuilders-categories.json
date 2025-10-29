@@ -5,38 +5,13 @@
       "Description": "Integration actions for form builder and survey platforms including Typeform, Google Forms, and JotForm",
       "ParentID": "@lookup:Action Categories.Name=Business Apps&ParentID=null",
       "Status": "Active"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Typeform",
-      "Description": "Typeform integration for managing forms, retrieving responses, generating statistics, and automating workflows",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-      "Status": "Active"
-    }
-  },
-  {
-    "fields": {
-      "Name": "JotForm",
-      "Description": "JotForm integration for managing forms, retrieving submissions, generating statistics, and automating workflows with regional endpoint support",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-      "Status": "Active"
-    }
-  },
-  {
-    "fields": {
-      "Name": "SurveyMonkey",
-      "Description": "SurveyMonkey integration for enterprise surveys, advanced analytics, audience management, and professional research workflows",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-      "Status": "Active"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Google Forms",
-      "Description": "Google Forms integration for retrieving form responses, generating statistics, and exporting data. Read-only API integration with Google Workspace.",
-      "ParentID": "@lookup:Action Categories.Name=Form Builders&Parent=Business Apps",
-      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "F0209686-E477-4C06-A082-B8FC1C9AD338"
+    },
+    "sync": {
+      "lastModified": "2025-10-29T05:25:00.921Z",
+      "checksum": "7df08ac02b95a635454bfdb7e1361e1e9f87e0911e4166fbaad3b469841ef6cd"
     }
   }
 ]
