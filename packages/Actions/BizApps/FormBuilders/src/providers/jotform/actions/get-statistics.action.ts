@@ -7,16 +7,19 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
 /**
  * Action to calculate aggregate statistics from JotForm submissions
  *
+ * Security: API credentials are retrieved securely from Company Integrations
+ * instead of being passed as parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get JotForm Submission Statistics',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '123456789'
- *   }, {
- *     Name: 'APIKey',
- *     Value: 'abc...'
  *   }, {
  *     Name: 'Region',
  *     Value: 'us'
@@ -42,6 +45,8 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -51,14 +56,7 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
                 };
             }
 
-            const apiKey = this.getParamValue(params.Params, 'APIKey');
-            if (!apiKey) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_KEY',
-                    Message: 'APIKey parameter is required'
-                };
-            }
+            const apiKey = await this.getSecureAPIToken(companyId, contextUser);
 
             const region = this.getParamValue(params.Params, 'Region') as 'us' | 'eu' | 'hipaa' | undefined;
             const filterParam = this.getParamValue(params.Params, 'Filter');
@@ -271,12 +269,12 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'APIKey',
+                Name: 'FormID',
                 Type: 'Input',
                 Value: null
             },

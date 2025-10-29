@@ -6,16 +6,19 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to retrieve complete details of a Google Form including all questions, settings, and configuration
  *
+ * Security: This action uses secure credential lookup via Company Integrations.
+ * API credentials are retrieved from environment variables or the database based on CompanyID.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get Google Forms Details',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'company-uuid-here'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '1FAIpQLSe...'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'ya29.a0...'
  *   }]
  * });
  * ```
@@ -38,6 +41,8 @@ export class GetGoogleFormAction extends GoogleFormsBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -47,14 +52,7 @@ export class GetGoogleFormAction extends GoogleFormsBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             // Fetch form details from Google Forms API
             const form = await this.getGoogleFormsDetails(formId, accessToken);
@@ -139,14 +137,14 @@ export class GetGoogleFormAction extends GoogleFormsBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
-                Name: 'AccessToken',
+                Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             }
         ];
     }

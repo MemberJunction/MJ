@@ -6,13 +6,16 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to create a new Typeform programmatically
  *
+ * Security: API credentials are retrieved securely from Company Integrations table or environment variables.
+ * Never pass API tokens as action parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Create Typeform',
  *   Params: [{
- *     Name: 'APIToken',
- *     Value: 'tfp_...'
+ *     Name: 'CompanyID',
+ *     Value: '12345'
  *   }, {
  *     Name: 'Title',
  *     Value: 'Customer Feedback Survey'
@@ -50,14 +53,7 @@ export class CreateTypeformAction extends TypeformBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
 
             const title = this.getParamValue(params.Params, 'Title');
             if (!title) {
@@ -76,6 +72,9 @@ export class CreateTypeformAction extends TypeformBaseAction {
                     Message: 'Fields parameter is required and must be a non-empty array'
                 };
             }
+
+            // Securely retrieve API token using company integration
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const formData: any = {
                 title,
@@ -168,7 +167,7 @@ export class CreateTypeformAction extends TypeformBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'APIToken',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null,
             },

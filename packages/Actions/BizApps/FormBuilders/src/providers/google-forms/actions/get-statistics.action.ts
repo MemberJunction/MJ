@@ -7,16 +7,19 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
 /**
  * Action to calculate aggregate statistics from Google Forms responses
  *
+ * Security: This action uses secure credential lookup via Company Integrations.
+ * API credentials are retrieved from environment variables or the database based on CompanyID.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get Google Forms Response Statistics',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'company-uuid-here'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '1a2b3c4d5e'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'ya29.a0...'
  *   }]
  * });
  * ```
@@ -39,6 +42,8 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -48,14 +53,7 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const maxResponses = this.getParamValue(params.Params, 'MaxResponses') || 10000;
             const includeTopAnswers = this.getParamValue(params.Params, 'IncludeTopAnswers') !== false;
@@ -246,12 +244,12 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'AccessToken',
+                Name: 'FormID',
                 Type: 'Input',
                 Value: null
             },

@@ -10,16 +10,19 @@ import { BaseAction } from '@memberjunction/actions';
  * the rest will be deleted. Use the MergeWithExisting parameter to automatically fetch
  * the current form and merge your changes.
  *
+ * Security: API credentials are retrieved securely from Company Integrations table or environment variables.
+ * Never pass API tokens as action parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Update Typeform',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: '12345'
+ *   }, {
  *     Name: 'FormID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'tfp_...'
  *   }, {
  *     Name: 'Title',
  *     Value: 'Updated Survey Title'
@@ -48,6 +51,8 @@ export class UpdateTypeformAction extends TypeformBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -57,14 +62,8 @@ export class UpdateTypeformAction extends TypeformBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            // Securely retrieve API token using company integration
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const mergeWithExisting = this.getParamValue(params.Params, 'MergeWithExisting') !== false;
 
@@ -187,49 +186,49 @@ export class UpdateTypeformAction extends TypeformBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'MergeWithExisting',
                 Type: 'Input',
-                Value: true, 
+                Value: true,
             },
             {
                 Name: 'Title',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Fields',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Settings',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Logic',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'HiddenFields',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'ThemeID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             }
         ];
     }

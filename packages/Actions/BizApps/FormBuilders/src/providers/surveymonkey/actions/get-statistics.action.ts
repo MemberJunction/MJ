@@ -7,16 +7,18 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
 /**
  * Action to calculate aggregate statistics from SurveyMonkey responses
  *
+ * Security: Uses secure credential lookup via CompanyID instead of accepting tokens directly.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get SurveyMonkey Response Statistics',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'SurveyID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'Bearer ...'
  *   }, {
  *     Name: 'StartCreatedAt',
  *     Value: '2024-01-01T00:00:00Z'
@@ -42,6 +44,8 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const surveyId = this.getParamValue(params.Params, 'SurveyID');
             if (!surveyId) {
                 return {
@@ -51,14 +55,7 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const startCreatedAt = this.getParamValue(params.Params, 'StartCreatedAt');
             const endCreatedAt = this.getParamValue(params.Params, 'EndCreatedAt');
@@ -244,12 +241,12 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'SurveyID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'AccessToken',
+                Name: 'SurveyID',
                 Type: 'Input',
                 Value: null
             },

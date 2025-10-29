@@ -7,16 +7,19 @@ import { BaseAction } from '@memberjunction/actions';
  * Action to watch for new JotForm submissions since last check
  * Useful for workflow automation and real-time notifications
  *
+ * Security: API credentials are retrieved securely from Company Integrations
+ * instead of being passed as parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Watch for New JotForm Submissions',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '123456789'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'your_api_key_here'
  *   }, {
  *     Name: 'LastCheckedTimestamp',
  *     Value: '2024-01-01T12:00:00Z'
@@ -42,6 +45,8 @@ export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -51,14 +56,7 @@ export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required. Get your API key from https://www.jotform.com/myaccount/api'
-                };
-            }
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             let lastChecked = this.getParamValue(params.Params, 'LastCheckedTimestamp');
             const onlyCompleted = this.getParamValue(params.Params, 'OnlyCompleted') === true;
@@ -201,12 +199,12 @@ export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
                 Value: null
             },

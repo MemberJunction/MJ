@@ -7,16 +7,18 @@ import { FormResponse } from '../../../base/base-form-builder.action';
 /**
  * Action to retrieve responses from a SurveyMonkey survey with comprehensive filtering options
  *
+ * Security: Uses secure credential lookup via CompanyID instead of accepting tokens directly.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get SurveyMonkey Responses',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'SurveyID',
  *     Value: '12345678'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'your_access_token'
  *   }, {
  *     Name: 'StartCreatedAt',
  *     Value: '2024-01-01T00:00:00Z'
@@ -45,6 +47,8 @@ export class GetSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const surveyId = this.getParamValue(params.Params, 'SurveyID');
             if (!surveyId) {
                 return {
@@ -54,14 +58,7 @@ export class GetSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required. Get your token from https://developer.surveymonkey.com/apps/'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const pageSize = this.getParamValue(params.Params, 'PageSize') || 100;
             const page = this.getParamValue(params.Params, 'Page');
@@ -179,12 +176,12 @@ export class GetSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'SurveyID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'AccessToken',
+                Name: 'SurveyID',
                 Type: 'Input',
                 Value: null
             },

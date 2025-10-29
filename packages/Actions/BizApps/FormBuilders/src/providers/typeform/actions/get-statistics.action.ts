@@ -7,16 +7,19 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
 /**
  * Action to calculate aggregate statistics from Typeform responses
  *
+ * Security: API credentials are retrieved securely from Company Integrations table or environment variables.
+ * Never pass API tokens as action parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get Typeform Response Statistics',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: '12345'
+ *   }, {
  *     Name: 'FormID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'tfp_...'
  *   }, {
  *     Name: 'Since',
  *     Value: '2024-01-01T00:00:00Z'
@@ -42,6 +45,8 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -51,14 +56,8 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            // Securely retrieve API token using company integration
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const since = this.getParamValue(params.Params, 'Since');
             const until = this.getParamValue(params.Params, 'Until');
@@ -238,39 +237,39 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Since',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Until',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000, 
+                Value: 10000,
             },
             {
                 Name: 'IncludeTopAnswers',
                 Type: 'Input',
-                Value: true, 
+                Value: true,
             },
             {
                 Name: 'TopAnswersLimit',
                 Type: 'Input',
-                Value: 10, 
+                Value: 10,
             }
         ];
     }

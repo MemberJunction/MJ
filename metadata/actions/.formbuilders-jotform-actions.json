@@ -14,6 +14,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "FormID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -22,29 +33,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "40E45DB7-AB5C-4C25-AC91-2868C80D2D34"
+            "ID": "BDB8307A-2AD4-4CBB-86A2-FE5EDF5E89D0"
           },
           "sync": {
             "lastModified": "2025-10-29T05:25:09.419Z",
             "checksum": "72f7505864d8891072fef60bb0f07274307d97663ecd8e72501833647561b471"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "APIToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "JotForm API key (get from https://www.jotform.com/myaccount/api)",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "BDB8307A-2AD4-4CBB-86A2-FE5EDF5E89D0"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:09.427Z",
-            "checksum": "d9d68dca07c514c08c38628823309c302a3e666d9284d3b5471f2d40bf56033f"
           }
         },
         {
@@ -360,6 +353,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "FormID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -391,24 +395,6 @@
           "sync": {
             "lastModified": "2025-10-29T05:25:09.655Z",
             "checksum": "c7b0a31d579dcc6db54b0f50756eb17f873877d2a2435a274d0c72b49ecc9b5b"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "APIToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "JotForm API key",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "F9C0A1DE-A1F0-4E54-B4F2-6715ABC3C6B0"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:09.665Z",
-            "checksum": "1de75ca042b5324e5b6b5fb0a49da0e525a41c3b35375c0139f5c4baccfd9e25"
           }
         },
         {
@@ -616,6 +602,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "FormID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -624,29 +621,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "D0A44ECC-BB58-41FF-968D-4FCE571F8E27"
+            "ID": "74B2B174-A4BF-418B-A188-DBB6C27C9C7B"
           },
           "sync": {
             "lastModified": "2025-10-29T05:25:09.813Z",
             "checksum": "68e576af801267bddfe08b7e0bd75d93e5e318bc20d3ad219c53ac9630a4a65e"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "APIToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "JotForm API key",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "74B2B174-A4BF-418B-A188-DBB6C27C9C7B"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:09.824Z",
-            "checksum": "1de75ca042b5324e5b6b5fb0a49da0e525a41c3b35375c0139f5c4baccfd9e25"
           }
         },
         {
@@ -928,6 +907,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "FormID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -936,29 +926,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "CE21F2DB-89FE-49C2-B27A-FB2C10A021EA"
+            "ID": "A9973EDD-7414-4EA0-BFE2-9099971F22BE"
           },
           "sync": {
             "lastModified": "2025-10-29T05:25:10.029Z",
             "checksum": "68e576af801267bddfe08b7e0bd75d93e5e318bc20d3ad219c53ac9630a4a65e"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "APIToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "JotForm API key",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "A9973EDD-7414-4EA0-BFE2-9099971F22BE"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:10.039Z",
-            "checksum": "1de75ca042b5324e5b6b5fb0a49da0e525a41c3b35375c0139f5c4baccfd9e25"
           }
         },
         {
@@ -1238,6 +1210,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "FormID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -1246,29 +1229,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "60788452-1BC2-4703-B0F4-8C98EE952FB4"
+            "ID": "985A6077-1A0C-4C78-A749-F551189473B1"
           },
           "sync": {
             "lastModified": "2025-10-29T05:25:10.209Z",
             "checksum": "d65bf9d52d5572f48d43628a0e3a0a0a3e95f9ef68fe0f646a971435dcc69b8d"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "APIToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "JotForm API key",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "985A6077-1A0C-4C78-A749-F551189473B1"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:10.220Z",
-            "checksum": "1de75ca042b5324e5b6b5fb0a49da0e525a41c3b35375c0139f5c4baccfd9e25"
           }
         },
         {
@@ -1616,6 +1581,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "FormID",
             "Type": "Both",
             "ValueType": "Scalar",
@@ -1624,29 +1600,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "4B1272C5-162D-420C-9B91-B3F7F024D718"
+            "ID": "D749F001-62C6-4D9C-8F07-00C52C5B609F"
           },
           "sync": {
             "lastModified": "2025-10-29T05:25:10.446Z",
             "checksum": "576d5ec7069e2cb823c10e1a7f81dac45514536e5eabf353c4eaef65357f94c8"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "APIToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "JotForm API key",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "D749F001-62C6-4D9C-8F07-00C52C5B609F"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:10.455Z",
-            "checksum": "1de75ca042b5324e5b6b5fb0a49da0e525a41c3b35375c0139f5c4baccfd9e25"
           }
         },
         {
@@ -1905,19 +1863,12 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "APIToken",
+            "Name": "CompanyID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "JotForm API key with create permissions",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "8BF5552E-D2C7-4560-BBBB-DF4F13D1525B"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:10.641Z",
-            "checksum": "b0a292da9c5a973b01f5458e8d182d911f1191176706b9e2dc2bf330fe1a5029"
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
           }
         },
         {
@@ -2177,6 +2128,17 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "FormID",
             "Type": "Both",
             "ValueType": "Scalar",
@@ -2185,29 +2147,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "1505A3BE-EACC-446C-8CA4-873F4E07E685"
+            "ID": "57404EA0-4F3C-4649-A53E-6ACBD2FC0543"
           },
           "sync": {
             "lastModified": "2025-10-29T05:25:10.808Z",
             "checksum": "16376d0324588cb040ccfaf886ab010f62419c0ebb3036c7e48954244061363a"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "APIToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "JotForm API key with write permissions",
-            "IsRequired": true
-          },
-          "primaryKey": {
-            "ID": "57404EA0-4F3C-4649-A53E-6ACBD2FC0543"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:10.836Z",
-            "checksum": "5f7b24b20c02353ae01cdb7fb312de6fb0740653ed723bc1813e498554d56dd0"
           }
         },
         {

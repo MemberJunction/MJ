@@ -7,16 +7,19 @@ import { BaseAction } from '@memberjunction/actions';
  * Action to watch for new Typeform responses since last check
  * Useful for workflow automation and real-time notifications
  *
+ * Security: API credentials are retrieved securely from Company Integrations table or environment variables.
+ * Never pass API tokens as action parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Watch for New Typeform Responses',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: '12345'
+ *   }, {
  *     Name: 'FormID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'tfp_...'
  *   }, {
  *     Name: 'LastCheckedTimestamp',
  *     Value: '2024-01-01T12:00:00Z'
@@ -42,6 +45,8 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -51,14 +56,8 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            // Securely retrieve API token using company integration
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             let lastChecked = this.getParamValue(params.Params, 'LastCheckedTimestamp');
             const onlyCompleted = this.getParamValue(params.Params, 'OnlyCompleted') === true;
@@ -189,14 +188,14 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'LastCheckedTimestamp',

@@ -7,16 +7,18 @@ import { BaseAction } from '@memberjunction/actions';
  * Action to watch for new SurveyMonkey responses since last check
  * Useful for workflow automation and real-time notifications
  *
+ * Security: Uses secure credential lookup via CompanyID instead of accepting tokens directly.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Watch for New SurveyMonkey Responses',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'SurveyID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'your_access_token_here'
  *   }, {
  *     Name: 'LastCheckedTimestamp',
  *     Value: '2024-01-01T12:00:00Z'
@@ -42,6 +44,8 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const surveyId = this.getParamValue(params.Params, 'SurveyID');
             if (!surveyId) {
                 return {
@@ -51,14 +55,7 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required. Get your access token from https://developer.surveymonkey.com/apps/'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             let lastChecked = this.getParamValue(params.Params, 'LastCheckedTimestamp');
             const onlyCompleted = this.getParamValue(params.Params, 'OnlyCompleted') === true;
@@ -190,12 +187,12 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'SurveyID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'AccessToken',
+                Name: 'SurveyID',
                 Type: 'Input',
                 Value: null
             },

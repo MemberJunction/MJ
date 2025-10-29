@@ -70,7 +70,9 @@ export abstract class BaseFormBuilderAction extends BaseAction {
     private _companyIntegration: CompanyIntegrationEntity | null = null;
 
     /**
-     * Common form builder parameters that many actions will need
+     * Common form builder parameters that many actions will need.
+     * CompanyID is required for secure credential lookup.
+     * FormID is the platform-specific form identifier.
      */
     protected getCommonFormParams(): ActionParam[] {
         return [
@@ -151,6 +153,34 @@ export abstract class BaseFormBuilderAction extends BaseAction {
             apiKey: integration.APIKey || undefined,
             accessToken: integration.AccessToken || undefined
         };
+    }
+
+    /**
+     * Helper to securely retrieve API token for a company.
+     * This method should be used by all form builder actions instead of accepting tokens as parameters.
+     *
+     * @param companyId - The MemberJunction company ID (required)
+     * @param contextUser - The user context for database queries
+     * @returns The API token for the specified company
+     * @throws Error if no credentials are found or company integration is not configured
+     */
+    protected async getSecureAPIToken(companyId: string | null | undefined, contextUser: UserInfo): Promise<string> {
+        // CompanyID is required - if not provided, throw error
+        if (!companyId) {
+            throw new Error(`CompanyID parameter is required. Please provide a valid CompanyID to identify which company's ${this.integrationName} credentials should be used.`);
+        }
+
+        const effectiveCompanyId = companyId;
+
+        const integration = await this.getCompanyIntegration(effectiveCompanyId, contextUser);
+        const credentials = await this.getAPICredentials(integration);
+
+        const token = credentials.apiToken || credentials.accessToken || credentials.apiKey;
+        if (!token) {
+            throw new Error(`No API token found for ${this.integrationName} integration for company ${effectiveCompanyId}. Please configure credentials in Company Integrations or set environment variable BIZAPPS_${this.formPlatform.toUpperCase().replace(/\s+/g, '_')}_${effectiveCompanyId}_API_TOKEN`);
+        }
+
+        return token;
     }
 
     /**

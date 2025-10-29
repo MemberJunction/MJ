@@ -10,16 +10,19 @@ import { BaseAction } from '@memberjunction/actions';
  * Use the MergeWithExisting parameter to safely update only specified properties
  * while preserving existing ones.
  *
+ * Security: API credentials are retrieved securely from Company Integrations
+ * instead of being passed as parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Update JotForm',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '123456789'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'your_api_key_here'
  *   }, {
  *     Name: 'Title',
  *     Value: 'Updated Survey Title'
@@ -48,6 +51,8 @@ export class UpdateJotFormAction extends JotFormBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -57,14 +62,7 @@ export class UpdateJotFormAction extends JotFormBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required. Get your API key from https://www.jotform.com/myaccount/api'
-                };
-            }
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const mergeWithExisting = this.getParamValue(params.Params, 'MergeWithExisting') !== false;
             const region = this.getParamValue(params.Params, 'Region') as 'us' | 'eu' | 'hipaa' | undefined;
@@ -217,12 +215,12 @@ export class UpdateJotFormAction extends JotFormBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
                 Value: null
             },

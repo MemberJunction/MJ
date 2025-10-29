@@ -12,16 +12,18 @@ import { BaseAction } from '@memberjunction/actions';
  * The action uses PATCH for partial updates when MergeWithExisting=true, which is
  * the recommended approach for most use cases.
  *
+ * Security: Uses secure credential lookup via CompanyID instead of accepting tokens directly.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Update SurveyMonkey',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'SurveyID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'your_access_token'
  *   }, {
  *     Name: 'Title',
  *     Value: 'Updated Survey Title'
@@ -49,6 +51,8 @@ export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
         };
       }
 
+      const companyId = this.getParamValue(params.Params, 'CompanyID');
+
       const surveyId = this.getParamValue(params.Params, 'SurveyID');
       if (!surveyId) {
         return {
@@ -58,14 +62,7 @@ export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
         };
       }
 
-      const accessToken = this.getParamValue(params.Params, 'AccessToken');
-      if (!accessToken) {
-        return {
-          Success: false,
-          ResultCode: 'MISSING_ACCESS_TOKEN',
-          Message: 'AccessToken parameter is required',
-        };
-      }
+      const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
       const mergeWithExisting = this.getParamValue(params.Params, 'MergeWithExisting') !== false;
 
@@ -198,19 +195,19 @@ export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
   public get Params(): ActionParam[] {
     return [
       {
-        Name: 'SurveyID',
+        Name: 'CompanyID',
         Type: 'Input',
         Value: null,
       },
       {
-        Name: 'AccessToken',
+        Name: 'SurveyID',
         Type: 'Input',
         Value: null,
       },
       {
         Name: 'MergeWithExisting',
         Type: 'Input',
-        Value: true, 
+        Value: true,
       },
       {
         Name: 'Title',
