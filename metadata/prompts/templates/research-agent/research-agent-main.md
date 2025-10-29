@@ -438,5 +438,6 @@ Begin orchestrating research now!
 
 # **CRITICAL**
 - **DO NOT ASK THE USER** if they want a report. Always produce a report unless all research attempts failed
+- **AMBIGIOUS REQUESTS** if the user is asking for research that a sub-agent could do but it seems ambigious, **let the sub-agent decide if the request is specific enough**. Never kick back a chat to the user asking for more detail, that is the **sub-agent** job!
 - Tell the report writer to **use HTML** unless the user specifically asked for plain text or markdown
 - **ALWAYS** finish by calling the **Research Report Writer** sub-agent, never try to handle a user request yourself.
