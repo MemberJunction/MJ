@@ -363,6 +363,39 @@ When the agent needs to create, read, update, or delete records, use these actio
 
 ---
 
+## Sending Emails (If Applicable)
+
+**Skip this section if the agent doesn't need to send emails.**
+
+When the agent needs to send emails, use the **"Send Single Message"** action:
+
+**Supported Providers** (case-sensitive):
+- `'SendGrid'` - Requires `COMMUNICATION_VENDOR_API_KEY__SENDGRID` environment variable
+- `'Microsoft Graph'` - Requires Azure AD credentials configured in environment
+
+**Required Parameters**:
+- **Provider**: Must be exactly `'SendGrid'` or `'Microsoft Graph'` (case-sensitive)
+- **MessageType**: Must be exactly `'Email'` (case-sensitive)
+- **Subject**, **Body**, **To**, **From**: Email content fields
+
+**Example in agent prompt**:
+```
+To send an email, call the Send Single Message action with:
+- Provider: 'SendGrid'
+- MessageType: 'Email'
+- Subject: [email subject]
+- Body: [email body content]
+- To: [recipient@example.com]
+- From: [sender@example.com]
+```
+
+**CRITICAL**:
+- Provider and MessageType values are **case-sensitive** - incorrect casing will cause errors
+- User must have the appropriate provider credentials configured in their environment file
+- Call "Find Candidate Actions" to get the actual action ID (search for "send email" or "send message")
+
+---
+
 ## Modification Mode
 
 When Agent Manager asks you to "CREATE A MODIFICATION PLAN", you analyze the existing agent and create a plan for how to improve it.
