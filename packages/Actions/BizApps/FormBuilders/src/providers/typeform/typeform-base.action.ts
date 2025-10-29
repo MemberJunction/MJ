@@ -1,8 +1,8 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormBuilderAction, FormResponse, FormAnswer } from '../../base/base-form-builder.action';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { BaseAction, OAuth2Manager } from '@memberjunction/actions';
 import axios, { AxiosInstance, AxiosError } from 'axios';
-import { BaseAction } from '@memberjunction/actions';
 
 /**
  * Typeform API response structures
@@ -80,6 +80,42 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
 
     private axiosInstance: AxiosInstance | null = null;
     private currentAPIToken: string | null = null;
+    private oauth2Manager: OAuth2Manager | null = null;
+
+    /**
+     * Creates an OAuth2Manager for Typeform authentication.
+     * Configures the OAuth2 endpoints and credentials for Typeform.
+     *
+     * @override
+     */
+    protected async createOAuth2Manager(companyId: string, contextUser: UserInfo): Promise<OAuth2Manager | null> {
+        const clientId = process.env['BIZAPPS_TYPEFORM_CLIENT_ID'];
+        const clientSecret = process.env['BIZAPPS_TYPEFORM_CLIENT_SECRET'];
+
+        if (!clientId || !clientSecret) {
+            return null; // OAuth2 not configured
+        }
+
+        // Check if we have stored tokens for this company
+        const integration = await this.getCompanyIntegration(companyId, contextUser);
+        const credentials = await this.getAPICredentials(integration);
+
+        const oauth = new OAuth2Manager({
+            clientId,
+            clientSecret,
+            tokenEndpoint: 'https://api.typeform.com/oauth/token',
+            authorizationEndpoint: 'https://api.typeform.com/oauth/authorize',
+            scopes: ['forms:read', 'forms:write', 'responses:read', 'accounts:read'],
+            accessToken: credentials.accessToken,
+            refreshToken: credentials.apiKey, // Store refresh token in apiKey field
+            onTokenUpdate: async (tokens) => {
+                // TODO: Persist updated tokens back to Company Integrations table
+                LogStatus(`Typeform OAuth2 tokens updated for company ${companyId}`);
+            }
+        });
+
+        return oauth;
+    }
 
     /**
      * Get axios instance with Typeform authentication
