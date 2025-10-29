@@ -90,7 +90,7 @@ Parent Agent
 "User wants to 'save findings' but didn't specify what database entity/table to use."
 "I CANNOT guess entity names - I must call Database Research Agent."
 
-**Call Database Research Agent**: "Does the CompetitorInsights entity exist? If so, what are all its fields including the primary key name and PriorityScore field? I need to design read, update, and create operations."
+**Call Database Research Agent**: Ask it to look for entities we care about, it's possible user doesn't provide the correct entity name, so you should ask it like this: "Is there any entity for [some entity name] or related to [PURPOSE]? Please give me all fields in JSON for all entities that match what we describe"
 
 **Two Possible Outcomes**:
 
@@ -287,7 +287,7 @@ The agent requires database support if the user mentions:
 - ✅ Storing, saving, tracking, or persisting data ("save findings", "track items", "store results")
 - ✅ Database operations: "save to", "write to", "read from", "query", "update database"
 - ✅ Data structures that need to map to database tables/entities
-- ✅ Using CRUD actions: "Create Record", "Get Record", "Update Record", "Delete Record"
+- ✅ Using CRUD operations
 
 ### MUST Consult Database Research Agent
 
@@ -306,9 +306,10 @@ The agent requires database support if the user mentions:
 **BUT - Always Call Find Candidate Agents**: Don't assume Database Research Agent exists! When you have database tasks like "find data", "search records", "check existing data", call **Find Candidate Agents** with TaskDescription="search database" or "find database records" - it should return Database Research Agent. Then include it as a related subagent.
 
 **How to consult - use specific questions like**:
-- "Is there any entity called [NAME] or related to [CONCEPT]? Please give me all fields if possible."
-- "What entities are available for tracking [TYPE OF DATA]? Include all field names and data types."
-- "What fields does the [ENTITY NAME] entity have? Include field names, data types, and any constraints."
+  - "Can you check if there's an entity for [PURPOSE/CONCEPT]? If yes, give me all fields in JSON format."
+  - "What entities are available for tracking [TYPE OF DATA]? Return field schemas in JSON."
+  - "Search for entities related to [CONCEPT]. If found, provide complete field information including primary keys, data types, and
+  constraints."
 
 **Results location**: Database Research Agent writes to `payload.TechnicalDesign.databaseSchema`
 
