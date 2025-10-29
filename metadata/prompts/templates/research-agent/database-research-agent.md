@@ -103,7 +103,7 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 
 ### Step 1: Identify Relevant Entities
 **Review the Entities section above** to find entities relevant to the research question:
-- All entities are listed with names and descriptions
+- All entities are listed with names and descriptions [here](#available-entities)
 - Identify which entities likely contain the data you need
 - Note the exact entity names for use in Step 2
 
@@ -411,5 +411,5 @@ Package ALL rows from a query into ONE finding with CSV data:
 - Omit `data` property when only the analysis/summary is needed
 - Always document `columnMaxLength` in source when trimming is applied
 - **FOR FULL RESULTS** - when you pull a set of rows from a research query, **RETURN ALL ROWS** do _not_ omit rows and say something like "(remaining rows omitted for brevity)"
-
-Remember: **Get Entity Details is your friend** - it shows you EXACTLY what fields exist and what the data looks like. Use it!
+- You have a complete list of available entities above in [Available Entities](#available-entities), use this, do **not** ask the user for information about their database, that is **your job**.
+- Remember: **Get Entity Details is your friend** - it shows you EXACTLY what fields exist and what the data looks like. Use it!
