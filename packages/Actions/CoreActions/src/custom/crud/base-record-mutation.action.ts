@@ -137,8 +137,8 @@ export abstract class BaseRecordMutationAction extends BaseAction {
             let resultCode = 'RECORD_NOT_FOUND';
             let message = `${entityName} record not found`;
 
-            if (latestResult?.Message?.toLowerCase().includes('permission') || 
-                latestResult?.Message?.toLowerCase().includes('denied')) {
+            const completeMessage = latestResult?.CompleteMessage?.toLowerCase() || '';
+            if (completeMessage.includes('permission') || completeMessage.includes('denied')) {
                 resultCode = 'PERMISSION_DENIED';
                 message = `Permission denied accessing ${entityName} record`;
             }
@@ -173,7 +173,7 @@ export abstract class BaseRecordMutationAction extends BaseAction {
      * Analyze error from entity save/delete operation and return appropriate result
      */
     protected analyzeEntityError(
-        entity: BaseEntity, 
+        entity: BaseEntity,
         operation: 'create' | 'update' | 'delete',
         entityName: string
     ): ActionResultSimple {
@@ -182,28 +182,27 @@ export abstract class BaseRecordMutationAction extends BaseAction {
         let message = `Failed to ${operation} ${entityName} record`;
 
         if (latestResult) {
-            if (latestResult.Message) {
-                message += `: ${latestResult.Message}`;
+            const completeMessage = latestResult.CompleteMessage;
+            if (completeMessage) {
+                message += `: ${completeMessage}`;
             }
-            
-            // Check for specific error types
-            if (latestResult.Message?.toLowerCase().includes('permission') || 
-                latestResult.Message?.toLowerCase().includes('denied')) {
+
+            // Check for specific error types using the complete consolidated message
+            const lowerMessage = completeMessage?.toLowerCase() || '';
+            if (lowerMessage.includes('permission') || lowerMessage.includes('denied')) {
                 resultCode = 'PERMISSION_DENIED';
-            } else if (latestResult.Message?.toLowerCase().includes('validation') ||
-                       latestResult.Message?.toLowerCase().includes('required')) {
+            } else if (lowerMessage.includes('validation') || lowerMessage.includes('required')) {
                 resultCode = 'VALIDATION_ERROR';
-            } else if (operation === 'update' && 
-                      (latestResult.Message?.toLowerCase().includes('concurrent') ||
-                       latestResult.Message?.toLowerCase().includes('modified'))) {
+            } else if (operation === 'update' &&
+                      (lowerMessage.includes('concurrent') || lowerMessage.includes('modified'))) {
                 resultCode = 'CONCURRENT_UPDATE';
             } else if (operation === 'delete') {
-                if (latestResult.Message?.toLowerCase().includes('reference') ||
-                    latestResult.Message?.toLowerCase().includes('constraint') ||
-                    latestResult.Message?.toLowerCase().includes('foreign key')) {
+                if (lowerMessage.includes('reference') ||
+                    lowerMessage.includes('constraint') ||
+                    lowerMessage.includes('foreign key')) {
                     resultCode = 'REFERENCE_CONSTRAINT';
                     message = `Cannot delete ${entityName} record: It is referenced by other records`;
-                } else if (latestResult.Message?.toLowerCase().includes('cascade')) {
+                } else if (lowerMessage.includes('cascade')) {
                     resultCode = 'CASCADE_CONSTRAINT';
                     message = `Cannot delete ${entityName} record: Cascade delete is not allowed`;
                 }

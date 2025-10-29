@@ -188,7 +188,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
 
-          LogError('Error deleting permission record in the transaction group: ' + permission.LatestResult.Error);
+          LogError('Error deleting permission record in the transaction group: ' + permission.LatestResult.CompleteMessage);
           return false;
         }  
       }      
@@ -204,7 +204,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
 
-          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.Error);          
+          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.CompleteMessage);          
           return false;
         }
       }
@@ -220,7 +220,7 @@ export class ResourcePermissionsComponent extends BaseAngularComponent implement
           if (this.ShowUserErrorMessages)
             MJNotificationService.Instance.CreateSimpleNotification('Error saving permissions', 'error', 2500);
 
-          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.Error);
+          LogError('Error saving permission record in the transaction group: ' + permission.LatestResult.CompleteMessage);
           return false;
         }
       }

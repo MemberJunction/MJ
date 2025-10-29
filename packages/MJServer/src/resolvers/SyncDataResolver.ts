@@ -226,7 +226,7 @@ export class SyncDataResolver {
                 for (const entityObject of data.Results) {
                     if (!await entityObject.Delete()) {
                         overallSuccess = false;
-                        combinedErrorMessage += 'Failed to delete the item :' + entityObject.LatestResult.Message + '\n';
+                        combinedErrorMessage += 'Failed to delete the item :' + entityObject.LatestResult.CompleteMessage + '\n';
                     }
                 }
                 result.Success = overallSuccess
@@ -316,7 +316,7 @@ export class SyncDataResolver {
                     result.Success = true;
                 }
                 else {
-                    result.ErrorMessage = 'Failed to delete the item :' + entityObject.LatestResult.Message;
+                    result.ErrorMessage = 'Failed to delete the item :' + entityObject.LatestResult.CompleteMessage;
                 }
             }
         }
@@ -334,7 +334,7 @@ export class SyncDataResolver {
                 result.Success = true;
             }
             else {
-                result.ErrorMessage = 'Failed to delete the item :' + entityObject.LatestResult.Message;
+                result.ErrorMessage = 'Failed to delete the item :' + entityObject.LatestResult.CompleteMessage;
             }
         }
         else {
@@ -363,7 +363,7 @@ export class SyncDataResolver {
             });
         }
         else {
-            result.ErrorMessage = 'Failed to create the item :' + entityObject.LatestResult.Message;
+            result.ErrorMessage = 'Failed to create the item :' + entityObject.LatestResult.CompleteMessage;
         }
     }
 
@@ -406,7 +406,7 @@ export class SyncDataResolver {
             });
         }
         else {
-            result.ErrorMessage = 'Failed to update the item :' + entityObject.LatestResult.Message;
+            result.ErrorMessage = 'Failed to update the item :' + entityObject.LatestResult.CompleteMessage;
         }
     }
 }

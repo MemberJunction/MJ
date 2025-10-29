@@ -194,7 +194,7 @@ export class SimpleRecordListComponent implements OnInit {
     if (result === 'Yes') {
       if (!await this.deleteRecordItem!.Delete()) {
         // show an error message
-        const errorMessage = this.deleteRecordItem!.LatestResult.Message;
+        const errorMessage = this.deleteRecordItem!.LatestResult.CompleteMessage;
         MJNotificationService.Instance.CreateSimpleNotification('Error deleting record: ' + errorMessage, 'error', 3000);
       }
       else 

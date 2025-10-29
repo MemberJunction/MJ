@@ -367,7 +367,7 @@ export class ApplicationViewComponent extends BaseBrowserComponent implements On
                 newResourceLink.UserID = this.currentUser.ID;
                 newResourceLink.FolderID = this.selectedFolderID
                 if (!await newResourceLink.Save()) {
-                    LogError('Error saving new resource link: ' + newResourceLink.LatestResult.Message);
+                    LogError('Error saving new resource link: ' + newResourceLink.LatestResult.CompleteMessage);
                     success = false;
                 }
                 else {

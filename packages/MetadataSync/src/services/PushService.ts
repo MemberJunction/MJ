@@ -799,8 +799,8 @@ export class PushService {
 
       // Log the LatestResult for debugging
       if (entity.LatestResult) {
-        if (entity.LatestResult.Message) {
-          logError(`   Database Message: ${entity.LatestResult.Message}`);
+        if (entity.LatestResult.CompleteMessage) {
+          logError(`   Database Message: ${entity.LatestResult.CompleteMessage}`);
         }
         if (entity.LatestResult.Errors && entity.LatestResult.Errors.length > 0) {
           logError(`   Errors:`);
@@ -847,7 +847,7 @@ export class PushService {
       }
       
       // Get the actual error details from the entity
-      const errorMessage = entity.LatestResult?.Message || 'Unknown error';
+      const errorMessage = entity.LatestResult?.CompleteMessage || 'Unknown error';
       const errorDetails = entity.LatestResult?.Errors?.map(err => 
         typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
       )?.join(', ') || '';
@@ -1010,7 +1010,7 @@ export class PushService {
       
       if (!deleteResult) {
         // Check the LatestResult for error details
-        const errorMessage = existingEntity.LatestResult?.Message || 'Unknown error';
+        const errorMessage = existingEntity.LatestResult?.CompleteMessage || 'Unknown error';
         const errorDetails = existingEntity.LatestResult?.Errors?.map(err => 
           typeof err === 'string' ? err : (err?.message || JSON.stringify(err))
         )?.join(', ') || '';

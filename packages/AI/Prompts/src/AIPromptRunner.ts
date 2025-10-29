@@ -427,11 +427,11 @@ export class AIPromptRunner {
         
         const saveResult = await promptRun.Save();
         if (!saveResult) {
-          this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`, {
+          this.logError(`Failed to save error to AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
             category: 'PromptRunSave',
             metadata: {
               promptRunId: promptRun.ID,
-              errorMessage: promptRun.LatestResult?.Message
+              errorMessage: promptRun.LatestResult?.CompleteMessage
             },
             maxErrorLength: params.maxErrorLength
           });
@@ -759,7 +759,7 @@ export class AIPromptRunner {
 
     const saveResult = await consolidatedPromptRun.Save();
     if (!saveResult) {
-      this.logError(`Failed to save consolidated AIPromptRun: ${consolidatedPromptRun.LatestResult?.Message || 'Unknown error'}`, {
+      this.logError(`Failed to save consolidated AIPromptRun: ${consolidatedPromptRun.LatestResult?.CompleteMessage || 'Unknown error'}`, {
         category: 'ConsolidatedPromptRunSave',
         metadata: {
           promptRunId: consolidatedPromptRun.ID,
@@ -1964,7 +1964,7 @@ export class AIPromptRunner {
 
       const saveResult = await promptRun.Save();
       if (!saveResult) {
-        const error = `Failed to save AIPromptRun: ${promptRun.LatestResult?.Message || 'Unknown error'}`;
+        const error = `Failed to save AIPromptRun: ${promptRun.LatestResult?.CompleteMessage || 'Unknown error'}`;
         this.logError(error, {
           category: 'PromptRunCreation',
           metadata: {
@@ -1989,12 +1989,12 @@ export class AIPromptRunner {
       
       return promptRun;
     } catch (error) {
-      const msg = `Error creating prompt run record: ${error.message} - ${promptRun?.LatestResult?.Message} - ${promptRun?.LatestResult?.Errors[0]?.Message}`;
+      const msg = `Error creating prompt run record: ${error.message} - ${promptRun?.LatestResult?.CompleteMessage} - ${promptRun?.LatestResult?.Errors[0]?.Message}`;
       this.logError(msg, {
         category: 'PromptRunSave',
         metadata: {
           promptRunId: promptRun.ID,
-          saveError: promptRun.LatestResult?.Message
+          saveError: promptRun.LatestResult?.CompleteMessage
         },
         maxErrorLength: params.maxErrorLength
       });
@@ -3844,10 +3844,10 @@ export class AIPromptRunner {
         // Safely extract error message - LatestResult.Message might be an Error object or string
         let errorMsg = 'Unknown error';
         try {
-          if (promptRun.LatestResult?.Message) {
-            errorMsg = typeof promptRun.LatestResult.Message === 'string'
-              ? promptRun.LatestResult.Message
-              : String(promptRun.LatestResult.Message);
+          if (promptRun.LatestResult?.CompleteMessage) {
+            errorMsg = typeof promptRun.LatestResult.CompleteMessage === 'string'
+              ? promptRun.LatestResult.CompleteMessage
+              : String(promptRun.LatestResult.CompleteMessage);
           }
         } catch (msgError) {
           errorMsg = 'Error accessing error message';

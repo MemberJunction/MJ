@@ -105,7 +105,7 @@ export class FormToolbarComponent implements OnInit {
             // Save the record
             const result = await this.form.SaveRecord(true);
             if (!result) {
-                const msg = this.form.record.LatestResult?.Message ? ': ' + this.form.record.LatestResult.Message : '';
+                const msg = this.form.record.LatestResult?.CompleteMessage ? ': ' + this.form.record.LatestResult.CompleteMessage : '';
                 SharedService.Instance.CreateSimpleNotification(`Error saving record${msg}`, 'error', 3000);
             }
         } finally {

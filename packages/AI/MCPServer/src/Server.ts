@@ -450,7 +450,7 @@ function addEntityCreateTool(entity: EntityInfo, contextUser: UserInfo) {
             record.SetMany(props, true);
             const success = await record.Save();
             if (!success) {
-                return JSON.stringify({success, record: undefined, errorMessage: record.LatestResult.Message });
+                return JSON.stringify({success, record: undefined, errorMessage: record.LatestResult.CompleteMessage });
             }
             else {
                 return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: undefined });
@@ -487,7 +487,7 @@ function addEntityUpdateTool(entity: EntityInfo, contextUser: UserInfo) {
                 });
                 record.SetMany(newProps, true);
                 const success = await record.Save();
-                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: !success ? record.LatestResult.Message : undefined });
+                return JSON.stringify({success, record: await convertEntityObjectToJSON(record), errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });
             }
             else {
                 return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});
@@ -518,7 +518,7 @@ function addEntityDeleteTool(entity: EntityInfo, contextUser: UserInfo) {
             if (loaded) {
                 const savedRecordJSON = await convertEntityObjectToJSON(record);
                 const success = await record.Delete();
-                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.Message : undefined });    
+                return JSON.stringify({success, record: savedRecordJSON, errorMessage: !success ? record.LatestResult.CompleteMessage : undefined });    
             }
             else {
                 return JSON.stringify({success: false, record: undefined, errorMessage: "Record not found"});

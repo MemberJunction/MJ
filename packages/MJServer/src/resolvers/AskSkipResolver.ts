@@ -651,7 +651,7 @@ export class AskSkipResolver {
   //     learningCycleEntity.StartedAt = startTime;
 
   //     if (!(await learningCycleEntity.Save())) {
-  //       throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //       throw new Error(`Failed to create learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //     }
 
   //     const learningCycleId = learningCycleEntity.ID;
@@ -671,7 +671,7 @@ export class AskSkipResolver {
   //         learningCycleEntity.AgentSummary = 'No new conversations to process, learning cycle skipped, but recorded for audit purposes.';
   //         learningCycleEntity.EndedAt = new Date();
   //         if (!(await learningCycleEntity.Save())) {
-  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //         }
   //         const result: SkipAPILearningCycleResponse = {
   //           success: true,
@@ -697,7 +697,7 @@ export class AskSkipResolver {
   //         learningCycleEntity.EndedAt = endTime;
 
   //         if (!(await learningCycleEntity.Save())) {
-  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.Error}`);
+  //           LogError(`Failed to update learning cycle record: ${learningCycleEntity.LatestResult.CompleteMessage}`);
   //         }
           
   //         return response;
@@ -940,7 +940,7 @@ export class AskSkipResolver {
 
 //       // Save the note
 //       if (!(await noteEntity.Save())) {
-//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//         LogError(`Error saving AI Agent Note: ${noteEntity.LatestResult.CompleteMessage}`);
 //         return false;
 //       }
 
@@ -981,7 +981,7 @@ export class AskSkipResolver {
 
 //     // Proceed with deletion
 //     if (!(await noteEntity.Delete())) {
-//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.Error}`);
+//       LogError(`Error deleting AI Agent Note: ${noteEntity.LatestResult.CompleteMessage}`);
 //       return false;
 //     }
 
