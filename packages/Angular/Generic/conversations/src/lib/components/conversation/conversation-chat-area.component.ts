@@ -203,7 +203,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
-    this.activeTasks.clear();
+    // Do NOT clear activeTasks here - they are workspace-level and should persist across conversation switches
+    // Tasks will be automatically removed when agents complete (via markMessageComplete in MessageInputComponent)
+    // Clearing here causes bugs: global tasks panel blanks out, no notifications when switching, spinners disappear
 
     // Hide artifact panel when conversation changes
     this.showArtifactPanel = false;
