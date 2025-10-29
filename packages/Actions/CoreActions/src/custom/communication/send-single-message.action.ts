@@ -19,37 +19,52 @@ import { Message } from "@memberjunction/communication-types";
 @RegisterClass(BaseAction, "__SendSingleMessage")
 export class SendSingleMessageAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
+        // Extract all parameters first
         const subject = params.Params.find(p => p.Name.trim().toLowerCase() === 'subject');
         const body = params.Params.find(p => p.Name.trim().toLowerCase() === 'body');
         const to = params.Params.find(p => p.Name.trim().toLowerCase() === 'to');
         const from = params.Params.find(p => p.Name.trim().toLowerCase() === 'from');
         const provider = params.Params.find(p => p.Name.trim().toLowerCase() === 'provider');
-        await CommunicationEngine.Instance.Config(false, params.ContextUser);
-        const p = CommunicationEngine.Instance.Providers.find(p => p.Name === provider.Value)
         const messageType = params.Params.find(p => p.Name.trim().toLowerCase() === 'messagetype');
-        const mt = p.MessageTypes.find(mt => mt.Name === messageType.Value);
 
+        // Validate ALL required parameters exist BEFORE using their values
+        if (!provider || !provider.Value)
+            throw new Error('Provider parameter is required');
+        if (!messageType || !messageType.Value)
+            throw new Error('MessageType parameter is required');
+        if (!from || !from.Value)
+            throw new Error('From parameter is required');
+        if (!to || !to.Value)
+            throw new Error('To parameter is required');
+
+        // Initialize Communication Engine
+        await CommunicationEngine.Instance.Config(false, params.ContextUser);
+
+        // Lookup provider and validate it exists BEFORE accessing properties
+        const p = CommunicationEngine.Instance.Providers.find(p => p.Name === provider.Value);
         if (!p)
-            throw new Error(`Provider ${provider.Value} not found.`);
-        if (!mt)
-            throw new Error(`Provider Message Type ${messageType.Value} not found.`);
-        if (!from)
-            throw new Error(`From is required.`);
-        if (!to)
-            throw new Error(`To is required.`);
+            throw new Error(`Provider '${provider.Value}' not found. Available providers: ${CommunicationEngine.Instance.Providers.map(p => p.Name).join(', ')}`);
 
+        // NOW safe to access p.MessageTypes
+        const mt = p.MessageTypes.find(mt => mt.Name === messageType.Value);
+        if (!mt)
+            throw new Error(`Provider Message Type '${messageType.Value}' not found for provider '${provider.Value}'. Available message types: ${p.MessageTypes.map(mt => mt.Name).join(', ')}`);
+
+        // Build message object
         const m: Message = {
-            MessageType: mt, 
+            MessageType: mt,
             From: from.Value,
             To: to.Value,
-            Subject: subject.Value,
-            Body: body.Value,
+            Subject: subject?.Value,
+            Body: body?.Value,
         }
+
+        // Send message
         const result = await CommunicationEngine.Instance.SendSingleMessage(provider.Value, messageType.Value, m);
         return {
             Success: result.Success,
             Message: result.Error,
-            ResultCode: result.Success ? "SUCCESS" : "FAILED"            
+            ResultCode: result.Success ? "SUCCESS" : "FAILED"
         };
     }
 }
