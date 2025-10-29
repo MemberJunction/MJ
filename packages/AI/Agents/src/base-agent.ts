@@ -46,19 +46,6 @@ import { AgentDataPreloader } from './AgentDataPreloader';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
 
-// Optional dependency - gracefully fallback to heuristic if not available
-let Tiktoken: any;
-let encoding_for_model: any;
-try {
-    const tiktoken = require('js-tiktoken');
-    Tiktoken = tiktoken.Tiktoken;
-    encoding_for_model = tiktoken.encoding_for_model;
-} catch (e) {
-    // js-tiktoken not available, will use heuristic fallback
-    Tiktoken = null;
-    encoding_for_model = null;
-}
-
 /**
  * Base iteration context for tracking loop execution in BaseAgent.
  * This is agent-type agnostic and handles both ForEach and While loops.
@@ -284,12 +271,6 @@ export class BaseAgent {
      * @private
      */
     private readonly MAX_RECOVERY_ATTEMPTS: number = 1;
-
-    /**
-     * Cache of tokenizer encoders by model name for efficient token counting.
-     * @private
-     */
-    private _tokenEncoders: Map<string, any> = new Map();
 
     /**
      * Gets the current validation retry count for the agent run.
@@ -2223,6 +2204,7 @@ export class BaseAgent {
                 type: 'message-removed',
                 turn: currentStepCount,
                 messageIndex: index,
+                message: removed as AgentChatMessage,
                 reason: 'Context recovery - oldest action results',
                 tokensSaved: this.estimateTokens(removed.content)
             });
@@ -2410,9 +2392,14 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         tokensToSave: number
     ): { tokensSaved: number; strategyName: string } {
-        // Find the last user message
-        const lastUserMessageIndex = params.conversationMessages
-            .findLastIndex(m => m.role === 'user');
+        // Find the last user message (reverse search for compatibility)
+        let lastUserMessageIndex = -1;
+        for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
+            if (params.conversationMessages[i].role === 'user') {
+                lastUserMessageIndex = i;
+                break;
+            }
+        }
 
         if (lastUserMessageIndex === -1) {
             return { tokensSaved: 0, strategyName: 'No user message to trim' };
@@ -6311,44 +6298,9 @@ export class BaseAgent {
             ? content
             : JSON.stringify(content);
 
-        // If we have model info and tiktoken is available, try to use accurate tokenizer
-        if (modelName && encoding_for_model) {
-            try {
-                let encoder = this._tokenEncoders.get(modelName);
-                if (!encoder) {
-                    // Map model names to encoder types
-                    const encoderName = this.getEncoderForModel(modelName);
-                    encoder = encoding_for_model(encoderName as any);
-                    this._tokenEncoders.set(modelName, encoder);
-                }
-
-                return encoder.encode(text).length;
-            } catch (err) {
-                // Fallback to heuristic on error
-                LogError('Token encoding failed, using heuristic', undefined, err);
-            }
-        }
-
-        // Fallback: improved heuristic
+        // Use heuristic token estimation (fast, good enough for context management)
+        // Avoids heavy tokenizer dependencies while providing ~10-20% accuracy
         return this.heuristicTokenCount(text);
-    }
-
-    /**
-     * Maps MJ model names to tiktoken encoder types.
-     * @param modelName - The MJ model name
-     * @returns The tiktoken encoder name
-     * @private
-     */
-    private getEncoderForModel(modelName: string): string {
-        const lowerModel = modelName.toLowerCase();
-
-        if (lowerModel.includes('gpt-4')) return 'gpt-4';
-        if (lowerModel.includes('gpt-3.5')) return 'gpt-3.5-turbo';
-        // Claude and other models - use cl100k_base as approximation
-        if (lowerModel.includes('claude')) return 'cl100k_base';
-
-        // Default to cl100k_base (used by most modern models)
-        return 'cl100k_base';
     }
 
     /**
