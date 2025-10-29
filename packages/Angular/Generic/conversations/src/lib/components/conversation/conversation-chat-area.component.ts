@@ -139,6 +139,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Setup resize listeners
     window.addEventListener('mousemove', this.onResizeMove.bind(this));
     window.addEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.addEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.addEventListener('touchend', this.onResizeTouchEnd.bind(this));
   }
 
   ngDoCheck() {
@@ -180,6 +182,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
     // Remove resize listeners
     window.removeEventListener('mousemove', this.onResizeMove.bind(this));
     window.removeEventListener('mouseup', this.onResizeEnd.bind(this));
+    window.removeEventListener('touchmove', this.onResizeTouchMove.bind(this));
+    window.removeEventListener('touchend', this.onResizeTouchEnd.bind(this));
   }
 
   private async onConversationChanged(conversationId: string | null): Promise<void> {
@@ -1210,6 +1214,37 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       document.body.style.userSelect = '';
 
       // Save to localStorage
+      this.saveArtifactPaneWidth();
+    }
+  }
+
+  /**
+   * Touch event handlers for mobile resize support
+   */
+  onResizeTouchStart(event: TouchEvent): void {
+    this.isResizing = true;
+    const touch = event.touches[0];
+    this.startX = touch.clientX;
+    this.startWidth = this.artifactPaneWidth;
+    event.preventDefault();
+  }
+
+  private onResizeTouchMove(event: TouchEvent): void {
+    if (!this.isResizing) return;
+
+    const touch = event.touches[0];
+    const containerWidth = window.innerWidth;
+    const deltaX = this.startX - touch.clientX;
+    const deltaPercent = (deltaX / containerWidth) * 100;
+    let newWidth = this.startWidth + deltaPercent;
+
+    newWidth = Math.max(20, Math.min(70, newWidth));
+    this.artifactPaneWidth = newWidth;
+  }
+
+  private onResizeTouchEnd(event: TouchEvent): void {
+    if (this.isResizing) {
+      this.isResizing = false;
       this.saveArtifactPaneWidth();
     }
   }

@@ -89,9 +89,9 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .active-tasks-btn {
-      background: var(--gray-700, #374151);
-      color: white;
-      padding: 6px 12px;
+      background: transparent;
+      color: #6B7280;
+      padding: 8px 12px;
       border-radius: 6px;
       font-size: 13px;
       display: flex;
@@ -103,20 +103,22 @@ import { takeUntil } from 'rxjs/operators';
     }
 
     .active-tasks-btn:hover {
-      background: var(--gray-600, #4B5563);
+      background: #F9FAFB;
+      color: #111827;
     }
 
     .active-tasks-btn.active {
-      background: var(--navy, #1e40af);
+      background: #F9FAFB;
+      color: #111827;
     }
 
     .task-count-badge {
-      background: var(--navy, #1e40af);
+      background: #EF4444;
       color: white;
       padding: 2px 6px;
       border-radius: 10px;
       font-size: 11px;
-      font-weight: bold;
+      font-weight: 600;
       min-width: 18px;
       text-align: center;
     }
@@ -295,6 +297,123 @@ import { takeUntil } from 'rxjs/operators';
 
     mj-task-widget:last-child {
       margin-bottom: 0;
+    }
+
+    /* Mobile adjustments: 481px - 768px */
+    @media (max-width: 768px) {
+      .active-tasks-btn {
+        padding: 6px 10px;
+        font-size: 12px;
+      }
+
+      .active-tasks-dropdown {
+        position: fixed;
+        top: auto;
+        right: 8px;
+        left: 8px;
+        bottom: 8px;
+        min-width: unset;
+        max-width: unset;
+        max-height: 60vh;
+      }
+
+      .dropdown-header {
+        padding: 10px 12px;
+      }
+
+      .dropdown-content {
+        max-height: calc(60vh - 48px);
+      }
+
+      .section {
+        padding: 10px;
+      }
+
+      .section-header {
+        font-size: 11px;
+        margin-bottom: 10px;
+      }
+
+      .active-task-item {
+        padding: 8px 10px;
+      }
+
+      .task-title {
+        font-size: 13px;
+      }
+
+      .task-status-text {
+        font-size: 11px;
+      }
+
+      .task-elapsed {
+        font-size: 10px;
+      }
+    }
+
+    /* Small Phone adjustments: <= 480px */
+    @media (max-width: 480px) {
+      .active-tasks-btn {
+        padding: 4px 8px;
+        font-size: 11px;
+      }
+
+      .active-tasks-dropdown {
+        right: 4px;
+        left: 4px;
+        bottom: 4px;
+        max-height: 70vh;
+      }
+
+      .dropdown-header {
+        padding: 8px 10px;
+      }
+
+      .header-left {
+        font-size: 13px;
+      }
+
+      .dropdown-content {
+        max-height: calc(70vh - 44px);
+      }
+
+      .section {
+        padding: 8px;
+      }
+
+      .section-header {
+        font-size: 10px;
+        margin-bottom: 8px;
+      }
+
+      .active-task-item {
+        padding: 6px 8px;
+        gap: 8px;
+      }
+
+      .task-title {
+        font-size: 12px;
+      }
+
+      .task-status-text {
+        font-size: 10px;
+      }
+
+      .task-elapsed {
+        font-size: 9px;
+      }
+
+      .no-tasks {
+        padding: 30px 12px;
+      }
+
+      .no-tasks i {
+        font-size: 28px;
+      }
+
+      .no-tasks p {
+        font-size: 13px;
+      }
     }
   `]
 })
