@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ng-tabstrip
 
+## 2.112.0
+
+### Patch Changes
+
+- @memberjunction/ng-container-directives@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

@@ -1,5 +1,18 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [c126b59]
+  - @memberjunction/global@2.112.0
+  - @memberjunction/ng-base-types@2.112.0
+  - @memberjunction/ng-container-directives@2.112.0
+  - @memberjunction/ng-notifications@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/ng-generic-dialog@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

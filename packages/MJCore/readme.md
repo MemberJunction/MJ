@@ -438,7 +438,7 @@ ORDER BY {{ orderClause | sqlNoKeywordsExpression }}
 -- ✅ ALLOWED: "Revenue DESC, CreatedDate ASC"
 -- ✅ ALLOWED: "SUM(Amount) DESC"
 -- ✅ ALLOWED: "CASE WHEN Amount > 1000 THEN 1 ELSE 0 END"
--- ❌ BLOCKED: "Revenue; DROP TABLE Users"
+-- ❌ BLOCKED: "Revenue; DROP  TABLE Users"
 -- ❌ BLOCKED: "Revenue UNION SELECT * FROM Secrets"
 ```
 

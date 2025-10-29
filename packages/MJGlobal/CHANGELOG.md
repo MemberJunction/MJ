@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/global
 
+## 2.112.0
+
+### Minor Changes
+
+- c126b59: Merge MJCore into MJGlobal
+
 ## 2.110.1
 
 ## 2.110.0
