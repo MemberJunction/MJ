@@ -13,8 +13,7 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
-import { ChatMessage } from '@memberjunction/ai';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -1197,38 +1196,6 @@ export class FlowAgentType extends BaseAgentType {
         return false;
     }
 
-    /**
-     * Flow agents pass full conversation history to sub-agents to preserve
-     * multi-turn context across workflow steps.
-     *
-     * Unlike the default implementation, Flow agents do NOT add the subAgentRequest.message
-     * as a separate user message, because the Flow step's Description field already defines
-     * the task and is used as the message. The full conversation history provides all the
-     * context the sub-agent needs.
-     *
-     * @override
-     * @since 2.113.0
-     */
-    public PrepareSubAgentConversation(
-        params: ExecuteAgentParams,
-        subAgentRequest: AgentSubAgentRequest,
-        contextMessage?: ChatMessage
-    ): ChatMessage[] {
-        // Start with full conversation history
-        const messages: ChatMessage[] = [...params.conversationMessages];
-
-        // Add context message if provided (from SubAgentContextPaths)
-        if (contextMessage) {
-            messages.push(contextMessage);
-        }
-
-        // Note: We do NOT add subAgentRequest.message here because:
-        // 1. Flow step Description already defines the task in createStepForFlowNode
-        // 2. The full conversation history already contains all user messages
-        // 3. Adding it would duplicate/confuse the context
-
-        return messages;
-    }
 
     /**
      * Flow agents apply ActionOutputMapping after each iteration

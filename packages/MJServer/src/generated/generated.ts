@@ -3047,6 +3047,13 @@ if this limit is exceeded.`})
     @Field(() => Boolean, {description: `When true, agent is restricted to system/scheduled use only and hidden from user selection, Agent Manager, and MCP/A2A discovery.`}) 
     IsRestricted: boolean;
         
+    @Field({description: `Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.`}) 
+    @MaxLength(100)
+    MessageMode: string;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`}) 
+    MaxMessages?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Parent?: string;
@@ -3281,6 +3288,12 @@ export class CreateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     IsRestricted?: boolean;
+
+    @Field({ nullable: true })
+    MessageMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    MaxMessages: number | null;
 }
     
 
@@ -3432,6 +3445,12 @@ export class UpdateMJAIAgentInput {
 
     @Field(() => Boolean, { nullable: true })
     IsRestricted?: boolean;
+
+    @Field({ nullable: true })
+    MessageMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    MaxMessages?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -44914,6 +44933,13 @@ export class MJAIAgentRelationship_ {
     @Field({nullable: true, description: `JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`}) 
     SubAgentContextPaths?: string;
         
+    @Field({description: `Specifies how conversation messages are passed from parent agent to related sub-agent. Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on relationship because related sub-agents can have multiple parents with different message passing needs.`}) 
+    @MaxLength(100)
+    MessageMode: string;
+        
+    @Field(() => Int, {nullable: true, description: `Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`}) 
+    MaxMessages?: number;
+        
     @Field({nullable: true}) 
     @MaxLength(510)
     Agent?: string;
@@ -44949,6 +44975,12 @@ export class CreateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     SubAgentContextPaths: string | null;
+
+    @Field({ nullable: true })
+    MessageMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    MaxMessages: number | null;
 }
     
 
@@ -44977,6 +45009,12 @@ export class UpdateMJAIAgentRelationshipInput {
 
     @Field({ nullable: true })
     SubAgentContextPaths?: string | null;
+
+    @Field({ nullable: true })
+    MessageMode?: string;
+
+    @Field(() => Int, { nullable: true })
+    MaxMessages?: number | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
