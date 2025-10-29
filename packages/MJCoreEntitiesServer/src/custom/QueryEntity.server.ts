@@ -163,7 +163,7 @@ export class QueryEntityExtended extends QueryEntity {
     private async extractAndSyncData(): Promise<void> {
         try {
             // Ensure AIEngine is configured
-            await AIEngine.Instance.Config(false, this.ContextCurrentUser);
+            await AIEngine.Instance.Config(false, this.ContextCurrentUser, this.ProviderToUse as any as IMetadataProvider);
             
             // Find the Template Parameter Extraction prompt (we'll reuse it for SQL)
             const aiPrompt = AIEngine.Instance.Prompts.find(p => 
