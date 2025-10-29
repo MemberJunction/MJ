@@ -285,13 +285,16 @@ export class AIEngine extends AIEngineBase {
                 return;
             }
 
+            // Filter out restricted agents - they should not be discoverable
+            const nonRestrictedAgents = agents.filter(agent => !agent.IsRestricted);
+
             // Filter to only agents that don't have embeddings yet
-            const agentsNeedingEmbeddings = agents.filter(agent =>
+            const agentsNeedingEmbeddings = nonRestrictedAgents.filter(agent =>
                 !this._agentEmbeddingsCache.has(agent.ID)
             );
 
             if (agentsNeedingEmbeddings.length === 0) {
-                console.log(`AIEngine: All ${agents.length} agents already have embeddings`);
+                console.log(`AIEngine: All ${nonRestrictedAgents.length} non-restricted agents already have embeddings`);
                 return;
             }
 
@@ -540,6 +543,12 @@ export class AIEngine extends AIEngineBase {
      */
     private async generateSingleAgentEmbedding(agent: AIAgentEntityExtended): Promise<void> {
         try {
+            // Skip restricted agents - they should not be discoverable
+            if (agent.IsRestricted) {
+                console.log(`AIEngine: Skipping embedding generation for restricted agent ${agent.Name}`);
+                return;
+            }
+
             const entries = await AgentEmbeddingService.GenerateAgentEmbeddings(
                 [agent],
                 (text) => this.EmbedTextLocal(text)
