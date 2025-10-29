@@ -2775,121 +2775,102 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Prepares conversation messages for sub-agent execution.
+     * Prepares conversation messages for sub-agent execution based on database-configured message mode.
      *
-     * This method orchestrates message preparation by:
-     * 1. Checking for per-request message strategy override
-     * 2. Applying strategy-based filtering if specified
-     * 3. Delegating to agent type for policy-based message selection
-     * 4. Allowing subclass overrides for custom behavior
+     * Message passing is controlled by MessageMode and MaxMessages fields stored in either:
+     * - AIAgentRelationship table (for related sub-agents via AgentRelationships)
+     * - AIAgent table (for child sub-agents via ParentID)
      *
-     * Subclasses can override this to implement custom message preparation logic
-     * specific to their domain (e.g., Skip agents might add special context).
+     * **Message Modes:**
+     * - `'None'`: Fresh start - only context message and task message (default)
+     * - `'All'`: Pass complete parent conversation history
+     * - `'Latest'`: Pass most recent N messages (where N = MaxMessages)
+     * - `'Bookend'`: Pass first 2 messages + indicator + most recent (N-2) messages
      *
-     * @param {ExecuteAgentParams} params - Current execution parameters
-     * @param {AgentSubAgentRequest} subAgentRequest - The sub-agent request
+     * **Priority:** AIAgentRelationship.MessageMode takes precedence over AIAgent.MessageMode
+     * to allow different parent agents to pass messages differently to the same sub-agent.
+     *
+     * Subclasses can override this method to implement custom message preparation logic
+     * specific to their domain (e.g., Skip agents adding special context).
+     *
+     * @param {ExecuteAgentParams} params - Execution parameters with conversation history
+     * @param {AgentSubAgentRequest} subAgentRequest - Sub-agent request details
+     * @param {AIAgentEntityExtended} subAgent - The sub-agent entity
      * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
-     * @returns {ChatMessage[]} Final message array for sub-agent
+     * @returns {ChatMessage[]} Prepared message array for sub-agent execution
      *
      * @protected
-     * @since 2.113.0
      */
     protected prepareSubAgentMessages(
         params: ExecuteAgentParams,
         subAgentRequest: AgentSubAgentRequest,
+        subAgent: AIAgentEntityExtended,
         contextMessage?: ChatMessage
     ): ChatMessage[] {
-        // Check for per-request message strategy override
-        if (subAgentRequest.messageStrategy) {
-            return this.applyMessageStrategy(
-                params.conversationMessages,
-                subAgentRequest,
-                contextMessage
-            );
-        }
-
-        // Otherwise delegate to agent type for default behavior
-        return this.AgentTypeInstance.PrepareSubAgentConversation(
-            params,
-            subAgentRequest,
-            contextMessage
-        );
-    }
-
-    /**
-     * Applies a message strategy to filter/select conversation messages.
-     *
-     * @param {ChatMessage[]} allMessages - Full conversation history
-     * @param {AgentSubAgentRequest} subAgentRequest - Request with strategy
-     * @param {ChatMessage | undefined} contextMessage - Optional context message
-     * @returns {ChatMessage[]} Filtered message array
-     *
-     * @private
-     * @since 2.113.0
-     */
-    private applyMessageStrategy(
-        allMessages: ChatMessage[],
-        subAgentRequest: AgentSubAgentRequest,
-        contextMessage?: ChatMessage
-    ): ChatMessage[] {
-        const strategy = subAgentRequest.messageStrategy!;
+        const engine = AIEngine.Instance;
         let messages: ChatMessage[] = [];
 
-        switch (strategy.mode) {
-            case 'fresh':
-                // Start with clean slate
+        // Check for related sub-agent configuration (AIAgentRelationship)
+        const relationship = engine.AgentRelationships.find(
+            r => r.AgentID === params.agent.ID && r.SubAgentID === subAgent.ID
+        );
+
+        // Get MessageMode and MaxMessages from either relationship or child agent
+        let messageMode = relationship?.MessageMode || subAgent.MessageMode || 'None';
+        let maxMessages = relationship?.MaxMessages || subAgent.MaxMessages || null;
+
+        // Apply message mode
+        switch (messageMode) {
+            case 'None':
+                // Fresh start - no conversation history, only context and task
+                // Messages are added after the switch statement
                 break;
 
-            case 'full':
-                // Include all parent conversation history
-                messages = [...allMessages];
+            case 'All':
+                // Pass all parent conversation history
+                messages = [...params.conversationMessages];
                 break;
 
-            case 'filtered':
-                // Apply built-in filters
-                messages = [...allMessages];
-
-                // Filter by roles if specified
-                if (strategy.includeRoles && strategy.includeRoles.length > 0) {
-                    messages = messages.filter(m => strategy.includeRoles!.includes(m.role));
-                }
-
-                // Exclude by metadata if specified
-                if (strategy.excludeMetadata && strategy.excludeMetadata.length > 0) {
-                    messages = messages.filter(m => {
-                        const metadata = (m as any).metadata;
-                        if (!metadata) return true;
-                        return !strategy.excludeMetadata!.some(key => metadata[key]);
-                    });
-                }
-
-                // Limit message count if specified (keep most recent)
-                if (strategy.maxMessages && messages.length > strategy.maxMessages) {
-                    messages = messages.slice(-strategy.maxMessages);
+            case 'Latest':
+                // Pass most recent N messages
+                if (maxMessages && maxMessages > 0) {
+                    messages = params.conversationMessages.slice(-maxMessages);
+                } else {
+                    messages = [...params.conversationMessages];
                 }
                 break;
 
-            case 'custom':
-                // Apply custom filter function
-                if (strategy.filter) {
-                    messages = allMessages.filter((msg, index, arr) =>
-                        strategy.filter!(msg, index, arr)
-                    );
+            case 'Bookend':
+                // Pass first 2 + most recent (N-2) with indicator message between
+                if (maxMessages && maxMessages > 2 && params.conversationMessages.length > maxMessages) {
+                    const firstTwo = params.conversationMessages.slice(0, 2);
+                    const remaining = params.conversationMessages.slice(-(maxMessages - 2));
+                    const omittedCount = params.conversationMessages.length - maxMessages;
 
-                    // Apply maxMessages limit if specified
-                    if (strategy.maxMessages && messages.length > strategy.maxMessages) {
-                        messages = messages.slice(-strategy.maxMessages);
-                    }
+                    messages = [
+                        ...firstTwo,
+                        {
+                            role: 'system',
+                            content: `[${omittedCount} messages omitted for context management]`
+                        },
+                        ...remaining
+                    ];
+                } else {
+                    messages = [...params.conversationMessages];
                 }
+                break;
+
+            default:
+                // Fallback to 'None' for any unrecognized mode
                 break;
         }
 
-        // Add context message if provided
+        // Add context message if provided (for all modes)
         if (contextMessage) {
             messages.push(contextMessage);
         }
 
-        // Always add the task message
+        // Always add the task message (for all modes)
         messages.push({
             role: 'user',
             content: subAgentRequest.message
@@ -2938,11 +2919,11 @@ The context is now within limits. Please retry your request with the recovered c
             // Create a new AgentRunner instance
             const runner = new AgentRunner();
 
-            // Prepare messages for sub-agent using configurable strategy
-            // Strategy can be overridden per-request or determined by agent type
+            // Prepare messages for sub-agent using database-configured message mode
             const subAgentMessages = this.prepareSubAgentMessages(
                 params,
                 subAgentRequest,
+                subAgent,
                 contextMessage
             );
             

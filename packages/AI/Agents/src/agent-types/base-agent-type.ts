@@ -12,7 +12,6 @@
  */
 
 import { AIPromptParams, AIPromptRunResult, BaseAgentNextStep, AgentPayloadChangeRequest, AgentAction, AgentSubAgentRequest, ExecuteAgentParams, AgentConfiguration} from '@memberjunction/ai-core-plus';
-import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentTypeEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { MJGlobal, JSONValidator } from '@memberjunction/global';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
@@ -459,63 +458,6 @@ export abstract class BaseAgentType {
         return null;
     }
 
-    /**
-     * Prepares conversation messages for sub-agent execution.
-     *
-     * Agent types control how conversation history is passed to sub-agents:
-     * - **Fresh start** (default): Empty array or just context + task message (Loop behavior)
-     * - **Full history**: Pass through all conversation messages (Flow behavior)
-     * - **Filtered history**: Custom filtering logic (future agent types)
-     *
-     * This method defines the agent type's policy for message passing. Individual
-     * sub-agent requests can override this behavior using the messageStrategy property.
-     *
-     * @param {ExecuteAgentParams} params - Current execution parameters with full conversation
-     * @param {AgentSubAgentRequest} subAgentRequest - The sub-agent request being prepared
-     * @param {ChatMessage | undefined} contextMessage - Optional context message from SubAgentContextPaths
-     * @returns {ChatMessage[]} Array of messages to pass to sub-agent (can be empty, filtered, or full history)
-     *
-     * @since 2.113.0
-     *
-     * @example
-     * ```typescript
-     * // Loop agent (fresh start)
-     * public PrepareSubAgentConversation(...): ChatMessage[] {
-     *   const messages: ChatMessage[] = [];
-     *   if (contextMessage) messages.push(contextMessage);
-     *   messages.push({ role: 'user', content: subAgentRequest.message });
-     *   return messages;
-     * }
-     *
-     * // Flow agent (full history)
-     * public PrepareSubAgentConversation(...): ChatMessage[] {
-     *   const messages = [...params.conversationMessages];
-     *   if (contextMessage) messages.push(contextMessage);
-     *   messages.push({ role: 'user', content: subAgentRequest.message });
-     *   return messages;
-     * }
-     * ```
-     */
-    public PrepareSubAgentConversation(
-        params: ExecuteAgentParams,
-        subAgentRequest: AgentSubAgentRequest,
-        contextMessage?: ChatMessage
-    ): ChatMessage[] {
-        // Default implementation: fresh start (current Loop behavior)
-        // This ensures backward compatibility for existing agent types
-        const messages: ChatMessage[] = [];
-
-        if (contextMessage) {
-            messages.push(contextMessage);
-        }
-
-        messages.push({
-            role: 'user',
-            content: subAgentRequest.message
-        });
-
-        return messages;
-    }
 
     /**
      * Determines if loop results should be injected as a temporary user message
