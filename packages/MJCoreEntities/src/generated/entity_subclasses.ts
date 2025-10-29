@@ -1528,6 +1528,23 @@ if this limit is exceeded.`),
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: When true, agent is restricted to system/scheduled use only and hidden from user selection, Agent Manager, and MCP/A2A discovery.`),
+    MessageMode: z.union([z.literal('All'), z.literal('Bookend'), z.literal('Latest'), z.literal('None')]).describe(`
+        * * Field Name: MessageMode
+        * * Display Name: Message Mode
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+        * * Description: Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.`),
+    MaxMessages: z.number().nullable().describe(`
+        * * Field Name: MaxMessages
+        * * Display Name: Max Messages
+        * * SQL Data Type: int
+        * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -8554,6 +8571,23 @@ export const AIAgentRelationshipSchema = z.object({
         * * Display Name: Sub Agent Context Paths
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of parent payload paths to send as LLM context to related sub-agent. Sub-agent receives this data in a formatted context message before its task message. Format: ["path1", "path2.nested", "path3.*", "*"]. Use "*" to send entire parent payload. Example: ["userPreferences", "priorFindings.summary", "sources[*]"]. If null, no parent context is sent (default behavior).`),
+    MessageMode: z.union([z.literal('All'), z.literal('Bookend'), z.literal('Latest'), z.literal('None')]).describe(`
+        * * Field Name: MessageMode
+        * * Display Name: Message Mode
+        * * SQL Data Type: nvarchar(50)
+        * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+        * * Description: Specifies how conversation messages are passed from parent agent to related sub-agent. Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on relationship because related sub-agents can have multiple parents with different message passing needs.`),
+    MaxMessages: z.number().nullable().describe(`
+        * * Field Name: MaxMessages
+        * * Display Name: Max Messages
+        * * SQL Data Type: int
+        * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.`),
     Agent: z.string().nullable().describe(`
         * * Field Name: Agent
         * * Display Name: Agent
@@ -19651,6 +19685,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     * Validate() method override for AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
     * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
+    * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
     * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
     * * Table-Level: This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
     * * Table-Level: This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
@@ -19663,6 +19698,7 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
         const result = super.Validate();
         this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
         this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMaxMessagesGreaterThanZero(result);
         this.ValidateMinExecutionsPerRunNonNegative(result);
         this.ValidateContextCompressionFieldsWhenEnabled(result);
         this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
@@ -19693,6 +19729,18 @@ export class AIAgentEntity extends BaseEntity<AIAgentEntityType> {
     public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
     	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
     		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If specified, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum number of messages, if specified, must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "If a maximum number of messages is specified, it must be greater than zero.", this.MaxMessages, ValidationErrorType.Failure));
     	}
     }
 
@@ -20477,6 +20525,39 @@ if this limit is exceeded.
     }
     set IsRestricted(value: boolean) {
         this.Set('IsRestricted', value);
+    }
+
+    /**
+    * * Field Name: MessageMode
+    * * Display Name: Message Mode
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+    * * Description: Specifies how conversation messages are passed from parent agent to this child sub-agent (when this agent is a child via ParentID). Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on child agent because each child has only one parent relationship.
+    */
+    get MessageMode(): 'All' | 'Bookend' | 'Latest' | 'None' {
+        return this.Get('MessageMode');
+    }
+    set MessageMode(value: 'All' | 'Bookend' | 'Latest' | 'None') {
+        this.Set('MessageMode', value);
+    }
+
+    /**
+    * * Field Name: MaxMessages
+    * * Display Name: Max Messages
+    * * SQL Data Type: int
+    * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.
+    */
+    get MaxMessages(): number | null {
+        return this.Get('MaxMessages');
+    }
+    set MaxMessages(value: number | null) {
+        this.Set('MaxMessages', value);
     }
 
     /**
@@ -38477,6 +38558,33 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Relationships entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxMessages: This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxMessagesGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "MaxMessages must be greater than 0 when specified.", this.MaxMessages, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -38593,6 +38701,39 @@ export class AIAgentRelationshipEntity extends BaseEntity<AIAgentRelationshipEnt
     }
     set SubAgentContextPaths(value: string | null) {
         this.Set('SubAgentContextPaths', value);
+    }
+
+    /**
+    * * Field Name: MessageMode
+    * * Display Name: Message Mode
+    * * SQL Data Type: nvarchar(50)
+    * * Default Value: None
+    * * Value List Type: List
+    * * Possible Values 
+    *   * All
+    *   * Bookend
+    *   * Latest
+    *   * None
+    * * Description: Specifies how conversation messages are passed from parent agent to related sub-agent. Valid values: 'None' (fresh start - only context and task message, default), 'All' (all parent conversation history), 'Latest' (most recent MaxMessages messages), 'Bookend' (first 2 messages + most recent MaxMessages-2 messages with indicator between). Stored on relationship because related sub-agents can have multiple parents with different message passing needs.
+    */
+    get MessageMode(): 'All' | 'Bookend' | 'Latest' | 'None' {
+        return this.Get('MessageMode');
+    }
+    set MessageMode(value: 'All' | 'Bookend' | 'Latest' | 'None') {
+        this.Set('MessageMode', value);
+    }
+
+    /**
+    * * Field Name: MaxMessages
+    * * Display Name: Max Messages
+    * * SQL Data Type: int
+    * * Description: Maximum number of conversation messages to include when MessageMode is 'Latest' or 'Bookend'. NULL means no limit (ignored for 'None' and 'All' modes). Must be greater than 0 if specified. For 'Latest': keeps most recent N messages. For 'Bookend': keeps first 2 + most recent (N-2) messages.
+    */
+    get MaxMessages(): number | null {
+        return this.Get('MaxMessages');
+    }
+    set MaxMessages(value: number | null) {
+        this.Set('MaxMessages', value);
     }
 
     /**
