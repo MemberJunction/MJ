@@ -566,6 +566,72 @@
   font-weight: normal;
 }
 
+/* Message Action Bar (separate panel above agent details) */
+.message-action-bar {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  background: #F9FAFB;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.action-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: 16px;
+  padding-left: 16px;
+  border-left: 1px solid #E5E7EB;
+}
+
+.action-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #9CA3AF;
+  border-radius: 6px;
+  font-size: 16px;
+  line-height: 1;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 36px;
+  height: 32px;
+  opacity: 0.6;
+}
+
+.action-bar-btn i {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.action-bar-btn:hover {
+  opacity: 1;
+  border-color: #6B7280;
+}
+
+.action-bar-btn.danger {
+  color: #DC2626;
+}
+
+.action-bar-btn.danger:hover {
+  opacity: 1;
+  background: #FEF2F2;
+  border-color: #DC2626;
+}
+
+.action-bar-btn i.pinned {
+  color: #3B82F6;
+}
+
 /* Message status indicator */
 .message-status {
   display: inline-flex;
@@ -854,6 +920,54 @@
   font-family: monospace;
   border-radius: 4px;
   vertical-align: middle;
+}
+
+/* Message Footer (rating counts and inline actions) */
+.message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #F3F4F6;
+}
+
+.rating-counts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #6B7280;
+}
+
+.rating-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rating-count.thumbs-up {
+  color: #16A34A;
+}
+
+.rating-count.thumbs-down {
+  color: #DC2626;
+}
+
+.rating-total {
+  font-size: 12px;
+  color: #9CA3AF;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Agent details section wrapper */
+.agent-details-section {
+  margin-top: 8px;
 }
 
 /* Mobile adjustments: 481px - 768px */
