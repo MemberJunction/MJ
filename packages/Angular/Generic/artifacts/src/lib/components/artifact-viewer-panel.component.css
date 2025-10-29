@@ -704,6 +704,21 @@
   transition: all 0.15s;
 }
 
+.link-item.clickable {
+  cursor: pointer;
+}
+
+.link-item.clickable:hover {
+  border-color: #1e40af;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  background: #F3F4F6;
+}
+
+.link-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .link-item:hover {
   border-color: #1e40af;
   box-shadow: 0 2px 4px rgba(0,0,0,0.05);
@@ -747,32 +762,22 @@
 
 .link-actions {
   display: flex;
-  gap: 8px;
-}
-
-.link-action-btn {
-  width: 32px;
-  height: 32px;
-  display: flex;
   align-items: center;
   justify-content: center;
-  background: white;
-  border: 1px solid #D1D5DB;
-  border-radius: 6px;
-  color: #1e40af;
-  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.link-actions i {
+  font-size: 14px;
+  color: #6B7280;
   transition: all 0.15s;
 }
 
-.link-action-btn:hover:not(:disabled) {
-  background: #EFF6FF;
-  border-color: #1e40af;
-}
-
-.link-action-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  color: #9CA3AF;
+.link-item.clickable:hover .link-actions i {
+  color: #1e40af;
+  transform: translateX(2px);
 }
 
 .links-container .empty-state {

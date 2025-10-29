@@ -289,7 +289,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
       // Step 3: Add to collection
       const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', this.currentUser);
       (collectionArtifact as any).CollectionID = this.collectionId;
-      (collectionArtifact as any).ArtifactID = artifact.ID;
+      (collectionArtifact as any).ArtifactVersionID = version.ID;
 
       const collectionLinkSaved = await collectionArtifact.Save();
       if (!collectionLinkSaved) {

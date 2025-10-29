@@ -59,6 +59,12 @@ import { LoadAIProviders } from '@memberjunction/ai-provider-bundle';
 LoadAIEngine();
 LoadAIProviders();
 
+// Load Communication Providers
+import { LoadMSGraphProvider } from '@memberjunction/communication-ms-graph';
+import { LoadProvider as LoadSendGridProvider } from '@memberjunction/communication-sendgrid';
+LoadMSGraphProvider();
+LoadSendGridProvider();
+
 import { ExternalChangeDetectorEngine } from '@memberjunction/external-change-detection';
 import { ScheduledJobsService } from './services/ScheduledJobsService.js';
 

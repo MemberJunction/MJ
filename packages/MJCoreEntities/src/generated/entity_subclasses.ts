@@ -10890,11 +10890,6 @@ export const CollectionArtifactSchema = z.object({
         * * Display Name: Collection ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Collections (vwCollections.ID)`),
-    ArtifactID: z.string().describe(`
-        * * Field Name: ArtifactID
-        * * Display Name: Artifact ID
-        * * SQL Data Type: uniqueidentifier
-        * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)`),
     Sequence: z.number().describe(`
         * * Field Name: Sequence
         * * Display Name: Sequence
@@ -10911,13 +10906,19 @@ export const CollectionArtifactSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ArtifactVersionID: z.string().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.`),
     Collection: z.string().describe(`
         * * Field Name: Collection
         * * Display Name: Collection
         * * SQL Data Type: nvarchar(255)`),
-    Artifact: z.string().describe(`
-        * * Field Name: Artifact
-        * * Display Name: Artifact
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version
         * * SQL Data Type: nvarchar(255)`),
 });
 
@@ -44766,7 +44767,7 @@ export class ArtifactEntity extends BaseEntity<ArtifactEntityType> {
  * * Schema: __mj
  * * Base Table: CollectionArtifact
  * * Base View: vwCollectionArtifacts
- * * @description Join table that establishes many-to-many relationships between Collections and Artifacts, allowing artifacts to be organized within collections
+ * * @description Links collections to specific artifact versions. Each collection can contain multiple versions of the same artifact.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -44818,19 +44819,6 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
     }
 
     /**
-    * * Field Name: ArtifactID
-    * * Display Name: Artifact ID
-    * * SQL Data Type: uniqueidentifier
-    * * Related Entity/Foreign Key: MJ: Artifacts (vwArtifacts.ID)
-    */
-    get ArtifactID(): string {
-        return this.Get('ArtifactID');
-    }
-    set ArtifactID(value: string) {
-        this.Set('ArtifactID', value);
-    }
-
-    /**
     * * Field Name: Sequence
     * * Display Name: Sequence
     * * SQL Data Type: int
@@ -44865,6 +44853,20 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
     }
 
     /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: Required. Specific version of the artifact saved to this collection. Collections store version-specific artifacts to enable proper version tracking and Links tab filtering.
+    */
+    get ArtifactVersionID(): string {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
     * * Field Name: Collection
     * * Display Name: Collection
     * * SQL Data Type: nvarchar(255)
@@ -44874,12 +44876,12 @@ export class CollectionArtifactEntity extends BaseEntity<CollectionArtifactEntit
     }
 
     /**
-    * * Field Name: Artifact
-    * * Display Name: Artifact
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version
     * * SQL Data Type: nvarchar(255)
     */
-    get Artifact(): string {
-        return this.Get('Artifact');
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
     }
 }
 
