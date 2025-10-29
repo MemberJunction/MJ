@@ -2775,8 +2775,132 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Prepares conversation messages for sub-agent execution.
+     *
+     * This method orchestrates message preparation by:
+     * 1. Checking for per-request message strategy override
+     * 2. Applying strategy-based filtering if specified
+     * 3. Delegating to agent type for policy-based message selection
+     * 4. Allowing subclass overrides for custom behavior
+     *
+     * Subclasses can override this to implement custom message preparation logic
+     * specific to their domain (e.g., Skip agents might add special context).
+     *
+     * @param {ExecuteAgentParams} params - Current execution parameters
+     * @param {AgentSubAgentRequest} subAgentRequest - The sub-agent request
+     * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
+     * @returns {ChatMessage[]} Final message array for sub-agent
+     *
+     * @protected
+     * @since 2.113.0
+     */
+    protected prepareSubAgentMessages(
+        params: ExecuteAgentParams,
+        subAgentRequest: AgentSubAgentRequest,
+        contextMessage?: ChatMessage
+    ): ChatMessage[] {
+        // Check for per-request message strategy override
+        if (subAgentRequest.messageStrategy) {
+            return this.applyMessageStrategy(
+                params.conversationMessages,
+                subAgentRequest,
+                contextMessage
+            );
+        }
+
+        // Otherwise delegate to agent type for default behavior
+        return this.AgentTypeInstance.PrepareSubAgentConversation(
+            params,
+            subAgentRequest,
+            contextMessage
+        );
+    }
+
+    /**
+     * Applies a message strategy to filter/select conversation messages.
+     *
+     * @param {ChatMessage[]} allMessages - Full conversation history
+     * @param {AgentSubAgentRequest} subAgentRequest - Request with strategy
+     * @param {ChatMessage | undefined} contextMessage - Optional context message
+     * @returns {ChatMessage[]} Filtered message array
+     *
+     * @private
+     * @since 2.113.0
+     */
+    private applyMessageStrategy(
+        allMessages: ChatMessage[],
+        subAgentRequest: AgentSubAgentRequest,
+        contextMessage?: ChatMessage
+    ): ChatMessage[] {
+        const strategy = subAgentRequest.messageStrategy!;
+        let messages: ChatMessage[] = [];
+
+        switch (strategy.mode) {
+            case 'fresh':
+                // Start with clean slate
+                break;
+
+            case 'full':
+                // Include all parent conversation history
+                messages = [...allMessages];
+                break;
+
+            case 'filtered':
+                // Apply built-in filters
+                messages = [...allMessages];
+
+                // Filter by roles if specified
+                if (strategy.includeRoles && strategy.includeRoles.length > 0) {
+                    messages = messages.filter(m => strategy.includeRoles!.includes(m.role));
+                }
+
+                // Exclude by metadata if specified
+                if (strategy.excludeMetadata && strategy.excludeMetadata.length > 0) {
+                    messages = messages.filter(m => {
+                        const metadata = (m as any).metadata;
+                        if (!metadata) return true;
+                        return !strategy.excludeMetadata!.some(key => metadata[key]);
+                    });
+                }
+
+                // Limit message count if specified (keep most recent)
+                if (strategy.maxMessages && messages.length > strategy.maxMessages) {
+                    messages = messages.slice(-strategy.maxMessages);
+                }
+                break;
+
+            case 'custom':
+                // Apply custom filter function
+                if (strategy.filter) {
+                    messages = allMessages.filter((msg, index, arr) =>
+                        strategy.filter!(msg, index, arr)
+                    );
+
+                    // Apply maxMessages limit if specified
+                    if (strategy.maxMessages && messages.length > strategy.maxMessages) {
+                        messages = messages.slice(-strategy.maxMessages);
+                    }
+                }
+                break;
+        }
+
+        // Add context message if provided
+        if (contextMessage) {
+            messages.push(contextMessage);
+        }
+
+        // Always add the task message
+        messages.push({
+            role: 'user',
+            content: subAgentRequest.message
+        });
+
+        return messages;
+    }
+
+    /**
      * Executes a sub-agent synchronously.
-     * 
+     *
      * This method creates a new instance of AgentRunner to execute a sub-agent.
      * The sub-agent receives the provided message/context and runs to completion.
      * If terminateAfter is true, the parent agent will not continue after the
@@ -2814,20 +2938,13 @@ The context is now within limits. Please retry your request with the recovered c
             // Create a new AgentRunner instance
             const runner = new AgentRunner();
 
-            // Prepare messages for sub-agent
-            // For related sub-agents, may include parent context message before the task message
-            const subAgentMessages: ChatMessage[] = [];
-
-            // Add context message first if provided (related sub-agents with SubAgentContextPaths)
-            if (contextMessage) {
-                subAgentMessages.push(contextMessage);
-            }
-
-            // Add the task message
-            subAgentMessages.push({
-                role: 'user',
-                content: subAgentRequest.message
-            });
+            // Prepare messages for sub-agent using configurable strategy
+            // Strategy can be overridden per-request or determined by agent type
+            const subAgentMessages = this.prepareSubAgentMessages(
+                params,
+                subAgentRequest,
+                contextMessage
+            );
             
             // Set parent run ID in the sub-agent's execution
             // This would need to be passed through the AgentRunner in a real implementation
