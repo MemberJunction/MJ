@@ -103,7 +103,7 @@ The following entities exist in the system. Invoke the `Get Entity Details` acti
 
 ### Step 1: Identify Relevant Entities
 **Review the Entities section above** to find entities relevant to the research question:
-- All entities are listed with names and descriptions
+- All entities are listed with names and descriptions [here](#available-entities)
 - Identify which entities likely contain the data you need
 - Note the exact entity names for use in Step 2
 
@@ -120,7 +120,9 @@ For each relevant entity, use **Get Entity Details**:
 Use **Execute Research Query** with the correct field names from Step 2:
 - ALWAYS use `BaseView` (from Get Entity Details) in your FROM clause
 - Use EXACT field names (copy from Get Entity Details output)
-- BaseView is like: `[SchemaName].[BaseView]` (e.g., `[__mj].[vwAIModels]`)
+- BaseView is like: `[SchemaName].[BaseView]` (e.g., `[__mj].[vwAIModels]` or `[crm].[vwAccounts]` etc)
+- **USE SERVER AGGREGATION** except for small entities. If you are pulling data use server SQL aggregation with GROUP BY, HAVING, and calculations like SUM, AVG, COUNT, etc in order to produce more compact insights you can pull into `findings`. For very small entities that have few rows/few columns you can do unaggregated queries, but **be very thoughtful** about how much context you are going to use with **query results**. 
+- In many cases you can gain the insights you need from aggregated query results. For example let's say you were trying to understand the relationship between Customers and Deals. Instead of doing `SELECT * FROM [crm].[vwDeals]` and then reasoning over the full results, you could do `SELECT CustomerID, SUM(Value), AVG(Value), COUNT(ID) FROM [crm].[vwDeals]` and filter appropriately as well of course. This would result in gaining the key **insights** you need for your research work without loading the context with massive # of tokens
 
 ### Step 4: Return Results
 Add your findings to the payload via `payloadChangeRequest`. See Output Format section below.
@@ -153,6 +155,7 @@ Use the **exact** entity name from the Entities section above. For example, if a
 - `AnalysisRequest` (optional): Instructions for LLM to analyze the data
 - `ReturnType` (optional): 'data only', 'analysis only', or 'data and analysis' (default if AnalysisRequest provided)
 - `ColumnMaxLength` (optional): Maximum length for column values (e.g., 50). Longer values will be trimmed to save context. Use when querying tables with verbose text/JSON fields.
+- **CRITICAL** - use server aggregation with `GROUP BY` whenever possible to reduce token load for the results the next time this prompt runs!
 
 **Example - Get analysis only (best for summaries)**:
 ```
@@ -196,7 +199,8 @@ Params:
 - 🎯 Action: **Return complete datasets** with full CSV data
 - 🎯 When dataset < 200 rows: Include ALL rows in CSV `data` property
 - 🎯 When dataset > 200 rows but < 1000: Still include all - use `ColumnMaxLength` to trim verbose fields
-- 🎯 When dataset > 1000 rows: Discuss with parent or sample strategically
+- 🎯 When dataset > 1000 rows: Discuss sample strategically - ALSO, you can plan to iterate - meaning you can grab a bit of data, infer findings and store those in payload, and then run another query. Doing this serially creates a **major token savings** because we only keep the query results in context for a limited period of time automatically so you can do serially queries like this. 
+- **KEY INSIGHT** - if you have to get a lot of data, do it **sequentially** instead of using the `ForEach` or many action requests as this returns all the requested stuff in a single message back to you. In comparison, doing things seqentially for larger chunks of data allows you to get the data, infer findings to put in payload and then that message will go away from context being very efficient!
 
 **Type 2: Summary/Insights** - Parent needs understanding, not raw data
 - 🎯 Keywords: "summarize", "what are the trends", "how many", "top N", "overview"
@@ -260,6 +264,7 @@ Params:
 - ✅ Get Entity Details shows you actual data
 - ✅ Use sample data to verify entity is relevant
 - ✅ Check TotalRowCount to see if entity has data
+- Remember rules about using server aggregation whenever possible to limit result size!
 
 ## Output Format - CRITICAL
 
@@ -406,5 +411,5 @@ Package ALL rows from a query into ONE finding with CSV data:
 - Omit `data` property when only the analysis/summary is needed
 - Always document `columnMaxLength` in source when trimming is applied
 - **FOR FULL RESULTS** - when you pull a set of rows from a research query, **RETURN ALL ROWS** do _not_ omit rows and say something like "(remaining rows omitted for brevity)"
-
-Remember: **Get Entity Details is your friend** - it shows you EXACTLY what fields exist and what the data looks like. Use it!
+- You have a complete list of available entities above in [Available Entities](#available-entities), use this, do **not** ask the user for information about their database, that is **your job**.
+- Remember: **Get Entity Details is your friend** - it shows you EXACTLY what fields exist and what the data looks like. Use it!

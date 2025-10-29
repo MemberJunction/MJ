@@ -828,13 +828,16 @@ Support environment-specific values:
 - `@env:VARIABLE_NAME`
 - Useful for different environments (dev/staging/prod)
 
-### Automatic JSON Stringification
-When a field value is an array or object, the tool automatically converts it to a JSON string for database storage:
-- Arrays and objects are detected and stringified with pretty formatting (2-space indentation)
-- Maintains clean, readable JSON in source files while storing as strings in database
-- Works seamlessly with all field types that accept text content
+### Automatic JSON Stringification with Reference Processing
 
-Examples:
+When a field value is an array or object, the tool automatically:
+1. **Recursively processes** all `@lookup:`, `@file:`, `@parent:`, `@root:` references inside the object
+2. **Converts to JSON string** with pretty formatting (2-space indentation) for database storage
+3. **Maintains clean structure** in source files while storing as strings in database
+
+This is extremely powerful for JSON-typed fields like `Configuration`, `Settings`, `Metadata`, etc.
+
+#### Basic Example
 ```json
 {
   "fields": {
@@ -846,16 +849,88 @@ Examples:
         "items": [1, 2, 3]
       }
     },
-    "Tags": ["tag1", "tag2", "tag3"],
-    "Metadata": {
-      "created": "2024-01-15",
-      "author": "John Doe"
+    "Tags": ["tag1", "tag2", "tag3"]
+  }
+}
+```
+
+The `Configuration` and `Tags` fields will automatically be converted to JSON strings when pushed to the database.
+
+#### Advanced Example: References Inside JSON Fields
+
+**This is the powerful part** - you can use `@lookup:` and other references INSIDE object-typed fields:
+
+```json
+{
+  "fields": {
+    "Name": "Agent Memory Manager Job",
+    "CronExpression": "0 */15 * * * *",
+    "Configuration": {
+      "AgentID": "@lookup:AI Agents.Name=Memory Manager",
+      "InitialMessage": "Analyze recent conversations",
+      "Settings": {
+        "MaxNotes": 5,
+        "Strategy": "Relevant",
+        "TargetAgentID": "@lookup:AI Agents.Name=Sage"
+      }
     }
   }
 }
 ```
 
-The `Configuration`, `Tags`, and `Metadata` fields will automatically be converted to JSON strings when pushed to the database, while maintaining their structured format in your source files.
+When pushed to the database, this becomes:
+```json
+{
+  "Configuration": "{\"AgentID\":\"actual-uuid-here\",\"InitialMessage\":\"Analyze recent conversations\",\"Settings\":{\"MaxNotes\":5,\"Strategy\":\"Relevant\",\"TargetAgentID\":\"another-uuid-here\"}}"
+}
+```
+
+**Benefits:**
+- ✅ **Human-readable**: Use agent names, not UUIDs in your metadata
+- ✅ **Maintainable**: Changes to entity names don't break references
+- ✅ **Type-safe**: Structured objects in source, properly stringified for DB
+- ✅ **Nested support**: References work at any depth in the object tree
+
+#### Common Use Cases
+
+**Scheduled Job Configuration:**
+```json
+{
+  "Configuration": {
+    "AgentID": "@lookup:AI Agents.Name=Report Generator",
+    "Schedule": "daily",
+    "Recipients": "@lookup:Users.Email=admin@company.com"
+  }
+}
+```
+
+**Action Parameters:**
+```json
+{
+  "DefaultParameters": {
+    "TargetEntityID": "@lookup:Entities.Name=Customers",
+    "TemplateID": "@lookup:Templates.Name=Welcome Email",
+    "Settings": {
+      "SendImmediate": true,
+      "Priority": "High"
+    }
+  }
+}
+```
+
+**AI Configuration:**
+```json
+{
+  "AIConfig": {
+    "PreferredModelID": "@lookup:AI Models.Name=GPT 4.1",
+    "FallbackModels": [
+      "@lookup:AI Models.Name=Claude Sonnet 3.7",
+      "@lookup:AI Models.Name=Gemini Pro"
+    ],
+    "Temperature": 0.7
+  }
+}
+```
 
 ### {@include} References in Files
 Enable content composition within non-JSON files (like .md, .html, .txt) using JSDoc-style include syntax:

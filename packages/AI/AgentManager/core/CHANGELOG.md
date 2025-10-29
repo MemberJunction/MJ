@@ -1,5 +1,23 @@
 # @memberjunction/ai-agent-manager
 
+## 2.112.0
+
+### Minor Changes
+
+- 2ac2120: Migration
+
+### Patch Changes
+
+- 621960a: Patch
+- Updated dependencies [2ac2120]
+- Updated dependencies [c126b59]
+- Updated dependencies [ed74bb8]
+  - @memberjunction/ai-agents@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

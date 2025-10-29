@@ -1,5 +1,13 @@
 # @memberjunction/ng-tasks
 
+## 2.112.0
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@2.112.0
+- @memberjunction/core@2.112.0
+- @memberjunction/core-entities@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

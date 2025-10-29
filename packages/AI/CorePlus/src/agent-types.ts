@@ -278,6 +278,14 @@ export type ExecuteAgentResult<P = any> = {
      * Populated when the agent's final step is 'Chat' or 'Success' and includes suggested responses.
      */
     suggestedResponses?: BaseAgentSuggestedResponse[];
+    /**
+     * Optional memory context that was injected into the agent execution.
+     * Includes the notes and examples that were retrieved and used for context.
+     */
+    memoryContext?: {
+        notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
+        examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
+    };
 }
 
 /**
@@ -378,6 +386,10 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
     conversationMessages: ChatMessage[];
     /** Optional user context for permission checking and personalization */
     contextUser?: UserInfo;
+    /** Optional user ID for scoping context memory (notes/examples). If not provided, uses contextUser.ID */
+    userId?: string;
+    /** Optional company ID for scoping context memory (notes/examples) */
+    companyId?: string;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */

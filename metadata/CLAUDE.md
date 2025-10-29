@@ -78,6 +78,8 @@ Agent prompt templates receive these standard variables:
 - Keep specialization instructions in the agent-specific prompt
 
 ### 7. Using References
+
+#### String Field References
 - **@lookup**: For entity relationships
   - Single field: `@lookup:Actions.Name=Web Search`
   - Multi-field: `@lookup:AI Prompt Categories.Name=Actions&Status=Active`
@@ -85,6 +87,50 @@ Agent prompt templates receive these standard variables:
 - **@file**: For external file content (e.g., `@file:templates/agent-prompt.md`)
 - **@parent**: For parent entity fields in nested structures (e.g., `@parent:ID`)
 - **@root**: For root entity fields in deeply nested structures
+
+#### JSON Object Fields with References (POWERFUL!)
+
+For fields that store JSON (like `Configuration`, `Settings`, `Metadata`), use **JSON objects** instead of stringified JSON. MetadataSync will:
+1. Recursively process `@lookup:`, `@file:`, `@parent:` references inside the object
+2. Resolve all references to actual UUIDs
+3. Stringify the resolved object for database storage
+
+**Example - Scheduled Job Configuration:**
+```json
+{
+  "fields": {
+    "Name": "Memory Manager Job",
+    "Configuration": {
+      "AgentID": "@lookup:AI Agents.Name=Memory Manager",
+      "InitialMessage": "Analyze conversations",
+      "Settings": {
+        "MaxItems": 100,
+        "TargetAgent": "@lookup:AI Agents.Name=Sage"
+      }
+    }
+  }
+}
+```
+
+**Benefits:**
+- ✅ Human-readable: Use names, not UUIDs
+- ✅ Maintainable: Entity name changes don't break references
+- ✅ Nested: Works at any depth
+- ✅ Type-safe: Structured in source, stringified for DB
+
+**Before this feature, you had to write:**
+```json
+"Configuration": "{\"AgentID\":\"@lookup:AI Agents.Name=Memory Manager\"}"
+```
+
+**Now you write:**
+```json
+"Configuration": {
+  "AgentID": "@lookup:AI Agents.Name=Memory Manager"
+}
+```
+
+Much cleaner and the @lookup actually gets resolved!
 
 ### 8. Directory Structure Best Practices
 ```

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/queue",
-  "version": "2.110.1",
+  "version": "2.112.0",
   "description": "MemberJunction: Queue Library for managing server side queues",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,13 +19,17 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.110.1",
-    "@memberjunction/ai-provider-bundle": "2.110.1",
-    "@memberjunction/aiengine": "2.110.1",
-    "@memberjunction/core": "2.110.1",
-    "@memberjunction/global": "2.110.1",
-    "@memberjunction/core-entities": "2.110.1",
+    "@memberjunction/ai": "2.112.0",
+    "@memberjunction/ai-provider-bundle": "2.112.0",
+    "@memberjunction/aiengine": "2.112.0",
+    "@memberjunction/core": "2.112.0",
+    "@memberjunction/global": "2.112.0",
+    "@memberjunction/core-entities": "2.112.0",
     "@types/uuid": "^9.0.1",
     "uuid": "^9.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

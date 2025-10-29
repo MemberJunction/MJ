@@ -124,9 +124,11 @@ export class SyncEngine {
     if (value !== null && typeof value === 'object') {
       // Check if it's an array or a plain object (not a Date, etc.)
       if (Array.isArray(value) || value.constructor === Object) {
-        // Convert to pretty-printed JSON string for inline metadata objects
+        // First recursively process any @lookup, @file, @parent references inside the object
+        const processedValue = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+        // Then convert to pretty-printed JSON string for inline metadata objects
         // Objects from @file references will be handled by BaseEntity during save
-        return JSON.stringify(value, null, 2);
+        return JSON.stringify(processedValue, null, 2);
       }
     }
     

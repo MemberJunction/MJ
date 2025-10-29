@@ -1,5 +1,58 @@
 # Change Log - @memberjunction/server
 
+## 2.112.0
+
+### Patch Changes
+
+- e237ca9: - Optimize AIEngine embedding generation to eliminate wasteful auto-refresh regeneration (~3s → <1ms)
+  - Enhance Skip artifact retrieval with optimized query and conversationDetailID for reliable modification workflow
+  - Add Query Parameter Processor to SQLServerDataProvider index exports
+  - Replace 4 RunView calls with single optimized query for Skip artifact retrieval
+- Updated dependencies [2ac2120]
+- Updated dependencies [2ac2120]
+- Updated dependencies [e237ca9]
+- Updated dependencies [c126b59]
+- Updated dependencies [2ac2120]
+- Updated dependencies [ed74bb8]
+- Updated dependencies [621960a]
+- Updated dependencies [2ac2120]
+  - @memberjunction/ai-agent-manager@2.112.0
+  - @memberjunction/ai-agents@2.112.0
+  - @memberjunction/core-actions@2.112.0
+  - @memberjunction/sqlserver-dataprovider@2.112.0
+  - @memberjunction/aiengine@2.112.0
+  - @memberjunction/skip-types@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/storage@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/ai-agent-manager-actions@2.112.0
+  - @memberjunction/scheduling-engine@2.112.0
+  - @memberjunction/external-change-detection@2.112.0
+  - @memberjunction/core-entities-server@2.112.0
+  - @memberjunction/ai-prompts@2.112.0
+  - @memberjunction/ai-vectors-pinecone@2.112.0
+  - @memberjunction/actions@2.112.0
+  - @memberjunction/queue@2.112.0
+  - @memberjunction/templates@2.112.0
+  - @memberjunction/ai@2.112.0
+  - @memberjunction/actions-apollo@2.112.0
+  - @memberjunction/actions-bizapps-accounting@2.112.0
+  - @memberjunction/actions-bizapps-crm@2.112.0
+  - @memberjunction/actions-bizapps-lms@2.112.0
+  - @memberjunction/actions-bizapps-social@2.112.0
+  - @memberjunction/entity-communications-server@2.112.0
+  - @memberjunction/component-registry-client-sdk@2.112.0
+  - @memberjunction/doc-utils@2.112.0
+  - @memberjunction/graphql-dataprovider@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/data-context@2.112.0
+  - @memberjunction/data-context-server@2.112.0
+  - @memberjunction/scheduling-actions@2.112.0
+  - @memberjunction/scheduling-engine-base@2.112.0
+  - @memberjunction/scheduling-base-types@2.112.0
+  - @memberjunction/ai-provider-bundle@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

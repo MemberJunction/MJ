@@ -1,5 +1,32 @@
 # @memberjunction/ng-conversations
 
+## 2.112.0
+
+### Minor Changes
+
+- 2ac2120: Migration
+- 2ac2120: migration
+
+### Patch Changes
+
+- 621960a: Patch
+- Updated dependencies [2ac2120]
+- Updated dependencies [c126b59]
+- Updated dependencies [ed74bb8]
+  - @memberjunction/ng-artifacts@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/ai-engine-base@2.112.0
+  - @memberjunction/ai@2.112.0
+  - @memberjunction/ng-base-types@2.112.0
+  - @memberjunction/ng-code-editor@2.112.0
+  - @memberjunction/ng-container-directives@2.112.0
+  - @memberjunction/ng-notifications@2.112.0
+  - @memberjunction/graphql-dataprovider@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/ng-tasks@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

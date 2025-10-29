@@ -1330,42 +1330,6 @@ GO
 
 
 
-DROP PROC IF EXISTS [__mj].[spDeleteConversation]
-GO
-CREATE PROCEDURE [__mj].[spDeleteConversation]
-    @ID uniqueidentifier
-AS  
-BEGIN
-    SET NOCOUNT ON;
-    -- Cascade update on Report - set FK to null before deleting rows in Conversation
-    UPDATE 
-        [__mj].[Report] 
-    SET 
-        [ConversationID] = NULL 
-    WHERE 
-        [ConversationID] = @ID
-
-	UPDATE 
-        [__mj].[Report] 
-    SET 
-        [ConversationDetailID] = NULL 
-    WHERE 
-        [ConversationDetailID] IN (SELECT ID FROM __mj.ConversationDetail WHERE ConversationID = @ID)
-
-    
-    -- Cascade delete from ConversationDetail
-    DELETE FROM 
-        [__mj].[ConversationDetail] 
-    WHERE 
-        [ConversationID] = @ID
-    
-    DELETE FROM 
-        [__mj].[Conversation]
-    WHERE 
-        [ID] = @ID
-    SELECT @ID AS ID -- Return the ID to indicate we successfully deleted the record
-END
-GO
 
 DROP PROC IF EXISTS [__mj].[spUpdateEntityFieldRelatedEntityNameFieldMap] 
 GO

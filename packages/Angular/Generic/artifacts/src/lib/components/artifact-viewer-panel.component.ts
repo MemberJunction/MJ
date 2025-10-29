@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, S
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
-import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity } from '@memberjunction/core-entities';
+import { ArtifactEntity, ArtifactVersionEntity, ArtifactVersionAttributeEntity, ArtifactTypeEntity, CollectionEntity, CollectionArtifactEntity, ArtifactMetadataEngine, ConversationEntity, ConversationDetailArtifactEntity, ConversationDetailEntity, ArtifactUseEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -141,6 +141,11 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
     // Load artifact with specified version if provided
     await this.loadArtifact(this.versionNumber);
+
+    // Track that user viewed this artifact
+    if (this.artifactVersion?.ID && this.currentUser) {
+      this.trackArtifactUsage('Viewed');
+    }
   }
 
   async ngOnChanges(changes: SimpleChanges) {
@@ -445,7 +450,12 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
   }
 
   onCopyToClipboard(): void {
-    if (this.jsonContent) {
+    // Get content from the currently active tab instead of always copying jsonContent
+    const tabData = this.GetTabContent(this.activeTab);
+    if (tabData?.content) {
+      navigator.clipboard.writeText(tabData.content);
+    } else if (this.jsonContent) {
+      // Fallback to jsonContent if tab content not found
       navigator.clipboard.writeText(this.jsonContent);
     }
   }
@@ -876,5 +886,36 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   public SetActiveTab(tabName: string): void {
     this.activeTab = tabName.toLowerCase();
+  }
+
+  /**
+   * Track artifact usage event
+   */
+  private async trackArtifactUsage(usageType: 'Viewed' | 'Opened' | 'Shared' | 'Saved' | 'Exported'): Promise<void> {
+    try {
+      if (!this.artifactVersion?.ID || !this.currentUser?.ID) {
+        return;
+      }
+
+      const md = new Metadata();
+      const usage = await md.GetEntityObject<ArtifactUseEntity>('MJ: Artifact Uses');
+
+      usage.ArtifactVersionID = this.artifactVersion.ID;
+      usage.UserID = this.currentUser.ID;
+      usage.UsageType = usageType;
+      usage.UsageContext = JSON.stringify({
+        viewContext: this.viewContext,
+        contextCollectionId: this.contextCollectionId,
+        timestamp: new Date().toISOString()
+      });
+
+      // Save asynchronously - don't block UI
+      usage.Save().catch(error => {
+        console.error('Failed to track artifact usage:', error);
+      });
+
+    } catch (error) {
+      console.error('Error tracking artifact usage:', error);
+    }
   }
 }

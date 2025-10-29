@@ -21,6 +21,9 @@ export class ConversationStateService {
   // Pending message from empty state - persists across component lifecycle
   public pendingMessageToSend: string | null = null;
 
+  // New unsaved conversation state - delays DB creation until first message
+  public isNewUnsavedConversation: boolean = false;
+
   constructor() {}
 
   /**
@@ -59,6 +62,29 @@ export class ConversationStateService {
   setActiveConversation(id: string | null): void {
     console.log('🎯 Setting active conversation:', id);
     this.activeConversationId = id;
+    // Clear unsaved state when switching to an existing conversation
+    if (id) {
+      this.isNewUnsavedConversation = false;
+    }
+  }
+
+  /**
+   * Initiates a new unsaved conversation (doesn't create DB record yet)
+   * This shows the welcome screen and delays DB creation until first message
+   */
+  startNewConversation(): void {
+    console.log('✨ Starting new unsaved conversation');
+    this.activeConversationId = null;
+    this.isNewUnsavedConversation = true;
+    this.pendingMessageToSend = null;
+  }
+
+  /**
+   * Clears the new unsaved conversation state
+   * Called when the conversation is actually created or cancelled
+   */
+  clearNewConversationState(): void {
+    this.isNewUnsavedConversation = false;
   }
 
   /**
