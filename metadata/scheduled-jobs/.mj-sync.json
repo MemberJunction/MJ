@@ -1,0 +1,24 @@
+{
+  "entity": "MJ: Scheduled Jobs",
+  "filePattern": ".*.json",
+  "defaults": {
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".scheduled-jobs.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+    },
+    "relatedEntities": {}
+  }
+}

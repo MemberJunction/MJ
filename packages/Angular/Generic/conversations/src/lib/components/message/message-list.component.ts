@@ -18,6 +18,7 @@ import { UserInfo, CompositeKey } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MessageItemComponent } from './message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
+import { RatingJSON } from '../../models/conversation-complete-query.model';
 
 /**
  * Container component for displaying a list of messages
@@ -36,6 +37,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   @Input() public isProcessing: boolean = false;
   @Input() public artifactMap: Map<string, LazyArtifactInfo[]> = new Map();
   @Input() public agentRunMap: Map<string, AIAgentRunEntityExtended> = new Map();
+  @Input() public ratingsMap: Map<string, RatingJSON[]> = new Map();
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
 
   @Output() public pinMessage = new EventEmitter<ConversationDetailEntity>();
@@ -175,6 +177,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
           instance.userAvatarMap = this.userAvatarMap;
+          instance.isLastMessage = (index === messages.length - 1); // Update last message flag
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
@@ -204,6 +207,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           // Update agent run from map
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
 
+          // Update ratings from map
+          instance.ratings = this.ratingsMap.get(message.ID);
+
           // Manually trigger change detection in child component when message status changes
           // This is necessary because we're using OnPush change detection and direct property assignment
           // doesn't trigger ngOnChanges (only reference changes do)
@@ -223,6 +229,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
           instance.userAvatarMap = this.userAvatarMap;
+          instance.isLastMessage = (index === messages.length - 1); // Mark last message
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
@@ -248,6 +255,9 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
 
           // Pass agent run from map (loaded once per conversation)
           instance.agentRun = this.agentRunMap.get(message.ID) || null;
+
+          // Pass ratings from map (parsed once per conversation)
+          instance.ratings = this.ratingsMap.get(message.ID);
 
           // Subscribe to outputs
           instance.pinClicked.subscribe((msg: ConversationDetailEntity) => this.pinMessage.emit(msg));

@@ -27,6 +27,7 @@ import { BaseNavigationComponent, SharedService } from '@memberjunction/ng-share
         [activeVersionIdInput]="activeVersionId"
         [activeTaskInput]="activeTaskId"
         (navigationChanged)="onNavigationChanged($event)"
+        (newConversationStarted)="onNewConversationStarted()"
         (openEntityRecord)="onOpenEntityRecord($event)">
       </mj-conversation-workspace>
     </div>
@@ -104,6 +105,26 @@ export class ChatWrapperComponent implements OnInit {
       this.activeCollectionId = queryParams['activeCollectionId'];
       this.activeVersionId = queryParams['activeVersionId'];
       this.activeTaskId = queryParams['activeTaskId'];
+    });
+  }
+
+  /**
+   * Handle new conversation started event
+   * Clears conversation-specific URL parameters when user clicks "New Conversation"
+   */
+  onNewConversationStarted(): void {
+    console.log('🆕 New conversation started - clearing URL params');
+
+    // Clear local state
+    this.activeConversationId = undefined;
+
+    // Update URL to remove conversation ID, keeping only tab parameter
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: {
+        tab: 'conversations'
+      },
+      replaceUrl: false // Add to browser history
     });
   }
 

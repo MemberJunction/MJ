@@ -15,6 +15,7 @@ import { ConversationStateService } from '../../services/conversation-state.serv
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
@@ -93,6 +94,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     versionId?: string;
     taskId?: string;
   }>();
+  @Output() newConversationStarted = new EventEmitter<void>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -126,6 +128,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private previousConversationId: string | null = null;
   private previousTaskId: string | undefined = undefined;
   private previousVersionId: string | null = null; // Used to track version changes in ngDoCheck
+  private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
   // LocalStorage keys
@@ -140,6 +143,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
+    private notificationService: MJNotificationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -233,6 +237,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   ngDoCheck() {
+    // Detect new unsaved conversation state changes
+    const currentIsNewConversation = this.conversationState.isNewUnsavedConversation;
+    if (currentIsNewConversation !== this.previousIsNewConversation) {
+      this.previousIsNewConversation = currentIsNewConversation;
+      if (currentIsNewConversation) {
+        // Emit event to clear URL conversation parameter
+        Promise.resolve().then(() => {
+          this.newConversationStarted.emit();
+        });
+      }
+    }
+
     // Detect conversation changes and emit event
     const currentId = this.conversationState.activeConversationId;
     if (currentId !== this.previousConversationId) {
@@ -339,14 +355,14 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async onRefreshAgentCache(): Promise<void> {
-    console.log('🔄 Refreshing AI Engine cache...');
     try {
       await AIEngineBase.Instance.Config(true);
       const agentCount = AIEngineBase.Instance.Agents?.length || 0;
-      console.log(`✅ AI Engine cache refreshed with ${agentCount} agents`);
+      this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();
     } catch (error) {
-      console.error('❌ Failed to refresh AI Engine:', error);
+      this.notificationService.CreateSimpleNotification('Failed to refresh agent cache', 'error', 3000);
+      console.error('Failed to refresh AI Engine:', error);
     }
   }
 

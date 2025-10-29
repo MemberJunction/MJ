@@ -14,7 +14,7 @@ export class ActionEngineServer extends ActionEngineBase {
 
 
    public static get Instance(): ActionEngineServer {
-      return super.getInstance<ActionEngineServer>("ActionEngineBase");
+      return super.getInstance<ActionEngineServer>();
    }
 
    public async RunAction(params: RunActionParams): Promise<ActionResult> {
