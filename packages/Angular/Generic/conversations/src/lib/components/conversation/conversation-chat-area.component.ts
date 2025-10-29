@@ -1095,10 +1095,15 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
   async onSuggestedResponseSelected(event: {text: string; customInput?: string}): Promise<void> {
     const messageText = event.customInput || event.text;
 
-    if (this.messageInputComponent) {
+    // If we have an active conversation with message input available, use it
+    if (this.messageInputComponent && !this.conversationState.isNewUnsavedConversation) {
       await this.messageInputComponent.sendMessageWithText(messageText);
+    } else if (!this.conversationState.activeConversation || this.conversationState.isNewUnsavedConversation) {
+      // If no conversation or in new unsaved state, route through empty state handler
+      // This will create the conversation and send the message
+      await this.onEmptyStateMessageSent(messageText);
     } else {
-      console.error('MessageInputComponent not available');
+      console.error('MessageInputComponent not available and not in a valid state to create conversation');
     }
   }
 
@@ -1329,6 +1334,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
       }
 
       LogStatusEx({message: '✅ Created new conversation', verboseOnly: true, additionalArgs: [newConversation.ID]});
+
+      // Clear the new unsaved conversation state since we've now created it
+      this.conversationState.clearNewConversationState();
 
       // Set as active conversation (this will trigger onConversationChanged which will send the message)
       this.conversationState.activeConversationId = newConversation.ID;

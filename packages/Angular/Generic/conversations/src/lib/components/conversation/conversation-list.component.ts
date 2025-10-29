@@ -497,19 +497,9 @@ export class ConversationListComponent implements OnInit, OnDestroy {
   }
 
   async createNewConversation(): Promise<void> {
-    try {
-      // Create conversation directly with default name
-      // Name will be updated automatically after first message
-      const conversation = await this.conversationState.createConversation(
-        'New Chat',
-        this.environmentId,
-        this.currentUser
-      );
-      this.conversationState.setActiveConversation(conversation.ID);
-    } catch (error) {
-      console.error('Error creating conversation:', error);
-      this.toastService.error('Failed to create conversation. Please try again.');
-    }
+    // Don't create DB record yet - just show the welcome screen
+    // Conversation will be created when user sends first message
+    this.conversationState.startNewConversation();
   }
 
   async renameConversation(conversation: ConversationEntity): Promise<void> {

@@ -41,8 +41,8 @@
     <div class="chat-content-area">
     <!-- Messages Pane -->
     <div class="chat-messages-pane" [class.full-width]="!showArtifactPanel">
-        @if (!conversationState.activeConversation) {
-          <!-- Empty State - No conversation selected -->
+        @if (!conversationState.activeConversation || conversationState.isNewUnsavedConversation) {
+          <!-- Empty State - No conversation selected OR new unsaved conversation -->
           <mj-conversation-empty-state
             [currentUser]="currentUser"
             [disabled]="isProcessing"
@@ -101,6 +101,7 @@
                 <div class="message-input-container-wrapper">
                   @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
                     <mj-message-input
+                      #messageInput
                       [hidden]="inputRef.conversationId !== conversationState.activeConversation.ID"
                       [conversationId]="inputRef.conversationId"
                       [conversationName]="inputRef.conversationName"

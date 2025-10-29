@@ -100,6 +100,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     artifactId?: string;
     taskId?: string;
   }>();
+  @Output() newConversationStarted = new EventEmitter<void>();
 
   public activeTab: NavigationTab = 'conversations';
   public isSidebarVisible: boolean = true;
@@ -132,6 +133,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private previousConversationId: string | null = null;
   private previousTaskId: string | undefined = undefined;
   private previousArtifactId: string | null = null; // Used to track artifact changes in ngDoCheck
+  private previousIsNewConversation: boolean = false; // Track new conversation state changes
   private destroy$ = new Subject<void>();
 
   // LocalStorage keys
@@ -240,6 +242,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   ngDoCheck() {
+    // Detect new unsaved conversation state changes
+    const currentIsNewConversation = this.conversationState.isNewUnsavedConversation;
+    if (currentIsNewConversation !== this.previousIsNewConversation) {
+      this.previousIsNewConversation = currentIsNewConversation;
+      if (currentIsNewConversation) {
+        // Emit event to clear URL conversation parameter
+        Promise.resolve().then(() => {
+          this.newConversationStarted.emit();
+        });
+      }
+    }
+
     // Detect conversation changes and emit event
     const currentId = this.conversationState.activeConversationId;
     if (currentId !== this.previousConversationId) {
