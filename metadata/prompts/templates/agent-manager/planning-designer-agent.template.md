@@ -524,10 +524,8 @@ When designing agents that produce artifacts, you should assign an appropriate `
 - Output is transient or intermediate (not a final deliverable)
 
 **Examples**:
-- Research agent → "Research Content" artifact type
-- Report generator → Appropriate report artifact type
-- Diagram creator → Appropriate visualization artifact type
-- Content writer → Appropriate content artifact type
+- Research Agent → "Research Content" artifact type for good report writing
+- Marketing Agent → "Marketing Content" artifact type for good blog post writing
 
 **In Your TechnicalDesign**: When you determine an agent should have a DefaultArtifactTypeID, document it clearly in the design with both the artifact type name and ID, explaining why this artifact type matches the agent's purpose.
 
