@@ -23,10 +23,6 @@
         </mj-active-agent-indicator>
     </div>
     <div class="chat-actions">
-        <mj-tasks-dropdown
-          [currentUser]="currentUser"
-          (taskClicked)="onTaskClicked($event)">
-        </mj-tasks-dropdown>
         <button class="action-btn" (click)="exportConversation()" title="Export conversation">
         <i class="fas fa-download"></i>
         Export
@@ -71,6 +67,7 @@
               [isProcessing]="isProcessing"
               [artifactMap]="effectiveArtifactsMap"
               [agentRunMap]="agentRunsByDetailId"
+              [ratingsMap]="ratingsByDetailId"
               [userAvatarMap]="userAvatarMap"
               (replyInThread)="onReplyInThread($event)"
               (viewThread)="onViewThread($event)"
@@ -100,25 +97,32 @@
                   </div>
                 </div>
               } @else {
-                <!-- Input Component -->
-                <mj-message-input
-                #messageInput
-                *ngIf="conversationState.activeConversation"
-                [conversationId]="conversationState.activeConversation.ID"
-                [currentUser]="currentUser"
-                [conversationHistory]="messages"
-                [disabled]="isProcessing"
-                [initialMessage]="conversationState.pendingMessageToSend"
-                (messageSent)="onMessageSent($event)"
-                (agentResponse)="onAgentResponse($event)"
-                (agentRunDetected)="onAgentRunDetected($event)"
-                (agentRunUpdate)="onAgentRunUpdate($event)"
-                (messageComplete)="onMessageComplete($event)"
-                (artifactCreated)="onArtifactCreated($event)"
-                (conversationRenamed)="onConversationRenamed($event)"
-                (intentCheckStarted)="onIntentCheckStarted()"
-                (intentCheckCompleted)="onIntentCheckCompleted()">
-                </mj-message-input>
+                <!-- Input Component - Multiple instances cached, only one visible -->
+                <div class="message-input-container-wrapper">
+                  @for (inputRef of getCachedInputs(); track inputRef.conversationId) {
+                    <mj-message-input
+                      [hidden]="inputRef.conversationId !== conversationState.activeConversation.ID"
+                      [conversationId]="inputRef.conversationId"
+                      [conversationName]="inputRef.conversationName"
+                      [currentUser]="currentUser"
+                      [conversationHistory]="inputRef.conversationId === conversationState.activeConversation.ID ? messages : []"
+                      [artifactsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? artifactsByDetailId : emptyArtifactsMap"
+                      [agentRunsByDetailId]="inputRef.conversationId === conversationState.activeConversation.ID ? agentRunsByDetailId : emptyAgentRunsMap"
+                      [inProgressMessageIds]="inputRef.conversationId === conversationState.activeConversation.ID ? inProgressMessageIds : emptyInProgressIds"
+                      [disabled]="isProcessing"
+                      [initialMessage]="inputRef.conversationId === conversationState.activeConversation.ID ? conversationState.pendingMessageToSend : null"
+                      (messageSent)="onMessageSent($event)"
+                      (agentResponse)="onAgentResponse($event)"
+                      (agentRunDetected)="onAgentRunDetected($event)"
+                      (agentRunUpdate)="onAgentRunUpdate($event)"
+                      (messageComplete)="onMessageComplete($event)"
+                      (artifactCreated)="onArtifactCreated($event)"
+                      (conversationRenamed)="onConversationRenamed($event)"
+                      (intentCheckStarted)="onIntentCheckStarted()"
+                      (intentCheckCompleted)="onIntentCheckCompleted()">
+                    </mj-message-input>
+                  }
+                </div>
               }
           </div>
           </div>

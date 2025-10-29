@@ -29,6 +29,7 @@ import { MessageInputComponent } from './components/message/message-input.compon
 import { MessageInputBoxComponent } from './components/message/message-input-box.component';
 import { SuggestedResponsesComponent } from './components/message/suggested-responses.component';
 import { MentionDropdownComponent } from './components/mention/mention-dropdown.component';
+import { ConversationMessageRatingComponent } from './components/message/conversation-message-rating.component';
 import { ConversationWorkspaceComponent } from './components/workspace/conversation-workspace.component';
 import { ConversationNavigationComponent } from './components/navigation/conversation-navigation.component';
 import { ConversationSidebarComponent } from './components/sidebar/conversation-sidebar.component';
@@ -63,6 +64,7 @@ import { CollectionShareModalComponent } from './components/collection/collectio
 import { UserPickerComponent } from './components/shared/user-picker.component';
 import { ArtifactCollectionPickerModalComponent } from './components/collection/artifact-collection-picker-modal.component';
 import { ArtifactShareModalComponent } from './components/artifact/artifact-share-modal.component';
+import { GlobalTasksPanelComponent } from './components/global-tasks/global-tasks-panel.component';
 
 // Directives
 import { SearchShortcutDirective } from './directives/search-shortcut.directive';
@@ -75,6 +77,7 @@ const COMPONENTS = [
   MessageInputBoxComponent,
   SuggestedResponsesComponent,
   MentionDropdownComponent,
+  ConversationMessageRatingComponent,
   ConversationWorkspaceComponent,
   ConversationNavigationComponent,
   ConversationSidebarComponent,
@@ -104,7 +107,8 @@ const COMPONENTS = [
   NotificationBadgeComponent,
   ActivityIndicatorComponent,
   ToastComponent,
-  InputDialogComponent
+  InputDialogComponent,
+  GlobalTasksPanelComponent
 ];
 
 @NgModule({

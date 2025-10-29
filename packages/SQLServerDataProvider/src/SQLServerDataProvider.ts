@@ -3130,10 +3130,18 @@ export class SQLServerDataProvider
           }, user);
         }
 
-        if (d && d[0]) {
+        if (d && d.length > 0) {
           // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
+          // Note: When CASCADE operations exist, multiple result sets are returned (d is array of arrays).
+          // When no CASCADE operations exist, a single result set is returned (d is array of objects).
+          // We need to handle both cases by checking if the first element is an array.
+          const isMultipleResultSets = Array.isArray(d[0]);
+          const deletedRecord = isMultipleResultSets
+            ? d[d.length - 1][0]  // Multiple result sets: get last result set, first row
+            : d[0];               // Single result set: get first row directly
+
           for (const key of entity.PrimaryKeys) {
-            if (key.Value !== d[0][key.Name]) {
+            if (key.Value !== deletedRecord[key.Name]) {
               // we can get here if the sp returns NULL for a given key. The reason that would be the case is if the record
               // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
               // it here for clarity.

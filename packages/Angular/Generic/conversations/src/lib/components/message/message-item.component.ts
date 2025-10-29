@@ -12,12 +12,13 @@ import {
   DoCheck
 } from '@angular/core';
 import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair, LogStatusEx } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { SuggestedResponse } from '../../models/conversation-state.model';
+import { RatingJSON } from '../../models/conversation-complete-query.model';
 
 /**
  * Component for displaying a single message in a conversation
@@ -42,6 +43,8 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public artifactVersion?: ArtifactVersionEntity;
   @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
+  @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
+  @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -105,7 +108,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      console.log(`🎯 Message ${this.message.ID} status changed to Complete, stopping timer`);
+      LogStatusEx({message: `🎯 Message ${this.message.ID} status changed to Complete, stopping timer`, verboseOnly: true});
 
       // Stop the elapsed time interval
       if (this._elapsedTimeInterval !== null) {
@@ -122,7 +125,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   ngAfterViewInit() {
-    this._loadTime = Date.now();
+    // Use message creation timestamp if available (for reconnecting to in-progress messages)
+    // Otherwise use current time for brand new messages
+    if (this.message?.__mj_CreatedAt) {
+      this._loadTime = new Date(this.message.__mj_CreatedAt).getTime();
+    } else {
+      this._loadTime = Date.now();
+    }
     this.startElapsedTimeUpdater();
     this.cdRef.detectChanges();
   }
@@ -393,6 +402,74 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get isLastMessageInConversation(): boolean {
     return this.allMessages.indexOf(this.message) === this.allMessages.length - 1;
+  }
+
+  /**
+   * Determine if rating component should be shown inline (Option C - Hybrid).
+   * Show for latest completed AI message that user hasn't rated yet.
+   * For older/already-rated messages, ratings accessible via gear menu.
+   */
+  public shouldShowRating(): boolean {
+    // Must be an AI message
+    if (!this.isAIMessage) return false;
+
+    // Must be completed (not in progress or failed)
+    if (this.messageStatus !== 'Complete') return false;
+
+    // Must not be editing
+    if (this.isEditing) return false;
+
+    // Must be the last message in conversation
+    if (!this.isLastMessageInConversation) return false;
+
+    // Check if current user has already rated this message
+    if (this.ratings && this.ratings.length > 0) {
+      const currentUserId = this.currentUser?.ID;
+      const userHasRated = this.ratings.some(r => r.UserID === currentUserId);
+
+      // If user already rated, don't show inline (accessible via gear menu)
+      if (userHasRated) return false;
+    }
+
+    // Show inline rating for latest completed AI message not yet rated by user
+    return true;
+  }
+
+  /**
+   * Check if message has any ratings (for gear icon badge)
+   */
+  public hasRatings(): boolean {
+    return !!(this.ratings && this.ratings.length > 0);
+  }
+
+  /**
+   * Get rating count for badge display on gear icon
+   */
+  public getRatingCount(): number {
+    return this.ratings?.length || 0;
+  }
+
+  /**
+   * Get thumbs up count (ratings >= 8)
+   */
+  public getThumbsUpCount(): number {
+    return this.ratings?.filter(r => r.Rating ? r.Rating >= 8 : false).length || 0;
+  }
+
+  /**
+   * Get thumbs down count (ratings <= 3)
+   */
+  public getThumbsDownCount(): number {
+    return this.ratings?.filter(r => r.Rating ? r.Rating <= 3 : false).length || 0;
+  }
+
+  /**
+   * Determine if pin/delete actions should show inline (with rating buttons).
+   * Show for latest completed AI message that user hasn't rated yet.
+   */
+  public shouldShowInlineActions(): boolean {
+    // Same logic as shouldShowRating - latest unrated message
+    return this.shouldShowRating();
   }
 
   public get hasArtifact(): boolean {

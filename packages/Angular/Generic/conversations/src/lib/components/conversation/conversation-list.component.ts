@@ -1,10 +1,13 @@
-import { Component, Input, OnInit, HostListener } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { UserInfo } from '@memberjunction/core';
 import { ConversationEntity } from '@memberjunction/core-entities';
 import { ConversationStateService } from '../../services/conversation-state.service';
 import { DialogService } from '../../services/dialog.service';
 import { NotificationService } from '../../services/notification.service';
 import { ToastService } from '../../services/toast.service';
+import { ActiveTasksService } from '../../services/active-tasks.service';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 
 @Component({
   selector: 'mj-conversation-list',
@@ -39,8 +42,9 @@ import { ToastService } from '../../services/toast.service';
                      [class.renamed]="conversation.ID === renamedConversationId"
                      (click)="selectConversation(conversation)">
                   <div class="conversation-icon-wrapper">
-                    <div class="conversation-icon">
-                      <i class="fas fa-comments"></i>
+                    <div class="conversation-icon" [class.has-tasks]="hasActiveTasks(conversation.ID)">
+                      <i *ngIf="!hasActiveTasks(conversation.ID)" class="fas fa-comments"></i>
+                      <i *ngIf="hasActiveTasks(conversation.ID)" class="fas fa-spinner fa-pulse"></i>
                     </div>
                     <div class="badge-overlay">
                       <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
@@ -93,8 +97,9 @@ import { ToastService } from '../../services/toast.service';
                    [class.renamed]="conversation.ID === renamedConversationId"
                    (click)="selectConversation(conversation)">
                 <div class="conversation-icon-wrapper">
-                  <div class="conversation-icon">
-                    <i class="fas fa-comments"></i>
+                  <div class="conversation-icon" [class.has-tasks]="hasActiveTasks(conversation.ID)">
+                    <i *ngIf="!hasActiveTasks(conversation.ID)" class="fas fa-comments"></i>
+                    <i *ngIf="hasActiveTasks(conversation.ID)" class="fas fa-spinner fa-pulse"></i>
                   </div>
                   <div class="badge-overlay">
                     <mj-notification-badge [conversationId]="conversation.ID"></mj-notification-badge>
@@ -228,6 +233,7 @@ import { ToastService } from '../../services/toast.service';
     .conversation-item.active { background: #0076B6; color: white; }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
+    .conversation-icon.has-tasks { color: #fb923c; }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -275,6 +281,28 @@ import { ToastService } from '../../services/toast.service';
     .conversation-item.active .conversation-actions { opacity: 1; pointer-events: auto; }
     .conversation-actions > * { pointer-events: auto; }
     .pinned-icon { color: #AAE7FD; font-size: 12px; }
+
+    /* Task Indicator */
+    .task-indicator {
+      color: #fb923c;
+      font-size: 12px;
+      margin-right: 8px;
+      flex-shrink: 0;
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+    @keyframes pulse-glow {
+      0%, 100% {
+        opacity: 1;
+        filter: drop-shadow(0 0 2px #fb923c);
+      }
+      50% {
+        opacity: 0.6;
+        filter: drop-shadow(0 0 4px #fb923c);
+      }
+    }
+    .conversation-item.active .task-indicator {
+      color: #fbbf24;
+    }
 
     .menu-btn {
       width: 28px;
@@ -399,7 +427,7 @@ import { ToastService } from '../../services/toast.service';
     }
   `]
 })
-export class ConversationListComponent implements OnInit {
+export class ConversationListComponent implements OnInit, OnDestroy {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Input() renamedConversationId: string | null = null;
@@ -407,12 +435,17 @@ export class ConversationListComponent implements OnInit {
   public directMessagesExpanded: boolean = true;
   public pinnedExpanded: boolean = true;
   public openMenuConversationId: string | null = null;
+  public conversationIdsWithTasks = new Set<string>();
+
+  private destroy$ = new Subject<void>();
 
   constructor(
     public conversationState: ConversationStateService,
     private dialogService: DialogService,
     private notificationService: NotificationService,
-    private toastService: ToastService
+    private toastService: ToastService,
+    private activeTasksService: ActiveTasksService,
+    private cdr: ChangeDetectorRef
   ) {}
 
   get pinnedConversations() {
@@ -426,6 +459,19 @@ export class ConversationListComponent implements OnInit {
   ngOnInit() {
     // Load conversations on init
     this.conversationState.loadConversations(this.environmentId, this.currentUser);
+
+    // Subscribe to conversation IDs with active tasks (hot set)
+    this.activeTasksService.conversationIdsWithTasks$.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(conversationIds => {
+      this.conversationIdsWithTasks = conversationIds;
+      this.cdr.markForCheck(); // Trigger change detection for icon updates
+    });
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   @HostListener('document:click')
@@ -537,5 +583,9 @@ export class ConversationListComponent implements OnInit {
       console.error('Error toggling pin:', error);
       await this.dialogService.alert('Error', 'Failed to pin/unpin conversation. Please try again.');
     }
+  }
+
+  hasActiveTasks(conversationId: string): boolean {
+    return this.conversationIdsWithTasks.has(conversationId);
   }
 }

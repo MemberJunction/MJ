@@ -1,5 +1,22 @@
 # @memberjunction/ng-artifacts
 
+## 2.112.0
+
+### Minor Changes
+
+- 2ac2120: Migration
+
+### Patch Changes
+
+- Updated dependencies [c126b59]
+  - @memberjunction/global@2.112.0
+  - @memberjunction/ng-base-types@2.112.0
+  - @memberjunction/ng-code-editor@2.112.0
+  - @memberjunction/ng-notifications@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/ng-react@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

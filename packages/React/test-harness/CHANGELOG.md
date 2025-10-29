@@ -1,5 +1,12 @@
 # @memberjunction/react-test-harness
 
+## 2.112.0
+
+### Patch Changes
+
+- @memberjunction/react-runtime@2.112.0
+- @memberjunction/interactive-component-types@2.112.0
+
 ## 2.110.1
 
 ### Patch Changes

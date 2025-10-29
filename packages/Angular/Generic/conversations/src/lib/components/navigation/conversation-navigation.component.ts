@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { NavigationTab } from '../../models/conversation-state.model';
+import { UserInfo } from '@memberjunction/core';
 
 @Component({
   selector: 'mj-conversation-navigation',
@@ -34,14 +35,15 @@ import { NavigationTab } from '../../models/conversation-state.model';
         </button>
       </div>
       <div class="nav-right">
+        <mj-tasks-dropdown
+          [currentUser]="currentUser"
+          (navigateToConversation)="navigateToConversation.emit($event)">
+        </mj-tasks-dropdown>
         <button class="nav-btn search-btn" (click)="searchTriggered.emit()" title="Search (Ctrl+K)">
           <i class="fas fa-search"></i>
         </button>
         <button class="nav-btn refresh-btn" (click)="refreshTriggered.emit()" title="Refresh agent cache">
           <i class="fas fa-sync-alt"></i>
-        </button>
-        <button class="nav-btn">
-          <i class="fas fa-cog"></i>
         </button>
       </div>
     </div>
@@ -110,8 +112,10 @@ import { NavigationTab } from '../../models/conversation-state.model';
 export class ConversationNavigationComponent {
   @Input() activeTab: NavigationTab = 'conversations';
   @Input() environmentId!: string;
+  @Input() currentUser!: UserInfo;
   @Output() tabChanged = new EventEmitter<NavigationTab>();
   @Output() sidebarToggled = new EventEmitter<void>();
   @Output() searchTriggered = new EventEmitter<void>();
   @Output() refreshTriggered = new EventEmitter<void>();
+  @Output() navigateToConversation = new EventEmitter<{conversationId: string; taskId: string}>();
 }
