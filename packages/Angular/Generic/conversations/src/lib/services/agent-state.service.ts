@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
-import { RunView, UserInfo } from '@memberjunction/core';
+import { LogStatusEx, RunView, UserInfo } from '@memberjunction/core';
 import { AIAgentRunEntity } from '@memberjunction/core-entities';
 
 export type AgentStatus = 'acknowledging' | 'working' | 'completing' | 'completed' | 'error';
@@ -101,7 +101,7 @@ export class AgentStateService implements OnDestroy {
     }
 
     const timestamp = new Date().toISOString();
-    console.log(`[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'})`);
+    LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'})`, verboseOnly: true});
 
     try {
       const rv = new RunView();
@@ -112,7 +112,7 @@ export class AgentStateService implements OnDestroy {
         filter += ` AND ConversationID='${conversationId}'`;
       }
 
-      console.log(`[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`);
+      LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Executing RunView for AI Agent Runs`, verboseOnly: true});
       const result = await rv.RunView<AIAgentRunEntity>(
         {
           EntityName: 'MJ: AI Agent Runs',
@@ -126,13 +126,13 @@ export class AgentStateService implements OnDestroy {
 
       if (result.Success) {
         const runs = result.Results || [];
-        console.log(`[${timestamp}] 🤖 AgentStateService - Found ${runs.length} active agent(s)`);
+        LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - Found ${runs.length} active agent(s)`, verboseOnly: true});
         const agentsWithStatus = runs.map(run => this.mapRunToAgentWithStatus(run));
         this._activeAgents$.next(agentsWithStatus);
 
         // Stop polling if no active agents (optimization to reduce DB load)
         if (runs.length === 0 && this.pollSubscription) {
-          console.log(`[${timestamp}] 🤖 AgentStateService - No active agents, stopping polling`);
+          LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService - No active agents, stopping polling`, verboseOnly: true});
           this.stopPolling();
         }
       }

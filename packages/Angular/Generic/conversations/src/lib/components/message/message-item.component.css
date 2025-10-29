@@ -60,23 +60,6 @@
   display: block;
 }
 
-/* Progress icon - positioned to the right of message, pushed down to avoid overlap */
-.message-item.in-progress .message-content::after {
-  content: '';
-  position: absolute;
-  right: 12px;
-  top: 22px;
-  width: 16px;
-  height: 16px;
-  border: 2px solid #3B82F6;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
 
 /* Pulse effect for avatar */
 .message-item.in-progress .avatar-circle {
@@ -242,14 +225,12 @@
 .time-pill.in-progress {
   background: #F3E8FF;
   color: #7C3AED;
-  animation: pillPulse 2s ease-in-out infinite;
 }
 
 /* Active agent run state - indigo with subtle pulse */
 .time-pill.active {
   background: #E0E7FF;
   color: #4F46E5;
-  animation: pillPulse 2s ease-in-out infinite;
 }
 
 /* Failed state - red */
@@ -892,7 +873,7 @@
 
 .action-buttons {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   margin-left: 16px;
   padding-left: 16px;
   border-left: 1px solid #E5E7EB;
@@ -906,15 +887,23 @@
   background: white;
   border: 1px solid #9CA3AF;
   border-radius: 6px;
-  font-size: 14px;
-  color: #374151;
+  font-size: 16px;
+  line-height: 1;
+  color: #6B7280;
   cursor: pointer;
   transition: all 0.2s;
   min-width: 36px;
+  height: 32px;
+  opacity: 0.6;
+}
+
+.action-bar-btn i {
+  font-size: 16px;
+  line-height: 1;
 }
 
 .action-bar-btn:hover {
-  background: #F3F4F6;
+  opacity: 1;
   border-color: #6B7280;
 }
 
@@ -923,8 +912,9 @@
 }
 
 .action-bar-btn.danger:hover {
-  background: #FEE2E2;
-  border-color: #FCA5A5;
+  opacity: 1;
+  background: #FEF2F2;
+  border-color: #DC2626;
 }
 
 .action-bar-btn i.pinned {
@@ -990,7 +980,7 @@
 
 .inline-actions {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
 }
 

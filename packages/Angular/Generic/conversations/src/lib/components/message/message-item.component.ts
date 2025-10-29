@@ -12,7 +12,7 @@ import {
   DoCheck
 } from '@angular/core';
 import { ConversationDetailEntity, ConversationEntity, AIAgentEntityExtended, AIAgentRunEntityExtended, ArtifactEntity, ArtifactVersionEntity, TaskEntity } from '@memberjunction/core-entities';
-import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata, CompositeKey, KeyValuePair, LogStatusEx } from '@memberjunction/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { MentionParserService } from '../../services/mention-parser.service';
@@ -44,6 +44,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public agentRun: AIAgentRunEntityExtended | null = null; // Passed from parent, loaded once per conversation
   @Input() public userAvatarMap: Map<string, {imageUrl: string | null; iconClass: string | null}> = new Map();
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
+  @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
 
   @Output() public pinClicked = new EventEmitter<ConversationDetailEntity>();
   @Output() public editClicked = new EventEmitter<ConversationDetailEntity>();
@@ -107,7 +108,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
     // Check if status changed from non-Complete to Complete
     if (this._previousMessageStatus !== 'Complete' && currentStatus === 'Complete') {
-      console.log(`🎯 Message ${this.message.ID} status changed to Complete, stopping timer`);
+      LogStatusEx({message: `🎯 Message ${this.message.ID} status changed to Complete, stopping timer`, verboseOnly: true});
 
       // Stop the elapsed time interval
       if (this._elapsedTimeInterval !== null) {
@@ -124,7 +125,13 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   ngAfterViewInit() {
-    this._loadTime = Date.now();
+    // Use message creation timestamp if available (for reconnecting to in-progress messages)
+    // Otherwise use current time for brand new messages
+    if (this.message?.__mj_CreatedAt) {
+      this._loadTime = new Date(this.message.__mj_CreatedAt).getTime();
+    } else {
+      this._loadTime = Date.now();
+    }
     this.startElapsedTimeUpdater();
     this.cdRef.detectChanges();
   }

@@ -14,7 +14,6 @@ import { MentionAutocompleteService, MentionSuggestion } from '../../services/me
 import { MentionParserService } from '../../services/mention-parser.service';
 import { Mention, MentionParseResult } from '../../models/conversation-state.model';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
-import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Subscription } from 'rxjs';
 
 @Component({
@@ -797,18 +796,18 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       if (result.payload?.taskGraph) {
         console.log('📋 Task graph detected, starting task orchestration');
         await this.handleTaskGraphExecution(userMessage, result, this.conversationId, conversationManagerMessage);
-        // Remove CM from active tasks
+        // Task will be removed in markMessageComplete()
         if (taskId) {
-          // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+          this.activeTasks.remove(taskId);
         }
       }
       // Stage 3: Check for sub-agent invocation (single-step delegation)
       else if (result.agentRun.FinalStep === 'Success' && result.payload?.invokeAgent) {
         // Reuse the existing conversationManagerMessage instead of creating new ones
         await this.handleSubAgentInvocation(userMessage, result, this.conversationId, conversationManagerMessage);
-        // Remove CM from active tasks
+        // Task will be removed in markMessageComplete()
         if (taskId) {
-          // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+          this.activeTasks.remove(taskId);
         }
       }
       // Stage 4: Direct chat response from Sage
@@ -838,9 +837,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         await userMessage.Save();
         this.messageSent.emit(userMessage);
 
-        // Remove CM from active tasks
+        // Task will be removed in markMessageComplete()
         if (taskId) {
-          // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+          this.activeTasks.remove(taskId);
         }
 
         // Clean up completion timestamp after delay
@@ -884,9 +883,9 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
           this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
         }
 
-        // Remove CM from active tasks
+        // Task will be removed in markMessageComplete()
         if (taskId) {
-          // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+          this.activeTasks.remove(taskId);
         }
       }
 
@@ -915,7 +914,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       // Clean up active task
       if (taskId) {
-        // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+        this.activeTasks.remove(taskId);
       }
     }
   }
@@ -1052,18 +1051,12 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         console.log('✅ Task graph execution completed successfully');
         taskExecutionMessage.Message = `✅ **${workflowName}** completed successfully`;
         taskExecutionMessage.Status = 'Complete';
-
-        // Mark as complete to trigger task cleanup and toast notification
-        this.markMessageComplete(taskExecutionMessage);
       } else {
         const errorMsg = result?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
         console.error('❌ Task graph execution failed:', errorMsg);
         taskExecutionMessage.Message = `❌ **${workflowName}** failed: ${errorMsg}`;
         taskExecutionMessage.Status = 'Error';
         taskExecutionMessage.Error = errorMsg;
-
-        // Mark as complete (error) to trigger task cleanup
-        this.markMessageComplete(taskExecutionMessage);
       }
 
       await taskExecutionMessage.Save();
@@ -1093,10 +1086,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       taskExecutionMessage.Message = `❌ **${workflowName}** - Error: ${String(error)}`;
       taskExecutionMessage.Status = 'Error';
       taskExecutionMessage.Error = String(error);
-
-      // Mark as complete (error) to trigger task cleanup
-      this.markMessageComplete(taskExecutionMessage);
-
       await taskExecutionMessage.Save();
       this.messageSent.emit(taskExecutionMessage);
 
@@ -1520,7 +1509,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       );
 
       // Remove from active tasks
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+      this.activeTasks.remove(taskId);
 
       if (continuityResult && continuityResult.success) {
         // Create response message
@@ -1569,7 +1558,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     } catch (error) {
       console.error(`❌ Error in agent continuity with ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+      this.activeTasks.remove(taskId);
 
       statusMessage.Status = 'Error';
       statusMessage.Message = `❌ **${agentName}** encountered an error\n\n${String(error)}`;
@@ -1648,7 +1637,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       );
 
       // Remove from active tasks
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+      this.activeTasks.remove(taskId);
 
       if (result && result.success) {
         if (result.agentRun.AgentID) {
@@ -1705,7 +1694,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     } catch (error) {
       console.error(`❌ Error invoking mentioned agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+      this.activeTasks.remove(taskId);
 
       // Update the existing agent response message if it was created
       if (agentResponseMessage) {
@@ -1861,7 +1850,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       );
 
       // Remove from active tasks
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+      this.activeTasks.remove(taskId);
 
       if (result && result.success) {
         // Update the response message with agent result
@@ -1901,7 +1890,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     } catch (error) {
       console.error(`❌ Error continuing with agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
+      this.activeTasks.remove(taskId);
 
       // Update the existing agent response message if it was created
       if (agentResponseMessage) {
@@ -1999,13 +1988,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     // Remove task from active tasks if it exists
     const task = this.activeTasks.getByConversationDetailId(conversationDetail.ID);
     if (task) {
-      console.log(`✅ Task found for message ${conversationDetail.ID} - removing from active tasks:`, {
-        taskId: task.id,
-        agentName: task.agentName,
-        conversationId: task.conversationId,
-        conversationName: task.conversationName
-      });
-
       this.activeTasks.remove(task.id);
 
       // Show completion notification
@@ -2014,8 +1996,6 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         'success',
         3000
       );
-    } else {
-      console.warn(`⚠️ No task found for completed message ${conversationDetail.ID} - task may have been removed prematurely or not added`);
     }
 
     // Emit completion event to parent so it can refresh agent run data

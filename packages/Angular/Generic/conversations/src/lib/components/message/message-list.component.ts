@@ -177,6 +177,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
           instance.userAvatarMap = this.userAvatarMap;
+          instance.isLastMessage = (index === messages.length - 1); // Update last message flag
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);
@@ -228,6 +229,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
           instance.allMessages = messages;
           instance.isProcessing = this.isProcessing;
           instance.userAvatarMap = this.userAvatarMap;
+          instance.isLastMessage = (index === messages.length - 1); // Mark last message
 
           // Get artifact from lazy-loading map
           const artifactList = this.artifactMap.get(message.ID);

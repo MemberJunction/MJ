@@ -57,4 +57,5 @@ export * from './lib/components/active-tasks/active-tasks-panel.component';
 export * from './lib/components/share/share-modal.component';
 export * from './lib/components/notification/notification-badge.component';
 export * from './lib/components/notification/activity-indicator.component';
-export * from './lib/components/toast/toast.component';export * from './lib/services/artifact-use-tracking.service';
+export * from './lib/components/toast/toast.component';
+export * from './lib/components/global-tasks/global-tasks-panel.component';

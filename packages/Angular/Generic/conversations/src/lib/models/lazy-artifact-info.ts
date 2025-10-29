@@ -145,8 +145,6 @@ export class LazyArtifactInfo {
 
       this._artifact = artifact;
       this._version = version;
-
-      console.log(`📦 Lazy-loaded artifact "${this.artifactName}" (v${this.versionNumber})`);
     } catch (error) {
       console.error('Error lazy-loading artifact:', error);
       throw error;
