@@ -6,16 +6,19 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to retrieve a specific submission from JotForm by submission ID
  *
+ * Security: API credentials are retrieved securely from Company Integrations
+ * instead of being passed as parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get Single JotForm Submission',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'SubmissionID',
  *     Value: '1234567890'
- *   }, {
- *     Name: 'APIKey',
- *     Value: 'abc123...'
  *   }, {
  *     Name: 'Region',
  *     Value: 'us'
@@ -41,6 +44,8 @@ export class GetSingleJotFormSubmissionAction extends JotFormBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const submissionId = this.getParamValue(params.Params, 'SubmissionID');
             if (!submissionId) {
                 return {
@@ -50,14 +55,7 @@ export class GetSingleJotFormSubmissionAction extends JotFormBaseAction {
                 };
             }
 
-            const apiKey = this.getParamValue(params.Params, 'APIKey');
-            if (!apiKey) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_KEY',
-                    Message: 'APIKey parameter is required'
-                };
-            }
+            const apiKey = await this.getSecureAPIToken(companyId, contextUser);
 
             const region = this.getParamValue(params.Params, 'Region') as 'us' | 'eu' | 'hipaa' | undefined;
 
@@ -120,12 +118,12 @@ export class GetSingleJotFormSubmissionAction extends JotFormBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'SubmissionID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'APIKey',
+                Name: 'SubmissionID',
                 Type: 'Input',
                 Value: null
             },

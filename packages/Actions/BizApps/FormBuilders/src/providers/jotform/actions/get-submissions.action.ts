@@ -7,16 +7,19 @@ import { FormResponse } from '../../../base/base-form-builder.action';
 /**
  * Action to retrieve submissions from a JotForm with comprehensive filtering options
  *
+ * Security: API credentials are retrieved securely from Company Integrations
+ * instead of being passed as parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get JotForm Submissions',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '123456789'
- *   }, {
- *     Name: 'APIKey',
- *     Value: 'your_api_key_here'
  *   }, {
  *     Name: 'Filter',
  *     Value: JSON.stringify({ status: 'ACTIVE', created_at: 'gt:2024-01-01' })
@@ -45,6 +48,8 @@ export class GetJotFormSubmissionsAction extends JotFormBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -54,14 +59,7 @@ export class GetJotFormSubmissionsAction extends JotFormBaseAction {
                 };
             }
 
-            const apiKey = this.getParamValue(params.Params, 'APIKey');
-            if (!apiKey) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_KEY',
-                    Message: 'APIKey parameter is required. Get your API key from https://www.jotform.com/myaccount/api'
-                };
-            }
+            const apiKey = await this.getSecureAPIToken(companyId, contextUser);
 
             const limit = this.getParamValue(params.Params, 'Limit') || 100;
             const offset = this.getParamValue(params.Params, 'Offset') || 0;
@@ -173,12 +171,12 @@ export class GetJotFormSubmissionsAction extends JotFormBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'APIKey',
+                Name: 'FormID',
                 Type: 'Input',
                 Value: null
             },

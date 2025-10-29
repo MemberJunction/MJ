@@ -6,16 +6,19 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to export Typeform responses as CSV format
  *
+ * Security: API credentials are retrieved securely from Company Integrations table or environment variables.
+ * Never pass API tokens as action parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Export Typeform Responses to CSV',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: '12345'
+ *   }, {
  *     Name: 'FormID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'tfp_...'
  *   }, {
  *     Name: 'IncludeMetadata',
  *     Value: true
@@ -41,6 +44,8 @@ export class ExportTypeformCSVAction extends TypeformBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -50,14 +55,8 @@ export class ExportTypeformCSVAction extends TypeformBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            // Securely retrieve API token using company integration
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const since = this.getParamValue(params.Params, 'Since');
             const until = this.getParamValue(params.Params, 'Until');
@@ -141,44 +140,44 @@ export class ExportTypeformCSVAction extends TypeformBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
-                Value: null 
+                Value: null,
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Since',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Until',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'Completed',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'IncludeMetadata',
                 Type: 'Input',
-                Value: true, 
+                Value: true,
             },
             {
                 Name: 'Delimiter',
                 Type: 'Input',
-                Value: ',', 
+                Value: ',',
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000, 
+                Value: 10000,
             }
         ];
     }

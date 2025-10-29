@@ -6,16 +6,19 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to retrieve details of a Typeform including all fields, settings, and logic
  *
+ * Security: API credentials are retrieved securely from Company Integrations table or environment variables.
+ * Never pass API tokens as action parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get Typeform Details',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: '12345'
+ *   }, {
  *     Name: 'FormID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'tfp_...'
  *   }]
  * });
  * ```
@@ -38,6 +41,8 @@ export class GetTypeformAction extends TypeformBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -47,14 +52,8 @@ export class GetTypeformAction extends TypeformBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            // Securely retrieve API token using company integration
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const response = await this.getAxiosInstance(apiToken).get(`/forms/${formId}`);
             const form = response.data;
@@ -160,14 +159,14 @@ export class GetTypeformAction extends TypeformBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
-                Value: null 
+                Value: null,
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             }
         ];
     }

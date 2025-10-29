@@ -6,16 +6,18 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to export SurveyMonkey responses as CSV format
  *
+ * Security: Uses secure credential lookup via CompanyID instead of accepting tokens directly.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Export SurveyMonkey Responses to CSV',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'SurveyID',
  *     Value: 'abc123'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'your-access-token'
  *   }, {
  *     Name: 'IncludeMetadata',
  *     Value: true
@@ -41,6 +43,8 @@ export class ExportSurveyMonkeyCSVAction extends SurveyMonkeyBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const surveyId = this.getParamValue(params.Params, 'SurveyID');
             if (!surveyId) {
                 return {
@@ -50,14 +54,7 @@ export class ExportSurveyMonkeyCSVAction extends SurveyMonkeyBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const startCreatedAt = this.getParamValue(params.Params, 'StartCreatedAt');
             const endCreatedAt = this.getParamValue(params.Params, 'EndCreatedAt');
@@ -139,12 +136,12 @@ export class ExportSurveyMonkeyCSVAction extends SurveyMonkeyBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'SurveyID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'AccessToken',
+                Name: 'SurveyID',
                 Type: 'Input',
                 Value: null
             },

@@ -6,16 +6,19 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to export Google Forms responses as CSV format
  *
+ * Security: This action uses secure credential lookup via Company Integrations.
+ * API credentials are retrieved from environment variables or the database based on CompanyID.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Export Google Forms Responses to CSV',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'company-uuid-here'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '1a2b3c4d5e6f7g8h9i0j'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'ya29.a0AfH6...'
  *   }, {
  *     Name: 'IncludeMetadata',
  *     Value: true
@@ -41,6 +44,8 @@ export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -50,14 +55,7 @@ export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required. Please provide a valid OAuth 2.0 access token.'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const includeMetadata = this.getParamValue(params.Params, 'IncludeMetadata') !== false;
             const delimiter = this.getParamValue(params.Params, 'Delimiter') || ',';
@@ -140,29 +138,29 @@ export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
-                Name: 'AccessToken',
+                Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'IncludeMetadata',
                 Type: 'Input',
-                Value: true, 
+                Value: true,
             },
             {
                 Name: 'Delimiter',
                 Type: 'Input',
-                Value: ',', 
+                Value: ',',
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000, 
+                Value: 10000,
             }
         ];
     }

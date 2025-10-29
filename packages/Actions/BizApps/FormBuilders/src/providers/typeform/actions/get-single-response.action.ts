@@ -6,19 +6,22 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to retrieve a specific response from Typeform by response token
  *
+ * Security: API credentials are retrieved securely from Company Integrations table or environment variables.
+ * Never pass API tokens as action parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get Single Typeform Response',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: '12345'
+ *   }, {
  *     Name: 'FormID',
  *     Value: 'abc123'
  *   }, {
  *     Name: 'ResponseToken',
  *     Value: 'xyz789'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'tfp_...'
  *   }]
  * });
  * ```
@@ -41,6 +44,8 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -59,14 +64,8 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            // Securely retrieve API token using company integration
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const tfResponse = await this.getSingleTypeformResponse(formId, responseToken, apiToken);
             const normalizedResponse = this.normalizeTypeformResponse(tfResponse);
@@ -142,17 +141,17 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
+                Name: 'CompanyID',
+                Type: 'Input',
+                Value: null,
+            },
+            {
                 Name: 'FormID',
                 Type: 'Input',
                 Value: null,
             },
             {
                 Name: 'ResponseToken',
-                Type: 'Input',
-                Value: null,
-            },
-            {
-                Name: 'APIToken',
                 Type: 'Input',
                 Value: null,
             }

@@ -6,13 +6,16 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to create a new JotForm programmatically
  *
+ * Security: API credentials are retrieved securely from Company Integrations
+ * instead of being passed as parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Create JotForm',
  *   Params: [{
- *     Name: 'APIToken',
- *     Value: 'your-api-key'
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
  *   }, {
  *     Name: 'Title',
  *     Value: 'Customer Feedback Form'
@@ -57,14 +60,9 @@ export class CreateJotFormAction extends JotFormBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const title = this.getParamValue(params.Params, 'Title');
             if (!title) {
@@ -254,7 +252,7 @@ export class CreateJotFormAction extends JotFormBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'APIToken',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },

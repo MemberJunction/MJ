@@ -6,16 +6,19 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to retrieve complete details of a JotForm including questions, properties, and settings
  *
+ * Security: API credentials are retrieved securely from Company Integrations
+ * instead of being passed as parameters.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get JotForm Details',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
+ *   }, {
  *     Name: 'FormID',
  *     Value: '123456789'
- *   }, {
- *     Name: 'APIToken',
- *     Value: 'abc...'
  *   }, {
  *     Name: 'Region',
  *     Value: 'us'
@@ -41,6 +44,8 @@ export class GetJotFormAction extends JotFormBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -50,14 +55,7 @@ export class GetJotFormAction extends JotFormBaseAction {
                 };
             }
 
-            const apiToken = this.getParamValue(params.Params, 'APIToken');
-            if (!apiToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_API_TOKEN',
-                    Message: 'APIToken parameter is required'
-                };
-            }
+            const apiToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const region = this.getParamValue(params.Params, 'Region') as 'us' | 'eu' | 'hipaa' | undefined;
 
@@ -172,12 +170,12 @@ export class GetJotFormAction extends JotFormBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'FormID',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
             {
-                Name: 'APIToken',
+                Name: 'FormID',
                 Type: 'Input',
                 Value: null
             },

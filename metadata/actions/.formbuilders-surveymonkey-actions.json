@@ -14,6 +14,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Company ID for SurveyMonkey integration configuration",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "11CD12FE-61D6-47CA-AFA6-C1C30DE206E9"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:05:42.263Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SurveyID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -22,29 +40,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "11CD12FE-61D6-47CA-AFA6-C1C30DE206E9"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:11.126Z",
-            "checksum": "d9cc3965b27a7e6b5370c5e41307c460d70ca5662c86b8d3ab753c6801d01f9e"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AccessToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "SurveyMonkey API access token (get from https://developer.surveymonkey.com/apps/)",
-            "IsRequired": true
-          },
-          "primaryKey": {
             "ID": "4074E918-6EA2-4A50-8732-7DDBCFAA8639"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:11.134Z",
-            "checksum": "00e339181b95bf34b0d9c793b6ae22092443c5f39ac73e1f6889715d515be97f"
+            "lastModified": "2025-10-29T15:05:42.278Z",
+            "checksum": "d9cc3965b27a7e6b5370c5e41307c460d70ca5662c86b8d3ab753c6801d01f9e"
           }
         },
         {
@@ -430,7 +430,7 @@
       "ID": "09DA4A47-0F6B-4DDC-A0FE-6C6F7D33982E"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.019Z",
+      "lastModified": "2025-10-29T13:23:06.333Z",
       "checksum": "c22090504b2397d7093a8bb149f9a3540909370d577843ffb99ba1954c20d983"
     }
   },
@@ -449,6 +449,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Company ID for SurveyMonkey integration configuration",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "59FA997A-0275-431B-9E41-D2BA72B048B8"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:05:42.361Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SurveyID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -457,10 +475,10 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "59FA997A-0275-431B-9E41-D2BA72B048B8"
+            "ID": "1CA91F90-A880-4C9C-B130-0B611CEAD981"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:11.366Z",
+            "lastModified": "2025-10-29T15:05:42.374Z",
             "checksum": "abe0fe7d78cd693807439916a51903d7bacb316d8cc433991c04d83eb1b49d50"
           }
         },
@@ -475,29 +493,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "1CA91F90-A880-4C9C-B130-0B611CEAD981"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:11.377Z",
-            "checksum": "869b4e0c74616ae8b5ef94f6f5ceb5f5b251e9d41ed0c1e86050c49bd0ad91f2"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AccessToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "SurveyMonkey API access token",
-            "IsRequired": true
-          },
-          "primaryKey": {
             "ID": "9F9294DB-0CE3-4926-B74F-47529F1CC691"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:11.387Z",
-            "checksum": "23ca0d873b6527fc75f73a1f0b6f364409765d0e620b3a75bbdcf2a560333f73"
+            "lastModified": "2025-10-29T15:05:42.384Z",
+            "checksum": "869b4e0c74616ae8b5ef94f6f5ceb5f5b251e9d41ed0c1e86050c49bd0ad91f2"
           }
         },
         {
@@ -719,7 +719,7 @@
       "ID": "5FC6C5FA-C9C0-4E7B-9403-D638BAC8EAEF"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.032Z",
+      "lastModified": "2025-10-29T13:23:06.336Z",
       "checksum": "69f8ee7ab423b1f66ae4877f71b6fb3a2d812b982306324c9d2c7eca932ec7fc"
     }
   },
@@ -738,6 +738,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Company ID for SurveyMonkey integration configuration",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "3E2D27C6-76E1-427C-B5E9-BE1D9EF6B2DE"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:05:42.459Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SurveyID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -746,29 +764,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "3E2D27C6-76E1-427C-B5E9-BE1D9EF6B2DE"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:11.561Z",
-            "checksum": "abe0fe7d78cd693807439916a51903d7bacb316d8cc433991c04d83eb1b49d50"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AccessToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "SurveyMonkey API access token",
-            "IsRequired": true
-          },
-          "primaryKey": {
             "ID": "C80E7E13-014E-4245-A202-2964E595830E"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:11.570Z",
-            "checksum": "23ca0d873b6527fc75f73a1f0b6f364409765d0e620b3a75bbdcf2a560333f73"
+            "lastModified": "2025-10-29T15:05:42.470Z",
+            "checksum": "abe0fe7d78cd693807439916a51903d7bacb316d8cc433991c04d83eb1b49d50"
           }
         },
         {
@@ -1116,7 +1116,7 @@
       "ID": "C8F445C1-2011-4370-8F14-2A41B057FDD6"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.044Z",
+      "lastModified": "2025-10-29T13:23:06.338Z",
       "checksum": "9a1d8f69f83e7c0baf771a2f4658210be351b1fc0ae436bdfc5569e790ce3110"
     }
   },
@@ -1135,6 +1135,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Company ID for SurveyMonkey integration configuration",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C1DC9119-1617-4645-96D7-B07BF280F13D"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:05:42.556Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SurveyID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -1143,29 +1161,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "C1DC9119-1617-4645-96D7-B07BF280F13D"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:11.816Z",
-            "checksum": "abe0fe7d78cd693807439916a51903d7bacb316d8cc433991c04d83eb1b49d50"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AccessToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "SurveyMonkey API access token",
-            "IsRequired": true
-          },
-          "primaryKey": {
             "ID": "B24E9DD4-29EE-4EDC-9F22-4A639E026CD5"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:11.826Z",
-            "checksum": "23ca0d873b6527fc75f73a1f0b6f364409765d0e620b3a75bbdcf2a560333f73"
+            "lastModified": "2025-10-29T15:05:42.568Z",
+            "checksum": "abe0fe7d78cd693807439916a51903d7bacb316d8cc433991c04d83eb1b49d50"
           }
         },
         {
@@ -1444,7 +1444,7 @@
       "ID": "C175F13E-16DC-4FC4-B2D1-46041B480E8C"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.055Z",
+      "lastModified": "2025-10-29T13:23:06.341Z",
       "checksum": "8435ad4c71b259c38dc0ed6544670b88740579ab2f3bbc27813516fcecbc825c"
     }
   },
@@ -1463,6 +1463,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Company ID for SurveyMonkey integration configuration",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5C3952AD-BB41-46E7-9CDA-C55FD77A81E4"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:05:42.645Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SurveyID",
             "Type": "Input",
             "ValueType": "Scalar",
@@ -1471,29 +1489,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "5C3952AD-BB41-46E7-9CDA-C55FD77A81E4"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:12.013Z",
-            "checksum": "b8ae7d2b7365d71f348324dd0a2b4aa0bbbb1be9cfa2f4183c8754b5eb153233"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AccessToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "SurveyMonkey API access token",
-            "IsRequired": true
-          },
-          "primaryKey": {
             "ID": "05C62316-7352-459F-8E32-B874FC58B8D3"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:12.023Z",
-            "checksum": "23ca0d873b6527fc75f73a1f0b6f364409765d0e620b3a75bbdcf2a560333f73"
+            "lastModified": "2025-10-29T15:05:42.658Z",
+            "checksum": "b8ae7d2b7365d71f348324dd0a2b4aa0bbbb1be9cfa2f4183c8754b5eb153233"
           }
         },
         {
@@ -1804,7 +1804,7 @@
       "ID": "D6E11636-E826-415E-9859-B54634FE772E"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.066Z",
+      "lastModified": "2025-10-29T13:23:06.343Z",
       "checksum": "5f5419cf13fbbb1a9287dcf81483437c54938c6a5eea238a12a3b7c856e6de45"
     }
   },
@@ -1823,6 +1823,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Company ID for SurveyMonkey integration configuration",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F22147EC-960F-48B4-9EAF-4AA4F5A5FECF"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:05:42.733Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SurveyID",
             "Type": "Both",
             "ValueType": "Scalar",
@@ -1831,29 +1849,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "F22147EC-960F-48B4-9EAF-4AA4F5A5FECF"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:12.227Z",
-            "checksum": "ac078ce4080377e05191375dd02aad1a57ff9d43d0c35a1ef31cec2de1f76743"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AccessToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "SurveyMonkey API access token",
-            "IsRequired": true
-          },
-          "primaryKey": {
             "ID": "DF0CA698-E8D6-4DB8-AB89-56999A9FB05C"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:12.235Z",
-            "checksum": "23ca0d873b6527fc75f73a1f0b6f364409765d0e620b3a75bbdcf2a560333f73"
+            "lastModified": "2025-10-29T15:05:42.743Z",
+            "checksum": "ac078ce4080377e05191375dd02aad1a57ff9d43d0c35a1ef31cec2de1f76743"
           }
         },
         {
@@ -2128,7 +2128,7 @@
       "ID": "9E131E5B-2D15-4A21-86A4-A0834C31B0FB"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.078Z",
+      "lastModified": "2025-10-29T13:23:06.345Z",
       "checksum": "6fb307cdd480e2959e2898c5141d5bee4a4e0df75060371222dadfdf8e654958"
     }
   },
@@ -2147,19 +2147,19 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "AccessToken",
+            "Name": "CompanyID",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "SurveyMonkey API access token with create permissions",
+            "Description": "Company ID for SurveyMonkey integration configuration",
             "IsRequired": true
           },
           "primaryKey": {
             "ID": "3F0857FE-7BBF-4714-BC4F-7E97DE261977"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:12.415Z",
-            "checksum": "b4444a952dc7778e7bb9ce1b89e36f59d09b3f08dcd4534103452c7c61a4bdf8"
+            "lastModified": "2025-10-29T15:05:42.787Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
           }
         },
         {
@@ -2455,7 +2455,7 @@
       "ID": "6D55727D-B21C-4D16-B765-8AA691364A9E"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.090Z",
+      "lastModified": "2025-10-29T13:23:06.347Z",
       "checksum": "05270069943a07ea8e248fa8d223fbcdbb43bd7dd2c17f81acb99fc94ad6396d"
     }
   },
@@ -2474,6 +2474,24 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Company ID for SurveyMonkey integration configuration",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B39F6452-ADE7-4BF9-860B-3EEAEE5B2929"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:05:42.867Z",
+            "checksum": "3941f162144514e0023e185ccc7f39113de772a61c67adbc5b2f0342f9b6ff18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "SurveyID",
             "Type": "Both",
             "ValueType": "Scalar",
@@ -2482,29 +2500,11 @@
             "IsRequired": true
           },
           "primaryKey": {
-            "ID": "B39F6452-ADE7-4BF9-860B-3EEAEE5B2929"
-          },
-          "sync": {
-            "lastModified": "2025-10-29T05:25:12.635Z",
-            "checksum": "b969d4705ada1c70e4453472ae5fb5392592ebc2ff70fa4f152c5d8e5c97cebc"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
-            "Name": "AccessToken",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "SurveyMonkey API access token with write permissions",
-            "IsRequired": true
-          },
-          "primaryKey": {
             "ID": "F7F3C6DD-2F07-45A4-87B0-C21F3292DA34"
           },
           "sync": {
-            "lastModified": "2025-10-29T05:25:12.644Z",
-            "checksum": "be659b64aff716bc6b7adc99590c9ce60dcee6bbf4b87a41441ceb8ac398c851"
+            "lastModified": "2025-10-29T15:05:42.879Z",
+            "checksum": "b969d4705ada1c70e4453472ae5fb5392592ebc2ff70fa4f152c5d8e5c97cebc"
           }
         },
         {
@@ -2765,7 +2765,7 @@
       "ID": "381C8C15-E5A5-4909-9FA2-818921839786"
     },
     "sync": {
-      "lastModified": "2025-10-29T05:25:11.099Z",
+      "lastModified": "2025-10-29T13:23:06.350Z",
       "checksum": "9c606aab8b99cc7678262377b8fc5c11c90b0bd15c925aa50ea2a5a9c8d1f068"
     }
   }

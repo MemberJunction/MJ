@@ -6,19 +6,22 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to retrieve a specific response from Google Forms by response ID
  *
+ * Security: This action uses secure credential lookup via Company Integrations.
+ * API credentials are retrieved from environment variables or the database based on CompanyID.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Get Single Google Forms Response',
  *   Params: [{
+ *     Name: 'CompanyID',
+ *     Value: 'company-uuid-here'
+ *   }, {
  *     Name: 'FormID',
  *     Value: 'abc123xyz'
  *   }, {
  *     Name: 'ResponseID',
  *     Value: 'ACYDBNhVXdW3lFGH...'
- *   }, {
- *     Name: 'AccessToken',
- *     Value: 'ya29.a0AfH6...'
  *   }]
  * });
  * ```
@@ -41,6 +44,8 @@ export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
                 };
             }
 
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
             const formId = this.getParamValue(params.Params, 'FormID');
             if (!formId) {
                 return {
@@ -59,14 +64,7 @@ export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required'
-                };
-            }
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const gfResponse = await this.getSingleGoogleFormsResponse(formId, responseId, accessToken);
             const normalizedResponse = this.normalizeGoogleFormsResponse(gfResponse);
@@ -133,19 +131,19 @@ export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
+                Name: 'CompanyID',
+                Type: 'Input',
+                Value: null,
+            },
+            {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null, 
+                Value: null,
             },
             {
                 Name: 'ResponseID',
                 Type: 'Input',
-                Value: null, 
-            },
-            {
-                Name: 'AccessToken',
-                Type: 'Input',
-                Value: null, 
+                Value: null,
             }
         ];
     }

@@ -6,13 +6,15 @@ import { BaseAction } from '@memberjunction/actions';
 /**
  * Action to create a new SurveyMonkey survey programmatically
  *
+ * Security: Uses secure credential lookup via CompanyID instead of accepting tokens directly.
+ *
  * @example
  * ```typescript
  * await runAction({
  *   ActionName: 'Create SurveyMonkey',
  *   Params: [{
- *     Name: 'AccessToken',
- *     Value: 'your-access-token'
+ *     Name: 'CompanyID',
+ *     Value: 'your-company-id'
  *   }, {
  *     Name: 'Title',
  *     Value: 'Customer Satisfaction Survey'
@@ -59,14 +61,9 @@ export class CreateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
                 };
             }
 
-            const accessToken = this.getParamValue(params.Params, 'AccessToken');
-            if (!accessToken) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_ACCESS_TOKEN',
-                    Message: 'AccessToken parameter is required'
-                };
-            }
+            const companyId = this.getParamValue(params.Params, 'CompanyID');
+
+            const accessToken = await this.getSecureAPIToken(companyId, contextUser);
 
             const title = this.getParamValue(params.Params, 'Title');
             if (!title) {
@@ -170,7 +167,7 @@ export class CreateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
     public get Params(): ActionParam[] {
         return [
             {
-                Name: 'AccessToken',
+                Name: 'CompanyID',
                 Type: 'Input',
                 Value: null
             },
