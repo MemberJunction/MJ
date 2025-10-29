@@ -1155,7 +1155,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (agentResult && agentResult.success) {
         // Update message with result
-        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', agentResult.suggestedResponses);
 
         // Server created artifacts - emit event to trigger UI reload
         if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
@@ -1259,8 +1259,8 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         if (subResult.agentRun.AgentID) {
           agentResponseMessage.AgentID = subResult.agentRun.AgentID;
         }
-        
-        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+
+        await this.updateConversationDetail(agentResponseMessage, subResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', subResult.suggestedResponses);
 
         // Server created artifacts - emit event to trigger UI reload
         if (subResult.payload && Object.keys(subResult.payload).length > 0) {
@@ -1618,7 +1618,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         }
         // Stage 3: Normal chat response
         else {
-          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete')
+          await this.updateConversationDetail(agentResponseMessage, result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result.suggestedResponses)
 
           // Server created artifacts - emit event to trigger UI reload
           if (result.payload && Object.keys(result.payload).length > 0) {
@@ -1799,7 +1799,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
 
       if (result && result.success) {
         // Update the response message with agent result
-        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete');
+        await this.updateConversationDetail(agentResponseMessage,result.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', result.suggestedResponses);
 
         // Server created artifacts (handles versioning) - emit event to trigger UI reload
         if (result.payload && Object.keys(result.payload).length > 0) {
