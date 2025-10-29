@@ -109,7 +109,7 @@ export class CreateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
             const surveyUrl = surveyDetails.collect_url || `https://www.surveymonkey.com/r/${createdSurvey.id}`;
             const editUrl = surveyDetails.edit_url || `https://www.surveymonkey.com/create/?sm=${createdSurvey.id}`;
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Survey',
                     Type: 'Output',
@@ -172,32 +172,27 @@ export class CreateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'SurveyMonkey OAuth access token with survey creation permissions'
+                Value: null
             },
             {
                 Name: 'Title',
                 Type: 'Input',
-                Value: null,
-                Description: 'Title of the survey'
+                Value: null
             },
             {
                 Name: 'Pages',
                 Type: 'Input',
-                Value: null,
-                Description: 'Array of page objects. Each page should have: title (string) and questions (array). Questions need: family (single_choice, multiple_choice, matrix, open_ended, demographic, datetime, presentation), subtype (varies by family), heading (question text), and answers object. Example: [{title: "Page 1", questions: [{family: "single_choice", subtype: "vertical", heading: "Your question?", answers: {choices: [{text: "Option 1"}, {text: "Option 2"}]}}]}]'
+                Value: null
             },
             {
                 Name: 'Language',
                 Type: 'Input',
-                Value: null,
-                Description: 'Optional survey language code (e.g., "en", "es", "fr", "de"). Defaults to "en" if not specified'
+                Value: null
             },
             {
                 Name: 'ButtonsText',
                 Type: 'Input',
-                Value: null,
-                Description: 'Optional object to customize button text. Properties: next_button, prev_button, done_button, exit_button. Example: {next_button: "Continue", prev_button: "Back", done_button: "Submit"}'
+                Value: null
             }
         ];
     }

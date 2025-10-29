@@ -83,7 +83,7 @@ export class ExportSurveyMonkeyCSVAction extends SurveyMonkeyBaseAction {
 
             const { csv, headers } = this.convertToCSV(responses, includeMetadata, delimiter);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'CSVData',
                     Type: 'Output',
@@ -141,44 +141,37 @@ export class ExportSurveyMonkeyCSVAction extends SurveyMonkeyBaseAction {
             {
                 Name: 'SurveyID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The SurveyMonkey survey ID'
+                Value: null
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'SurveyMonkey API access token'
+                Value: null
             },
             {
                 Name: 'StartCreatedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'Start date for responses to export (ISO 8601 format)'
+                Value: null
             },
             {
                 Name: 'EndCreatedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'End date for responses to export (ISO 8601 format)'
+                Value: null
             },
             {
                 Name: 'IncludeMetadata',
                 Type: 'Input',
-                Value: true,
-                Description: 'Include metadata columns (browser, platform, referer, user agent)'
+                Value: true
             },
             {
                 Name: 'Delimiter',
                 Type: 'Input',
-                Value: ',',
-                Description: 'CSV delimiter character (default: comma)'
+                Value: ','
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum responses to export (default 10000)'
+                Value: 10000
             }
         ];
     }

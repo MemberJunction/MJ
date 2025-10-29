@@ -113,7 +113,7 @@ export class CreateJotFormAction extends JotFormBaseAction {
             const formUrl = `https://form.jotform.com/${createdForm.id}`;
             const adminUrl = `https://www.jotform.com/build/${createdForm.id}`;
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'FormDetails',
                     Type: 'Output',
@@ -256,32 +256,27 @@ export class CreateJotFormAction extends JotFormBaseAction {
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key with form creation permissions'
+                Value: null
             },
             {
                 Name: 'Title',
                 Type: 'Input',
-                Value: null,
-                Description: 'Title of the form'
+                Value: null
             },
             {
                 Name: 'Questions',
                 Type: 'Input',
-                Value: null,
-                Description: 'Array of question objects. Each question needs: type, text, and optional name, required, validation, options. Types: control_text (short text), control_textarea (long text), control_email, control_number, control_dropdown, control_radio, control_checkbox, control_rating, control_datetime, control_fileupload, control_payment, control_address, control_phone, control_fullname, control_signature, control_matrix, control_scale, control_head (section header), control_button (submit button)'
+                Value: null
             },
             {
                 Name: 'Properties',
                 Type: 'Input',
-                Value: null,
-                Description: 'Optional form properties object (e.g., {thankYouURL: "https://example.com/thanks", requiresPassword: false, activeRedirect: "thankurl", sendPostData: "Yes"})'
+                Value: null
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: null,
-                Description: 'Optional JotForm API region: "us" (default), "eu", or "hipaa"'
+                Value: null
             }
         ];
     }

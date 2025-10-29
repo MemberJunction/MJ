@@ -95,7 +95,7 @@ export class GetJotFormAction extends JotFormBaseAction {
             };
 
             // Prepare output parameters
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'FormDetails',
                     Type: 'Output',
@@ -174,20 +174,17 @@ export class GetJotFormAction extends JotFormBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The JotForm form ID to retrieve'
+                Value: null
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key for authentication'
+                Value: null
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: 'us',
-                Description: 'JotForm region (us, eu, hipaa). Default: us'
+                Value: 'us'
             }
         ];
     }

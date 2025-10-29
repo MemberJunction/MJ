@@ -118,7 +118,7 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
                 }
             }
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Responses',
                     Type: 'Output',
@@ -176,80 +176,67 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Typeform form ID (found in the form URL)'
+                Value: null, 
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Typeform API access token (get from https://admin.typeform.com/account#/section/tokens)'
+                Value: null, 
             },
             {
                 Name: 'PageSize',
                 Type: 'Input',
-                Value: 25,
-                Description: 'Number of responses per page (1-1000, default 25)'
+                Value: 25, 
             },
             {
                 Name: 'Since',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter responses submitted since this date (ISO 8601 format or Unix timestamp)'
+                Value: null, 
             },
             {
                 Name: 'Until',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter responses submitted until this date (ISO 8601 format or Unix timestamp)'
+                Value: null, 
             },
             {
                 Name: 'After',
                 Type: 'Input',
-                Value: null,
-                Description: 'Response token for pagination - get next page after this token'
+                Value: null, 
             },
             {
                 Name: 'Before',
                 Type: 'Input',
-                Value: null,
-                Description: 'Response token for pagination - get page before this token'
+                Value: null, 
             },
             {
                 Name: 'Completed',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter by completion status (true=completed only, false=partial only, null=all)'
+                Value: null, 
             },
             {
                 Name: 'Sort',
                 Type: 'Input',
-                Value: 'submitted_at,desc',
-                Description: 'Sort order: "submitted_at,asc" or "submitted_at,desc" (default: submitted_at,desc)'
+                Value: 'submitted_at,desc', 
             },
             {
                 Name: 'Query',
                 Type: 'Input',
-                Value: null,
-                Description: 'Text search across all response answers'
+                Value: null, 
             },
             {
                 Name: 'Fields',
                 Type: 'Input',
-                Value: null,
-                Description: 'Comma-separated list of field IDs to include (returns only these fields)'
+                Value: null, 
             },
             {
                 Name: 'GetAllPages',
                 Type: 'Input',
-                Value: false,
-                Description: 'If true, automatically fetch all pages of responses (up to MaxResponses)'
+                Value: false, 
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum number of responses to retrieve when GetAllPages is true (default 10000)'
+                Value: 10000, 
             }
         ];
     }

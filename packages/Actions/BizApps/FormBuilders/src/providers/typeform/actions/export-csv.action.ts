@@ -85,7 +85,7 @@ export class ExportTypeformCSVAction extends TypeformBaseAction {
 
             const { csv, headers } = this.convertToCSV(responses, includeMetadata, delimiter);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'CSVData',
                     Type: 'Output',
@@ -143,50 +143,42 @@ export class ExportTypeformCSVAction extends TypeformBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Typeform form ID'
+                Value: null 
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Typeform API access token'
+                Value: null, 
             },
             {
                 Name: 'Since',
                 Type: 'Input',
-                Value: null,
-                Description: 'Start date for responses to export (ISO 8601 format)'
+                Value: null, 
             },
             {
                 Name: 'Until',
                 Type: 'Input',
-                Value: null,
-                Description: 'End date for responses to export (ISO 8601 format)'
+                Value: null, 
             },
             {
                 Name: 'Completed',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter by completion status (true=completed only, false=partial only, null=all)'
+                Value: null, 
             },
             {
                 Name: 'IncludeMetadata',
                 Type: 'Input',
-                Value: true,
-                Description: 'Include metadata columns (browser, platform, referer, user agent)'
+                Value: true, 
             },
             {
                 Name: 'Delimiter',
                 Type: 'Input',
-                Value: ',',
-                Description: 'CSV delimiter character (default: comma)'
+                Value: ',', 
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum responses to export (default 10000)'
+                Value: 10000, 
             }
         ];
     }

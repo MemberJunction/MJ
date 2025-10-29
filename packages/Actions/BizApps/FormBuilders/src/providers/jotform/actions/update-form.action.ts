@@ -165,7 +165,7 @@ export class UpdateJotFormAction extends JotFormBaseAction {
             const formUrl = updatedForm.url || `https://form.jotform.com/${formId}`;
 
             // Build output parameters
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'FormID',
                     Type: 'Output',
@@ -219,44 +219,37 @@ export class UpdateJotFormAction extends JotFormBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The JotForm form ID to update (found in the form URL or dashboard)'
+                Value: null
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key with write permissions (get from https://www.jotform.com/myaccount/api)'
+                Value: null
             },
             {
                 Name: 'MergeWithExisting',
                 Type: 'Input',
-                Value: true,
-                Description: 'If true (default), fetches existing form and merges your changes. If false, replaces form data with your data (DANGEROUS - may lose existing configuration)'
+                Value: true
             },
             {
                 Name: 'Title',
                 Type: 'Input',
-                Value: null,
-                Description: 'New title for the form (optional)'
+                Value: null
             },
             {
                 Name: 'Questions',
                 Type: 'Input',
-                Value: null,
-                Description: 'Questions/fields to update. Can be array of question objects or object keyed by question ID (merged with existing if MergeWithExisting=true)'
+                Value: null
             },
             {
                 Name: 'Properties',
                 Type: 'Input',
-                Value: null,
-                Description: 'Form properties to update as JSON object (e.g., {"height":"600","thankurl":"https://example.com/thanks"}). Merged with existing if MergeWithExisting=true'
+                Value: null
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: 'us',
-                Description: 'JotForm region: "us" (default), "eu", or "hipaa"'
+                Value: 'us'
             }
         ];
     }

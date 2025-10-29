@@ -110,7 +110,7 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
 
             const emails = this.extractEmailFromResponses(newResponses);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'NewResponses',
                     Type: 'Output',
@@ -192,38 +192,32 @@ export class WatchNewSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction 
             {
                 Name: 'SurveyID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The SurveyMonkey survey ID to monitor (found in the survey URL or API)'
+                Value: null
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'SurveyMonkey access token (get from https://developer.surveymonkey.com/apps/)'
+                Value: null
             },
             {
                 Name: 'LastCheckedTimestamp',
                 Type: 'Input',
-                Value: null,
-                Description: 'ISO 8601 timestamp of last check. If not provided, uses DefaultLookbackMinutes.'
+                Value: null
             },
             {
                 Name: 'DefaultLookbackMinutes',
                 Type: 'Input',
-                Value: 60,
-                Description: 'If LastCheckedTimestamp not provided, look back this many minutes (default 60)'
+                Value: 60
             },
             {
                 Name: 'OnlyCompleted',
                 Type: 'Input',
-                Value: false,
-                Description: 'Only return completed responses (default false)'
+                Value: false
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 1000,
-                Description: 'Maximum new responses to return (default 1000)'
+                Value: 1000
             }
         ];
     }

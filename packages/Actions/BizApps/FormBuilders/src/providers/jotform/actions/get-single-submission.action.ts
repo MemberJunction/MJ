@@ -64,7 +64,7 @@ export class GetSingleJotFormSubmissionAction extends JotFormBaseAction {
             const jfSubmission = await this.getSingleJotFormSubmission(submissionId, apiKey, region);
             const normalizedSubmission = this.normalizeJotFormSubmission(jfSubmission);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Submission',
                     Type: 'Output',
@@ -122,20 +122,17 @@ export class GetSingleJotFormSubmissionAction extends JotFormBaseAction {
             {
                 Name: 'SubmissionID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The JotForm submission ID to retrieve'
+                Value: null
             },
             {
                 Name: 'APIKey',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key'
+                Value: null
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm region: us, eu, or hipaa (defaults to us)'
+                Value: null
             }
         ];
     }

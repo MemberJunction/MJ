@@ -71,7 +71,7 @@ export class GetSingleSurveyMonkeyResponseAction extends SurveyMonkeyBaseAction 
             const smResponse = await this.getSingleSurveyMonkeyResponse(surveyId, responseId, accessToken);
             const normalizedResponse = this.normalizeSurveyMonkeyResponse(smResponse);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Response',
                     Type: 'Output',
@@ -134,20 +134,17 @@ export class GetSingleSurveyMonkeyResponseAction extends SurveyMonkeyBaseAction 
             {
                 Name: 'SurveyID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The SurveyMonkey survey ID'
+                Value: null
             },
             {
                 Name: 'ResponseID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The unique response ID to retrieve'
+                Value: null
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'SurveyMonkey API access token'
+                Value: null
             }
         ];
     }

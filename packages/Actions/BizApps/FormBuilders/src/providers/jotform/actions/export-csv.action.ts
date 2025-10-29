@@ -96,7 +96,7 @@ export class ExportJotFormCSVAction extends JotFormBaseAction {
 
             const { csv, headers } = this.convertToCSV(submissions, includeMetadata, delimiter);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'CSVData',
                     Type: 'Output',
@@ -154,44 +154,37 @@ export class ExportJotFormCSVAction extends JotFormBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The JotForm form ID'
+                Value: null
             },
             {
                 Name: 'APIKey',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key'
+                Value: null
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: 'us',
-                Description: 'JotForm API region: "us" (default), "eu", or "hipaa"'
+                Value: 'us'
             },
             {
                 Name: 'Filter',
                 Type: 'Input',
-                Value: null,
-                Description: 'Optional filter object as JSON (e.g., {"status": "ACTIVE"})'
+                Value: null
             },
             {
                 Name: 'IncludeMetadata',
                 Type: 'Input',
-                Value: true,
-                Description: 'Include metadata columns (browser, platform, referer, user agent)'
+                Value: true
             },
             {
                 Name: 'Delimiter',
                 Type: 'Input',
-                Value: ',',
-                Description: 'CSV delimiter character (default: comma)'
+                Value: ','
             },
             {
                 Name: 'MaxSubmissions',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum submissions to export (default 10000)'
+                Value: 10000
             }
         ];
     }

@@ -98,7 +98,7 @@ export class GetSurveyMonkeyDetailsAction extends SurveyMonkeyBaseAction {
             };
 
             // Prepare output parameters
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Survey',
                     Type: 'Output',
@@ -172,14 +172,12 @@ export class GetSurveyMonkeyDetailsAction extends SurveyMonkeyBaseAction {
             {
                 Name: 'SurveyID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The SurveyMonkey survey ID to retrieve'
+                Value: null
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'SurveyMonkey API access token (OAuth2)'
+                Value: null
             }
         ];
     }

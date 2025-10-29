@@ -126,7 +126,7 @@ export class UpdateTypeformAction extends TypeformBaseAction {
 
             const formUrl = updatedForm._links?.display || `https://form.typeform.com/to/${updatedForm.id}`;
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Form',
                     Type: 'Output',
@@ -189,56 +189,47 @@ export class UpdateTypeformAction extends TypeformBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Typeform form ID to update'
+                Value: null, 
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Typeform API access token with write permissions'
+                Value: null, 
             },
             {
                 Name: 'MergeWithExisting',
                 Type: 'Input',
-                Value: true,
-                Description: 'If true (default), fetches existing form and merges your changes. If false, replaces entire form with your data (DANGEROUS - will delete unspecified fields)'
+                Value: true, 
             },
             {
                 Name: 'Title',
                 Type: 'Input',
-                Value: null,
-                Description: 'New title for the form (optional if MergeWithExisting=true)'
+                Value: null, 
             },
             {
                 Name: 'Fields',
                 Type: 'Input',
-                Value: null,
-                Description: 'Array of field objects to replace all fields (required if MergeWithExisting=false)'
+                Value: null, 
             },
             {
                 Name: 'Settings',
                 Type: 'Input',
-                Value: null,
-                Description: 'Form settings to update (merged with existing if MergeWithExisting=true)'
+                Value: null, 
             },
             {
                 Name: 'Logic',
                 Type: 'Input',
-                Value: null,
-                Description: 'Array of logic jump rules (replaces existing logic)'
+                Value: null, 
             },
             {
                 Name: 'HiddenFields',
                 Type: 'Input',
-                Value: null,
-                Description: 'Array of hidden field names (replaces existing hidden fields)'
+                Value: null, 
             },
             {
                 Name: 'ThemeID',
                 Type: 'Input',
-                Value: null,
-                Description: 'Theme ID to apply to the form'
+                Value: null, 
             }
         ];
     }

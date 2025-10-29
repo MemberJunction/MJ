@@ -142,7 +142,7 @@ export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
       const updatedSurvey = await this.updateSurveyMonkey(surveyId, accessToken, updateData);
 
       // Build output parameters
-      const outputParams = [
+      const outputParams: ActionParam[] = [
         {
           Name: 'Survey',
           Type: 'Output',
@@ -201,44 +201,36 @@ export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
         Name: 'SurveyID',
         Type: 'Input',
         Value: null,
-        Description: 'The SurveyMonkey survey ID to update',
       },
       {
         Name: 'AccessToken',
         Type: 'Input',
         Value: null,
-        Description: 'SurveyMonkey API access token with write permissions',
       },
       {
         Name: 'MergeWithExisting',
         Type: 'Input',
-        Value: true,
-        Description:
-          'If true (default), fetches existing survey and merges your changes. If false, replaces entire survey data (DANGEROUS - may lose existing configuration)',
+        Value: true, 
       },
       {
         Name: 'Title',
         Type: 'Input',
         Value: null,
-        Description: 'New title for the survey (optional)',
       },
       {
         Name: 'Pages',
         Type: 'Input',
         Value: null,
-        Description: 'Array of page objects to update. Note: This requires separate API calls and may need additional implementation (optional)',
       },
       {
         Name: 'Language',
         Type: 'Input',
         Value: null,
-        Description: 'Survey language code (e.g., "en", "es", "fr"). See SurveyMonkey API docs for supported languages (optional)',
       },
       {
         Name: 'ButtonsText',
         Type: 'Input',
         Value: null,
-        Description: 'Custom button text as JSON object with keys: next_button, prev_button, done_button, exit_button (optional)',
       },
     ];
   }

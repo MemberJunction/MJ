@@ -77,7 +77,7 @@ export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
                 respondent.email = gfResponse.respondentEmail;
             }
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Response',
                     Type: 'Output',
@@ -135,20 +135,17 @@ export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Google Forms form ID'
+                Value: null, 
             },
             {
                 Name: 'ResponseID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The unique response ID to retrieve'
+                Value: null, 
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Google OAuth 2.0 access token with forms.responses.readonly or forms.readonly scope'
+                Value: null, 
             }
         ];
     }

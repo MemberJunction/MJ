@@ -109,7 +109,7 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
 
             const emails = this.extractEmailFromResponses(newResponses);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'NewResponses',
                     Type: 'Output',
@@ -191,38 +191,32 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Typeform form ID to monitor'
+                Value: null, 
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Typeform API access token'
+                Value: null, 
             },
             {
                 Name: 'LastCheckedTimestamp',
                 Type: 'Input',
                 Value: null,
-                Description: 'ISO 8601 timestamp of last check. If not provided, uses DefaultLookbackMinutes.'
             },
             {
                 Name: 'DefaultLookbackMinutes',
                 Type: 'Input',
                 Value: 60,
-                Description: 'If LastCheckedTimestamp not provided, look back this many minutes (default 60)'
             },
             {
                 Name: 'OnlyCompleted',
                 Type: 'Input',
                 Value: false,
-                Description: 'Only return completed responses (default false)'
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
                 Value: 1000,
-                Description: 'Maximum new responses to return (default 1000)'
             }
         ];
     }

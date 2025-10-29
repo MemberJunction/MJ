@@ -115,7 +115,7 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
             const dailyBreakdown = this.calculateDailyBreakdown(responses);
             const hourlyDistribution = this.calculateHourlyDistribution(responses);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Statistics',
                     Type: 'Output',
@@ -240,44 +240,37 @@ export class GetTypeformStatisticsAction extends TypeformBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Typeform form ID'
+                Value: null, 
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Typeform API access token'
+                Value: null, 
             },
             {
                 Name: 'Since',
                 Type: 'Input',
-                Value: null,
-                Description: 'Start date for analysis (ISO 8601 format)'
+                Value: null, 
             },
             {
                 Name: 'Until',
                 Type: 'Input',
-                Value: null,
-                Description: 'End date for analysis (ISO 8601 format)'
+                Value: null, 
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum responses to analyze (default 10000)'
+                Value: 10000, 
             },
             {
                 Name: 'IncludeTopAnswers',
                 Type: 'Input',
-                Value: true,
-                Description: 'Calculate most popular answers for each field'
+                Value: true, 
             },
             {
                 Name: 'TopAnswersLimit',
                 Type: 'Input',
-                Value: 10,
-                Description: 'Number of top answers to return per field (default 10)'
+                Value: 10, 
             }
         ];
     }

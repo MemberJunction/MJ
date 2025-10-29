@@ -115,7 +115,7 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
             const dailyBreakdown = this.calculateDailyBreakdown(responses);
             const hourlyDistribution = this.calculateHourlyDistribution(responses);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Statistics',
                     Type: 'Output',
@@ -246,44 +246,37 @@ export class GetSurveyMonkeyStatisticsAction extends SurveyMonkeyBaseAction {
             {
                 Name: 'SurveyID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The SurveyMonkey survey ID'
+                Value: null
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'SurveyMonkey OAuth 2.0 access token'
+                Value: null
             },
             {
                 Name: 'StartCreatedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'Start date for analysis (ISO 8601 format)'
+                Value: null
             },
             {
                 Name: 'EndCreatedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'End date for analysis (ISO 8601 format)'
+                Value: null
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum responses to analyze (default 10000)'
+                Value: 10000
             },
             {
                 Name: 'IncludeTopAnswers',
                 Type: 'Input',
-                Value: true,
-                Description: 'Calculate most popular answers for each field'
+                Value: true
             },
             {
                 Name: 'TopAnswersLimit',
                 Type: 'Input',
-                Value: 10,
-                Description: 'Number of top answers to return per field (default 10)'
+                Value: 10
             }
         ];
     }

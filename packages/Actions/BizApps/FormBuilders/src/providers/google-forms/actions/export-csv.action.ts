@@ -84,7 +84,7 @@ export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
 
             const { csv, headers } = this.convertToCSV(responses, includeMetadata, delimiter);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'CSVData',
                     Type: 'Output',
@@ -142,32 +142,27 @@ export class ExportGoogleFormsCSVAction extends GoogleFormsBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Google Forms form ID (can be extracted from form URL)'
+                Value: null, 
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'OAuth 2.0 access token with forms.responses.readonly or forms.readonly scope'
+                Value: null, 
             },
             {
                 Name: 'IncludeMetadata',
                 Type: 'Input',
-                Value: true,
-                Description: 'Include metadata columns (respondent email, platform, user agent)'
+                Value: true, 
             },
             {
                 Name: 'Delimiter',
                 Type: 'Input',
-                Value: ',',
-                Description: 'CSV delimiter character (default: comma)'
+                Value: ',', 
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum responses to export (default 10000)'
+                Value: 10000, 
             }
         ];
     }

@@ -112,7 +112,7 @@ export class CreateTypeformAction extends TypeformBaseAction {
 
             const formUrl = createdForm._links?.display || `https://form.typeform.com/to/${createdForm.id}`;
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Form',
                     Type: 'Output',
@@ -171,49 +171,41 @@ export class CreateTypeformAction extends TypeformBaseAction {
                 Name: 'APIToken',
                 Type: 'Input',
                 Value: null,
-                Description: 'Typeform API access token with create permissions'
             },
             {
                 Name: 'Title',
                 Type: 'Input',
                 Value: null,
-                Description: 'Title of the form'
             },
             {
                 Name: 'Fields',
                 Type: 'Input',
                 Value: null,
-                Description: 'Array of field objects. Each field needs: type, title, and optional ref. Types: short_text, long_text, email, number, dropdown, multiple_choice, yes_no, rating, opinion_scale, date, phone_number, website, file_upload, payment, legal, matrix, ranking, picture_choice'
             },
             {
                 Name: 'Settings',
                 Type: 'Input',
                 Value: null,
-                Description: 'Optional form settings object (e.g., {is_public: true, show_progress_bar: true})'
             },
             {
                 Name: 'Logic',
                 Type: 'Input',
                 Value: null,
-                Description: 'Optional array of logic jump rules for conditional field display'
             },
             {
                 Name: 'HiddenFields',
                 Type: 'Input',
                 Value: null,
-                Description: 'Optional array of hidden field names for URL parameters'
             },
             {
                 Name: 'ThemeID',
                 Type: 'Input',
                 Value: null,
-                Description: 'Optional theme ID to apply to the form'
             },
             {
                 Name: 'WorkspaceID',
                 Type: 'Input',
                 Value: null,
-                Description: 'Optional workspace ID where form should be created'
             }
         ];
     }

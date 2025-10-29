@@ -79,7 +79,7 @@ export class GetTypeformAction extends TypeformBaseAction {
                 lastUpdated: form.last_updated_at ? new Date(form.last_updated_at) : undefined
             };
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Form',
                     Type: 'Output',
@@ -162,14 +162,12 @@ export class GetTypeformAction extends TypeformBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Typeform form ID to retrieve'
+                Value: null 
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Typeform API access token'
+                Value: null, 
             }
         ];
     }

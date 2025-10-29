@@ -121,7 +121,7 @@ export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
 
             const emails = this.extractEmailFromResponses(newSubmissions);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'NewSubmissions',
                     Type: 'Output',
@@ -203,44 +203,37 @@ export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The JotForm form ID to monitor (found in the form URL or dashboard)'
+                Value: null
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key (get from https://www.jotform.com/myaccount/api)'
+                Value: null
             },
             {
                 Name: 'LastCheckedTimestamp',
                 Type: 'Input',
-                Value: null,
-                Description: 'ISO 8601 timestamp of last check. If not provided, uses DefaultLookbackMinutes.'
+                Value: null
             },
             {
                 Name: 'DefaultLookbackMinutes',
                 Type: 'Input',
-                Value: 60,
-                Description: 'If LastCheckedTimestamp not provided, look back this many minutes (default 60)'
+                Value: 60
             },
             {
                 Name: 'OnlyCompleted',
                 Type: 'Input',
-                Value: false,
-                Description: 'Only return completed submissions (status = ACTIVE) (default false)'
+                Value: false
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: 'us',
-                Description: 'JotForm region: "us" (default), "eu", or "hipaa"'
+                Value: 'us'
             },
             {
                 Name: 'MaxSubmissions',
                 Type: 'Input',
-                Value: 1000,
-                Description: 'Maximum new submissions to return (default 1000)'
+                Value: 1000
             }
         ];
     }

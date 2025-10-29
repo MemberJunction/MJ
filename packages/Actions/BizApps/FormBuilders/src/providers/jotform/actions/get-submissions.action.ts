@@ -117,7 +117,7 @@ export class GetJotFormSubmissionsAction extends JotFormBaseAction {
                 actualOffset = result.offset;
             }
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Submissions',
                     Type: 'Output',
@@ -175,56 +175,47 @@ export class GetJotFormSubmissionsAction extends JotFormBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The JotForm form ID (found in the form URL or dashboard)'
+                Value: null
             },
             {
                 Name: 'APIKey',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key (get from https://www.jotform.com/myaccount/api)'
+                Value: null
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: 'us',
-                Description: 'JotForm region: "us" (default), "eu", or "hipaa"'
+                Value: 'us'
             },
             {
                 Name: 'Limit',
                 Type: 'Input',
-                Value: 100,
-                Description: 'Number of submissions per page (1-1000, default 100)'
+                Value: 100
             },
             {
                 Name: 'Offset',
                 Type: 'Input',
-                Value: 0,
-                Description: 'Starting position for pagination (default 0)'
+                Value: 0
             },
             {
                 Name: 'Filter',
                 Type: 'Input',
-                Value: null,
-                Description: 'JSON object for filtering submissions (e.g., {"status":"ACTIVE","created_at":"gt:2024-01-01"})'
+                Value: null
             },
             {
                 Name: 'OrderBy',
                 Type: 'Input',
-                Value: null,
-                Description: 'Field to order results by (e.g., "created_at" or "id")'
+                Value: null
             },
             {
                 Name: 'GetAllPages',
                 Type: 'Input',
-                Value: false,
-                Description: 'If true, automatically fetch all pages of submissions (up to MaxSubmissions)'
+                Value: false
             },
             {
                 Name: 'MaxSubmissions',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum number of submissions to retrieve when GetAllPages is true (default 10000)'
+                Value: 10000
             }
         ];
     }

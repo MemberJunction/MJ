@@ -77,7 +77,7 @@ export class GetGoogleFormAction extends GoogleFormsBaseAction {
             };
 
             // Prepare output parameters
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Form',
                     Type: 'Output',
@@ -141,14 +141,12 @@ export class GetGoogleFormAction extends GoogleFormsBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Google Form ID to retrieve'
+                Value: null, 
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Google OAuth 2.0 access token with Forms API access'
+                Value: null, 
             }
         ];
     }

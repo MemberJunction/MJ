@@ -118,7 +118,7 @@ export class GetSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
                 hasMore = !!result.links.next;
             }
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Responses',
                     Type: 'Output',
@@ -181,80 +181,67 @@ export class GetSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
             {
                 Name: 'SurveyID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The SurveyMonkey survey ID (found in the survey URL or dashboard)'
+                Value: null
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'SurveyMonkey API access token (get from https://developer.surveymonkey.com/apps/)'
+                Value: null
             },
             {
                 Name: 'PageSize',
                 Type: 'Input',
-                Value: 100,
-                Description: 'Number of responses per page (1-100, default 100)'
+                Value: 100
             },
             {
                 Name: 'Page',
                 Type: 'Input',
-                Value: null,
-                Description: 'Page number for pagination (starts at 1, default is 1)'
+                Value: null
             },
             {
                 Name: 'StartCreatedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter responses created after this date (ISO 8601 format, e.g., "2024-01-01T00:00:00Z")'
+                Value: null
             },
             {
                 Name: 'EndCreatedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter responses created before this date (ISO 8601 format, e.g., "2024-12-31T23:59:59Z")'
+                Value: null
             },
             {
                 Name: 'StartModifiedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter responses modified after this date (ISO 8601 format)'
+                Value: null
             },
             {
                 Name: 'EndModifiedAt',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter responses modified before this date (ISO 8601 format)'
+                Value: null
             },
             {
                 Name: 'SortOrder',
                 Type: 'Input',
-                Value: null,
-                Description: 'Sort order: "ASC" or "DESC" (ascending or descending)'
+                Value: null
             },
             {
                 Name: 'SortBy',
                 Type: 'Input',
-                Value: null,
-                Description: 'Field to sort by: "date_created" or "date_modified"'
+                Value: null
             },
             {
                 Name: 'Status',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter by response status: "completed", "partial", "overquota", or "disqualified"'
+                Value: null
             },
             {
                 Name: 'GetAllPages',
                 Type: 'Input',
-                Value: false,
-                Description: 'If true, automatically fetch all pages of responses (up to MaxResponses)'
+                Value: false
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum number of responses to retrieve when GetAllPages is true (default 10000)'
+                Value: 10000
             }
         ];
     }

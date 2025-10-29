@@ -71,7 +71,7 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
             const tfResponse = await this.getSingleTypeformResponse(formId, responseToken, apiToken);
             const normalizedResponse = this.normalizeTypeformResponse(tfResponse);
 
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Response',
                     Type: 'Output',
@@ -145,19 +145,16 @@ export class GetSingleTypeformResponseAction extends TypeformBaseAction {
                 Name: 'FormID',
                 Type: 'Input',
                 Value: null,
-                Description: 'The Typeform form ID'
             },
             {
                 Name: 'ResponseToken',
                 Type: 'Input',
                 Value: null,
-                Description: 'The unique response token to retrieve'
             },
             {
                 Name: 'APIToken',
                 Type: 'Input',
                 Value: null,
-                Description: 'Typeform API access token'
             }
         ];
     }

@@ -139,7 +139,7 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
             const hourlyDistribution = this.calculateHourlyDistribution(submissions);
 
             // Build output parameters
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Statistics',
                     Type: 'Output',
@@ -273,44 +273,37 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The JotForm form ID'
+                Value: null
             },
             {
                 Name: 'APIKey',
                 Type: 'Input',
-                Value: null,
-                Description: 'JotForm API key'
+                Value: null
             },
             {
                 Name: 'Region',
                 Type: 'Input',
-                Value: 'us',
-                Description: 'JotForm region (us, eu, hipaa). Default: us'
+                Value: 'us'
             },
             {
                 Name: 'Filter',
                 Type: 'Input',
-                Value: null,
-                Description: 'Filter object for submissions (JSON format). Example: {"status":"ACTIVE"}'
+                Value: null
             },
             {
                 Name: 'MaxSubmissions',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum submissions to analyze (default 10000)'
+                Value: 10000
             },
             {
                 Name: 'IncludeTopAnswers',
                 Type: 'Input',
-                Value: true,
-                Description: 'Calculate most popular answers for each field'
+                Value: true
             },
             {
                 Name: 'TopAnswersLimit',
                 Type: 'Input',
-                Value: 10,
-                Description: 'Number of top answers to return per field (default 10)'
+                Value: 10
             }
         ];
     }

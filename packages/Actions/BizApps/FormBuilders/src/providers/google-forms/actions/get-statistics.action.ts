@@ -114,7 +114,7 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
             const hourlyDistribution = this.calculateHourlyDistribution(responses);
 
             // Build output parameters
-            const outputParams = [
+            const outputParams: ActionParam[] = [
                 {
                     Name: 'Statistics',
                     Type: 'Output',
@@ -248,32 +248,27 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
             {
                 Name: 'FormID',
                 Type: 'Input',
-                Value: null,
-                Description: 'The Google Forms form ID'
+                Value: null
             },
             {
                 Name: 'AccessToken',
                 Type: 'Input',
-                Value: null,
-                Description: 'Google Forms API access token (OAuth 2.0)'
+                Value: null
             },
             {
                 Name: 'MaxResponses',
                 Type: 'Input',
-                Value: 10000,
-                Description: 'Maximum responses to analyze (default 10000)'
+                Value: 10000
             },
             {
                 Name: 'IncludeTopAnswers',
                 Type: 'Input',
-                Value: true,
-                Description: 'Calculate most popular answers for each field'
+                Value: true
             },
             {
                 Name: 'TopAnswersLimit',
                 Type: 'Input',
-                Value: 10,
-                Description: 'Number of top answers to return per field (default 10)'
+                Value: 10
             }
         ];
     }
