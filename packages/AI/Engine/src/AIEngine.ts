@@ -6,7 +6,7 @@ import { BaseLLM, BaseModel, BaseResult, ChatParams, ChatMessage, ChatMessageRol
 import { SummarizeResult } from "@memberjunction/ai";
 import { ClassifyResult } from "@memberjunction/ai";
 import { ChatResult } from "@memberjunction/ai";
-import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo, RunView } from "@memberjunction/core";
+import { BaseEntity, BaseEntityEvent, LogError, Metadata, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { AIActionEntity, AIAgentEntityExtended, AIModelEntityExtended, ActionEntity } from "@memberjunction/core-entities";
 import { AIEngineBase, LoadBaseAIEngine } from "@memberjunction/ai-engine-base";
@@ -15,6 +15,9 @@ import { AgentEmbeddingService } from "./services/AgentEmbeddingService";
 import { ActionEmbeddingService } from "./services/ActionEmbeddingService";
 import { AgentEmbeddingMetadata, AgentMatchResult } from "./types/AgentMatchResult";
 import { ActionEmbeddingMetadata, ActionMatchResult } from "./types/ActionMatchResult";
+import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
+import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
+import { ActionEngineBase } from "@memberjunction/actions-base";
 
 
 /**
@@ -50,6 +53,12 @@ export class AIEngine extends AIEngineBase {
 
     // Vector service for action embeddings - initialized during AdditionalLoading
     private _actionVectorService: SimpleVectorService<ActionEmbeddingMetadata> | null = null;
+
+    // Vector service for note embeddings - initialized during AdditionalLoading
+    private _noteVectorService: SimpleVectorService<NoteEmbeddingMetadata> | null = null;
+
+    // Vector service for example embeddings - initialized during AdditionalLoading
+    private _exampleVectorService: SimpleVectorService<ExampleEmbeddingMetadata> | null = null;
 
     // Actions loaded from database
     private _actions: ActionEntity[] = [];
@@ -234,14 +243,25 @@ export class AIEngine extends AIEngineBase {
         // On subsequent auto-refreshes (when configs are updated), skip embedding generation
         // since the embeddings are still valid and expensive to regenerate
         if (!this._embeddingsGenerated) {
+            // now load all the related embeddings and we can do this all in parallel as well
+            // since they are independent of each other
+            const promises = [];
             // Load Actions from database
-            await this.loadActions(contextUser);
+            promises.push(this.loadActions(contextUser));
 
             // Compute agent embeddings using agents already loaded by base class
-            await this.loadAgentEmbeddings();
+            promises.push(this.loadAgentEmbeddings());
 
             // Compute action embeddings using actions we just loaded
-            await this.loadActionEmbeddings();
+            promises.push(this.loadActionEmbeddings());
+
+            // Load note embeddings
+            promises.push(this.loadNoteEmbeddings(contextUser));
+
+            // Load example embeddings
+            promises.push(this.loadExampleEmbeddings(contextUser));
+
+            await Promise.all(promises);
 
             this._embeddingsGenerated = true;
         }
@@ -309,24 +329,14 @@ export class AIEngine extends AIEngineBase {
      * @private
      */
     private async loadActions(contextUser?: UserInfo): Promise<void> {
-        const startTime = Date.now();
-        console.log('AIEngine: Loading actions...');
-
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<ActionEntity>({
-                EntityName: 'Actions',
-                ExtraFilter: "Status = 'Active'",
-                OrderBy: 'Name',
-                ResultType: 'entity_object'
-            }, contextUser);
+            await ActionEngineBase.Instance.Config(false, contextUser);
+            const actions = ActionEngineBase.Instance.Actions.filter(a => a.Status === 'Active');
 
-            if (result.Success && result.Results) {
-                this._actions = result.Results;
-                const duration = Date.now() - startTime;
-                console.log(`AIEngine: Loaded ${this._actions.length} actions in ${duration}ms`);
+            if (actions && actions.length > 0) {
+                this._actions = actions;
             } else {
-                console.error(`Failed to load actions: ${result.ErrorMessage || 'Unknown error'}`);
+                console.error(`Failed to load actions`);
                 this._actions = [];
             }
 
@@ -389,6 +399,96 @@ export class AIEngine extends AIEngineBase {
         } catch (error) {
             console.error(`Failed to load action embeddings: ${error instanceof Error ? error.message : String(error)}`);
             // Don't throw - allow AIEngine to continue loading even if embeddings fail
+        }
+    }
+
+    /**
+     * Load note embeddings from database and build vector service.
+     * Only loads active notes with embeddings already generated.
+     * @private
+     */
+    private async loadNoteEmbeddings(contextUser?: UserInfo): Promise<void> {
+        try {
+            const notes = this.AgentNotes.filter(n => n.Status === 'Active' && n.EmbeddingVector);
+
+            if (notes.length === 0) {
+                console.log('AIEngine: No active notes with embeddings found');
+                return;
+            }
+
+            const entries = notes.map(note => ({
+                key: note.ID,
+                vector: JSON.parse(note.EmbeddingVector!),
+                metadata: {
+                    id: note.ID,
+                    agentId: note.AgentID,
+                    userId: note.UserID,
+                    companyId: note.CompanyID,
+                    type: note.Type,
+                    noteText: note.Note!,
+                    noteEntity: note
+                }
+            }));
+
+            this._noteVectorService = new SimpleVectorService();
+            this._noteVectorService.LoadVectors(entries);
+        } catch (error) {
+            console.error(`Failed to load note embeddings: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Load example embeddings from database and build vector service.
+     * Only loads active examples with embeddings already generated.
+     * @private
+     */
+    private async loadExampleEmbeddings(contextUser?: UserInfo): Promise<void> {
+        try {
+            const examples = this.AgentExamples.filter(e => e.Status === 'Active' && e.EmbeddingVector);
+
+            if (examples.length === 0) {
+                console.log('AIEngine: No examples with embeddings found');
+                return;
+            }
+
+            const entries = examples.map(example => ({
+                key: example.ID,
+                vector: JSON.parse(example.EmbeddingVector!),
+                metadata: {
+                    id: example.ID,
+                    agentId: example.AgentID,
+                    userId: example.UserID,
+                    companyId: example.CompanyID,
+                    type: example.Type,
+                    exampleInput: example.ExampleInput,
+                    exampleOutput: example.ExampleOutput,
+                    successScore: example.SuccessScore,
+                    exampleEntity: example
+                }
+            }));
+
+            this._exampleVectorService = new SimpleVectorService();
+            this._exampleVectorService.LoadVectors(entries);
+        } catch (error) {
+            console.error(`Failed to load example embeddings: ${error instanceof Error ? error.message : String(error)}`);
+        }
+    }
+
+    /**
+     * Override ProcessEntityEvent to refresh note/example embeddings when they change.
+     * Uses 15 second debounce configured in AdditionalLoading.
+     */
+    protected override async ProcessEntityEvent(event: BaseEntityEvent): Promise<void> {
+        // Call base implementation first
+        await super.ProcessEntityEvent(event);
+
+        // Refresh embeddings if notes/examples changed
+        const entityName = event.baseEntity.EntityInfo.Name.toLowerCase().trim();
+
+        if (entityName === 'ai agent notes') {
+            await this.loadNoteEmbeddings(this.ContextUser);
+        } else if (entityName === 'ai agent examples') {
+            await this.loadExampleEmbeddings(this.ContextUser);
         }
     }
 
@@ -538,6 +638,126 @@ export class AIEngine extends AIEngineBase {
             topK,
             minSimilarity
         );
+    }
+
+    /**
+     * Find notes similar to query text using semantic search.
+     * Searches across agent notes and returns matches filtered by scope.
+     *
+     * @param queryText - The text to search for similar notes
+     * @param agentId - Optional agent ID to filter results
+     * @param userId - Optional user ID to filter results
+     * @param companyId - Optional company ID to filter results
+     * @param topK - Maximum number of results to return (default: 5)
+     * @param minSimilarity - Minimum similarity score 0-1 (default: 0.5)
+     * @returns Array of matching notes sorted by similarity score (highest first)
+     * @throws Error if note embeddings not loaded or query text empty
+     */
+    public async FindSimilarAgentNotes(
+        queryText: string,
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 5,
+        minSimilarity: number = 0.5
+    ): Promise<NoteMatchResult[]> {
+        if (!this._noteVectorService) {
+            return []; // this is a valid state, we don't create the vector service unless there are notes in the DB
+        }
+
+        if (!queryText || queryText.trim().length === 0) {
+            throw new Error('queryText cannot be empty');
+        }
+
+        // Generate query embedding
+        const queryEmbedding = await this.EmbedTextLocal(queryText);
+        if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
+            throw new Error('Failed to generate embedding for query text');
+        }
+
+        // Build filter function for pre-filtering (only if filtering is needed)
+        const needsFiltering = agentId || userId || companyId;
+        const filter = needsFiltering ? (metadata: NoteEmbeddingMetadata) => {
+            // Apply scoping filters - null means "matches anything"
+            if (agentId && metadata.agentId !== agentId) return false;
+            if (userId && metadata.userId && metadata.userId !== userId) return false;
+            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+            return true;
+        } : undefined;
+
+        // Single call - filtering happens BEFORE similarity calculation (10-20x faster!)
+        const results = this._noteVectorService.FindNearest(
+            queryEmbedding.result.vector,
+            topK,
+            minSimilarity,
+            undefined,  // metric - use default 'cosine'
+            filter
+        );
+
+        return results.map(r => ({
+            note: r.metadata.noteEntity,
+            similarity: r.score
+        }));
+    }
+
+    /**
+     * Find examples similar to query text using semantic search.
+     * Searches across agent examples and returns matches filtered by scope.
+     *
+     * @param queryText - The text to search for similar examples
+     * @param agentId - Optional agent ID to filter results
+     * @param userId - Optional user ID to filter results
+     * @param companyId - Optional company ID to filter results
+     * @param topK - Maximum number of results to return (default: 3)
+     * @param minSimilarity - Minimum similarity score 0-1 (default: 0.5)
+     * @returns Array of matching examples sorted by similarity score (highest first)
+     * @throws Error if example embeddings not loaded or query text empty
+     */
+    public async FindSimilarAgentExamples(
+        queryText: string,
+        agentId?: string,
+        userId?: string,
+        companyId?: string,
+        topK: number = 3,
+        minSimilarity: number = 0.5
+    ): Promise<ExampleMatchResult[]> {
+        if (!this._exampleVectorService) {
+            return []; // this is a valid state, we don't create the vector service unless there are examples in the DB
+        }
+
+        if (!queryText || queryText.trim().length === 0) {
+            throw new Error('queryText cannot be empty');
+        }
+
+        // Generate query embedding
+        const queryEmbedding = await this.EmbedTextLocal(queryText);
+        if (!queryEmbedding || !queryEmbedding.result || queryEmbedding.result.vector.length === 0) {
+            throw new Error('Failed to generate embedding for query text');
+        }
+
+        // Build filter function for pre-filtering (only if filtering is needed)
+        const needsFiltering = agentId || userId || companyId;
+        const filter = needsFiltering ? (metadata: ExampleEmbeddingMetadata) => {
+            // Apply scoping filters
+            if (agentId && metadata.agentId !== agentId) return false;
+            if (userId && metadata.userId && metadata.userId !== userId) return false;
+            if (companyId && metadata.companyId && metadata.companyId !== companyId) return false;
+            return true;
+        } : undefined;
+
+        // Single call - filtering happens BEFORE similarity calculation (10-20x faster!)
+        const results = this._exampleVectorService.FindNearest(
+            queryEmbedding.result.vector,
+            topK,
+            minSimilarity,
+            undefined,  // metric - use default 'cosine'
+            filter
+        );
+
+        return results.map(r => ({
+            example: r.metadata.exampleEntity,
+            similarity: r.score
+        }));
     }
 
     /**

@@ -15,6 +15,7 @@ import { ConversationStateService } from '../../services/conversation-state.serv
 import { ArtifactStateService } from '../../services/artifact-state.service';
 import { CollectionStateService } from '../../services/collection-state.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { NavigationTab, WorkspaceLayout } from '../../models/conversation-state.model';
 import { SearchResult } from '../../services/search.service';
 import { Subject, takeUntil } from 'rxjs';
@@ -145,6 +146,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
     public artifactState: ArtifactStateService,
     public collectionState: CollectionStateService,
     private artifactPermissionService: ArtifactPermissionService,
+    private notificationService: MJNotificationService,
     private cdr: ChangeDetectorRef
   ) {
     super();
@@ -345,14 +347,14 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async onRefreshAgentCache(): Promise<void> {
-    console.log('🔄 Refreshing AI Engine cache...');
     try {
       await AIEngineBase.Instance.Config(true);
       const agentCount = AIEngineBase.Instance.Agents?.length || 0;
-      console.log(`✅ AI Engine cache refreshed with ${agentCount} agents`);
+      this.notificationService.CreateSimpleNotification(`Agent cache refreshed (${agentCount} agents)`, 'success', 3000);
       this.cdr.detectChanges();
     } catch (error) {
-      console.error('❌ Failed to refresh AI Engine:', error);
+      this.notificationService.CreateSimpleNotification('Failed to refresh agent cache', 'error', 3000);
+      console.error('Failed to refresh AI Engine:', error);
     }
   }
 

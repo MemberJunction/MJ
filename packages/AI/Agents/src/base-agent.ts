@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
@@ -20,6 +20,7 @@ import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import { AgentContextInjector } from './agent-context-injector';
 import {
     AIPromptParams,
     AIPromptRunResult,
@@ -588,6 +589,26 @@ export class BaseAgent {
             // its state
             await this.initializeAgentType(wrappedParams, config);
 
+            // Inject context memory (notes and examples) before execution
+            const userId = params.userId || params.contextUser?.ID;
+            const companyId = params.companyId;
+
+            // Extract input text from conversation messages (last user message)
+            const lastUserMessage = params.conversationMessages
+                .filter(m => m.role === 'user')
+                .pop();
+            const inputText = lastUserMessage?.content || '';
+
+            // Inject context memory (notes and examples) into conversation messages
+            await this.InjectContextMemory(
+                typeof inputText === 'string' ? inputText : '',
+                params.agent,
+                userId,
+                companyId,
+                params.contextUser,
+                wrappedParams.conversationMessages
+            );
+
             // Execute the agent's internal logic with wrapped parameters
             this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
             const executionResult = await this.executeAgentInternal<R>(wrappedParams, config);
@@ -718,6 +739,97 @@ export class BaseAgent {
     protected async initializeEngines(contextUser?: UserInfo): Promise<void> {
         await AIEngine.Instance.Config(false, contextUser);
         await ActionEngineServer.Instance.Config(false, contextUser);
+    }
+
+    /**
+     * Storage for injected memory context to prepend to prompts
+     */
+    private _memoryContext: string = '';
+
+    /**
+     * Storage for injected notes and examples to include in result
+     */
+    private _injectedMemory: { notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] } = { notes: [], examples: [] };
+
+    /**
+     * Inject notes and examples into agent context memory.
+     * Called automatically before agent execution if injection is enabled on the agent.
+     * Injects memory context directly into conversation messages array.
+     *
+     * @param input - The user input text for semantic search
+     * @param agent - The agent configuration entity
+     * @param userId - Optional user ID for scoping
+     * @param companyId - Optional company ID for scoping
+     * @param contextUser - User context
+     * @param conversationMessages - The conversation messages array to inject into
+     * @returns Object containing injected notes and examples
+     */
+    protected async InjectContextMemory(
+        input: string,
+        agent: AIAgentEntityExtended,
+        userId?: string,
+        companyId?: string,
+        contextUser?: UserInfo,
+        conversationMessages?: ChatMessage[]
+    ): Promise<{ notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] }> {
+        // Check if injection is enabled
+        if (!agent.InjectNotes && !agent.InjectExamples) {
+            return { notes: [], examples: [] };
+        }
+
+        const injector = new AgentContextInjector();
+
+        // Get notes if injection enabled
+        const notes = agent.InjectNotes
+            ? await injector.GetNotesForContext({
+                agentId: agent.ID,
+                userId,
+                companyId,
+                currentInput: input,
+                strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
+                maxNotes: agent.MaxNotesToInject || 5,
+                contextUser: contextUser!
+            })
+            : [];
+
+        // Get examples if injection enabled
+        const examples = agent.InjectExamples
+            ? await injector.GetExamplesForContext({
+                agentId: agent.ID,
+                userId,
+                companyId,
+                currentInput: input,
+                strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
+                maxExamples: agent.MaxExamplesToInject || 3,
+                contextUser: contextUser!
+            })
+            : [];
+
+        // Format and inject memory context into conversation messages
+        if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
+            const notesText = injector.FormatNotesForInjection(notes);
+            const examplesText = injector.FormatExamplesForInjection(examples);
+
+            this._memoryContext = '';
+            if (notesText) this._memoryContext += notesText + '\n\n';
+            if (examplesText) this._memoryContext += examplesText + '\n\n';
+
+            // Inject as system message at the start
+            conversationMessages.unshift({
+                role: 'system',
+                content: this._memoryContext
+            });
+
+            this.logStatus(
+                `💾 Injected ${notes.length} notes and ${examples.length} examples into conversation context`,
+                true
+            );
+        }
+
+        // Store for inclusion in result
+        this._injectedMemory = { notes, examples };
+
+        return { notes, examples };
     }
 
     /**
@@ -5407,7 +5519,10 @@ Please choose an alternative approach to complete your task.`
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
             agentRun: this._agentRun!,
-            suggestedResponses: finalStep.suggestedResponses
+            suggestedResponses: finalStep.suggestedResponses,
+            memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
+                ? this._injectedMemory
+                : undefined
         };
     }
 
