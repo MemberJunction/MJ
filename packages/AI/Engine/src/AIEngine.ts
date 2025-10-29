@@ -333,7 +333,7 @@ export class AIEngine extends AIEngineBase {
      */
     private async loadActions(contextUser?: UserInfo): Promise<void> {
         try {
-            await ActionEngineBase.Instance.Config(false, contextUser);
+            await ActionEngineBase.Instance.Config(false, contextUser, this.ProviderToUse);
             const actions = ActionEngineBase.Instance.Actions.filter(a => a.Status === 'Active');
 
             if (actions && actions.length > 0) {
