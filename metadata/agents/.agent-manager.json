@@ -8,7 +8,10 @@
       "ExecutionOrder": 0,
       "ArtifactCreationMode": "System Only",
       "ExposeAsAction": true,
-      "IconClass": "fa-solid fa-robot"
+      "IconClass": "fa-solid fa-robot",
+      "PayloadSelfWritePaths": [
+        "ID"
+      ]
     },
     "relatedEntities": {
       "MJ: AI Agent Data Sources": [
@@ -141,7 +144,13 @@
             "Status": "Active",
             "ExecutionOrder": 1,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-clipboard-list"
+            "IconClass": "fa-solid fa-clipboard-list",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "FunctionalRequirements"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Prompts": [
@@ -224,8 +233,8 @@
             "ID": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:05:09.650Z",
-            "checksum": "4a6f237ce1b37585a23fa4939f39fdb2855fe31618b4ccd9a933807425769300"
+            "lastModified": "2025-10-29T00:55:06.319Z",
+            "checksum": "41d5d4520e9b6a05a8ed96984760bbca3777355132a877fe1c7604242e94335b"
           }
         },
         {
@@ -237,7 +246,15 @@
             "Status": "Active",
             "ExecutionOrder": 2,
             "ExposeAsAction": false,
-            "IconClass": "fa-solid fa-sitemap"
+            "DriverClass": "AgentPlanningDesigner",
+            "IconClass": "fa-solid fa-sitemap",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "TechnicalDesign",
+              "modificationPlan"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Data Sources": [
@@ -385,8 +402,8 @@
             "ID": "644674DB-7791-44C4-8360-3914111C0E10"
           },
           "sync": {
-            "lastModified": "2025-07-19T17:05:09.720Z",
-            "checksum": "89d1860a798c166e1132bb2dd6d8908d820a7b095bfbfae9f95d0d74a0b48854"
+            "lastModified": "2025-10-29T00:55:06.335Z",
+            "checksum": "156dc21e631fc2cd73ac7dfd35e89d9e7597f6e23bb7333d392ca5d42872598d"
           }
         },
         {
@@ -399,7 +416,13 @@
             "ExecutionOrder": 3,
             "ExposeAsAction": false,
             "DriverClass": "AgentArchitectAgent",
-            "IconClass": "fa-solid fa-drafting-compass"
+            "IconClass": "fa-solid fa-drafting-compass",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "*"
+            ]
           },
           "relatedEntities": {
             "MJ: AI Agent Data Sources": [
@@ -455,8 +478,8 @@
             "ID": "F80CB55D-7C89-41B4-9E99-73A53EF3D92A"
           },
           "sync": {
-            "lastModified": "2025-10-21T19:26:53.791Z",
-            "checksum": "86f59ebe97396d3637bb24d0bfaef73c4bf081744c388b8b5c2e24e03123c32e"
+            "lastModified": "2025-10-29T00:55:06.349Z",
+            "checksum": "7e788a9ebaaf71b1429efc3c82543164428ecd385ac9a20a66b6dca57ec12185"
           }
         },
         {
@@ -469,14 +492,18 @@
             "ExecutionOrder": 4,
             "ExposeAsAction": false,
             "DriverClass": "AgentBuilderAgent",
-            "IconClass": "fa-solid fa-hammer"
+            "IconClass": "fa-solid fa-hammer",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": []
           },
           "primaryKey": {
             "ID": "F3686377-DD93-480D-89AB-8427A36A5C2E"
           },
           "sync": {
-            "lastModified": "2025-10-21T19:26:53.803Z",
-            "checksum": "8f0bbaf983b03726289456cd3c5cfcd38891f56862ca2bc2d16106246cd2b649"
+            "lastModified": "2025-10-29T00:55:06.383Z",
+            "checksum": "22e9a92aa31696ad2f925919478239497cd41287e913b4bdd8625aac2a4579cd"
           }
         },
         {
@@ -489,7 +516,13 @@
             "ExecutionOrder": 5,
             "ExposeAsAction": false,
             "InvocationMode": "Sub-Agent",
-            "IconClass": "fa-solid fa-download"
+            "IconClass": "fa-solid fa-download",
+            "PayloadDownstreamPaths": [
+              "ID"
+            ],
+            "PayloadUpstreamPaths": [
+              "*"
+            ]
           },
           "relatedEntities": {
             "AI Agent Actions": [
@@ -575,8 +608,8 @@
             "ID": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
           },
           "sync": {
-            "lastModified": "2025-10-24T03:18:40.679Z",
-            "checksum": "dee3ab1c2106a8de71169aa76a6157c9ed7f2346d7169af60aece7bb6a74ca3f"
+            "lastModified": "2025-10-29T00:55:06.395Z",
+            "checksum": "2485b76ca46428ac802b5ff6c100052132924fa2591780618e327caddb7944fb"
           }
         }
       ]
@@ -585,8 +618,8 @@
       "ID": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
     },
     "sync": {
-      "lastModified": "2025-10-24T03:18:40.428Z",
-      "checksum": "0becbda406998f08153fee3db9e0d56e864bc23a0f2a42c030566b97d883ba44"
+      "lastModified": "2025-10-29T00:55:06.248Z",
+      "checksum": "49b96c61edeccba3966b05edf89f62ac366eab15ed38ab0bdbc7928406ec0086"
     }
   }
 ]
