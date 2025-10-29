@@ -15,7 +15,18 @@
 -----------------------------------------------------------------
 -- PART 1: Add Embedding Fields to AIAgentNote and AIAgentExample
 -----------------------------------------------------------------
+/* SQL text to recompile all views */
+EXEC [${flyway:defaultSchema}].spRecompileAllViews
 
+/* SQL text to update existing entities from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntitiesFromSchema @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to delete unneeded entity fields */
+EXEC [${flyway:defaultSchema}].spDeleteUnneededEntityFields @ExcludedSchemaNames='sys,staging'
+
+/* SQL text to update existing entity fields from schema */
+EXEC [${flyway:defaultSchema}].spUpdateExistingEntityFieldsFromSchema @ExcludedSchemaNames='sys,staging'
+ 
 ALTER TABLE [${flyway:defaultSchema}].[AIAgentNote] ADD
     EmbeddingVector NVARCHAR(MAX) NULL,
     EmbeddingModelID UNIQUEIDENTIFIER NULL,
