@@ -1197,6 +1197,103 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Detects if a default value string represents a SQL function that should be evaluated server-side.
+     * SQL functions like NEWID(), GETDATE(), GETUTCDATE(), CURRENT_TIMESTAMP, etc. cannot be evaluated
+     * client-side and must be handled by the database.
+     * @param defaultValue The default value string to check
+     * @returns True if the value is a SQL function, false otherwise
+     */
+    private isSQLFunction(defaultValue: string): boolean {
+        if (!defaultValue || typeof defaultValue !== 'string') {
+            return false;
+        }
+
+        const trimmed = defaultValue.trim().toUpperCase();
+        const sqlFunctions = [
+            'NEWID()',
+            'GETDATE()',
+            'GETUTCDATE()',
+            'CURRENT_TIMESTAMP',
+            'SYSDATETIME()',
+            'SYSUTCDATETIME()',
+            'SYSDATETIMEOFFSET()',
+            'NEWSEQUENTIALID()',
+            'UUID_GENERATE_V4()',  // PostgreSQL
+            'GEN_RANDOM_UUID()'    // PostgreSQL
+        ];
+
+        return sqlFunctions.some(func => trimmed.includes(func));
+    }
+
+    /**
+     * Applies default values to fields before saving to prevent NULL constraint violations.
+     * This is a temporary fix for the issue where SQL Server enforces NOT NULL constraints
+     * before applying database defaults. Only applies defaults when:
+     * - Field has a default value defined
+     * - Field does not allow NULL
+     * - Current field value is NULL or undefined
+     * - Field is not a special date field (__mj_CreatedAt, __mj_UpdatedAt, __mj_DeletedAt)
+     * - Field is not read-only
+     * - Default is not a SQL function (which requires server-side evaluation)
+     */
+    private applyDefaultValues(): void {
+        for (const field of this.Fields) {
+            const ef = field.EntityFieldInfo;
+
+            // Check all conditions for applying default
+            if (!ef.HasDefaultValue ||
+                ef.AllowsNull ||
+                (field.Value !== null && field.Value !== undefined) ||
+                ef.IsSpecialDateField ||
+                ef.ReadOnly ||
+                this.isSQLFunction(ef.DefaultValue)) {
+                continue;
+            }
+
+            // Apply type-specific default value conversion
+            if (ef.TSType === EntityFieldTSType.Boolean) {
+                // Convert string default to boolean
+                if (typeof ef.DefaultValue === "string") {
+                    const trimmed = ef.DefaultValue.trim();
+                    field.Value = trimmed === "1" || trimmed.toLowerCase() === "true";
+                } else {
+                    field.Value = !!ef.DefaultValue;
+                }
+            }
+            else if (ef.TSType === EntityFieldTSType.Number) {
+                // Convert string default to number
+                const numValue = Number(ef.DefaultValue);
+                if (!isNaN(numValue)) {
+                    field.Value = numValue;
+                }
+                // If conversion fails, leave as null - server will handle error
+            }
+            else if (ef.TSType === EntityFieldTSType.Date) {
+                // Only apply if it's a parseable date string (not a SQL function)
+                try {
+                    const dateValue = new Date(ef.DefaultValue);
+                    if (!isNaN(dateValue.getTime())) {
+                        field.Value = dateValue;
+                    }
+                } catch (e) {
+                    // If parsing fails, leave as null - server will handle
+                }
+            }
+            else if (ef.Type.trim().toLowerCase() === "uniqueidentifier") {
+                // For GUIDs, only apply if not a SQL function like NEWID()
+                // If we get here, it's not a SQL function (checked above), so apply the default
+                if (ef.DefaultValue && ef.DefaultValue.trim().length > 0) {
+                    field.Value = ef.DefaultValue;
+                }
+            }
+            else {
+                // For strings and other types, apply the default value as-is
+                field.Value = ef.DefaultValue;
+            }
+        }
+    }
+
+    /**
      * Private, internal method to handle saving the current state of the object to the database. This method is called by the public facing Save() method
      * and is debounced to prevent multiple calls from being executed simultaneously.
      * @param options
@@ -1219,6 +1316,12 @@ export abstract class BaseEntity<T = unknown> {
                     throw new Error('No provider set');
                 }
                 else  {
+                    // Apply default values before validation for new records
+                    // This prevents NULL constraint violations when fields have database defaults
+                    if (!this.IsSaved) {
+                        this.applyDefaultValues();
+                    }
+
                     let valResult = new ValidationResult();
                     if (_options.ReplayOnly) {
                         valResult.Success = true; // bypassing validation since we are in replay only....
