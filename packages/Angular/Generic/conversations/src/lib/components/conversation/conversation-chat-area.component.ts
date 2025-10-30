@@ -80,7 +80,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, DoCheck
 
   // System artifacts mapping: ConversationDetailID -> Array of LazyArtifactInfo (Visibility='System Only')
   // Kept separate so we can toggle their display without reloading
-  private systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
+  // Made public so it can be passed to MessageInputComponent for payload loading
+  public systemArtifactsByDetailId = new Map<string, LazyArtifactInfo[]>();
 
   // Cached combined artifacts map - updated when toggle changes
   private _combinedArtifactsMap: Map<string, LazyArtifactInfo[]> | null = null;
