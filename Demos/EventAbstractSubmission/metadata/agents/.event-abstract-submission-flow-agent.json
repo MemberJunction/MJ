@@ -137,7 +137,7 @@
             "ActionInputMapping": {
               "EntityName": "Submissions",
               "Fields": {
-                "EventID": "payload.eventID",
+                "EventID": "data.eventId",
                 "SubmissionTitle": "payload.answers.What is your proposed session topic",
                 "SubmissionAbstract": "payload.answers.Please share a brief biography about yourself",
                 "SubmissionType": "payload.answers.Tell us about your relevant experience related to this topic",
@@ -159,8 +159,8 @@
             "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
           },
           "sync": {
-            "lastModified": "2025-10-30T18:35:11.714Z",
-            "checksum": "1a6104a35d60aa35d378f78d4ecfe0863682235e6033e60d0e28c3cf1fd31f56"
+            "lastModified": "2025-10-30T19:03:56.627Z",
+            "checksum": "dba74d556566fa999dd7ad6db383a38966ce4b94e1d70e4443d1053027b885db"
           }
         }
       ],
@@ -246,7 +246,8 @@
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
       "Status": "Active",
       "ExecutionOrder": 0,
-      "ExposeAsAction": true,
+      "ExposeAsAction": false,
+      "InvocationMode": "Sub-Agent",
       "IconClass": "fa-solid fa-clipboard-check"
     },
     "relatedEntities": {
@@ -364,7 +365,8 @@
             "StartingStep": true,
             "ActionID": "@lookup:Actions.Name=Get Typeform Responses",
             "ActionInputMapping": {
-              "FormID": "QTdVpptX",
+              "CompanyID": "data.companyId",
+              "FormID": "data.formId",
               "SinceDate": "payload.lastCheckDate",
               "CompletedOnly": true
             },
@@ -380,8 +382,8 @@
             "ID": "D92593AB-1638-4112-A1CA-670D7F01235B"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:45:30.816Z",
-            "checksum": "b9446cfae31d63c722b342464f1c1444f815fd7f499814cb4fbefa4028cd0874"
+            "lastModified": "2025-10-30T19:03:56.653Z",
+            "checksum": "27429e46ba741d042e79a14c9368446130cf09a2557ed8159ccb43ea28efa808"
           }
         }
       ],
@@ -440,8 +442,8 @@
       "ID": "1E1343B2-09B9-49B3-808E-8915D9769E51"
     },
     "sync": {
-      "lastModified": "2025-10-30T01:28:20.340Z",
-      "checksum": "c800508d25fe84ff41b8a394555cc6b60fae9f467d2b3a7a22423f0df1f8e381"
+      "lastModified": "2025-10-30T19:03:56.537Z",
+      "checksum": "40b59ec64b409b31c2ad978ab010d85b7e43fd917b28ea6f1707288b067326ad"
     }
   }
 ]
