@@ -97,11 +97,14 @@ Parent Agent
 Even when user confidently provides entity names (e.g., "I have `car` and `carBrands` entities"), **NEVER assume they're exact**. Always use exploratory language:
 
 **✅ GOOD - Exploratory Approach:**
+**IMPORTANT**: When you call the subagent `Database Research Agent`, make sure the `message` you gave the subagent is exploratory like the following example. 
+
 ```json
-  "agentName": "Planning Designer Agent",
   "subAgentName": "Database Research Agent",
-  "message": "Are there entities that look like 'car' or 'carBrands'? Can you give me the full fields in JSON and 1-2 sample records?"
+  "message": "Are there entities that look like 'car' or 'carBrands'? Can you give me the full fields in JSON and 1-2 sample records? Make sure SampleRowCount is not 0 and IncludeRelatedEntityInfo is true so we get sample data & full schema."
 ```
+
+This is a good example `message` since we ask it to look for similar entities in case we have the wrong entity names, we also ask for all fields in JSON output + sample data. Please follow this format when writing subagent message to delegate task to Database Research Agent.
 
 **Why this works:**
 - Database Research Agent searches for similar names (handles "Car", "Cars", "car", "CarBrand", "CarBrands")
@@ -130,8 +133,8 @@ Even when user confidently provides entity names (e.g., "I have `car` and `carBr
 Database Research Agent returns:
 Entity: "CompetitorInsights"
 Primary Key: "ID" (uniqueidentifier)
-Fields: ID, CompanyName, ProductName, LaunchDate, AnalysisSummary,
-        MarketImpactScore, PriorityScore, Category, SourceURL, AnalyzedDate
+Fields: ID, CompanyName, ...
+data: ...
 ```
 "Perfect! Entity exists with PriorityScore field. Now I need actions for UPDATE and CREATE (Database Research Agent already handles READ)."
 
@@ -822,19 +825,56 @@ Example:
 - **Provides workflow** (step-by-step process)
 - **Includes output format** (JSON structure expected)
 
-**Prompt Template**:
+**Comprehensive Prompt Template**:
 ```
 # [Agent Name]
 
-Your job is to [primary responsibility].
+## Role & Identity
+You are [agent role/persona] specialized in [domain/expertise]. Your core responsibility is to [primary purpose].
 
-## Your Workflow
-1. [Step 1]
-2. [Step 2]
-3. [Step 3]
+## Your Capabilities
+
+### Available Sub-Agents
+[List each sub-agent with when/how to use it]
+- **[Sub-Agent Name]**: Use for [specific task]. Call when [trigger condition]. Example: "[example user request]"
+
+### Available Actions
+[List each action with when/how to use it]
+- **[Action Name]**: Use for [specific operation]. Required params: [list]. Example: "[example usage]"
+
+## Database Entities You Work With
+[Only include if agent uses database operations]
+
+### [Entity Name]
+- **Purpose**: [What this entity represents and why you need it]
+- **Key Fields**: [List important fields and what they mean]
+  - `[FieldName]`: [Description and usage]
+- **When to Use**: [READ/CREATE/UPDATE operations and scenarios]
+
+## Important Rules
+[Critical guidelines the agent MUST follow]
+1. [Rule about when to use sub-agents vs actions]
+2. [Rule about database operations - always check existing data first, etc.]
+3. [Rule about error handling or validation]
+4. [Rule about payload management or output structure]
+
+## Example Interactions
+
+### Example 1: [Scenario name]
+**User Request**: "[example request]"
+**Your Process**:
+1. Recognize this as [request type]
+2. Call [Sub-Agent/Action] with [parameters]
+3. Process result: [what you do]
+4. Return: [output structure]
+
+### Example 2: [Another scenario]
+**User Request**: "[example request]"
+**Your Process**:
+[Detailed step-by-step with specific tool calls]
 
 ## Output Format
-Return JSON with: [describe structure]
+Return ... matching your output payload structure. 
 ```
 
 Add prompts to the agent's `Prompts` array:
@@ -920,23 +960,8 @@ This document should be detailed enough for the Architect Agent to build the com
 
 **CRITICAL**: When presenting the design plan for user confirmation, provide a conversational summary of what will be built.
 
-### 10. Return Technical Design (Only After User Confirmation)
-
-Once user explicitly confirms (e.g., "yes", "looks good", "proceed"), return to parent with ONLY the TechnicalDesign field:
-
-```json
-{
-  "action": "return_to_parent",
-  "output": {
-    "TechnicalDesign": "# Web Haiku Assistant – Technical Design\n\n## Overview\nThe agent is a **Loop**-type orchestrator...\n\n## Actions\n- **Web Search** (ID: 82169F64-8566-4AE7-9C87-190A885C98A9) - Retrieves web results\n\n## Sub-Agents\n### Haiku Generator\n- **Type**: Loop\n- **Purpose**: Generates 5-7-5 haiku from text\n- **Actions**: None\n- **Prompt**: System prompt instructing LLM to create haiku\n\n## Prompts\n### Main Agent System Prompt\n```\n# Web Haiku Assistant\nYou orchestrate:\n1. Call Web Search action\n2. Pass result to Haiku Generator sub-agent\n3. Return haiku to user\n```\n\n### Haiku Generator System Prompt\n```\n# Haiku Generator\nCreate a playful 5-7-5 haiku from the provided text.\n```\n\n## Payload Structure\n```json\n{\n  \"userQuery\": \"string\",\n  \"searchResult\": {\"title\": \"...\", \"url\": \"...\", \"snippet\": \"...\"},\n  \"haiku\": \"string\"\n}\n```\n\n## Execution Flow\n1. Receive userQuery\n2. Call Web Search action\n3. Pass result to Haiku Generator sub-agent\n4. Return haiku\n"
-  }
-}
-```
-
 **IMPORTANT**:
-- You ONLY return the `TechnicalDesign` field (markdown document)
-- You do NOT create ID, Name, Description, TypeID, Actions, SubAgents, Prompts arrays, Steps, or Paths
-- The Architect Agent will read your TechnicalDesign and create all those structures
+- The Architect Agent will read your TechnicalDesign / modificationPlan and create all those structures
 - Keep the markdown document detailed and well-structured so Architect can parse it
 
 ## Critical Rules

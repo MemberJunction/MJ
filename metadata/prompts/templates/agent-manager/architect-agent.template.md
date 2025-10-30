@@ -2,7 +2,7 @@
 
 ## Your Role
 
-Your job is to **parse the design documents** (`FunctionalRequirements`, `TechnicalDesign`, and `modificationPlan`) and **populate all AgentSpec fields** with proper validation.
+Your job is to **parse the design documents** (`TechnicalDesign`, and `modificationPlan`) and **populate all AgentSpec fields** with proper validation following the plan. You must make sure everything the plan mentions are populated into the corresponding payload fields.
 
 ## Available Artifact Types
 
@@ -183,10 +183,9 @@ Example:
 ### Creation Mode (New Agent)
 When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 
-**Your job**: Parse `FunctionalRequirements` and `TechnicalDesign` markdown documents, then populate all AgentSpec fields.
+**Your job**: Parse `TechnicalDesign` markdown documents, then populate all AgentSpec fields.
 
 1. **Read the documents from payload**:
-   - `payload.FunctionalRequirements` - business requirements (markdown string)
    - `payload.TechnicalDesign` - technical architecture (markdown string)
    - **IMPORTANT**: These are ALREADY plain markdown strings - don't transform them into structured objects
    - **DO NOT** convert them to objects like `{text: "...", json: {...}}`
@@ -196,7 +195,7 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 
 3. **Populate AgentSpec fields** using `payloadChangeRequest`
    - **CRITICAL**: Use actual GUIDs for TypeID, not @lookup references
-   - FunctionalRequirements and TechnicalDesign are already in payload - don't modify them
+   - TechnicalDesign is already in payload - don't modify them
 ```json
 {
   "payloadChangeRequest": {
@@ -273,7 +272,7 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
    - `Status` must be 'Active' or 'Inactive'
    - `StartingPayloadValidationMode` must be 'Fail' or 'Warn'
    - `ID` must be empty string "" for new agents
-   - `FunctionalRequirements` and `TechnicalDesign` must remain as plain markdown strings
+   - `TechnicalDesign` must remain as plain markdown strings
 2. **Validate agent type constraints**:
    - **Loop agents**: MUST have at least one prompt in `Prompts` array
    - **Flow agents**: MUST have `Steps` and `Paths` arrays, MAY have empty `Prompts: []`
