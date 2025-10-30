@@ -13,7 +13,8 @@ export interface FormResponse {
     formId: string;
     submittedAt: Date;
     completed: boolean;
-    answers: FormAnswer[];
+    answerDetails: FormAnswer[]; // Renamed from answers - detailed array with field info
+    answers?: Record<string, any>; // Renamed from simpleAnswers - flat object with question titles as keys
     metadata?: {
         browser?: string;
         platform?: string;
@@ -301,7 +302,7 @@ export abstract class BaseFormBuilderAction extends BaseAction {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
         for (const response of responses) {
-            for (const answer of response.answers) {
+            for (const answer of response.answerDetails) {
                 if (answer.fieldType === 'email' ||
                     (typeof answer.answer === 'string' && emailRegex.test(answer.answer))) {
                     emails.push(answer.answer);

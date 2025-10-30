@@ -98,12 +98,12 @@ export class WatchNewJotFormSubmissionsAction extends JotFormBaseAction {
             const submissionsByType: Record<string, any[]> = {};
             if (newSubmissions.length > 0) {
                 const firstSubmission = newSubmissions[0];
-                for (const answer of firstSubmission.answers) {
+                for (const answer of firstSubmission.answerDetails) {
                     submissionsByType[answer.fieldType] = [];
                 }
 
                 for (const submission of newSubmissions) {
-                    for (const answer of submission.answers) {
+                    for (const answer of submission.answerDetails) {
                         if (!submissionsByType[answer.fieldType]) {
                             submissionsByType[answer.fieldType] = [];
                         }

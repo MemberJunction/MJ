@@ -117,7 +117,7 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
                 const allFieldIds = new Set<string>();
 
                 for (const submission of submissions) {
-                    for (const answer of submission.answers) {
+                    for (const answer of submission.answerDetails) {
                         allFieldIds.add(answer.fieldId);
                     }
                 }

@@ -91,7 +91,7 @@
             "LoopBodyType": "Action",
             "ActionID": "@lookup:Actions.Name=Create Record",
             "Configuration": {
-              "collectionPath": "response.speakers",
+              "collectionPath": "payload.answers.Speakers",
               "itemVariable": "speaker",
               "indexVariable": "speakerIndex",
               "maxIterations": 10,
@@ -123,8 +123,8 @@
             "ID": "D8D2D8C0-0AF0-4BC2-B095-34747E39E48A"
           },
           "sync": {
-            "lastModified": "2025-10-30T16:33:49.855Z",
-            "checksum": "62d405003a6a10917cf14d19a35452609837af9082f2613e09781e2a72447f54"
+            "lastModified": "2025-10-30T18:33:09.066Z",
+            "checksum": "139de356f0757a9cb024623452860cde75ae60888c35b761d9dfd042e79f8a73"
           }
         },
         {
@@ -138,14 +138,14 @@
               "EntityName": "Submissions",
               "Fields": {
                 "EventID": "payload.eventID",
-                "SubmissionTitle": "payload.response.title",
-                "SubmissionAbstract": "payload.response.abstract",
-                "SubmissionType": "payload.response.submissionType",
-                "TypeformResponseID": "payload.response.response_id",
-                "TypeformSubmittedAt": "payload.response.submitted_at",
+                "SubmissionTitle": "payload.answers.What is your proposed session topic",
+                "SubmissionAbstract": "payload.answers.Please share a brief biography about yourself",
+                "SubmissionType": "payload.answers.Tell us about your relevant experience related to this topic",
+                "TypeformResponseID": "payload.responseId",
+                "TypeformSubmittedAt": "payload.submittedAt",
                 "Status": "New",
-                "TargetAudience": "payload.response.targetAudience",
-                "TechLevel": "payload.response.techLevel"
+                "TargetAudience": "payload.answers.What is your full name",
+                "TechLevel": "payload.answers.Please upload your detailed session proposal required"
               }
             },
             "ActionOutputMapping": {
@@ -159,8 +159,8 @@
             "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
           },
           "sync": {
-            "lastModified": "2025-10-30T16:33:49.871Z",
-            "checksum": "e3ccd1d0810004eb9761fb7d5e7d8ea5568bab95cf4098eda7ee0aec74bc759f"
+            "lastModified": "2025-10-30T18:35:11.714Z",
+            "checksum": "1a6104a35d60aa35d378f78d4ecfe0863682235e6033e60d0e28c3cf1fd31f56"
           }
         }
       ],
@@ -169,7 +169,7 @@
           "fields": {
             "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
             "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Create Speakers&AgentID=@parent:ID",
-            "Condition": "payload.response.speakers != null",
+            "Condition": "payload.answers.Speakers != null",
             "Priority": 1,
             "Description": "Create speakers if the response has any"
           },
@@ -177,15 +177,15 @@
             "ID": "ED4E85E9-F47C-4546-9182-CC1DA54B0385"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.606Z",
-            "checksum": "a81d03db728b3f9157ba4863dba71c131032e9eba3b17c3c5d972bd0b8343b23"
+            "lastModified": "2025-10-30T18:33:09.131Z",
+            "checksum": "8f9089e42c1cf0c1cb6dc06dfff1ee243d07404e7adbb71c451c020f6088bce4"
           }
         },
         {
           "fields": {
             "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
             "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Complete&AgentID=@parent:ID",
-            "Condition": "payload.response.speakers == null",
+            "Condition": "payload.answers.Speakers == null",
             "Priority": 2,
             "Description": "Skip speaker processing if none provided"
           },
@@ -193,8 +193,8 @@
             "ID": "B63BA465-EFE8-4E4E-AB5B-6E19AC13FEED"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.618Z",
-            "checksum": "1dd53dfdbff75834897b2ab948f4671e5814510df47b8843e1bf1d177d38f26d"
+            "lastModified": "2025-10-30T18:33:09.144Z",
+            "checksum": "1a922928f7cc4b8e86298eebfde615422704217d47f6c480c86086f1f2a40ca8"
           }
         },
         {

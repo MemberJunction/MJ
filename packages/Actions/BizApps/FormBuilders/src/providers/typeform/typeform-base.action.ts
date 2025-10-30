@@ -286,10 +286,34 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
     }
 
     /**
+     * Get form details from Typeform API
+     */
+    protected async getFormDetails(formId: string, apiToken: string): Promise<any> {
+        try {
+            const response = await this.getAxiosInstance(apiToken).get(`/forms/${formId}`);
+            return response.data;
+        } catch (error) {
+            LogError('Failed to get Typeform form details:', error);
+            throw this.handleTypeformError(error);
+        }
+    }
+
+    /**
      * Normalize Typeform response to common format
      */
-    protected normalizeTypeformResponse(tfResponse: TypeformResponseItem): FormResponse {
-        const answers: FormAnswer[] = tfResponse.answers.map(answer => {
+    protected normalizeTypeformResponse(tfResponse: TypeformResponseItem, formFields?: any[]): FormResponse {
+        // Create field title lookup map from form fields
+        const fieldTitleMap = new Map<string, string>();
+        if (formFields) {
+            formFields.forEach((field: any) => {
+                // Use the field ref as key (matches what's in response.question) and title as value
+                if (field.ref && field.title) {
+                    fieldTitleMap.set(field.ref, field.title);
+                }
+            });
+        }
+
+        const answerDetails: FormAnswer[] = tfResponse.answers.map(answer => {
             let answerValue: any;
             let question = answer.field.ref || answer.field.id;
 
@@ -350,6 +374,15 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
             };
         });
 
+        // Generate answers object with question titles as keys (renamed from simpleAnswers)
+        const answers: Record<string, any> = {};
+        answerDetails.forEach(answer => {
+            const questionTitle = fieldTitleMap.get(answer.question) || answer.question;
+            // Clean up the question title to be a valid object key
+            const cleanKey = questionTitle.replace(/[^a-zA-Z0-9\s]/g, '').trim();
+            answers[cleanKey] = answer.answer;
+        });
+
         const completed = !!tfResponse.submitted_at;
         const submittedAt = tfResponse.submitted_at
             ? new Date(tfResponse.submitted_at)
@@ -360,7 +393,8 @@ export abstract class TypeformBaseAction extends BaseFormBuilderAction {
             formId: tfResponse.landing_id,
             submittedAt,
             completed,
-            answers,
+            answerDetails, // Renamed from answers
+            answers, // Renamed from simpleAnswers
             metadata: {
                 browser: tfResponse.metadata?.browser,
                 platform: tfResponse.metadata?.platform,

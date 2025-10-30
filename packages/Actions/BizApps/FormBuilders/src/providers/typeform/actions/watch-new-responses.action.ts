@@ -87,12 +87,12 @@ export class WatchNewTypeformResponsesAction extends TypeformBaseAction {
             const responsesByType: Record<string, any[]> = {};
             if (newResponses.length > 0) {
                 const firstResponse = newResponses[0];
-                for (const answer of firstResponse.answers) {
+                for (const answer of firstResponse.answerDetails) {
                     responsesByType[answer.fieldType] = [];
                 }
 
                 for (const response of newResponses) {
-                    for (const answer of response.answers) {
+                    for (const answer of response.answerDetails) {
                         if (!responsesByType[answer.fieldType]) {
                             responsesByType[answer.fieldType] = [];
                         }

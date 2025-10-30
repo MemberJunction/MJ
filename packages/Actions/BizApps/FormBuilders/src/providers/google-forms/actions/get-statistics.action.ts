@@ -92,7 +92,7 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
                 const allFieldIds = new Set<string>();
 
                 for (const response of responses) {
-                    for (const answer of response.answers) {
+                    for (const answer of response.answerDetails) {
                         allFieldIds.add(answer.fieldId);
                     }
                 }
