@@ -8,6 +8,7 @@ export * from './watch-new-responses.action';
 // Typeform Form Management Actions
 export * from './get-form.action';
 export * from './get-forms.action';
+export * from './get-file-content.action';
 export * from './create-form.action';
 export * from './update-form.action';
 
@@ -19,6 +20,7 @@ import { LoadExportTypeformCSVAction } from './export-csv.action';
 import { LoadWatchNewTypeformResponsesAction } from './watch-new-responses.action';
 import { LoadGetTypeformAction } from './get-form.action';
 import { LoadGetTypeformFormsAction } from './get-forms.action';
+import { LoadTypeformGetFileContentAction } from './get-file-content.action';
 import { LoadCreateTypeformAction } from './create-form.action';
 import { LoadUpdateTypeformAction } from './update-form.action';
 
@@ -34,6 +36,7 @@ export function LoadAllTypeformActions(): void {
     LoadWatchNewTypeformResponsesAction();
     LoadGetTypeformAction();
     LoadGetTypeformFormsAction();
+    LoadTypeformGetFileContentAction();
     LoadCreateTypeformAction();
     LoadUpdateTypeformAction();
 }

@@ -24,53 +24,82 @@
             "lastModified": "2025-10-30T01:28:20.433Z",
             "checksum": "69aa35cc41c7c2b9f59f19566e8e2d557c3fc4dbcedea5a4723b3febeaba34a1"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Update Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "799EC1A3-17A5-43AB-A6DA-065F655CB8D2"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T21:12:14.315Z",
+            "checksum": "df1be674a0bab35106c0da849ac708368740b297dee5d6fd60dae743e8e40d90"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Typeform Get File Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2AA1DA43-3A8B-49AC-877B-85C4B56E3CD9"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:05:50.029Z",
+            "checksum": "ed41243f44831cc3446179f52d70ea9417ff9ad88b2a3d26ab543f8274a533a6"
+          }
         }
       ],
       "MJ: AI Agent Steps": [
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Complete",
-            "StepType": "Prompt",
-            "StartingStep": false,
-            "PromptID": "@lookup:AI Prompts.Name=Process Single Submission - Complete",
+            "Name": "Get File Content",
+            "StepType": "Action",
+            "StartingStep": true,
+            "ActionID": "@lookup:Actions.Name=Typeform Get File Content",
+            "ActionInputMapping": {
+              "CompanyID": "data.companyId",
+              "FileURL": "payload.answers.Please upload your detailed session proposal required",
+              "Format": "text"
+            },
+            "ActionOutputMapping": {
+              "Content": "payload.fileContent",
+              "Format": "payload.fileFormat"
+            },
             "Status": "Active",
-            "PositionX": 400,
-            "PositionY": 200
+            "PositionX": 100,
+            "PositionY": 100
           },
           "primaryKey": {
-            "ID": "F8B37F45-22FB-49DC-A4BB-57BE1AD4BC5E"
+            "ID": "E4FE92F0-4FE7-4175-AD3A-714CCE1A7CC7"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.448Z",
-            "checksum": "4924118bf4e99a7878841a6636d47456b54f2b7c3aab6c1cfcdfb7a293779b7f"
+            "lastModified": "2025-10-30T22:05:50.058Z",
+            "checksum": "220a3dcdee1cddb196f7ab4f6e758aa3dac129a915f0d6b7133f2e48d6b678de"
           }
         },
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "Name": "Link Speakers to Submission",
-            "StepType": "Action",
+            "Name": "Generate Summary",
+            "StepType": "Prompt",
             "StartingStep": false,
-            "ActionID": "@lookup:Actions.Name=Create Record",
-            "ActionInputMapping": {
-              "EntityName": "Submission Speakers",
-              "Fields": {
-                "SubmissionID": "payload.submissionID",
-                "SpeakerID": "payload.speakerID"
-              }
-            },
-            "Description": "Create SubmissionSpeaker junction record for each created speaker",
+            "PromptID": "@lookup:AI Prompts.Name=Generate Abstract Summary",
             "Status": "Active",
-            "PositionX": 300,
-            "PositionY": 200
+            "PositionX": 200,
+            "PositionY": 100
           },
           "primaryKey": {
-            "ID": "94C50D25-2696-4B05-A8CA-FB91825B33EF"
+            "ID": "3AC1F543-4E9B-42F3-84D3-DF34D3330E0A"
           },
           "sync": {
-            "lastModified": "2025-10-30T20:52:35.449Z",
-            "checksum": "bd5b7de95d1786c06677ddd3d847c6c7e478ff2b078ecc3398f04a7375b10d7f"
+            "lastModified": "2025-10-30T21:22:15.777Z",
+            "checksum": "9fa141760769e31b30ac180816c8e95cf18186fe2a4b67b2b236dd43bc1d9bce"
           }
         },
         {
@@ -103,7 +132,7 @@
             "ID": "D8D2D8C0-0AF0-4BC2-B095-34747E39E48A"
           },
           "sync": {
-            "lastModified": "2025-10-30T20:52:35.463Z",
+            "lastModified": "2025-10-30T21:08:46.360Z",
             "checksum": "9e0b9e804c94a318b288c5ff7d26c189cd8f7a2aff999ab58462ca5a60306d11"
           }
         },
@@ -112,7 +141,7 @@
             "AgentID": "@parent:ID",
             "Name": "Create Submission",
             "StepType": "Action",
-            "StartingStep": true,
+            "StartingStep": false,
             "ActionID": "@lookup:Actions.Name=Create Record",
             "ActionInputMapping": {
               "EntityName": "Submissions",
@@ -123,7 +152,7 @@
                 "Status": "New",
                 "SubmissionTitle": "payload.answers.What is your proposed session topic",
                 "SubmissionAbstract": "payload.answers.Please share a brief biography about yourself",
-                "SubmissionSummary": "payload.answers.Tell us about your relevant experience related to this topic",
+                "SubmissionSummary": "payload.generatedSummary",
                 "PresentationFileURL": "payload.answers.Please upload your detailed session proposal required"
               }
             },
@@ -131,19 +160,97 @@
               "RecordID": "submissionID"
             },
             "Status": "Active",
-            "PositionX": 100,
+            "PositionX": 300,
             "PositionY": 100
           },
           "primaryKey": {
             "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
           },
           "sync": {
-            "lastModified": "2025-10-30T20:57:59.454Z",
-            "checksum": "c20afb77e2dd26887c67b4297e66764ba7fbc94b108810b86cac83566a704969"
+            "lastModified": "2025-10-30T21:22:15.788Z",
+            "checksum": "ebeda45211708bdb4fc3907a07a39dceec46ed9dff1e1c06b571aa54e7984e39"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Link Speakers to Submission",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "ActionInputMapping": {
+              "EntityName": "Submission Speakers",
+              "Fields": {
+                "SubmissionID": "payload.submissionID",
+                "SpeakerID": "payload.speakerID"
+              }
+            },
+            "Description": "Create SubmissionSpeaker junction record for each created speaker",
+            "Status": "Active",
+            "PositionX": 400,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "AE81C6DB-B304-4899-B051-383C602D1EC7"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T21:22:15.734Z",
+            "checksum": "d55b251163fa50cd6e9041f57b45d0fdb3fe2514d751feb50e2ea3ddb9f349a4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Complete",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Process Single Submission - Complete",
+            "Status": "Active",
+            "PositionX": 500,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "0435DF48-50D2-404E-97E1-B04B21183550"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T21:22:15.747Z",
+            "checksum": "f202907bdd5006dbbc10f4055afde6a39c8a1283f161cb10c9144749e8bbf268"
           }
         }
       ],
       "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Get File Content&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Generate Summary&AgentID=@parent:ID",
+            "Condition": null,
+            "Priority": 1,
+            "Description": "Generate summary after getting file content"
+          },
+          "primaryKey": {
+            "ID": "D4CFDE93-DDB2-4876-B475-9C80DD509EEC"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T21:22:15.856Z",
+            "checksum": "5a67c65851bc0fcf0e2f9c723b684324ae78949b5f69b7d8a048ebcf85a9a6bc"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Generate Summary&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
+            "Condition": null,
+            "Priority": 1,
+            "Description": "Create submission with generated summary"
+          },
+          "primaryKey": {
+            "ID": "C99BAEF2-B559-498A-A18E-2B6420094820"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T21:22:15.866Z",
+            "checksum": "d01606a256ac37a6461d4aafac9c6de6816e2481e8ffa14c40ff343fbf25c141"
+          }
+        },
         {
           "fields": {
             "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
@@ -153,11 +260,11 @@
             "Description": "Create speakers if the response has any"
           },
           "primaryKey": {
-            "ID": "ED4E85E9-F47C-4546-9182-CC1DA54B0385"
+            "ID": "5285C2F3-EF48-4597-9A5C-5F514D39677E"
           },
           "sync": {
-            "lastModified": "2025-10-30T20:52:35.538Z",
-            "checksum": "21d6126b00f3f5454e222d5d68fe878a66f97fab1937076df3c048dd28b3d940"
+            "lastModified": "2025-10-30T21:22:15.874Z",
+            "checksum": "ccba42fd7b8277e5f6305160fc3af5e414646698997dca5be53534397bcd7f30"
           }
         },
         {
@@ -172,8 +279,8 @@
             "ID": "B63BA465-EFE8-4E4E-AB5B-6E19AC13FEED"
           },
           "sync": {
-            "lastModified": "2025-10-30T20:52:35.550Z",
-            "checksum": "7bc7eb6d01c7e2dd19031abaf55a2bb06f7ad235cbd5cee072740c971e81cd1f"
+            "lastModified": "2025-10-30T21:22:15.903Z",
+            "checksum": "eb149c8dd6a14b5a8a6b57bc44a9f1b0f64770dee1007875efd6c81629c393f4"
           }
         },
         {
@@ -188,7 +295,7 @@
             "ID": "EAD197BE-24D2-47E1-8B5F-FD5B51C3CC26"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.628Z",
+            "lastModified": "2025-10-30T21:22:15.912Z",
             "checksum": "0c7f49f9016649f0202244f58caaca477857100ca228352f8688100bbb8b8dbc"
           }
         },
@@ -204,7 +311,7 @@
             "ID": "CCEA59FC-09EE-40B3-A324-BBB62F457FD4"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.640Z",
+            "lastModified": "2025-10-30T21:22:15.921Z",
             "checksum": "9a6b99028abb06cc0555b89798802a3faa8e702313364ab185c6b4a241171a90"
           }
         }

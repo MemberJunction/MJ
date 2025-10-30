@@ -2026,7 +2026,7 @@ export class BaseAgent {
     protected isFatalPromptError(promptResult: AIPromptRunResult): boolean {
         // First check error message for template rendering errors
         if (promptResult?.errorMessage) {
-            const templateErrorPattern = /Failed to render.*child prompt templates/i;
+            const templateErrorPattern = /Failed to render/i;
             if (templateErrorPattern.test(promptResult.errorMessage)) {
                 return true; // Template rendering errors are fatal
             }
@@ -3623,25 +3623,30 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     private async finalizeStepEntity(stepEntity: AIAgentRunStepEntityExtended, success: boolean, errorMessage?: string, outputData?: any): Promise<void> {
-        stepEntity.Status = success ? 'Completed' : 'Failed';
-        stepEntity.CompletedAt = new Date();
-        stepEntity.Success = success;
-        stepEntity.ErrorMessage = errorMessage || null;
-        
-        // Populate OutputData if provided
-        if (outputData) {
-            stepEntity.OutputData = JSON.stringify({
-                ...outputData,
-                context: {
-                    success,
-                    durationMs: stepEntity.CompletedAt.getTime() - stepEntity.StartedAt.getTime(),
-                    errorMessage
-                }
-            });
+        try {
+            stepEntity.Status = success ? 'Completed' : 'Failed';
+            stepEntity.CompletedAt = new Date();
+            stepEntity.Success = success;
+            stepEntity.ErrorMessage = errorMessage || null;
+            
+            // Populate OutputData if provided
+            if (outputData) {
+                stepEntity.OutputData = JSON.stringify({
+                    ...CopyScalarsAndArrays(outputData, true),
+                    context: {
+                        success,
+                        durationMs: stepEntity.CompletedAt.getTime() - stepEntity.StartedAt.getTime(),
+                        errorMessage
+                    }
+                });
+            }
+            
+            if (!await stepEntity.Save()) {
+                console.error('Failed to update agent run step record');
+            }
         }
-        
-        if (!await stepEntity.Save()) {
-            console.error('Failed to update agent run step record');
+        catch (e) {
+            console.error('Failed to update agent run step record', e);
         }
     }
 

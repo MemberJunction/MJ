@@ -1,62 +1,22 @@
 [
   {
     "fields": {
-      "Name": "Event Abstract Submission - No Responses",
-      "Description": "Message shown when no new Typeform responses are found",
+      "Name": "Generate Abstract Summary",
+      "Description": "Generate AI summary from session proposal and file content",
       "TypeID": "@lookup:AI Prompt Types.Name=Chat",
       "CategoryID": "@lookup:AI Prompt Categories.Name=Event Abstract Submission",
-      "TemplateText": "@file:templates/event-abstract-submission/no-responses.template.md",
+      "TemplateText": "@file:templates/generate-abstract-summary.template.md",
       "Status": "Active",
-      "ResponseFormat": "Text",
+      "ResponseFormat": "JSON",
       "PromptRole": "System",
       "PromptPosition": "First"
     },
     "primaryKey": {
-      "ID": "40DA1BFE-2A20-4712-A681-B42FC1EC8810"
+      "ID": "874DC90D-7840-4D5F-8E1C-70C93481556D"
     },
     "sync": {
-      "lastModified": "2025-10-30T01:28:19.863Z",
-      "checksum": "e3a1d0b9d13ac0b174287c16fc56e366f1d63cdf59639622da02310e17b9158e"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Event Abstract Submission - Complete Summary",
-      "Description": "Summary message after successfully processing all Typeform responses",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Event Abstract Submission",
-      "TemplateText": "@file:templates/event-abstract-submission/complete-summary.template.md",
-      "Status": "Active",
-      "ResponseFormat": "Text",
-      "PromptRole": "System",
-      "PromptPosition": "First"
-    },
-    "primaryKey": {
-      "ID": "F00E8534-C031-498B-ABF7-C76B907628D1"
-    },
-    "sync": {
-      "lastModified": "2025-10-30T01:28:19.924Z",
-      "checksum": "11e271c13a4a557771dffc6521d5417bb823c0dbb5f8bd32458f0ff1db1adc40"
-    }
-  },
-  {
-    "fields": {
-      "Name": "Process Single Submission - Complete",
-      "Description": "Completion message after processing a single submission",
-      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
-      "CategoryID": "@lookup:AI Prompt Categories.Name=Event Abstract Submission",
-      "TemplateText": "@file:templates/event-abstract-submission/sub-agent-complete.template.md",
-      "Status": "Active",
-      "ResponseFormat": "Text",
-      "PromptRole": "System",
-      "PromptPosition": "First"
-    },
-    "primaryKey": {
-      "ID": "109C7CB7-3DE7-46E4-969A-1CE60A84847D"
-    },
-    "sync": {
-      "lastModified": "2025-10-30T01:28:20.274Z",
-      "checksum": "4e4ad782daef079353bdc9f4aae2a64f4059d6f6d3cd6aa24328be316746f16a"
+      "lastModified": "2025-10-30T22:26:01.642Z",
+      "checksum": "44b4445fc8b7b3d185e2cd94175c7fd1e9f6587f7221f5647b51deaf043d4a39"
     }
   }
 ]
