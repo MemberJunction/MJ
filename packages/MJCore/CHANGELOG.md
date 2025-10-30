@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/core
 
+## 2.113.2
+
+### Patch Changes
+
+- 61d1df4: Bump patch version
+  - @memberjunction/global@2.113.2
+
 ## 2.112.0
 
 ### Patch Changes
