@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/code-execution",
-  "version": "2.113.1",
+  "version": "2.113.2",
   "description": "Sandboxed code execution service for MemberJunction actions and agents",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -9,8 +9,8 @@
     "watch": "tsc --watch"
   },
   "dependencies": {
-    "@memberjunction/core": "2.113.1",
-    "@memberjunction/global": "2.113.1",
+    "@memberjunction/core": "2.113.2",
+    "@memberjunction/global": "2.113.2",
     "isolated-vm": "^6.0.2",
     "lodash": "^4.17.21",
     "date-fns": "^3.0.0",

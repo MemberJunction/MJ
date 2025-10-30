@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/core-entities-server",
-  "version": "2.113.1",
+  "version": "2.113.2",
   "description": "Entity subclasses for the metadata layer of MemberJunction that are only used on server side applications like MJAPI, distributed as part of each release of MemberJunction",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,16 +19,16 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai-provider-bundle": "2.113.1",
-    "@memberjunction/core": "2.113.1",
-    "@memberjunction/global": "2.113.1",
-    "@memberjunction/core-entities": "2.113.1",
-    "@memberjunction/ai-vector-dupe": "2.113.1",
-    "@memberjunction/ai-core-plus": "2.113.1",
-    "@memberjunction/ai-prompts": "2.113.1",
-    "@memberjunction/skip-types": "2.113.1",
-    "@memberjunction/aiengine": "2.113.1",
-    "@memberjunction/sqlserver-dataprovider": "2.113.1",
+    "@memberjunction/ai-provider-bundle": "2.113.2",
+    "@memberjunction/core": "2.113.2",
+    "@memberjunction/global": "2.113.2",
+    "@memberjunction/core-entities": "2.113.2",
+    "@memberjunction/ai-vector-dupe": "2.113.2",
+    "@memberjunction/ai-core-plus": "2.113.2",
+    "@memberjunction/ai-prompts": "2.113.2",
+    "@memberjunction/skip-types": "2.113.2",
+    "@memberjunction/aiengine": "2.113.2",
+    "@memberjunction/sqlserver-dataprovider": "2.113.2",
     "zod": "^3.23.8"
   },
   "repository": {
