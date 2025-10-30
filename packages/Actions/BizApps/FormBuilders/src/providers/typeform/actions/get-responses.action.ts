@@ -3,6 +3,7 @@ import { TypeformBaseAction } from '../typeform-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { FormResponse } from '../../../base/base-form-builder.action';
+import { LogStatus } from '@memberjunction/core';
 
 /**
  * Action to retrieve responses from a Typeform with comprehensive filtering options
@@ -30,7 +31,7 @@ import { FormResponse } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Typeform Responses')
+@RegisterClass(BaseAction, 'GetTypeformResponsesAction')
 export class GetTypeformResponsesAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -78,6 +79,16 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
             let pageCount: number;
             let responseTokens: { before?: string; after?: string } = {};
 
+            // Get form details to fetch field titles for simpleAnswers
+            let formFields: any[] = [];
+            try {
+                const formDetails = await this.getFormDetails(formId, apiToken);
+                formFields = formDetails.fields || [];
+            } catch (formError) {
+                LogStatus(`Warning: Could not fetch form details for simpleAnswers generation: ${formError.message}`);
+                // Continue without simpleAnswers - this is not a critical failure
+            }
+
             if (getAllPages) {
                 const maxResponses = this.getParamValue(params.Params, 'MaxResponses') || 10000;
                 const tfResponses = await this.getAllTypeformResponses(formId, apiToken, {
@@ -89,7 +100,7 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
                     maxResponses
                 });
 
-                responses = tfResponses.map(r => this.normalizeTypeformResponse(r));
+                responses = tfResponses.map(r => this.normalizeTypeformResponse(r, formFields));
                 totalItems = responses.length;
                 pageCount = 1;
             } else {
@@ -107,7 +118,7 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
                     fields: fieldsArray
                 });
 
-                responses = result.items.map(r => this.normalizeTypeformResponse(r));
+                responses = result.items.map(r => this.normalizeTypeformResponse(r, formFields));
                 totalItems = result.total_items;
                 pageCount = result.page_count;
 
@@ -142,6 +153,16 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
                     Name: 'Count',
                     Type: 'Output',
                     Value: responses.length
+                },
+                {
+                    Name: 'AnswerDetails',
+                    Type: 'Output',
+                    Value: responses.map(r => r.answerDetails)
+                },
+                {
+                    Name: 'Answers',
+                    Type: 'Output',
+                    Value: responses.map(r => r.answers)
                 }
             ];
 
@@ -239,4 +260,11 @@ export class GetTypeformResponsesAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetTypeformResponsesAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

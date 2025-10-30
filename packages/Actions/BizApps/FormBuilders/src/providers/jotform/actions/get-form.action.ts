@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get JotForm Details')
+@RegisterClass(BaseAction, 'GetJotFormAction')
 export class GetJotFormAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -186,4 +186,11 @@ export class GetJotFormAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetJotFormAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

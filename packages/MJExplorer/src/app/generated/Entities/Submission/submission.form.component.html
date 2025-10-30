@@ -1,0 +1,86 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="Submissions" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="Submission Notifications" [Visible]="record.IsSaved"> 
+                        Submission Notifications
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Submission Notifications','SubmissionID')"  
+                            [NewRecordValues]="NewRecordValues('Submission Notifications')"
+                            [AllowLoad]="IsCurrentTab('Submission Notifications')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Submissions" [Visible]="record.IsSaved"> 
+                        Submissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Submissions','ResubmissionOfID')"  
+                            [NewRecordValues]="NewRecordValues('Submissions')"
+                            [AllowLoad]="IsCurrentTab('Submissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Submission Speakers" [Visible]="record.IsSaved"> 
+                        Submission Speakers
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Submission Speakers','SubmissionID')"  
+                            [NewRecordValues]="NewRecordValues('Submission Speakers')"
+                            [AllowLoad]="IsCurrentTab('Submission Speakers')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Submission Reviews" [Visible]="record.IsSaved"> 
+                        Submission Reviews
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Submission Reviews','SubmissionID')"  
+                            [NewRecordValues]="NewRecordValues('Submission Reviews')"
+                            [AllowLoad]="IsCurrentTab('Submission Reviews')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="Event Review Tasks" [Visible]="record.IsSaved"> 
+                        Event Review Tasks
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('Event Review Tasks','SubmissionID')"  
+                            [NewRecordValues]="NewRecordValues('Event Review Tasks')"
+                            [AllowLoad]="IsCurrentTab('Event Review Tasks')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

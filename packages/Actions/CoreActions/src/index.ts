@@ -187,6 +187,7 @@ import { LoadCreateSVGSketchDiagramAction } from './custom/visualization/create-
 import { LoadCreateMermaidDiagramAction } from './custom/visualization/create-mermaid-diagram.action';
 import { LoadGeneratedActions } from './generated/action_subclasses';
 import { LoadCoreEntitiesServerSubClasses } from '@memberjunction/core-entities-server';
+import { LoadGetRecordsAction } from './custom/crud';
 
 export function LoadAllCoreActions() {
     LoadGeneratedActions()
@@ -197,6 +198,7 @@ export function LoadAllCoreActions() {
     LoadTeamsWebhookAction();
     LoadCreateRecordAction();
     LoadGetRecordAction();
+    LoadGetRecordsAction();
     LoadUpdateRecordAction();
     LoadDeleteRecordAction();
     LoadGetWeatherAction();

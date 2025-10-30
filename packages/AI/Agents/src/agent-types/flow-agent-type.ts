@@ -14,7 +14,7 @@
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
-import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { LogError, LogStatus, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -624,7 +624,8 @@ export class FlowAgentType extends BaseAgentType {
         actions: AgentAction[],
         currentPayload: P,
         agentTypeState: ATS,
-        currentStep: BaseAgentNextStep<P>
+        currentStep: BaseAgentNextStep<P>,
+        params?: ExecuteAgentParams<P>
     ): Promise<void> {
         // Try to find the flow state and use its payload if available
         const stepMetadata = currentStep as Record<string, unknown>;
@@ -684,7 +685,7 @@ export class FlowAgentType extends BaseAgentType {
             // Apply each mapping
             for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
                 // Use recursive resolution to handle nested objects, arrays, and primitive values
-                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload);
+                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload, params);
                 
                 // Set the parameter value
                 action.params[paramName] = resolvedValue;
@@ -750,25 +751,32 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private resolveNestedValue(value: unknown, currentPayload: any): unknown {
+    private resolveNestedValue(value: unknown, currentPayload: any, params?: ExecuteAgentParams): unknown {
         if (typeof value === 'string') {
-            // Handle string values with payload/static resolution
-            if (value.startsWith('static:')) {
-                return value.substring(7);
-            } else if (value.startsWith('payload.')) {
-                const path = value.substring(8);
+            // Handle string values with payload/static/data resolution (case-insensitive)
+            const trimmedValue = value.trim();
+            
+            if (trimmedValue.toLowerCase().startsWith('static:')) {
+                return value.substring(value.indexOf(':') + 1);
+            } else if (trimmedValue.toLowerCase().startsWith('payload.')) {
+                const pathStart = value.indexOf('.') + 1;
+                const path = value.substring(pathStart);
                 return this.getValueFromPath(currentPayload, path);
+            } else if (trimmedValue.toLowerCase().startsWith('data.') && params?.data) {
+                const pathStart = value.indexOf('.') + 1;
+                const path = value.substring(pathStart);
+                return this.getValueFromPath(params.data, path);
             } else {
                 return value;
             }
         } else if (Array.isArray(value)) {
             // Handle arrays - recursively resolve each element
-            return value.map(item => this.resolveNestedValue(item, currentPayload));
+            return value.map(item => this.resolveNestedValue(item, currentPayload, params));
         } else if (value && typeof value === 'object') {
             // Handle objects - recursively resolve each property
             const resolvedObj: Record<string, unknown> = {};
             for (const [key, val] of Object.entries(value)) {
-                resolvedObj[key] = this.resolveNestedValue(val, currentPayload);
+                resolvedObj[key] = this.resolveNestedValue(val, currentPayload, params);
             }
             return resolvedObj;
         } else {
@@ -1196,6 +1204,55 @@ export class FlowAgentType extends BaseAgentType {
         return false;
     }
 
+    /**
+     * Flow agents don't require agent-level prompts - they use step-level prompts exclusively
+     * @override
+     */
+    public get RequiresAgentLevelPrompts(): boolean {
+        return false;
+    }
+
+    /**
+     * Provides Flow-specific guidance for prompt configuration
+     * @override
+     */
+    public GetPromptConfigurationGuidance(): string {
+        return `   - Flow agents use step-level prompts (StepType="Prompt" with PromptID)\n` +
+               `   - Prompts should be configured in agent steps, not AI Agent Prompts relationship\n` +
+               `   - Verify that prompts exist in AI Prompts table and are active`;
+    }
+
+    /**
+     * Flow agents should NEVER fall back to prompt execution for Success/Failed steps.
+     * Flow agents are deterministic and driven by their graph structure (steps and paths).
+     * When a step completes (Success or Failed), the agent should terminate rather than
+     * retry with prompts.
+     *
+     * @override
+     * @since 2.113.0
+     */
+    public async HandleStepFallback<P = any, ATS = any>(
+        step: BaseAgentNextStep<P>,
+        config: AgentConfiguration,
+        params: ExecuteAgentParams<P>,
+        payload: P,
+        agentTypeState: ATS
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Flow agents NEVER fall back to prompt execution
+        // They are driven entirely by their graph structure (steps and paths)
+        // Success/Failed steps should terminate, not retry prompts
+
+        if (step.step === 'Success' || step.step === 'Failed') {
+            // Use spread to preserve all properties and just override terminate
+            return {
+                ...step,
+                terminate: true
+            };
+        }
+
+        // For other step types, use default behavior (should not reach here)
+        return null;
+    }
 
     /**
      * Flow agents apply ActionOutputMapping after each iteration
@@ -1257,6 +1314,7 @@ export class FlowAgentType extends BaseAgentType {
 
         return null;
     }
+ 
 }
 
 /**

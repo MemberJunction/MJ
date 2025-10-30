@@ -34,7 +34,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Update SurveyMonkey')
+@RegisterClass(BaseAction, 'UpdateSurveyMonkeyAction')
 export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
   public get Description(): string {
     return 'Updates an existing SurveyMonkey survey. Set MergeWithExisting=true (default) to safely update only specified properties while preserving others. Set to false to replace entire survey data (not recommended).';
@@ -231,4 +231,11 @@ export class UpdateSurveyMonkeyAction extends SurveyMonkeyBaseAction {
       },
     ];
   }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadUpdateSurveyMonkeyAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

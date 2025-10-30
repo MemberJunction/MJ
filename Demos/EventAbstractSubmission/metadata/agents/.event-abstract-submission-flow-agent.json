@@ -1,0 +1,465 @@
+[
+  {
+    "fields": {
+      "Name": "Process Single Submission",
+      "Description": "Sub-agent that processes a single Typeform response: creates a Submission record, then iterates over speakers to create Speaker records and link them via SubmissionSpeaker junction table. Note: Speaker deduplication should be handled as a separate cleanup process - this agent prioritizes speed and reliability by creating records directly.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-file-alt"
+    },
+    "relatedEntities": {
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "F351BD35-165A-4356-A439-4768120EB0A9"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T01:28:20.433Z",
+            "checksum": "69aa35cc41c7c2b9f59f19566e8e2d557c3fc4dbcedea5a4723b3febeaba34a1"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Update Record",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "799EC1A3-17A5-43AB-A6DA-065F655CB8D2"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T21:12:14.315Z",
+            "checksum": "df1be674a0bab35106c0da849ac708368740b297dee5d6fd60dae743e8e40d90"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Typeform Get File Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2AA1DA43-3A8B-49AC-877B-85C4B56E3CD9"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:05:50.029Z",
+            "checksum": "ed41243f44831cc3446179f52d70ea9417ff9ad88b2a3d26ab543f8274a533a6"
+          }
+        }
+      ],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Get File Content",
+            "StepType": "Action",
+            "StartingStep": true,
+            "ActionID": "@lookup:Actions.Name=Typeform Get File Content",
+            "ActionInputMapping": {
+              "CompanyID": "data.companyId",
+              "FileURL": "payload.answers.Please upload your detailed session proposal required",
+              "Format": "text"
+            },
+            "ActionOutputMapping": {
+              "Content": "payload.fileContent",
+              "Format": "payload.fileFormat"
+            },
+            "Status": "Active",
+            "PositionX": 100,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "E4FE92F0-4FE7-4175-AD3A-714CCE1A7CC7"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.610Z",
+            "checksum": "220a3dcdee1cddb196f7ab4f6e758aa3dac129a915f0d6b7133f2e48d6b678de"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Generate Summary",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Generate Abstract Summary",
+            "Status": "Active",
+            "PositionX": 200,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "3AC1F543-4E9B-42F3-84D3-DF34D3330E0A"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.625Z",
+            "checksum": "9fa141760769e31b30ac180816c8e95cf18186fe2a4b67b2b236dd43bc1d9bce"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Create Speakers",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "ActionInputMapping": {
+              "EntityName": "Speakers",
+              "Fields": {
+                "FullName": "payload.answers.What is your full name?",
+                "Email": "payload.answers.Email",
+                "Bio": "payload.answers.Please share a brief biography about yourself.",
+                "Title": "Speaker",
+                "Organization": "Independent",
+                "SpeakingExperience": "payload.answers.Tell us about your relevant experience related to this topic."
+              }
+            },
+            "ActionOutputMapping": {
+              "RecordID": "speakerID"
+            },
+            "Description": "Create Speaker record for single speaker from the response",
+            "Status": "Active",
+            "PositionX": 200,
+            "PositionY": 200
+          },
+          "primaryKey": {
+            "ID": "D8D2D8C0-0AF0-4BC2-B095-34747E39E48A"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.640Z",
+            "checksum": "9e0b9e804c94a318b288c5ff7d26c189cd8f7a2aff999ab58462ca5a60306d11"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Create Submission",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "ActionInputMapping": {
+              "EntityName": "Submissions",
+              "Fields": {
+                "EventID": "data.eventId",
+                "TypeformResponseID": "payload.responseId",
+                "SubmittedAt": "payload.submittedAt",
+                "Status": "New",
+                "SubmissionTitle": "payload.answers.What is your proposed session topic",
+                "SubmissionAbstract": "payload.answers.Please share a brief biography about yourself",
+                "SubmissionSummary": "payload.generatedSummary",
+                "PresentationFileURL": "payload.answers.Please upload your detailed session proposal required"
+              }
+            },
+            "ActionOutputMapping": {
+              "RecordID": "submissionID"
+            },
+            "Status": "Active",
+            "PositionX": 300,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.654Z",
+            "checksum": "ebeda45211708bdb4fc3907a07a39dceec46ed9dff1e1c06b571aa54e7984e39"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Link Speakers to Submission",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:Actions.Name=Create Record",
+            "ActionInputMapping": {
+              "EntityName": "Submission Speakers",
+              "Fields": {
+                "SubmissionID": "payload.submissionID",
+                "SpeakerID": "payload.speakerID"
+              }
+            },
+            "Description": "Create SubmissionSpeaker junction record for each created speaker",
+            "Status": "Active",
+            "PositionX": 400,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "AE81C6DB-B304-4899-B051-383C602D1EC7"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.668Z",
+            "checksum": "d55b251163fa50cd6e9041f57b45d0fdb3fe2514d751feb50e2ea3ddb9f349a4"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Complete",
+            "StepType": "Prompt",
+            "StartingStep": false,
+            "PromptID": "@lookup:AI Prompts.Name=Process Single Submission - Complete",
+            "Status": "Active",
+            "PositionX": 500,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "0435DF48-50D2-404E-97E1-B04B21183550"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.681Z",
+            "checksum": "f202907bdd5006dbbc10f4055afde6a39c8a1283f161cb10c9144749e8bbf268"
+          }
+        }
+      ],
+      "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Get File Content&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Generate Summary&AgentID=@parent:ID",
+            "Condition": null,
+            "Priority": 1,
+            "Description": "Generate summary after getting file content"
+          },
+          "primaryKey": {
+            "ID": "D4CFDE93-DDB2-4876-B475-9C80DD509EEC"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.765Z",
+            "checksum": "5a67c65851bc0fcf0e2f9c723b684324ae78949b5f69b7d8a048ebcf85a9a6bc"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Generate Summary&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
+            "Condition": null,
+            "Priority": 1,
+            "Description": "Create submission with generated summary"
+          },
+          "primaryKey": {
+            "ID": "C99BAEF2-B559-498A-A18E-2B6420094820"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.775Z",
+            "checksum": "d01606a256ac37a6461d4aafac9c6de6816e2481e8ffa14c40ff343fbf25c141"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Create Speakers&AgentID=@parent:ID",
+            "Condition": "payload.answers.What is your full name != null",
+            "Priority": 1,
+            "Description": "Create speakers if the response has any"
+          },
+          "primaryKey": {
+            "ID": "5285C2F3-EF48-4597-9A5C-5F514D39677E"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.785Z",
+            "checksum": "ccba42fd7b8277e5f6305160fc3af5e414646698997dca5be53534397bcd7f30"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Submission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Complete&AgentID=@parent:ID",
+            "Condition": "payload.answers.What is your full name == null",
+            "Priority": 2,
+            "Description": "Skip speaker processing if none provided"
+          },
+          "primaryKey": {
+            "ID": "B63BA465-EFE8-4E4E-AB5B-6E19AC13FEED"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.794Z",
+            "checksum": "eb149c8dd6a14b5a8a6b57bc44a9f1b0f64770dee1007875efd6c81629c393f4"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Create Speakers&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Link Speakers to Submission&AgentID=@parent:ID",
+            "Condition": null,
+            "Priority": 1,
+            "Description": "Link all created speakers to the submission"
+          },
+          "primaryKey": {
+            "ID": "EAD197BE-24D2-47E1-8B5F-FD5B51C3CC26"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.802Z",
+            "checksum": "0c7f49f9016649f0202244f58caaca477857100ca228352f8688100bbb8b8dbc"
+          }
+        },
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Link Speakers to Submission&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Complete&AgentID=@parent:ID",
+            "Condition": null,
+            "Priority": 1,
+            "Description": "Complete after linking all speakers"
+          },
+          "primaryKey": {
+            "ID": "CCEA59FC-09EE-40B3-A324-BBB62F457FD4"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:33:09.811Z",
+            "checksum": "9a6b99028abb06cc0555b89798802a3faa8e702313364ab185c6b4a241171a90"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7F12A577-EFE1-4C11-965B-C1D03908F138"
+    },
+    "sync": {
+      "lastModified": "2025-10-30T01:28:20.322Z",
+      "checksum": "93e72c2293589cd4af7381cf5c655091deb79d04351b9dcc37ab272d173312ac"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Event Abstract Submission Flow Agent",
+      "Description": "Automated workflow for processing Typeform abstract submissions. Polls Typeform for new responses, then delegates to a sub-agent to create Submission and Speaker records with deduplication.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "InvocationMode": "Sub-Agent",
+      "IconClass": "fa-solid fa-clipboard-check"
+    },
+    "relatedEntities": {
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Typeform Responses",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7A428131-8808-471E-8ECF-084F38586244"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T01:28:20.501Z",
+            "checksum": "6e0da71beb9748ba7ac036186631c86ff7b0aaaef45655f39c00c7d41229372a"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Process Single Submission",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "*": "processedSubmissions"
+            },
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "1E0B681E-77C5-474E-B298-87C064D21498"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T15:30:30.055Z",
+            "checksum": "966005262657183636075dc038dd3a5f685be5a93d91689c3257bc08c128beca"
+          }
+        }
+      ],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Process Each Response",
+            "StepType": "ForEach",
+            "StartingStep": false,
+            "LoopBodyType": "Sub-Agent",
+            "SubAgentID": "@lookup:AI Agents.Name=Process Single Submission",
+            "Configuration": {
+              "collectionPath": "typeformResponses",
+              "itemVariable": "response",
+              "indexVariable": "index",
+              "maxIterations": 1000,
+              "continueOnError": true,
+              "executionMode": "parallel"
+            },
+            "Description": "Process each Typeform response by creating submission and speaker records",
+            "Status": "Active",
+            "PositionX": 300,
+            "PositionY": 200
+          },
+          "primaryKey": {
+            "ID": "E3DF9398-E3C2-43F6-96E9-C324D4A86A0C"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:51:05.612Z",
+            "checksum": "edcb3308e63b194b3281868073fa1a43d2ce4e1008c717e6d1306c671f71dec6"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Get Typeform Responses",
+            "StepType": "Action",
+            "StartingStep": true,
+            "ActionID": "@lookup:Actions.Name=Get Typeform Responses",
+            "ActionInputMapping": {
+              "CompanyID": "data.companyId",
+              "FormID": "data.formId",
+              "SinceDate": "payload.lastCheckDate",
+              "CompletedOnly": true
+            },
+            "ActionOutputMapping": {
+              "Responses": "typeformResponses",
+              "TotalItems": "responseCount"
+            },
+            "Status": "Active",
+            "PositionX": 100,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "D92593AB-1638-4112-A1CA-670D7F01235B"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:37:52.411Z",
+            "checksum": "27429e46ba741d042e79a14c9368446130cf09a2557ed8159ccb43ea28efa808"
+          }
+        }
+      ],
+      "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Get Typeform Responses&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Process Each Response&AgentID=@parent:ID",
+            "Condition": "payload.responseCount > 0",
+            "Priority": 1,
+            "Description": "Process responses if we have any"
+          },
+          "primaryKey": {
+            "ID": "67F75258-8D92-43A7-8B29-2279903F273B"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:37:52.448Z",
+            "checksum": "a657bb72eae6c0e86219fb38ecd9b3a1259e3426a7be465a990b53626599ab9a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1E1343B2-09B9-49B3-808E-8915D9769E51"
+    },
+    "sync": {
+      "lastModified": "2025-10-30T19:03:56.537Z",
+      "checksum": "40b59ec64b409b31c2ad978ab010d85b7e43fd917b28ea6f1707288b067326ad"
+    }
+  }
+]

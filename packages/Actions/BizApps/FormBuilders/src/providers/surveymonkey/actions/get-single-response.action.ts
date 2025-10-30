@@ -25,7 +25,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Single SurveyMonkey Response')
+@RegisterClass(BaseAction, 'GetSingleSurveyMonkeyResponseAction')
 export class GetSingleSurveyMonkeyResponseAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -145,4 +145,11 @@ export class GetSingleSurveyMonkeyResponseAction extends SurveyMonkeyBaseAction 
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSingleSurveyMonkeyResponseAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }
