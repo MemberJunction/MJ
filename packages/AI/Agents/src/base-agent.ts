@@ -3898,13 +3898,11 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Returns the default payload self write paths for the agent. If not specified, it will return ["*"]
+     * Returns the default payload self write paths for the agent. If not specified, it will return undefined
      
      */
-    private getDefaultPayloadSelfWritePaths(): string[] {
-        return [
-            "*"
-        ];
+    private getDefaultPayloadSelfWritePaths(): string[] | undefined {
+        return undefined;
     }
 
     /**
