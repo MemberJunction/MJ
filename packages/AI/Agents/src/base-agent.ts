@@ -3817,6 +3817,28 @@ The context is now within limits. Please retry your request with the recovered c
 
                     if (fallbackStep) {
                         // Agent type provided custom handling (e.g., Flow agents terminate)
+
+                        // If agent type wants to terminate, create a step to log this decision for observability
+                        if (fallbackStep.terminate) {
+                            const terminationMessage = `Agent completed successfully. Agent type '${config.agentType.Name}' terminated execution.`;
+
+                            // Create termination step
+                            const stepEntity = await this.createStepEntity({
+                                stepType: 'Decision',
+                                stepName: terminationMessage,
+                                contextUser: params.contextUser,
+                                payloadAtStart: fallbackStep.previousPayload,
+                                payloadAtEnd: fallbackStep.newPayload
+                            });
+
+                            // Finalize immediately as completed
+                            await this.finalizeStepEntity(stepEntity, true, undefined, {
+                                reason: 'Agent type intervention - Success',
+                                agentType: config.agentType.Name,
+                                decision: 'Success'
+                            });
+                        }
+
                         return fallbackStep;
                     } else {
                         // Agent type wants default behavior (e.g., Loop agents process with prompt)
@@ -3844,10 +3866,44 @@ The context is now within limits. Please retry your request with the recovered c
 
                     if (fallbackStep) {
                         // Agent type provided custom handling (e.g., Flow agents terminate)
-                        this.logError(`Agent type '${config.agentType.Name}' handling Failed step with custom logic`, {
-                            agent: params.agent,
-                            category: 'AgentExecution'
-                        });
+
+                        // If agent type wants to terminate, create a step to log this decision for observability
+                        if (fallbackStep.terminate) {
+                            const errorDetails = fallbackStep.errorMessage || 'No error details provided';
+                            const terminationMessage = `Agent failed. Agent type '${config.agentType.Name}' terminated execution: ${errorDetails}`;
+
+                            // Create termination step
+                            const stepEntity = await this.createStepEntity({
+                                stepType: 'Decision',
+                                stepName: terminationMessage,
+                                contextUser: params.contextUser,
+                                payloadAtStart: fallbackStep.previousPayload,
+                                payloadAtEnd: fallbackStep.newPayload
+                            });
+
+                            // Finalize as failed with error details
+                            await this.finalizeStepEntity(stepEntity, false, errorDetails, {
+                                reason: 'Agent type intervention - Failed',
+                                agentType: config.agentType.Name,
+                                decision: 'Failed'
+                            });
+
+                            // Also update the agent run's error message for top-level visibility
+                            if (this.AgentRun) {
+                                this.AgentRun.ErrorMessage = terminationMessage;
+                                await this.AgentRun.Save();
+                            }
+
+                            this.logError(`Agent type '${config.agentType.Name}' handling Failed step with termination`, {
+                                agent: params.agent,
+                                category: 'AgentExecution',
+                                metadata: {
+                                    errorDetails,
+                                    agentType: config.agentType.Name
+                                }
+                            });
+                        }
+
                         return fallbackStep;
                     } else {
                         // Agent type wants default behavior (e.g., Loop agents retry with prompt)
