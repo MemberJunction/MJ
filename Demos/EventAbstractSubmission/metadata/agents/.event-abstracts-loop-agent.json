@@ -2,18 +2,16 @@
   {
     "fields": {
       "Name": "Event Abstracts",
-      "Description": "Conversational agent for event abstract submission processing. Helps users select an event and TypeForm, then processes new form responses to create submission records. Provides a user-friendly interface for managing conference abstract submissions.",
+      "Description": "Conversational agent for event abstract submission processing. Helps users select an event and TypeForm, then processes new form responses to create submission records. Provides a user-friendly interface for managing conference abstract submissions",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "ModelSelectionMode": "Agent",
+      "PayloadSelfWritePaths": [
+        "*"
+      ],
       "ExposeAsAction": true,
       "IconClass": "fa-solid fa-calendar-check",
-      "ArtifactCreationMode": "System Only",
-      "PayloadSelfWritePaths": [
-        "selectedEvent.*",
-        "selectedForm.*",
-        "processingResult.*"
-      ]
+      "ArtifactCreationMode": "System Only"
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -88,8 +86,8 @@
       "ID": "32055FD3-CE42-49A9-BA55-ACD3E311B40D"
     },
     "sync": {
-      "lastModified": "2025-10-30T19:45:52.819Z",
-      "checksum": "51216ffbf9a8ddf155633ebef7ffcae092bbb361e6007c908aa1c3aa82431359"
+      "lastModified": "2025-10-30T20:23:48.404Z",
+      "checksum": "7b6c1619152ec1aa92c777f619555a46ba78f63638e485882d0dedf5d8347d7d"
     }
   }
 ]
