@@ -515,5 +515,6 @@ This example shows all patterns in one agent: Flow orchestration, Action steps w
 - **Match prompts to agents** - use design.prompts[].agentName to assign prompts correctly
 - **Don't guess field names** - follow the AgentSpec interface exactly
 - **Keep it minimal** - only include fields that have values from the design
+- **Avoid Duplicate** - No duplicate actions, subagents, prompt, etc.
 
 {{ _OUTPUT_EXAMPLE }}
