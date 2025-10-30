@@ -2686,5 +2686,45 @@
       "lastModified": "2025-10-29T15:25:28.641Z",
       "checksum": "3e0a541cf1b924b72caa25653089eb131d059b6f4d649857cb2c586c4d798293"
     }
+  },
+  {
+    "fields": {
+      "Name": "Get Typeform Forms",
+      "Description": "Retrieves a list of all TypeForms for a company including form IDs, titles, and basic metadata. Use this to discover available forms before processing submissions.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "GetTypeformFormsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F4194C4C-1DDA-49CC-A062-B5334DF0DDEE"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T19:02:46.890Z",
+            "checksum": "e6b5eeca684600b3d0089c6bdb1481389708af7130c7517f95f1d155e3148865"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AF24645E-E420-488F-8247-D95365F1EF95"
+    },
+    "sync": {
+      "lastModified": "2025-10-30T19:02:44.853Z",
+      "checksum": "6da66d752587a7e92a02c10e49b0aaaf18226338bea86dd9b5eaf5598b51d430"
+    }
   }
 ]

@@ -11,5 +11,6 @@
 export * from './base-record-mutation.action';
 export * from './create-record.action';
 export * from './get-record.action';
+export * from './get-records.action';
 export * from './update-record.action';
 export * from './delete-record.action';
