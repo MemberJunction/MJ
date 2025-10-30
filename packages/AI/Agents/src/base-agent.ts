@@ -2024,6 +2024,14 @@ export class BaseAgent {
      * @protected
      */
     protected isFatalPromptError(promptResult: AIPromptRunResult): boolean {
+        // First check error message for template rendering errors
+        if (promptResult?.errorMessage) {
+            const templateErrorPattern = /Failed to render.*child prompt templates/i;
+            if (templateErrorPattern.test(promptResult.errorMessage)) {
+                return true; // Template rendering errors are fatal
+            }
+        }
+
         // If no error info, not fatal (might be transient)
         if (!promptResult?.chatResult?.errorInfo) {
             return false;
@@ -2164,6 +2172,17 @@ export class BaseAgent {
                            `   - Review agent metadata in AI Agents table\n` +
                            `   - Check all foreign key relationships are valid\n` +
                            `   - Verify agent type is properly configured`;
+                }
+            },
+            {
+                pattern: /Failed to render.*child prompt templates/i,
+                getMessage: () => {
+                    return `Template rendering error: ${errorMessage}\n\n` +
+                           `🔧 Template Configuration Fix:\n` +
+                           `   - Check nunjucks template syntax in prompt content\n` +
+                           `   - Use {% raw %}{{}}{% endraw %} for literal braces in examples\n` +
+                           `   - Verify all template variables are properly defined\n` +
+                           `   - Ensure template variables referenced in content exist in context`;
                 }
             }
         ];
