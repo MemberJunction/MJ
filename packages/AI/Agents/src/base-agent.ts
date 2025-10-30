@@ -3113,9 +3113,9 @@ The context is now within limits. Please retry your request with the recovered c
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
                 data: {
+                        ...params.data,
                         ...subAgentRequest.templateParameters,
-                        ...params.data, 
-                      }, // merge any template parameters, but override with explicitly provided data so that hallucinated input params don't override data provided by caller
+                      }, // merge parent data first, then override with template parameters so loop agents can dynamically override parent data
                 context: params.context, // pass along our context to sub-agents so they can keep passing it down and pass to actions as well
                 verbose: params.verbose, // pass verbose flag to sub-agent
                 // Add callback to link AgentRun ID immediately when created
@@ -5229,7 +5229,8 @@ The context is now within limits. Please retry your request with the recovered c
                     actions,
                     currentPayload,
                     this.AgentTypeState,
-                    previousDecision
+                    previousDecision,
+                    params
                 );
             } catch (error) {
                 LogError(`Error in PreProcessActionStep: ${error.message}`);
@@ -5849,7 +5850,8 @@ The context is now within limits. Please retry your request with the recovered c
                 const context = {
                     item,
                     index,
-                    payload: currentPayload
+                    payload: currentPayload,
+                    data: params.data
                 };
 
                 // Resolve action parameters using templates
@@ -6110,7 +6112,8 @@ The context is now within limits. Please retry your request with the recovered c
                 const context = {
                     item: attemptContext,
                     index,
-                    payload: currentPayload
+                    payload: currentPayload,
+                    data: params.data
                 };
                 
                 // Resolve action parameters using templates 

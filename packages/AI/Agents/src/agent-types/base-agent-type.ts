@@ -396,7 +396,8 @@ export abstract class BaseAgentType {
         actions: AgentAction[],
         currentPayload: P,
         agentTypeState: ATS,
-        currentStep: BaseAgentNextStep<P>
+        currentStep: BaseAgentNextStep<P>,
+        params?: ExecuteAgentParams<P>
     ): Promise<void> {
         // Default implementation does nothing
         // Subclasses can override to implement custom logic

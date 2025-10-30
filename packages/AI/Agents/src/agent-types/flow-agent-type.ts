@@ -624,7 +624,8 @@ export class FlowAgentType extends BaseAgentType {
         actions: AgentAction[],
         currentPayload: P,
         agentTypeState: ATS,
-        currentStep: BaseAgentNextStep<P>
+        currentStep: BaseAgentNextStep<P>,
+        params?: ExecuteAgentParams<P>
     ): Promise<void> {
         // Try to find the flow state and use its payload if available
         const stepMetadata = currentStep as Record<string, unknown>;
@@ -684,7 +685,7 @@ export class FlowAgentType extends BaseAgentType {
             // Apply each mapping
             for (const [paramName, mappingValue] of Object.entries(inputMapping)) {
                 // Use recursive resolution to handle nested objects, arrays, and primitive values
-                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload);
+                const resolvedValue = this.resolveNestedValue(mappingValue, currentPayload, params);
                 
                 // Set the parameter value
                 action.params[paramName] = resolvedValue;
@@ -750,25 +751,32 @@ export class FlowAgentType extends BaseAgentType {
      * 
      * @private
      */
-    private resolveNestedValue(value: unknown, currentPayload: any): unknown {
+    private resolveNestedValue(value: unknown, currentPayload: any, params?: ExecuteAgentParams): unknown {
         if (typeof value === 'string') {
-            // Handle string values with payload/static resolution
-            if (value.startsWith('static:')) {
-                return value.substring(7);
-            } else if (value.startsWith('payload.')) {
-                const path = value.substring(8);
+            // Handle string values with payload/static/data resolution (case-insensitive)
+            const trimmedValue = value.trim();
+            
+            if (trimmedValue.toLowerCase().startsWith('static:')) {
+                return value.substring(value.indexOf(':') + 1);
+            } else if (trimmedValue.toLowerCase().startsWith('payload.')) {
+                const pathStart = value.indexOf('.') + 1;
+                const path = value.substring(pathStart);
                 return this.getValueFromPath(currentPayload, path);
+            } else if (trimmedValue.toLowerCase().startsWith('data.') && params?.data) {
+                const pathStart = value.indexOf('.') + 1;
+                const path = value.substring(pathStart);
+                return this.getValueFromPath(params.data, path);
             } else {
                 return value;
             }
         } else if (Array.isArray(value)) {
             // Handle arrays - recursively resolve each element
-            return value.map(item => this.resolveNestedValue(item, currentPayload));
+            return value.map(item => this.resolveNestedValue(item, currentPayload, params));
         } else if (value && typeof value === 'object') {
             // Handle objects - recursively resolve each property
             const resolvedObj: Record<string, unknown> = {};
             for (const [key, val] of Object.entries(value)) {
-                resolvedObj[key] = this.resolveNestedValue(val, currentPayload);
+                resolvedObj[key] = this.resolveNestedValue(val, currentPayload, params);
             }
             return resolvedObj;
         } else {
