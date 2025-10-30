@@ -14,7 +14,7 @@
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
-import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { LogError, LogStatus, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
@@ -1306,6 +1306,7 @@ export class FlowAgentType extends BaseAgentType {
 
         return null;
     }
+ 
 }
 
 /**

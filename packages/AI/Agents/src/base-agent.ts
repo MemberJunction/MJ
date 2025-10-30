@@ -3627,47 +3627,6 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
-     * Helper method to get a value from a nested object path
-     * Supports dot notation and array indexing
-     * @private
-     */
-    private getValueFromPath(obj: any, path: string): unknown {
-        const parts = path.split('.');
-        let current = obj;
-
-        for (const part of parts) {
-            if (!part) continue;
-
-            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
-
-            if (arrayMatch) {
-                const arrayName = arrayMatch[1];
-                const index = parseInt(arrayMatch[2], 10);
-
-                if (current && typeof current === 'object' && arrayName in current) {
-                    current = current[arrayName];
-
-                    if (Array.isArray(current) && index >= 0 && index < current.length) {
-                        current = current[index];
-                    } else {
-                        return undefined;
-                    }
-                } else {
-                    return undefined;
-                }
-            } else {
-                if (current && typeof current === 'object' && part in current) {
-                    current = current[part];
-                } else {
-                    return undefined;
-                }
-            }
-        }
-
-        return current;
-    }
-
-    /**
      * Default parameter resolution for loop body parameters (used by Flow agents)
      * Resolves item.field, payload.field, item, index, or static values
      * @private
@@ -4263,6 +4222,90 @@ The context is now within limits. Please retry your request with the recovered c
         }
     }
 
+    /**
+     * Computes the upstream and downstream paths for a sub-agent based on the agent's payload paths.
+     * @param params 
+     * @param subAgentEntity 
+     * @param subAgentRequest 
+     * @returns 
+     */
+    private computeUpstreamDownstreamPaths<SC = any>(        
+        params: ExecuteAgentParams, 
+        subAgentEntity: AIAgentEntityExtended, 
+        subAgentRequest: AgentSubAgentRequest<SC>
+    ): { downstreamPaths: string[], upstreamPaths: string[] } {
+        let downstreamPaths: string[] = ['*'];
+        let upstreamPaths: string[] = ['*'];
+        
+        try {
+            // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
+            // until CodeGen runs after the migration to add these fields to AIAgentEntity
+            if (subAgentEntity.PayloadDownstreamPaths) {
+                downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
+            }
+            if (subAgentEntity.PayloadUpstreamPaths) {
+                upstreamPaths = JSON.parse(subAgentEntity.PayloadUpstreamPaths);
+            }
+        } catch (parseError) {
+            this.logError(`Failed to parse payload paths for sub-agent ${subAgentRequest.name}: ${parseError.message}`, {
+                category: 'SubAgentExecution',
+                metadata: {
+                    agentName: params.agent.Name,
+                    subAgentName: subAgentRequest.name,
+                    subAgentId: subAgentEntity.ID,
+                    downstreamPaths: subAgentEntity.PayloadDownstreamPaths,
+                    upstreamPaths: subAgentEntity.PayloadUpstreamPaths
+                }
+            });
+        }
+
+        return { downstreamPaths, upstreamPaths };
+    }
+
+    /**
+     * Computes the payload for a child sub-agent based on the agent's payload paths.
+     * @param params 
+     * @param subAgentEntity 
+     * @param downstreamPaths 
+     * @param subAgentRequest 
+     * @param previousDecision 
+     * @returns 
+     */
+    private async computeChildSubAgentPayload<SC = any, SR = any>(
+        params: ExecuteAgentParams, 
+        subAgentEntity: AIAgentEntityExtended,
+        downstreamPaths: string[],        
+        subAgentRequest: AgentSubAgentRequest<SC>,
+        previousDecision?: BaseAgentNextStep<SR, SC>
+    ): Promise<any> {
+        // Extract only allowed downstream payload
+        let downstreamPayload = this._payloadManager.extractDownstreamPayload(
+            subAgentRequest.name,
+            previousDecision.newPayload,
+            downstreamPaths
+        );
+        
+        // Apply payload scope if defined
+        let scopedPayload = downstreamPayload;
+        if (subAgentEntity.PayloadScope) {
+            scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope) as Partial<SR>;
+            if (scopedPayload === null) {
+                // Critical failure - scope path doesn't exist in payload
+                const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
+                this.logError(errorMessage, {
+                    category: 'SubAgentExecution',
+                    metadata: {
+                        agentName: params.agent.Name,
+                        subAgentName: subAgentRequest.name,
+                        payloadScope: subAgentEntity.PayloadScope,
+                        availableKeys: Object.keys(downstreamPayload || {})
+                    }
+                });
+                throw new Error(errorMessage);
+            }
+        }
+        return scopedPayload
+    }
 
 
     /**
@@ -4271,11 +4314,13 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @private
      * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
+     * @param subAgentPayloadOverride - Optional payload override for sub-agent execution, if provided the normal payload computation is skipped
      */
     private async executeChildSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
-        parentStepId?: string
+        parentStepId?: string,
+        subAgentPayloadOverride?: any
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
@@ -4325,56 +4370,13 @@ The context is now within limits. Please retry your request with the recovered c
         
         try {
             // Parse payload access paths
-            let downstreamPaths: string[] = ['*'];
-            let upstreamPaths: string[] = ['*'];
-            
-            try {
-                // Note: TypeScript errors on PayloadDownstreamPaths/PayloadUpstreamPaths are expected
-                // until CodeGen runs after the migration to add these fields to AIAgentEntity
-                if (subAgentEntity.PayloadDownstreamPaths) {
-                    downstreamPaths = JSON.parse(subAgentEntity.PayloadDownstreamPaths);
-                }
-                if (subAgentEntity.PayloadUpstreamPaths) {
-                    upstreamPaths = JSON.parse(subAgentEntity.PayloadUpstreamPaths);
-                }
-            } catch (parseError) {
-                this.logError(`Failed to parse payload paths for sub-agent ${subAgentRequest.name}: ${parseError.message}`, {
-                    category: 'SubAgentExecution',
-                    metadata: {
-                        agentName: params.agent.Name,
-                        subAgentName: subAgentRequest.name,
-                        subAgentId: subAgentEntity.ID,
-                        downstreamPaths: subAgentEntity.PayloadDownstreamPaths,
-                        upstreamPaths: subAgentEntity.PayloadUpstreamPaths
-                    }
-                });
+            const { downstreamPaths, upstreamPaths } = this.computeUpstreamDownstreamPaths(params, subAgentEntity, subAgentRequest);
+            let scopedPayload = null;
+            if (!subAgentPayloadOverride) {
+                scopedPayload = await this.computeChildSubAgentPayload<SC, SR>(params, subAgentEntity, downstreamPaths, subAgentRequest, previousDecision);
             }
-            
-            // Extract only allowed downstream payload
-            let downstreamPayload = this._payloadManager.extractDownstreamPayload(
-                subAgentRequest.name,
-                previousDecision.newPayload,
-                downstreamPaths
-            );
-            
-            // Apply payload scope if defined
-            let scopedPayload = downstreamPayload;
-            if (subAgentEntity.PayloadScope) {
-                scopedPayload = this._payloadManager.applyPayloadScope(downstreamPayload, subAgentEntity.PayloadScope) as Partial<SR>;
-                if (scopedPayload === null) {
-                    // Critical failure - scope path doesn't exist in payload
-                    const errorMessage = `Critical: Failed to extract payload scope '${subAgentEntity.PayloadScope}' for sub-agent '${subAgentRequest.name}'. The specified path does not exist in the payload.`;
-                    this.logError(errorMessage, {
-                        category: 'SubAgentExecution',
-                        metadata: {
-                            agentName: params.agent.Name,
-                            subAgentName: subAgentRequest.name,
-                            payloadScope: subAgentEntity.PayloadScope,
-                            availableKeys: Object.keys(downstreamPayload || {})
-                        }
-                    });
-                    throw new Error(errorMessage);
-                }
+            else {
+                scopedPayload = subAgentPayloadOverride; // we received a payload override, use it
             }
             
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
@@ -4623,11 +4625,13 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @private
      * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
+     * @param subAgentPayloadOverride - Optional payload override for sub-agent execution, if provided the normal payload computation is skipped
      */
     private async processSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
-        parentStepId?: string
+        parentStepId?: string,
+        subAgentPayloadOverride?: any
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         const name = subAgentRequest?.name;
@@ -4651,7 +4655,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         if (childAgent) {
             // This is a child agent - use direct payload coupling
-            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision, parentStepId);
+            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision, parentStepId, subAgentPayloadOverride);
         }
 
         // Check for related agent
@@ -4668,7 +4672,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (relatedAgent && relatedAgent.Name.trim().toLowerCase() === name.trim().toLowerCase()) {
                 // This is a related agent - use message-based coupling
-                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship, parentStepId);
+                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship, parentStepId, subAgentPayloadOverride);
             }
         }
 
@@ -4700,7 +4704,8 @@ The context is now within limits. Please retry your request with the recovered c
         previousDecision: BaseAgentNextStep<SR, SC>,
         subAgentEntity: AIAgentEntityExtended,
         relationship: AIAgentRelationshipEntity,
-        parentStepId?: string
+        parentStepId?: string,
+        subAgentPayloadOverride?: SR
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
 
@@ -4759,8 +4764,8 @@ The context is now within limits. Please retry your request with the recovered c
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
             // Prepare initial payload via input mapping (if configured)
-            let initialSubAgentPayload: SR | undefined = undefined;
-            if (relationship.SubAgentInputMapping) {
+            let initialSubAgentPayload: SR | undefined = subAgentPayloadOverride;
+            if (!initialSubAgentPayload && relationship.SubAgentInputMapping) {
                 const mapped = this.applySubAgentInputMapping(
                     previousDecision.newPayload as unknown as Record<string, unknown>,
                     relationship.SubAgentInputMapping
@@ -5832,13 +5837,23 @@ The context is now within limits. Please retry your request with the recovered c
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
                 { item, itemVariable: forEach.itemVariable,index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
             );
-            const resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
+            let resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
 
             // Execute action, sub-agent, or prompt
             let result;
             if (forEach.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(forEach.action.name, params.agent.ID, params.agent.Name, params);
+
+                // Create context for template resolution
+                const context = {
+                    item,
+                    index,
+                    payload: currentPayload
+                };
+
+                // Resolve action parameters using templates
+                resolvedParams = this.resolveTemplates(resolvedParams, context, forEach.itemVariable);
                 const resolvedAction = {
                     name: matchedAction.Action,
                     params: resolvedParams
@@ -5847,7 +5862,7 @@ The context is now within limits. Please retry your request with the recovered c
                 result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, item);
             } else {
                 throw new Error('ForEach missing action/subAgent');
             }
@@ -6083,13 +6098,24 @@ The context is now within limits. Please retry your request with the recovered c
             const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
                 { item: attemptContext, index, itemVariable: whileOp.itemVariable, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} }
             );
-            const resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
+            let resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
 
             // Execute action or sub-agent
             let result;
             if (whileOp.action) {
                 // Find the AgentAction with fuzzy matching
                 const matchedAction = this.findAgentActionForLoop(whileOp.action.name, params.agent.ID, params.agent.Name, params);
+
+                // Create context for template resolution
+                const context = {
+                    item: attemptContext,
+                    index,
+                    payload: currentPayload
+                };
+                
+                // Resolve action parameters using templates 
+                resolvedParams = this.resolveTemplates(resolvedParams, context, whileOp.itemVariable || 'item');
+
                 const resolvedAction = {
                     name: matchedAction.Action,
                     params: resolvedParams
@@ -6098,7 +6124,7 @@ The context is now within limits. Please retry your request with the recovered c
                 result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId, attemptContext);
             } else {
                 throw new Error('While missing action/subAgent');
             }
@@ -6889,6 +6915,111 @@ The context is now within limits. Please retry your request with the recovered c
         if (params.verbose) {
             console.log(`[Turn ${currentTurn}] Expanded message at index ${messageIndex}`);
         }
+    }
+
+    /**
+     * Generic template resolver for loop iterations - extracts from LoopAgentType to make available to all agent types
+     * Resolves templates like {{item.field}}, {{index}}, etc. in action parameters and sub-agent payloads
+     */
+    protected resolveTemplates(
+        obj: Record<string, unknown>,
+        context: Record<string, any>,
+        itemVariable: string
+    ): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string') {
+                result[key] = this.resolveValueFromContext(value, context, itemVariable);
+            } else if (Array.isArray(value)) {
+                result[key] = value.map(v =>
+                    typeof v === 'string' ? this.resolveValueFromContext(v, context, itemVariable) : v
+                );
+            } else if (typeof value === 'object' && value !== null) {
+                result[key] = this.resolveTemplates(value as Record<string, unknown>, context, itemVariable);
+            } else {
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Resolves a value from context using variable references - extracts from LoopAgentType
+     */
+    protected resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
+        // check to see if value is wrapped in a nunjucks style template like {{variable}} and
+        // if so, remove that wrapping to get the actual variable name.
+        // we only do this if the string starts and ends with the {{ }} pattern
+        // and we trim whitespace first
+        const trimmedValue = value.trim();
+        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
+            value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
+        }
+
+        // first check itemVariable name
+        const ivToLower = itemVariable?.trim().toLowerCase();
+        if (value?.toLowerCase().startsWith(`${ivToLower}.`)) {
+            const path = value.substring(ivToLower.length + 1);
+            return this.getValueFromPath(context.item, path);
+        }
+
+        // Check for direct context variable references
+        for (const [varName, varValue] of Object.entries(context)) {
+            if (value === varName) {
+                return varValue;
+            }
+
+            if (value?.trim().toLowerCase().startsWith(`${varName}.`)) {
+                const path = value.substring(varName.length + 1);
+                return this.getValueFromPath(varValue, path);
+            }
+        }
+
+        // Static value
+        return value;
+    }
+
+    /**
+     * Helper to get value from nested object path - extracts from LoopAgentType
+     */
+    protected getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+
+        for (const part of parts) {
+            if (!part) continue;
+
+            // Check for array indexing
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
+            } else {
+                // Regular property access
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
+            }
+        }
+
+        return current;
     }
 }
 
