@@ -3879,6 +3879,16 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Returns the default payload self write paths for the agent. If not specified, it will return ["*"]
+     
+     */
+    private getDefaultPayloadSelfWritePaths(): string[] {
+        return [
+            "*"
+        ];
+    }
+
+    /**
      * Executes a prompt step and tracks it.
      * 
      * @private
@@ -4068,7 +4078,7 @@ The context is now within limits. Please retry your request with the recovered c
                 // Parse the allowed paths if configured
                 const allowedPaths = params.agent.PayloadSelfWritePaths 
                     ? JSON.parse(params.agent.PayloadSelfWritePaths) 
-                    : undefined;
+                    : this.getDefaultPayloadSelfWritePaths();
 
                 // Apply the changes to the payload with operation control
                 const changeResult = this._payloadManager.applyAgentChangeRequest(
@@ -5395,7 +5405,7 @@ The context is now within limits. Please retry your request with the recovered c
                 if (payloadChangeRequest) {
                     const allowedPaths = params.agent.PayloadSelfWritePaths 
                         ? JSON.parse(params.agent.PayloadSelfWritePaths) 
-                        : undefined;
+                        : this.getDefaultPayloadSelfWritePaths();
                     
                     const changeResult = this._payloadManager.applyAgentChangeRequest(
                         currentPayload,
