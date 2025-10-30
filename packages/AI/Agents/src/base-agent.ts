@@ -2061,7 +2061,6 @@ export class BaseAgent {
      * @protected
      */
     protected isConfigurationError(
-        error: any,
         errorMessage: string,
         config?: AgentConfiguration
     ): { isConfigError: boolean; detailedMessage: string } {
@@ -4145,7 +4144,7 @@ The context is now within limits. Please retry your request with the recovered c
             const errString = error?.message || error || 'Unknown error';
 
             // Classify error type - configuration errors are fatal and should not be retried
-            const configCheck = this.isConfigurationError(error, errString, config);
+            const configCheck = this.isConfigurationError(errString, config);
             const isConfigurationError = configCheck.isConfigError;
             const detailedErrorMessage = configCheck.detailedMessage;
 
