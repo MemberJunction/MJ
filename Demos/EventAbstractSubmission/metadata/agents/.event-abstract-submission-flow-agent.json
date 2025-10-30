@@ -54,8 +54,21 @@
             "StartingStep": false,
             "LoopBodyType": "Action",
             "ActionID": "@lookup:Actions.Name=Create Record",
-            "Configuration": "{\"collectionPath\": \"createdSpeakers\", \"itemVariable\": \"speakerRecord\", \"indexVariable\": \"speakerIndex\", \"maxIterations\": 10, \"continueOnError\": false, \"executionMode\": \"sequential\"}",
-            "ActionInputMapping": "{\"EntityName\": \"static:Submission Speakers\", \"RecordData\": {\"SubmissionID\": \"payload.submissionID\", \"SpeakerID\": \"speakerRecord.speakerID\"}}",
+            "Configuration": {
+              "collectionPath": "createdSpeakers",
+              "itemVariable": "speakerRecord",
+              "indexVariable": "speakerIndex",
+              "maxIterations": 10,
+              "continueOnError": false,
+              "executionMode": "sequential"
+            },
+            "ActionInputMapping": {
+              "EntityName": "Submission Speakers",
+              "RecordData": {
+                "SubmissionID": "payload.submissionID",
+                "SpeakerID": "speakerRecord.speakerID"
+              }
+            },
             "Description": "Create SubmissionSpeaker junction record for each created speaker",
             "Status": "Active",
             "PositionX": 300,
@@ -65,8 +78,8 @@
             "ID": "94C50D25-2696-4B05-A8CA-FB91825B33EF"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.462Z",
-            "checksum": "5d3dd030657e9f03c6ee966348b41d0a83c601a12ff051d7bfef3a141986842c"
+            "lastModified": "2025-10-30T01:45:30.766Z",
+            "checksum": "20ecccfd3a397cd47b973bb74ab8d76280f843da42a31c2a1cc3067a2932b4b4"
           }
         },
         {
@@ -77,9 +90,30 @@
             "StartingStep": false,
             "LoopBodyType": "Action",
             "ActionID": "@lookup:Actions.Name=Create Record",
-            "Configuration": "{\"collectionPath\": \"response.speakers\", \"itemVariable\": \"speaker\", \"indexVariable\": \"speakerIndex\", \"maxIterations\": 10, \"continueOnError\": false, \"executionMode\": \"sequential\"}",
-            "ActionInputMapping": "{\"EntityName\": \"static:Speakers\", \"RecordData\": {\"FirstName\": \"speaker.firstName\", \"LastName\": \"speaker.lastName\", \"Email\": \"speaker.email\", \"Company\": \"speaker.company\", \"Title\": \"speaker.title\", \"Bio\": \"speaker.bio\", \"LinkedInURL\": \"speaker.linkedin\", \"TwitterHandle\": \"speaker.twitter\"}}",
-            "ActionOutputMapping": "{\"RecordID\": \"createdSpeakers[index].speakerID\"}",
+            "Configuration": {
+              "collectionPath": "response.speakers",
+              "itemVariable": "speaker",
+              "indexVariable": "speakerIndex",
+              "maxIterations": 10,
+              "continueOnError": false,
+              "executionMode": "sequential"
+            },
+            "ActionInputMapping": {
+              "EntityName": "Speakers",
+              "RecordData": {
+                "FirstName": "speaker.firstName",
+                "LastName": "speaker.lastName",
+                "Email": "speaker.email",
+                "Company": "speaker.company",
+                "Title": "speaker.title",
+                "Bio": "speaker.bio",
+                "LinkedInURL": "speaker.linkedin",
+                "TwitterHandle": "speaker.twitter"
+              }
+            },
+            "ActionOutputMapping": {
+              "RecordID": "createdSpeakers[index].speakerID"
+            },
             "Description": "Create Speaker record for each speaker in the response",
             "Status": "Active",
             "PositionX": 200,
@@ -89,8 +123,8 @@
             "ID": "D8D2D8C0-0AF0-4BC2-B095-34747E39E48A"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.476Z",
-            "checksum": "a3101ad720a595fd095b6b8edaf23f78bd8e0790a5105b8c85a75c27138e2290"
+            "lastModified": "2025-10-30T01:45:30.783Z",
+            "checksum": "1ba44d37c3015fcce790dc97113208e2c43262e5c9d2332e5702cf449856256f"
           }
         },
         {
@@ -100,8 +134,23 @@
             "StepType": "Action",
             "StartingStep": true,
             "ActionID": "@lookup:Actions.Name=Create Record",
-            "ActionInputMapping": "{\"EntityName\": \"static:Submissions\", \"RecordData\": {\"EventID\": \"payload.eventID\", \"SubmissionTitle\": \"payload.response.title\", \"SubmissionAbstract\": \"payload.response.abstract\", \"SubmissionType\": \"payload.response.submissionType\", \"TypeformResponseID\": \"payload.response.response_id\", \"TypeformSubmittedAt\": \"payload.response.submitted_at\", \"Status\": \"static:New\", \"TargetAudience\": \"payload.response.targetAudience\", \"TechLevel\": \"payload.response.techLevel\"}}",
-            "ActionOutputMapping": "{\"RecordID\": \"submissionID\"}",
+            "ActionInputMapping": {
+              "EntityName": "Submissions",
+              "RecordData": {
+                "EventID": "payload.eventID",
+                "SubmissionTitle": "payload.response.title",
+                "SubmissionAbstract": "payload.response.abstract",
+                "SubmissionType": "payload.response.submissionType",
+                "TypeformResponseID": "payload.response.response_id",
+                "TypeformSubmittedAt": "payload.response.submitted_at",
+                "Status": "New",
+                "TargetAudience": "payload.response.targetAudience",
+                "TechLevel": "payload.response.techLevel"
+              }
+            },
+            "ActionOutputMapping": {
+              "RecordID": "submissionID"
+            },
             "Status": "Active",
             "PositionX": 100,
             "PositionY": 100
@@ -110,8 +159,8 @@
             "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.489Z",
-            "checksum": "3e3b4122fe3bfdb2dd30d42cc0f7562e03351d29375285eca5c0aba8b3b817d2"
+            "lastModified": "2025-10-30T01:45:30.801Z",
+            "checksum": "e2670f1c2e8fbaac88a79423c83ee3d7cecfb367c42527a9673a5b0b0ecc40cc"
           }
         }
       ],
@@ -264,7 +313,14 @@
             "StartingStep": false,
             "LoopBodyType": "Sub-Agent",
             "SubAgentID": "@lookup:AI Agents.Name=Process Single Submission",
-            "Configuration": "{\"collectionPath\": \"typeformResponses\", \"itemVariable\": \"response\", \"indexVariable\": \"index\", \"maxIterations\": 100, \"continueOnError\": true, \"executionMode\": \"sequential\"}",
+            "Configuration": {
+              "collectionPath": "typeformResponses",
+              "itemVariable": "response",
+              "indexVariable": "index",
+              "maxIterations": 100,
+              "continueOnError": true,
+              "executionMode": "sequential"
+            },
             "Description": "Process each Typeform response by creating submission and speaker records",
             "Status": "Active",
             "PositionX": 300,
@@ -274,8 +330,8 @@
             "ID": "E3DF9398-E3C2-43F6-96E9-C324D4A86A0C"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.406Z",
-            "checksum": "095be977ca1cf8450154c120f57ade2898b90e7d1acf874e0fb51d1545d6348d"
+            "lastModified": "2025-10-30T01:45:30.746Z",
+            "checksum": "143d15a2efb29056dc3de7c83a3db83977f6fe385e295364a53983a99a56da88"
           }
         },
         {
@@ -285,8 +341,15 @@
             "StepType": "Action",
             "StartingStep": true,
             "ActionID": "@lookup:Actions.Name=Get Typeform Responses",
-            "ActionInputMapping": "{\"FormID\": \"payload.typeformFormID\", \"SinceDate\": \"payload.lastCheckDate\", \"CompletedOnly\": true}",
-            "ActionOutputMapping": "{\"Responses\": \"typeformResponses\", \"TotalItems\": \"responseCount\"}",
+            "ActionInputMapping": {
+              "FormID": "QTdVpptX",
+              "SinceDate": "payload.lastCheckDate",
+              "CompletedOnly": true
+            },
+            "ActionOutputMapping": {
+              "Responses": "typeformResponses",
+              "TotalItems": "responseCount"
+            },
             "Status": "Active",
             "PositionX": 100,
             "PositionY": 100
@@ -295,8 +358,8 @@
             "ID": "D92593AB-1638-4112-A1CA-670D7F01235B"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:28:20.545Z",
-            "checksum": "b8c6cc83586b11e40347eb566d91e6e6428ea66a88cb41fffcf2e79a54c5be62"
+            "lastModified": "2025-10-30T01:45:30.816Z",
+            "checksum": "b9446cfae31d63c722b342464f1c1444f815fd7f499814cb4fbefa4028cd0874"
           }
         }
       ],
