@@ -628,6 +628,32 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * ```
      */
     disableDataPreloading?: boolean;
+
+    /**
+     * Optional absolute maximum number of iterations (steps) for the agent run.
+     * This provides a hard limit safety net to prevent infinite loops in case of
+     * configuration errors or unexpected agent behavior. This value overrides any
+     * agent-level MaxIterationsPerRun setting if it is lower.
+     *
+     * If not specified, defaults to 5000 iterations as a safety measure.
+     * Use a higher value only if you have a legitimate need for very long-running agents.
+     *
+     * This is different from MaxIterationsPerRun (agent metadata guardrail):
+     * - MaxIterationsPerRun: Configurable per-agent business rule
+     * - absoluteMaxIterations: System-wide safety limit (default: 5000)
+     *
+     * @default 5000
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   absoluteMaxIterations: 10000,  // Allow more iterations for this specific run
+     * };
+     * ```
+     */
+    absoluteMaxIterations?: number;
 }
 
 /**

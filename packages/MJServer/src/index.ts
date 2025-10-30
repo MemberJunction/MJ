@@ -50,6 +50,8 @@ LoadSchedulingEngine(); // This also loads drivers
 import { LoadAllSchedulingActions } from '@memberjunction/scheduling-actions';
 LoadAllSchedulingActions(); // prevent tree shaking for scheduling actions
 
+import { GetTypeformResponsesAction } from '@memberjunction/actions-bizapps-formbuilders';
+const x = GetTypeformResponsesAction; // prevent tree shaking for this dynamic module
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';

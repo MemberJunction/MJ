@@ -2686,5 +2686,121 @@
       "lastModified": "2025-10-29T15:25:28.641Z",
       "checksum": "3e0a541cf1b924b72caa25653089eb131d059b6f4d649857cb2c586c4d798293"
     }
+  },
+  {
+    "fields": {
+      "Name": "Get Typeform Forms",
+      "Description": "Retrieves a list of all TypeForms for a company including form IDs, titles, and basic metadata. Use this to discover available forms before processing submissions.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "GetTypeformFormsAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F4194C4C-1DDA-49CC-A062-B5334DF0DDEE"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T19:02:46.890Z",
+            "checksum": "e6b5eeca684600b3d0089c6bdb1481389708af7130c7517f95f1d155e3148865"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AF24645E-E420-488F-8247-D95365F1EF95"
+    },
+    "sync": {
+      "lastModified": "2025-10-30T19:02:44.853Z",
+      "checksum": "6da66d752587a7e92a02c10e49b0aaaf18226338bea86dd9b5eaf5598b51d430"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Typeform Get File Content",
+      "Description": "Downloads file content from Typeform using the file URL from response data. Returns file content in base64, text, or binary format with metadata.",
+      "CategoryID": "@lookup:Action Categories.Name=Typeform&Parent=Form Builders",
+      "DriverClass": "TypeformGetFileContentAction",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-download"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompanyID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The MemberJunction Company ID for credential lookup (optional - defaults to user's company)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E655545E-CE04-42CD-A492-79E4B881BFD7"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:05:12.444Z",
+            "checksum": "e6b5eeca684600b3d0089c6bdb1481389708af7130c7517f95f1d155e3148865"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FileURL",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The Typeform file URL to download (must be api.typeform.com/responses/files/...)",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F074D183-4B2E-49D9-BDAB-5CBCEE557FC2"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:05:12.471Z",
+            "checksum": "4fd92aae2caecc2be36bb5a0c8d20d6fdb373f88ed502d5969eb4b66c6188017"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Format",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Output format: auto (smart detection), text, base64, or raw",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "70369E26-5C5D-47E2-A707-EC99BA5A8181"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T22:05:12.478Z",
+            "checksum": "e5973bc9c0ce1446fb013bd8900c01922c72a52f7e5a58b4ab73f292c99d7fb3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "8AB5241D-53F6-4388-991A-2CAECDE4E5BF"
+    },
+    "sync": {
+      "lastModified": "2025-10-30T22:05:11.193Z",
+      "checksum": "690bbe2c53c223effa0aa966bec2630ea938c1885a2458ad7cdb18be75aaaff8"
+    }
   }
 ]

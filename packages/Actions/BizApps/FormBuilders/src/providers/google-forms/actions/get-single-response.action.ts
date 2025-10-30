@@ -26,7 +26,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Single Google Forms Response')
+@RegisterClass(BaseAction, 'GetSingleGoogleFormsResponseAction')
 export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
 
     public get Description(): string {
@@ -147,4 +147,11 @@ export class GetSingleGoogleFormsResponseAction extends GoogleFormsBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSingleGoogleFormsResponseAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

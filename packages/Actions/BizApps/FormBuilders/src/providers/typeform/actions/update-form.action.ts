@@ -33,7 +33,7 @@ import { BaseAction } from '@memberjunction/actions';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Update Typeform')
+@RegisterClass(BaseAction, 'UpdateTypeformAction')
 export class UpdateTypeformAction extends TypeformBaseAction {
 
     public get Description(): string {
@@ -232,4 +232,11 @@ export class UpdateTypeformAction extends TypeformBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadUpdateTypeformAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

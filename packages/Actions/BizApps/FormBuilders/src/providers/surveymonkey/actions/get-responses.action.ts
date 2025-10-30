@@ -29,7 +29,7 @@ import { FormResponse } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get SurveyMonkey Responses')
+@RegisterClass(BaseAction, 'GetSurveyMonkeyResponsesAction')
 export class GetSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
 
     public get Description(): string {
@@ -242,4 +242,11 @@ export class GetSurveyMonkeyResponsesAction extends SurveyMonkeyBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetSurveyMonkeyResponsesAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

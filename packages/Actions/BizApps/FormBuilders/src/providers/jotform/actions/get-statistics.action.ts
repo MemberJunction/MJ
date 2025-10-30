@@ -27,7 +27,7 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get JotForm Submission Statistics')
+@RegisterClass(BaseAction, 'GetJotFormStatisticsAction')
 export class GetJotFormStatisticsAction extends JotFormBaseAction {
 
     public get Description(): string {
@@ -117,7 +117,7 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
                 const allFieldIds = new Set<string>();
 
                 for (const submission of submissions) {
-                    for (const answer of submission.answers) {
+                    for (const answer of submission.answerDetails) {
                         allFieldIds.add(answer.fieldId);
                     }
                 }
@@ -305,4 +305,11 @@ export class GetJotFormStatisticsAction extends JotFormBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetJotFormStatisticsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }

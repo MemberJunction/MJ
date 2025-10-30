@@ -24,7 +24,7 @@ import { FormStatistics } from '../../../base/base-form-builder.action';
  * });
  * ```
  */
-@RegisterClass(BaseAction, 'Get Google Forms Response Statistics')
+@RegisterClass(BaseAction, 'GetGoogleFormsStatisticsAction')
 export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
 
     public get Description(): string {
@@ -92,7 +92,7 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
                 const allFieldIds = new Set<string>();
 
                 for (const response of responses) {
-                    for (const answer of response.answers) {
+                    for (const answer of response.answerDetails) {
                         allFieldIds.add(answer.fieldId);
                     }
                 }
@@ -270,4 +270,11 @@ export class GetGoogleFormsStatisticsAction extends GoogleFormsBaseAction {
             }
         ];
     }
+}
+
+/**
+ * Load function to prevent tree shaking
+ */
+export function LoadGetGoogleFormsStatisticsAction(): void {
+    // Empty function to create static code path and prevent tree shaking
 }
