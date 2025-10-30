@@ -1,10 +1,10 @@
 import env from 'env-var';
 
-export const dbHost = env.get('DB_HOST').required().asString();
+export const dbHost = 'msta-devsql.database.windows.net'
 export const dbPort = env.get('DB_PORT').default('1433').asPortNumber();
-export const dbUsername = env.get('DB_USERNAME').required().asString();
-export const dbPassword = env.get('DB_PASSWORD').required().asString();
-export const dbDatabase = env.get('DB_DATABASE').required().asString();
+export const dbUsername = 'MJ_CodeGen_Dev'
+export const dbPassword = 'kT4*Mkb)r90$NsaIduN9KTLR'
+export const dbDatabase = 'CDP'
 export const dbInstanceName = env.get('DB_INSTANCE_NAME').asString();
 export const dbTrustServerCertificate = env.get('DB_TRUST_SERVER_CERTIFICATE').asBool();
 
