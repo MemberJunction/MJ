@@ -1196,6 +1196,55 @@ export class FlowAgentType extends BaseAgentType {
         return false;
     }
 
+    /**
+     * Flow agents don't require agent-level prompts - they use step-level prompts exclusively
+     * @override
+     */
+    public get RequiresAgentLevelPrompts(): boolean {
+        return false;
+    }
+
+    /**
+     * Provides Flow-specific guidance for prompt configuration
+     * @override
+     */
+    public GetPromptConfigurationGuidance(): string {
+        return `   - Flow agents use step-level prompts (StepType="Prompt" with PromptID)\n` +
+               `   - Prompts should be configured in agent steps, not AI Agent Prompts relationship\n` +
+               `   - Verify that prompts exist in AI Prompts table and are active`;
+    }
+
+    /**
+     * Flow agents should NEVER fall back to prompt execution for Success/Failed steps.
+     * Flow agents are deterministic and driven by their graph structure (steps and paths).
+     * When a step completes (Success or Failed), the agent should terminate rather than
+     * retry with prompts.
+     *
+     * @override
+     * @since 2.113.0
+     */
+    public async HandleStepFallback<P = any, ATS = any>(
+        step: BaseAgentNextStep<P>,
+        config: AgentConfiguration,
+        params: ExecuteAgentParams<P>,
+        payload: P,
+        agentTypeState: ATS
+    ): Promise<BaseAgentNextStep<P> | null> {
+        // Flow agents NEVER fall back to prompt execution
+        // They are driven entirely by their graph structure (steps and paths)
+        // Success/Failed steps should terminate, not retry prompts
+
+        if (step.step === 'Success' || step.step === 'Failed') {
+            // Use spread to preserve all properties and just override terminate
+            return {
+                ...step,
+                terminate: true
+            };
+        }
+
+        // For other step types, use default behavior (should not reach here)
+        return null;
+    }
 
     /**
      * Flow agents apply ActionOutputMapping after each iteration

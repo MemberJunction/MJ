@@ -1050,27 +1050,33 @@ export class BaseAgent {
             };
         }
 
-        // Find the system prompt (optional)
+        // Get the agent type instance to check if agent-level prompts are required
+        const agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(agentType);
+        const requiresAgentLevelPrompts = agentTypeInstance.RequiresAgentLevelPrompts;
+
+        // Find the system prompt (optional for some agent types)
         const systemPrompt = engine.Prompts.find(p => p.ID === agentType.SystemPromptID);
 
-        if (!systemPrompt)
+        if (!systemPrompt) {
             metadataOptional = true; // If no system prompt, we can skip some validations
-        
-        // Find the first active agent prompt
+        }
+
+        // Find the first active agent prompt (optional for agent types that don't require them)
         const agentPrompt = engine.AgentPrompts
             .filter(ap => ap.AgentID === agent.ID && ap.Status === 'Active')
             .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
-        
-        if (!agentPrompt && !metadataOptional) {
+
+        if (!agentPrompt && !metadataOptional && requiresAgentLevelPrompts) {
             return {
                 success: false,
                 errorMessage: `No prompts configured for agent: ${agent.Name}`
             };
         }
 
-        // Find the actual prompt entity
-        const childPrompt = engine.Prompts.find(p => p.ID === agentPrompt?.PromptID);
-        if (!childPrompt && !metadataOptional) {
+        // Find the actual prompt entity (will be undefined for agent types with only step-level prompts)
+        const childPrompt = agentPrompt ? engine.Prompts.find(p => p.ID === agentPrompt.PromptID) : undefined;
+
+        if (!childPrompt && !metadataOptional && requiresAgentLevelPrompts) {
             return {
                 success: false,
                 errorMessage: `Child prompt not found for ID: ${agentPrompt?.PromptID}`
@@ -1147,9 +1153,9 @@ export class BaseAgent {
             this.logStatus(`🎯 Using agent default effort level: ${params.agent.DefaultPromptEffortLevel}`, true, params);
         } else {
             // If neither is set, effortLevel remains undefined and will fall back to prompt.EffortLevel in AIPromptRunner
-            // the issue thought is we really want the childPrompt.EffortLevel so we need to grab that and 
+            // the issue thought is we really want the childPrompt.EffortLevel so we need to grab that and
             // put it in place
-            if (childPrompt.EffortLevel !== undefined && childPrompt.EffortLevel !== null) {
+            if (childPrompt && childPrompt.EffortLevel !== undefined && childPrompt.EffortLevel !== null) {
                 promptParams.effortLevel = childPrompt.EffortLevel;
                 this.logStatus(`🎯 Using child prompt effort level: ${childPrompt.EffortLevel}`, true, params);
             }
@@ -1924,7 +1930,21 @@ export class BaseAgent {
         reason?: string;
     }> {
         const agent = params.agent;
-        
+
+        // Check absolute maximum iterations (safety net to prevent infinite loops)
+        const DEFAULT_ABSOLUTE_MAX_ITERATIONS = 5000;
+        const absoluteMaxIterations = params.absoluteMaxIterations ?? DEFAULT_ABSOLUTE_MAX_ITERATIONS;
+
+        if (agentRun.TotalPromptIterations && agentRun.TotalPromptIterations >= absoluteMaxIterations) {
+            return {
+                exceeded: true,
+                type: 'iterations',
+                limit: absoluteMaxIterations,
+                current: agentRun.TotalPromptIterations,
+                reason: `Absolute maximum iteration safety limit of ${absoluteMaxIterations} exceeded. Current iterations: ${agentRun.TotalPromptIterations}. This is a system-wide safety measure to prevent infinite loops.`
+            };
+        }
+
         // Check cost limit
         if (agent.MaxCostPerRun && agentRun.TotalCost) {
             if (agentRun.TotalCost >= agent.MaxCostPerRun) {
@@ -2025,6 +2045,146 @@ export class BaseAgent {
         ];
 
         return fatalErrorTypes.includes(errorInfo.errorType);
+    }
+
+    /**
+     * Determines if an error is a configuration error that cannot be resolved by retrying.
+     * Configuration errors indicate issues with agent setup that need manual intervention.
+     *
+     * This method provides detailed diagnostic information to help identify what configuration
+     * is missing or incorrect.
+     *
+     * @param {any} error - The error object or Error instance
+     * @param {string} errorMessage - The error message string
+     * @param {AgentConfiguration} [config] - Optional agent configuration to check for missing pieces
+     * @returns {{isConfigError: boolean, detailedMessage: string}} Object with determination and detailed diagnostic message
+     * @protected
+     */
+    protected isConfigurationError(
+        error: any,
+        errorMessage: string,
+        config?: AgentConfiguration
+    ): { isConfigError: boolean; detailedMessage: string } {
+        // Check for common configuration error patterns
+        const configErrorPatterns = [
+            {
+                pattern: /cannot read propert(y|ies) of (undefined|null)/i,
+                getMessage: () => {
+                    // Try to extract what property was being accessed
+                    const propertyMatch = errorMessage.match(/reading '(\w+)'/i);
+                    const property = propertyMatch ? propertyMatch[1] : 'unknown property';
+
+                    let details = `Attempted to access property '${property}' on an undefined or null object.`;
+
+                    // Provide specific guidance based on the property name
+                    if (property.toLowerCase().includes('prompt')) {
+                        details += `\n\n🔧 Configuration Issue: Missing prompt configuration.`;
+                        if (config) {
+                            if (!config.childPrompt) {
+                                details += `\n   - Agent does not have a child prompt configured`;
+                                // Get agent-type-specific guidance
+                                if (this.AgentTypeInstance) {
+                                    const guidance = this.AgentTypeInstance.GetPromptConfigurationGuidance();
+                                    details += `\n${guidance}`;
+                                }
+                            }
+                            if (!config.systemPrompt) {
+                                details += `\n   - Agent type does not have a system prompt configured`;
+                            }
+                        }
+                    } else if (property.toLowerCase().includes('agent')) {
+                        details += `\n\n🔧 Configuration Issue: Missing agent configuration.`;
+                        details += `\n   - Ensure agent type is properly configured`;
+                        details += `\n   - Check that agent metadata is complete`;
+                    }
+
+                    return details;
+                }
+            },
+            {
+                pattern: /childprompt is (undefined|null|not defined)/i,
+                getMessage: () => {
+                    let details = `Agent is missing required child prompt configuration.\n\n` +
+                           `🔧 Configuration Fix:\n`;
+
+                    if (this.AgentTypeInstance) {
+                        const guidance = this.AgentTypeInstance.GetPromptConfigurationGuidance();
+                        details += `${guidance}`;
+                    } else {
+                        details += `   - Ensure agent has AI Agent Prompts relationship configured\n` +
+                                   `   - Verify that prompt exists in AI Prompts table and is active`;
+                    }
+
+                    return details;
+                }
+            },
+            {
+                pattern: /systemprompt is (undefined|null|not defined)/i,
+                getMessage: () => {
+                    return `Agent type is missing system prompt configuration.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Check agent type's SystemPromptID in AI Agent Types table\n` +
+                           `   - Verify system prompt exists and is active\n` +
+                           `   - Some agent types (like Flow) may not require system prompts`;
+                }
+            },
+            {
+                pattern: /no prompts configured/i,
+                getMessage: () => {
+                    return `Agent has no prompts configured.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Add at least one AI Agent Prompt relationship to this agent\n` +
+                           `   - Or for Flow agents: Add Prompt-type steps to the agent's step graph`;
+                }
+            },
+            {
+                pattern: /agent type not found/i,
+                getMessage: () => {
+                    return `Agent references an agent type that doesn't exist.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Verify TypeID in AI Agents table matches existing AI Agent Types record\n` +
+                           `   - Check that AIEngine.Instance.AgentTypes includes the required type\n` +
+                           `   - Ensure Config() has been called to load agent types`;
+                }
+            },
+            {
+                pattern: /child prompt not found/i,
+                getMessage: () => {
+                    return `Referenced child prompt doesn't exist or isn't loaded.\n\n` +
+                           `🔧 Configuration Fix:\n` +
+                           `   - Check AI Agent Prompts relationship has valid PromptID\n` +
+                           `   - Verify prompt exists in AI Prompts table\n` +
+                           `   - Ensure AIEngine.Instance.Prompts includes the prompt`;
+                }
+            },
+            {
+                pattern: /agent configuration/i,
+                getMessage: () => {
+                    return `General agent configuration error.\n\n` +
+                           `🔧 Configuration Check:\n` +
+                           `   - Review agent metadata in AI Agents table\n` +
+                           `   - Check all foreign key relationships are valid\n` +
+                           `   - Verify agent type is properly configured`;
+                }
+            }
+        ];
+
+        // Check each pattern
+        for (const { pattern, getMessage } of configErrorPatterns) {
+            if (pattern.test(errorMessage)) {
+                const detailedMessage = getMessage();
+                return {
+                    isConfigError: true,
+                    detailedMessage: `Configuration Error: ${detailedMessage}\n\nOriginal Error: ${errorMessage}`
+                };
+            }
+        }
+
+        // Not a configuration error
+        return {
+            isConfigError: false,
+            detailedMessage: errorMessage
+        };
     }
 
     /**
@@ -3647,9 +3807,22 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                 }
                 else {
-                    // either task wasn't complete or was a sub-agent run in which case we ALWAYS process one more time
-                    // with the parent prompt
-                    return await this.executePromptStep(params, config, previousDecision);
+                    // Ask agent type how to handle this Success step
+                    const fallbackStep = await this.AgentTypeInstance.HandleStepFallback(
+                        previousDecision,
+                        config,
+                        params,
+                        previousDecision.newPayload || previousDecision.previousPayload,
+                        this.AgentTypeState
+                    );
+
+                    if (fallbackStep) {
+                        // Agent type provided custom handling (e.g., Flow agents terminate)
+                        return fallbackStep;
+                    } else {
+                        // Agent type wants default behavior (e.g., Loop agents process with prompt)
+                        return await this.executePromptStep(params, config, previousDecision);
+                    }
                 }
             case 'Failed':
                 if (previousDecision.terminate) {
@@ -3661,9 +3834,26 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                 }
                 else {
-                    // we had a failure in the past step, but we are not terminating
-                    // so we will retry the prompt step
-                    return await this.executePromptStep(params, config, previousDecision);
+                    // Ask agent type how to handle this Failed step
+                    const fallbackStep = await this.AgentTypeInstance.HandleStepFallback(
+                        previousDecision,
+                        config,
+                        params,
+                        previousDecision.newPayload || previousDecision.previousPayload,
+                        this.AgentTypeState
+                    );
+
+                    if (fallbackStep) {
+                        // Agent type provided custom handling (e.g., Flow agents terminate)
+                        this.logError(`Agent type '${config.agentType.Name}' handling Failed step with custom logic`, {
+                            agent: params.agent,
+                            category: 'AgentExecution'
+                        });
+                        return fallbackStep;
+                    } else {
+                        // Agent type wants default behavior (e.g., Loop agents retry with prompt)
+                        return await this.executePromptStep(params, config, previousDecision);
+                    }
                 }
             case 'ForEach':
                 return await this.executeForEachLoop(params, config, previousDecision);
@@ -3947,26 +4137,75 @@ The context is now within limits. Please retry your request with the recovered c
             // in this case, we have a failed prompt execution. In this situation, let's make sure our payload at end isn't adjusted as
             // that affects downstream things in the agent run
             // if we got far enough along where PayloadAtEnd was set, honor that, otherwise use the previous decision's payload or params.payload
-            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload; 
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
             stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
-            await this.finalizeStepEntity(stepEntity, false, error.message);
 
             // we had an error, don't throw the exception as that will kill our overall execution/run
-            // instead retrun a helpful message in our return value that the parent loop can review and 
-            // adjust
+            // instead return a helpful message in our return value that the parent loop can review and adjust
             const errString = error?.message || error || 'Unknown error';
+
+            // Classify error type - configuration errors are fatal and should not be retried
+            const configCheck = this.isConfigurationError(error, errString, config);
+            const isConfigurationError = configCheck.isConfigError;
+            const detailedErrorMessage = configCheck.detailedMessage;
+
+            // Check guardrails to see if we've exceeded limits
+            const guardailCheck = await this.hasExceededAgentRunGuardrails(params, this.AgentRun);
+            const guardrailsExceeded = guardailCheck && guardailCheck.exceeded;
+
+            // Determine if we should terminate
+            // Terminate if: configuration error OR guardrails exceeded
+            const shouldTerminate = isConfigurationError || guardrailsExceeded;
+
+            // Build the error message for the step entity and return value
+            let finalErrorMessage: string;
+            if (isConfigurationError) {
+                finalErrorMessage = detailedErrorMessage;
+                this.logError(`❌ Configuration error in prompt execution (will terminate):\n${detailedErrorMessage}`, {
+                    agent: params.agent,
+                    category: 'AgentConfiguration',
+                    metadata: {
+                        error: error,
+                        stackTrace: error?.stack
+                    }
+                });
+            } else if (guardrailsExceeded) {
+                finalErrorMessage = `Guardrails exceeded: ${guardailCheck.reason}\n\nOriginal error: ${errString}`;
+                this.logError(`⛔ Guardrails exceeded during prompt execution: ${guardailCheck.reason}`, {
+                    agent: params.agent,
+                    category: 'Guardrails',
+                    metadata: {
+                        guardrailType: guardailCheck.type,
+                        limit: guardailCheck.limit,
+                        current: guardailCheck.current,
+                        originalError: errString
+                    }
+                });
+            } else {
+                finalErrorMessage = `Prompt execution failed: ${errString}`;
+                this.logError(`⚠️ Prompt execution error (will retry if guardrails allow): ${errString}`, {
+                    agent: params.agent,
+                    category: 'PromptExecution',
+                    metadata: {
+                        attemptNumber: this._agentRun?.TotalPromptIterations || 0,
+                        retryable: true,
+                        error: error,
+                        stackTrace: error?.stack
+                    }
+                });
+            }
+
+            // Finalize the step entity with the appropriate error message
+            await this.finalizeStepEntity(stepEntity, false, finalErrorMessage);
+
             const errorNextStep = {
-                errorMessage: `Prompt execution failed: ${errString}`,
+                errorMessage: finalErrorMessage,
                 step: 'Failed' as const,
-                terminate: false,
+                terminate: shouldTerminate,
                 previousPayload: payload,
                 newPayload: payload
             };
 
-            const guardailCheck = await this.hasExceededAgentRunGuardrails(params, this.AgentRun);
-            if(guardailCheck && guardailCheck.exceeded) {
-                errorNextStep.terminate = true;
-            };
             return errorNextStep;
         }
     }
