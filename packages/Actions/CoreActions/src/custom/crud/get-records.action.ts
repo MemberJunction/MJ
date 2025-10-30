@@ -1,7 +1,6 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import { MJGlobal } from "@memberjunction/global";
 import { RunView } from "@memberjunction/core";
 
 /**

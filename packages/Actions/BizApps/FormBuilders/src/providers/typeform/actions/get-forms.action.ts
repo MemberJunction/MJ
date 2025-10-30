@@ -39,13 +39,6 @@ export class GetTypeformFormsAction extends TypeformBaseAction {
             }
 
             const companyId = this.getParamValue(params.Params, 'CompanyID');
-            if (!companyId) {
-                return {
-                    Success: false,
-                    ResultCode: 'MISSING_COMPANY_ID',
-                    Message: 'CompanyID parameter is required'
-                };
-            }
 
             // Get secure API token
             const apiToken = await this.getSecureAPIToken(companyId, contextUser);
@@ -101,7 +94,19 @@ export class GetTypeformFormsAction extends TypeformBaseAction {
             return {
                 Success: true,
                 ResultCode: 'SUCCESS',
-                Message: `Successfully retrieved ${forms.length} TypeForms from Typeform API`
+                Message: `Successfully retrieved ${forms.length} TypeForms from Typeform API`,
+                Params: [
+                    {
+                        Name: 'Forms',
+                        Type: 'Output',
+                        Value: transformedForms
+                    },
+                    {
+                        Name: 'TotalCount',
+                        Type: 'Output',
+                        Value: forms.length
+                    }
+                ]
             };
 
         } catch (error) {
