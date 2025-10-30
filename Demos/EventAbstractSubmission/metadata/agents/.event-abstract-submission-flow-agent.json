@@ -64,7 +64,7 @@
             },
             "ActionInputMapping": {
               "EntityName": "Submission Speakers",
-              "RecordData": {
+              "Fields": {
                 "SubmissionID": "payload.submissionID",
                 "SpeakerID": "speakerRecord.speakerID"
               }
@@ -78,8 +78,8 @@
             "ID": "94C50D25-2696-4B05-A8CA-FB91825B33EF"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:45:30.766Z",
-            "checksum": "20ecccfd3a397cd47b973bb74ab8d76280f843da42a31c2a1cc3067a2932b4b4"
+            "lastModified": "2025-10-30T16:33:49.832Z",
+            "checksum": "1096b585885d60ac247379d3a5d52e86f89118aa40e368d9ccc942c55f00a66e"
           }
         },
         {
@@ -100,7 +100,7 @@
             },
             "ActionInputMapping": {
               "EntityName": "Speakers",
-              "RecordData": {
+              "Fields": {
                 "FirstName": "speaker.firstName",
                 "LastName": "speaker.lastName",
                 "Email": "speaker.email",
@@ -123,8 +123,8 @@
             "ID": "D8D2D8C0-0AF0-4BC2-B095-34747E39E48A"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:45:30.783Z",
-            "checksum": "1ba44d37c3015fcce790dc97113208e2c43262e5c9d2332e5702cf449856256f"
+            "lastModified": "2025-10-30T16:33:49.855Z",
+            "checksum": "62d405003a6a10917cf14d19a35452609837af9082f2613e09781e2a72447f54"
           }
         },
         {
@@ -136,7 +136,7 @@
             "ActionID": "@lookup:Actions.Name=Create Record",
             "ActionInputMapping": {
               "EntityName": "Submissions",
-              "RecordData": {
+              "Fields": {
                 "EventID": "payload.eventID",
                 "SubmissionTitle": "payload.response.title",
                 "SubmissionAbstract": "payload.response.abstract",
@@ -159,8 +159,8 @@
             "ID": "54559AB2-E0E1-4500-89C1-62AECDFEC9D4"
           },
           "sync": {
-            "lastModified": "2025-10-30T01:45:30.801Z",
-            "checksum": "e2670f1c2e8fbaac88a79423c83ee3d7cecfb367c42527a9673a5b0b0ecc40cc"
+            "lastModified": "2025-10-30T16:33:49.871Z",
+            "checksum": "e3ccd1d0810004eb9761fb7d5e7d8ea5568bab95cf4098eda7ee0aec74bc759f"
           }
         }
       ],
@@ -263,6 +263,28 @@
           "sync": {
             "lastModified": "2025-10-30T01:28:20.501Z",
             "checksum": "6e0da71beb9748ba7ac036186631c86ff7b0aaaef45655f39c00c7d41229372a"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Process Single Submission",
+            "Status": "Active",
+            "SubAgentOutputMapping": {
+              "*": "processedSubmissions"
+            },
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "1E0B681E-77C5-474E-B298-87C064D21498"
+          },
+          "sync": {
+            "lastModified": "2025-10-30T15:30:30.055Z",
+            "checksum": "966005262657183636075dc038dd3a5f685be5a93d91689c3257bc08c128beca"
           }
         }
       ],

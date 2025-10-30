@@ -4220,8 +4220,7 @@ The context is now within limits. Please retry your request with the recovered c
                     agent: params.agent,
                     category: 'AgentConfiguration',
                     metadata: {
-                        error: error,
-                        stackTrace: error?.stack
+                        error: CopyScalarsAndArrays(error, true)
                     }
                 });
             } else if (guardrailsExceeded) {
@@ -4244,8 +4243,7 @@ The context is now within limits. Please retry your request with the recovered c
                     metadata: {
                         attemptNumber: this._agentRun?.TotalPromptIterations || 0,
                         retryable: true,
-                        error: error,
-                        stackTrace: error?.stack
+                        error: CopyScalarsAndArrays(error, true)
                     }
                 });
             }
@@ -4272,10 +4270,12 @@ The context is now within limits. Please retry your request with the recovered c
      * Child agents use direct payload inheritance with downstream/upstream paths.
      *
      * @private
+     * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      */
     private async executeChildSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
+        parentStepId?: string
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         // Check for cancellation before starting
@@ -4318,7 +4318,7 @@ The context is now within limits. Please retry your request with the recovered c
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
-        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload });
+        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload, parentId: parentStepId });
         
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
@@ -4622,10 +4622,12 @@ The context is now within limits. Please retry your request with the recovered c
      * Related agents (AgentRelationships) use message-based coupling with optional output mapping.
      *
      * @private
+     * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      */
     private async processSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
+        parentStepId?: string
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
         const name = subAgentRequest?.name;
@@ -4649,7 +4651,7 @@ The context is now within limits. Please retry your request with the recovered c
 
         if (childAgent) {
             // This is a child agent - use direct payload coupling
-            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision);
+            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision, parentStepId);
         }
 
         // Check for related agent
@@ -4666,7 +4668,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (relatedAgent && relatedAgent.Name.trim().toLowerCase() === name.trim().toLowerCase()) {
                 // This is a related agent - use message-based coupling
-                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship);
+                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship, parentStepId);
             }
         }
 
@@ -4691,12 +4693,14 @@ The context is now within limits. Please retry your request with the recovered c
      * Optional output mapping can merge sub-agent results back to parent payload.
      *
      * @private
+     * @param parentStepId - Optional ID of parent step (e.g., ForEach/While loop step) for proper UI hierarchy
      */
     private async executeRelatedSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision: BaseAgentNextStep<SR, SC>,
         subAgentEntity: AIAgentEntityExtended,
-        relationship: AIAgentRelationshipEntity
+        relationship: AIAgentRelationshipEntity,
+        parentStepId?: string
     ): Promise<BaseAgentNextStep<SR, SC>> {
         const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
 
@@ -4741,7 +4745,8 @@ The context is now within limits. Please retry your request with the recovered c
             contextUser: params.contextUser,
             targetId: subAgentEntity.ID,
             inputData,
-            payloadAtStart: previousDecision.newPayload
+            payloadAtStart: previousDecision.newPayload,
+            parentId: parentStepId
         });
 
         // Increment execution count for this sub-agent
@@ -5842,7 +5847,7 @@ The context is now within limits. Please retry your request with the recovered c
                 result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (forEach.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId);
             } else {
                 throw new Error('ForEach missing action/subAgent');
             }
@@ -6093,7 +6098,7 @@ The context is now within limits. Please retry your request with the recovered c
                 result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
             } else if (whileOp.subAgent) {
                 const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
-                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep, parentStepId);
             } else {
                 throw new Error('While missing action/subAgent');
             }
