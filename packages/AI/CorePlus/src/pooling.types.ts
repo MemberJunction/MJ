@@ -76,6 +76,14 @@ export interface PooledExecutionTask {
      * Additional context for debugging
      */
     context?: Record<string, unknown>;
+
+    /**
+     * Executor callback function
+     *
+     * Called by ModelExecutionPool to execute the task with a specific vendor/key.
+     * This function is provided by AIPromptRunner and handles the actual LLM call.
+     */
+    executor: (vendorId: string, apiKeyValue: string) => Promise<AIPromptRunResult<any>>;
 }
 
 /**

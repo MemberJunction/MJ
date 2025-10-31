@@ -282,17 +282,20 @@ export class ModelExecutionPool {
                 throw new Error('No healthy vendor available with capacity');
             }
 
-            // TODO: Actual execution logic would go here
-            // For now, we'll create a mock result
-            const executionTimeMS = Math.random() * 1000 + 500;
-            await new Promise(resolve => setTimeout(resolve, executionTimeMS));
+            // Execute using the provided executor callback
+            const promptResult = await task.executor(selection.vendorId, selection.apiKeyValue);
 
+            const executionTimeMS = Date.now() - startTime;
+
+            // Convert AIPromptRunResult to PooledExecutionResult
             const result: PooledExecutionResult = {
                 task,
-                success: true,
-                rawResult: 'Mock result',
+                success: promptResult.success,
+                rawResult: promptResult.rawResult,
+                parsedResult: promptResult.result,
+                errorMessage: promptResult.errorMessage,
                 executionTimeMS,
-                tokensUsed: task.estimatedTokens,
+                tokensUsed: promptResult.tokensUsed || task.estimatedTokens,
                 vendorId: selection.vendorId,
                 apiKeyId: selection.apiKeyId,
                 startTime: new Date(startTime),
@@ -300,18 +303,22 @@ export class ModelExecutionPool {
                 queueWaitTimeMS: 0
             };
 
-            // Track success
-            this.stats.recordSuccess(executionTimeMS);
+            // Track success/failure
+            if (promptResult.success) {
+                this.stats.recordSuccess(executionTimeMS);
+                this.healthTracker.recordSuccess(selection.vendorId, selection.apiKeyId);
+            } else {
+                this.stats.recordFailure(executionTimeMS);
+                // Don't record as health error here - the executor already handled error analysis
+            }
 
             // Record usage
             const vendorPool = this.vendorPools.get(selection.vendorId);
             if (vendorPool) {
-                vendorPool.recordUsage(selection.apiKeyId, task.estimatedTokens, 1);
+                const actualTokens = promptResult.tokensUsed || task.estimatedTokens;
+                vendorPool.recordUsage(selection.apiKeyId, actualTokens, 1);
                 vendorPool.decrementActiveRequests(selection.apiKeyId);
             }
-
-            // Health tracker
-            this.healthTracker.recordSuccess(selection.vendorId, selection.apiKeyId);
 
             return result;
 

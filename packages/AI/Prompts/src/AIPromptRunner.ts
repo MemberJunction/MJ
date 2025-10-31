@@ -321,20 +321,146 @@ export class AIPromptRunner {
   ): Promise<AIPromptRunResult<T>> {
     this.logStatus(`Executing prompt "${params.prompt.Name}" via pooling system`, true, params);
 
-    const poolManager = ModelPoolManager.getInstance();
+    const startTime = new Date();
+    const prompt = params.prompt;
 
-    // Note: Full integration would require:
-    // 1. Rendering the template first
-    // 2. Selecting the model
-    // 3. Creating the pooled task
-    // 4. Calling poolManager.executeRequest()
-    // 5. Converting pool result back to AIPromptRunResult
-    //
-    // For now, we'll fall back to direct execution
-    // This will be completed in a follow-up implementation
+    // Check cancellation
+    if (params.cancellationToken?.aborted) {
+      return {
+        success: false,
+        status: 'Cancelled',
+        cancelled: true,
+        cancellationReason: 'user_requested',
+        errorMessage: 'Prompt execution was cancelled before starting',
+        executionTimeMS: 0,
+        chatResult: { success: false, errorMessage: 'Cancelled' } as any,
+        tokensUsed: 0
+      } as AIPromptRunResult<T>;
+    }
 
-    this.logStatus(`Pooling integration is in progress - falling back to direct execution`, true, params);
-    return await this.executeDirect<T>(params);
+    try {
+      // Step 1: Render template if needed
+      let renderedPromptText = '';
+
+      if (params.systemPromptOverride) {
+        renderedPromptText = params.systemPromptOverride;
+      } else if (prompt.TemplateID && (!params.conversationMessages || params.templateMessageRole !== 'none')) {
+        await this._templateEngine.Config(false, params.contextUser);
+        const template = await this.loadTemplate(prompt.TemplateID, params.contextUser);
+        if (!template) {
+          throw new Error(`Template with ID ${prompt.TemplateID} not found for prompt ${prompt.Name}`);
+        }
+        const renderedPrompt = await this.renderPromptTemplate(template, params);
+        if (!renderedPrompt.Success) {
+          throw new Error(`Failed to render template: ${renderedPrompt.Message}`);
+        }
+        renderedPromptText = renderedPrompt.Output;
+      }
+
+      // Step 2: Select model (needed to know which model ID to use for the pool)
+      const modelResult = await this.selectModel(prompt, params.override?.modelId, params.contextUser, params.configurationId, params.override?.vendorId, params);
+      const selectedModel = modelResult.model;
+      if (!selectedModel) {
+        throw new Error(`No suitable model found for prompt ${prompt.Name}`);
+      }
+
+      // Step 3: Create executor callback that will be called by the pool with selected vendor/key
+      const executor = async (vendorId: string, apiKeyValue: string): Promise<AIPromptRunResult<T>> => {
+        // Create a modified params object with the API key override
+        const executionParams = { ...params };
+        if (!executionParams.apiKeys) {
+          executionParams.apiKeys = [];
+        }
+        // Add the pool-selected API key
+        executionParams.apiKeys.push({
+          driverClass: selectedModel.DriverClass,
+          apiKey: apiKeyValue
+        });
+
+        // Override vendor ID
+        if (!executionParams.override) {
+          executionParams.override = {};
+        }
+        executionParams.override.vendorId = vendorId;
+
+        // Execute the model directly with the pool-selected vendor/key
+        const chatResult = await this.executeModel(
+          selectedModel,
+          renderedPromptText,
+          prompt,
+          executionParams,
+          vendorId,
+          params.conversationMessages,
+          params.templateMessageRole || 'system',
+          params.cancellationToken
+        );
+
+        // Convert ChatResult to AIPromptRunResult
+        const result: AIPromptRunResult<T> = {
+          success: chatResult.success,
+          status: chatResult.success ? 'Completed' : 'Failed',
+          result: chatResult.response as T,
+          rawResult: chatResult.response,
+          chatResult,
+          executionTimeMS: Date.now() - startTime.getTime(),
+          tokensUsed: chatResult.tokensUsed || 0,
+          promptTokens: chatResult.promptTokens,
+          completionTokens: chatResult.completionTokens,
+          errorMessage: chatResult.errorMessage
+        };
+
+        return result;
+      };
+
+      // Step 4: Estimate tokens for rate limiting
+      const estimatedTokens = Math.ceil((renderedPromptText.length / 4) * 1.2);
+
+      // Step 5: Create pooled task
+      const task: PooledExecutionTask = {
+        taskId: uuidv4(),
+        modelId: selectedModel.ID,
+        params,
+        renderedPrompt: renderedPromptText,
+        estimatedTokens,
+        priority: (params as any).priority || 100,
+        timeout: (params as any).poolTimeout || 60000,
+        cancellationToken: params.cancellationToken,
+        onProgress: params.onProgress,
+        onStreaming: params.onStreaming,
+        executor
+      };
+
+      // Step 6: Submit to pool manager
+      const poolManager = ModelPoolManager.getInstance();
+      const poolResult = await poolManager.executeRequest(task);
+
+      // Step 7: Convert PooledExecutionResult back to AIPromptRunResult
+      const finalResult: AIPromptRunResult<T> = {
+        success: poolResult.success,
+        status: poolResult.success ? 'Completed' : 'Failed',
+        result: poolResult.parsedResult as T,
+        rawResult: poolResult.rawResult,
+        chatResult: { success: poolResult.success, response: poolResult.rawResult } as any,
+        executionTimeMS: poolResult.executionTimeMS,
+        tokensUsed: poolResult.tokensUsed || 0,
+        queueWaitTimeMS: poolResult.queueWaitTimeMS,
+        errorMessage: poolResult.errorMessage,
+        cancelled: poolResult.cancelled,
+        cancellationReason: poolResult.cancellationReason
+      };
+
+      return finalResult;
+
+    } catch (error) {
+      return {
+        success: false,
+        status: 'Failed',
+        errorMessage: error.message || 'Unknown error in pooled execution',
+        chatResult: { success: false, errorMessage: error.message } as any,
+        executionTimeMS: Date.now() - startTime.getTime(),
+        tokensUsed: 0
+      } as AIPromptRunResult<T>;
+    }
   }
 
   /**
