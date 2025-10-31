@@ -9,7 +9,7 @@ import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
 import { SQLCodeGenBase } from './Database/sql_codegen';
 import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
-import { MSSQLConnection } from './Config/db-connection';
+import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { outputDir, commands, mj_core_schema, configInfo, getSettingValue } from './Config/config';
 import { logError, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
@@ -79,7 +79,17 @@ export class RunCodeGenBase {
     const pool = await MSSQLConnection(); // get the MSSQL connection pool
     const config = new SQLServerProviderConfigData(pool, mj_core_schema());
     const sqlServerProvider: SQLServerDataProvider = await setupSQLServerClient(config);
-    succeedSpinner('Database connection initialized');
+
+    // Get connection details from the sqlConfig
+    let connectionInfo = sqlConfig.server;
+    if (sqlConfig.port) {
+      connectionInfo += `:${sqlConfig.port}`;
+    }
+    if (sqlConfig.options?.instanceName) {
+      connectionInfo += `\\${sqlConfig.options.instanceName}`;
+    }
+    connectionInfo += `/${sqlConfig.database}`;
+    succeedSpinner(`Database connection initialized: ${connectionInfo}`);
     return sqlServerProvider;
   }
 
