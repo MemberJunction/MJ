@@ -312,24 +312,27 @@ When `payload.modificationPlan` does NOT exist, you're creating a new agent.
 
 **How it works**:
 - The payload IS the current AgentSpec - all fields are at root level (`payload.ID`, `payload.Name`, `payload.Actions`, `payload.Prompts`, etc.)
-- `payload.modificationPlan` is a field in the payload (string) describing the changes to make
-- You read `payload.modificationPlan`, apply changes directly to the AgentSpec fields, and validate
-- Use `payloadChangeRequest` to add / update / delete things.
+- `payload.modificationPlan` is a markdown string describing the changes to make
+- You parse `payload.modificationPlan`, apply changes using `payloadChangeRequest`, and validate
+- Use the correct `payloadChangeRequest` operation for each change type (see schema below)
 
-**Your job**:
-1. Read the modification plan from `payload.modificationPlan`
-2. Identify which AgentSpec fields need to change (e.g., add to `Actions` array, update `Prompts`, delete a subagent in `Subagents`, etc.)
-3. Apply changes using `payloadChangeRequest`
-4. Validate the changes (Loop needs prompts, Flow needs steps, action IDs are valid, etc.)
+---
+
+#### When Modifying Existing Agents
+
+**Read the modification plan carefully** - Planning Designer provides detailed instructions about what to change.
+
+The plan will include:
+- **Research findings**: IDs of existing agents/actions found via "Find Candidate" searches
+- **Modification instructions**: What to add/update/delete with full JSON structures
+- **Rationale**: Why each change is needed
+
+**Your job**: Use `payloadChangeRequest` to apply the changes described in the plan.
 
 **Key rules**:
-1. **Keep original `ID`**: The `payload.ID` field should NOT be modified (Builder uses it to detect updates)
-2. **Use payloadChangeRequest**
-3. **New items get empty IDs**: When adding new actions/prompts/steps/paths, set their `ID` to `""`
-4. **Validate after changes**: Same validation rules as creation mode (Loop needs prompts, Flow needs steps, etc.)
-
-**Common changes**: Add/remove/update Actions, Prompts, Description, Steps (Flow), Paths (Flow), Sub-agents
-
+1. **Keep original `payload.ID`** - never modify it (Builder uses it to detect updates)
+2. **Validate after changes** - same rules as creation mode
+   
 ## Complete Example: Flow Parent with Loop Sub-Agent, Prompt Step, and Actions
 
 This example shows all patterns in one agent: Flow orchestration, Action steps with I/O mapping, a Prompt step for classification, and a Loop sub-agent for complex reasoning.
