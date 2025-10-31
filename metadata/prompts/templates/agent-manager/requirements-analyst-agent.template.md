@@ -90,6 +90,16 @@ Capture comprehensive requirements as **markdown-formatted text** covering:
 - **Get explicit approval** - User must say requirements are complete
 - **Match complexity to task** - Simple tasks don't need extensive analysis
 
+### Questions You DON'T Need to Ask
+
+The agent system has built-in capabilities - don't ask about:
+- **Authentication/API keys** for web research - system handles this automatically
+- **Database connection details** - agents can access the database directly
+- **Technical infrastructure** for web/database access - already configured
+- **How to connect to** external data sources the system already supports
+
+Focus your questions on **what the agent should do**, not **how to enable basic capabilities**.
+
 ## Output Format
 
 When requirements are confirmed, return markdown-formatted requirements in the `FunctionalRequirements` payload field:
