@@ -5,6 +5,14 @@
     <span>{{ processingMessage }}</span>
   </div>
 
+  <!-- Agent Configuration Selector -->
+  <mj-agent-configuration-selector
+    *ngIf="converationManagerAgent"
+    [agent]="converationManagerAgent"
+    [disabled]="disabled || isProcessing || isSending"
+    (configurationSelected)="onConfigurationSelected($event)">
+  </mj-agent-configuration-selector>
+
   <!-- Message Input Box -->
   <mj-message-input-box
     #inputBox

@@ -1,0 +1,17 @@
+<div class="configuration-selector" *ngIf="presets.length > 0">
+  <label for="config-preset" class="preset-label">{{ label }}</label>
+  <select
+    id="config-preset"
+    class="preset-select"
+    [(ngModel)]="selectedPresetName"
+    (change)="onPresetChange()"
+    [disabled]="disabled">
+    <option *ngFor="let preset of presets" [value]="preset.Name">
+      {{ preset.DisplayName }}
+    </option>
+  </select>
+  <span class="preset-description" *ngIf="showDescription && selectedPreset && selectedPreset.Description">
+    <i class="fa-solid fa-info-circle"></i>
+    {{ selectedPreset.Description }}
+  </span>
+</div>

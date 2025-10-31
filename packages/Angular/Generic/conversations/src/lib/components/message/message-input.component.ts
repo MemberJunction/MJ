@@ -56,6 +56,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
   public isProcessing: boolean = false; // True when waiting for agent/naming response
   public processingMessage: string = 'AI is responding...'; // Message shown during processing
   public converationManagerAgent: AIAgentEntityExtended | null = null;
+  public selectedConfigurationId: string | null = null; // Selected AI configuration for agent execution
 
   // PubSub subscription for task progress updates
   private pushStatusSubscription?: Subscription;
@@ -130,6 +131,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
         this.inputBox.focus();
       }
     }, 100);
+  }
+
+  /**
+   * Handles configuration preset selection from the agent-configuration-selector component.
+   * Stores the selected configuration ID to be used when executing the agent.
+   *
+   * @param configurationId - The AI Configuration ID to use, or null for default configuration
+   */
+  public onConfigurationSelected(configurationId: string | null): void {
+    this.selectedConfigurationId = configurationId;
+    console.log('🎚️ Configuration selected:', configurationId || 'default');
   }
 
   /**

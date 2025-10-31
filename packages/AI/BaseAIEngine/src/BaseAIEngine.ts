@@ -20,6 +20,7 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIAgentRelationshipEntity,
          AIAgentPermissionEntity,
          AIAgentDataSourceEntity,
+         AIAgentConfigurationEntity,
          AIAgentExampleEntity} from "@memberjunction/core-entities";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
  
@@ -53,6 +54,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentSteps: AIAgentStepEntity[] = [];
     private _agentStepPaths: AIAgentStepPathEntity[] = [];
     private _agentPermissions: AIAgentPermissionEntity[] = [];
+    private _agentConfigurations: AIAgentConfigurationEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -167,6 +169,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentDataSources',
                 EntityName: 'MJ: AI Agent Data Sources'
+            },
+            {
+                PropertyName: '_agentConfigurations',
+                EntityName: 'MJ: AI Agent Configurations'
             }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -459,6 +465,14 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentDataSources;
     }
 
+    /**
+     * Cached array of AI Agent Configurations loaded from the database.
+     * These define semantic presets for agents (e.g., "Fast", "High Quality").
+     */
+    public get AgentConfigurations(): AIAgentConfigurationEntity[] {
+        return this._agentConfigurations;
+    }
+
     public get AgentSteps(): AIAgentStepEntity[] {
         return this._agentSteps;
     }
@@ -649,5 +663,92 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
      */
     public async RefreshAgentPermissionsCache(agentId: string, user: UserInfo): Promise<void> {
         await AIAgentPermissionHelper.RefreshCache(user);
+    }
+
+    // ==========================================
+    // AI Agent Configuration Preset Methods
+    // ==========================================
+
+    /**
+     * Gets all configuration presets for a specific agent.
+     * Configuration presets provide user-friendly semantic names (e.g., "Fast", "High Quality")
+     * that map to technical AI Configuration IDs for agent execution.
+     *
+     * @param agentId - The agent ID
+     * @param activeOnly - If true, only returns Active status presets (default: true)
+     * @returns Array of configuration presets sorted by Priority (lower numbers first)
+     *
+     * @example
+     * ```typescript
+     * const presets = AIEngine.Instance.GetAgentConfigurationPresets('agent-uuid');
+     * // Returns: [
+     * //   { Name: 'Default', DisplayName: 'Standard', Priority: 100, IsDefault: true },
+     * //   { Name: 'Fast', DisplayName: 'Quick Draft', Priority: 200 },
+     * //   { Name: 'HighQuality', DisplayName: 'Maximum Detail', Priority: 300 }
+     * // ]
+     * ```
+     */
+    public GetAgentConfigurationPresets(agentId: string, activeOnly: boolean = true): AIAgentConfigurationEntity[] {
+        let presets = this._agentConfigurations.filter(ac => ac.AgentID === agentId);
+
+        if (activeOnly) {
+            presets = presets.filter(ac => ac.Status === 'Active');
+        }
+
+        // Sort by Priority (lower numbers first)
+        return presets.sort((a, b) => a.Priority - b.Priority);
+    }
+
+    /**
+     * Gets the default configuration preset for an agent.
+     * The default preset is marked with IsDefault = true in the database.
+     *
+     * @param agentId - The agent ID
+     * @returns The default preset, or undefined if none exists
+     *
+     * @example
+     * ```typescript
+     * const defaultPreset = AIEngine.Instance.GetDefaultAgentConfigurationPreset('agent-uuid');
+     * if (defaultPreset) {
+     *   console.log(`Default: ${defaultPreset.DisplayName}`);
+     * }
+     * ```
+     */
+    public GetDefaultAgentConfigurationPreset(agentId: string): AIAgentConfigurationEntity | undefined {
+        const presets = this.GetAgentConfigurationPresets(agentId, true);
+        return presets.find(ac => ac.IsDefault);
+    }
+
+    /**
+     * Gets a specific configuration preset by agent ID and preset name.
+     * Name is the code-friendly identifier (e.g., "Fast", "HighQuality").
+     *
+     * @param agentId - The agent ID
+     * @param presetName - The preset name (e.g., "Fast", "HighQuality")
+     * @returns The configuration preset, or undefined if not found
+     *
+     * @example
+     * ```typescript
+     * const fastPreset = AIEngine.Instance.GetAgentConfigurationPresetByName(
+     *   'agent-uuid',
+     *   'Fast'
+     * );
+     *
+     * if (fastPreset) {
+     *   // Use fastPreset.AIConfigurationID in ExecuteAgentParams
+     *   const result = await agent.Execute({
+     *     agent: agentEntity,
+     *     conversationMessages: messages,
+     *     configurationId: fastPreset.AIConfigurationID
+     *   });
+     * }
+     * ```
+     */
+    public GetAgentConfigurationPresetByName(agentId: string, presetName: string): AIAgentConfigurationEntity | undefined {
+        return this._agentConfigurations.find(
+            ac => ac.AgentID === agentId &&
+                  ac.Name === presetName &&
+                  ac.Status === 'Active'
+        );
     }
 }

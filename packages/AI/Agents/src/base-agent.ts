@@ -11,7 +11,7 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentExampleEntity, AIAgentConfigurationEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
@@ -7055,6 +7055,73 @@ The context is now within limits. Please retry your request with the recovered c
         }
 
         return current;
+    }
+
+    /**
+     * Gets the available configuration presets for this agent.
+     * Returns semantic presets like "Fast", "Balanced", "High Quality" that users can choose from.
+     * Configuration presets provide user-friendly names for different AI model configurations.
+     *
+     * @returns Array of configuration presets sorted by Priority, or empty array if none configured
+     *
+     * @example
+     * ```typescript
+     * const agent = new ResearchAgent();
+     * const presets = agent.GetConfigurationPresets();
+     * // Returns: [
+     * //   { Name: 'Default', DisplayName: 'Standard', AIConfigurationID: null },
+     * //   { Name: 'Fast', DisplayName: 'Quick Draft', AIConfigurationID: 'fast-config-uuid' },
+     * //   { Name: 'HighQuality', DisplayName: 'Maximum Detail', AIConfigurationID: 'frontier-uuid' }
+     * // ]
+     *
+     * // Use with agent execution:
+     * const fastPreset = presets.find(p => p.Name === 'Fast');
+     * if (fastPreset) {
+     *   const result = await agent.Execute({
+     *     agent: agentEntity,
+     *     conversationMessages: messages,
+     *     configurationId: fastPreset.AIConfigurationID
+     *   });
+     * }
+     * ```
+     */
+    public GetConfigurationPresets(): AIAgentConfigurationEntity[] {
+        if (!this._agent?.ID) {
+            return [];
+        }
+        return AIEngine.Instance.GetAgentConfigurationPresets(this._agent.ID);
+    }
+
+    /**
+     * Gets the default configuration preset for this agent.
+     * The default preset is marked with IsDefault = true and typically represents
+     * the recommended configuration for most use cases.
+     *
+     * @returns The default preset, or undefined if none configured
+     *
+     * @example
+     * ```typescript
+     * const agent = new ResearchAgent();
+     * const defaultPreset = agent.GetDefaultConfigurationPreset();
+     *
+     * if (defaultPreset) {
+     *   console.log(`Default configuration: ${defaultPreset.DisplayName}`);
+     *   console.log(`Description: ${defaultPreset.Description}`);
+     *
+     *   // Use default configuration in execution
+     *   const result = await agent.Execute({
+     *     agent: agentEntity,
+     *     conversationMessages: messages,
+     *     configurationId: defaultPreset.AIConfigurationID
+     *   });
+     * }
+     * ```
+     */
+    public GetDefaultConfigurationPreset(): AIAgentConfigurationEntity | undefined {
+        if (!this._agent?.ID) {
+            return undefined;
+        }
+        return AIEngine.Instance.GetDefaultAgentConfigurationPreset(this._agent.ID);
     }
 }
 
