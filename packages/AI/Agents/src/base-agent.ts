@@ -5277,7 +5277,7 @@ The context is now within limits. Please retry your request with the recovered c
             let lastStep: AIAgentRunStepEntityExtended | undefined = undefined;
             const actionPromises = actions.map(async (aa) => {
                 // get all agent actions first for this agent
-                const actionEntity = actionEngine.Actions.find(a => a.Name === aa.name && agentActions.some(aa => aa.ActionID === a.ID));
+                const actionEntity = actionEngine.Actions.find(a => a.Name === aa.name && agentActions.some(agentAction => agentAction.ActionID === a.ID));
                 if (!actionEntity) {
                     throw new Error(`Action "${aa.name}" Not Found for Agent "${params.agent.Name}"`);
                 }
