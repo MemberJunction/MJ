@@ -1,0 +1,60 @@
+<div class="record-form-container"  >
+    <form *ngIf="record" class="record-form"  #form="ngForm" >
+        <mj-form-toolbar [form]="this"></mj-form-toolbar>
+
+                <mj-tabstrip (TabSelected)="onTabSelect($event)"  (ResizeContainer)="InvokeManualResize()">
+                    
+                    <mj-tab Name="Details">
+                        Details
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-form-section 
+                            Entity="MJ: Collections" 
+                            Section="details" 
+                            [record]="record" 
+                            [EditMode]="this.EditMode">
+                        </mj-form-section>
+                    </mj-tab-body>
+                    
+                    <mj-tab Name="MJ: Collection Artifacts" [Visible]="record.IsSaved"> 
+                        MJ: Collection Artifacts
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Artifacts','CollectionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collection Artifacts')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collection Artifacts')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Collection Permissions" [Visible]="record.IsSaved"> 
+                        MJ: Collection Permissions
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collection Permissions','CollectionID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collection Permissions')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collection Permissions')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+
+                    <mj-tab Name="MJ: Collections" [Visible]="record.IsSaved"> 
+                        MJ: Collections
+                    </mj-tab>
+                    <mj-tab-body>
+                        <mj-user-view-grid 
+                            [Params]="BuildRelationshipViewParamsByEntityName('MJ: Collections','ParentID')"  
+                            [NewRecordValues]="NewRecordValues('MJ: Collections')"
+                            [AllowLoad]="IsCurrentTab('MJ: Collections')"  
+                            [EditMode]="GridEditMode()"  
+                            >
+                        </mj-user-view-grid>                    
+                    </mj-tab-body>
+                </mj-tabstrip>
+    </form>
+</div>
+        

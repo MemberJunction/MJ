@@ -266,6 +266,15 @@ export class AIModelSelectionInfo {
   fallbackUsed: boolean;
   /** The selection strategy that was used */
   selectionStrategy?: 'Default' | 'Specific' | 'ByPower';
+
+  /**
+   * Gets all model/vendor combinations that have available API keys.
+   * These are the valid candidates that can be used for execution or retry.
+   * @returns Array of models considered that are available (have API keys)
+   */
+  extractValidCandidates() {
+    return this.modelsConsidered.filter(m => m.available);
+  }
 }  
 
 /**
@@ -540,30 +549,53 @@ export class AIPromptParams {
 
   /**
    * Optional effort level override for this prompt execution (1-100).
-   * 
+   *
    * Higher values request more thorough reasoning and analysis from AI models.
    * Each provider maps the 1-100 scale to their specific effort parameters:
    * - OpenAI: Maps to reasoning_effort (1-33=low, 34-66=medium, 67-100=high)
    * - Anthropic: Maps to thinking mode with token budgets
    * - Groq: Maps to reasoning_effort parameter (experimental)
    * - Gemini: Controls reasoning mode intensity
-   * 
+   *
    * Precedence hierarchy (highest to lowest priority):
    * 1. This effortLevel parameter (runtime override)
    * 2. Agent's DefaultPromptEffortLevel (if executed via agent)
    * 3. Prompt's EffortLevel property (prompt default)
    * 4. No effort level (provider default behavior)
-   * 
+   *
    * @example
    * ```typescript
    * const params = new AIPromptParams();
    * params.prompt = myPrompt;
    * params.effortLevel = 85; // High effort for thorough analysis
-   * 
+   *
    * const result = await AIPromptRunner.RunPrompt(params);
    * ```
    */
   effortLevel?: number;
+
+  /**
+   * Optional maximum length for error messages returned in results.
+   *
+   * When set, error messages longer than this value will be truncated with "... [truncated]" appended.
+   * When undefined (default), error messages are returned in full without truncation.
+   *
+   * This is useful for handling extremely long error messages (like provider-specific JSON dumps)
+   * while still allowing full error details when needed for debugging.
+   *
+   * Default: undefined (no truncation)
+   *
+   * @example
+   * ```typescript
+   * const params = new AIPromptParams();
+   * params.prompt = myPrompt;
+   * params.maxErrorLength = 500; // Truncate errors longer than 500 characters
+   *
+   * const result = await AIPromptRunner.RunPrompt(params);
+   * // Long errors will be truncated: "Error message text... [truncated]"
+   * ```
+   */
+  maxErrorLength?: number;
 }
 
 

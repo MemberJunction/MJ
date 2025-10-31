@@ -24,7 +24,9 @@ import { CommunicationEngineBase, Message } from '@memberjunction/communication-
 import { TemplateEngineBase } from '@memberjunction/templates-base-types';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { GraphQLActionClient } from '@memberjunction/graphql-dataprovider';
-
+import { LoadEntityCommunicationsEngineClient } from '@memberjunction/entity-communications-client';
+// Prevent tree-shaking of EntityCommunicationsEngineClient
+LoadEntityCommunicationsEngineClient();
 
 export type GridRowClickedEvent = {
   entityId: string;
@@ -59,6 +61,11 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   @Input() InEditMode: boolean = false;
   @Input() EditMode: "None" | "Save" | "Queue" = "None"
   @Input() AutoNavigate: boolean = true;
+  /**
+   * If set to false, the component will not automatically refresh when Params are provided.
+   * This is useful when the parent component wants to control when Refresh is called.
+   */
+  @Input() AutoRefreshOnInit: boolean = true;
 
 
   /**
@@ -623,7 +630,7 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
   async ngAfterViewInit() {
     await ResourcePermissionEngine.Instance.Config();
     //this.setGridHeight();
-    if (this.Params)
+    if (this.Params && this.AutoRefreshOnInit)
       this.Refresh(this.Params);
 
     // setup event listener for MJGlobal because we might have a parent component that sends us messages
@@ -696,9 +703,9 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
     // NOW WE CAN DO ASYNC stuff, before we check AllowLoad we must not do async stuff
 
     await TemplateEngineBase.Instance.Config(false);
-    await EntityCommunicationsEngineClient.Instance.Config(false);
     await CommunicationEngineBase.Instance.Config(false);
     await EntityActionEngineBase.Instance.Config(false);
+    await EntityCommunicationsEngineClient.Instance.Config(false);
 
     if (params && (params.ViewEntity || params.ViewID || params.ViewName || (params.EntityName && params.ExtraFilter))) {
       const startTime = new Date().getTime();
@@ -1173,10 +1180,10 @@ export class UserViewGridComponent implements OnInit, AfterViewInit {
       if(!this._entityInfo)
         return false;
 
-      return EntityCommunicationsEngineClient.Instance.EntitySupportsCommunication(this._entityInfo.ID);  
+      return EntityCommunicationsEngineClient.Instance.EntitySupportsCommunication(this._entityInfo.ID);
     }
     catch (e){
-      LogError (e); 
+      LogError (e);
       return false; // make this non fatal - this can occur at times due to timing issues, it seems, we need to investigate further
     }
   }

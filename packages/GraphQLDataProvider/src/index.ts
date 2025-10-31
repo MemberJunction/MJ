@@ -9,9 +9,7 @@ export { GraphQLActionClient } from './graphQLActionClient';
 export { GraphQLAIClient } from './graphQLAIClient';
 export type { 
     RunAIPromptParams, 
-    RunAIPromptResult, 
-    RunAIAgentParams, 
-    RunAIAgentResult,
+    RunAIPromptResult,  
     ExecuteSimplePromptParams,
     SimplePromptResult,
     EmbedTextParams,
@@ -22,5 +20,6 @@ export type {
     GetRegistryComponentParams,
     SearchRegistryComponentsParams,
     RegistryComponentSearchResult,
-    ComponentDependencyTree
+    ComponentDependencyTree,
+    ComponentSpecWithHash
 } from './GraphQLComponentRegistryClient';

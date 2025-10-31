@@ -1,5 +1,6 @@
-import { BaseCommunicationProvider, CommunicationEngineBase, Message, MessageRecipient, MessageResult } from "@memberjunction/communication-types";
+import { BaseCommunicationProvider, CommunicationEngineBase, CreateDraftResult, Message, MessageRecipient, MessageResult } from "@memberjunction/communication-types";
 import { CommunicationRunEntity } from "@memberjunction/core-entities";
+import { LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { MJGlobal } from "@memberjunction/global";
 import { ProcessedMessageServer } from "./BaseProvider";
  
@@ -109,7 +110,7 @@ export class CommunicationEngine extends CommunicationEngineBase {
                     log.Status = sendResult.Success ? 'Complete' : 'Failed';
                     log.ErrorMessage = sendResult.Error;
                     if (!await log.Save()){
-                        throw new Error(`Failed to complete log for message.`);
+                        throw new Error(`Failed to complete log for message: ${log.LatestResult?.Message}`);
                     }
                     else{
                         return sendResult;
@@ -123,5 +124,76 @@ export class CommunicationEngine extends CommunicationEngineBase {
         else{
             throw new Error(`Failed to process message: ${processResult.Message}`);
         }
+     }
+
+     /**
+      * Creates a draft message using the specified provider
+      * @param message - The message to save as a draft
+      * @param providerName - Name of the provider to use
+      * @param contextUser - Optional user context for server-side operations
+      * @returns Promise<CreateDraftResult> - Result containing draft ID if successful
+      */
+     public async CreateDraft(
+         message: Message,
+         providerName: string,
+         contextUser?: UserInfo
+     ): Promise<CreateDraftResult> {
+         try {
+             if (!this.Loaded) {
+                 return {
+                     Success: false,
+                     ErrorMessage: 'Metadata not loaded. Call Config() before creating drafts.'
+                 };
+             }
+
+             // Get provider instance
+             const provider = this.GetProvider(providerName);
+             if (!provider) {
+                 return {
+                     Success: false,
+                     ErrorMessage: `Provider ${providerName} not found`
+                 };
+             }
+
+             // Check if provider supports drafts
+             const providerEntity = this.Providers.find(p => p.Name === providerName);
+             if (!providerEntity?.SupportsDrafts) {
+                 return {
+                     Success: false,
+                     ErrorMessage: `Provider ${providerName} does not support creating drafts`
+                 };
+             }
+
+             // Process message (render templates)
+             const processedMessage = new ProcessedMessageServer(message);
+             const processResult = await processedMessage.Process(false, contextUser || this.ContextUser);
+
+             if (!processResult.Success) {
+                 return {
+                     Success: false,
+                     ErrorMessage: `Failed to process message: ${processResult.Message}`
+                 };
+             }
+
+             // Create draft via provider
+             const result = await provider.CreateDraft({
+                 Message: processedMessage,
+                 ContextData: message.ContextData
+             });
+
+             if (result.Success) {
+                 LogStatus(`Draft created successfully via ${providerName}. Draft ID: ${result.DraftID}`);
+             } else {
+                 LogError(`Failed to create draft via ${providerName}`, undefined, result.ErrorMessage);
+             }
+
+             return result;
+         } catch (error: any) {
+             LogError('Error creating draft', undefined, error);
+             return {
+                 Success: false,
+                 ErrorMessage: error.message || 'Error creating draft'
+             };
+         }
      }
 }

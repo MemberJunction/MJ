@@ -1,5 +1,238 @@
 # Change Log - @memberjunction/scheduled-actions-server
 
+## 2.112.0
+
+### Patch Changes
+
+- @memberjunction/actions-content-autotag@2.112.0
+- @memberjunction/scheduled-actions@2.112.0
+- @memberjunction/ai-vectors-pinecone@2.112.0
+- @memberjunction/ai-vector-sync@2.112.0
+- @memberjunction/actions@2.112.0
+- @memberjunction/ai@2.112.0
+- @memberjunction/ai-mistral@2.112.0
+- @memberjunction/ai-openai@2.112.0
+- @memberjunction/core@2.112.0
+- @memberjunction/core-entities@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/actions-content-autotag@2.110.1
+- @memberjunction/scheduled-actions@2.110.1
+- @memberjunction/ai@2.110.1
+- @memberjunction/ai-mistral@2.110.1
+- @memberjunction/ai-openai@2.110.1
+- @memberjunction/ai-vectors-pinecone@2.110.1
+- @memberjunction/ai-vector-sync@2.110.1
+- @memberjunction/actions@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/actions-content-autotag@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/scheduled-actions@2.110.0
+  - @memberjunction/ai-vectors-pinecone@2.110.0
+  - @memberjunction/ai-vector-sync@2.110.0
+  - @memberjunction/ai@2.110.0
+  - @memberjunction/ai-mistral@2.110.0
+  - @memberjunction/ai-openai@2.110.0
+  - @memberjunction/core@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/actions-content-autotag@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/scheduled-actions@2.109.0
+  - @memberjunction/ai-vectors-pinecone@2.109.0
+  - @memberjunction/ai-vector-sync@2.109.0
+  - @memberjunction/ai@2.109.0
+  - @memberjunction/ai-mistral@2.109.0
+  - @memberjunction/ai-openai@2.109.0
+  - @memberjunction/core@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [656d86c]
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/actions-content-autotag@2.108.0
+  - @memberjunction/scheduled-actions@2.108.0
+  - @memberjunction/ai-vectors-pinecone@2.108.0
+  - @memberjunction/ai-vector-sync@2.108.0
+  - @memberjunction/ai-mistral@2.108.0
+  - @memberjunction/ai-openai@2.108.0
+  - @memberjunction/core@2.108.0
+
+## 2.107.0
+
+### Minor Changes
+
+- e05a672: migration
+- 0be127f: migration
+
+### Patch Changes
+
+- Updated dependencies [e05a672]
+- Updated dependencies [0be127f]
+  - @memberjunction/scheduled-actions@2.107.0
+  - @memberjunction/actions-content-autotag@2.107.0
+  - @memberjunction/ai@2.107.0
+  - @memberjunction/ai-mistral@2.107.0
+  - @memberjunction/ai-openai@2.107.0
+  - @memberjunction/ai-vectors-pinecone@2.107.0
+  - @memberjunction/ai-vector-sync@2.107.0
+  - @memberjunction/actions@2.107.0
+  - @memberjunction/core@2.107.0
+  - @memberjunction/core-entities@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/actions-content-autotag@2.106.0
+- @memberjunction/scheduled-actions@2.106.0
+- @memberjunction/ai@2.106.0
+- @memberjunction/ai-mistral@2.106.0
+- @memberjunction/ai-openai@2.106.0
+- @memberjunction/ai-vectors-pinecone@2.106.0
+- @memberjunction/ai-vector-sync@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/ai-vector-sync@2.105.0
+  - @memberjunction/ai-vectors-pinecone@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/actions-content-autotag@2.105.0
+  - @memberjunction/scheduled-actions@2.105.0
+  - @memberjunction/ai-mistral@2.105.0
+  - @memberjunction/ai-openai@2.105.0
+  - @memberjunction/core@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- Updated dependencies [aafa827]
+- Updated dependencies [9ad6353]
+  - @memberjunction/ai-openai@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai-vector-sync@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/ai-mistral@2.104.0
+  - @memberjunction/ai-vectors-pinecone@2.104.0
+  - @memberjunction/actions-content-autotag@2.104.0
+  - @memberjunction/scheduled-actions@2.104.0
+  - @memberjunction/core@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/ai-vectors-pinecone@2.103.0
+  - @memberjunction/scheduled-actions@2.103.0
+  - @memberjunction/actions-content-autotag@2.103.0
+  - @memberjunction/ai-mistral@2.103.0
+  - @memberjunction/ai-openai@2.103.0
+  - @memberjunction/ai-vector-sync@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/ai@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/actions-content-autotag@2.100.3
+- @memberjunction/actions@2.100.3
+- @memberjunction/scheduled-actions@2.100.3
+- @memberjunction/ai-vectors-pinecone@2.100.3
+- @memberjunction/ai-vector-sync@2.100.3
+- @memberjunction/ai@2.100.3
+- @memberjunction/ai-mistral@2.100.3
+- @memberjunction/ai-openai@2.100.3
+- @memberjunction/core@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.100.2
+- @memberjunction/ai-mistral@2.100.2
+- @memberjunction/ai-openai@2.100.2
+- @memberjunction/ai-vectors-pinecone@2.100.2
+- @memberjunction/ai-vector-sync@2.100.2
+- @memberjunction/actions-content-autotag@2.100.2
+- @memberjunction/actions@2.100.2
+- @memberjunction/scheduled-actions@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.100.1
+- @memberjunction/ai-mistral@2.100.1
+- @memberjunction/ai-openai@2.100.1
+- @memberjunction/ai-vectors-pinecone@2.100.1
+- @memberjunction/ai-vector-sync@2.100.1
+- @memberjunction/actions-content-autotag@2.100.1
+- @memberjunction/actions@2.100.1
+- @memberjunction/scheduled-actions@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/ai-vectors-pinecone@2.100.0
+  - @memberjunction/ai-vector-sync@2.100.0
+  - @memberjunction/actions-content-autotag@2.100.0
+  - @memberjunction/actions@2.100.0
+  - @memberjunction/scheduled-actions@2.100.0
+  - @memberjunction/ai@2.100.0
+  - @memberjunction/ai-mistral@2.100.0
+  - @memberjunction/ai-openai@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

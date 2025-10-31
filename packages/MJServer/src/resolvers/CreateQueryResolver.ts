@@ -1,9 +1,9 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType, Resolver, PubSub, PubSubEngine } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, Metadata, RunView, UserInfo, CompositeKey, DatabaseProviderBase } from '@memberjunction/core';
+import { LogError, RunView, UserInfo, CompositeKey, DatabaseProviderBase, LogStatus } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { QueryCategoryEntity, QueryPermissionEntity } from '@memberjunction/core-entities';
-import { QueryResolver } from '../generated/generated.js';
+import { MJQueryResolver } from '../generated/generated.js';
 import { GetReadOnlyProvider, GetReadWriteProvider } from '../util.js';
 import { DeleteOptionsInput } from '../generic/DeleteOptionsInput.js';
 import { QueryEntityExtended } from '@memberjunction/core-entities-server';
@@ -294,7 +294,7 @@ export class DeleteQueryResultType {
 }
 
 @Resolver()
-export class QueryResolverExtended extends QueryResolver {
+export class MJQueryResolverExtended extends MJQueryResolver {
     /**
      * Creates a new query with the provided attributes. This mutation is restricted to system users only.
      * @param input - CreateQuerySystemUserInput containing all the query attributes
@@ -311,11 +311,22 @@ export class QueryResolverExtended extends QueryResolver {
         try {
             // Handle CategoryPath if provided
             let finalCategoryID = input.CategoryID;
-            const provider = GetReadWriteProvider(context.providers); 
+            const provider = GetReadWriteProvider(context.providers);
             if (input.CategoryPath) {
                 finalCategoryID = await this.findOrCreateCategoryPath(input.CategoryPath, provider, context.userPayload.userRecord);
             }
-            
+
+            // Check for existing query with same name in the same category
+            const existingQuery = await this.findExistingQuery(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
+
+            if (existingQuery) {
+                const categoryInfo = input.CategoryPath ? `category path '${input.CategoryPath}'` : `category ID '${finalCategoryID}'`;
+                return {
+                    Success: false,
+                    ErrorMessage: `Query with name '${input.Name}' already exists in ${categoryInfo}`
+                };
+            }
+
             // Use QueryEntityExtended which handles AI processing
             const record = await provider.GetEntityObject<QueryEntityExtended>("Queries", context.userPayload.userRecord);
             
@@ -331,22 +342,29 @@ export class QueryResolverExtended extends QueryResolver {
                 CacheTTLMinutes: input.CacheTTLMinutes || null,
                 CacheMaxSize: input.CacheMaxSize || null
             };
-            // Remove Permissions from the fields to set since we handle them separately
-            delete (fieldsToSet as any).Permissions;
-            
+            // Remove non-database fields that we handle separately or are input-only
+            delete (fieldsToSet as any).Permissions;    // Handled separately via createPermissions
+            delete (fieldsToSet as any).CategoryPath;   // Input-only field, resolved to CategoryID
+
             record.SetMany(fieldsToSet, true);
             this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
 
-            // Pass the transactionScopeId from the user payload to the save operation
-            if (await record.Save()) {
-                // save worked, fire the AfterCreate event and then return all the data
+            // Attempt to save the query
+            const saveResult = await record.Save();
+
+            if (saveResult) {
+                // Save succeeded - fire the AfterCreate event and return all the data
                 await this.AfterCreate(provider, input); // fire event
                 const queryID = record.ID;
-                
+
                 if (input.Permissions && input.Permissions.length > 0) {
                     await this.createPermissions(provider, input.Permissions, queryID, context.userPayload.userRecord);
                     await record.RefreshRelatedMetadata(true); // force DB update since we just created new permissions
-                }                
+                }
+
+                // Refresh metadata cache to include the newly created query
+                // This ensures subsequent operations can find the query without additional DB calls
+                await provider.Refresh();
 
                 return {
                     Success: true,
@@ -361,11 +379,36 @@ export class QueryResolverExtended extends QueryResolver {
                     }),
                     Permissions: record.QueryPermissions
                 };
-            } 
+            }
             else {
+                // Save failed - check if another request created the same query (race condition)
+                // Always recheck regardless of error type to handle all duplicate scenarios
+                const existingQuery = await this.findExistingQuery(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
+
+                if (existingQuery) {
+                    // Found the query that was created by another request
+                    // Return it as if we created it (it has the same name/category)
+                    LogStatus(`[CreateQuery] Unique constraint detected for query '${input.Name}'. Using existing query (ID: ${existingQuery.ID}) created by concurrent request.`);
+                    return {
+                        Success: true,
+                        QueryData: JSON.stringify(existingQuery),
+                        Fields: existingQuery.Fields || [],
+                        Parameters: existingQuery.Parameters || [],
+                        Entities: existingQuery.Entities?.map(e => ({
+                            ID: e.ID,
+                            QueryID: e.QueryID,
+                            EntityID: e.EntityID,
+                            EntityName: e.Entity
+                        })) || [],
+                        Permissions: existingQuery.Permissions || []
+                    };
+                }
+
+                // Genuine failure - couldn't find an existing query with the same name
+                const errorMessage = record.LatestResult?.Message || '';
                 return {
                     Success: false,
-                    ErrorMessage: 'Failed to create query using CreateRecord method'
+                    ErrorMessage: `Failed to create query: ${errorMessage || 'Unknown error'}`
                 };
             }
         } 
@@ -373,7 +416,7 @@ export class QueryResolverExtended extends QueryResolver {
             LogError(err);
             return {
                 Success: false,
-                ErrorMessage: `QueryResolverExtended::CreateQuerySystemUser --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
+                ErrorMessage: `MJQueryResolverExtended::CreateQuerySystemUser --- Error creating query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
     }
@@ -553,7 +596,7 @@ export class QueryResolverExtended extends QueryResolver {
             LogError(err);
             return {
                 Success: false,
-                ErrorMessage: `QueryResolverExtended::UpdateQuerySystemUser --- Error updating query: ${err instanceof Error ? err.message : String(err)}`
+                ErrorMessage: `MJQueryResolverExtended::UpdateQuerySystemUser --- Error updating query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
     }
@@ -578,7 +621,7 @@ export class QueryResolverExtended extends QueryResolver {
             if (!ID || ID.trim() === '') {
                 return {
                     Success: false,
-                    ErrorMessage: 'QueryResolverExtended::DeleteQuerySystemResolver --- Invalid query ID: ID cannot be null or empty'
+                    ErrorMessage: 'MJQueryResolverExtended::DeleteQuerySystemResolver --- Invalid query ID: ID cannot be null or empty'
                 };
             }
 
@@ -610,7 +653,7 @@ export class QueryResolverExtended extends QueryResolver {
             LogError(err);
             return {
                 Success: false,
-                ErrorMessage: `QueryResolverExtended::DeleteQuerySystemResolver --- Error deleting query: ${err instanceof Error ? err.message : String(err)}`
+                ErrorMessage: `MJQueryResolverExtended::DeleteQuerySystemResolver --- Error deleting query: ${err instanceof Error ? err.message : String(err)}`
             };
         }
     }
@@ -652,7 +695,7 @@ export class QueryResolverExtended extends QueryResolver {
                     if (!newCategory) {
                         throw new Error(`Failed to create entity object for Query Categories`);
                     }
-                    
+
                     newCategory.Name = categoryName;
                     newCategory.ParentID = currentParentID;
                     newCategory.UserID = contextUser.ID;
@@ -660,16 +703,33 @@ export class QueryResolverExtended extends QueryResolver {
 
                     const saveResult = await newCategory.Save();
                     if (!saveResult) {
-                        throw new Error(`Failed to create category '${categoryName}': ${newCategory.LatestResult?.Message || 'Unknown error'}`);
+                        // Save failed - always recheck if another request created the same category
+                        const recheckExisting = await this.findCategoryByNameAndParent(p, categoryName, currentParentID, contextUser);
+                        if (recheckExisting) {
+                            // Another request created it - use that one
+                            LogStatus(`[CreateQuery] Unique constraint detected for category '${categoryName}'. Using existing category (ID: ${recheckExisting.ID}) created by concurrent request.`);
+                            currentCategoryID = recheckExisting.ID;
+                            currentParentID = recheckExisting.ID;
+                        } else {
+                            // Genuine failure (not a duplicate)
+                            const errorMessage = newCategory.LatestResult?.Message || '';
+                            throw new Error(`Failed to create category '${categoryName}': ${errorMessage || 'Unknown error'}`);
+                        }
+                    } else {
+                        currentCategoryID = newCategory.ID;
+                        currentParentID = newCategory.ID;
                     }
-
-                    currentCategoryID = newCategory.ID;
-                    currentParentID = newCategory.ID;
-
-                    // Refresh metadata after each category creation to ensure it's available for subsequent lookups
-                    await p.Refresh();
                 } catch (error) {
-                    throw new Error(`Failed to create category '${categoryName}': ${error instanceof Error ? error.message : String(error)}`);
+                    // On error, double-check if category exists (race condition handling)
+                    const recheckExisting = await this.findCategoryByNameAndParent(p, categoryName, currentParentID, contextUser);
+                    if (recheckExisting) {
+                        // Category exists, another request created it
+                        LogStatus(`[CreateQuery] Exception during category creation for '${categoryName}'. Using existing category (ID: ${recheckExisting.ID}) created by concurrent request.`);
+                        currentCategoryID = recheckExisting.ID;
+                        currentParentID = recheckExisting.ID;
+                    } else {
+                        throw new Error(`Failed to create category '${categoryName}': ${error instanceof Error ? error.message : String(error)}`);
+                    }
                 }
             }
         }
@@ -682,7 +742,44 @@ export class QueryResolverExtended extends QueryResolver {
     }
 
     /**
-     * Finds a category by name and parent ID using case-insensitive comparison via RunView.
+     * Finds an existing query by name and category ID using RunView.
+     * Bypasses metadata cache to ensure we get the latest data from database.
+     * @param provider - Database provider
+     * @param queryName - Name of the query to find
+     * @param categoryID - Category ID (can be null)
+     * @param contextUser - User context for database operations
+     * @returns The matching query info or null if not found
+     */
+    private async findExistingQuery(
+        provider: DatabaseProviderBase,
+        queryName: string,
+        categoryID: string | null,
+        contextUser: UserInfo
+    ): Promise<any | null> {
+        try {
+            // Query database directly to avoid cache staleness issues
+            const categoryFilter = categoryID ? `CategoryID='${categoryID}'` : 'CategoryID IS NULL';
+            const nameFilter = `LOWER(Name) = LOWER('${queryName.replace(/'/g, "''")}')`;
+
+            const result = await provider.RunView({
+                EntityName: 'Queries',
+                ExtraFilter: `${nameFilter} AND ${categoryFilter}`
+            }, contextUser);
+
+            if (result.Success && result.Results && result.Results.length > 0) {
+                return result.Results[0];
+            }
+
+            return null;
+        } catch (error) {
+            // If query fails, return null (query doesn't exist)
+            return null;
+        }
+    }
+
+    /**
+     * Finds a category by name and parent ID using RunView.
+     * Bypasses metadata cache to ensure we get the latest data from database.
      * @param categoryName - Name of the category to find
      * @param parentID - Parent category ID (null for root level)
      * @param contextUser - User context for database operations
@@ -690,11 +787,11 @@ export class QueryResolverExtended extends QueryResolver {
      */
     private async findCategoryByNameAndParent(provider: DatabaseProviderBase, categoryName: string, parentID: string | null, contextUser: UserInfo): Promise<QueryCategoryEntity | null> {
         try {
-            const rv = provider;
+            // Query database directly to avoid cache staleness issues
             const parentFilter = parentID ? `ParentID='${parentID}'` : 'ParentID IS NULL';
             const nameFilter = `LOWER(Name) = LOWER('${categoryName.replace(/'/g, "''")}')`; // Escape single quotes
-            
-            const result = await rv.RunView<QueryCategoryEntity>({
+
+            const result = await provider.RunView<QueryCategoryEntity>({
                 EntityName: 'Query Categories',
                 ExtraFilter: `${nameFilter} AND ${parentFilter}`,
                 ResultType: 'entity_object'
@@ -703,10 +800,10 @@ export class QueryResolverExtended extends QueryResolver {
             if (result.Success && result.Results && result.Results.length > 0) {
                 return result.Results[0];
             }
-            
+
             return null;
         } catch (error) {
-            LogError(error);
+            // If query fails, return null
             return null;
         }
     }

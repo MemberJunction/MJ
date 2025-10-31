@@ -11,32 +11,78 @@
  * @since 2.49.0
  */
 
-import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended } from '@memberjunction/core-entities';
+import { AIAgentTypeEntity, AIAgentRunEntityExtended, AIAgentRunStepEntityExtended, TemplateParamEntity, AIPromptEntityExtended, ActionParamEntity, AIAgentEntityExtended, AIAgentRelationshipEntity, AIAgentActionEntity, AIAgentNoteEntity, AIAgentExampleEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
 import { CopyScalarsAndArrays, JSONValidator } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+import { AgentContextInjector } from './agent-context-injector';
 import {
     AIPromptParams,
     AIPromptRunResult,
     ChildPromptParam,
-    ExecuteAgentParams, 
+    ExecuteAgentParams,
     AgentContextData,
     AgentConfiguration,
     AgentExecutionProgressCallback,
     ExecuteAgentResult,
     AgentAction,
     AgentSubAgentRequest,
-    BaseAgentNextStep
+    BaseAgentNextStep,
+    MessageLifecycleCallback,
+    MessageLifecycleEvent,
+    AgentChatMessage,
+    AgentChatMessageMetadata,
+    AIModelSelectionInfo
 } from '@memberjunction/ai-core-plus';
 import { ActionEntityExtended, ActionResult } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
 import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from './PayloadManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
+import { AgentDataPreloader } from './AgentDataPreloader';
+import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import * as _ from 'lodash';
+
+/**
+ * Base iteration context for tracking loop execution in BaseAgent.
+ * This is agent-type agnostic and handles both ForEach and While loops.
+ */
+interface BaseIterationContext {
+    loopType: 'ForEach' | 'While';
+
+    // ForEach specific
+    collection?: any[];
+
+    // While specific
+    condition?: string;
+
+    // Common (currentIndex used for both: array index for ForEach, iteration count for While)
+    currentIndex: number;
+    itemVariable: string;
+    indexVariable?: string;
+    maxIterations: number;
+    continueOnError: boolean;
+    delayBetweenIterationsMs?: number;
+    results: any[];
+    errors: any[];
+
+    // Store the forEach or while config for re-execution
+    loopConfig: ForEachOperation | WhileOperation;
+
+    // Parent step ID for creating child iteration steps with ParentID link
+    parentStepId?: string;
+
+    // Action output mapping to apply after each iteration (Flow agents)
+    actionOutputMapping?: string;
+
+
+    // Agent-type specific data (e.g., Flow stores stepId here)
+    agentTypeData?: any;
+}
 
 /**
  * Extended progress step that includes additional metadata for execution tracking
@@ -142,6 +188,12 @@ export class BaseAgent {
     private _executionCounts: Map<string, number> = new Map();
 
     /**
+     * Callback for message lifecycle events (expiration, compaction, removal, expansion).
+     * @private
+     */
+    private _messageLifecycleCallback: MessageLifecycleCallback | undefined;
+
+    /**
      * Counter for validation-induced retries (when validation changes a step to Retry).
      * This is separate from FinalPayloadValidation retries.
      * @private
@@ -167,6 +219,13 @@ export class BaseAgent {
      * @private
      */
     private _agentHierarchy: string[] = [];
+
+    /**
+     * Current iteration context for ForEach/While loops.
+     * Only one active loop per BaseAgent instance (nested loops handled by sub-agent instances).
+     * @private
+     */
+    private _iterationContext: BaseIterationContext | null = null;
 
     /**
      * Current depth in the agent hierarchy (0 = root agent, 1 = first sub-agent, etc.).
@@ -199,6 +258,20 @@ export class BaseAgent {
      * @private
      */
     private _validationRetryCount: number = 0;
+
+    /**
+     * Counter tracking the number of context recovery attempts made in this run.
+     * Context recovery removes/compacts old messages when context length is exceeded.
+     * Reset at the start of each agent run.
+     * @private
+     */
+    private _contextRecoveryAttempts: number = 0;
+
+    /**
+     * Maximum number of context recovery attempts allowed per agent run.
+     * @private
+     */
+    private readonly MAX_RECOVERY_ATTEMPTS: number = 1;
 
     /**
      * Gets the current validation retry count for the agent run.
@@ -311,14 +384,95 @@ export class BaseAgent {
     }
 
     /**
-     * This overridable method is responsible for setting up any necessary one-time initalization of the 
+     * This overridable method is responsible for setting up any necessary one-time initalization of the
      * agent type. The base class sets up the AgentTypeInstance and also lets that agent type initialize
      * its state.
-     * @param params 
+     * @param params
      */
     protected async initializeAgentType(params: ExecuteAgentParams, config: AgentConfiguration) {
         this._agentTypeInstance = await BaseAgentType.GetAgentTypeInstance(config.agentType);
         this._agentTypeState = await this._agentTypeInstance.InitializeAgentTypeState(params);
+    }
+
+    /**
+     * Preloads data sources configured for the agent.
+     *
+     * This method loads data from RunView or RunQuery sources as configured in
+     * AIAgentDataSource metadata and merges it with caller-provided data, context, and payload.
+     * Data sources can target three destinations:
+     * - Data: For Nunjucks templates in prompts (visible to LLMs)
+     * - Context: For actions only (NOT visible to LLMs)
+     * - Payload: For agent state initialization
+     *
+     * Caller-provided values always take precedence over preloaded values.
+     *
+     * @param params - The execution parameters
+     * @private
+     */
+    private async preloadAgentData(params: ExecuteAgentParams): Promise<void> {
+        // Skip if disabled
+        if (params.disableDataPreloading === true) {
+            this.logStatus(`⏭️  Data preloading disabled for agent '${params.agent.Name}'`, true, params);
+            return;
+        }
+
+        try {
+            // Load preloaded data using the singleton service
+            const preloadedResult = await AgentDataPreloader.Instance.PreloadAgentData(
+                params.agent.ID,
+                params.contextUser,
+                this._agentRun?.ID
+            );
+
+            const totalSources =
+                Object.keys(preloadedResult.data).length +
+                Object.keys(preloadedResult.context).length +
+                Object.keys(preloadedResult.payload).length;
+
+            if (totalSources > 0) {
+                const destinations: string[] = [];
+                if (Object.keys(preloadedResult.data).length > 0) {
+                    destinations.push(`data(${Object.keys(preloadedResult.data).length})`);
+                }
+                if (Object.keys(preloadedResult.context).length > 0) {
+                    destinations.push(`context(${Object.keys(preloadedResult.context).length})`);
+                }
+                if (Object.keys(preloadedResult.payload).length > 0) {
+                    destinations.push(`payload(${Object.keys(preloadedResult.payload).length})`);
+                }
+
+                this.logStatus(
+                    `📊 Preloaded ${totalSources} data source(s) for agent '${params.agent.Name}': ${destinations.join(', ')}`,
+                    true,
+                    params
+                );
+
+                // Merge with existing data/context/payload (caller values take precedence)
+                params.data = {
+                    ...preloadedResult.data,
+                    ...params.data
+                };
+
+                params.context = {
+                    ...preloadedResult.context,
+                    ...params.context
+                };
+
+                params.payload = {
+                    ...preloadedResult.payload,
+                    ...params.payload
+                };
+            } else {
+                this.logStatus(`📭 No data sources configured for agent '${params.agent.Name}'`, true, params);
+            }
+        } catch (error) {
+            // Log error but don't fail the agent run
+            this.logError(`Failed to preload data for agent '${params.agent.Name}': ${error.message}`, {
+                agent: params.agent,
+                category: 'DataPreloading',
+                severity: 'warning'
+            });
+        }
     }
 
     /**
@@ -352,7 +506,20 @@ export class BaseAgent {
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         try {
             this.logStatus(`🤖 Starting execution of agent '${params.agent.Name}'`, true, params);
-            
+
+            // Check permissions - user must have run permission or be the owner
+            const canRun = await AIAgentPermissionHelper.HasPermission(
+                params.agent.ID,
+                params.contextUser,
+                'run'
+            );
+
+            if (!canRun) {
+                const errorMessage = `User ${params.contextUser.Email} does not have permission to run agent '${params.agent.Name}' (ID: ${params.agent.ID})`;
+                this.logStatus(`🚫 ${errorMessage}`, false, params);
+                throw new Error(errorMessage);
+            }
+
             // Wrap the progress callback to capture all events
             const wrappedParams = {
                 ...params,
@@ -380,6 +547,10 @@ export class BaseAgent {
             // Reset validation retry counters for this run
             this._validationRetryCount = 0;
             this._generalValidationRetryCount = 0;
+            this._contextRecoveryAttempts = 0;
+
+            // Store message lifecycle callback if provided
+            this._messageLifecycleCallback = params.onMessageLifecycle;
 
             // Initialize engines
             await this.initializeEngines(params.contextUser);
@@ -417,9 +588,32 @@ export class BaseAgent {
                 return await this.createFailureResult(config.errorMessage || 'Failed to load agent configuration', params.contextUser);
             }
 
+            // Preload agent data sources unless disabled
+            await this.preloadAgentData(wrappedParams);
+
             // now initialize the agent type which gets us the instance setup in our class plus also gets the agent type to initialize
             // its state
             await this.initializeAgentType(wrappedParams, config);
+
+            // Inject context memory (notes and examples) before execution
+            const userId = params.userId || params.contextUser?.ID;
+            const companyId = params.companyId;
+
+            // Extract input text from conversation messages (last user message)
+            const lastUserMessage = params.conversationMessages
+                .filter(m => m.role === 'user')
+                .pop();
+            const inputText = lastUserMessage?.content || '';
+
+            // Inject context memory (notes and examples) into conversation messages
+            await this.InjectContextMemory(
+                typeof inputText === 'string' ? inputText : '',
+                params.agent,
+                userId,
+                companyId,
+                params.contextUser,
+                wrappedParams.conversationMessages
+            );
 
             // Execute the agent's internal logic with wrapped parameters
             this.logStatus(`🚀 Executing agent '${params.agent.Name}' internal logic`, true, params);
@@ -504,6 +698,9 @@ export class BaseAgent {
                 throw new Error('Cancelled during execution');
             }
 
+            // Prune and compact expired messages before executing the next step
+            await this.pruneAndCompactExpiredMessages(params, stepCount);
+
             // Execute the current step based on previous decision or initial prompt
             this.logStatus(`🔄 Executing step ${stepCount + 1} for agent '${params.agent.Name}'`, true, params);
             const nextStep = await this.executeNextStep<P>(params, config, currentNextStep);
@@ -548,6 +745,97 @@ export class BaseAgent {
     protected async initializeEngines(contextUser?: UserInfo): Promise<void> {
         await AIEngine.Instance.Config(false, contextUser);
         await ActionEngineServer.Instance.Config(false, contextUser);
+    }
+
+    /**
+     * Storage for injected memory context to prepend to prompts
+     */
+    private _memoryContext: string = '';
+
+    /**
+     * Storage for injected notes and examples to include in result
+     */
+    private _injectedMemory: { notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] } = { notes: [], examples: [] };
+
+    /**
+     * Inject notes and examples into agent context memory.
+     * Called automatically before agent execution if injection is enabled on the agent.
+     * Injects memory context directly into conversation messages array.
+     *
+     * @param input - The user input text for semantic search
+     * @param agent - The agent configuration entity
+     * @param userId - Optional user ID for scoping
+     * @param companyId - Optional company ID for scoping
+     * @param contextUser - User context
+     * @param conversationMessages - The conversation messages array to inject into
+     * @returns Object containing injected notes and examples
+     */
+    protected async InjectContextMemory(
+        input: string,
+        agent: AIAgentEntityExtended,
+        userId?: string,
+        companyId?: string,
+        contextUser?: UserInfo,
+        conversationMessages?: ChatMessage[]
+    ): Promise<{ notes: AIAgentNoteEntity[]; examples: AIAgentExampleEntity[] }> {
+        // Check if injection is enabled
+        if (!agent.InjectNotes && !agent.InjectExamples) {
+            return { notes: [], examples: [] };
+        }
+
+        const injector = new AgentContextInjector();
+
+        // Get notes if injection enabled
+        const notes = agent.InjectNotes
+            ? await injector.GetNotesForContext({
+                agentId: agent.ID,
+                userId,
+                companyId,
+                currentInput: input,
+                strategy: agent.NoteInjectionStrategy as 'Relevant' | 'Recent' | 'All',
+                maxNotes: agent.MaxNotesToInject || 5,
+                contextUser: contextUser!
+            })
+            : [];
+
+        // Get examples if injection enabled
+        const examples = agent.InjectExamples
+            ? await injector.GetExamplesForContext({
+                agentId: agent.ID,
+                userId,
+                companyId,
+                currentInput: input,
+                strategy: agent.ExampleInjectionStrategy as 'Semantic' | 'Recent' | 'Rated',
+                maxExamples: agent.MaxExamplesToInject || 3,
+                contextUser: contextUser!
+            })
+            : [];
+
+        // Format and inject memory context into conversation messages
+        if ((notes.length > 0 || examples.length > 0) && conversationMessages) {
+            const notesText = injector.FormatNotesForInjection(notes);
+            const examplesText = injector.FormatExamplesForInjection(examples);
+
+            this._memoryContext = '';
+            if (notesText) this._memoryContext += notesText + '\n\n';
+            if (examplesText) this._memoryContext += examplesText + '\n\n';
+
+            // Inject as system message at the start
+            conversationMessages.unshift({
+                role: 'system',
+                content: this._memoryContext
+            });
+
+            this.logStatus(
+                `💾 Injected ${notes.length} notes and ${examples.length} examples into conversation context`,
+                true
+            );
+        }
+
+        // Store for inclusion in result
+        this._injectedMemory = { notes, examples };
+
+        return { notes, examples };
     }
 
     /**
@@ -980,11 +1268,9 @@ export class BaseAgent {
         promptResult: AIPromptRunResult,
         currentPayload: P
     ): Promise<BaseAgentNextStep<P>> {
-        this.logStatus(`🤔 Processing next step for agent '${params.agent.Name}' with agent type '${agentType.Name}'`, true, params);
-
         // Let the agent type determine the next step
         this.logStatus(`🎯 Agent type '${agentType.Name}' determining next step`, true, params);
-        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this._agentTypeState);
+        const nextStep = await this.AgentTypeInstance.DetermineNextStep<P>(promptResult, params, currentPayload, this.AgentTypeState);
         return nextStep;
     }
 
@@ -1022,6 +1308,12 @@ export class BaseAgent {
                 return this.validateRetryNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
             case 'Failed':
                 return this.validateFailedNextStep<P>(params, nextStep, currentPayload, agentRun, currentStep);
+            case 'ForEach':
+                // ForEach loops are valid - no additional validation needed
+                return nextStep;
+            case 'While':
+                // While loops are valid - no additional validation needed
+                return nextStep;
             default:
                 // if we get here, the next step is not recognized, we can return a retry step
                 this.logError(`Invalid next step '${nextStep.step}' for agent '${params.agent.Name}'`, {
@@ -1116,9 +1408,34 @@ export class BaseAgent {
     ): Promise<BaseAgentNextStep<P>> {
         // check to make sure the current agent can execute the specified action
         const curAgentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID && aa.Status === 'Active');
-        const missingActions = nextStep.actions?.filter(action => 
-            !curAgentActions.some(aa => aa.Action.trim().toLowerCase() === action.name.trim().toLowerCase())
-        );
+        const missingActions = nextStep.actions?.filter(action => {
+            const actionName = action.name.trim().toLowerCase();
+
+            // Try exact match first
+            const exactMatch = curAgentActions.find(aa =>
+                aa.Action.trim().toLowerCase() === actionName
+            );
+            if (exactMatch) return false;  // Found exact match, not missing
+
+            // Fallback: Try CONTAINS search for partial matches
+            const containsMatches = curAgentActions.filter(aa =>
+                aa.Action.trim().toLowerCase().includes(actionName)
+            );
+
+            if (containsMatches.length === 1) {
+                // Exactly one partial match - use it and update action name
+                const correctedName = containsMatches[0].Action;
+                this.logStatus(`Action name fuzzy matched: '${action.name}' → '${correctedName}'`, true, params);
+                action.name = correctedName;  // Update to correct full name
+                return false;  // Found via contains, not missing
+            }
+
+            // No matches or ambiguous (multiple matches) - it's missing
+            if (containsMatches.length > 1) {
+                this.logStatus(`Ambiguous action name '${action.name}' matches ${containsMatches.length} actions: ${containsMatches.map(a => a.Action).join(', ')}`, true, params);
+            }
+            return true;
+        });
         // we should have zero missing actions, if we do, we need to log an error and return a retry step
         if (missingActions && missingActions.length > 0) {
             const missingActionNames = missingActions.map(a => a.name).join(', ');
@@ -1677,6 +1994,577 @@ export class BaseAgent {
     }
 
     /**
+     * Determines if a prompt execution error is fatal and should stop agent execution.
+     * Fatal errors are those that won't be resolved by retrying, such as context length
+     * exceeded (when no larger model is available), authentication failures, or invalid
+     * request format.
+     *
+     * @param promptResult - The result from prompt execution
+     * @returns true if the error is fatal and agent should terminate, false otherwise
+     * @protected
+     */
+    protected isFatalPromptError(promptResult: AIPromptRunResult): boolean {
+        // If no error info, not fatal (might be transient)
+        if (!promptResult?.chatResult?.errorInfo) {
+            return false;
+        }
+
+        const errorInfo = promptResult.chatResult.errorInfo;
+
+        // Check severity first - if marked as Fatal by the error analyzer, respect that
+        if (errorInfo.severity === 'Fatal') {
+            return true;
+        }
+
+        // Fatal error types that should stop agent execution immediately
+        // These won't be resolved by retrying the same prompt
+        const fatalErrorTypes: AIErrorType[] = [
+            'ContextLengthExceeded',  // No model can handle this context size (after failover attempts)
+            'Authentication',          // API key is invalid or missing
+            'InvalidRequest'           // Request format or parameters are wrong
+        ];
+
+        return fatalErrorTypes.includes(errorInfo.errorType);
+    }
+
+    /**
+     * Converts ChatMessageContent to a string representation.
+     * Handles both simple strings and content block arrays.
+     *
+     * @param content - The message content to convert
+     * @returns String representation of the content
+     * @protected
+     */
+    protected contentToString(content: ChatMessageContent): string {
+        if (typeof content === 'string') {
+            return content;
+        }
+
+        // Content is an array of blocks - convert to string
+        return content.map((block: ChatMessageContentBlock) => {
+            if (block.type === 'text') {
+                return block.content;
+            }
+            return `[${block.type}: ${block.content}]`;
+        }).join('\n');
+    }
+
+    /**
+     * Smart trimming of message content based on detected format.
+     * Attempts to preserve structure while reducing size.
+     *
+     * @param content - The message content to trim (must be string)
+     * @param maxLength - Maximum length for the trimmed content
+     * @returns Object with trimmed content and strategy used
+     * @protected
+     */
+    protected smartTrimContent(content: string, maxLength: number = 1000): { trimmed: string; strategy: string; originalLength: number } {
+        const originalLength = content.length;
+
+        // Try to parse as JSON
+        try {
+            const data = JSON.parse(content);
+
+            if (Array.isArray(data)) {
+                // JSON array - keep first 10 items
+                const itemsToKeep = 10;
+                if (data.length > itemsToKeep) {
+                    const truncated = data.slice(0, itemsToKeep);
+                    const trimmed = JSON.stringify(truncated, null, 2) +
+                        `\n\n... (${(data.length - itemsToKeep).toLocaleString()} more items truncated due to context length)`;
+                    return {
+                        trimmed,
+                        strategy: 'JSON array truncation',
+                        originalLength
+                    };
+                }
+            } else if (typeof data === 'object' && data !== null) {
+                // JSON object - keep structure but truncate long values
+                const truncated: any = {};
+                let fieldCount = 0;
+                const maxFields = 20;
+
+                for (const [key, value] of Object.entries(data)) {
+                    if (fieldCount >= maxFields) {
+                        truncated['...'] = `(${Object.keys(data).length - maxFields} more fields truncated)`;
+                        break;
+                    }
+                    if (typeof value === 'string' && value.length > 200) {
+                        truncated[key] = value.substring(0, 200) + '... (truncated)';
+                    } else if (Array.isArray(value) && value.length > 5) {
+                        truncated[key] = [...value.slice(0, 5), `... (${value.length - 5} more items)`];
+                    } else {
+                        truncated[key] = value;
+                    }
+                    fieldCount++;
+                }
+
+                return {
+                    trimmed: JSON.stringify(truncated, null, 2),
+                    strategy: 'JSON object field truncation',
+                    originalLength
+                };
+            }
+        } catch {
+            // Not JSON, continue to other strategies
+        }
+
+        // Try CSV detection (header + comma-separated values)
+        if (content.includes('\n')) {
+            const lines = content.split('\n');
+            const firstLine = lines[0];
+
+            // Check if first line looks like CSV header (contains commas)
+            if (firstLine.includes(',') && lines.length > 1) {
+                const rowsToKeep = 10;
+                if (lines.length > rowsToKeep + 1) {
+                    const header = lines[0];
+                    const dataRows = lines.slice(1, rowsToKeep + 1);
+                    const trimmed = [header, ...dataRows].join('\n') +
+                        `\n... (${(lines.length - rowsToKeep - 1).toLocaleString()} more rows truncated due to context length)`;
+                    return {
+                        trimmed,
+                        strategy: 'CSV row truncation',
+                        originalLength
+                    };
+                }
+            }
+        }
+
+        // Fallback: simple character truncation
+        if (content.length > maxLength) {
+            return {
+                trimmed: content.substring(0, maxLength) + '\n\n... (truncated due to context length)',
+                strategy: 'character truncation',
+                originalLength
+            };
+        }
+
+        // Content is already small enough
+        return {
+            trimmed: content,
+            strategy: 'no truncation needed',
+            originalLength
+        };
+    }
+
+    /**
+     * Recovery Strategy 1: Remove oldest action-result messages.
+     * Targets messages older than minAge turns for removal.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn/step number
+     * @param minAge - Minimum age in turns for removal (default: 5)
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected recoveryStrategy_RemoveOldestActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge: number = 5
+    ): { tokensSaved: number; strategyName: string } {
+        let tokensSaved = 0;
+        const removedIndices: number[] = [];
+
+        // Find action-result messages older than minAge turns
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                age: (msg as AgentChatMessage).metadata?.turnAdded
+                    ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
+                    : 0,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result'
+            }))
+            .filter(c => c.isActionResult && c.age >= minAge)
+            .sort((a, b) => b.age - a.age); // Oldest first
+
+        // Remove messages until we've saved enough
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            removedIndices.push(candidate.index);
+            tokensSaved += candidate.tokens;
+
+            this.logStatus(
+                `Removing action-result from ${candidate.age} turns ago (${candidate.tokens} tokens)`,
+                true,
+                params
+            );
+        }
+
+        // Remove in reverse order to maintain indices
+        removedIndices.sort((a, b) => b - a).forEach(index => {
+            const removed = params.conversationMessages.splice(index, 1)[0];
+
+            // Emit lifecycle event
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentStepCount,
+                messageIndex: index,
+                message: removed as AgentChatMessage,
+                reason: 'Context recovery - oldest action results',
+                tokensSaved: this.estimateTokens(removed.content)
+            });
+        });
+
+        return {
+            tokensSaved,
+            strategyName: `Removed ${removedIndices.length} old action-results (${minAge}+ turns)`
+        };
+    }
+
+    /**
+     * Recovery Strategy 2: Compact old action-result messages.
+     * Uses smart trimming to reduce size while preserving some content.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @param currentStepCount - Current turn/step number
+     * @param minAge - Minimum age in turns for compaction (default: 3)
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected async recoveryStrategy_CompactOldActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number,
+        currentStepCount: number,
+        minAge: number = 3
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        let tokensSaved = 0;
+        let compactedCount = 0;
+
+        // Find action-result messages to compact
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                age: (msg as AgentChatMessage).metadata?.turnAdded
+                    ? currentStepCount - (msg as AgentChatMessage).metadata!.turnAdded
+                    : 0,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
+            }))
+            .filter(c => c.isActionResult && c.age >= minAge && !c.alreadyCompacted)
+            .sort((a, b) => b.age - a.age); // Oldest first
+
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            const originalTokens = candidate.tokens;
+            const originalMessage = candidate.message as AgentChatMessage;
+            const originalContent = typeof originalMessage.content === 'string'
+                ? originalMessage.content
+                : JSON.stringify(originalMessage.content);
+
+            // Use smart trim (faster than AI summary, no API cost)
+            const compactedContent = await this.compactMessage(
+                originalMessage,
+                {
+                    compactMode: 'First N Chars',
+                    compactLength: 500,
+                    compactPromptId: '',
+                    originalLength: originalContent.length
+                },
+                params
+            );
+
+            const newTokens = this.estimateTokens(compactedContent);
+            const saved = originalTokens - newTokens;
+
+            if (saved > 0) {
+                // Update message in place with compacted content
+                params.conversationMessages[candidate.index] = {
+                    ...originalMessage,
+                    content: compactedContent,
+                    metadata: {
+                        ...originalMessage.metadata,
+                        wasCompacted: true,
+                        originalLength: originalContent.length,
+                        tokensSaved: saved
+                    }
+                };
+                tokensSaved += saved;
+                compactedCount++;
+
+                this.logStatus(
+                    `Compacted action-result from ${candidate.age} turns ago (saved ${saved} tokens)`,
+                    true,
+                    params
+                );
+            }
+        }
+
+        return {
+            tokensSaved,
+            strategyName: `Compacted ${compactedCount} old action-results (${minAge}+ turns)`
+        };
+    }
+
+    /**
+     * Recovery Strategy 3: Aggressively compact ALL action-result messages.
+     * Used when gentler strategies haven't freed enough space.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected async recoveryStrategy_CompactAllActionResults(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): Promise<{ tokensSaved: number; strategyName: string }> {
+        let tokensSaved = 0;
+        let compactedCount = 0;
+
+        // Find ALL action-result messages that aren't already compacted
+        const candidates = params.conversationMessages
+            .map((msg, index) => ({
+                message: msg,
+                index: index,
+                tokens: this.estimateTokens(msg.content),
+                isActionResult: (msg as AgentChatMessage).metadata?.messageType === 'action-result',
+                alreadyCompacted: (msg as AgentChatMessage).metadata?.wasCompacted === true
+            }))
+            .filter(c => c.isActionResult && !c.alreadyCompacted && c.tokens > 200)
+            .sort((a, b) => b.tokens - a.tokens); // Largest first
+
+        for (const candidate of candidates) {
+            if (tokensSaved >= tokensToSave) break;
+
+            const originalTokens = candidate.tokens;
+            const originalMessage = candidate.message as AgentChatMessage;
+            const originalContent = typeof originalMessage.content === 'string'
+                ? originalMessage.content
+                : JSON.stringify(originalMessage.content);
+
+            // Aggressive compaction - keep only first 200 chars
+            const compactedContent = await this.compactMessage(
+                originalMessage,
+                {
+                    compactMode: 'First N Chars',
+                    compactLength: 200,
+                    compactPromptId: '',
+                    originalLength: originalContent.length
+                },
+                params
+            );
+
+            const newTokens = this.estimateTokens(compactedContent);
+            const saved = originalTokens - newTokens;
+
+            if (saved > 0) {
+                // Update message in place with compacted content
+                params.conversationMessages[candidate.index] = {
+                    ...originalMessage,
+                    content: compactedContent,
+                    metadata: {
+                        ...originalMessage.metadata,
+                        wasCompacted: true,
+                        originalLength: originalContent.length,
+                        tokensSaved: saved
+                    }
+                };
+                tokensSaved += saved;
+                compactedCount++;
+            }
+        }
+
+        return {
+            tokensSaved,
+            strategyName: `Aggressively compacted ${compactedCount} action-results`
+        };
+    }
+
+    /**
+     * Recovery Strategy 4: Preserve beginning of last user message (fallback).
+     * Keeps the first 200-300 tokens of the user's request (which usually contains the core ask)
+     * and adds a clear marker that content was trimmed due to context limits.
+     *
+     * @param params - Agent execution parameters
+     * @param tokensToSave - Target number of tokens to free
+     * @returns Result with tokens saved and strategy description
+     * @protected
+     */
+    protected recoveryStrategy_TrimLastUserMessage(
+        params: ExecuteAgentParams,
+        tokensToSave: number
+    ): { tokensSaved: number; strategyName: string } {
+        // Find the last user message (reverse search for compatibility)
+        let lastUserMessageIndex = -1;
+        for (let i = params.conversationMessages.length - 1; i >= 0; i--) {
+            if (params.conversationMessages[i].role === 'user') {
+                lastUserMessageIndex = i;
+                break;
+            }
+        }
+
+        if (lastUserMessageIndex === -1) {
+            return { tokensSaved: 0, strategyName: 'No user message to trim' };
+        }
+
+        const lastUserMessage = params.conversationMessages[lastUserMessageIndex];
+        const originalTokens = this.estimateTokens(lastUserMessage.content);
+
+        // Keep first 200-300 tokens worth (approximately 800-1200 characters)
+        const contentString = this.contentToString(lastUserMessage.content);
+        const targetChars = 1000; // Roughly 250 tokens
+
+        if (contentString.length <= targetChars) {
+            // Message is already short enough
+            return { tokensSaved: 0, strategyName: 'User message already short' };
+        }
+
+        // Keep the beginning (most important part with the request)
+        const trimResult = this.smartTrimContent(contentString, targetChars);
+
+        // Add clear marker that we trimmed it
+        const newContent = trimResult.trimmed +
+            '\n\n<CONTEXT_LIMIT_REACHED>\n' +
+            'Note: The conversation has exceeded the model\'s context window. ' +
+            'The remainder of your message was trimmed to fit within the limit. ' +
+            'The beginning of your request (shown above) has been preserved.\n' +
+            '</CONTEXT_LIMIT_REACHED>';
+
+        const newTokens = this.estimateTokens(newContent);
+        const saved = originalTokens - newTokens;
+
+        if (saved > 0) {
+            params.conversationMessages[lastUserMessageIndex] = {
+                ...lastUserMessage,
+                content: newContent
+            };
+        }
+
+        return {
+            tokensSaved: saved,
+            strategyName: 'Preserved beginning of user message with context limit marker'
+        };
+    }
+
+    /**
+     * Attempts to recover from a context length exceeded error using multiple strategies.
+     * Uses escalating strategies: remove old results → compact old results → compact all → trim user message.
+     * This approach preserves the user's original request while removing stale action results.
+     *
+     * @param params - Agent execution parameters (conversationMessages will be modified)
+     * @param payload - Current payload to carry forward
+     * @param errorMessage - The original error message from the failed prompt
+     * @param modelSelectionInfo - Model selection information containing the model and vendor used
+     * @returns A Retry step with reduced context or Failed if recovery unsuccessful
+     * @protected
+     */
+    protected async attemptContextRecovery<P>(
+        params: ExecuteAgentParams,
+        payload: P,
+        errorMessage: string,
+        modelSelectionInfo?: AIModelSelectionInfo
+    ): Promise<BaseAgentNextStep<P>> {
+        this.logStatus(
+            `⚠️ Context length exceeded - attempting recovery with multi-strategy approach`,
+            true,
+            params
+        );
+
+        // Calculate how many tokens we need to save
+        const modelLimit = this.getModelContextLimit(modelSelectionInfo);
+        const currentTokens = this.estimateConversationTokens(params.conversationMessages);
+        const tokensToSave = currentTokens - Math.floor(modelLimit * 0.9); // Target 90% usage
+
+        this.logStatus(
+            `Need to save ~${tokensToSave} tokens (current: ${currentTokens}, limit: ${modelLimit})`,
+            true,
+            params
+        );
+
+        if (tokensToSave <= 0) {
+            // Already under limit, this shouldn't happen but handle gracefully
+            this.logStatus(`Already under context limit, retrying...`, true, params);
+            return {
+                step: 'Retry' as const,
+                retryReason: 'Context recovery - already under limit',
+                retryInstructions: 'The context is now within limits.',
+                terminate: false,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+
+        // Get current step count for age calculations
+        const currentStepCount = this._agentRun?.Steps?.length || 0;
+
+        // Try multiple recovery strategies in order
+        const strategies = [
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 5),
+            () => this.recoveryStrategy_CompactOldActionResults(params, tokensToSave, currentStepCount, 3),
+            () => this.recoveryStrategy_RemoveOldestActionResults(params, tokensToSave, currentStepCount, 2),
+            () => this.recoveryStrategy_CompactAllActionResults(params, tokensToSave),
+            () => Promise.resolve(this.recoveryStrategy_TrimLastUserMessage(params, tokensToSave))
+        ];
+
+        let tokensSaved = 0;
+        const strategiesUsed: string[] = [];
+
+        for (const strategy of strategies) {
+            const result = await strategy();
+            tokensSaved += result.tokensSaved;
+            if (result.tokensSaved > 0) {
+                strategiesUsed.push(result.strategyName);
+                this.logStatus(`${result.strategyName}: saved ${result.tokensSaved} tokens`, true, params);
+            }
+
+            if (tokensSaved >= tokensToSave) {
+                break;
+            }
+        }
+
+        // Check if we saved enough
+        if (tokensSaved < tokensToSave * 0.5) {
+            this.logStatus(
+                `❌ Context recovery insufficient: only saved ${tokensSaved}/${tokensToSave} tokens`,
+                true,
+                params
+            );
+            return {
+                errorMessage: `Context recovery failed: only saved ${tokensSaved}/${tokensToSave} tokens. ${errorMessage}`,
+                step: 'Failed' as const,
+                terminate: true,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+
+        this.logStatus(
+            `✅ Context recovery successful: saved ${tokensSaved} tokens using ${strategiesUsed.length} strategies`,
+            true,
+            params
+        );
+
+        // Build detailed description of what was done
+        const strategyDescriptions = strategiesUsed.map((strategy, index) =>
+            `${index + 1}. ${strategy}`
+        ).join('\n');
+
+        // Return Retry step to give agent another chance
+        return {
+            step: 'Retry' as const,
+            retryReason: `Context recovery successful - ${tokensSaved} tokens freed`,
+            retryInstructions: `The conversation exceeded the model's context limit (${modelLimit} tokens). I've applied the following context recovery strategies to free up ${tokensSaved} tokens:
+
+${strategyDescriptions}
+
+The context is now within limits. Please retry your request with the recovered context.`,
+            terminate: false,
+            previousPayload: payload,
+            newPayload: payload
+        };
+    }
+
+    /**
      * Processes the next step based on agent type determination.
      * 
      * @param {ExecuteAgentParams} params - Original execution parameters
@@ -1887,8 +2775,113 @@ export class BaseAgent {
     }
 
     /**
+     * Prepares conversation messages for sub-agent execution based on database-configured message mode.
+     *
+     * Message passing is controlled by MessageMode and MaxMessages fields stored in either:
+     * - AIAgentRelationship table (for related sub-agents via AgentRelationships)
+     * - AIAgent table (for child sub-agents via ParentID)
+     *
+     * **Message Modes:**
+     * - `'None'`: Fresh start - only context message and task message (default)
+     * - `'All'`: Pass complete parent conversation history
+     * - `'Latest'`: Pass most recent N messages (where N = MaxMessages)
+     * - `'Bookend'`: Pass first 2 messages + indicator + most recent (N-2) messages
+     *
+     * **Priority:** AIAgentRelationship.MessageMode takes precedence over AIAgent.MessageMode
+     * to allow different parent agents to pass messages differently to the same sub-agent.
+     *
+     * Subclasses can override this method to implement custom message preparation logic
+     * specific to their domain (e.g., Skip agents adding special context).
+     *
+     * @param {ExecuteAgentParams} params - Execution parameters with conversation history
+     * @param {AgentSubAgentRequest} subAgentRequest - Sub-agent request details
+     * @param {AIAgentEntityExtended} subAgent - The sub-agent entity
+     * @param {ChatMessage | undefined} contextMessage - Optional context from SubAgentContextPaths
+     * @returns {ChatMessage[]} Prepared message array for sub-agent execution
+     *
+     * @protected
+     */
+    protected prepareSubAgentMessages(
+        params: ExecuteAgentParams,
+        subAgentRequest: AgentSubAgentRequest,
+        subAgent: AIAgentEntityExtended,
+        contextMessage?: ChatMessage
+    ): ChatMessage[] {
+        const engine = AIEngine.Instance;
+        let messages: ChatMessage[] = [];
+
+        // Check for related sub-agent configuration (AIAgentRelationship)
+        const relationship = engine.AgentRelationships.find(
+            r => r.AgentID === params.agent.ID && r.SubAgentID === subAgent.ID
+        );
+
+        // Get MessageMode and MaxMessages from either relationship or child agent
+        let messageMode = relationship?.MessageMode || subAgent.MessageMode || 'None';
+        let maxMessages = relationship?.MaxMessages || subAgent.MaxMessages || null;
+
+        // Apply message mode
+        switch (messageMode) {
+            case 'None':
+                // Fresh start - no conversation history, only context and task
+                // Messages are added after the switch statement
+                break;
+
+            case 'All':
+                // Pass all parent conversation history
+                messages = [...params.conversationMessages];
+                break;
+
+            case 'Latest':
+                // Pass most recent N messages
+                if (maxMessages && maxMessages > 0) {
+                    messages = params.conversationMessages.slice(-maxMessages);
+                } else {
+                    messages = [...params.conversationMessages];
+                }
+                break;
+
+            case 'Bookend':
+                // Pass first 2 + most recent (N-2) with indicator message between
+                if (maxMessages && maxMessages > 2 && params.conversationMessages.length > maxMessages) {
+                    const firstTwo = params.conversationMessages.slice(0, 2);
+                    const remaining = params.conversationMessages.slice(-(maxMessages - 2));
+                    const omittedCount = params.conversationMessages.length - maxMessages;
+
+                    messages = [
+                        ...firstTwo,
+                        {
+                            role: 'system',
+                            content: `[${omittedCount} messages omitted for context management]`
+                        },
+                        ...remaining
+                    ];
+                } else {
+                    messages = [...params.conversationMessages];
+                }
+                break;
+
+            default:
+                // Fallback to 'None' for any unrecognized mode
+                break;
+        }
+
+        // Add context message if provided (for all modes)
+        if (contextMessage) {
+            messages.push(contextMessage);
+        }
+
+        // Always add the task message (for all modes)
+        messages.push({
+            role: 'user',
+            content: subAgentRequest.message
+        });
+
+        return messages;
+    }
+
+    /**
      * Executes a sub-agent synchronously.
-     * 
+     *
      * This method creates a new instance of AgentRunner to execute a sub-agent.
      * The sub-agent receives the provided message/context and runs to completion.
      * If terminateAfter is true, the parent agent will not continue after the
@@ -1914,25 +2907,25 @@ export class BaseAgent {
      */
     protected async ExecuteSubAgent<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
-        subAgentRequest: AgentSubAgentRequest<SC>, 
+        subAgentRequest: AgentSubAgentRequest<SC>,
         subAgent: AIAgentEntityExtended,
         stepEntity: AIAgentRunStepEntityExtended,
-        payload?: SR
+        payload?: SR,
+        contextMessage?: ChatMessage
     ): Promise<ExecuteAgentResult<SR>> {
         try {
             this.logStatus(`🤖 Executing sub-agent '${subAgentRequest.name}'`, true, params);
-            
+
             // Create a new AgentRunner instance
             const runner = new AgentRunner();
-            
-            // Prepare messages for sub-agent, adding the context message
-            const subAgentMessages: ChatMessage[] = [
-                // don't include the full conversation of the parent, just the subAgentRequest - we previously did this: ...params.conversationMessages,
-                {
-                    role: 'user',
-                    content: subAgentRequest.message
-                }
-            ];
+
+            // Prepare messages for sub-agent using database-configured message mode
+            const subAgentMessages = this.prepareSubAgentMessages(
+                params,
+                subAgentRequest,
+                subAgent,
+                contextMessage
+            );
             
             // Set parent run ID in the sub-agent's execution
             // This would need to be passed through the AgentRunner in a real implementation
@@ -2105,8 +3098,42 @@ export class BaseAgent {
     }
 
     /**
+     * Formats a parameter value for display in action execution messages.
+     * Truncates long strings and formats objects/arrays for readability.
+     *
+     * @param {any} value - The parameter value to format
+     * @param {number} maxLength - Maximum length before truncation (default: 100)
+     * @returns {string} Formatted value suitable for message display
+     * @private
+     */
+    private formatParamValueForMessage(value: any, maxLength: number = 100): string {
+        if (value === null || value === undefined) {
+            return 'null';
+        }
+
+        let stringValue: string;
+
+        if (typeof value === 'string') {
+            stringValue = value;
+        } else if (typeof value === 'object') {
+            // For objects/arrays, use compact JSON
+            stringValue = JSON.stringify(value);
+        } else {
+            stringValue = String(value);
+        }
+
+        // Truncate if too long
+        if (stringValue.length > maxLength) {
+            return `\`${stringValue.substring(0, maxLength)}...\``;
+        }
+
+        // Use inline code formatting for values
+        return `\`${stringValue}\``;
+    }
+
+    /**
      * Gets the agent type name for a given type ID.
-     * 
+     *
      * @param {string} typeID - The agent type ID
      * @returns {string} The agent type name or 'Unknown'
      * @private
@@ -2185,6 +3212,9 @@ export class BaseAgent {
         // Create AIAgentRunEntity
         this._agentRun = await this._metadata.GetEntityObject<AIAgentRunEntityExtended>('MJ: AI Agent Runs', params.contextUser);
         this._agentRun.AgentID = params.agent.ID;
+        if (params.conversationDetailId) {
+            this._agentRun.ConversationDetailID = params.conversationDetailId;
+        }
         this._agentRun.Status = 'Running';
         this._agentRun.StartedAt = new Date();
         this._agentRun.UserID = params.contextUser?.ID || null;
@@ -2275,7 +3305,7 @@ export class BaseAgent {
             
             if (validationResult) {
                 // Create validation step
-                const stepEntity = await this.createStepEntity('Validation', 'Agent Validation', contextUser);
+                const stepEntity = await this.createStepEntity({ stepType: 'Validation', stepName: 'Agent Validation', contextUser });
                 
                 
                 // Update step entity
@@ -2285,7 +3315,7 @@ export class BaseAgent {
             }
             
             // Validation successful - create success step
-            const stepEntity = await this.createStepEntity('Validation', 'Agent Validation', contextUser);
+            const stepEntity = await this.createStepEntity({ stepType: 'Validation', stepName: 'Agent Validation', contextUser });
             
             
             await this.finalizeStepEntity(stepEntity, true);
@@ -2298,43 +3328,49 @@ export class BaseAgent {
 
     /**
      * Creates a step entity for tracking.
-     * 
+     *
      * @private
-     * @param {string} stepType - The type of step
-     * @param {string} stepName - Human-readable name for the step
-     * @param {UserInfo} contextUser - User context for the operation
-     * @param {string} [targetId] - Optional ID of the target entity
-     * @param {any} [inputData] - Optional input data to capture for this step
-     * @param {string} [targetLogId] - Optional ID of the execution log (ActionExecutionLog, AIPromptRun, or AIAgentRun)
+     * @param params - Step creation parameters
      * @returns {Promise<AIAgentRunStepEntityExtended>} - The created step entity
      */
-    private async createStepEntity(stepType: AIAgentRunStepEntityExtended["StepType"], stepName: string, contextUser: UserInfo, targetId?: string, inputData?: any, targetLogId?: string, payloadAtStart?: any, payloadAtEnd?: any): Promise<AIAgentRunStepEntityExtended> {
-        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', contextUser);
-        
+    private async createStepEntity(params: {
+        stepType: AIAgentRunStepEntityExtended["StepType"];
+        stepName: string;
+        contextUser: UserInfo;
+        targetId?: string;
+        inputData?: any;
+        targetLogId?: string;
+        payloadAtStart?: any;
+        payloadAtEnd?: any;
+        parentId?: string;
+    }): Promise<AIAgentRunStepEntityExtended> {
+        const stepEntity = await this._metadata.GetEntityObject<AIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', params.contextUser);
+
         stepEntity.AgentRunID = this._agentRun!.ID;
         // Step number is based on current count of steps + 1
         stepEntity.StepNumber = (this._agentRun!.Steps?.length || 0) + 1;
-        stepEntity.StepType = stepType;
+        stepEntity.StepType = params.stepType;
         // Include hierarchy breadcrumb in StepName for better logging
-        stepEntity.StepName = this.formatHierarchicalMessage(stepName);
+        stepEntity.StepName = this.formatHierarchicalMessage(params.stepName);
         // check to see if targetId is a valid UUID
-        if (targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId)) {
+        if (params.targetId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(params.targetId)) {
             // If not valid, we can just ignore it, but console.warn
-            console.warn(`Invalid target ID format: ${targetId}`);
+            console.warn(`Invalid target ID format: ${params.targetId}`);
         }
         else {
-            stepEntity.TargetID = targetId || null;
+            stepEntity.TargetID = params.targetId || null;
         }
-        stepEntity.TargetLogID = targetLogId || null;
+        stepEntity.TargetLogID = params.targetLogId || null;
+        stepEntity.ParentID = params.parentId || null;  // Link to parent step (e.g., loop step)
         stepEntity.Status = 'Running';
         stepEntity.StartedAt = new Date();
-        stepEntity.PayloadAtStart = payloadAtStart ? JSON.stringify(payloadAtStart) : null;
-        stepEntity.PayloadAtEnd = payloadAtEnd ? JSON.stringify(payloadAtEnd) : null;
+        stepEntity.PayloadAtStart = params.payloadAtStart ? JSON.stringify(params.payloadAtStart) : null;
+        stepEntity.PayloadAtEnd = params.payloadAtEnd ? JSON.stringify(params.payloadAtEnd) : null;
         
         // Populate InputData if provided
-        if (inputData) {
+        if (params.inputData) {
             stepEntity.InputData = JSON.stringify({
-                ...inputData,
+                ...params.inputData,
                 context: {
                     agentHierarchy: this._agentHierarchy,
                     depth: this._depth,
@@ -2432,8 +3468,83 @@ export class BaseAgent {
     }
 
     /**
+     * Helper method to get a value from a nested object path
+     * Supports dot notation and array indexing
+     * @private
+     */
+    private getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+
+        for (const part of parts) {
+            if (!part) continue;
+
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
+            } else {
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
+            }
+        }
+
+        return current;
+    }
+
+    /**
+     * Default parameter resolution for loop body parameters (used by Flow agents)
+     * Resolves item.field, payload.field, item, index, or static values
+     * @private
+     */
+    private resolveLoopParams(
+        params: Record<string, unknown>,
+        item: any,
+        index: number,
+        payload: any
+    ): Record<string, unknown> {
+        const resolved: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(params)) {
+            if (typeof value === 'string') {
+                if (value.startsWith('item.')) {
+                    resolved[key] = this.getValueFromPath(item, value.substring(5));
+                } else if (value.startsWith('payload.')) {
+                    resolved[key] = this.getValueFromPath(payload, value.substring(8));
+                } else if (value === 'item') {
+                    resolved[key] = item;
+                } else if (value === 'index') {
+                    resolved[key] = index;
+                } else {
+                    resolved[key] = value;  // Static value
+                }
+            } else {
+                resolved[key] = value;
+            }
+        }
+
+        return resolved;
+    }
+
+    /**
      * Formats a message with agent hierarchy for streaming/progress updates.
-     * 
+     *
      * @private
      * @param {string} baseMessage - The base message to format
      * @returns {string} - The formatted message with hierarchy breadcrumb
@@ -2511,23 +3622,28 @@ export class BaseAgent {
         // Execute based on the previous decision using standard logic
         switch (previousDecision.step) {
             case 'Retry':
+                // Check if this is a message expansion request
+                if (previousDecision.messageIndex !== undefined) {
+                    // Handle message expansion before retrying
+                    const currentStepCount = this._agentRun?.Steps?.length || 0;
+                    this.executeExpandMessageStep(previousDecision, params, currentStepCount);
+                }
                 return await this.executePromptStep(params, config, previousDecision);
             case 'Sub-Agent':
-                return await this.executeSubAgentStep<P, P>(params, previousDecision!);
+                return await this.processSubAgentStep<P, P>(params, previousDecision!);
             case 'Actions':
-                return await this.executeActionsStep(params, config, previousDecision);
+                return await this.executeActionsStep(params, previousDecision, undefined);
             case 'Chat':
                 return await this.executeChatStep(params, previousDecision);
             case 'Success':
-                const pd = previousDecision as BaseAgentNextStep<P> & { previousPayload?: { taskComplete?: boolean } };
                 if (previousDecision.terminate) {
                     // If parent agent previously requested to auto-terminate, after a successful
-                    // sub-agent run, we can finalize the agent run                    
-                    return { 
+                    // sub-agent run, we can finalize the agent run
+                    return {
                         terminate: true,
-                        step: 'Success', 
+                        step: 'Success',
                         previousPayload: previousDecision.previousPayload,
-                        newPayload: previousDecision.newPayload 
+                        newPayload: previousDecision.newPayload
                     };
                 }
                 else {
@@ -2537,9 +3653,9 @@ export class BaseAgent {
                 }
             case 'Failed':
                 if (previousDecision.terminate) {
-                    return { 
+                    return {
                         terminate: true,
-                        step: 'Failed', 
+                        step: 'Failed',
                         previousPayload: previousDecision.previousPayload,
                         newPayload: previousDecision.newPayload
                     };
@@ -2549,6 +3665,10 @@ export class BaseAgent {
                     // so we will retry the prompt step
                     return await this.executePromptStep(params, config, previousDecision);
                 }
+            case 'ForEach':
+                return await this.executeForEachLoop(params, config, previousDecision);
+            case 'While':
+                return await this.executeWhileLoop(params, config, previousDecision);
             default:
                 throw new Error(`Unsupported next step: ${previousDecision.step}`);
         }
@@ -2583,7 +3703,7 @@ export class BaseAgent {
         
         // Prepare prompt parameters
         const payload = previousDecision?.newPayload || params.payload;
-        const stepEntity = await this.createStepEntity('Prompt', 'Execute Agent Prompt', params.contextUser, promptId, inputData, undefined, payload);
+        const stepEntity = await this.createStepEntity({ stepType: 'Prompt', stepName: 'Execute Agent Prompt', contextUser: params.contextUser, targetId: promptId, inputData, payloadAtStart: payload });
         
         try {
             // Report prompt execution progress with context
@@ -2660,23 +3780,69 @@ export class BaseAgent {
             // Execute the prompt
             const promptResult = await this.executePrompt(promptParams);
 
+            // Remove temporary messages before processing prompt results
+            // This includes loop results and sub-agent completion messages
+            params.conversationMessages = params.conversationMessages.filter(m => {
+                const metadata = (m as any).metadata;
+                return !metadata?._loopResults && !metadata?._subAgentResult;
+            });
+
             // Update step entity with AIPromptRun ID if available
             if (promptResult.promptRun?.ID) {
                 stepEntity.TargetLogID = promptResult.promptRun.ID;
                 stepEntity.PromptRun = promptResult.promptRun; // Store the prompt run object
                 // don't save here, we save when we call finalizeStepEntity()
             }
-                        
+
+            // Check if prompt execution failed
+            if (!promptResult.success) {
+                await this.finalizeStepEntity(stepEntity, false, promptResult.errorMessage);
+
+                // Check if this is a fatal error that shouldn't be retried
+                const isFatal = this.isFatalPromptError(promptResult);
+
+                // Check if this is a context length overflow that we can recover from
+                const isContextOverflow = isFatal &&
+                    promptResult.chatResult?.errorInfo?.errorType === 'ContextLengthExceeded';
+
+                if (isContextOverflow && this._contextRecoveryAttempts < this.MAX_RECOVERY_ATTEMPTS) {
+                    // Attempt context recovery with multiple strategies
+                    this._contextRecoveryAttempts++;
+
+                    this.logStatus(
+                        `⚠️ Context length exceeded - attempting recovery by trimming conversation`,
+                        true,
+                        params
+                    );
+
+                    return await this.attemptContextRecovery(params, payload, promptResult.errorMessage || 'Context length exceeded', promptResult.modelSelectionInfo);
+                }
+
+                this.logStatus(
+                    `❌ Prompt execution failed: ${promptResult.errorMessage} (fatal: ${isFatal})`,
+                    true,
+                    params
+                );
+
+                return {
+                    errorMessage: promptResult.errorMessage || 'Prompt execution failed',
+                    step: 'Failed' as const,
+                    terminate: isFatal, // Terminate for fatal errors, allow retry for transient errors
+                    previousPayload: payload,
+                    newPayload: payload
+                };
+            }
+
             // Check for cancellation after prompt execution
             if (params.cancellationToken?.aborted) {
                 await this.finalizeStepEntity(stepEntity, false, 'Cancelled during prompt execution');
                 const cancelledResult = await this.createCancelledResult('Cancelled during prompt execution', params.contextUser);
-                return { 
+                return {
                     ...cancelledResult,
-                    terminate: true, 
+                    terminate: true,
                     step: 'Failed', // Cancelled is treated as failed
                     previousPayload: cancelledResult.payload,
-                    newPayload: cancelledResult.payload // No changes, just return the same payload   
+                    newPayload: cancelledResult.payload // No changes, just return the same payload
                 }
             }
 
@@ -2808,11 +3974,12 @@ export class BaseAgent {
 
 
     /**
-     * Executes a sub-agent step and tracks it.
-     * 
+     * Executes a child sub-agent step (ParentID relationship) and tracks it.
+     * Child agents use direct payload inheritance with downstream/upstream paths.
+     *
      * @private
      */
-    private async executeSubAgentStep<SC = any, SR = any>(
+    private async executeChildSubAgentStep<SC = any, SR = any>(
         params: ExecuteAgentParams<SC>,
         previousDecision?: BaseAgentNextStep<SR, SC>,
     ): Promise<BaseAgentNextStep<SR, SC>> {
@@ -2857,7 +4024,7 @@ export class BaseAgent {
         if (!subAgentEntity) {
             throw new Error(`Sub-agent '${subAgentRequest.name}' not found`);
         }
-        const stepEntity = await this.createStepEntity('Sub-Agent', `Execute Sub-Agent: ${subAgentRequest.name}`, params.contextUser, subAgentEntity.ID, inputData, undefined, previousDecision.newPayload);
+        const stepEntity = await this.createStepEntity({ stepType: 'Sub-Agent', stepName: `Execute Sub-Agent: ${subAgentRequest.name}`, contextUser: params.contextUser, targetId: subAgentEntity.ID, inputData, payloadAtStart: previousDecision.newPayload });
         
         // Increment execution count for this sub-agent
         this.incrementExecutionCount(subAgentEntity.ID);
@@ -2919,12 +4086,14 @@ export class BaseAgent {
             stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
 
             // Execute sub-agent with scoped payload
+            // Child sub-agents don't use context messages (they inherit payload directly)
             const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
                 params,
                 subAgentRequest,
                 subAgentEntity,
                 stepEntity,
-                scopedPayload as SR
+                scopedPayload as SR,
+                undefined // No context message for child sub-agents
             );
             
             let mergedPayload = previousDecision.newPayload; // Start with the original payload
@@ -3103,10 +4272,16 @@ export class BaseAgent {
             const resultMessage = subAgentResult.success
                 ? `Sub-agent completed successfully:\n${JSON.stringify(subAgentSummary, null, 2)}`
                 : `Sub-agent failed:\n${JSON.stringify(subAgentSummary, null, 2)}`;
-                
+
             params.conversationMessages.push({
                 role: 'user',
-                content: resultMessage
+                content: resultMessage,
+                metadata: {
+                    _temporary: true,
+                    _subAgentResult: true,
+                    subAgentName: subAgentRequest.name,
+                    subAgentId: subAgentEntity.ID
+                }
             });
             
             // Set PayloadAtEnd with the merged payload
@@ -3148,14 +4323,491 @@ export class BaseAgent {
     }
 
     /**
+     * Routes sub-agent execution to the appropriate handler based on relationship type.
+     * Child agents (ParentID) use direct payload coupling.
+     * Related agents (AgentRelationships) use message-based coupling with optional output mapping.
+     *
+     * @private
+     */
+    private async processSubAgentStep<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision?: BaseAgentNextStep<SR, SC>,
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
+        const name = subAgentRequest?.name;
+
+        if (!name) {
+            return {
+                step: 'Failed',
+                terminate: false,
+                errorMessage: 'Sub-agent name is required',
+                previousPayload: previousDecision?.newPayload,
+                newPayload: previousDecision?.newPayload
+            };
+        }
+
+        // Find the sub-agent - check both child and related agents
+        const childAgents = AIEngine.Instance.Agents.filter(a =>
+            a.ParentID === params.agent.ID &&
+            a.Status === 'Active'
+        );
+        const childAgent = childAgents.find(a => a.Name.trim().toLowerCase() === name.trim().toLowerCase());
+
+        if (childAgent) {
+            // This is a child agent - use direct payload coupling
+            return await this.executeChildSubAgentStep<SC, SR>(params, previousDecision);
+        }
+
+        // Check for related agent
+        const activeRelationships = AIEngine.Instance.AgentRelationships.filter(ar =>
+            ar.AgentID === params.agent.ID &&
+            ar.Status === 'Active'
+        );
+
+        for (const relationship of activeRelationships) {
+            const relatedAgent = AIEngine.Instance.Agents.find(a =>
+                a.ID === relationship.SubAgentID &&
+                a.Status === 'Active'
+            );
+
+            if (relatedAgent && relatedAgent.Name.trim().toLowerCase() === name.trim().toLowerCase()) {
+                // This is a related agent - use message-based coupling
+                return await this.executeRelatedSubAgentStep<SC, SR>(params, previousDecision, relatedAgent, relationship);
+            }
+        }
+
+        // Sub-agent not found
+        this.logError(`Sub-agent '${name}' not found or not active for agent '${params.agent.Name}'`, {
+            agent: params.agent,
+            category: 'SubAgentExecution'
+        });
+
+        return {
+            step: 'Retry',
+            terminate: false,
+            errorMessage: `Sub-agent '${name}' not found or not active`,
+            previousPayload: previousDecision?.newPayload,
+            newPayload: previousDecision?.newPayload
+        };
+    }
+
+    /**
+     * Executes a related sub-agent step (AgentRelationships) and tracks it.
+     * Related agents use message-based communication with independent payloads.
+     * Optional output mapping can merge sub-agent results back to parent payload.
+     *
+     * @private
+     */
+    private async executeRelatedSubAgentStep<SC = any, SR = any>(
+        params: ExecuteAgentParams<SC>,
+        previousDecision: BaseAgentNextStep<SR, SC>,
+        subAgentEntity: AIAgentEntityExtended,
+        relationship: AIAgentRelationshipEntity
+    ): Promise<BaseAgentNextStep<SR, SC>> {
+        const subAgentRequest = previousDecision.subAgent as AgentSubAgentRequest<SC>;
+
+        // Check for cancellation before starting
+        if (params.cancellationToken?.aborted) {
+            throw new Error('Cancelled before related sub-agent execution');
+        }
+
+        // Report sub-agent execution progress
+        params.onProgress?.({
+            step: 'subagent_execution',
+            percentage: 60,
+            message: this.formatHierarchicalMessage(`Delegating to ${subAgentRequest.name} agent`),
+            metadata: {
+                agentName: params.agent.Name,
+                subAgentName: subAgentRequest.name,
+                reason: subAgentRequest.message,
+                relationshipType: 'related'
+            }
+        });
+
+        // Add assistant message indicating we're executing a related sub-agent
+        params.conversationMessages.push({
+            role: 'assistant',
+            content: `I'm delegating this task to the "${subAgentRequest.name}" agent.\n\nReason: ${subAgentRequest.message}`
+        });
+
+        // Prepare input data for the step
+        const inputData = {
+            agentName: params.agent.Name,
+            subAgentName: subAgentRequest.name,
+            message: subAgentRequest.message,
+            terminateAfter: subAgentRequest.terminateAfter,
+            conversationMessages: params.conversationMessages,
+            parentAgentHierarchy: this._agentHierarchy,
+            relationshipType: 'related'
+        };
+
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Sub-Agent',
+            stepName: `Execute Related Sub-Agent: ${subAgentRequest.name}`,
+            contextUser: params.contextUser,
+            targetId: subAgentEntity.ID,
+            inputData,
+            payloadAtStart: previousDecision.newPayload
+        });
+
+        // Increment execution count for this sub-agent
+        this.incrementExecutionCount(subAgentEntity.ID);
+
+        try {
+            // Related agents can receive parent data in two ways:
+            // 1. SubAgentInputMapping: Maps parent payload → sub-agent payload (structural data)
+            // 2. SubAgentContextPaths: Parent payload → sub-agent conversation context (LLM awareness)
+            stepEntity.PayloadAtStart = JSON.stringify(previousDecision.newPayload);
+
+            // Prepare initial payload via input mapping (if configured)
+            let initialSubAgentPayload: SR | undefined = undefined;
+            if (relationship.SubAgentInputMapping) {
+                const mapped = this.applySubAgentInputMapping(
+                    previousDecision.newPayload as unknown as Record<string, unknown>,
+                    relationship.SubAgentInputMapping
+                );
+                if (mapped && Object.keys(mapped).length > 0) {
+                    initialSubAgentPayload = mapped as SR;
+
+                    if (params.verbose === true || IsVerboseLoggingEnabled()) {
+                        LogStatus(`Related sub-agent '${subAgentRequest.name}' receiving mapped payload: ${JSON.stringify(Object.keys(mapped))}`);
+                    }
+                }
+            }
+
+            // Prepare context message with parent payload data (if configured)
+            let contextPaths: string[] = [];
+            if (relationship.SubAgentContextPaths) {
+                try {
+                    contextPaths = JSON.parse(relationship.SubAgentContextPaths);
+                } catch (parseError) {
+                    LogError(`Failed to parse SubAgentContextPaths for sub-agent ${subAgentRequest.name}: ${parseError.message}`);
+                }
+            }
+
+            const contextMessage = this.prepareRelatedSubAgentContextMessage(
+                previousDecision.newPayload as unknown as Record<string, unknown>,
+                contextPaths
+            );
+
+            if (contextMessage && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                LogStatus(`Related sub-agent '${subAgentRequest.name}' receiving context from paths: ${contextPaths.join(', ')}`);
+            }
+
+            // Execute related agent with prepared payload and context
+            const subAgentResult = await this.ExecuteSubAgent<SC, SR>(
+                params,
+                subAgentRequest,
+                subAgentEntity,
+                stepEntity,
+                initialSubAgentPayload, // Mapped payload from parent (or undefined if no mapping)
+                contextMessage // Context message with parent payload data (or undefined if no context paths)
+            );
+
+            let mergedPayload = previousDecision.newPayload; // Start with parent's payload
+            let currentStepPayloadChangeResult: PayloadChangeResultSummary | undefined = undefined;
+
+            if (subAgentResult.success && relationship.SubAgentOutputMapping) {
+                // Apply output mapping if configured
+                const payloadChange = this.applySubAgentOutputMapping(
+                    subAgentResult.payload as unknown as Record<string, unknown>,
+                    previousDecision.newPayload as unknown as Record<string, unknown>,
+                    relationship.SubAgentOutputMapping
+                );
+
+                if (payloadChange && payloadChange.updateElements) {
+                    // Merge the mapped changes into parent payload
+                    const mergeResult = this._payloadManager.applyAgentChangeRequest<SR>(
+                        previousDecision.newPayload,
+                        payloadChange as AgentPayloadChangeRequest<SR>,
+                        {
+                            validateChanges: true,
+                            logChanges: true,
+                            analyzeChanges: true,
+                            generateDiff: true,
+                            agentName: `${subAgentRequest.name} (related agent mapping)`,
+                            verbose: params.verbose === true || IsVerboseLoggingEnabled()
+                        }
+                    );
+
+                    mergedPayload = mergeResult.result;
+
+                    // Track the mapping operation
+                    currentStepPayloadChangeResult = this.buildPayloadChangeResultSummary(mergeResult);
+
+                    if (mergeResult.warnings.length > 0 && (params.verbose === true || IsVerboseLoggingEnabled())) {
+                        LogStatus(`Related sub-agent mapping warnings: ${mergeResult.warnings.join('; ')}`);
+                    }
+                }
+            }
+
+            // Check if we should terminate after this sub-agent
+            const shouldTerminate = subAgentRequest.terminateAfter === true;
+
+            // Prepare output data
+            const outputData = {
+                subAgentResult: {
+                    success: subAgentResult.success,
+                    finalStep: subAgentResult.agentRun?.FinalStep,
+                    errorMessage: subAgentResult.agentRun?.ErrorMessage,
+                    stepCount: subAgentResult.agentRun?.Steps?.length || 0,
+                    hasMergedPayload: !!(relationship.SubAgentOutputMapping && mergedPayload !== previousDecision.newPayload)
+                },
+                shouldTerminate: shouldTerminate,
+                nextStep: shouldTerminate ? 'success' : 'retry',
+                ...(currentStepPayloadChangeResult && {
+                    payloadChangeResult: currentStepPayloadChangeResult
+                })
+            };
+
+            // Set PayloadAtEnd with the merged payload
+            if (stepEntity) {
+                stepEntity.PayloadAtEnd = JSON.stringify(mergedPayload);
+            }
+
+            // Finalize step entity
+            await this.finalizeStepEntity(
+                stepEntity,
+                subAgentResult.success,
+                subAgentResult.agentRun?.ErrorMessage,
+                outputData
+            );
+
+            // Check if sub-agent returned a Chat step
+            if (subAgentResult.agentRun?.FinalStep === 'Chat') {
+                return {
+                    step: 'Chat',
+                    terminate: true,
+                    message: subAgentResult.agentRun?.Message || null,
+                    previousPayload: previousDecision?.newPayload,
+                    newPayload: previousDecision?.newPayload
+                };
+            }
+
+            // Add sub-agent result to conversation as user message
+            const subAgentSummary = {
+                agentName: params.agent.Name,
+                subAgentName: subAgentRequest.name,
+                success: subAgentResult.success,
+                payload: subAgentResult.payload,
+                errorMessage: subAgentResult.agentRun?.ErrorMessage
+            };
+
+            params.conversationMessages.push({
+                role: 'user',
+                content: `Related sub-agent "${subAgentRequest.name}" completed:\n${JSON.stringify(subAgentSummary, null, 2)}`
+            });
+
+            // Update the agent run's current payload
+            if (this._agentRun) {
+                this._agentRun.FinalPayloadObject = mergedPayload;
+            }
+
+            return {
+                ...subAgentResult,
+                step: subAgentResult.success ? 'Success' : 'Failed',
+                terminate: shouldTerminate,
+                previousPayload: previousDecision?.newPayload,
+                newPayload: mergedPayload
+            };
+        } catch (error) {
+            const payload = stepEntity.PayloadAtEnd ? JSON.parse(stepEntity.PayloadAtEnd) : previousDecision?.newPayload || params.payload;
+            stepEntity.PayloadAtEnd = payload ? JSON.stringify(payload) : null;
+            await this.finalizeStepEntity(stepEntity, false, error.message);
+
+            return {
+                errorMessage: `Related sub-agent execution failed: ${(error as Error).message}`,
+                step: 'Failed',
+                terminate: false,
+                previousPayload: payload,
+                newPayload: payload
+            };
+        }
+    }
+
+    /**
+     * Applies sub-agent output mapping to update the parent payload.
+     * Maps sub-agent result payload paths to parent payload paths.
+     * Mirrors the action output mapping pattern used by Flow agents.
+     *
+     * @private
+     */
+    private applySubAgentOutputMapping<P>(
+        subAgentResult: Record<string, unknown>,
+        _parentPayload: Record<string, unknown>,
+        mappingConfig: string
+    ): AgentPayloadChangeRequest<P> | null {
+        try {
+            const mapping: Record<string, string> = JSON.parse(mappingConfig);
+            const updateObj: Record<string, unknown> = {};
+
+            for (const [subAgentPath, parentPath] of Object.entries(mapping)) {
+                let value: unknown;
+
+                if (subAgentPath === '*') {
+                    // Wildcard - capture entire sub-agent result
+                    value = subAgentResult;
+                } else {
+                    // Extract from sub-agent result using dot notation
+                    value = this.getValueFromPath(subAgentResult, subAgentPath);
+                }
+
+                if (value !== undefined) {
+                    // Parse the parent path and build nested object
+                    const pathParts = parentPath.split('.');
+                    let current = updateObj;
+
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        const part = pathParts[i];
+                        if (!(part in current)) {
+                            current[part] = {};
+                        }
+                        current = current[part] as Record<string, unknown>;
+                    }
+
+                    current[pathParts[pathParts.length - 1]] = value;
+                }
+            }
+
+            if (Object.keys(updateObj).length === 0) {
+                return null;
+            }
+
+            return {
+                updateElements: updateObj as Partial<P>
+            };
+        } catch (error) {
+            LogError(`Failed to parse SubAgentOutputMapping: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Applies sub-agent input mapping to prepare initial payload for related sub-agent.
+     * Maps parent payload paths to sub-agent initial payload paths.
+     * Enables structural data transfer from parent to related sub-agent.
+     *
+     * @param parentPayload - Parent agent's current payload
+     * @param mappingConfig - JSON mapping configuration string
+     * @returns Mapped payload object for sub-agent initialization, or null if mapping fails or produces empty result
+     * @private
+     */
+    private applySubAgentInputMapping(
+        parentPayload: Record<string, unknown>,
+        mappingConfig: string
+    ): Record<string, unknown> | null {
+        try {
+            const mapping: Record<string, string> = JSON.parse(mappingConfig);
+            const subAgentPayload: Record<string, unknown> = {};
+
+            for (const [parentPath, subAgentPath] of Object.entries(mapping)) {
+                let value: unknown;
+
+                if (parentPath === '*') {
+                    // Wildcard - send entire parent payload to sub-agent
+                    value = parentPayload;
+                } else {
+                    // Extract from parent payload using dot notation
+                    value = this.getValueFromPath(parentPayload, parentPath);
+                }
+
+                if (value !== undefined) {
+                    // Parse the sub-agent path and build nested object
+                    const pathParts = subAgentPath.split('.');
+                    let current = subAgentPayload;
+
+                    for (let i = 0; i < pathParts.length - 1; i++) {
+                        const part = pathParts[i];
+                        if (!(part in current)) {
+                            current[part] = {};
+                        }
+                        current = current[part] as Record<string, unknown>;
+                    }
+
+                    current[pathParts[pathParts.length - 1]] = value;
+                }
+            }
+
+            if (Object.keys(subAgentPayload).length === 0) {
+                return null;
+            }
+
+            return subAgentPayload;
+        } catch (error) {
+            LogError(`Failed to parse SubAgentInputMapping: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Prepares a context message containing parent payload data for related sub-agent.
+     * Extracts specified paths from parent payload and formats them as a user message
+     * to provide LLM context to the sub-agent.
+     *
+     * @param parentPayload - Parent agent's current payload
+     * @param contextPaths - Array of paths to extract, or ["*"] for entire payload
+     * @returns ChatMessage with formatted context, or null if no paths specified or no data found
+     * @private
+     */
+    private prepareRelatedSubAgentContextMessage(
+        parentPayload: Record<string, unknown>,
+        contextPaths: string[]
+    ): ChatMessage | null {
+        if (!contextPaths || contextPaths.length === 0) {
+            return null;
+        }
+
+        // Check for wildcard - send entire payload
+        if (contextPaths.includes('*')) {
+            return {
+                role: 'user',
+                content: `Parent Agent Context:\n\n${JSON.stringify(parentPayload, null, 2)}`
+            };
+        }
+
+        // Extract specific paths
+        const contextData: Record<string, unknown> = {};
+
+        for (const path of contextPaths) {
+            const value = this.getValueFromPath(parentPayload, path);
+            if (value !== undefined) {
+                contextData[path] = value;
+            }
+        }
+
+        if (Object.keys(contextData).length === 0) {
+            return null;
+        }
+
+        // Format as readable context
+        const contextLines = Object.entries(contextData).map(([key, value]) => {
+            const valueStr = typeof value === 'object'
+                ? JSON.stringify(value, null, 2)
+                : String(value);
+            return `${key}:\n${valueStr}`;
+        });
+
+        return {
+            role: 'user',
+            content: `Parent Agent Context:\n\n${contextLines.join('\n\n')}`
+        };
+    }
+
+    /**
+     * Helper method to get a value from a nested object path.
+     * Supports both dot notation (obj.prop) and array indexing (arr[0]).
+     *
+
+    /**
      * Executes actions step and tracks it.
      * 
      * @private
      */
     private async executeActionsStep(
         params: ExecuteAgentParams,
-        config: AgentConfiguration,
-        previousDecision: BaseAgentNextStep
+        previousDecision: BaseAgentNextStep,
+        parentStepId: string,
+        addConversationMessage: boolean = true
     ): Promise<BaseAgentNextStep> {
         
         try {
@@ -3167,39 +4819,41 @@ export class BaseAgent {
             }
 
             // Report action execution progress with markdown formatting for parameters
+            // Use same format as assistant message for consistency
             let progressMessage: string;
             if (actions.length === 1) {
                 const aa = actions[0];
-                progressMessage = `Executing action: **${aa.name}**`;
-                
+                progressMessage = `Executing **${aa.name}** action`;
+
                 // Add parameters if they exist
                 if (aa.params && Object.keys(aa.params).length > 0) {
                     const paramsList = Object.entries(aa.params)
                         .map(([key, value]) => {
-                            const displayValue = typeof value === 'object' 
-                                ? JSON.stringify(value, null, 2) 
-                                : String(value);
-                            return `  - \`${key}\`: ${displayValue}`;
+                            const displayValue = this.formatParamValueForMessage(value);
+                            return `• **${key}**: ${displayValue}`;
                         })
                         .join('\n');
-                    progressMessage += `\n${paramsList}`;
+                    progressMessage += ` with parameters:\n${paramsList}`;
+                } else {
+                    progressMessage += '.';
                 }
             } else {
-                progressMessage = `Executing ${actions.length} actions:`;
-                actions.forEach(aa => {
-                    progressMessage += `\n\n• **${aa.name}**`;
+                progressMessage = `Executing **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+                    let actionText = `${index + 1}. **${aa.name}**`;
+
+                    // Add parameters if they exist
                     if (aa.params && Object.keys(aa.params).length > 0) {
                         const paramsList = Object.entries(aa.params)
                             .map(([key, value]) => {
-                                const displayValue = typeof value === 'object' 
-                                    ? JSON.stringify(value, null, 2) 
-                                    : String(value);
-                                return `  - \`${key}\`: ${displayValue}`;
+                                const displayValue = this.formatParamValueForMessage(value);
+                                return `   • **${key}**: ${displayValue}`;
                             })
                             .join('\n');
-                        progressMessage += `\n${paramsList}`;
+                        actionText += `\n${paramsList}`;
                     }
-                });
+
+                    return actionText;
+                }).join('\n\n');
             }
                 
             params.onProgress?.({
@@ -3212,17 +4866,53 @@ export class BaseAgent {
                 },
                 displayMode: 'live' // Only show in live mode
             });
-            
-            // Add assistant message indicating we're executing actions with more detail
-            const actionMessage = actions.length === 1 
-                ? `I'm executing the "${actions[0].name}" action...`
-                : `I'm executing ${actions.length} actions to gather the information needed:\n${actions.map(a => `• ${a.name}`).join('\n')}`;
-            
-            params.conversationMessages.push({
-                role: 'assistant',
-                content: actionMessage
-            });
-            
+
+            // Build detailed action execution message with parameters using markdown formatting
+            // This creates a permanent, lightweight record of what was requested
+            let actionMessage: string;
+            if (actions.length === 1) {
+                const aa = actions[0];
+                actionMessage = `I'm executing the **${aa.name}** action`;
+
+                // Add parameters if they exist
+                if (aa.params && Object.keys(aa.params).length > 0) {
+                    const paramsList = Object.entries(aa.params)
+                        .map(([key, value]) => {
+                            const displayValue = this.formatParamValueForMessage(value);
+                            return `• **${key}**: ${displayValue}`;
+                        })
+                        .join('\n');
+                    actionMessage += ` with parameters:\n${paramsList}`;
+                } else {
+                    actionMessage += '.';
+                }
+            } else {
+                actionMessage = `I'm executing **${actions.length} actions** in parallel:\n\n` + actions.map((aa, index) => {
+                    let actionText = `${index + 1}. **${aa.name}**`;
+
+                    // Add parameters if they exist
+                    if (aa.params && Object.keys(aa.params).length > 0) {
+                        const paramsList = Object.entries(aa.params)
+                            .map(([key, value]) => {
+                                const displayValue = this.formatParamValueForMessage(value);
+                                return `   • **${key}**: ${displayValue}`;
+                            })
+                            .join('\n');
+                        actionText += `\n${paramsList}`;
+                    }
+
+                    return actionText;
+                }).join('\n\n');
+            }
+
+            if (addConversationMessage) {
+                // Add assistant message (no metadata - this is a permanent record)
+                params.conversationMessages.push({
+                    role: 'assistant',
+                    content: actionMessage
+                });
+            }
+
             const actionEngine = ActionEngineServer.Instance;
             const agentActions = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === params.agent.ID);
 
@@ -3261,7 +4951,7 @@ export class BaseAgent {
                     actionParams: aa.params
                 };
                 
-                const stepEntity = await this.createStepEntity('Actions', `Execute Action: ${aa.name}`, params.contextUser, actionEntity.ID, actionInputData, undefined, currentPayload, currentPayload);
+                const stepEntity = await this.createStepEntity({ stepType: 'Actions', stepName: `Execute Action: ${aa.name}`, contextUser: params.contextUser, targetId: actionEntity.ID, inputData: actionInputData, payloadAtStart: currentPayload, payloadAtEnd: currentPayload, parentId: parentStepId });
                 lastStep = stepEntity;
                 // Override step number to ensure unique values for parallel actions
                 stepEntity.StepNumber = baseStepNumber + numActionsProcessed++;
@@ -3326,14 +5016,61 @@ export class BaseAgent {
             
             // Check if any actions failed
             const failedActions = actionSummaries.filter(a => !a.success);
-            
+
             // Add user message with the results
             const resultsMessage = (failedActions.length > 0 ? `${failedActions.length} of ${actionSummaries.length} failed:` : `Action results:`) + `\n${JSON.stringify(actionSummaries, null, 2)}`;
-                
-            params.conversationMessages.push({
-                role: 'user',
-                content: resultsMessage
-            });
+
+            // Build metadata from AI Agent Actions configuration
+            // If multiple actions, use the most restrictive (shortest) expiration settings
+            let metadata: AgentChatMessageMetadata | undefined;
+            const agentActionConfigs = actionResults
+                .map(r => agentActions.find(aa => aa.ActionID === r.actionEntity.ID))
+                .filter(aa => aa != null);
+
+            if (agentActionConfigs.length > 0) {
+                // Find the most restrictive expiration settings
+                let minExpirationTurns: number | null = null;
+                let expirationMode: 'None' | 'Remove' | 'Compact' = 'None';
+                let compactMode: 'First N Chars' | 'AI Summary' | undefined;
+                let compactLength: number | undefined;
+                let compactPromptId: string | undefined;
+
+                for (const agentAction of agentActionConfigs) {
+                    // Track shortest expiration (most restrictive)
+                    if (agentAction.ResultExpirationTurns != null) {
+                        if (minExpirationTurns === null || agentAction.ResultExpirationTurns < minExpirationTurns) {
+                            minExpirationTurns = agentAction.ResultExpirationTurns;
+                            expirationMode = agentAction.ResultExpirationMode as 'None' | 'Remove' | 'Compact' || 'None';
+                            compactMode = agentAction.CompactMode as 'First N Chars' | 'AI Summary' | undefined;
+                            compactLength = agentAction.CompactLength;
+                            compactPromptId = agentAction.CompactPromptID;
+                        }
+                    }
+                }
+
+                // Only add metadata if we have expiration settings
+                if (minExpirationTurns !== null && expirationMode !== 'None') {
+                    const currentStepCount = this._agentRun?.Steps?.length || 0;
+                    metadata = {
+                        turnAdded: currentStepCount,
+                        messageType: 'action-result',
+                        expirationTurns: minExpirationTurns,
+                        expirationMode: expirationMode,
+                        compactMode: compactMode,
+                        compactLength: compactLength,
+                        compactPromptId: compactPromptId
+                    };
+                }
+            }
+
+            if (addConversationMessage) {
+                // Add user message with results and optional metadata
+                params.conversationMessages.push({
+                    role: 'user',
+                    content: resultsMessage,
+                    metadata: metadata
+                } as AgentChatMessage);
+            }
             
             // Call agent type's post-processing for actions
             let finalPayload = currentPayload;
@@ -3392,7 +5129,7 @@ export class BaseAgent {
                 previousPayload: previousDecision?.previousPayload || null,
                 newPayload: finalPayload, // Use the final payload after any post-processing
                 priorStepResult: actionSummaries,
-                retryReason: failedActions.length > 0 
+                retryReason: failedActions.length > 0
                     ? `Processing results with ${failedActions.length} failed action(s): ${failedActions.map(a => a.actionName).join(', ')}`
                     : `Analyzing results from ${actionSummaries.length} completed action(s) to formulate response`
             };
@@ -3419,12 +5156,12 @@ export class BaseAgent {
         params: ExecuteAgentParams,
         previousDecision: BaseAgentNextStep
     ): Promise<BaseAgentNextStep> {
-        const stepEntity = await this.createStepEntity('Chat', 'User Interaction', params.contextUser);
+        const stepEntity = await this.createStepEntity({ stepType: 'Chat', stepName: 'User Interaction', contextUser: params.contextUser });
         
         // Chat steps are successful - they indicate a need for user interaction
         await this.finalizeStepEntity(stepEntity, true);
         
-        return { 
+        return {
             step: 'Chat',
             terminate: true,
             message: previousDecision.message || 'Additional information needed from user',
@@ -3433,12 +5170,686 @@ export class BaseAgent {
             confidence: previousDecision.confidence,
             previousPayload: previousDecision.previousPayload,
             newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
+            suggestedResponses: previousDecision.suggestedResponses
         };
     }
 
     /**
+     * Executes a ForEach loop with actual for loop
+     * @private
+     */
+    private async executeForEachLoop(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const forEach = previousDecision.forEach as ForEachOperation;
+        if (!forEach) {
+            return this.createFailedStep('ForEach configuration missing', previousDecision);
+        }
+
+        const validationMessage = this.validateForEachOperation(forEach);
+        if (validationMessage) {
+            return this.createFailedStep(`ForEach configuration invalid: ${validationMessage}`, previousDecision);
+        }
+
+        const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
+        const collection = this.getCollectionFromPayload(currentPayload, forEach.collectionPath);
+
+        if (!collection) {
+            return this.createFailedStep(`Collection path "${forEach.collectionPath}" not an array`, previousDecision);
+        }
+
+        const loopStepEntity = await this.createForEachLoopStep(forEach, collection, currentPayload, params);
+        const loopResults = await this.executeForEachIterations(forEach, collection, currentPayload, loopStepEntity.ID, params, config);
+
+        return this.completeForEachLoop(forEach, loopStepEntity, loopResults, previousDecision, params);
+    }
+
+    private validateWhileOperation(whileOp: WhileOperation): string | null {
+        if (!whileOp.condition || whileOp.condition.trim() === '') {
+            return 'Condition is required';
+        }
+        if (!whileOp.itemVariable || whileOp.itemVariable.trim() === '') {
+            return 'Item variable is required';
+        }
+
+        // now validate the action or sub-agent
+        if (whileOp.action) {
+            return this.validateActionInAgent(whileOp.action.name);
+        }
+        else if (whileOp.subAgent) {
+            // check to make sure sub-agent is valid
+            return this.validateSubAgentInAgent(whileOp.subAgent.name);
+        }
+
+        // if we get here, all good
+        return null;
+    }
+
+    private validateForEachOperation(forEach: ForEachOperation): string | null {
+        // make sure that for actions it is valid action and for sub-agents it is valid sub-agent
+        if (!forEach.itemVariable || forEach.itemVariable.trim() === '') {
+            return 'Item variable is required';
+        }
+        if (!forEach.collectionPath || forEach.collectionPath.trim() === '') {
+            return 'Collection path is required';
+        }
+
+        if (forEach.action) {
+            return this.validateActionInAgent(forEach.action.name);
+        }
+        else if (forEach.subAgent) {
+            // check to make sure sub-agent is valid
+            return this.validateSubAgentInAgent(forEach.subAgent.name);
+        }
+
+        // if we get here, all good
+        return null;
+    }
+
+    protected validateActionInAgent(actionName: string): string | null {
+        // check to make sure action is valid
+        const aa = AIEngine.Instance.AgentActions.filter(aa => aa.AgentID === this._agentRun!.AgentID);
+        let action = aa.filter(a => a.Agent?.trim().toLowerCase() === actionName.trim().toLowerCase());
+        if (!action) {
+            // try to do a search contains without exact match and if we have exactly 1 it is ok, if more than 1 different error
+            // message and if no match still not good
+            const partialAction = aa.filter(a => a.Agent?.trim().toLowerCase().includes(actionName.trim().toLowerCase() || ''));
+            if (partialAction.length > 1) {
+                return `Ambiguous action '${actionName}' specified`;
+            }
+            else if (partialAction.length === 0) {
+                return `No action '${actionName}' found`;
+            }
+        }
+        return null;
+    }
+
+    protected validateSubAgentInAgent(subAgentName: string): string | null {
+        // check to make sure sub-agent is valid
+        const relatedAgents = AIEngine.Instance.AgentRelationships.filter(ar => ar.AgentID === this._agentRun!.AgentID);
+        const childAgents = AIEngine.Instance.Agents.filter(a => a.ParentID === this._agentRun!.AgentID);
+
+        // now check to make sure that subAgentName is either in relatedAgents or childAgents
+        let subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+        if (subAgent.length === 0) {
+            // no exact match, try for partial match
+            subAgent = relatedAgents.filter(ra => ra.SubAgent?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+            if (subAgent.length > 1) {
+                return `Ambiguous sub-agent '${subAgentName}' specified`;
+            } 
+            else if (subAgent.length === 0) {
+                // try child agents now
+                let childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase() === subAgentName.trim().toLowerCase());
+                if (childAgent.length === 0) {
+                    // no exact match, try for partial match
+                    childAgent = childAgents.filter(ca => ca.Name?.trim().toLowerCase().includes(subAgentName.trim().toLowerCase() || ''));
+                    if (childAgent.length > 1) {
+                        return `Ambiguous child agent '${subAgentName}' specified`;
+                    } else if (childAgent.length === 0) {
+                        return `No child agent '${subAgentName}' found`;
+                    }
+                } 
+                else {
+                    // we have one match, so we're good here
+                }
+            }
+        }
+
+        // if we get here, all good
+        return null;
+    }
+
+    /**
+     * Helper: Validate and extract collection from payload
+     * Strips "payload." prefix if present (for LLM convenience)
+     */
+    private getCollectionFromPayload(payload: any, path: string): any[] | null {
+        // Remove "payload." prefix if present
+        const cleanPath = path.toLowerCase().startsWith('payload.')
+            ? path.substring(8)
+            : path;
+
+        const value = this.getValueFromPath(payload, cleanPath);
+        return Array.isArray(value) ? value : null;
+    }
+
+    /**
+     * Helper: Create parent ForEach loop step (not finalized until loop completes)
+     */
+    private async createForEachLoopStep(
+        forEach: ForEachOperation,
+        collection: any[],
+        payload: any,
+        params: ExecuteAgentParams
+    ): Promise<AIAgentRunStepEntityExtended> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'ForEach',
+            stepName: `ForEach: ${forEach.collectionPath} (${collection.length} items)`,
+            contextUser: params.contextUser,
+            inputData: { forEach, count: collection.length },
+            payloadAtStart: payload
+        });
+        // Don't finalize yet - will finalize after loop completes
+        return stepEntity;
+    }
+
+    /**
+     * Helper: Execute all iterations with actual for loop
+     */
+    private async executeForEachIterations(
+        forEach: ForEachOperation,
+        collection: any[],
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
+        const executionMode = forEach.executionMode || 'sequential';
+
+        if (executionMode === 'parallel') {
+            return this.executeForEachIterationsParallel(forEach, collection, initialPayload, parentStepId, params, config);
+        } else {
+            return this.executeForEachIterationsSequential(forEach, collection, initialPayload, parentStepId, params, config);
+        }
+    }
+
+    /**
+     * Execute ForEach iterations sequentially (one at a time).
+     * This is the original implementation - safe for state accumulation and maintaining order.
+     */
+    private async executeForEachIterationsSequential(
+        forEach: ForEachOperation,
+        collection: any[],
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
+        let currentPayload = initialPayload;
+        const maxIterations = forEach.maxIterations ?? 1000;
+        const results: Array<BaseAgentNextStep> = [];
+        const errors = [];
+
+        // ACTUAL FOR LOOP - simple and clear!
+        for (let i = 0; i < Math.min(collection.length, maxIterations); i++) {
+            if (i > 0 && forEach.delayBetweenIterationsMs) {
+                await new Promise(resolve => setTimeout(resolve, forEach.delayBetweenIterationsMs));
+            }
+
+            const iterResult = await this.executeSingleForEachIteration(
+                forEach,
+                collection[i],
+                i,
+                currentPayload,
+                parentStepId,
+                params,
+                config
+            );
+
+            if (iterResult.error) {
+                errors.push(iterResult.error);
+                if (!forEach.continueOnError) break;
+            } else {
+                results.push(iterResult.result);
+                currentPayload = iterResult.payload;
+            }
+        }
+
+        return { results, errors, finalPayload: currentPayload };
+    }
+
+    /**
+     * Execute ForEach iterations in parallel batches.
+     * Processes multiple iterations concurrently for better performance when iterations are independent.
+     * Results are collected in parallel but applied to payload sequentially to maintain order.
+     */
+    private async executeForEachIterationsParallel(
+        forEach: ForEachOperation,
+        collection: any[],
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any }> {
+        const maxIterations = forEach.maxIterations ?? 1000;
+        const maxConcurrency = forEach.maxConcurrency ?? 10;
+        const itemsToProcess = Math.min(collection.length, maxIterations);
+
+        // Create batches for parallel processing
+        const batches = this.createBatches(collection.slice(0, itemsToProcess), maxConcurrency);
+
+        const allResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }> = [];
+
+        // Process each batch in parallel
+        for (let batchIndex = 0; batchIndex < batches.length; batchIndex++) {
+            const batch = batches[batchIndex];
+
+            // Execute all items in this batch concurrently
+            const batchPromises = batch.map(({ item, index }) =>
+                this.executeSingleForEachIteration(
+                    forEach,
+                    item,
+                    index,
+                    initialPayload, // Pass initial payload (read-only) to all parallel iterations
+                    parentStepId,
+                    params,
+                    config
+                ).then(iterResult => ({
+                    index,
+                    result: iterResult.result,
+                    error: iterResult.error,
+                    payload: iterResult.payload
+                }))
+            );
+
+            const batchResults = await Promise.all(batchPromises);
+            allResults.push(...batchResults);
+
+            // Optional: Inter-batch delay
+            if (forEach.delayBetweenIterationsMs && batchIndex < batches.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, forEach.delayBetweenIterationsMs));
+            }
+
+            // Check for errors that should stop processing
+            const hasFailure = batchResults.some(r => r.error);
+            if (hasFailure && !forEach.continueOnError) {
+                break;
+            }
+        }
+
+        // Sort results by original index to maintain order
+        allResults.sort((a, b) => a.index - b.index);
+
+        // Apply results sequentially to build final payload
+        return this.applyForEachResultsSequentially(allResults, initialPayload, forEach.continueOnError || false);
+    }
+
+    /**
+     * Create batches of items for parallel processing.
+     * Each batch contains up to maxConcurrency items with their original indices.
+     */
+    private createBatches<T>(
+        items: T[],
+        maxConcurrency: number
+    ): Array<Array<{ item: T; index: number }>> {
+        const batches: Array<Array<{ item: T; index: number }>> = [];
+
+        for (let i = 0; i < items.length; i += maxConcurrency) {
+            const batch = items.slice(i, i + maxConcurrency).map((item, batchOffset) => ({
+                item,
+                index: i + batchOffset
+            }));
+            batches.push(batch);
+        }
+
+        return batches;
+    }
+
+    /**
+     * Apply ForEach results sequentially to build final payload.
+     * This ensures payload changes are applied in order even when iterations ran in parallel.
+     */
+    private applyForEachResultsSequentially(
+        sortedResults: Array<{ index: number; result?: BaseAgentNextStep; error?: any; payload?: any }>,
+        initialPayload: any,
+        continueOnError: boolean
+    ): { results: BaseAgentNextStep[], errors: any[], finalPayload: any } {
+        let currentPayload = initialPayload;
+        const results: BaseAgentNextStep[] = [];
+        const errors: any[] = [];
+
+        for (const { result, error, payload } of sortedResults) {
+            if (error) {
+                errors.push(error);
+                if (!continueOnError) {
+                    break;
+                }
+            } else if (result) {
+                results.push(result);
+                // Apply payload change from this iteration
+                currentPayload = payload || currentPayload;
+            }
+        }
+
+        return { results, errors, finalPayload: currentPayload };
+    }
+
+    /**
+     * Helper: Execute single ForEach iteration
+     */
+    private async executeSingleForEachIteration(
+        forEach: ForEachOperation,
+        item: any,
+        index: number,
+        currentPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ payload?: any, error?: any, result?: BaseAgentNextStep }> {
+        try {
+            // Resolve params via BeforeLoopIteration hook
+            const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
+                { item, itemVariable: forEach.itemVariable,index, payload: currentPayload, loopType: 'ForEach', actionParams: forEach.action?.params || {} }
+            );
+            const resolvedParams = beforeHook?.actionParams || forEach.action?.params || {};
+
+            // Execute action, sub-agent, or prompt
+            let result;
+            if (forEach.action) {
+                // Find the AgentAction with fuzzy matching
+                const matchedAction = this.findAgentActionForLoop(forEach.action.name, params.agent.ID, params.agent.Name, params);
+                const resolvedAction = {
+                    name: matchedAction.Action,
+                    params: resolvedParams
+                }
+                const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
+            } else if (forEach.subAgent) {
+                const subAgentStep = { step: 'Sub-Agent' as const, subAgent: forEach.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
+            } else {
+                throw new Error('ForEach missing action/subAgent');
+            }
+
+            // Apply AfterLoopIteration hook
+            const iterPayload = result.newPayload || currentPayload;
+            const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
+                { currentPayload: iterPayload, item, itemVariable: forEach.itemVariable, index, loopContext: { actionOutputMapping: forEach.action?.outputMapping } }
+            );
+
+            return { payload: afterHook || iterPayload, result };
+
+        } catch (error) {
+            return { error: { index, item, message: error.message } };
+        }
+    }
+
+    /**
+     * Helper: Complete ForEach and return result
+     */
+    private async completeForEachLoop(
+        forEach: ForEachOperation,
+        loopStepEntity: AIAgentRunStepEntityExtended,
+        loopResults: { results: BaseAgentNextStep[], errors: any[], finalPayload: any },
+        previousDecision: BaseAgentNextStep,
+        params: ExecuteAgentParams
+    ): Promise<BaseAgentNextStep> {
+        // Finalize the loop step now that loop is complete
+        loopStepEntity.PayloadAtEnd = JSON.stringify(loopResults.finalPayload);
+        await this.finalizeStepEntity(loopStepEntity, 
+                                      loopResults.errors.length === 0, 
+                                      loopResults.errors.join('\n\n'),
+                                      loopResults);
+
+        if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+            this.injectLoopResultsMessage('ForEach', forEach.collectionPath, loopResults.results, loopResults.errors, params);
+        }
+
+        return {
+            step: 'Retry',
+            retryInstructions: `Completed ForEach loop request using collection at '${forEach.collectionPath}'`,
+            terminate: false,
+            newPayload: loopResults.finalPayload,
+            previousPayload: previousDecision.previousPayload
+        };
+    }
+
+    /**
+     * Helper: Inject loop results as temporary message
+     */
+    private injectLoopResultsMessage(
+        loopType: 'ForEach' | 'While',
+        collectionOrCondition: string,
+        results: BaseAgentNextStep[],
+        errors: any[],
+        params: ExecuteAgentParams
+    ) {
+        // grab the priorStepResult from within each result item and put that into a new array
+        const extractedResults = results.map(r => r.priorStepResult);
+        const label = loopType === 'ForEach' ? 'Collection' : 'Condition';
+        params.conversationMessages.push({
+            role: 'user',
+            content: `## Loop Completed\n**Type:** ${loopType}\n**${label}:** ${collectionOrCondition}\n` +
+                     `**Processed:** ${results.length}, **Errors:** ${errors.length}\n\n` +
+                     `**Results:**\n\`\`\`json\n${JSON.stringify(extractedResults, null, 2)}\n\`\`\``,
+            metadata: { _temporary: true, _loopResults: true }
+        } as any);
+    }
+
+    /**
+     * Helper: Find AgentAction with fuzzy matching for loops
+     */
+    private findAgentActionForLoop(
+        actionName: string,
+        agentId: string,
+        agentName: string,
+        params: ExecuteAgentParams
+    ): AIAgentActionEntity {
+        const agentActions = AIEngine.Instance.AgentActions.filter(aa =>
+            aa.AgentID === agentId && aa.Status === 'Active'
+        );
+
+        // Try exact match first
+        let matched = agentActions.find(aa =>
+            aa.Action.trim().toLowerCase() === actionName.trim().toLowerCase()
+        );
+
+        // Fallback: CONTAINS search
+        if (!matched) {
+            const containsMatches = agentActions.filter(aa =>
+                aa.Action.trim().toLowerCase().includes(actionName.trim().toLowerCase())
+            );
+
+            if (containsMatches.length === 1) {
+                matched = containsMatches[0];
+                this.logStatus(`Action fuzzy matched: '${actionName}' → '${matched.Action}'`, true, params);
+            } else if (containsMatches.length > 1) {
+                throw new Error(`Ambiguous action '${actionName}'. Matches: ${containsMatches.map(a => a.Action).join(', ')}`);
+            } else {
+                throw new Error(`Action '${actionName}' not found for agent '${agentName}'`);
+            }
+        }
+
+        return matched;
+    }
+
+    /**
+     * Helper: Create failed step
+     */
+    private createFailedStep(errorMessage: string, previousDecision: BaseAgentNextStep): BaseAgentNextStep {
+        return {
+            step: 'Failed',
+            terminate: false,
+            errorMessage,
+            previousPayload: previousDecision.previousPayload,
+            newPayload: previousDecision.newPayload || previousDecision.previousPayload
+        };
+    }
+ 
+    /**
+     * Executes a While loop with actual while loop
+     * @private
+     */
+    private async executeWhileLoop(
+        params: ExecuteAgentParams,
+        config: AgentConfiguration,
+        previousDecision: BaseAgentNextStep
+    ): Promise<BaseAgentNextStep> {
+        const whileOp = previousDecision.while as WhileOperation;
+        if (!whileOp) {
+            return this.createFailedStep('While configuration missing', previousDecision);
+        }
+
+        const validationMessage = this.validateWhileOperation(whileOp);
+        if (validationMessage) {
+            return this.createFailedStep(`While configuration invalid: ${validationMessage}`, previousDecision);
+        }
+
+        const currentPayload = previousDecision.newPayload || previousDecision.previousPayload;
+        const loopStepEntity = await this.createWhileLoopStep(whileOp, currentPayload, params);
+        const loopResults = await this.executeWhileIterations(whileOp, currentPayload, loopStepEntity.ID, params, config);
+
+        return this.completeWhileLoop(whileOp, loopStepEntity, loopResults, previousDecision, params);
+    }
+
+    /**
+     * Helper: Create parent While loop step
+     */
+    private async createWhileLoopStep(
+        whileOp: WhileOperation,
+        payload: any,
+        params: ExecuteAgentParams
+    ): Promise<AIAgentRunStepEntityExtended> {
+        const stepEntity = await this.createStepEntity({
+            stepType: 'While',
+            stepName: `While: ${whileOp.condition}`,
+            contextUser: params.contextUser,
+            inputData: { while: whileOp },
+            payloadAtStart: payload
+        });
+        return stepEntity;
+    }
+
+    /**
+     * Helper: Execute While iterations with actual while loop
+     */
+    private async executeWhileIterations(
+        whileOp: WhileOperation,
+        initialPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ results: BaseAgentNextStep[], errors: any[], finalPayload: any, iterations: number }> {
+        let currentPayload = initialPayload;
+        const maxIterations = whileOp.maxIterations ?? 100;
+        const results: BaseAgentNextStep[] = [];
+        const errors = [];
+        let iterationCount = 0;
+
+        const { SafeExpressionEvaluator } = require('@memberjunction/global');
+        const evaluator = new SafeExpressionEvaluator();
+
+        // ACTUAL WHILE LOOP - simple and clear!
+        while (iterationCount < maxIterations) {
+            if (iterationCount > 0 && whileOp.delayBetweenIterationsMs) {
+                await new Promise(resolve => setTimeout(resolve, whileOp.delayBetweenIterationsMs));
+            }
+
+            const evalResult = evaluator.evaluate(whileOp.condition, { payload: currentPayload, results, errors });
+            if (!evalResult.success || !evalResult.value) {
+                break;
+            }
+
+            const attemptContext = { attemptNumber: iterationCount + 1, totalAttempts: iterationCount };
+            const iterResult = await this.executeSingleWhileIteration(
+                whileOp,
+                attemptContext,
+                iterationCount,
+                currentPayload,
+                parentStepId,
+                params,
+                config
+            );
+
+            if (iterResult.error) {
+                errors.push(iterResult.error);
+                if (!whileOp.continueOnError) break;
+            } else {
+                results.push(iterResult.result);
+                currentPayload = iterResult.payload;
+            }
+
+            iterationCount++;
+        }
+
+        return { results, errors, finalPayload: currentPayload, iterations: iterationCount };
+    }
+
+    /**
+     * Helper: Execute single While iteration
+     */
+    private async executeSingleWhileIteration(
+        whileOp: WhileOperation,
+        attemptContext: any,
+        index: number,
+        currentPayload: any,
+        parentStepId: string,
+        params: ExecuteAgentParams,
+        config: AgentConfiguration
+    ): Promise<{ payload?: any, error?: any, result?: BaseAgentNextStep }> {
+        try {
+            // Resolve params via BeforeLoopIteration hook
+            const beforeHook = this.AgentTypeInstance.BeforeLoopIteration?.(
+                { item: attemptContext, index, itemVariable: whileOp.itemVariable, payload: currentPayload, loopType: 'While', actionParams: whileOp.action?.params || {} }
+            );
+            const resolvedParams = beforeHook?.actionParams || whileOp.action?.params || {};
+
+            // Execute action or sub-agent
+            let result;
+            if (whileOp.action) {
+                // Find the AgentAction with fuzzy matching
+                const matchedAction = this.findAgentActionForLoop(whileOp.action.name, params.agent.ID, params.agent.Name, params);
+                const resolvedAction = {
+                    name: matchedAction.Action,
+                    params: resolvedParams
+                };
+                const actionStep = { step: 'Actions' as const, actions: [resolvedAction], newPayload: currentPayload, previousPayload: currentPayload, terminate: false };
+                result = await this.executeActionsStep(params, actionStep as BaseAgentNextStep, parentStepId, false);
+            } else if (whileOp.subAgent) {
+                const subAgentStep = { step: 'Sub-Agent' as const, subAgent: whileOp.subAgent, newPayload: currentPayload, previousPayload: currentPayload };
+                result = await this.processSubAgentStep(params, subAgentStep as BaseAgentNextStep);
+            } else {
+                throw new Error('While missing action/subAgent');
+            }
+
+            // Apply AfterLoopIteration hook
+            const iterPayload = result.newPayload || currentPayload;
+            const afterHook = this.AgentTypeInstance.AfterLoopIteration?.(
+                { currentPayload: iterPayload, item: attemptContext, itemVariable: whileOp.itemVariable, index, loopContext: { actionOutputMapping: whileOp.action?.outputMapping } }
+            );
+
+            return { payload: afterHook || iterPayload, result };
+
+        } catch (error) {
+            return { error: { index, item: attemptContext, message: error.message } };
+        }
+    }
+
+    /**
+     * Helper: Complete While and return result
+     */
+    private async completeWhileLoop(
+        whileOp: WhileOperation,
+        loopStepEntity: AIAgentRunStepEntityExtended,
+        loopResults: { results: BaseAgentNextStep[], errors: any[], finalPayload: any, iterations: number },
+        previousDecision: BaseAgentNextStep,
+        params: ExecuteAgentParams
+    ): Promise<BaseAgentNextStep> {
+        loopStepEntity.PayloadAtEnd = JSON.stringify(loopResults.finalPayload);
+
+        await this.finalizeStepEntity(loopStepEntity, 
+                                      loopResults.errors.length === 0,
+                                      loopResults.errors.join('\n\n'),
+                                      loopResults);
+
+        if (this.AgentTypeInstance.InjectLoopResultsAsMessage) {
+            this.injectLoopResultsMessage('While', whileOp.condition, loopResults.results, loopResults.errors, params);
+        }
+
+        return {
+            step: 'Retry',
+            retryInstructions: `Completed While loop request using condition '${whileOp.condition}' after ${loopResults.iterations} iteration(s)`,
+            terminate: false,
+            newPayload: loopResults.finalPayload,
+            previousPayload: previousDecision.previousPayload
+        };
+    }
+ 
+    /**
      * Creates a failure result with proper tracking.
-     * 
+     *
      * @private
      */
     private async createFailureResult(errorMessage: string, contextUser?: UserInfo): Promise<ExecuteAgentResult> {
@@ -3501,9 +5912,21 @@ export class BaseAgent {
      */
     private async finalizeAgentRun<P>(finalStep: BaseAgentNextStep, payload?: P, contextUser?: UserInfo): Promise<ExecuteAgentResult<P>> {
         if (this._agentRun) {
-            this._agentRun.Status = 'Completed';
             this._agentRun.CompletedAt = new Date();
             this._agentRun.Success = finalStep.step === 'Success' || finalStep.step === 'Chat';
+            if (!this._agentRun.Success && finalStep.message) {
+                // grab the message from the finalStep.message if it exists and append to any existing
+                // error messagge thjat might already be there
+                this._agentRun.ErrorMessage = (this._agentRun.ErrorMessage ? this._agentRun.ErrorMessage + '\n\n' : '') + finalStep.message;
+            }
+            if (!this._agentRun.Success) {
+                // set status to Failed
+                this._agentRun.Status = 'Failed';
+            }
+            else {
+                this._agentRun.Status = 'Completed';
+            }
+        
             this._agentRun.Result = payload ? JSON.stringify(payload) : null;
             this._agentRun.FinalStep = finalStep.step;
             this._agentRun.Message = finalStep.message;
@@ -3528,7 +5951,11 @@ export class BaseAgent {
         return {
             success: finalStep.step === 'Success' || finalStep.step === 'Chat',
             payload,
-            agentRun: this._agentRun!
+            agentRun: this._agentRun!,
+            suggestedResponses: finalStep.suggestedResponses,
+            memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
+                ? this._injectedMemory
+                : undefined
         };
     }
 
@@ -3650,6 +6077,519 @@ export class BaseAgent {
         }
         
         return violations;
+    }
+
+    /**
+     * Prunes and compacts expired messages in the conversation based on configured expiration rules.
+     * Processes messages in three phases: identification, compaction, and removal.
+     *
+     * @param params - Agent execution parameters containing conversation messages
+     * @param currentTurn - Current turn number in the agent execution
+     * @protected
+     */
+    protected async pruneAndCompactExpiredMessages(
+        params: ExecuteAgentParams,
+        currentTurn: number
+    ): Promise<void> {
+        const messagesToCompact: Array<{
+            index: number;
+            message: AgentChatMessage;
+            metadata: {
+                compactMode: 'First N Chars' | 'AI Summary';
+                compactLength: number;
+                compactPromptId: string;
+                originalLength: number;
+            };
+        }> = [];
+        const messagesToRemove: number[] = [];
+
+        // Phase 1: Identify expired messages
+        for (let i = 0; i < params.conversationMessages.length; i++) {
+            const msg = params.conversationMessages[i] as AgentChatMessage;
+
+            // Skip messages without expiration metadata
+            if (!msg.metadata?.expirationTurns && msg.metadata?.expirationTurns !== 0) {
+                continue;
+            }
+
+            // Skip if expiration mode is None
+            if (msg.metadata.expirationMode === 'None') {
+                continue;
+            }
+
+            // Calculate age in turns
+            const turnAdded = msg.metadata.turnAdded || 0;
+            const turnsAlive = currentTurn - turnAdded;
+
+            // Check if expired
+            if (turnsAlive > msg.metadata.expirationTurns) {
+                msg.metadata.isExpired = true;
+
+                if (msg.metadata.expirationMode === 'Remove') {
+                    messagesToRemove.push(i);
+
+                    this.emitMessageLifecycleEvent({
+                        type: 'message-expired',
+                        turn: currentTurn,
+                        messageIndex: i,
+                        message: msg,
+                        reason: `Expired after ${turnsAlive} turns (limit: ${msg.metadata.expirationTurns})`
+                    });
+                } else if (msg.metadata.expirationMode === 'Compact') {
+                    // Ensure we have compact config
+                    if (msg.metadata.compactMode) {
+                        messagesToCompact.push({
+                            index: i,
+                            message: msg,
+                            metadata: {
+                                compactMode: msg.metadata.compactMode,
+                                compactLength: msg.metadata.compactLength || 500,
+                                compactPromptId: msg.metadata.compactPromptId || '',
+                                originalLength: typeof msg.content === 'string'
+                                    ? msg.content.length
+                                    : JSON.stringify(msg.content).length
+                            }
+                        });
+                    }
+                }
+            }
+        }
+
+        // Phase 2: Compact messages (may involve async LLM calls)
+        const preserveOriginal = params.messageExpirationOverride?.preserveOriginalContent !== false;
+
+        for (const item of messagesToCompact) {
+            const originalContent = item.message.content;
+            const compacted = await this.compactMessage(
+                item.message,
+                item.metadata,
+                params
+            );
+
+            // Calculate token savings
+            const originalTokens = this.estimateTokens(originalContent);
+            const compactedTokens = this.estimateTokens(compacted);
+            const tokensSaved = originalTokens - compactedTokens;
+
+            // Update message in place
+            params.conversationMessages[item.index] = {
+                ...item.message,
+                content: compacted,
+                metadata: {
+                    ...item.message.metadata,
+                    wasCompacted: true,
+                    originalContent: preserveOriginal ? originalContent : undefined,
+                    originalLength: item.metadata.originalLength,
+                    tokensSaved,
+                    canExpand: preserveOriginal
+                }
+            };
+
+            this.emitMessageLifecycleEvent({
+                type: 'message-compacted',
+                turn: currentTurn,
+                messageIndex: item.index,
+                message: params.conversationMessages[item.index] as AgentChatMessage,
+                reason: `Compacted using ${item.metadata.compactMode} (saved ${tokensSaved} tokens)`,
+                tokensSaved
+            });
+        }
+
+        // Phase 3: Remove expired messages (reverse order to preserve indices)
+        for (let i = messagesToRemove.length - 1; i >= 0; i--) {
+            const index = messagesToRemove[i];
+            const removed = params.conversationMessages.splice(index, 1)[0];
+
+            this.emitMessageLifecycleEvent({
+                type: 'message-removed',
+                turn: currentTurn,
+                messageIndex: index,
+                message: removed as AgentChatMessage,
+                reason: 'Removed due to expiration'
+            });
+        }
+
+        // Log summary if verbose
+        if (params.verbose && (messagesToCompact.length > 0 || messagesToRemove.length > 0)) {
+            const totalSaved = messagesToCompact.reduce((sum, item) => {
+                const msg = params.conversationMessages[item.index] as AgentChatMessage;
+                return sum + (msg.metadata?.tokensSaved || 0);
+            }, 0);
+
+            console.log(`[Turn ${currentTurn}] Message pruning: ` +
+                `${messagesToCompact.length} compacted (saved ~${totalSaved} tokens), ` +
+                `${messagesToRemove.length} removed`);
+        }
+    }
+
+    /**
+     * Creates an AIAgentRunStep for message compaction operations.
+     * Records the compaction attempt with context about the message being compacted.
+     *
+     * @param prompt - The AI prompt used for compaction
+     * @param message - The message being compacted
+     * @param params - Agent execution parameters
+     * @returns The created run step entity
+     * @protected
+     */
+    protected async createCompactionStep(
+        prompt: AIPromptEntityExtended,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<AIAgentRunStepEntityExtended> {
+        if (!this._agentRun) {
+            throw new Error('Cannot create compaction step: agent run not initialized');
+        }
+
+        const md = new Metadata();
+        const step = await md.GetEntityObject<AIAgentRunStepEntityExtended>(
+            'MJ: AI Agent Run Steps',
+            params.contextUser
+        );
+
+        step.NewRecord();
+        step.AgentRunID = this._agentRun.ID;
+        step.StepType = 'Prompt';
+        step.Status = 'Running';
+        step.InputData = JSON.stringify({
+            stepName: 'Message Compaction',
+            description: `Compacting message using AI Summary (${message.metadata?.messageType || 'unknown'} from turn ${message.metadata?.turnAdded || 0})`,
+            messageType: message.metadata?.messageType,
+            turnAdded: message.metadata?.turnAdded,
+            originalLength: message.metadata?.originalLength ||
+                (typeof message.content === 'string' ? message.content.length : JSON.stringify(message.content).length),
+            compactMode: 'AI Summary',
+            promptId: prompt.ID,
+            promptName: prompt.Name
+        });
+
+        await step.Save();
+        return step;
+    }
+
+    /**
+     * Updates the compaction step with execution results and token usage.
+     *
+     * @param step - The run step to update
+     * @param result - The prompt execution result
+     * @param message - The message that was compacted
+     * @param params - Agent execution parameters
+     * @protected
+     */
+    protected async updateCompactionStep(
+        step: AIAgentRunStepEntityExtended,
+        result: AIPromptRunResult<{ summary: string }>,
+        message: AgentChatMessage,
+        params: ExecuteAgentParams
+    ): Promise<void> {
+        step.Status = result.success ? 'Completed' : 'Failed';
+        const promptTokens = result.promptTokens || 0;
+        const completionTokens = result.completionTokens || 0;
+        step.OutputData = JSON.stringify({
+            success: result.success,
+            summaryLength: result.result?.summary?.length || 0,
+            tokensSaved: message.metadata?.tokensSaved || 0,
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            cost: result.cost
+        });
+
+        if (!result.success) {
+            step.ErrorMessage = result.errorMessage || 'AI Summary compaction failed';
+        }
+
+        await step.Save();
+    }
+
+    /**
+     * Compacts a message using configured compaction mode.
+     *
+     * @param message - The message to compact
+     * @param metadata - Compaction configuration
+     * @param params - Agent execution parameters for context
+     * @returns Compacted content string
+     * @protected
+     */
+    protected async compactMessage(
+        message: AgentChatMessage,
+        metadata: {
+            compactMode: 'First N Chars' | 'AI Summary';
+            compactLength: number;
+            compactPromptId: string;
+            originalLength: number;
+        },
+        params: ExecuteAgentParams
+    ): Promise<string> {
+        const originalContent = typeof message.content === 'string'
+            ? message.content
+            : JSON.stringify(message.content);
+
+        switch (metadata.compactMode) {
+            case 'First N Chars': {
+                const length = metadata.compactLength;
+
+                if (originalContent.length <= length) {
+                    return originalContent; // Already short enough
+                }
+
+                const truncated = originalContent.substring(0, length);
+                return `${truncated}...\n\n[Compacted: showing first ${length} of ${originalContent.length} characters. Agent can request expansion if needed.]`;
+            }
+
+            case 'AI Summary': {
+                try {
+                    // Get prompt for summarization with lookup hierarchy:
+                    // 1. Runtime override (metadata.compactPromptId from messageExpirationOverride)
+                    // 2. AIAgentAction.CompactPromptID
+                    // 3. Action.DefaultCompactPromptID
+                    // 4. System default compact prompt
+                    const promptId = metadata.compactPromptId || this.getSystemDefaultCompactPromptId();
+                    const prompt = AIEngine.Instance.Prompts.find(p => p.ID === promptId);
+
+                    if (!prompt) {
+                        // Fallback to First N Chars if prompt not found
+                        console.warn(`Compact prompt ${promptId} not found, falling back to First N Chars`);
+                        return this.compactMessage(message,
+                            { ...metadata, compactMode: 'First N Chars' },
+                            params
+                        );
+                    }
+
+                    // Create tracking step for this compaction
+                    const step = await this.createCompactionStep(prompt, message, params);
+
+                    // Execute summarization prompt
+                    const promptParams = new AIPromptParams();
+                    promptParams.prompt = prompt;
+                    promptParams.data = {
+                        originalContent,
+                        originalLength: metadata.originalLength,
+                        targetLength: metadata.compactLength || 500,
+                        messageType: message.metadata?.messageType || 'unknown',
+                        turnAdded: message.metadata?.turnAdded || 0
+                    };
+                    promptParams.contextUser = params.contextUser;
+
+                    const runner = new AIPromptRunner();
+                    const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);
+
+                    // Update step with result
+                    await this.updateCompactionStep(step, result, message, params);
+
+                    if (!result.success || !result.result?.summary) {
+                        // Fallback to First N Chars on failure
+                        console.warn('AI summary failed, falling back to First N Chars');
+                        return this.compactMessage(message,
+                            { ...metadata, compactMode: 'First N Chars' },
+                            params
+                        );
+                    }
+
+                    return `[AI Summary of ${metadata.originalLength} chars. Agent can request full expansion if needed.]\n\n${result.result.summary}`;
+
+                } catch (error) {
+                    console.error('Error during AI summary:', error);
+                    // Fallback to First N Chars
+                    return this.compactMessage(message,
+                        { ...metadata, compactMode: 'First N Chars' },
+                        params
+                    );
+                }
+            }
+
+            default:
+                return originalContent;
+        }
+    }
+
+    /**
+     * Returns the system default prompt ID for message compaction.
+     * Looks up the "Compact Agent Message" prompt by name.
+     * @protected
+     */
+    protected getSystemDefaultCompactPromptId(): string {
+        const prompt = AIEngine.Instance.Prompts.find(p => p.Name === 'Compact Agent Message');
+        if (!prompt) {
+            console.warn('System default compact prompt not found. Ensure "Compact Agent Message" prompt exists.');
+            return '';
+        }
+        return prompt.ID;
+    }
+
+    /**
+     * Estimates token count from content.
+     * Uses js-tiktoken for accurate counting when available and model info is provided,
+     * falls back to improved heuristic otherwise.
+     * @param content - The message content to estimate tokens for
+     * @param modelName - Optional model name for accurate tokenization
+     * @protected
+     */
+    protected estimateTokens(content: ChatMessage['content'], modelName?: string): number {
+        const text = typeof content === 'string'
+            ? content
+            : JSON.stringify(content);
+
+        // Use heuristic token estimation (fast, good enough for context management)
+        // Avoids heavy tokenizer dependencies while providing ~10-20% accuracy
+        return this.heuristicTokenCount(text);
+    }
+
+    /**
+     * Provides an improved heuristic token count when tokenizer is unavailable.
+     * @param text - The text to estimate tokens for
+     * @returns Estimated token count
+     * @private
+     */
+    private heuristicTokenCount(text: string): number {
+        // More sophisticated heuristic
+        const charCount = text.length;
+
+        // Count structural tokens (JSON syntax adds overhead)
+        const structuralChars = (text.match(/[\{\}\[\],:]/g) || []).length;
+        const whitespaceChars = (text.match(/\s/g) || []).length;
+
+        // Effective character count (whitespace counts less)
+        const effectiveChars = charCount - (whitespaceChars * 0.5);
+
+        // Base ratio: 4 chars per token
+        // Adjustment: +0.05 token for every structural char
+        const baseTokens = effectiveChars / 4;
+        const structuralTokens = structuralChars * 0.05;
+
+        return Math.ceil(baseTokens + structuralTokens);
+    }
+
+    /**
+     * Gets the context limit for the current model.
+     * Uses model selection info from the prompt result to determine the actual model's MaxInputTokens.
+     * @param modelSelectionInfo - Model selection information from the prompt execution
+     * @returns The maximum input tokens for the model
+     * @protected
+     */
+    protected getModelContextLimit(modelSelectionInfo?: AIModelSelectionInfo): number {
+        // Default conservative limit if we can't determine the actual limit
+        const DEFAULT_LIMIT = 8000;
+
+        if (!modelSelectionInfo) {
+            this.logStatus(`No model selection info available, using default limit: ${DEFAULT_LIMIT}`, true);
+            return DEFAULT_LIMIT;
+        }
+
+        try {
+            // Get the selected model and vendor from the model selection info
+            const modelSelected = modelSelectionInfo.modelSelected;
+            const vendorSelected = modelSelectionInfo.vendorSelected;
+
+            if (!modelSelected) {
+                this.logStatus(`No model selected in model selection info, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // If no vendor selected, can't determine model-specific limit
+            if (!vendorSelected) {
+                this.logStatus(`No vendor selected, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Find the ModelVendor entry that matches the selected vendor
+            const modelVendors = modelSelected.ModelVendors;
+            if (!modelVendors || modelVendors.length === 0) {
+                this.logStatus(`No ModelVendors array found on model, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Find the vendor-specific entry
+            const vendorEntry = modelVendors.find((mv: any) => mv.VendorID === vendorSelected.ID);
+            if (!vendorEntry) {
+                this.logStatus(`No matching vendor entry found in ModelVendors, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            // Get MaxInputTokens from the vendor-specific entry
+            const maxInputTokens = vendorEntry.MaxInputTokens;
+            if (!maxInputTokens || maxInputTokens <= 0) {
+                this.logStatus(`MaxInputTokens not set or invalid on vendor entry, using default limit: ${DEFAULT_LIMIT}`, true);
+                return DEFAULT_LIMIT;
+            }
+
+            this.logStatus(`Using vendor-specific MaxInputTokens: ${maxInputTokens} (Model: ${modelSelected.Name}, Vendor: ${vendorSelected.Name})`, true);
+            return maxInputTokens;
+
+        } catch (error) {
+            this.logStatus(`Error extracting model context limit: ${error}, using default limit: ${DEFAULT_LIMIT}`, true);
+            return DEFAULT_LIMIT;
+        }
+    }
+
+    /**
+     * Estimates total token count across all conversation messages.
+     * @param messages - Message array to estimate
+     * @returns Total estimated tokens
+     * @protected
+     */
+    protected estimateConversationTokens(messages: ChatMessage[]): number {
+        return messages.reduce((total, msg) => {
+            return total + this.estimateTokens(msg.content);
+        }, 0);
+    }
+
+    /**
+     * Emits message lifecycle event if callback is registered.
+     * @protected
+     */
+    protected emitMessageLifecycleEvent(event: MessageLifecycleEvent): void {
+        if (this._messageLifecycleCallback) {
+            this._messageLifecycleCallback(event);
+        }
+    }
+
+    /**
+     * Expands a previously compacted message to its original content.
+     *
+     * @param request - The expand message request
+     * @param params - Agent execution parameters
+     * @param currentTurn - Current turn number
+     * @protected
+     */
+    protected executeExpandMessageStep(
+        request: BaseAgentNextStep,
+        params: ExecuteAgentParams,
+        currentTurn: number
+    ): void {
+        const messageIndex = request.messageIndex;
+        const reason = request.expandReason;
+
+        if (messageIndex === undefined || messageIndex < 0 || messageIndex >= params.conversationMessages.length) {
+            console.warn(`Cannot expand message: index ${messageIndex} out of bounds`);
+            return;
+        }
+
+        const message = params.conversationMessages[messageIndex] as AgentChatMessage;
+
+        if (!message.metadata?.canExpand || !message.metadata?.originalContent) {
+            console.warn(`Cannot expand message at index ${messageIndex}: not expandable or no original content`);
+            return;
+        }
+
+        // Restore original content
+        message.content = message.metadata.originalContent;
+        message.metadata.wasCompacted = false;
+        message.metadata.canExpand = false;
+        delete message.metadata.originalContent;
+
+        // Emit lifecycle event
+        this.emitMessageLifecycleEvent({
+            type: 'message-expanded',
+            turn: currentTurn,
+            messageIndex,
+            message,
+            reason: reason || 'Agent requested expansion'
+        });
+
+        if (params.verbose) {
+            console.log(`[Turn ${currentTurn}] Expanded message at index ${messageIndex}`);
+        }
     }
 }
 

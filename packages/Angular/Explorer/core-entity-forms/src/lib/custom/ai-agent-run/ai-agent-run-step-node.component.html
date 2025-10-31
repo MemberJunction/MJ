@@ -5,19 +5,24 @@
      [style.margin-left.px]="item.level * 24"
      (click)="handleClick()">
   
-  <!-- Expand/Collapse Button for Sub-Agents -->
-  <button class="expand-toggle" 
-          *ngIf="isSubAgent"
+  <!-- Expand/Collapse Button for Sub-Agents and Parent Steps -->
+  <button class="expand-toggle"
+          *ngIf="canExpand"
           (click)="handleExpandToggle($event)"
           [attr.aria-expanded]="item.isExpanded">
-    <i class="fas" 
+    <i class="fas"
        [class.fa-chevron-right]="!item.isExpanded"
        [class.fa-chevron-down]="item.isExpanded"></i>
   </button>
   
   <!-- Timeline Marker -->
   <div class="timeline-marker" [attr.data-color]="item.color">
-    <i class="fas" [ngClass]="item.icon"></i>
+    <img *ngIf="item.logoUrl"
+         [src]="item.logoUrl"
+         [alt]="item.title"
+         class="timeline-marker-logo"
+         (error)="onLogoError($event)" />
+    <i *ngIf="!item.logoUrl" class="fas" [ngClass]="item.icon"></i>
   </div>
   
   <!-- Timeline Content -->

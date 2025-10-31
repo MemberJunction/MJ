@@ -70,7 +70,9 @@ export const loadModule = () => {
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
-          values = e.EntityFieldValues.map(
+          // Sort by Sequence to ensure consistent ordering in comments
+          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
@@ -79,7 +81,9 @@ export const loadModule = () => {
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
-          typeString = e.EntityFieldValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
+          // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
+          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          typeString = sortedValues.map((v) => `${quotes}${v.Value}${quotes}`).join(' | ');
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += ' | ' + TypeScriptTypeFromSQLType(e.Type);
@@ -327,8 +331,8 @@ ${formattedText}`
       }).join('\n\n')
 
       const ret = `    /**
-    * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields: 
-${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${f.functionDescription}`).join('\n')}  
+    * Validate() method override for ${entity.Name} entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: ${f.functionDescription}`).join('\n')}
     * @public
     * @method
     * @override
@@ -336,6 +340,7 @@ ${validators.map((f) => `    * * ${f.fieldName ? f.fieldName : 'Table-Level'}: $
     public override Validate(): ValidationResult {
         const result = super.Validate();
 ${validators.map((f) => `        this.${f.functionName}(result);`).join('\n')}
+        result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
     }
@@ -357,7 +362,9 @@ ${validationFunctions}`
         let values: string = '';
         let valueList: string = '';
         if (e.ValueListType && e.ValueListType.length > 0 && e.ValueListType.trim().toLowerCase() !== 'none') {
-          values = e.EntityFieldValues.map(
+          // Sort by Sequence to ensure consistent ordering in comments
+          const sortedValues = sortBySequenceAndCreatedAt([...e.EntityFieldValues]);
+          values = sortedValues.map(
             (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
           ).join('');
           valueList = `\n    * * Value List Type: ${e.ValueListType}\n    * * Possible Values ` + values;
@@ -366,7 +373,9 @@ ${validationFunctions}`
         if (e.ValueListTypeEnum !== EntityFieldValueListType.None && e.EntityFieldValues && e.EntityFieldValues.length > 0) {
           // construct a typeString that is a union of the possible values
           const quotes = e.NeedsQuotes ? "'" : '';
-          typeString = `union([${e.EntityFieldValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
+          // Sort by Sequence to ensure consistent ordering (values are alphabetically ordered in DB)
+          const sortedValues = [...e.EntityFieldValues].sort((a, b) => a.Sequence - b.Sequence);
+          typeString = `union([${sortedValues.map((v) => `z.literal(${quotes}${v.Value}${quotes})`).join(', ')}])`;
           if (e.ValueListTypeEnum === EntityFieldValueListType.ListOrUserEntry) {
             // special case becuase a user can enter whatever they want
             typeString += `.or(z.${TypeScriptTypeFromSQLType(e.Type)}()) `;
@@ -402,7 +411,9 @@ export type ${entity.ClassName}EntityType = z.infer<typeof ${schemaName}>;
 
     let valueList: string = '';
     if (entityField.ValueListType && entityField.ValueListType.length > 0 && entityField.ValueListType.trim().toLowerCase() !== 'none') {
-      let values = entityField.EntityFieldValues.map(
+      // Sort by Sequence to ensure consistent ordering in comments
+      const sortedValues = sortBySequenceAndCreatedAt([...entityField.EntityFieldValues]);
+      let values = sortedValues.map(
         (v) => `\n    *   * ${v.Value}${v.Description && v.Description.length > 0 ? ' - ' + v.Description : ''}`
       ).join('');
       valueList = `\n    * * Value List Type: ${entityField.ValueListType}\n    * * Possible Values ` + values;

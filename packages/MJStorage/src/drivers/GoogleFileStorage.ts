@@ -2,12 +2,17 @@ import { GetSignedUrlConfig, Storage } from '@google-cloud/storage';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  FileSearchOptions,
+  FileSearchResultSet,
+  GetObjectParams,
+  GetObjectMetadataParams,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * Google Cloud Storage implementation of the FileStorageBase interface.
@@ -54,9 +59,41 @@ export class GoogleFileStorage extends FileStorageBase {
    */
   constructor() {
     super();
-    const credentials = env.get('STORAGE_GOOGLE_KEY_JSON').required().asJsonObject();
-    this._client = new Storage({ credentials });
-    this._bucket = env.get('STORAGE_GOOGLE_BUCKET_NAME').required().asString();
+
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('googleCloud');
+
+    // Handle credentials from config or env vars
+    let credentials;
+    if (config?.keyJSON) {
+      // If keyJSON is a string, parse it
+      credentials = typeof config.keyJSON === 'string' ? JSON.parse(config.keyJSON) : config.keyJSON;
+    } else if (config?.keyFilename) {
+      // If keyFilename is provided, use it
+      this._client = new Storage({ keyFilename: config.keyFilename });
+      this._bucket = config?.defaultBucket || env.get('STORAGE_GOOGLE_BUCKET_NAME').required().asString();
+      return;
+    } else {
+      // Fall back to env vars
+      credentials = env.get('STORAGE_GOOGLE_KEY_JSON').required().asJsonObject();
+    }
+
+    // Initialize with credentials
+    const storageOptions: { credentials?: object; projectId?: string } = { credentials };
+    if (config?.projectID) {
+      storageOptions.projectId = config.projectID;
+    }
+
+    this._client = new Storage(storageOptions);
+    this._bucket = config?.defaultBucket || env.get('STORAGE_GOOGLE_BUCKET_NAME').required().asString();
+  }
+
+  /**
+   * Checks if Google Cloud Storage provider is properly configured.
+   * Returns true if service account credentials and bucket name are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._client && this._bucket);
   }
 
   /**
@@ -402,19 +439,23 @@ export class GoogleFileStorage extends FileStorageBase {
 
   /**
    * Retrieves metadata for a specific object in Google Cloud Storage.
-   * 
+   *
    * This method fetches the properties of an object without downloading its content,
    * which is more efficient for checking file attributes like size, content type,
    * and last modified date.
-   * 
-   * @param objectName - The name of the object to get metadata for
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for GCS)
    * @returns A Promise resolving to a StorageObjectMetadata object
    * @throws Error if the object doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const metadata = await gcsStorage.GetObjectMetadata('documents/report.pdf');
+   *   // For GCS, objectId and fullPath are the same (both are the object name)
+   *   const metadata = await gcsStorage.GetObjectMetadata({ fullPath: 'documents/report.pdf' });
+   *   // Or equivalently:
+   *   const metadata2 = await gcsStorage.GetObjectMetadata({ objectId: 'documents/report.pdf' });
+   *
    *   console.log(`File: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Last modified: ${metadata.lastModified}`);
@@ -423,15 +464,23 @@ export class GoogleFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For GCS, objectId and fullPath are the same (both are the object name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const file = this._client.bucket(this._bucket).file(objectName);
       const [metadata] = await file.getMetadata();
-      
+
       const pathParts = objectName.split('/');
       const name = pathParts[pathParts.length - 1];
       const path = pathParts.slice(0, -1).join('/');
-      
+
       return {
         name,
         path,
@@ -447,24 +496,28 @@ export class GoogleFileStorage extends FileStorageBase {
     } catch (e) {
       console.error('Error getting object metadata from Google storage', { objectName, bucket: this._bucket });
       console.error(e);
-      throw new Error(`Object not found: ${objectName}`);
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
 
   /**
    * Downloads an object's content from Google Cloud Storage.
-   * 
+   *
    * This method retrieves the full content of an object and returns it
    * as a Buffer for processing in memory.
-   * 
-   * @param objectName - The name of the object to download
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for GCS)
    * @returns A Promise resolving to a Buffer containing the object's data
    * @throws Error if the object doesn't exist or cannot be downloaded
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const content = await gcsStorage.GetObject('documents/config.json');
+   *   // For GCS, objectId and fullPath are the same (both are the object name)
+   *   const content = await gcsStorage.GetObject({ fullPath: 'documents/config.json' });
+   *   // Or equivalently:
+   *   const content2 = await gcsStorage.GetObject({ objectId: 'documents/config.json' });
+   *
    *   // Parse the JSON content
    *   const config = JSON.parse(content.toString('utf8'));
    *   console.log('Configuration loaded:', config);
@@ -473,7 +526,15 @@ export class GoogleFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For GCS, objectId and fullPath are the same (both are the object name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const file = this._client.bucket(this._bucket).file(objectName);
       const [bufferContent] = await file.download();
@@ -481,7 +542,7 @@ export class GoogleFileStorage extends FileStorageBase {
     } catch (e) {
       console.error('Error getting object from Google storage', { objectName, bucket: this._bucket });
       console.error(e);
-      throw new Error(`Failed to get object: ${objectName}`);
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
 
@@ -647,19 +708,19 @@ export class GoogleFileStorage extends FileStorageBase {
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {
       directoryPath = this._normalizeDirectoryPath(directoryPath);
-      
+
       // Method 1: Check if directory placeholder exists
       const placeholderExists = await this.ObjectExists(directoryPath);
       if (placeholderExists) {
         return true;
       }
-      
+
       // Method 2: Check if any objects with this prefix exist
       const options = {
         prefix: directoryPath,
         maxResults: 1
       };
-      
+
       const [files] = await this._client.bucket(this._bucket).getFiles(options);
       return files.length > 0;
     } catch (e) {
@@ -667,5 +728,26 @@ export class GoogleFileStorage extends FileStorageBase {
       console.error(e);
       return false;
     }
+  }
+
+  /**
+   * Search is not supported by Google Cloud Storage.
+   * GCS is an object storage service without built-in search capabilities.
+   *
+   * To search GCS objects, consider:
+   * - Using BigQuery to query GCS data
+   * - Maintaining a separate search index (Elasticsearch, etc.)
+   * - Using object metadata for filtering with ListObjects
+   * - Using Cloud Data Loss Prevention API for content discovery
+   *
+   * @param query - The search query (not used)
+   * @param options - Search options (not used)
+   * @throws UnsupportedOperationError always
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    this.throwUnsupportedOperationError('SearchFiles');
   }
 }

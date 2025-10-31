@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/content-autotagging",
-  "version": "2.99.0",
+  "version": "2.112.0",
   "description": "MemberJunction Content Autotagging Application",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",
@@ -16,11 +16,12 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
-    "@memberjunction/ai": "2.99.0",
-    "@memberjunction/aiengine": "2.99.0",
-    "@memberjunction/core": "2.99.0",
-    "@memberjunction/core-entities": "2.99.0",
-    "@memberjunction/global": "2.99.0",
+    "@memberjunction/ai": "2.112.0",
+    "@memberjunction/ai-provider-bundle": "2.112.0",
+    "@memberjunction/aiengine": "2.112.0",
+    "@memberjunction/core": "2.112.0",
+    "@memberjunction/core-entities": "2.112.0",
+    "@memberjunction/global": "2.112.0",
     "axios": "^1.7.2",
     "cheerio": "^1.0.0-rc.12",
     "crypto": "^1.0.1",
@@ -46,5 +47,9 @@
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.4.5"
   },
-  "keywords": []
+  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

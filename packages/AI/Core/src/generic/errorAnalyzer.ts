@@ -59,6 +59,7 @@ export class ErrorAnalyzer {
         // Check provider error code for context length exceeded (in case message parsing missed it)
         if (providerErrorCode === 'context_length_exceeded') {
             return {
+                error,
                 httpStatusCode,
                 errorType: 'ContextLengthExceeded',
                 severity: 'Fatal',
@@ -74,6 +75,7 @@ export class ErrorAnalyzer {
         }
         
         return {
+            error,
             httpStatusCode,
             errorType,
             severity,
@@ -118,14 +120,98 @@ export class ErrorAnalyzer {
      * @returns {AIErrorType} The categorized error type
      */
     private static determineErrorType(error: any, statusCode?: number): AIErrorType {
-        // Check status code first
+        // IMPORTANT: Check error message patterns FIRST before status codes
+        // This allows us to correctly classify vendor-specific errors that may use
+        // non-standard status codes (e.g., xAI using 403 for billing/quota issues)
+        const errorString = (error?.message || error?.name || '').toLowerCase();
+
+        // Check for context length exceeded errors first (highest priority)
+        if (errorString.includes('context_length_exceeded') ||
+            errorString.includes('context length exceeded') ||
+            errorString.includes('reduce the length of the messages') ||
+            errorString.includes('maximum context length')) {
+            return 'ContextLengthExceeded';
+        }
+
+        // Check for rate limit errors
+        if (errorString.includes('rate limit') ||
+            errorString.includes('too many requests')) {
+            return 'RateLimit';
+        }
+
+        // Check for billing/credit/quota errors (separate from rate limits)
+        if (errorString.includes('credit') ||       // xAI "no credits" errors
+            errorString.includes('billing') ||      // Generic billing issues
+            errorString.includes('payment') ||      // Payment required errors
+            errorString.includes('insufficient funds') ||
+            errorString.includes('quota exceeded') ||
+            errorString.includes('balance') ||      // Account balance issues
+            errorString.includes('no funds')) {
+            return 'NoCredit';
+        }
+
+        // Check for clear authentication/authorization errors (must be specific)
+        if (errorString.includes('unauthorized') ||
+            errorString.includes('authentication failed') ||
+            errorString.includes('invalid api key') ||
+            errorString.includes('invalid key') ||
+            errorString.includes('api key is invalid')) {
+            return 'Authentication';
+        }
+
+        // Check for service availability issues
+        if (errorString.includes('service unavailable') ||
+            errorString.includes('service is down') ||
+            errorString.includes('maintenance') ||
+            errorString.includes('temporarily unavailable')) {
+            return 'ServiceUnavailable';
+        }
+
+        // Check for network errors
+        if (errorString.includes('network') ||
+            errorString.includes('timeout') ||
+            errorString.includes('econnrefused') ||
+            errorString.includes('dns') ||
+            errorString.includes('connection reset')) {
+            return 'NetworkError';
+        }
+
+        // Check for model-specific errors
+        if (errorString.includes('model') &&
+            (errorString.includes('not found') ||
+             errorString.includes('does not exist') ||
+             errorString.includes('overloaded') ||
+             errorString.includes('not available'))) {
+            return 'ModelError';
+        }
+
+        // Check for invalid request patterns (be specific to avoid false positives)
+        if (errorString.includes('invalid request') ||
+            errorString.includes('bad request') ||
+            errorString.includes('malformed request') ||
+            errorString.includes('validation error')) {
+            return 'InvalidRequest';
+        }
+
+        // Check for specific error types from provider SDKs
+        const errorTypeName = error?.constructor?.name || error?.name || '';
+
+        if (errorTypeName.includes('RateLimit')) return 'RateLimit';
+        if (errorTypeName.includes('Authentication')) return 'Authentication';
+        if (errorTypeName.includes('APIError') && statusCode === 500) return 'InternalServerError';
+
+        // NOW check status codes as fallback (lower priority than message content)
         if (statusCode) {
             switch (statusCode) {
                 case 429:
                     return 'RateLimit';
                 case 401:
-                case 403:
+                    // 401 is almost always authentication
                     return 'Authentication';
+                case 403:
+                    // 403 can be auth OR quota/billing - if we got here, message didn't clarify,
+                    // so treat as retriable ServiceUnavailable to allow failover
+                    return 'ServiceUnavailable';
                 case 503:
                     return 'ServiceUnavailable';
                 case 500:
@@ -134,67 +220,12 @@ export class ErrorAnalyzer {
                     return 'InternalServerError';
                 case 400:
                 case 422:
+                    // Only treat as InvalidRequest if we have a status code but message didn't match
+                    // anything more specific above
                     return 'InvalidRequest';
             }
         }
-        
-        // Check error message and name patterns
-        const errorString = (error?.message || error?.name || '').toLowerCase();
-        
-        // Check for context length exceeded errors first (before general InvalidRequest)
-        if (errorString.includes('context_length_exceeded') || 
-            errorString.includes('context length exceeded') ||
-            errorString.includes('reduce the length of the messages') ||
-            errorString.includes('maximum context length')) {
-            return 'ContextLengthExceeded';
-        }
-        
-        if (errorString.includes('rate limit') || 
-            errorString.includes('too many requests') ||
-            errorString.includes('quota exceeded')) {
-            return 'RateLimit';
-        }
-        
-        if (errorString.includes('unauthorized') || 
-            errorString.includes('authentication') ||
-            errorString.includes('api key') ||
-            errorString.includes('invalid key')) {
-            return 'Authentication';
-        }
-        
-        if (errorString.includes('service unavailable') || 
-            errorString.includes('service is down') ||
-            errorString.includes('maintenance')) {
-            return 'ServiceUnavailable';
-        }
-        
-        if (errorString.includes('network') || 
-            errorString.includes('timeout') ||
-            errorString.includes('econnrefused') ||
-            errorString.includes('dns')) {
-            return 'NetworkError';
-        }
-        
-        if (errorString.includes('model') && 
-            (errorString.includes('not found') || 
-             errorString.includes('does not exist') ||
-             errorString.includes('overloaded'))) {
-            return 'ModelError';
-        }
-        
-        if (errorString.includes('invalid') || 
-            errorString.includes('bad request') ||
-            errorString.includes('malformed')) {
-            return 'InvalidRequest';
-        }
-        
-        // Check for specific error types from provider SDKs
-        const errorTypeName = error?.constructor?.name || error?.name || '';
-        
-        if (errorTypeName.includes('RateLimit')) return 'RateLimit';
-        if (errorTypeName.includes('Authentication')) return 'Authentication';
-        if (errorTypeName.includes('APIError') && statusCode === 500) return 'InternalServerError';
-        
+
         return 'Unknown';
     }
     
@@ -210,21 +241,22 @@ export class ErrorAnalyzer {
     private static determineSeverity(errorType: AIErrorType): ErrorSeverity {
         switch (errorType) {
             case 'RateLimit':
+            case 'NoCredit':              // Billing/credit errors are retriable with another provider
             case 'ServiceUnavailable':
             case 'NetworkError':
                 return 'Retriable';
-                
+
             case 'InternalServerError':
             case 'ModelError':
                 return 'Transient';
-                
+
             case 'Authentication':
             case 'InvalidRequest':
                 return 'Fatal';
-                
+
             case 'ContextLengthExceeded':
                 return 'Fatal';
-                
+
             default:
                 return 'Transient';
         }
@@ -232,8 +264,11 @@ export class ErrorAnalyzer {
     
     /**
      * Determines whether an error can potentially be resolved by switching providers.
-     * Some errors are provider-specific while others are request-specific.
-     * 
+     *
+     * Strategy: We're permissive with failover - most errors should allow trying another
+     * provider/model since vendors may use different status codes and error messages.
+     * Only block failover for clear client-side errors that won't be fixed by switching.
+     *
      * @private
      * @static
      * @param {AIErrorType} errorType - The categorized error type
@@ -241,20 +276,22 @@ export class ErrorAnalyzer {
      */
     private static canFailoverForError(errorType: AIErrorType): boolean {
         switch (errorType) {
-            case 'RateLimit':
-            case 'ServiceUnavailable':
-            case 'InternalServerError':
-            case 'NetworkError':
-            case 'ModelError':
+            // Provider-specific errors - ALWAYS allow failover
+            case 'RateLimit':              // Different provider may have capacity
+            case 'NoCredit':               // Different provider may have credits/quota
+            case 'ServiceUnavailable':     // Different provider may be available
+            case 'InternalServerError':    // Different provider may be stable
+            case 'NetworkError':           // Different provider/region may be reachable
+            case 'ModelError':             // Different provider may have working model
+            case 'ContextLengthExceeded':  // Different model may have larger context
+            case 'Authentication':         // Different vendor may have valid API key
                 return true;
-                
-            case 'Authentication':
-            case 'InvalidRequest':
+
+            // Clear client-side errors - DO NOT failover (won't help)
+            case 'InvalidRequest':         // Malformed request won't work elsewhere
                 return false;
-                
-            case 'ContextLengthExceeded':
-                return true;
-                
+
+            // Unknown errors - DEFAULT to allowing failover (permissive approach)
             default:
                 return true;
         }

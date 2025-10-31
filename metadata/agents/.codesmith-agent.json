@@ -1,0 +1,60 @@
+[
+  {
+    "fields": {
+      "Name": "Codesmith Agent",
+      "Description": "Expert code generator and executor for data analysis and transformations. Generates JavaScript code, tests it in a secure sandbox, and iteratively refines it until successful. Supports lodash, date-fns, mathjs, papaparse, uuid, and validator libraries. Perfect for data manipulation, calculations, and analysis tasks.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": true,
+      "InvocationMode": "Any",
+      "IconClass": "fa-solid fa-hammer",
+      "PayloadSelfWritePaths": "[\"task\", \"inputData\", \"requirements\", \"iterations\", \"code\", \"results\", \"errors\", \"logs\"]",
+      "FinalPayloadValidation": "{\"code\": \"string:!empty\", \"results\": \"any\", \"iterations\": \"number:[1+]\"}",
+      "FinalPayloadValidationMode": "Warn",
+      "MaxIterationsPerRun": 10
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Codesmith Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C2854FC4-5A06-4A9A-A6A8-E0DB10175DB7"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T19:24:53.931Z",
+            "checksum": "aef84cc88b4a365061a8fde426dd45c975f9fe7fb27127c635fe1cfc260fff6d"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Execute Code",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A67BA225-1F18-4FBA-976A-67762319074E"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T19:24:53.942Z",
+            "checksum": "36e26f29dad3c3d85fd9b8755617c63d0a26589a26aec5fa4d2ddf4925971f55"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "03E3675E-E8C7-41B3-92C6-99520FF35FAB"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T19:24:53.894Z",
+      "checksum": "ed3f978f73841fd9c86365c20e7e6af876694ba66e137fd884db2d918391dd8a"
+    }
+  }
+]

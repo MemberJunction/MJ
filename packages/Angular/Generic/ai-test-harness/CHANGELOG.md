@@ -1,5 +1,206 @@
 # @memberjunction/ng-ai-test-harness
 
+## 2.112.0
+
+### Patch Changes
+
+- @memberjunction/ng-code-editor@2.112.0
+- @memberjunction/ng-container-directives@2.112.0
+- @memberjunction/ng-notifications@2.112.0
+- @memberjunction/graphql-dataprovider@2.112.0
+- @memberjunction/core@2.112.0
+- @memberjunction/core-entities@2.112.0
+- @memberjunction/ng-shared@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.110.1
+- @memberjunction/ng-code-editor@2.110.1
+- @memberjunction/ng-container-directives@2.110.1
+- @memberjunction/ng-notifications@2.110.1
+- @memberjunction/graphql-dataprovider@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/ng-shared@2.110.0
+  - @memberjunction/graphql-dataprovider@2.110.0
+  - @memberjunction/ng-code-editor@2.110.0
+  - @memberjunction/ng-notifications@2.110.0
+  - @memberjunction/ng-container-directives@2.110.0
+  - @memberjunction/core@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ng-shared@2.109.0
+  - @memberjunction/ng-code-editor@2.109.0
+  - @memberjunction/ng-notifications@2.109.0
+  - @memberjunction/graphql-dataprovider@2.109.0
+  - @memberjunction/ng-container-directives@2.109.0
+  - @memberjunction/core@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [656d86c]
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/graphql-dataprovider@2.108.0
+  - @memberjunction/ng-shared@2.108.0
+  - @memberjunction/ng-code-editor@2.108.0
+  - @memberjunction/ng-notifications@2.108.0
+  - @memberjunction/ng-container-directives@2.108.0
+  - @memberjunction/core@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.107.0
+- @memberjunction/ng-code-editor@2.107.0
+- @memberjunction/ng-container-directives@2.107.0
+- @memberjunction/ng-notifications@2.107.0
+- @memberjunction/graphql-dataprovider@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.106.0
+- @memberjunction/ng-code-editor@2.106.0
+- @memberjunction/ng-container-directives@2.106.0
+- @memberjunction/ng-notifications@2.106.0
+- @memberjunction/graphql-dataprovider@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/graphql-dataprovider@2.105.0
+  - @memberjunction/ng-shared@2.105.0
+  - @memberjunction/ng-code-editor@2.105.0
+  - @memberjunction/ng-notifications@2.105.0
+  - @memberjunction/ng-container-directives@2.105.0
+  - @memberjunction/core@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- 8f2a4fa: Enhance Web Page Content action with comprehensive format support (resolves #1414)
+
+  **New Format Support**:
+
+  - JSON APIs, PDF, DOCX, XML, CSV, HTML, and images
+  - Intelligent content type detection from headers and file extensions
+  - New 'auto' mode for automatic format selection (default)
+
+  **Improvements**:
+
+  - Enhanced HTML to Markdown conversion (Turndown library)
+  - Robust HTML parsing with JSDOM
+  - Increased default MaxContentLength to 100,000 characters
+  - Fix '[object Object]' display in Prompt Runner UI
+
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+  - @memberjunction/graphql-dataprovider@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/ng-code-editor@2.104.0
+  - @memberjunction/ng-container-directives@2.104.0
+  - @memberjunction/ng-notifications@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/ng-shared@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- 239ae00: Fix 'object object invalid json' error in agent response.
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/ng-container-directives@2.103.0
+  - @memberjunction/ng-notifications@2.103.0
+  - @memberjunction/ng-code-editor@2.103.0
+  - @memberjunction/ng-shared@2.103.0
+  - @memberjunction/graphql-dataprovider@2.103.0
+  - @memberjunction/core-entities@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/ng-shared@2.100.3
+- @memberjunction/ng-code-editor@2.100.3
+- @memberjunction/ng-notifications@2.100.3
+- @memberjunction/graphql-dataprovider@2.100.3
+- @memberjunction/ng-container-directives@2.100.3
+- @memberjunction/core@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.100.2
+- @memberjunction/ng-code-editor@2.100.2
+- @memberjunction/ng-container-directives@2.100.2
+- @memberjunction/ng-notifications@2.100.2
+- @memberjunction/graphql-dataprovider@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared@2.100.1
+- @memberjunction/ng-code-editor@2.100.1
+- @memberjunction/ng-container-directives@2.100.1
+- @memberjunction/ng-notifications@2.100.1
+- @memberjunction/graphql-dataprovider@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [b3132ec]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/graphql-dataprovider@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/ng-shared@2.100.0
+  - @memberjunction/ng-code-editor@2.100.0
+  - @memberjunction/ng-container-directives@2.100.0
+  - @memberjunction/ng-notifications@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

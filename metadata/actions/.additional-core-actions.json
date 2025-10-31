@@ -4517,5 +4517,1061 @@
       "lastModified": "2025-08-12T19:54:31.238Z",
       "checksum": "9b3028660f997c53a0514db22b738527e6176fd9e8dda88e60e6b587e705fff1"
     }
+  },
+  {
+    "fields": {
+      "Name": "Perplexity Search",
+      "Type": "Custom",
+      "Description": "Performs AI-powered web search using Perplexity's Search API. Returns comprehensive search results with citations, related questions, and optional images. Supports advanced filtering by domain and recency.",
+      "Status": "Active",
+      "DriverClass": "Perplexity Search"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "Description": "The search query text (required). Can be a question or topic to search for.",
+            "IsRequired": true,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "BF0BA434-2DE4-4F9D-8936-4A8DC0669DF9"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.667Z",
+            "checksum": "7357a5e9635d11585e9db3274586756a4a9e2e09c84f6d2a855ee51dad31b74d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Model",
+            "Type": "Input",
+            "Description": "Perplexity model to use (default: llama-3.1-sonar-small-128k-online). Options: llama-3.1-sonar-small-128k-online, llama-3.1-sonar-large-128k-online, llama-3.1-sonar-huge-128k-online",
+            "IsRequired": false,
+            "DefaultValue": "llama-3.1-sonar-small-128k-online",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "C32A123C-B82C-42FC-9AD3-544FD6506567"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.678Z",
+            "checksum": "29183b0bb3e5dcaacda56416c933f861916dce6ebf4f5a66de8e1b94aa07a305"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxTokens",
+            "Type": "Input",
+            "Description": "Maximum tokens in response (default: 1000)",
+            "IsRequired": false,
+            "DefaultValue": "1000",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "F8621844-96CA-4E35-B1F4-F2BD172EAA5A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.689Z",
+            "checksum": "9953730820fd53f5c05eecba978476030725783c14edb395b4b9821e3c6fb24d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Temperature",
+            "Type": "Input",
+            "Description": "Sampling temperature 0-2 (default: 0.2). Lower values make output more focused and deterministic.",
+            "IsRequired": false,
+            "DefaultValue": "0.2",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "ABB0C5DE-8ED9-4CAA-B73B-7D10E7DC7363"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.699Z",
+            "checksum": "f840dea075fa07e37f1ca6e57465bffd0ad2624dd6d571352edb1b7461c719eb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TopP",
+            "Type": "Input",
+            "Description": "Nucleus sampling threshold (default: 0.9). Controls diversity of output.",
+            "IsRequired": false,
+            "DefaultValue": "0.9",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "65E3FCDF-D5A8-4EE5-9E45-024F99DD98B3"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.710Z",
+            "checksum": "20e074cccc35afc80a48d96098e7a2aecf028b6e682dba383fe938b7d84f09e3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReturnImages",
+            "Type": "Input",
+            "Description": "Include images in search results (default: false)",
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "245F5F60-9290-4A18-914D-1D63CC265028"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.720Z",
+            "checksum": "1fd01c6a998f3ebaa33bfa51af6fa33c032108e3d2013ac67a57927ae17673ef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReturnRelatedQuestions",
+            "Type": "Input",
+            "Description": "Include related questions in results (default: false)",
+            "IsRequired": false,
+            "DefaultValue": "false",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "0B2CA46A-C7B5-4504-BDEC-7F7BC808A6DD"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.730Z",
+            "checksum": "e7e6fcec499a77876a676328c5936a03fa05f4c353229f1cf27817ca429a0fa6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchDomainFilter",
+            "Type": "Input",
+            "Description": "Array of domains to limit/exclude search. Use '-' prefix to exclude a domain (e.g., ['-example.com'] excludes example.com). Can be an array or comma-separated string.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": true
+          },
+          "primaryKey": {
+            "ID": "FA6FDF27-AC0E-44CC-A59A-814D0829ECC4"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.740Z",
+            "checksum": "a5f90ff6f5f3de074c9fee17e9d1b7b48d654b32bac68696fa12082c32e93cee"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchRecencyFilter",
+            "Type": "Input",
+            "Description": "Filter by recency - 'day', 'week', 'month', or 'year' (optional)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "040EA597-FF2E-4191-B4C6-4D00F1DD061D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.750Z",
+            "checksum": "eacc42f18fd74009586e553385131783bbb5e0f7e00a308c8fbc8bb136336af7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Output",
+            "Description": "The AI-generated search result content with citations",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "000E6635-7C45-43EE-9CCC-CD8CFBA5E0C5"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.759Z",
+            "checksum": "e0498dd9222f9c3f8cda63540c1d5876a0c3bef7011bfaac2893d1ff94bc66c2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Citations",
+            "Type": "Output",
+            "Description": "Array of citation URLs used in the response",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": true
+          },
+          "primaryKey": {
+            "ID": "171C53B0-E061-466F-978B-46E5D2C8FE91"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.804Z",
+            "checksum": "2ae5f3feceec3182023a04cf2f4cbc84d2fcfc75aaad45de9d3589ecb328845d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CitationCount",
+            "Type": "Output",
+            "Description": "Number of citations in the response",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "6EE912FE-3991-4F5F-976B-D3FD5AE12CD7"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.815Z",
+            "checksum": "bdc841ff19227effef51e289864ca1f50d8a306c719cd8c6ecadcd9cced303e6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Images",
+            "Type": "Output",
+            "Description": "Array of image URLs (only present if ReturnImages is true)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": true
+          },
+          "primaryKey": {
+            "ID": "6A66F564-69F9-4E06-8660-B60590955C74"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.825Z",
+            "checksum": "59b28c34d94a18ae9b7b625f983b6c84f5ee7d37531e81fbd91ebf813be487eb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageCount",
+            "Type": "Output",
+            "Description": "Number of images returned (only present if ReturnImages is true)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "D2F78067-ACC7-40E5-AD52-A8C91F415339"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.835Z",
+            "checksum": "8e71c39123d9e511d0bebbd79ae5c50c5deb56f8184de99cdc09fabb5b440079"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RelatedQuestions",
+            "Type": "Output",
+            "Description": "Array of related question strings (only present if ReturnRelatedQuestions is true)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": true
+          },
+          "primaryKey": {
+            "ID": "534A2A9F-FC0B-42B1-B735-BE037825983A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.845Z",
+            "checksum": "8ffb9245342f95a76c67c783bdede9fe8beef8ed0c287c05cb54fd20361da08d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RelatedQuestionCount",
+            "Type": "Output",
+            "Description": "Number of related questions (only present if ReturnRelatedQuestions is true)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "B2625B72-CE10-4798-802A-F2F37529E032"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.854Z",
+            "checksum": "ca84fd11c03c69b26ea9979fd8dfd622a221d41c8c814eadb21e9a305b550b03"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Usage",
+            "Type": "Output",
+            "Description": "Token usage statistics object with prompt_tokens, completion_tokens, and total_tokens",
+            "IsRequired": false,
+            "ValueType": "Simple Object",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "62E39EBC-5540-4846-B191-C29894DE44AF"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.863Z",
+            "checksum": "a1b4ff831918c1af1ef05193d33e9a95a456fd1e973699d8334c6eefc6c6df70"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SearchResultDetails",
+            "Type": "Output",
+            "Description": "Complete search result object including query, model, content, citations, images, related questions, usage, and finish reason",
+            "IsRequired": false,
+            "ValueType": "Simple Object",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "262D49AC-661E-4E6D-B86C-EC9A420E3F83"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.872Z",
+            "checksum": "2481fd31c642c174136b5809d9eaaf21a2a06c85e514eed7cad31f65be96e107"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Search completed successfully"
+          },
+          "primaryKey": {
+            "ID": "D2C8E66D-4EED-43B6-945A-679BDC984A20"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.889Z",
+            "checksum": "c7f92ac1f01346f7e5e47be96391bfa10a99ef3c9c4c1a640db3b76eb75f1f1a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "Description": "Query parameter is required"
+          },
+          "primaryKey": {
+            "ID": "914CDB22-7B64-4C63-8AF9-73617969DE49"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.899Z",
+            "checksum": "9d1125a216752402d0912d6520becc70d4e4210a0f9c42c070c59e84d1c6f06d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "Description": "Perplexity API key not found. Provide ApiKey parameter or set PERPLEXITY_API_KEY environment variable"
+          },
+          "primaryKey": {
+            "ID": "E5919575-3F4A-4875-89AD-3B2E10D7EE6A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.941Z",
+            "checksum": "e4d25f5759d40d088ca5cefb5a1fe7ff7a286fd5ec008761e5b98d67a431d425"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_API_KEY",
+            "Description": "Invalid Perplexity API key"
+          },
+          "primaryKey": {
+            "ID": "CFFC6FF1-5B31-41A9-93BA-482CE5101AC2"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.949Z",
+            "checksum": "f9a569a16e19591615bad4b33469deabe36027340c1dc4e1caf9922ba9daea3c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RATE_LIMITED",
+            "Description": "Perplexity API rate limit exceeded"
+          },
+          "primaryKey": {
+            "ID": "614328C2-5FC2-4E02-859D-7A6575EB5E86"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.958Z",
+            "checksum": "e6b8dc98e83e76b4576886733f1f9af121d5527f21b0ec057c2abc953533935b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EMPTY_RESPONSE",
+            "Description": "Empty response from Perplexity API"
+          },
+          "primaryKey": {
+            "ID": "31D04C64-FD4E-4519-BADA-115EA6BB9CB9"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.966Z",
+            "checksum": "363d36176e4a01867526c4e9e2a485b984bb5edb45c28a2ed58f1b7511643855"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "Description": "Perplexity API error occurred"
+          },
+          "primaryKey": {
+            "ID": "880352D4-BA00-4B26-894A-0327E641E55E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.975Z",
+            "checksum": "547c16f942efc2b04e130ef55ac189751ffb9e3a07061f2f11371eeb6880c58f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SEARCH_FAILED",
+            "Description": "Failed to perform Perplexity search"
+          },
+          "primaryKey": {
+            "ID": "8A1141F9-7B80-4862-B979-997C6C53B41B"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.985Z",
+            "checksum": "e688749422a15725bcfdfc68f7ea3498d74b6cd47e9fd9540697f212a149ddf4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D4DF539B-F739-4374-949A-01A880BE71EF"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:09.849Z",
+      "checksum": "7eb891766c397cac7f2d55f17218eb1888b499bc19807014182ea5516714118e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gamma Generate Presentation",
+      "Type": "Custom",
+      "Description": "Generates presentations, documents, or social media posts using Gamma's AI-powered Generations API. Creates professional slides from text input with customizable themes, images, and export formats.",
+      "Status": "Active",
+      "DriverClass": "Gamma Generate Presentation"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InputText",
+            "Type": "Input",
+            "Description": "Text to generate content from (required, 1-750,000 characters). This is the main content that will be used to create the presentation.",
+            "IsRequired": true,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "40D9CB85-BDB8-4428-B400-6C452A398B2B"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:56.996Z",
+            "checksum": "4cab08d49d459c3e95fc9f06280562ee6e37a52642026088f51dff7755fde311"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Format",
+            "Type": "Input",
+            "Description": "Output format - 'presentation' (default), 'document', or 'social'",
+            "IsRequired": false,
+            "DefaultValue": "presentation",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "E5A356AF-5765-41A6-9B3D-F2A0AEDF73A6"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.005Z",
+            "checksum": "1583ef02b379708a0073869302fe0ca8de38076af214688b5e9b31952d5890d4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextMode",
+            "Type": "Input",
+            "Description": "How to process text - 'generate' (default, AI creates new content), 'condense' (summarize), or 'preserve' (use as-is)",
+            "IsRequired": false,
+            "DefaultValue": "generate",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "AF562E8D-0CA8-4914-BAD0-9B81CBD2DAF9"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.015Z",
+            "checksum": "60f0ba7aadb018c1df48983e1c6b2e0c92d270d490159e3ef31f7a83a5840f67"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ThemeName",
+            "Type": "Input",
+            "Description": "Visual theme name for the presentation (optional). Examples: Modern, Classic, Bold, etc.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "8526C949-9EBB-4137-8DA9-C1B2191817B6"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.024Z",
+            "checksum": "9b5df8b750855bb31898909d8790209ea37c3c535e6024d9c14d76c42769399c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "NumCards",
+            "Type": "Input",
+            "Description": "Number of slides/cards to generate (1-75, depends on account tier)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "2DE7D17D-6AE6-4621-A5A3-9E7DFB1A3D6B"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.075Z",
+            "checksum": "882ebef1f37fc5fc176e33fb5c373a52a92ea7b24108baa5d78339af6c87f27f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CardSplit",
+            "Type": "Input",
+            "Description": "How to split content into cards - 'auto' (default, AI decides) or 'inputTextBreaks' (use line breaks from input)",
+            "IsRequired": false,
+            "DefaultValue": "auto",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "3014B057-72CE-4ECB-8AE0-7AD36CED0439"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.085Z",
+            "checksum": "9b2dfbb68d5ed20636c72b0f9c6592e27ed21eeb6f091d96a33fa3b8309eae08"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AdditionalInstructions",
+            "Type": "Input",
+            "Description": "Custom guidance for content generation (optional). Provide specific instructions to tailor the output.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "4CEF02FE-6F1D-4B3C-8920-16E9EDC1064C"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.095Z",
+            "checksum": "5eb49bfbc315dbb95f927799415fc14e284631465665cc9742af7f4feb89f90c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExportAs",
+            "Type": "Input",
+            "Description": "Export format - 'pdf' or 'pptx' (optional). If specified, the presentation will be exported in this format.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "351BF6AF-F6B6-417C-91DB-45BF4865153D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.104Z",
+            "checksum": "3c990ebfacab2bfedf087ab385752a1dfd954495f946cb7312e0c2b13d8d3773"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextAmount",
+            "Type": "Input",
+            "Description": "Amount of text per slide - 'auto', 'minimal', 'moderate', or 'detailed'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "A3BC2A36-9CE1-4817-9F0E-D61CCADE316F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.112Z",
+            "checksum": "940da4f6572f3f0953054abefb2981b6f2324042838ada06acfeaf1f122131c0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextTone",
+            "Type": "Input",
+            "Description": "Tone of text - 'auto', 'professional', 'casual', or 'educational'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "DB98CE36-44E6-47A9-BDBA-F2652E1ADF00"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.122Z",
+            "checksum": "cd0e1c8c2eb2c2943062c3631769ec66dedc0b950c0260e106ae8af33e6f35e5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextAudience",
+            "Type": "Input",
+            "Description": "Target audience description (optional). Example: 'executives', 'students', 'technical team'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "AB539016-5D6C-4D39-AC8E-59B40FABB25E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.133Z",
+            "checksum": "40002b2f61ae7610f9b951e12ac62ecddbc48de220c7fe65aa1921c1d3256c0a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TextLanguage",
+            "Type": "Input",
+            "Description": "Language for content (optional). Use ISO 639-1 codes like 'en', 'es', 'fr', etc.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "330D4A1B-2058-4546-8411-6FA1DE6B446A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.143Z",
+            "checksum": "405da6b2eb2b975b811d0790bbdc99a027fade70cb2f7d10f1a3825086dbcc7d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageSource",
+            "Type": "Input",
+            "Description": "Image source - 'auto', 'web', 'ai', or 'none'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "FE806025-1577-489C-96AE-AF6A03218CF7"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.152Z",
+            "checksum": "8a5f5e5ff0d564e5cd0b141d9e9d183ba4e21254b6e645b09f6ffabc7a4fc688"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageModel",
+            "Type": "Input",
+            "Description": "AI image model - 'dall-e-3', 'sd-3-large', or 'firefly-3'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "BA637478-9E55-422A-B7F8-030B360A5BBE"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.162Z",
+            "checksum": "3db7008bad82a4070e83f08a2c2ae2222f32b97b17975dd6fa622613de2fe93c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ImageStyle",
+            "Type": "Input",
+            "Description": "AI image style - 'auto', 'photographic', 'digital-art', or 'illustration'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "217E4663-93C7-4250-AEDF-DD0663D3124F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.210Z",
+            "checksum": "60c9ca4eadd8003f801fcdfeffb3e4166b28bc40a06be2a745ffe32750324f1b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PollStatus",
+            "Type": "Input",
+            "Description": "Poll for completion status (default: true). If false, returns immediately with generationId.",
+            "IsRequired": false,
+            "DefaultValue": "true",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "AB092C4A-6B56-4183-8170-7D222EA3E88F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.220Z",
+            "checksum": "f81287a9d2bcfb707cba42b475a00ccccaf58923b867280acbb782930dbfc1fc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PollInterval",
+            "Type": "Input",
+            "Description": "Seconds between status checks when polling (default: 5)",
+            "IsRequired": false,
+            "DefaultValue": "5",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "34CB1AB2-C131-410E-8087-68AB7C10AF49"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.230Z",
+            "checksum": "fa5de3cf6f221e2d1354a2147fcb29529e21a8908823e959ffefa847544e0917"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxPollTime",
+            "Type": "Input",
+            "Description": "Maximum seconds to poll before timeout (default: 300)",
+            "IsRequired": false,
+            "DefaultValue": "300",
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "53704320-6333-4257-9D47-C61090F8FF20"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.240Z",
+            "checksum": "7ca6ce1070631a5db939bdd07577055b8bfb9f07895956ba13f6c9036aa585c2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GenerationId",
+            "Type": "Output",
+            "Description": "Unique identifier for the generation request. Can be used to check status later.",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "79489FAB-9767-442A-8A87-60704FB927BE"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.250Z",
+            "checksum": "57335f876c61f5b5d10bbd52159070a57ad849982e3a308316c6596da4771754"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "GammaUrl",
+            "Type": "Output",
+            "Description": "URL to the generated Gamma presentation (only present when generation completes)",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "AE66C7E3-00E2-4C61-ADA7-0E7E128418FD"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.260Z",
+            "checksum": "e4a576c207b5eed4d9f06202ac5364ba03f913c59c67cc53e883e86025ca29f7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Status",
+            "Type": "Output",
+            "Description": "Status of the generation - 'pending', 'completed', or 'failed'",
+            "IsRequired": false,
+            "ValueType": "Scalar",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "DE3DDCF6-181E-4A01-A852-97329AEA63E8"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.269Z",
+            "checksum": "7351d050ce324fabb5fb53de2dd0f1d67861621c1cd56d09746182eb9580a0d0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Credits",
+            "Type": "Output",
+            "Description": "Credits usage information object (only present when generation completes)",
+            "IsRequired": false,
+            "ValueType": "Simple Object",
+            "IsArray": false
+          },
+          "primaryKey": {
+            "ID": "A846A11D-4A77-40B8-BA62-C4068CAF0D5F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.278Z",
+            "checksum": "6b8d5dd8e8505e918bc6e508dfe72f76e58a28c5118c26b88198b7bc50dfc78f"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "Description": "Presentation generated successfully"
+          },
+          "primaryKey": {
+            "ID": "FA2A68CA-42CA-4502-BF1F-F19E3F131BDC"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.288Z",
+            "checksum": "366de8ec8058faa09c8396c580714ca5ae2a88749cc4b99af3f8fae3a555dbaf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_STARTED",
+            "Description": "Generation started but polling disabled - use GenerationId to check status"
+          },
+          "primaryKey": {
+            "ID": "0BBD581B-5D8B-4296-85C7-4A1B6361FEBB"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.296Z",
+            "checksum": "bf82ef22a11a6f0ababe094518dfdc64491f33ac24a8e211f13c72eb41d8883a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_INPUT_TEXT",
+            "Description": "InputText parameter is required"
+          },
+          "primaryKey": {
+            "ID": "CB27D27F-5327-4E93-90EE-46C2750DB570"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.335Z",
+            "checksum": "c0f8bd3170c1c34cf0d732b426fcd3f42e6ffb5670c033926f74f35142b7aea8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_INPUT_TEXT_LENGTH",
+            "Description": "InputText must be between 1 and 750,000 characters"
+          },
+          "primaryKey": {
+            "ID": "D5B7824B-BF03-4601-941E-CD16B597CAF1"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.343Z",
+            "checksum": "0915995187b4cd448ab9bb08bdd0a080edb09d0afa44ad3013c3930c69cfcc88"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_API_KEY",
+            "Description": "Gamma API key not found. Set gammaApiKey in mj.config.cjs or GAMMA_API_KEY environment variable"
+          },
+          "primaryKey": {
+            "ID": "1BC97D54-FCB5-4668-820C-82D0547930B8"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.350Z",
+            "checksum": "01c6f5e466d38e1dfa1ea1a46c2320bc017972c0600a349bb66cb69fceda1e69"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_API_KEY",
+            "Description": "Invalid Gamma API key. Verify your API key is correct and has proper permissions"
+          },
+          "primaryKey": {
+            "ID": "9F29A57B-859D-4C1F-A11C-49B73873525C"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.357Z",
+            "checksum": "060ce2558ddd6b0c0263b4848d1059b6e00908576b48bc2b1a8b7ea903a7b933"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RATE_LIMITED",
+            "Description": "Gamma API rate limit exceeded (50 presentations per day during beta)"
+          },
+          "primaryKey": {
+            "ID": "4A99EC38-250D-49BF-B1B4-376D66F613C6"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.365Z",
+            "checksum": "5b3415f9c69e037cc79fac9ff1051ac70c89913647a3c980d1d3d5041fc2402b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_PARAMETERS",
+            "Description": "Invalid request parameters"
+          },
+          "primaryKey": {
+            "ID": "181599A8-4820-4D22-948E-B9EABC3D075D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.375Z",
+            "checksum": "e893ba64bb1765d3d9c78847eeb3939903f133a23c3c64abdad4df117ab1cdb9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_RESPONSE",
+            "Description": "Invalid response from Gamma API"
+          },
+          "primaryKey": {
+            "ID": "DF3D935F-0BAA-4828-9065-DD4DD4E511B2"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.386Z",
+            "checksum": "83248dce2a06d27f6e0e433d9379c19f9f354d8475436f666faa1958f2d0b19f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_FAILED",
+            "Description": "Failed to generate presentation"
+          },
+          "primaryKey": {
+            "ID": "533BC650-F31F-4BEC-BA25-96598D6461D2"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.396Z",
+            "checksum": "13489b908ac8d605bd99afc1d32e7dc5b11d4f16a32d986bfeb706edd51cec20"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "GENERATION_TIMEOUT",
+            "Description": "Generation timed out - use GenerationId to check status later"
+          },
+          "primaryKey": {
+            "ID": "373884DD-8780-4187-B1DF-C15C4B542E1C"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.407Z",
+            "checksum": "f7795c2b7f86df14b182c0a96ef8e02e632d053aca3e9306b3695e5e630f89a3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "API_ERROR",
+            "Description": "Gamma API error occurred"
+          },
+          "primaryKey": {
+            "ID": "FBB0A20A-E6BD-48A7-8538-484B0E3FCA3A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:49:57.414Z",
+            "checksum": "31a58f15b29ca7386fc92e304643d0ec6a001643b0708e1163dd2c6bf1cf2752"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "CB760D90-688F-482C-96D6-16BDE2F8AF86"
+    },
+    "sync": {
+      "lastModified": "2025-10-15T23:02:09.859Z",
+      "checksum": "126168c55fcbb9f91033e9972918d7d0032d6b20a946032cf54be86f04e389d8"
+    }
   }
 ]

@@ -1,5 +1,241 @@
 # @memberjunction/ai-agent-manager-actions
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [2ac2120]
+- Updated dependencies [c126b59]
+- Updated dependencies [621960a]
+  - @memberjunction/ai-agent-manager@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/actions@2.112.0
+  - @memberjunction/actions-base@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@2.110.1
+- @memberjunction/actions-base@2.110.1
+- @memberjunction/actions@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/ai-agent-manager@2.110.0
+  - @memberjunction/actions-base@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ai-agent-manager@2.109.0
+  - @memberjunction/actions-base@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Minor Changes
+
+- d205a6c: migration
+
+### Patch Changes
+
+- Updated dependencies [d205a6c]
+- Updated dependencies [656d86c]
+  - @memberjunction/ai-agent-manager@2.108.0
+  - @memberjunction/actions-base@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@2.107.0
+- @memberjunction/actions-base@2.107.0
+- @memberjunction/actions@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/global@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@2.106.0
+- @memberjunction/actions-base@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/global@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/actions-base@2.105.0
+  - @memberjunction/ai-agent-manager@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- 49171c3: - Implement missing AI Agent Manager action drivers including
+  deactivate-agent, export-agent-bundle, set-agent-prompt, and
+  validate-agent-configuration
+
+  - Add comprehensive UUID validation with regex patterns to prevent SQL
+    conversion errors
+  - Enhance parameter validation and error handling across all actions
+  - Implement DRY principle by consolidating validation logic in base class
+  - Add transaction management infrastructure for future multi-record
+    operations
+  - Fix type safety issues with optional chaining for parameter handling
+  - Improve agent definition interfaces for better type safety
+  - Standardize error handling patterns across all action implementations
+
+  This completes the Agent Manager action system and resolves critical
+  validation errors that were preventing proper agent management
+  functionality.
+
+- 7980171: entity name corrections
+
+  ### Features
+
+  - **Resizable & Draggable Dialogs**: Converted all AI Agent dialog
+    types from DialogService to WindowService
+    - Added corner resizing and drag-and-drop movement capabilities for
+      all 7 dialog types
+    - Fixed z-index layering issues to render above MJExplorer banner
+    - Improved dialog styling with enhanced CSS and layout fixes
+  - **Enhanced AI Agent Form**: Major improvements to
+    ai-agent-form.component with expanded HTML layout and comprehensive
+    styling
+
+  ### Bug Fixes
+
+  - **Critical Entity Name Corrections**: Fixed entity references to use
+    proper "MJ: " prefix for newer core entities
+    - Fixed 'AI Agent Prompts' → 'MJ: AI Agent Prompts' (3 occurrences)
+    - Fixed 'AI Agent Runs' → 'MJ: AI Agent Runs' (4 occurrences)
+    - Ensures all entity references work correctly with the
+      MemberJunction framework and prevents runtime errors
+
+  ### Documentation
+
+  - Updated CLAUDE.md with comprehensive entity naming guidelines
+  - Added complete list of all 23 core entities requiring "MJ: " prefix
+  - Added warning section with code examples to prevent future entity
+    naming issues
+
+  ### Impact
+
+  - **Enhanced User Experience**: All AI Agent dialogs now provide
+    modern, resizable, and draggable interfaces
+  - **Database Compatibility**: Ensures proper entity schema compliance
+    across all AI services
+  - **Developer Guidance**: Comprehensive documentation prevents future
+    entity naming conflicts
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [9ad6353]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/actions-base@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/ai-agent-manager@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/ai-agent-manager@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/actions-base@2.103.0
+  - @memberjunction/global@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/actions-base@2.100.3
+- @memberjunction/actions@2.100.3
+- @memberjunction/ai-agent-manager@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@2.100.2
+- @memberjunction/actions-base@2.100.2
+- @memberjunction/actions@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/global@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@2.100.1
+- @memberjunction/actions-base@2.100.1
+- @memberjunction/actions@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/global@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/actions-base@2.100.0
+  - @memberjunction/actions@2.100.0
+  - @memberjunction/ai-agent-manager@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

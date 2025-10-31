@@ -1,5 +1,7 @@
 // DealList Sub-component
-function DealList ({ deals, sortConfig, onSort, onOpenDeal, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+function DealList ({ deals, sortConfig, onSort, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
+  // Load OpenRecordButton component
+  const OpenRecordButton = components['OpenRecordButton'];
   const handleSort = (field) => {
     const newOrder = sortConfig?.field === field && sortConfig?.order === 'asc' ? 'desc' : 'asc';
     if (onSort) {
@@ -12,13 +14,6 @@ function DealList ({ deals, sortConfig, onSort, onOpenDeal, utilities, styles, c
     return sortConfig.order === 'asc' ? '↑' : '↓';
   };
 
-  const handleOpen = (dealId) => {
-    if (onOpenDeal) {
-      onOpenDeal(dealId);
-    } else if (callbacks?.OpenEntityRecord) {
-      callbacks.OpenEntityRecord('Deals', dealId);
-    }
-  };
 
   return (
     <div style={{ width: '100%', overflowX: 'auto' }}>
@@ -168,30 +163,22 @@ function DealList ({ deals, sortConfig, onSort, onOpenDeal, utilities, styles, c
                 {deal.closeDate ? new Date(deal.closeDate).toLocaleDateString() : '-'}
               </td>
               <td style={{ padding: '12px', textAlign: 'center' }}>
-                <button
-                  onClick={() => handleOpen(deal.id)}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '14px',
-                    border: '1px solid #007bff',
-                    borderRadius: '4px',
-                    background: '#fff',
-                    color: '#007bff',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.backgroundColor = '#007bff';
-                    e.target.style.color = '#fff';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.backgroundColor = '#fff';
-                    e.target.style.color = '#007bff';
-                  }}
-                  title="Open in Explorer"
-                >
-                  ↗
-                </button>
+                {OpenRecordButton && (
+                  <OpenRecordButton
+                    entityName="Deals"
+                    record={deal}
+                    text="↗"
+                    variant="default"
+                    size="small"
+                    showIcon={false}
+                    utilities={utilities}
+                    styles={styles}
+                    components={components}
+                    callbacks={callbacks}
+                    savedUserSettings={savedUserSettings}
+                    onSaveUserSettings={onSaveUserSettings}
+                  />
+                )}
               </td>
             </tr>
           ))}

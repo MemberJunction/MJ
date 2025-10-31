@@ -39,7 +39,7 @@
 
 .app-logo {
   width: 290px;
-  height: 40px;
+  height: 37px;
   background: url(assets/MJ_logo.svg);
 }
 
@@ -59,6 +59,30 @@
 
 .user-avatar:hover {
   opacity: 0.8;
+}
+
+.user-avatar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 0 0px 1px #FFF;
+  margin: 0 25px;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.user-avatar-icon:hover {
+  opacity: 0.8;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.user-avatar-icon i {
+  font-size: 20px;
+  color: #FFF;
 }
 
 /* Custom dropdown menu styles */
@@ -252,6 +276,8 @@
 
   .app-logo {
     width: 60px;
+    height: 34px;
+    background-size: cover;
   }
 
   .search-wrapper-toggle {

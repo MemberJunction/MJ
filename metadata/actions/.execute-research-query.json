@@ -1,0 +1,418 @@
+[
+  {
+    "fields": {
+      "Name": "Execute Research Query",
+      "Description": "Executes a read-only SQL SELECT query for research purposes with security validation. Ensures SELECT-only operations, prevents dangerous SQL operations, enforces timeouts, and logs all queries for audit trail. SQL syntax validation is performed by SQL Server during execution.",
+      "DriverClass": "Execute Research Query",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-code",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Query",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "SQL SELECT query to execute (required). Only SELECT statements are allowed. Query is validated for syntax and security before execution.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "9A2AE3E8-2CD3-40FA-8DEB-5DA5090A70D4"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.149Z",
+            "checksum": "bab03837d7d8c62712385ca2627aaf5eb80bb086b03b8b82e2a860d760a5cee5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxRows",
+            "DefaultValue": "1000",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of rows to return. Default: 1000. Helps prevent overwhelming results from large tables.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "55628036-367B-465D-B75C-AE0C86C3404E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.162Z",
+            "checksum": "0dcd8a3e4fe9a0ebe0e412e5777264e4af11658516b5fb4b757d47dcf501c7ee"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Timeout",
+            "DefaultValue": "30",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Query timeout in seconds. Default: 30. Prevents long-running queries from blocking resources.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E0F8ADF0-6914-43E9-AC26-DD3A5090AB11"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.174Z",
+            "checksum": "089cb8b882d723859d4d5b301bf90c19c1ffa4ea5bbe5d0138f121ef063e1591"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DataFormat",
+            "DefaultValue": "csv",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Format for data output: 'csv' (comma-separated values - more token efficient) or 'json' (structured objects). Default: csv. CSV format significantly reduces token usage by avoiding field repetition in every row.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "AC046C76-618A-44FC-845A-1F8169FE08A8"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T13:29:38.686Z",
+            "checksum": "efce69bafa5e24f3ec91c6361f3bd734ff60d289ae6b4fb85d3c98e696de0258"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AnalysisRequest",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Optional analysis instructions for the LLM to analyze the query results. When provided, the results will be analyzed according to these instructions. Example: 'Summarize the top 5 products by revenue' or 'Identify any anomalies in the data'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4BC6BD62-CF78-4021-B5F5-E1D976E6C0B0"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T13:29:38.703Z",
+            "checksum": "3d22a056e16959725eeb5a9422de49cc8dc0d4e1c13b987451d5110fcf9826b1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ReturnType",
+            "DefaultValue": "data and analysis",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "What to return: 'data only' (just query results), 'analysis only' (just LLM analysis), or 'data and analysis' (both). Default: 'data and analysis' if AnalysisRequest is provided, otherwise 'data only'. This parameter is ignored if AnalysisRequest is not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "88597ED2-6A44-4E8A-B555-BEC2E2786B27"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T13:29:38.715Z",
+            "checksum": "44965263b3d07fcd452b5b5a8804cb4886ebf80c277a34d5a94693964d9d0fd7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ColumnMaxLength",
+            "DefaultValue": "50",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum length for column values in characters. Values longer than this will be trimmed with '...' suffix to save context. Use when querying tables with verbose text/JSON fields (e.g., PromptText, Description). Example: 50 = trim to 50 characters. Default: 50. Set to 0 if you want FULL column results. Applies to both CSV and JSON formats.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9BCB13D7-4D0C-44E0-8B38-5D5E0DE81782"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T15:28:47.497Z",
+            "checksum": "4f2a94505cc164dd99ba8a8e15355e523a977c0027a0415c3116f62f5067c962"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of result rows. Each row is an object with column names as keys and values as data.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B8E3197F-0080-4551-B2E3-0CF95D4E52A6"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.205Z",
+            "checksum": "a67d84243a791e699016b7cb5574f011a85fbd6a04274bbfe477f980b0f72ae5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Columns",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of column metadata. Each contains: ColumnName, DataType, IsNullable.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "383A0ED2-A7C0-4D97-8708-B828A36FEB67"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.214Z",
+            "checksum": "7c900d5e8f5e8b77eb29d21e59c5ec154a0414952684210fe4efea883c32cc9c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "RowCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of rows returned by the query.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D2BCE897-2E45-4B28-BAC9-505D17A5FD0F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.225Z",
+            "checksum": "ce58ab569055bd862c08d1379cb43ed0cdf36a9b43410d1fe8ffaaceffc5ea79"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExecutionTimeMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Query execution time in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B7835CC0-99E9-48E9-9B9E-2A222E127F91"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.236Z",
+            "checksum": "0451f294d975027b94b0811650c6a407dcf5cc664ca420c4e04697b3de3c93fc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "WasTruncated",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating whether results were truncated due to MaxRows limit.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A8BB2C13-7C33-44DF-97E6-51D84D2F4BAD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.245Z",
+            "checksum": "25debe740d0b4a4b5ae1d888e7710e5bf41b078074c3c9fc43215c301019c9bf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ValidationWarnings",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "Array of non-fatal validation warnings (e.g., missing indexes, potentially slow queries).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6637D9E2-0A07-41BE-BB26-AB1C55AFB190"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.302Z",
+            "checksum": "fec6afc97c35f6b0991c5cde46776f0f538e4c402735b29e396ba832883fb560"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Analysis",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "LLM-generated analysis of the query results based on the AnalysisRequest parameter. Only present when AnalysisRequest is provided and ReturnType includes 'analysis'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9B1AAB3-74A4-44D0-99CB-2F3580F344DD"
+          },
+          "sync": {
+            "lastModified": "2025-10-18T13:29:38.786Z",
+            "checksum": "5f161c0910ce868c61ae4555b524c139eab594328a1f12213631d33e1824ec2f"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Query executed successfully and returned results."
+          },
+          "primaryKey": {
+            "ID": "D1FD5F6C-B0B1-40B6-8A8F-4136A6D2E8DD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.318Z",
+            "checksum": "0f060dccf30a06be814cb4f061d96dcc3111f3c0152f6a1b9aeda349cadc5f19"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_QUERY",
+            "IsSuccess": false,
+            "Description": "Query parameter is required but was not provided."
+          },
+          "primaryKey": {
+            "ID": "66E4404F-8AC6-403B-A914-E860B5C85B1E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.330Z",
+            "checksum": "fd95f9b802343aa2b0b6e2c453361a1303a372717a6ac881d964d35f323575e6"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_SQL_SYNTAX",
+            "IsSuccess": false,
+            "Description": "SQL query has invalid syntax. Check query for syntax errors using node-sql-parser validation."
+          },
+          "primaryKey": {
+            "ID": "8201558C-8734-4BB5-A756-55E0A138841D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.338Z",
+            "checksum": "59230186e87b5db80c2d1b16d23e80cd6e30746da52c6df43ae5f8668f389726"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "NOT_SELECT_STATEMENT",
+            "IsSuccess": false,
+            "Description": "Query contains non-SELECT statements (INSERT, UPDATE, DELETE, DROP, etc.). Only SELECT queries are allowed for research purposes."
+          },
+          "primaryKey": {
+            "ID": "D72D7941-DC2C-490A-8292-47C4435464C4"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.347Z",
+            "checksum": "e1e2c8847f464ef330579c0816485b653be2783bc4289c50ccf8fcaeeef77ec9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DANGEROUS_QUERY",
+            "IsSuccess": false,
+            "Description": "Query contains potentially dangerous operations (dynamic SQL, system procedures, etc.). Query rejected for security reasons."
+          },
+          "primaryKey": {
+            "ID": "E494F0D5-98F5-4E42-8C7F-55D3FFAF279B"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.356Z",
+            "checksum": "25003c6b22c489a4585d7df4dcd3910ca4b4adb50e026e29cef62548a2f833ed"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_TIMEOUT",
+            "IsSuccess": false,
+            "Description": "Query execution exceeded timeout limit. Consider optimizing query or increasing Timeout parameter."
+          },
+          "primaryKey": {
+            "ID": "E1B0504D-A43B-4CE2-8C55-AB648912012A"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.365Z",
+            "checksum": "c158acb19352fc4d4f391c36d6094b444f672dd03efafe141a7bc2b8349cbd27"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PERMISSION_DENIED",
+            "IsSuccess": false,
+            "Description": "Insufficient permissions to execute query on specified tables/views. User needs SELECT permission."
+          },
+          "primaryKey": {
+            "ID": "62DD84E6-6F2D-4097-AB98-4102A37D031E"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.374Z",
+            "checksum": "b843f05c080f0567ebff6dfe2d4889fe1d98310017b47b259960e591d5f1ad24"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "DATABASE_ERROR",
+            "IsSuccess": false,
+            "Description": "Database error occurred during query execution. Check error message for SQL Server error details."
+          },
+          "primaryKey": {
+            "ID": "60406415-41CE-4A7C-8AA6-F3C5CBBB871D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.384Z",
+            "checksum": "805229b307a56a007ed6f480b9be3284ebe6afd52c0f633c08b5e795e0695bd1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "QUERY_EXECUTION_FAILED",
+            "IsSuccess": false,
+            "Description": "Query execution failed due to an unexpected error. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "34711179-3B81-4AD3-AD94-D218E70978C3"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:25.399Z",
+            "checksum": "ae5ba5afd3ea634a3ee41e5e4ce592b9615295bc7b68a4ddc1105a4526a98b57"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "4B92BDED-4AD6-497A-B16E-BAE85BAB7563"
+    },
+    "sync": {
+      "lastModified": "2025-10-16T22:41:33.098Z",
+      "checksum": "8c3e4354b9ff50a02a0842a54fc99a8e1197e6205fb3a6350d7abfc6c465e2d8"
+    }
+  }
+]

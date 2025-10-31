@@ -145,9 +145,10 @@ export const contextFunction =
     const apiKey = String(req.headers['x-mj-api-key']);
     
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const operationName: string | undefined = (req as any).body?.operationName;
+    const reqAny = req as any;
+    const operationName: string | undefined = reqAny.body?.operationName;
     if (operationName !== 'IntrospectionQuery') {
-      console.log({ operationName });
+      console.log({ operationName, variables: reqAny.body?.variables || undefined });
     }
 
     const userPayload = await getUserPayload(

@@ -23,6 +23,9 @@
           </button>
           @if (importDropdownOpen) {
             <div class="dropdown-menu">
+              <button class="dropdown-item" (click)="importFromArtifact()">
+                <i class="fa-solid fa-database"></i> Import from Artifact
+              </button>
               <button class="dropdown-item" (click)="importFromFile()">
                 <i class="fa-solid fa-file"></i> Import from File
               </button>
@@ -68,62 +71,26 @@
     <kendo-splitter-pane [min]="'350px'" [max]="'650px'" [size]="'400px'">
       <div class="components-panel">
         <div class="panel-header">
+          <!-- Clean Header with Filter Button -->
           <div class="panel-header-top">
-            <h3>Components</h3>
             <div class="header-actions">
-              <button 
-                class="favorites-toggle"
-                [class.active]="showOnlyFavorites"
-                (click)="toggleShowOnlyFavorites()"
-                title="Show only favorites">
-                @if (showOnlyFavorites) {
-                  <i class="fa-solid fa-star"></i> Favorites
-                } @else {
-                  <i class="fa-regular fa-star"></i> All
+              <button
+                class="filter-toggle-btn"
+                [class.active]="isFilterPanelExpanded || GetActiveFilterCount() > 0"
+                (click)="ToggleFilterPanel()"
+                [title]="isFilterPanelExpanded ? 'Hide filters' : 'Show filters'">
+                <i class="fa-solid fa-sliders"></i>
+                @if (GetActiveFilterCount() > 0) {
+                  <span class="filter-count-badge">{{ GetActiveFilterCount() }}</span>
                 }
               </button>
               <span class="component-count">{{ filteredComponents.length }} of {{ allComponents.length }}</span>
             </div>
           </div>
-          
-          <!-- Modern Category Filter Pills -->
-          <div class="category-filters">
-            @if (availableCategories.length > 0) {
-              <div class="filter-pills">
-                @for (category of getVisibleCategories(); track category.name) {
-                  <button 
-                    class="category-pill"
-                    [class.active]="isCategorySelected(category.name)"
-                    [style.--pill-color]="category.color"
-                    (click)="toggleCategory(category.name)">
-                    <span class="pill-name">{{ category.name }}</span>
-                    <span class="pill-count">{{ category.count }}</span>
-                  </button>
-                }
-                @if (availableCategories.length > 5) {
-                  <button 
-                    class="more-button"
-                    (click)="toggleShowAllCategories()">
-                    @if (showAllCategories) {
-                      <i class="fa-solid fa-chevron-up"></i> Less
-                    } @else {
-                      <i class="fa-solid fa-chevron-down"></i> +{{ availableCategories.length - 5 }} more
-                    }
-                  </button>
-                }
-                @if (selectedCategories.size > 0) {
-                  <button 
-                    class="clear-filters-button"
-                    (click)="clearCategoryFilters()">
-                    <i class="fa-solid fa-times"></i> Clear
-                  </button>
-                }
-              </div>
-            }
-          </div>
-          
+
+          <!-- Search (Always Visible) -->
           <div class="search-box">
-            <kendo-textbox 
+            <kendo-textbox
               [value]="searchQuery"
               (valueChange)="onSearchChange($event)"
               placeholder="Search components..."
@@ -133,6 +100,80 @@
               </ng-template>
             </kendo-textbox>
           </div>
+
+          <!-- Collapsible Filter Panel -->
+          @if (isFilterPanelExpanded) {
+            <div class="filter-panel">
+              <div class="filter-panel-header" (click)="ToggleFilterPanel()">
+                <span><i class="fa-solid fa-chevron-down"></i> Filters</span>
+                <span class="filter-count-text">{{ filteredComponents.length }} of {{ allComponents.length }}</span>
+              </div>
+
+              <div class="filter-panel-content">
+                <!-- Quick Filters -->
+                <div class="filter-section">
+                  <label class="filter-section-label">Quick Filters</label>
+                  <div class="filter-options">
+                    <label class="filter-checkbox">
+                      <input type="checkbox"
+                             [checked]="showOnlyFavorites"
+                             (change)="toggleShowOnlyFavorites()">
+                      <span>Show favorites only</span>
+                    </label>
+                    <label class="filter-checkbox">
+                      <input type="checkbox"
+                             [checked]="!showDeprecatedComponents"
+                             (change)="toggleShowDeprecatedComponents()">
+                      <span>Hide deprecated
+                        @if (getDeprecatedCount() > 0) {
+                          <span class="deprecated-count">({{ getDeprecatedCount() }} hidden)</span>
+                        }
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Category Filters -->
+                @if (availableCategories.length > 0) {
+                  <div class="filter-section">
+                    <label class="filter-section-label">Categories</label>
+                    <div class="category-pills-grid">
+                      @for (category of getVisibleCategories(); track category.name) {
+                        <button
+                          class="category-pill-compact"
+                          [class.active]="isCategorySelected(category.name)"
+                          [style.--pill-color]="category.color"
+                          (click)="toggleCategory(category.name)">
+                          <span class="pill-name">{{ category.name }}</span>
+                          <span class="pill-count">{{ category.count }}</span>
+                        </button>
+                      }
+                    </div>
+                    @if (availableCategories.length > 5) {
+                      <button
+                        class="show-more-categories-btn"
+                        (click)="toggleShowAllCategories()">
+                        @if (showAllCategories) {
+                          <i class="fa-solid fa-chevron-up"></i> Show less
+                        } @else {
+                          <i class="fa-solid fa-chevron-down"></i> Show {{ availableCategories.length - 5 }} more
+                        }
+                      </button>
+                    }
+                  </div>
+                }
+
+                <!-- Clear All Button -->
+                @if (GetActiveFilterCount() > 0) {
+                  <div class="filter-panel-footer">
+                    <button class="clear-all-btn" (click)="ClearAllFilters()">
+                      <i class="fa-solid fa-times"></i> Clear All Filters
+                    </button>
+                  </div>
+                }
+              </div>
+            </div>
+          }
         </div>
         
         <div class="components-list">
@@ -194,6 +235,8 @@
                         } @else {
                           <span class="status-badge file">File</span>
                         }
+                      } @else if (getComponentStatus(component) === 'Deprecated') {
+                        <span class="status-badge deprecated">Deprecated</span>
                       } @else if (getComponentStatus(component) === 'Published') {
                         <span class="status-badge published">Published</span>
                       } @else {

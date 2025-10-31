@@ -16,9 +16,15 @@ export * from './custom/AIAgentRunExtended';
 export * from './custom/AIAgentRunStepExtended';
 export * from './custom/AIPromptRunEntityExtended';
 export * from './custom/ComponentEntityExtended';
+export * from './custom/EnvironmentEntityExtended';
+export * from './custom/TemplateEntityExtended';
 
 export * from './custom/ResourcePermissions/ResourcePermissionEngine';
 export * from './custom/ResourcePermissions/ResourcePermissionSubclass';
 export * from './custom/ResourcePermissions/ResourceData';
 
 export * from './engines/component-metadata';
+export * from './engines/artifacts';
+
+export * from './artifact-extraction/artifact-extract-rules';
+export * from './artifact-extraction/artifact-extractor';

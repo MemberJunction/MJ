@@ -40,9 +40,12 @@
                                 </span>
                             }
                             @if (record.Parent) {
-                                <span class="parent-agent">
+                                <span class="parent-agent clickable"
+                                      (click)="navigateToParentAgent()"
+                                      title="Open parent agent: {{ record.Parent }}">
                                     <i class="fa-solid fa-sitemap"></i>
                                     Child of {{ record.Parent }}
+                                    <i class="fa-solid fa-external-link" style="margin-left: 4px; font-size: 10px;"></i>
                                 </span>
                             }
                         </div>
@@ -58,6 +61,13 @@
                                     title="Run this AI agent">
                             <i class="fa-solid fa-play"></i>
                             Run
+                        </button>
+                        <button kendoButton size="large" 
+                                (click)="openPermissionsDialog()" 
+                                title="Manage permissions"
+                                >
+                            <i class="fa-solid fa-lock"></i>
+                            Permissions
                         </button>
                     }
                     <button kendoButton fillMode="outline" size="small" (click)="refreshRelatedData()" title="Refresh all data">
@@ -372,104 +382,203 @@
                     </kendo-panelbar-item>
                 }
 
-                <!-- Sub-Agents -->
+                <!-- Sub-Agents (Unified View with Filter) -->
                 @if (record.ID) {
                     <kendo-panelbar-item [expanded]="false" [disabled]="loadingStates.subAgents">
                         <ng-template kendoPanelBarItemTitle>
                             <i class="fa-solid fa-sitemap"></i> Sub-Agents
                             @if (loadingStates.subAgents) {
                                 <span style="margin-left: 8px;"><i class="fa-solid fa-spinner fa-spin" style="font-size: 12px;"></i></span>
-                            } @else if (subAgentCount > 0) {
-                                <span> ({{ subAgentCount }})</span>
+                            } @else if (totalSubAgentCount > 0) {
+                                <span> ({{ totalSubAgentCount }})</span>
                             }
                         </ng-template>
                         <ng-template kendoPanelBarContent>
                             <div class="panel-content">
-                                <div class="section-header">
-                                    <div class="section-description">
-                                        Manage hierarchical relationships with child agents that work under this agent.
+
+                                <!-- Filter Controls -->
+                                <div class="section-header sub-agent-filter-header">
+                                    <div class="filter-controls">
+                                        <kendo-buttongroup selection="single">
+                                            <button kendoButton
+                                                [toggleable]="true"
+                                                [selected]="subAgentFilter === 'all'"
+                                                (click)="setSubAgentFilter('all')"
+                                                size="small">
+                                                <i class="fa-solid fa-layer-group"></i>
+                                                All ({{ totalSubAgentCount }})
+                                            </button>
+                                            <button kendoButton
+                                                [toggleable]="true"
+                                                [selected]="subAgentFilter === 'child'"
+                                                (click)="setSubAgentFilter('child')"
+                                                size="small">
+                                                <i class="fa-solid fa-link"></i>
+                                                Child ({{ childSubAgentCount }})
+                                            </button>
+                                            <button kendoButton
+                                                [toggleable]="true"
+                                                [selected]="subAgentFilter === 'related'"
+                                                (click)="setSubAgentFilter('related')"
+                                                size="small">
+                                                <i class="fa-solid fa-share-nodes"></i>
+                                                Related ({{ relatedSubAgentCount }})
+                                            </button>
+                                        </kendo-buttongroup>
                                     </div>
+
                                     <div class="header-actions">
                                         @if (EditMode && UserCanCreateSubAgents) {
-                                            <button kendoButton themeColor="primary" size="small" (click)="addSubAgents()">
-                                                <i class="fa-solid fa-plus"></i> Add Subagent
+                                            <button kendoButton
+                                                themeColor="primary"
+                                                size="small"
+                                                (click)="createChildSubAgent()"
+                                                title="Create a new child sub-agent that shares this agent's payload">
+                                                <i class="fa-solid fa-plus"></i>
+                                                <i class="fa-solid fa-link"></i>
+                                                Create Child
                                             </button>
-                                            <button kendoButton themeColor="secondary" size="small" (click)="createSubAgent()">
-                                                <i class="fa-solid fa-plus"></i> Create Sub-Agent
+                                            <button kendoButton
+                                                themeColor="secondary"
+                                                size="small"
+                                                (click)="linkRelatedSubAgent()"
+                                                title="Link an existing agent as a related sub-agent with payload mapping">
+                                                <i class="fa-solid fa-plus"></i>
+                                                <i class="fa-solid fa-share-nodes"></i>
+                                                Link Related
                                             </button>
                                         }
                                     </div>
                                 </div>
-                                
-                                @if (subAgentCount === 0) {
+
+                                <!-- Empty State -->
+                                @if (totalSubAgentCount === 0) {
                                     <div class="empty-state">
                                         <i class="fa-solid fa-sitemap"></i>
                                         <h4>No Sub-Agents</h4>
-                                        <p>Create sub-agents to build a hierarchical structure for complex workflows.</p>
+                                        <p>Sub-agents help build complex workflows through hierarchical orchestration.</p>
+                                        <div class="empty-state-info">
+                                            <div class="info-card">
+                                                <i class="fa-solid fa-link" style="color: #2196F3;"></i>
+                                                <strong>Child Sub-Agents</strong>
+                                                <p>Share payload structure, dedicated to parent</p>
+                                            </div>
+                                            <div class="info-card">
+                                                <i class="fa-solid fa-share-nodes" style="color: #9C27B0;"></i>
+                                                <strong>Related Sub-Agents</strong>
+                                                <p>Reusable agents with payload mapping</p>
+                                            </div>
+                                        </div>
                                         @if (EditMode && UserCanCreateSubAgents) {
-                                            <button kendoButton themeColor="primary" (click)="addSubAgents()">
-                                                <i class="fa-solid fa-plus"></i> Add Subagent
-                                            </button>
-                                            <button kendoButton themeColor="secondary" (click)="createSubAgent()">
-                                                <i class="fa-solid fa-plus"></i> Create First Sub-Agent
-                                            </button>
+                                            <div class="empty-state-actions">
+                                                <button kendoButton themeColor="primary" (click)="createChildSubAgent()">
+                                                    <i class="fa-solid fa-plus"></i> Create Child Sub-Agent
+                                                </button>
+                                                <button kendoButton themeColor="secondary" (click)="linkRelatedSubAgent()">
+                                                    <i class="fa-solid fa-plus"></i> Link Related Sub-Agent
+                                                </button>
+                                            </div>
                                         }
                                     </div>
                                 } @else {
+                                    <!-- Unified Sub-Agent List -->
                                     <div class="entity-list">
-                                        @for (subAgent of subAgents; track subAgent.ID) {
-                                            <div class="entity-item sub-agent-item" (click)="navigateToEntity('AI Agents', subAgent.ID)">
+                                        @for (item of filteredSubAgents; track item.agent.ID) {
+                                            <div class="entity-item sub-agent-item"
+                                                 [class.child-sub-agent]="item.type === 'child'"
+                                                 [class.related-sub-agent]="item.type === 'related'"
+                                                 (click)="navigateToEntity('AI Agents', item.agent.ID)">
+
+                                                <!-- Type Badge -->
+                                                <div class="sub-agent-type-badge"
+                                                     [style.background-color]="getSubAgentBadgeColor(item)">
+                                                    <i [class]="getSubAgentBadgeIcon(item)"></i>
+                                                    {{ getSubAgentBadgeText(item) }}
+                                                </div>
+
+                                                <!-- Agent Icon -->
                                                 <div class="item-icon">
-                                                    @if (hasSubAgentLogoURL(subAgent)) {
-                                                        <img [src]="subAgent.LogoURL" [alt]="subAgent.Name + ' logo'" class="sub-agent-logo">
+                                                    @if (hasSubAgentLogoURL(item.agent)) {
+                                                        <img [src]="item.agent.LogoURL"
+                                                             [alt]="item.agent.Name + ' logo'"
+                                                             class="sub-agent-logo">
                                                     } @else {
-                                                        <i [class]="getSubAgentIcon(subAgent)"></i>
+                                                        <i [class]="getSubAgentIcon(item.agent)"></i>
                                                     }
                                                 </div>
+
+                                                <!-- Agent Content -->
                                                 <div class="item-content">
-                                                    <div class="item-title">{{ subAgent.Name || 'Untitled Sub-Agent' }}</div>
-                                                    @if (subAgent.Description) {
-                                                        <div class="item-preview">{{ subAgent.Description }}</div>
+                                                    <div class="item-title">{{ item.agent.Name || 'Untitled Sub-Agent' }}</div>
+
+                                                    @if (item.agent.Description) {
+                                                        <div class="item-preview">{{ item.agent.Description }}</div>
                                                     }
+
                                                     <div class="item-meta">
-                                                        @if (subAgent.Status) {
-                                                            <span class="status-tag" [style.background-color]="getStatusBadgeColor()">
-                                                                {{ subAgent.Status }}
+                                                        <!-- Payload Info -->
+                                                        <span class="meta-tag payload-info">
+                                                            <i class="fa-solid fa-database"></i>
+                                                            {{ getSubAgentPayloadInfo(item) }}
+                                                        </span>
+
+                                                        <!-- Status -->
+                                                        @if (item.agent.Status) {
+                                                            <span class="status-tag"
+                                                                  [style.background-color]="getStatusBadgeColor()">
+                                                                {{ item.agent.Status }}
                                                             </span>
                                                         }
-                                                        @if (subAgent.ExecutionMode) {
-                                                            <span class="meta-tag">{{ subAgent.ExecutionMode }}</span>
+
+                                                        <!-- Agent Type -->
+                                                        @if (item.agent.Type) {
+                                                            <span class="meta-tag">{{ item.agent.Type }}</span>
                                                         }
                                                     </div>
                                                 </div>
+
+                                                <!-- Actions -->
                                                 <div class="item-actions">
-                                                    @if (EditMode && UserCanCreateSubAgents) {
-                                                        <button kendoButton
-                                                            fillMode="flat" 
-                                                            themeColor="primary" 
-                                                            size="small"
-                                                            (click)="openSubAgentAdvancedSettings(subAgent, $event)"
-                                                            title="Advanced settings">
-                                                            <i class="fa-solid fa-cog"></i>
-                                                        </button>
+                                                    @if (EditMode) {
+                                                        <!-- Output Mapping Config (Related only) -->
+                                                        @if (item.type === 'related') {
+                                                            <button kendoButton
+                                                                fillMode="flat"
+                                                                themeColor="primary"
+                                                                size="small"
+                                                                (click)="configureOutputMapping(item, $event)"
+                                                                title="Configure output mapping">
+                                                                <i class="fa-solid fa-exchange-alt"></i>
+                                                            </button>
+                                                        }
+
+                                                        <!-- Advanced Settings (Child only) -->
+                                                        @if (item.type === 'child' && UserCanCreateSubAgents) {
+                                                            <button kendoButton
+                                                                fillMode="flat"
+                                                                themeColor="primary"
+                                                                size="small"
+                                                                (click)="openSubAgentAdvancedSettings(item.agent, $event)"
+                                                                title="Advanced settings">
+                                                                <i class="fa-solid fa-cog"></i>
+                                                            </button>
+                                                        }
+
+                                                        <!-- Remove/Unlink -->
+                                                        @if (UserCanDeleteSubAgents) {
+                                                            <button kendoButton
+                                                                fillMode="flat"
+                                                                themeColor="error"
+                                                                size="small"
+                                                                (click)="item.type === 'child' ? removeChildSubAgent(item, $event) : unlinkRelatedSubAgent(item, $event)"
+                                                                [title]="item.type === 'child' ? 'Delete child sub-agent' : 'Unlink related sub-agent'">
+                                                                <i [class]="item.type === 'child' ? 'fa-solid fa-trash' : 'fa-solid fa-unlink'"></i>
+                                                            </button>
+                                                        }
                                                     }
-                                                    @if (EditMode && UserCanDeleteSubAgents) {
-                                                        <button kendoButton
-                                                            fillMode="flat" 
-                                                            themeColor="error" 
-                                                            size="small"
-                                                            (click)="removeSubAgent(subAgent, $event)"
-                                                            title="Remove sub-agent">
-                                                            <i class="fa-solid fa-trash"></i>
-                                                        </button>
-                                                    }
+
                                                     <i class="fa-solid fa-external-link"></i>
                                                 </div>
-                                            </div>
-                                        }
-                                        @if (subAgentCount > subAgents.length) {
-                                            <div class="view-more-item" (click)="navigateToEntity('AI Agents', '')">
-                                                <span>View all {{ subAgentCount }} sub-agents...</span>
                                             </div>
                                         }
                                     </div>

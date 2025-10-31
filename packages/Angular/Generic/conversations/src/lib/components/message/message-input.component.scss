@@ -1,0 +1,29 @@
+.message-input-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.processing-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 10;
+  pointer-events: none;
+
+  i {
+    color: var(--primary-color, #007bff);
+  }
+
+  span {
+    font-size: 0.9rem;
+    color: var(--text-primary, #333);
+  }
+}

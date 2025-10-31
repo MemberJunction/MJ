@@ -14,8 +14,93 @@ import { AIAgentRunEntityExtended, AIAgentTypeEntity, AIPromptEntityExtended } f
 import { ChatMessage } from '@memberjunction/ai';
 import { AIAgentEntityExtended } from '@memberjunction/core-entities';
 import { UserInfo } from '@memberjunction/core';
-import { AgentPayloadChangeRequest } from './agent-payload-change-request';
+import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse } from './agent-payload-change-request';
 import { AIAPIKey } from '@memberjunction/ai';
+
+/**
+ * Universal ForEach loop configuration used by all agent types.
+ * Flow agents convert AIAgentStep configuration to this format.
+ * Loop agents receive this from LLM responses.
+ * @since 2.112.0
+ */
+export interface ForEachOperation {
+    /** Path in payload to array to iterate over */
+    collectionPath: string;
+    /** Variable name for current item (default: "item") */
+    itemVariable?: string;
+    /** Variable name for loop index (default: "index") */
+    indexVariable?: string;
+    /** Maximum iterations (undefined=1000, 0=unlimited, >0=limit) */
+    maxIterations?: number;
+    /** Continue processing if an iteration fails (default: false) */
+    continueOnError?: boolean;
+    /** Delay between iterations in milliseconds (default: 0) */
+    delayBetweenIterationsMs?: number;
+    /**
+     * Execution mode for iterations (default: 'sequential')
+     * - 'sequential': Process iterations one at a time in order (safest, maintains order, good for state accumulation)
+     * - 'parallel': Process multiple iterations concurrently (faster for independent operations like web scraping, API calls)
+     * @since 2.113.0
+     */
+    executionMode?: 'sequential' | 'parallel';
+    /**
+     * Maximum number of iterations to process concurrently when executionMode='parallel' (default: 10)
+     * Only applies when executionMode='parallel'. Controls batch size to prevent resource exhaustion.
+     * Recommended values:
+     * - I/O-bound operations (API calls, web scraping): 10-20
+     * - CPU-bound operations (data processing): CPU core count
+     * - Sub-agent spawning: 2-5 (agents are resource-intensive)
+     * @since 2.113.0
+     */
+    maxConcurrency?: number;
+
+    /** Execute action per iteration */
+    action?: {
+        name: string;
+        params: Record<string, unknown>;
+        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
+    };
+
+    /** Execute sub-agent per iteration */
+    subAgent?: {
+        name: string;
+        message: string;
+        templateParameters?: Record<string, string>;
+    };
+}
+
+/**
+ * Universal While loop configuration used by all agent types.
+ * Flow agents convert AIAgentStep configuration to this format.
+ * Loop agents receive this from LLM responses.
+ * @since 2.112.0
+ */
+export interface WhileOperation {
+    /** Boolean expression evaluated before each iteration */
+    condition: string;
+    /** Variable name for attempt context (default: "attempt") */
+    itemVariable?: string;
+    /** Maximum iterations (undefined=100, 0=unlimited, >0=limit) */
+    maxIterations?: number;
+    /** Continue processing if an iteration fails (default: false) */
+    continueOnError?: boolean;
+    /** Delay between iterations in milliseconds (default: 0) */
+    delayBetweenIterationsMs?: number;
+
+    /** Execute action per iteration */
+    action?: {
+        name: string;
+        params: Record<string, unknown>;
+        outputMapping?: string;  // JSON mapping for Flow agents (maps action outputs to payload)
+    };
+
+    /** Execute sub-agent per iteration */
+    subAgent?: {
+        name: string;
+        message: string;
+        templateParameters?: Record<string, string>;
+    };
+}
 
 
 /**
@@ -26,6 +111,8 @@ export type AgentAction = {
     name: string;
     /** Parameters to pass to the action */
     params: Record<string, unknown>;
+    /** Mapping of action outputs to payload fields */
+    outputMapping?: string;   
 }
 
 /**
@@ -65,7 +152,7 @@ export type AgentSubAgentRequest<TContext = any> = {
     terminateAfter: boolean;
     /** Optional template parameters for sub-agent invocation */
     templateParameters?: Record<string, string>;
-    /** 
+    /**
      * Context data passed to the sub-agent by the parent agent.
      * This context flows through the entire execution hierarchy,
      * allowing sub-agents to access runtime-specific configuration,
@@ -90,7 +177,7 @@ export type AgentSubAgentRequest<TContext = any> = {
 export type BaseAgentNextStep<P = any, TContext = any> = {
     /** Whether to terminate the agent execution after this step */
     terminate: boolean;
-    /** 
+    /**
      * The determined next step:
      * - 'success': The agent has completed its task successfully
      * - 'failed': The agent has failed to complete its task
@@ -98,9 +185,14 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      *   a) Process new results from completed actions or sub-agents
      *   b) Retry after a failure condition
      *   c) Continue processing with updated context
+     *   d) Process after expanding a compacted message (when messageIndex is set)
      * - 'sub-agent': The agent should spawn a sub-agent to handle a specific task
      * - 'actions': The agent should perform one or more actions using the Actions framework
      * - 'chat': The agent needs to communicate with the user before proceeding
+     *
+     * Note: To expand a compacted message, set step to 'Retry', set messageIndex to the message to expand,
+     * and optionally set expandReason to explain why expansion is needed. The framework will expand the message
+     * and then continue with the retry.
      */
     step: AIAgentRunEntityExtended['FinalStep']
     /** Result from the prior step, useful for retry or sub-agent context */
@@ -133,19 +225,32 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     actions?: AgentAction[];
     /** Message to send to user when step is 'chat' */
     message?: string;
+    /**
+     * Optional, when step is 'chat' or 'success', a list of suggested responses
+     * to show the user for quick selection in a UI.
+     */
+    suggestedResponses?: BaseAgentSuggestedResponse[];
+    /** Index of the message to expand when step is 'expand-message' */
+    messageIndex?: number;
+    /** Reason for expanding the message when step is 'expand-message' */
+    expandReason?: string;
     /** Optional, reasoning information from the agent */
     reasoning?: string;
     /** Optional confidence level in the decision (0.0 to 1.0) */
-    confidence?: number;    
+    confidence?: number;
+    /** ForEach operation details when step is 'ForEach' (v2.112+) */
+    forEach?: ForEachOperation;
+    /** While operation details when step is 'While' (v2.112+) */
+    while?: WhileOperation;
 }
 
 /**
  * Result returned from executing an AI Agent with comprehensive execution history.
- * 
+ *
  * This result structure provides complete visibility into the agent's execution flow,
  * including all prompts executed, actions taken, sub-agents invoked, and decisions made.
  * The agentRun property contains the full execution history with all steps.
- * 
+ *
  * @template P - Generic type parameter for payload value, allowing flexibility in the type of data returned by the agent
  */
 export type ExecuteAgentResult<P = any> = {
@@ -153,7 +258,7 @@ export type ExecuteAgentResult<P = any> = {
     success: boolean;
     /** Optional payload returned by the agent */
     payload?: P;
-    /** 
+    /**
      * The agent run entity with full execution history.
      * - Use agentRun.ErrorMessage for error details
      * - Use agentRun.Status === 'Cancelled' to check if cancelled
@@ -161,6 +266,26 @@ export type ExecuteAgentResult<P = any> = {
      * - Use agentRun.Steps for the execution step history
      */
     agentRun: AIAgentRunEntityExtended;
+    /**
+     * The artifact type ID for the returned payload.
+     * This identifies what type of artifact the payload represents (e.g., JSON, Markdown, HTML).
+     * Used by UI to determine how to render the payload and which extract rules to apply.
+     * If not specified, falls back to the agent's default artifact type configuration.
+     */
+    payloadArtifactTypeID?: string;
+    /**
+     * Optional suggested responses to show the user for quick selection in a UI.
+     * Populated when the agent's final step is 'Chat' or 'Success' and includes suggested responses.
+     */
+    suggestedResponses?: BaseAgentSuggestedResponse[];
+    /**
+     * Optional memory context that was injected into the agent execution.
+     * Includes the notes and examples that were retrieved and used for context.
+     */
+    memoryContext?: {
+        notes: any[]; // AIAgentNoteEntity[] - using any to avoid circular dependency
+        examples: any[]; // AIAgentExampleEntity[] - using any to avoid circular dependency
+    };
 }
 
 /**
@@ -261,6 +386,10 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
     conversationMessages: ChatMessage[];
     /** Optional user context for permission checking and personalization */
     contextUser?: UserInfo;
+    /** Optional user ID for scoping context memory (notes/examples). If not provided, uses contextUser.ID */
+    userId?: string;
+    /** Optional company ID for scoping context memory (notes/examples) */
+    companyId?: string;
     /** Optional cancellation token to abort the agent execution */
     cancellationToken?: AbortSignal;
     /** Optional callback for receiving execution progress updates */
@@ -336,6 +465,15 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      * Different from parentRun which is for sub-agent hierarchy.
      */
     lastRunId?: string;
+
+    /**
+     * Optional conversation detail ID to associate with this agent execution.
+     * When provided, this value is stored in the ConversationDetailID column within
+     * the to be created AIAgentRun record. This allows for linking the agent run 
+     * to a specific conversation detail for tracking and reporting purposes.
+     */
+    conversationDetailId?: string;
+
     /**
      * Optional flag to automatically populate the payload from the last run.
      * When true and lastRunId is provided, the framework will:
@@ -388,26 +526,26 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
 
     /**
      * Optional effort level for all prompt executions in this agent run (1-100).
-     * 
+     *
      * Higher values request more thorough reasoning and analysis from AI models.
      * This effort level takes precedence over the agent's DefaultPromptEffortLevel
      * and individual prompt EffortLevel settings for all prompts executed during
      * this agent run.
-     * 
+     *
      * Each provider maps the 1-100 scale to their specific effort parameters:
      * - OpenAI: Maps to reasoning_effort (1-33=low, 34-66=medium, 67-100=high)
      * - Anthropic: Maps to thinking mode with token budgets
      * - Groq: Maps to reasoning_effort parameter (experimental)
      * - Gemini: Controls reasoning mode intensity
-     * 
+     *
      * This setting is inherited by all sub-agents unless they explicitly override it.
-     * 
+     *
      * Precedence hierarchy (highest to lowest priority):
      * 1. This effortLevel parameter (runtime override - highest priority)
      * 2. Agent's DefaultPromptEffortLevel (agent default)
      * 3. Prompt's EffortLevel property (prompt default)
      * 4. No effort level (provider default behavior - lowest priority)
-     * 
+     *
      * @example
      * ```typescript
      * const params: ExecuteAgentParams = {
@@ -416,11 +554,80 @@ export type ExecuteAgentParams<TContext = any, P = any> = {
      *   effortLevel: 85, // High effort for thorough analysis across all prompts
      *   contextUser: user
      * };
-     * 
+     *
      * const result = await agent.Execute(params);
      * ```
      */
     effortLevel?: number;
+
+    /**
+     * Optional runtime override for message expiration behavior.
+     * When specified, these values take precedence over the AIAgentAction configuration
+     * for all action results in this agent run. Useful for testing, debugging, or
+     * implementing custom expiration strategies.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   messageExpirationOverride: {
+     *     expirationTurns: 2,
+     *     expirationMode: 'Compact',
+     *     compactMode: 'First N Chars',
+     *     compactLength: 500,
+     *     preserveOriginalContent: true
+     *   }
+     * };
+     * ```
+     */
+    messageExpirationOverride?: MessageExpirationOverride;
+
+    /**
+     * Optional callback for message lifecycle events.
+     * Called when messages are expired, compacted, removed, or expanded during agent execution.
+     * Useful for monitoring, debugging, and tracking token savings.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   onMessageLifecycle: (event) => {
+     *     console.log(`[Turn ${event.turn}] ${event.type}: ${event.reason}`);
+     *     if (event.tokensSaved) {
+     *       console.log(`  Tokens saved: ${event.tokensSaved}`);
+     *     }
+     *   }
+     * };
+     * ```
+     */
+    onMessageLifecycle?: MessageLifecycleCallback;
+
+    /**
+     * Optional flag to disable data preloading from AIAgentDataSource metadata.
+     * When true, the agent will not automatically preload data sources even if
+     * they are configured in the database. This is useful for:
+     * - Performance optimization when preloaded data is not needed
+     * - Testing scenarios where you want to control data explicitly
+     * - Cases where the caller provides all necessary data manually
+     *
+     * Default: false (data preloading is enabled)
+     *
+     * Note: Caller-provided data in the data parameter always takes precedence
+     * over preloaded data, even when preloading is enabled.
+     *
+     * @example
+     * ```typescript
+     * const params: ExecuteAgentParams = {
+     *   agent: myAgent,
+     *   conversationMessages: messages,
+     *   disableDataPreloading: true,  // Skip automatic data preloading
+     *   data: { CUSTOM_DATA: myData }  // Use only caller-provided data
+     * };
+     * ```
+     */
+    disableDataPreloading?: boolean;
 }
 
 /**
@@ -463,6 +670,102 @@ export type AgentConfiguration = {
     childPrompt?: AIPromptEntityExtended;
 }
 
+/**
+ * Typed metadata for agent conversation messages.
+ * Extends ChatMessage<M> to provide agent-specific metadata for message lifecycle management.
+ */
+export type AgentChatMessageMetadata = {
+    /** Turn number when this message was added to the conversation */
+    turnAdded?: number;
+    /** Number of turns after which this message expires */
+    expirationTurns?: number;
+    /** Mode for handling expired messages */
+    expirationMode?: 'None' | 'Remove' | 'Compact';
+    /** Mode for compacting expired messages */
+    compactMode?: 'First N Chars' | 'AI Summary';
+    /** Number of characters to keep when using 'First N Chars' mode */
+    compactLength?: number;
+    /** Prompt ID to use for AI Summary compaction */
+    compactPromptId?: string;
+    /** Whether this message has been compacted */
+    wasCompacted?: boolean;
+    /** Original content before compaction (for expansion) */
+    originalContent?: ChatMessage['content'];
+    /** Original length in characters before compaction */
+    originalLength?: number;
+    /** Number of tokens saved by compaction */
+    tokensSaved?: number;
+    /** Whether this message can be expanded back to original */
+    canExpand?: boolean;
+    /** Whether this message has expired */
+    isExpired?: boolean;
+    /** Type of message (for logging/debugging) */
+    messageType?: 'action-result' | 'sub-agent-result' | 'chat' | 'system' | 'user';
+}
+
+/**
+ * Agent conversation message with typed metadata.
+ */
+export type AgentChatMessage = ChatMessage<AgentChatMessageMetadata>;
+
+/**
+ * Event types for message lifecycle callbacks.
+ */
+export type MessageLifecycleEventType = 'message-expired' | 'message-compacted' | 'message-removed' | 'message-expanded';
+
+/**
+ * Event data for message lifecycle callbacks.
+ */
+export type MessageLifecycleEvent = {
+    /** Type of lifecycle event */
+    type: MessageLifecycleEventType;
+    /** Turn number when the event occurred */
+    turn: number;
+    /** Index of the message in the conversation array */
+    messageIndex: number;
+    /** The message that was affected */
+    message: AgentChatMessage;
+    /** Human-readable reason for the event */
+    reason: string;
+    /** Number of tokens saved (for compaction events) */
+    tokensSaved?: number;
+}
+
+/**
+ * Callback function type for message lifecycle events.
+ */
+export type MessageLifecycleCallback = (event: MessageLifecycleEvent) => void;
+
+/**
+ * Runtime override for message expiration behavior.
+ * When specified in ExecuteAgentParams, these values take precedence over
+ * the AIAgentAction configuration for all action results in this agent run.
+ */
+export type MessageExpirationOverride = {
+    /** Number of turns before expiration (overrides AIAgentAction.ResultExpirationTurns) */
+    expirationTurns?: number;
+    /** Mode for handling expired messages (overrides AIAgentAction.ResultExpirationMode) */
+    expirationMode?: 'None' | 'Remove' | 'Compact';
+    /** Mode for compacting expired messages (overrides AIAgentAction.CompactMode) */
+    compactMode?: 'First N Chars' | 'AI Summary';
+    /** Number of characters to keep when using 'First N Chars' mode (overrides AIAgentAction.CompactLength) */
+    compactLength?: number;
+    /** Prompt ID to use for AI Summary compaction (overrides AIAgentAction.CompactPromptID) */
+    compactPromptId?: string;
+    /** Whether to preserve original content for expansion (default: true) */
+    preserveOriginalContent?: boolean;
+}
+
+/**
+ * Request to expand a compacted message to its original content.
+ */
+export interface ExpandMessageRequest {
+    /** Step type identifier */
+    step: 'expand-message';
+    /** Index of the message to expand in the conversation array */
+    messageIndex: number;
+    /** Optional reason for expanding the message */
+    reason?: string;
+}
 
 
-    

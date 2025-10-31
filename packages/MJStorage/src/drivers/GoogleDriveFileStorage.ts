@@ -2,12 +2,18 @@ import { google, drive_v3 } from 'googleapis';
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileStorageBase,
+  FileSearchOptions,
+  FileSearchResult,
+  FileSearchResultSet,
+  GetObjectParams,
+  GetObjectMetadataParams,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * Google Drive implementation of the FileStorageBase interface.
@@ -46,12 +52,17 @@ import {
 export class GoogleDriveFileStorage extends FileStorageBase {
   /** The name of this storage provider, used in error messages */
   protected readonly providerName = 'Google Drive';
-  
+
   /** The Google Drive API client */
   private _drive: drive_v3.Drive;
-  
+
   /** Optional root folder ID to restrict operations to a specific folder */
   private _rootFolderId?: string;
+
+  /** OAuth2 credentials for configuration checking */
+  private _clientID?: string;
+  private _clientSecret?: string;
+  private _refreshToken?: string;
 
   /**
    * Creates a new instance of GoogleDriveFileStorage.
@@ -62,34 +73,55 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    */
   constructor() {
     super();
-    
-    // Get credentials from environment
-    const keyFile = env.get('STORAGE_GDRIVE_KEY_FILE').asString();
-    const credentials = env.get('STORAGE_GDRIVE_CREDENTIALS_JSON').asJsonObject();
-    
-    // Initialize the Google Drive client
+
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('googleDrive');
+
+    // Get credentials from config or environment
+    const keyFile = config?.keyFile || env.get('STORAGE_GDRIVE_KEY_FILE').asString();
+    const credentials = config?.credentialsJSON || env.get('STORAGE_GDRIVE_CREDENTIALS_JSON').asJsonObject();
+    this._clientID = config?.clientID || env.get('STORAGE_GDRIVE_CLIENT_ID').asString();
+    this._clientSecret = config?.clientSecret || env.get('STORAGE_GDRIVE_CLIENT_SECRET').asString();
+    this._refreshToken = config?.refreshToken || env.get('STORAGE_GDRIVE_REFRESH_TOKEN').asString();
+    const redirectURI = config?.redirectURI || env.get('STORAGE_GDRIVE_REDIRECT_URI').asString();
+
+    // Initialize the Google Drive client - support THREE auth methods
     if (keyFile) {
-      // Using key file
+      // Method 1: Using key file (service account)
       const auth = new google.auth.GoogleAuth({
         keyFile,
         scopes: ['https://www.googleapis.com/auth/drive']
       });
       this._drive = google.drive({ version: 'v3', auth });
     } else if (credentials) {
-      // Using credentials directly
+      // Method 2: Using credentials directly (service account)
+      const creds = typeof credentials === 'string' ? JSON.parse(credentials) : credentials;
       const auth = new google.auth.JWT(
-        (credentials as any).client_email,
+        (creds as any).client_email,
         undefined,
-        (credentials as any).private_key,
+        (creds as any).private_key,
         ['https://www.googleapis.com/auth/drive']
       );
       this._drive = google.drive({ version: 'v3', auth });
+    } else if (this._clientID && this._clientSecret && this._refreshToken) {
+      // Method 3: Using OAuth2 with refresh token
+      const auth = new google.auth.OAuth2(this._clientID, this._clientSecret, redirectURI);
+      auth.setCredentials({ refresh_token: this._refreshToken });
+      this._drive = google.drive({ version: 'v3', auth });
     } else {
-      throw new Error('Google Drive storage requires either STORAGE_GDRIVE_KEY_FILE or STORAGE_GDRIVE_CREDENTIALS_JSON to be set');
+      throw new Error('Google Drive storage requires either STORAGE_GDRIVE_KEY_FILE, STORAGE_GDRIVE_CREDENTIALS_JSON, or OAuth2 credentials (CLIENT_ID, CLIENT_SECRET, REFRESH_TOKEN) to be set');
     }
-    
+
     // Optionally set a root folder ID to restrict operations
-    this._rootFolderId = env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString();
+    this._rootFolderId = config?.rootFolderID || env.get('STORAGE_GDRIVE_ROOT_FOLDER_ID').asString();
+  }
+
+  /**
+   * Checks if Google Drive provider is properly configured.
+   * Returns true if all required OAuth credentials are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._clientID && this._clientSecret && this._refreshToken);
   }
 
   /**
@@ -612,19 +644,24 @@ export class GoogleDriveFileStorage extends FileStorageBase {
   
   /**
    * Retrieves metadata for a specific object in Google Drive.
-   * 
+   *
    * This method fetches the file information without downloading its content,
    * which is more efficient for checking file attributes like size, type,
    * and last modified date.
-   * 
-   * @param objectName - The path to the file to get metadata for
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise resolving to a StorageObjectMetadata object
    * @throws Error if the file doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const metadata = await driveStorage.GetObjectMetadata('documents/report.pdf');
+   *   // Fast path: Use objectId (Google Drive file ID)
+   *   const metadata = await driveStorage.GetObjectMetadata({ objectId: '1a2b3c4d5e' });
+   *
+   *   // Slow path: Use path
+   *   const metadata2 = await driveStorage.GetObjectMetadata({ fullPath: 'documents/report.pdf' });
+   *
    *   console.log(`File: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Last modified: ${metadata.lastModified}`);
@@ -633,41 +670,65 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
     try {
-      // Get the file
-      const file = await this._getItemByPath(objectName);
-      
-      if (!file.id) {
-        throw new Error(`File not found: ${objectName}`);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
       }
-      
-      // Parse path to get parent path
-      const pathParts = objectName.split('/');
-      pathParts.pop(); // Remove filename
-      const parentPath = pathParts.join('/');
-      
+
+      let file: drive_v3.Schema$File;
+      let parentPath = '';
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        console.log(`⚡ Fast path: Using Object ID directly: ${params.objectId}`);
+        const response = await this._drive.files.get({
+          fileId: params.objectId,
+          fields: 'id, name, mimeType, size, modifiedTime, createdTime, parents'
+        });
+        file = response.data;
+      } else {
+        // Slow path: Resolve path to file
+        console.log(`🐌 Slow path: Resolving path "${params.fullPath}" to ID`);
+        file = await this._getItemByPath(params.fullPath!);
+
+        if (!file.id) {
+          throw new Error(`File not found: ${params.fullPath}`);
+        }
+
+        // Parse path to get parent path
+        const pathParts = params.fullPath!.split('/');
+        pathParts.pop(); // Remove filename
+        parentPath = pathParts.join('/');
+      }
+
       return this._fileToMetadata(file, parentPath);
     } catch (error) {
-      console.error('Error getting object metadata', { objectName, error });
-      throw new Error(`Object not found: ${objectName}`);
+      console.error('Error getting object metadata', { params, error });
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
   
   /**
    * Downloads an object's content from Google Drive.
-   * 
+   *
    * This method retrieves the full content of a file and returns it
    * as a Buffer for processing in memory.
-   * 
-   * @param objectName - The path to the file to download
+   *
+   * @param params - Object identifier (prefer objectId for performance, fallback to fullPath)
    * @returns A Promise resolving to a Buffer containing the file's data
    * @throws Error if the file doesn't exist or cannot be downloaded
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const content = await driveStorage.GetObject('documents/config.json');
+   *   // Fast path: Use objectId (Google Drive file ID)
+   *   const content = await driveStorage.GetObject({ objectId: '1a2b3c4d5e' });
+   *
+   *   // Slow path: Use path
+   *   const content2 = await driveStorage.GetObject({ fullPath: 'documents/config.json' });
+   *
    *   // Parse the JSON content
    *   const config = JSON.parse(content.toString('utf8'));
    *   console.log('Configuration loaded:', config);
@@ -676,27 +737,43 @@ export class GoogleDriveFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
     try {
-      // Get the file
-      const file = await this._getItemByPath(objectName);
-      
-      if (!file.id) {
-        throw new Error(`File not found: ${objectName}`);
+      // Validate params
+      if (!params.objectId && !params.fullPath) {
+        throw new Error('Either objectId or fullPath must be provided');
       }
-      
+
+      let fileId: string;
+
+      // Fast path: Use objectId if provided
+      if (params.objectId) {
+        fileId = params.objectId;
+        console.log(`⚡ Fast path: Using Object ID directly: ${fileId}`);
+      } else {
+        // Slow path: Resolve path to ID
+        console.log(`🐌 Slow path: Resolving path "${params.fullPath}" to ID`);
+        const file = await this._getItemByPath(params.fullPath!);
+
+        if (!file.id) {
+          throw new Error(`File not found: ${params.fullPath}`);
+        }
+
+        fileId = file.id;
+      }
+
       // Download the file
       const response = await this._drive.files.get({
-        fileId: file.id,
+        fileId: fileId,
         alt: 'media'
       }, {
         responseType: 'arraybuffer'
       });
-      
+
       return Buffer.from(response.data as ArrayBuffer);
     } catch (error) {
-      console.error('Error getting object', { objectName, error });
-      throw new Error(`Failed to get object: ${objectName}`);
+      console.error('Error getting object', { params, error });
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
   
@@ -908,11 +985,192 @@ export class GoogleDriveFileStorage extends FileStorageBase {
       const normalizedPath = directoryPath.endsWith('/')
         ? directoryPath.substring(0, directoryPath.length - 1)
         : directoryPath;
-      
+
       const item = await this._getItemByPath(normalizedPath);
       return item.mimeType === 'application/vnd.google-apps.folder';
     } catch (error) {
       return false;
     }
+  }
+
+  /**
+   * Searches for files in Google Drive using the Drive API search capabilities.
+   *
+   * Google Drive search syntax supports:
+   * - Simple terms: "report" matches files containing "report"
+   * - Exact phrases: "quarterly report" matches that exact phrase
+   * - Boolean OR: "budget OR forecast"
+   * - Exclusion: "report -draft" excludes files with "draft"
+   * - Wildcards: Not supported in Drive API
+   *
+   * Content search is always enabled for supported file types (Docs, Sheets, PDFs, etc.)
+   * when searchContent option is true.
+   *
+   * @param query - Search query using Google Drive search syntax
+   * @param options - Search options
+   * @returns Promise resolving to search results
+   *
+   * @example
+   * ```typescript
+   * // Simple name search
+   * const results = await storage.SearchFiles('quarterly report');
+   *
+   * // Search with file type filter
+   * const pdfResults = await storage.SearchFiles('budget', {
+   *   fileTypes: ['pdf'],
+   *   modifiedAfter: new Date('2024-01-01')
+   * });
+   *
+   * // Content search
+   * const contentResults = await storage.SearchFiles('machine learning', {
+   *   searchContent: true,
+   *   pathPrefix: 'documents/research/'
+   * });
+   * ```
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    const maxResults = options?.maxResults || 100;
+
+    // Build the Google Drive query string
+    const queryParts: string[] = [];
+
+    // Add the user's search query (searches name and/or content)
+    if (options?.searchContent) {
+      queryParts.push(`fullText contains '${this._escapeQuery(query)}'`);
+    } else {
+      queryParts.push(`name contains '${this._escapeQuery(query)}'`);
+    }
+
+    // Add file type filter
+    if (options?.fileTypes && options.fileTypes.length > 0) {
+      const mimeTypes = options.fileTypes.map(ft => {
+        // Convert extensions to MIME types if needed
+        return ft.includes('/') ? ft : mime.lookup(ft) || ft;
+      });
+      const mimeQuery = mimeTypes.map(mt => `mimeType='${mt}'`).join(' or ');
+      queryParts.push(`(${mimeQuery})`);
+    }
+
+    // Add date filters
+    if (options?.modifiedAfter) {
+      queryParts.push(`modifiedTime > '${options.modifiedAfter.toISOString()}'`);
+    }
+    if (options?.modifiedBefore) {
+      queryParts.push(`modifiedTime < '${options.modifiedBefore.toISOString()}'`);
+    }
+
+    // Add path prefix filter (parent folder)
+    let parentFolderId = this._rootFolderId;
+    if (options?.pathPrefix) {
+      try {
+        const folder = await this._getItemByPath(options.pathPrefix);
+        parentFolderId = folder.id || undefined;
+      } catch (error) {
+        // If path doesn't exist, throw error so caller knows search failed
+        throw new Error(`Google Drive search failed - invalid pathPrefix: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    if (parentFolderId) {
+      queryParts.push(`'${parentFolderId}' in parents`);
+    }
+
+    // Exclude trashed files
+    queryParts.push('trashed=false');
+
+    // Add provider-specific options
+    if (options?.providerSpecific) {
+      for (const [key, value] of Object.entries(options.providerSpecific)) {
+        if (typeof value === 'boolean') {
+          queryParts.push(`${key}=${value}`);
+        } else if (typeof value === 'string') {
+          queryParts.push(`${key}='${value}'`);
+        }
+      }
+    }
+
+    const finalQuery = queryParts.join(' and ');
+
+    try {
+      const response = await this._drive.files.list({
+        q: finalQuery,
+        pageSize: maxResults,
+        fields: 'nextPageToken, files(id, name, mimeType, size, modifiedTime, parents, properties)',
+        orderBy: 'modifiedTime desc'
+      });
+
+      const files = response.data.files || [];
+      const results: FileSearchResult[] = [];
+
+      for (const file of files) {
+        const path = await this._getFilePathFromId(file.id!);
+        const pathParts = path.split('/');
+        const fileName = pathParts.pop() || file.name!;
+        const parentPath = pathParts.join('/');
+
+        results.push({
+          path,
+          name: fileName,
+          size: parseInt(file.size || '0'),
+          contentType: file.mimeType!,
+          lastModified: new Date(file.modifiedTime!),
+          objectId: file.id || '',  // Google Drive file ID for direct access
+          matchInFilename: file.name!.toLowerCase().includes(query.toLowerCase()),
+          customMetadata: file.properties as Record<string, string>,
+          providerData: { driveFileId: file.id }
+        });
+      }
+
+      return {
+        results,
+        totalMatches: undefined, // Drive API doesn't provide total count
+        hasMore: !!response.data.nextPageToken,
+        nextPageToken: response.data.nextPageToken || undefined
+      };
+
+    } catch (error) {
+      console.error('Error searching files in Google Drive', { query, options, error });
+      throw new Error(`Google Drive search failed: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Escapes special characters in search queries for Google Drive.
+   * @private
+   */
+  private _escapeQuery(query: string): string {
+    return query.replace(/'/g, "\\'").replace(/\\/g, '\\\\');
+  }
+
+  /**
+   * Gets the full path of a file from its ID by traversing up the parent chain.
+   * @private
+   */
+  private async _getFilePathFromId(fileId: string): Promise<string> {
+    const pathParts: string[] = [];
+    let currentId: string | undefined = fileId;
+
+    while (currentId && currentId !== 'root' && currentId !== this._rootFolderId) {
+      const file = await this._drive.files.get({
+        fileId: currentId,
+        fields: 'id, name, parents'
+      });
+
+      if (file.data.name) {
+        pathParts.unshift(file.data.name);
+      }
+
+      // Move to parent
+      currentId = file.data.parents?.[0];
+
+      // Stop if we've reached root or the configured root folder
+      if (currentId === 'root' || currentId === this._rootFolderId) {
+        break;
+      }
+    }
+
+    return pathParts.join('/');
   }
 }

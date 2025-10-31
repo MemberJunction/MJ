@@ -1,5 +1,93 @@
 # Change Log - @memberjunction/ng-link-directives
 
+## 2.112.0
+
+### Patch Changes
+
+- @memberjunction/core@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/core@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- @memberjunction/core@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- @memberjunction/core@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- @memberjunction/core@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/core@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/core@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- @memberjunction/core@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- @memberjunction/core@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+  - @memberjunction/core@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/core@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/core@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+  - @memberjunction/core@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

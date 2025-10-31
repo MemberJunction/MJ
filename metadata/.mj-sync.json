@@ -3,15 +3,18 @@
   "push": {
     "autoCreateMissingRecords": true
   },
-  "directoryOrder": [
+  "directoryOrder": [ 
+    "artifact-types",
     "action-categories",
     "actions",
     "prompt-categories",
     "prompts",
     "agent-types",
     "agents",
+    "scheduled-jobs",
     "query-categories",
     "queries",
+    "component-registries",
     "component-libraries",
     "components"
   ],

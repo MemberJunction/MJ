@@ -1,5 +1,45 @@
 # Change Log - @memberjunction/global
 
+## 2.112.0
+
+### Minor Changes
+
+- c126b59: Merge MJCore into MJGlobal
+
+## 2.110.1
+
+## 2.110.0
+
+## 2.109.0
+
+## 2.108.0
+
+## 2.107.0
+
+## 2.106.0
+
+## 2.105.0
+
+## 2.104.0
+
+### Minor Changes
+
+- 2ff5428: MJ & Skip Logo Updates
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+
+## 2.100.3
+
+## 2.100.2
+
+## 2.100.1
+
+## 2.100.0
+
 ## 2.99.0
 
 ## 2.98.0

@@ -10,12 +10,11 @@ import {
 import { AppContext } from '../types.js';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
-//load the default vectorDB and embedding model
-import { LoadMistralEmbedding } from '@memberjunction/ai-mistral';
+//load the default vectorDB
 import { LoadPineconeVectorDB } from '@memberjunction/ai-vectors-pinecone';
 import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from '../generic/KeyInputOutputTypes.js';
 import { GetReadOnlyProvider } from '../util.js';
-LoadMistralEmbedding();
+// AI provider loading now handled by @memberjunction/aiengine
 LoadPineconeVectorDB();
 
 @InputType()

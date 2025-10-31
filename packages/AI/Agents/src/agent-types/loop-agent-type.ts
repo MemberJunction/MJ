@@ -10,12 +10,12 @@
  * @since 2.49.0
  */
 
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
 import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { AIPromptEntityExtended } from '@memberjunction/core-entities';
-import { LoopAgentResponse } from './loop-agent-response-type';
+import { LoopAgentResponse } from './loop-agent-response-type'; 
 
 /**
  * Implementation of the Loop Agent Type pattern.
@@ -53,6 +53,8 @@ import { LoopAgentResponse } from './loop-agent-response-type';
  */
 @RegisterClass(BaseAgentType, "LoopAgentType")
 export class LoopAgentType extends BaseAgentType {
+    private _evaluator = new SafeExpressionEvaluator();
+
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization
         // but can be extended in the future if needed
@@ -107,7 +109,8 @@ export class LoopAgentType extends BaseAgentType {
                     message: response.message,
                     reasoning: response.reasoning,
                     confidence: response.confidence,
-                    payloadChangeRequest: response.payloadChangeRequest
+                    payloadChangeRequest: response.payloadChangeRequest,
+                    suggestedResponses: response.suggestedResponses
                 });
             }
 
@@ -119,7 +122,8 @@ export class LoopAgentType extends BaseAgentType {
             // Determine next step based on type
             const retVal: Partial<BaseAgentNextStep<P>> = {
                 payloadChangeRequest: response.payloadChangeRequest,
-                terminate: response.taskComplete
+                terminate: response.taskComplete,
+                suggestedResponses: response.suggestedResponses
             }
             switch (response.nextStep.type) {
                 case 'Sub-Agent':
@@ -161,6 +165,28 @@ export class LoopAgentType extends BaseAgentType {
                         retVal.step = 'Chat';
                         retVal.message = response.message;
                         retVal.terminate = true; // when chat request, this agent needs to return back to the caller/user
+                    }
+                    break;
+                case 'ForEach':
+                    if (!response.nextStep.forEach) {
+                        retVal.step = 'Retry';
+                        retVal.errorMessage = 'ForEach type specified but forEach details missing';
+                    }
+                    else {
+                        // Return ForEach decision for BaseAgent to execute in next iteration
+                        retVal.step = 'ForEach';
+                        retVal.forEach = response.nextStep.forEach;
+                    }
+                    break;
+                case 'While':
+                    if (!response.nextStep.while) {
+                        retVal.step = 'Retry';
+                        retVal.errorMessage = 'While type specified but while details missing';
+                    }
+                    else {
+                        // Return While decision for BaseAgent to execute in next iteration
+                        retVal.step = 'While';
+                        retVal.while = response.nextStep.while;
                     }
                     break;
                 default:
@@ -249,7 +275,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'foreach', 'while'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -260,6 +286,12 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.actions && response.nextStep.actions.length > 0) {
                 response.nextStep.type = 'Actions'; // update the data structure to have the correct type
                 lcaseType = 'actions';
+            } else if (!lcaseType && response.nextStep.forEach) {
+                response.nextStep.type = 'ForEach'; // update the data structure to have the correct type
+                lcaseType = 'foreach';
+            } else if (!lcaseType && response.nextStep.while) {
+                response.nextStep.type = 'While'; // update the data structure to have the correct type
+                lcaseType = 'while';
             }
 
             if (!validStepTypes.includes(lcaseType)) {
@@ -291,6 +323,18 @@ export class LoopAgentType extends BaseAgentType {
                     // if we have reasoning, use that as the message
                     response.message = response.reasoning;
                 }
+            }
+
+            if (lcaseType === 'foreach' && !response.nextStep.forEach) {
+                const message = 'LoopAgentResponse requires forEach object for ForEach type';
+                LogError(message);
+                return {success: false, message};
+            }
+
+            if (lcaseType === 'while' && !response.nextStep.while) {
+                const message = 'LoopAgentResponse requires while object for While type';
+                LogError(message);
+                return {success: false, message};
             }
         }
 
@@ -377,6 +421,165 @@ export class LoopAgentType extends BaseAgentType {
     ): Promise<AIPromptEntityExtended | null> {
         // Loop agents always use the default prompt from configuration
         return config.childPrompt || null;
+    }
+
+    /**
+     * Loop agents need to resolve template variables before each iteration
+     * @override
+     */
+    public BeforeLoopIteration<P>(
+        context: {
+            item: any;
+            index: number;
+            payload: P;
+            loopType: 'ForEach' | 'While';
+            itemVariable: string;
+            actionParams: Record<string, unknown>;
+            subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
+        } 
+    ): {
+        actionParams?: Record<string, unknown>;
+        subAgentRequest?: { name: string; message: string; templateParameters?: Record<string, string> };
+        payload?: P;
+    } | null {
+        // Resolve templates in action params if present
+        if (context.actionParams) {
+            const resolvedParams = this.resolveTemplates(context.actionParams, {
+                item: context.item,
+                index: context.index,
+                payload: context.payload
+            }, context.itemVariable);
+
+            return { actionParams: resolvedParams };
+        }
+
+        // TODO: Handle subAgentRequest template resolution if needed
+
+        return null;
+    }
+
+    // AfterLoopIteration: Not needed - default behavior (collect results) is correct
+
+    /**
+     * Resolves template variables in an object recursively
+     */
+    private resolveTemplates(
+        obj: Record<string, unknown>,
+        context: Record<string, any>,
+        itemVariable: string
+    ): Record<string, unknown> {
+        const result: Record<string, unknown> = {};
+
+        for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string') {
+                result[key] = this.resolveValueFromContext(value, context, itemVariable);
+            } else if (Array.isArray(value)) {
+                result[key] = value.map(v =>
+                    typeof v === 'string' ? this.resolveValueFromContext(v, context, itemVariable) : v
+                );
+            } else if (typeof value === 'object' && value !== null) {
+                result[key] = this.resolveTemplates(value as Record<string, unknown>, context, itemVariable);
+            } else {
+                result[key] = value;
+            }
+        }
+
+        return result;
+    }
+
+    // /**
+    //  * Resolves template string with variable interpolation
+    //  */
+    // private resolveTemplateString(template: string, context: Record<string, any>): string {
+    //     let result = template;
+
+    //     // Simple variable replacement for now
+    //     for (const [varName, varValue] of Object.entries(context)) {
+    //         const placeholder = `{{${varName}}}`;
+    //         if (result.includes(placeholder)) {
+    //             result = result.replace(new RegExp(placeholder.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'),
+    //                 typeof varValue === 'string' ? varValue : JSON.stringify(varValue));
+    //         }
+    //     }
+
+    //     return result;
+    // }
+
+    /**
+     * Resolves a value from context using variable references
+     */
+    private resolveValueFromContext(value: string, context: Record<string, any>, itemVariable: string): any {
+        // check to see if value is wrapped in a nunjucks style template like {{variable}} and
+        // if so, remove that wrapping to get the actual variable name.
+        // we only do this if the string starts and ends with the {{ }} pattern
+        // and we trim whitespace first
+        const trimmedValue = value.trim();
+        if (trimmedValue.startsWith('{{') && trimmedValue.endsWith('}}')) {
+            value = trimmedValue.substring(2, trimmedValue.length - 2).trim();
+        }
+
+        // first check itemVariable name
+        const ivToLower = itemVariable?.trim().toLowerCase();
+        if (value?.toLowerCase().startsWith(`${ivToLower}.`)) {
+            const path = value.substring(ivToLower.length + 1);
+            return this.getValueFromPath(context.item, path);
+        }
+
+        // Check for direct context variable references
+        for (const [varName, varValue] of Object.entries(context)) {
+            if (value === varName) {
+                return varValue;
+            }
+
+            if (value?.trim().toLowerCase().startsWith(`${varName}.`)) {
+                const path = value.substring(varName.length + 1);
+                return this.getValueFromPath(varValue, path);
+            }
+        }
+
+        // Static value
+        return value;
+    }
+
+    /**
+     * Helper to get value from nested object path
+     */
+    private getValueFromPath(obj: any, path: string): unknown {
+        const parts = path.split('.');
+        let current = obj;
+
+        for (const part of parts) {
+            if (!part) continue;
+
+            // Check for array indexing
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
+            } else {
+                // Regular property access
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
+            }
+        }
+
+        return current;
     }
 }
 

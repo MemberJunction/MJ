@@ -1,0 +1,260 @@
+<div [class]="messageClasses" [attr.data-message-id]="message.ID">
+  <div class="message-avatar">
+    <div class="avatar-circle" [class.ai-avatar]="isAIMessage" [class.user-avatar]="isUserMessage">
+      @if (isUserMessage) {
+        @if (userAvatarUrl) {
+          <img [src]="userAvatarUrl" alt="User avatar" class="avatar-image" />
+        } @else if (userAvatarIconClass) {
+          <i [class]="userAvatarIconClass"></i>
+        } @else {
+          <i class="fas fa-user"></i>
+        }
+      } @else if (isAIMessage) {
+        <i class="fas" [ngClass]="aiAgentInfo?.iconClass || 'fa-robot'"></i>
+      }
+    </div>
+  </div>
+
+  <div class="message-content">
+    <div class="message-header">
+      <span class="message-sender" [title]="isAIMessage ? (aiAgentInfo?.role || 'AI Assistant') : ''">
+        {{ isAIMessage ? (aiAgentInfo?.name || 'AI Assistant') : messageSenderName }}
+      </span>
+      <span class="message-time">{{ message.__mj_CreatedAt | date:'short' }}</span>
+
+      <!-- Status indicator for user messages -->
+      <span *ngIf="isUserMessage && messageStatus !== 'Complete'" class="message-status" [class.error]="messageStatus === 'Error'">
+        <i class="fas" [ngClass]="messageStatus === 'Error' ? 'fa-exclamation-triangle' : 'fa-circle-notch fa-spin'"></i>
+        <span class="status-text">{{ getStatusText() }}</span>
+      </span>
+
+      <!-- Time pill - shows for AI messages in all states (in-progress, active, complete, failed) -->
+      <span *ngIf="!isUserMessage && timePillText"
+            class="time-pill"
+            [class.in-progress]="isInProgressAIMessage"
+            [class.active]="!isInProgressAIMessage && isAgentRunActive"
+            [class.complete]="!isInProgressAIMessage && !isAgentRunActive && messageStatus === 'Complete'"
+            [class.failed]="messageStatus === 'Error'">
+        <i class="fas fa-clock"></i>
+        {{ timePillText }}
+      </span>
+
+      <!-- Agent run icon (clickable to expand details) - always rightmost when present -->
+      <span *ngIf="hasAgentRun"
+            class="agent-run-icon"
+            (click)="toggleAgentDetails()"
+            [class.expanded]="isAgentDetailsExpanded"
+            [title]="hasRatings() ? 'Agent details & ' + getRatingCount() + ' rating(s)' : 'Click to view agent execution details'">
+        <i class="fas fa-cog"></i>
+        <span class="rating-badge" *ngIf="hasRatings()">{{ getRatingCount() }}</span>
+      </span>
+    </div>
+
+    <div class="message-body">
+      @if (!isEditing) {
+        <div class="message-text">
+          <markdown [data]="displayMessage"></markdown>
+          @if (isMessageEdited) {
+            <span class="edited-badge">(edited)</span>
+          }
+        </div>
+
+        <!-- Artifact Message Card -->
+        @if (hasArtifact && artifact && artifactVersion) {
+          <div class="artifact-wrapper" [class.system-artifact]="isSystemArtifact">
+            <mj-artifact-message-card
+              [artifactId]="artifact.ID"
+              [artifact]="artifact"
+              [artifactVersion]="artifactVersion"
+              [currentUser]="currentUser"
+              (actionPerformed)="onArtifactActionPerformed($event)">
+            </mj-artifact-message-card>
+          </div>
+        }
+
+        <!-- Suggested Responses (shown only for last message by owner) -->
+        @if (isLastMessageInConversation && isConversationOwner && suggestedResponses.length > 0) {
+          <mj-suggested-responses
+            [suggestedResponses]="suggestedResponses"
+            [disabled]="isProcessing"
+            [isLastMessage]="isLastMessageInConversation"
+            [isConversationOwner]="isConversationOwner"
+            (responseSelected)="onSuggestedResponseSelected($event)">
+          </mj-suggested-responses>
+        }
+      }
+
+      @if (isEditing) {
+        <div class="message-edit-container">
+          <textarea
+            class="message-edit-textarea"
+            [(ngModel)]="editedText"
+            (keydown)="onEditKeydown($event)"
+            rows="4"
+            placeholder="Edit your message..."></textarea>
+          <div class="edit-actions">
+            <button class="edit-action-btn save" (click)="saveEdit()">
+              <i class="fas fa-check"></i>
+              Save
+            </button>
+            <button class="edit-action-btn cancel" (click)="cancelEditing()">
+              <i class="fas fa-times"></i>
+              Cancel
+            </button>
+          </div>
+          <div class="edit-hint">
+            Press Enter to save, Shift+Enter for new line, Escape to cancel
+          </div>
+        </div>
+      }
+    </div>
+
+    <!-- Message Footer: Rating buttons and action buttons for last completed AI message -->
+    @if (isAIMessage && !isEditing && messageStatus === 'Complete' && (isLastMessage || hasRatings())) {
+      <div class="message-footer">
+        <!-- Rating component (thumbs up/down) -->
+        <mj-conversation-message-rating
+          [conversationDetailId]="message.ID"
+          [currentUser]="currentUser"
+          [ratingsData]="ratings">
+        </mj-conversation-message-rating>
+
+        <!-- Pin/Delete buttons (only for last message) -->
+        @if (isLastMessage) {
+          <div class="inline-actions">
+            <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
+              <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
+            </button>
+            <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Agent details content section -->
+    <div class="agent-details-section">
+      <!-- Message Action Bar (appears when gear expanded for non-last messages) -->
+      @if (isAgentDetailsExpanded && !isLastMessage && isAIMessage && messageStatus === 'Complete') {
+        <div class="message-action-bar">
+          <div class="action-bar-container">
+            <mj-conversation-message-rating
+              [conversationDetailId]="message.ID"
+              [currentUser]="currentUser"
+              [ratingsData]="ratings">
+            </mj-conversation-message-rating>
+
+            <div class="action-buttons">
+              <button class="action-bar-btn" (click)="onPinClick()" [title]="message.IsPinned ? 'Unpin Message' : 'Pin Message'">
+                <i class="fas fa-thumbtack" [class.pinned]="message.IsPinned"></i>
+              </button>
+              <button class="action-bar-btn danger" (click)="onDeleteClick()" title="Delete Message">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Agent Run Details Panel (expandable) -->
+      @if (isAgentDetailsExpanded && hasAgentRun) {
+        <!-- Agent Run Details Panel -->
+        <div class="agent-details-panel">
+          @if (agentRun) {
+            <div class="agent-details-content">
+              <div class="agent-details-header">
+                <i class="fas fa-chart-line"></i>
+                <span>
+                  <a class="agent-name-link" (click)="openAgentRecord()" title="Open agent details">
+                    {{ aiAgentInfo?.name || 'Agent' }}
+                  </a>
+                  Run Details
+                </span>
+              </div>
+
+              <div class="agent-details-grid">
+                <div class="detail-row">
+                  <span class="detail-label">Run ID:</span>
+                  <span class="detail-value">
+                    <a class="run-id-link" (click)="openAgentRunRecord()" title="Open agent run details">
+                      {{ agentRun.ID }}
+                      <i class="fas fa-external-link-alt"></i>
+                    </a>
+                  </span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunStepCount > 0">
+                  <span class="detail-label">Steps:</span>
+                  <span class="detail-value">{{ agentRunStepCount }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunTotalTokens > 0">
+                  <span class="detail-label">Tokens:</span>
+                  <span class="detail-value">{{ formatNumber(agentRunTotalTokens) }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRunTotalCost > 0">
+                  <span class="detail-label">Cost:</span>
+                  <span class="detail-value">\${{ agentRunTotalCost.toFixed(4) }}</span>
+                </div>
+
+                <div class="detail-row" *ngIf="agentRun.Status">
+                  <span class="detail-label">Status:</span>
+                  <span class="detail-value status-badge" [class]="'status-' + agentRun.Status.toLowerCase()">
+                    {{ agentRun.Status }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          }
+
+          <!-- Tasks Section -->
+          @if (detailTasks.length > 0) {
+            <div class="agent-details-tasks">
+              <div class="tasks-section-header">
+                <i class="fas fa-tasks"></i>
+                <span>Associated Tasks ({{ detailTasks.length }})</span>
+              </div>
+              <div class="tasks-list">
+                <mj-task-widget
+                  *ngFor="let task of detailTasks"
+                  [task]="task"
+                  [compact]="false"
+                  [clickable]="false"
+                  [showProgress]="true"
+                  [showDuration]="true">
+                </mj-task-widget>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    </div>
+
+    <!-- Rating component moved to message footer (lines 113-134) -->
+
+    <!-- Removed message-actions hover panel - actions now in gear icon dropdown -->
+    <!-- Retry button kept for critical error recovery on failed messages -->
+    @if (messageStatus === 'Error' && isAIMessage && !isProcessing && !isEditing) {
+      <div class="message-actions">
+        <button class="message-action-btn retry-btn" (click)="onRetryClick()" title="Retry">
+          <i class="fas fa-redo"></i>
+          Retry
+        </button>
+      </div>
+    }
+
+    <!-- Reaction Buttons -->
+    <div class="message-reactions" *ngIf="!isProcessing && !isInProgressAIMessage && !isEditing">
+      <button class="reaction-btn" (click)="toggleReaction('like')">
+        <i class="far fa-thumbs-up"></i>
+        <span class="reaction-count">0</span>
+      </button>
+      <button class="reaction-btn" (click)="toggleReaction('comment')">
+        <i class="far fa-comment"></i>
+        <span class="reaction-count">0</span>
+      </button>
+    </div>
+  </div>
+</div>

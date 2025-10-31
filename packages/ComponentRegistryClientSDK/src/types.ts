@@ -63,6 +63,41 @@ export interface GetComponentParams {
    * Registry identifier
    */
   registry: string;
+
+  /**
+   * Component namespace
+   */
+  namespace: string;
+
+  /**
+   * Component name
+   */
+  name: string;
+
+  /**
+   * Component version (defaults to 'latest')
+   */
+  version?: string;
+
+  /**
+   * Optional hash for caching - if provided and matches current spec, returns 304
+   */
+  hash?: string;
+
+  /**
+   * User email for tracking and analytics (optional)
+   */
+  userEmail?: string;
+}
+
+/**
+ * Component response with hash and caching support
+ */
+export interface ComponentResponse {
+  /**
+   * Component ID
+   */
+  id: string;
   
   /**
    * Component namespace
@@ -75,9 +110,29 @@ export interface GetComponentParams {
   name: string;
   
   /**
-   * Component version (defaults to 'latest')
+   * Component version
    */
-  version?: string;
+  version: string;
+  
+  /**
+   * Component specification (undefined if not modified - 304 response)
+   */
+  specification?: ComponentSpec;
+  
+  /**
+   * SHA-256 hash of the specification
+   */
+  hash: string;
+  
+  /**
+   * Indicates if the component was not modified (304 response)
+   */
+  notModified?: boolean;
+  
+  /**
+   * Message from server (e.g., "Not modified")
+   */
+  message?: string;
 }
 
 /**
@@ -315,4 +370,89 @@ export class RegistryError extends Error {
     super(message);
     this.name = 'RegistryError';
   }
+}
+
+/**
+ * Parameters for component feedback submission
+ */
+export interface ComponentFeedbackParams {
+  /**
+   * Name of the component
+   */
+  componentName: string;
+
+  /**
+   * Namespace of the component
+   */
+  componentNamespace: string;
+
+  /**
+   * Version of the component (optional)
+   */
+  componentVersion?: string;
+
+  /**
+   * Name of the registry (optional)
+   */
+  registryName?: string;
+
+  /**
+   * Rating (0-5 scale)
+   */
+  rating: number;
+
+  /**
+   * Type of feedback (optional)
+   */
+  feedbackType?: string;
+
+  /**
+   * Comments/feedback text (optional)
+   */
+  comments?: string;
+
+  /**
+   * Associated conversation ID (optional)
+   */
+  conversationID?: string;
+
+  /**
+   * Associated conversation detail ID (optional)
+   */
+  conversationDetailID?: string;
+
+  /**
+   * Associated report ID (optional)
+   */
+  reportID?: string;
+
+  /**
+   * Associated dashboard ID (optional)
+   */
+  dashboardID?: string;
+
+  /**
+   * User email for contact lookup (optional)
+   */
+  userEmail?: string;
+}
+
+/**
+ * Response from feedback submission
+ */
+export interface ComponentFeedbackResponse {
+  /**
+   * Whether the feedback was successfully submitted
+   */
+  success: boolean;
+
+  /**
+   * ID of the created feedback record (if applicable)
+   */
+  feedbackID?: string;
+
+  /**
+   * Error message (if unsuccessful)
+   */
+  error?: string;
 }

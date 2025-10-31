@@ -1,0 +1,20 @@
+<div class="message-input-wrapper">
+  <!-- Processing Indicator Overlay -->
+  <div class="processing-indicator" *ngIf="isProcessing">
+    <i class="fas fa-circle-notch fa-spin"></i>
+    <span>{{ processingMessage }}</span>
+  </div>
+
+  <!-- Message Input Box -->
+  <mj-message-input-box
+    #inputBox
+    [placeholder]="placeholder"
+    [disabled]="disabled || isProcessing"
+    [showCharacterCount]="false"
+    [enableMentions]="true"
+    [currentUser]="currentUser"
+    [rows]="3"
+    [(value)]="messageText"
+    (textSubmitted)="onTextSubmitted($event)">
+  </mj-message-input-box>
+</div>

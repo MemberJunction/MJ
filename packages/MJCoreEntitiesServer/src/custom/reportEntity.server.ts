@@ -1,4 +1,4 @@
-import { BaseEntity, Metadata, RunView } from "@memberjunction/core";
+import { BaseEntity, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { ReportEntity, ReportSnapshotEntity, ReportVersionEntity } from "@memberjunction/core-entities";
 import { SkipAPIAnalysisCompleteResponse } from "@memberjunction/skip-types";
@@ -65,7 +65,8 @@ export class ReportEntity_Server extends ReportEntity  {
                 if (saveResult && (createSnapshot || createReportVersion)) {
                     // here we either have a new record or the configuration has changed, so we need to create a snapshot of the report
                     let success: boolean = true;
-                    const md = new Metadata();
+                    // Use the entity's provider instead of creating new Metadata instance
+                    const md = this.ProviderToUse as any as IMetadataProvider;
 
                     if (createReportVersion) {
                         const reportVersion = await md.GetEntityObject<ReportVersionEntity>('MJ: Report Versions', this.ContextCurrentUser);

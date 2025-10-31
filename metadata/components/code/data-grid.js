@@ -1,7 +1,7 @@
-function DataGrid({ 
+function DataGrid({
   entityName,
   data,
-  fields,
+  columns, // Array of column definitions: [{field: 'Name', header: 'Product Name', render: fn, width: '200px', sortable: true}]
   sorting = true,
   paging = true,
   pageSize = 10,
@@ -17,12 +17,13 @@ function DataGrid({
   onPageChanged,
   onSortChanged,
   onFilterChanged,
-  utilities, 
-  styles, 
-  components, 
-  callbacks, 
-  savedUserSettings, 
-  onSaveUserSettings 
+  onRowClick,
+  utilities,
+  styles,
+  components,
+  callbacks,
+  savedUserSettings,
+  onSaveUserSettings
 }) {
   // Always use the MJ unwrapLibraryComponents function to get components from global libraries like antd, this ensures
   // that various library build/package formats are handled correctly and transparently for your code!
@@ -69,76 +70,145 @@ function DataGrid({
   const statusColorMap = {
     // Green colors for positive states
     active: '#389e0d',      // darker green
-    approved: '#389e0d',
-    complete: '#389e0d',
-    completed: '#389e0d',
-    success: '#389e0d',
-    successful: '#389e0d',
-    enabled: '#389e0d',
-    published: '#389e0d',
+    approved: '#52c41a',    // green
+    complete: '#237804',    // dark green
+    completed: '#135200',   // very dark green
+    success: '#3f6600',     // olive green
+    successful: '#5b8c00',  // light olive
+    enabled: '#7cb305',     // lime
+    published: '#a0d911',   // light lime
     
     // Red colors for negative states
     inactive: '#cf1322',    // darker red
-    rejected: '#cf1322',
-    failed: '#cf1322',
-    error: '#cf1322',
-    disabled: '#cf1322',
-    cancelled: '#cf1322',
-    canceled: '#cf1322',
-    terminated: '#cf1322',
-    expired: '#cf1322',
+    rejected: '#f5222d',    // red
+    failed: '#a8071a',      // dark red
+    error: '#820014',       // very dark red
+    disabled: '#ff4d4f',    // light red
+    cancelled: '#ff7875',   // salmon
+    canceled: '#ff9c9c',    // light salmon
+    terminated: '#873800',  // burnt orange
+    expired: '#ad4e00',     // dark orange
+    deprecated: '#d4380d',  // rust orange
     
     // Yellow/Orange for pending states
     pending: '#d48806',     // darker orange
-    paused: '#d48806',
-    temporary: '#d48806',
-    draft: '#d48806',
-    review: '#d48806',
-    waiting: '#d48806',
+    paused: '#fa8c16',      // orange
+    temporary: '#faad14',   // gold
+    draft: '#d4b106',       // dark gold
+    review: '#ad8b00',      // darker gold
+    waiting: '#ffc53d',     // light gold
     
     // Blue for informational states
     processing: '#096dd9',  // darker blue
-    running: '#096dd9',
-    inprogress: '#096dd9',
-    'in progress': '#096dd9',
-    'in-progress': '#096dd9'
+    running: '#1890ff',     // blue
+    inprogress: '#0050b3',  // dark blue
+    'in progress': '#003a8c', // very dark blue
+    'in-progress': '#40a9ff' // light blue
   };
   
-  // Fallback colors for value lists (darker for better contrast)
+  // 50 distinct colors for value lists (excluding colors used in statusColorMap)
+  // These are carefully selected to be visually distinct from each other
   const fallbackColors = [
-    '#096dd9', // darker blue
-    '#389e0d', // darker green
-    '#d4380d', // darker orange
-    '#c41d7f', // darker magenta
-    '#531dab', // darker purple
-    '#08979c', // darker cyan
-    '#cf1322', // darker red/volcano
-    '#1d39c4', // darker geekblue
-    '#7cb305', // darker lime
-    '#d4b106'  // darker gold
+    '#722ed1', // purple
+    '#9254de', // light purple
+    '#531dab', // dark purple
+    '#391085', // very dark purple
+    '#b37feb', // lavender
+    
+    '#c41d7f', // magenta
+    '#eb2f96', // pink
+    '#f759ab', // light pink
+    '#9e1068', // dark magenta
+    '#780650', // very dark magenta
+    
+    '#08979c', // teal
+    '#13c2c2', // cyan
+    '#006d75', // dark teal
+    '#36cfc9', // light cyan
+    '#5cdbd3', // pale cyan
+    
+    '#1d39c4', // indigo
+    '#2f54eb', // royal blue
+    '#597ef7', // periwinkle
+    '#10239e', // dark indigo
+    '#061178', // navy
+    
+    '#fa541c', // vermillion
+    '#ff7a45', // coral
+    '#ff9c6e', // peach
+    '#d4380d', // rust (if not used above)
+    '#ad2102', // brick red
+    
+    '#8c8c8c', // gray
+    '#595959', // dark gray
+    '#bfbfbf', // light gray
+    '#434343', // charcoal
+    '#262626', // near black
+    
+    '#614700', // brown
+    '#874d00', // tan
+    '#a8730f', // amber
+    '#c79816', // mustard
+    '#d4a017', // goldenrod
+    
+    '#00474f', // dark cyan
+    '#006064', // petrol
+    '#004851', // dark petrol
+    '#1a535c', // ocean
+    '#2c5f2d', // forest green
+    
+    '#4a7c59', // sage
+    '#6b8e23', // olive drab
+    '#556b2f', // dark olive
+    '#8fbc8f', // dark sea green
+    '#3cb371', // medium sea green
+    
+    '#cd5c5c', // indian red
+    '#bc8f8f', // rosy brown
+    '#daa520', // goldenrod
+    '#b8860b', // dark goldenrod
+    '#ff6347'  // tomato
   ];
   
-  // Get color for a value in a value list
+  // Get color for a value in a value list - ensures unique colors for all values
   const getValueColor = (value, possibleValues) => {
     if (!value) return null;
     
-    // Check common status mapping first
     const normalized = value.toString().toLowerCase().trim();
+    
+    // Build a complete color assignment map for this column
+    const colorAssignments = new Map();
+    let nextColorIndex = 0;
+    
+    // First, assign colors to all possible values in order
+    if (possibleValues && Array.isArray(possibleValues)) {
+      possibleValues.forEach(pv => {
+        const pvValue = (pv.Value || pv.Code || '').toLowerCase().trim();
+        if (pvValue && !colorAssignments.has(pvValue)) {
+          // Check if this value has a predefined color in statusColorMap
+          if (statusColorMap[pvValue]) {
+            colorAssignments.set(pvValue, statusColorMap[pvValue]);
+          } else {
+            // Assign next available fallback color
+            colorAssignments.set(pvValue, fallbackColors[nextColorIndex % fallbackColors.length]);
+            nextColorIndex++;
+          }
+        }
+      });
+    }
+    
+    // Return the assigned color for this value
+    if (colorAssignments.has(normalized)) {
+      return colorAssignments.get(normalized);
+    }
+    
+    // If value wasn't in possibleValues, check statusColorMap first
     if (statusColorMap[normalized]) {
       return statusColorMap[normalized];
     }
     
-    // Use consistent color based on position in possible values
-    if (possibleValues && Array.isArray(possibleValues)) {
-      const index = possibleValues.findIndex(v => 
-        v.Value?.toLowerCase() === normalized || v.Code?.toLowerCase() === normalized
-      );
-      if (index >= 0) {
-        return fallbackColors[index % fallbackColors.length];
-      }
-    }
-    
-    // Hash the value to get a consistent color
+    // Otherwise assign a fallback color based on hash
+    // This ensures consistency even for unexpected values
     let hash = 0;
     for (let i = 0; i < normalized.length; i++) {
       hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
@@ -154,38 +224,51 @@ function DataGrid({
     return () => clearTimeout(timer);
   }, [filterText, filterDebounceTime]);
   
-  // Determine fields to display - use provided fields or extract from data
-  // This handles both explicit field lists and auto-discovery from data
+  // Normalize column definitions - support both simple strings and full column definitions
+  const normalizedColumns = React.useMemo(() => {
+    if (!columns || columns.length === 0) {
+      // Auto-discover columns from data if none provided
+      if (data && Array.isArray(data) && data.length > 0) {
+        const allKeys = new Set();
+        data.forEach(row => {
+          if (row && typeof row === 'object') {
+            Object.keys(row).forEach(key => {
+              if (key !== 'key') {
+                allKeys.add(key);
+              }
+            });
+          }
+        });
+        return Array.from(allKeys).map(key => ({ field: key }));
+      }
+      return [];
+    }
+
+    // Normalize columns to standard format
+    return columns.map(col => {
+      if (typeof col === 'string') {
+        // Simple string field name - use defaults
+        return { field: col };
+      } else if (typeof col === 'object' && col.field) {
+        // Already a column definition object
+        return col;
+      } else {
+        console.warn('Invalid column configuration:', col);
+        return null;
+      }
+    }).filter(Boolean);
+  }, [columns, data]);
+
+  // Extract just the field names for filtering and other operations
   const displayFields = React.useMemo(() => {
-    // If fields are explicitly provided, use them
-    if (fields && fields.length > 0) {
-      return fields;
-    }
-    
-    // If no fields specified, try to extract all unique keys from data
-    // But gracefully handle null/undefined/empty data
-    if (data && Array.isArray(data) && data.length > 0) {
-      const allKeys = new Set();
-      data.forEach(row => {
-        if (row && typeof row === 'object') {
-          Object.keys(row).forEach(key => {
-            // Skip internal keys like 'key' that we add for row selection
-            if (key !== 'key') {
-              allKeys.add(key);
-            }
-          });
-        }
-      });
-      return Array.from(allKeys);
-    }
-    
-    // Return empty array if no fields and no data to extract from
-    return [];
-  }, [fields, data]);
+    return normalizedColumns.map(col => col.field);
+  }, [normalizedColumns]);
   
-  // Build columns from fields with metadata-aware formatting
-  const columns = React.useMemo(() => {
-    return displayFields.map(fieldName => {
+  // Build table columns from column definitions with metadata-aware formatting
+  const tableColumns = React.useMemo(() => {
+    return normalizedColumns.map(colDef => {
+      const fieldName = colDef.field;
+
       // Get field metadata if available
       const fieldInfo = entityInfo?.Fields?.find(f => f.Name === fieldName);
       const fieldType = fieldInfo?.Type?.toLowerCase() || '';
@@ -254,23 +337,26 @@ function DataGrid({
       const useEllipsis = isLongTextField;
       
       // Handle special __mj fields display names
-      let displayName = fieldInfo?.DisplayName || fieldName;
-      if (fieldName === '__mj_CreatedAt') {
-        displayName = 'Created At';
-      } else if (fieldName === '__mj_UpdatedAt') {
-        displayName = 'Updated At';
-      } else if (fieldName === '__mj_DeletedAt') {
-        displayName = 'Deleted At';
+      // Priority: colDef.header > fieldInfo.DisplayName > default handling
+      let displayName = colDef.header || fieldInfo?.DisplayName || fieldName;
+      if (!colDef.header) {
+        if (fieldName === '__mj_CreatedAt') {
+          displayName = 'Created At';
+        } else if (fieldName === '__mj_UpdatedAt') {
+          displayName = 'Updated At';
+        } else if (fieldName === '__mj_DeletedAt') {
+          displayName = 'Deleted At';
+        }
       }
-      
+
       return {
         title: displayName,
         dataIndex: fieldName,
         key: fieldName,
         align: align,
-        width: columnWidth,
+        width: colDef.width || columnWidth, // Use column-specific width if provided
         ellipsis: false, // We'll handle ellipsis manually for click expansion
-        sorter: sorting ? (a, b) => {
+        sorter: (colDef.sortable !== undefined ? colDef.sortable : sorting) ? (a, b) => {
           const valA = a[fieldName];
           const valB = b[fieldName];
           if (valA == null) return 1;
@@ -281,13 +367,19 @@ function DataGrid({
           return valA - valB;
         } : false,
         render: (value, record) => {
+          // Check for custom render function first
+          if (colDef.render && typeof colDef.render === 'function') {
+            return colDef.render(value, record, fieldInfo);
+          }
+
+          // Default handling for null values
           if (value == null) return '-';
-          
+
           // Create a unique key for this cell
           const cellKey = `${record.key || record.ID || record.id}_${fieldName}`;
           const isExpanded = expandedCells[cellKey];
-          
-          // Format based on field type
+
+          // Format based on field type (default behavior)
           let displayValue = value;
           let formattedContent = null;
           
@@ -319,7 +411,7 @@ function DataGrid({
           }
           // Handle numeric fields with formatting
           else if (fieldType.includes('money')) {
-            displayValue = typeof value === 'number' 
+            displayValue = typeof value === 'number'
               ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
               : value;
             formattedContent = displayValue;
@@ -453,7 +545,7 @@ function DataGrid({
         }
       };
     });
-  }, [displayFields, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
+  }, [normalizedColumns, entityInfo, sorting, filtering, highlightFilterMatches, debouncedFilter, expandedCells]);
   
   // Filter data based on search term
   // Handles null/undefined data gracefully and returns appropriate defaults
@@ -570,16 +662,41 @@ function DataGrid({
   
   return (
     <div className="data-grid-component" style={{ width: '100%' }}>
+      <style>{`
+        .data-grid-component .ant-table-wrapper,
+        .data-grid-component .ant-table,
+        .data-grid-component .ant-table-tbody,
+        .data-grid-component .ant-table-row,
+        .data-grid-component .ant-table-cell,
+        .data-grid-component .ant-table-tbody > tr {
+          animation: none !important;
+          transition: none !important;
+        }
+        .data-grid-component .ant-table-tbody > tr.ant-table-row {
+          animation: none !important;
+        }
+        .data-grid-component * {
+          animation-duration: 0s !important;
+          transition-duration: 0s !important;
+        }
+      `}</style>
       {filtering && (
         <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
-          <Search
-            placeholder={`Search in ${filterFields ? filterFields.join(', ') : 'all fields'}`}
-            value={filterText}
-            onChange={e => setFilterText(e.target.value)}
-            allowClear
-            onClear={() => setFilterText('')}
-            style={{ width: '100%' }}  // Full width to match grid
-          />
+          <div style={{ position: 'relative' }}>
+            <Search
+              placeholder={`Search in ${filterFields ? filterFields.join(', ') : 'all fields'}`}
+              value={filterText}
+              onChange={e => setFilterText(e.target.value)}
+              allowClear
+              onClear={() => setFilterText('')}
+              style={{ width: '100%' }}  // Full width to match grid
+            />
+            <style>{`
+              .data-grid-component .ant-btn.ant-input-search-button {
+                margin-top: -1px;
+              }
+            `}</style>
+          </div>
           {debouncedFilter && (
             <Text type="secondary">
               Found {filteredData.length} matching records
@@ -589,7 +706,7 @@ function DataGrid({
       )}
       
       <Table
-        columns={columns}
+        columns={tableColumns}
         dataSource={dataWithKeys}
         rowSelection={rowSelection}
         pagination={pagination}
@@ -600,6 +717,16 @@ function DataGrid({
           emptyText: `No ${entityName || 'records'} found`
         }}
         size="middle"
+        onRow={(record) => ({
+          onClick: () => {
+            if (onRowClick) {
+              onRowClick(record);
+            }
+          },
+          style: {
+            cursor: onRowClick ? 'pointer' : 'default'
+          }
+        })}
       />
     </div>
   );

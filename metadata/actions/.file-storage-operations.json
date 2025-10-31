@@ -1,0 +1,2198 @@
+[
+  {
+    "fields": {
+      "Name": "File Storage: List Objects",
+      "Description": "List files and directories in a storage provider path. Active providers: Azure Blob Storage, Google Drive, Dropbox, Box.com, SharePoint Storage. Inactive: AWS S3 Storage, Google Cloud Storage.",
+      "DriverClass": "File Storage: List Objects",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "76FC037B-622C-428A-A0E7-2B05C6187026"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.829Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Path",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path to list",
+            "IsRequired": false,
+            "DefaultValue": "/"
+          },
+          "primaryKey": {
+            "ID": "B201FEB5-D131-46CE-87D4-DD32884D1A1B"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.840Z",
+            "checksum": "13aa98b989082bed7390bc8638dbe6df72871195cb3e119b61be9547d423e194"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Delimiter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Path delimiter",
+            "IsRequired": false,
+            "DefaultValue": "/"
+          },
+          "primaryKey": {
+            "ID": "B4718C0D-E0E6-48E1-A207-5C06190933AA"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.851Z",
+            "checksum": "70382f149a2859a7434a71685928b952754f5ac357be7b1b5d0b7900967dcaa1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Objects",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of file objects",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9F95B2EA-D5AD-4B66-A106-6418C449FC4C"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.862Z",
+            "checksum": "e41207d7f68cbe3918748841366ca56de76d9d6b15ba2a8ea45a5c0de8396873"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Prefixes",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Array of directory prefixes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "80204210-0979-40DD-BEF8-4FCC284742AC"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.871Z",
+            "checksum": "b1cf77bcca7a24f97fda5564f74e7e2423d89159c770230a99b6fd8f02dfe8df"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of objects returned",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A2EF122D-CC02-4AB5-993A-856DCF7B5AF5"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.880Z",
+            "checksum": "ec89a31e0990a54471bb0f3524faf6b077071a6971e3579ef6c39df8b92b731d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DirectoryCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of directories returned",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BAE58DF4-DBD7-409A-A067-29080981CD56"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.891Z",
+            "checksum": "a9f275bf7aed0adc578f3515ae7b436331705ca0a5fe7e29df042c545c2795b0"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "151896C3-465D-4962-8999-F38443BC54EC"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.901Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "B6933A6C-BF79-4AC9-B4C6-9F5D12E56B8D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.911Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "4AC41A87-31EB-4756-A3DD-BFDFE0052C1D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.920Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "C2BDC828-7661-4484-B451-FAF7A45B9EB7"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.967Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AE9554D7-C3F6-400B-865D-D1E81CC2058E"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.627Z",
+      "checksum": "b7e3d0d50527f8b682956e79e348baecf13c9c53d3e68ef85d7178a802e0c94f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Get Object Metadata",
+      "Description": "Retrieve metadata about a file object in a storage provider. Returns size, content type, last modified date, and other properties.",
+      "DriverClass": "File Storage: Get Object Metadata",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-info-circle"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "B5BDD3FD-29E1-480D-A124-B9C17EB15F24"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.976Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object. Required if ObjectID not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1E918DB8-0268-4590-BBB6-F5B2592C2FCF"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:00.985Z",
+            "checksum": "f8643ff7c94d75aadc22b285a96b910f8ee4e003464338529eec4f87331a8828"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider-specific object ID (Box: file ID, Google Drive: file ID, SharePoint: item ID, Dropbox: id). If provided, bypasses path resolution for faster access. Obtain from search results ObjectID field.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "6BA8A9CB-AC80-4745-956A-58DDBDAC596A"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:00.940Z",
+            "checksum": "2f6363d6dade6911589478699a06f55a2acb56c97da9c3f46f987c0c92d10138"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Name",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "File name",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "9C0ED316-4408-4674-A278-B2B9F57F77CE"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:00.995Z",
+            "checksum": "1a5265c45c83294cd9f75e5b8d9ba4a62e438739250c5810b123d7ac4f8bfd29"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Path",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Directory path",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4F96D91D-C988-4A99-9D67-5F82A4EB4D88"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.005Z",
+            "checksum": "e762a681fe3bc2187cdb21bf3ac976bcaf7cbac577f0662923d2e1ebf32427c5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "FullPath",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Full path",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "1BE8E8BE-F552-46B5-B80B-5F1655CEAA40"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.013Z",
+            "checksum": "4e8c292e8aef68ec3c5e0ebbcc36a473f049cb6ea16ec71c3341dced818f955c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Size",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "File size in bytes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A3182CAA-4BA4-4BE0-BB73-835795C931FD"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.023Z",
+            "checksum": "b85bbc476811de370fc870aeb09f6893189d5fb6ae32eca09230b68cb3e9fb15"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ContentType",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Content MIME type",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "771B7B17-8932-4425-BBC7-F80E83055D65"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.031Z",
+            "checksum": "930f0d084c4637f220c802144a85161e1b2763e75f9d78162409e51734208343"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "LastModified",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Last modified timestamp",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E475A3D4-8C09-4A2F-9A21-67CDE739017F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.041Z",
+            "checksum": "c35252653005e766c422fe8f2a665e7416fb9de4b317602a7d691f1e6c440c55"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IsDirectory",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if object is a directory",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7E9DAD45-DB34-4990-8A9D-A38477716378"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.049Z",
+            "checksum": "7210d9fade80599bca6903b9470f00696d10fd17d59d14a23bc8276720cff5b7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ETag",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Entity tag (if available)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "03453BD1-2EEB-4F6C-8864-E6190286CDAF"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.094Z",
+            "checksum": "371b938799df12d8cf315764a09777aacd22476308c1886778a7cb00675b8d2f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CustomMetadata",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Custom metadata key-value pairs (if available)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "35A60697-C54A-41F6-B1FE-90B65540FFA1"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.103Z",
+            "checksum": "7a34c30b82e3fc403f2d96707fbd95fb42ea44750752dcce79510fc6d793b828"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "C13B301B-34CD-426D-BD26-ED18E57FDF5F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.112Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "2A7B4781-9778-4A5E-84BC-FE704DB60F17"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.120Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "8165EFC0-92AA-45FF-980B-FEB6067B3C97"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.129Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OBJECTNAME",
+            "IsSuccess": false,
+            "Description": "ObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "BC77CC29-355B-4568-9746-151A57D24A55"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.137Z",
+            "checksum": "babbbe481c85d0c687d9ffbedd6dd68df6915afa895111536286f653f4264464"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "EADEADB5-00C1-4989-A26D-57C470D0386C"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.147Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "32C9BA41-A275-46FF-AD71-52451770D8DF"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.641Z",
+      "checksum": "69958ef5e0a5cc3ad3d6d296f9fbe5f846969fdce08872f8ba70d212696e8364"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Get Object",
+      "Description": "Download file content from a storage provider. Returns the file content as base64-encoded data.",
+      "DriverClass": "File Storage: Get Object",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-download"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "97B2FF32-C062-480C-9FA7-34AF72C8888A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.156Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object. Required if ObjectID not provided.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "455FB26C-23BF-438F-BF92-9E6B7679B457"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:01.133Z",
+            "checksum": "f8643ff7c94d75aadc22b285a96b910f8ee4e003464338529eec4f87331a8828"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider-specific object ID (Box: file ID, Google Drive: file ID, SharePoint: item ID, Dropbox: id). If provided, bypasses path resolution for faster access. Obtain from search results ObjectID field.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "622C43A3-F0B4-4AFE-8BE9-6FB42C598A56"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:01.249Z",
+            "checksum": "2f6363d6dade6911589478699a06f55a2acb56c97da9c3f46f987c0c92d10138"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Content",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Base64-encoded file content",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C27CB04F-170B-4582-8E7D-5AB9126A34E2"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.172Z",
+            "checksum": "c16686ac5bde400e3de803e85e309a6cd546bc5ae232794a34bf2a8c90a42131"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Size",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "File size in bytes",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "616D5C32-342E-4F7C-9E8E-8C62597F6B65"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.227Z",
+            "checksum": "b85bbc476811de370fc870aeb09f6893189d5fb6ae32eca09230b68cb3e9fb15"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "94D5B4FF-9145-4B99-B23E-4DFEA52222D1"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.236Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "E46C3ED5-F088-4AF4-B484-FBCE588FF599"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.244Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "74D340BA-6291-4109-93E7-E3966ACFF60E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.252Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OBJECTNAME",
+            "IsSuccess": false,
+            "Description": "ObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "CF153080-5F4D-45A7-B2D4-B569FF5D2272"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.260Z",
+            "checksum": "babbbe481c85d0c687d9ffbedd6dd68df6915afa895111536286f653f4264464"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "731E2B5C-BCB6-4ADE-AA83-05B1310D51F2"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.269Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5634B886-F737-4B44-8F10-1185A6F96EB6"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.654Z",
+      "checksum": "408e6466b515598f45d2d9fd30c36e4e0a4b2b1a2a6555cdb615351a7f453e25"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Get Download URL",
+      "Description": "Generate a pre-authenticated download URL for a file. The URL can be used to download the file without additional authentication.",
+      "DriverClass": "File Storage: Get Download URL",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-link"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "09396761-C34A-43CE-98D3-9FD19816EE3E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.279Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "DF46815C-BC65-411B-80DE-B81A53D8C852"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.287Z",
+            "checksum": "7277fe0dd59c9a6bf175bb15cbd40c4f47eab7e1c72c92f0697d1da6a56d82c2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DownloadUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pre-authenticated download URL",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7FCB678F-4372-43C3-B33B-356A21789749"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.296Z",
+            "checksum": "f792727628e7303b44046672efa9ef26b3b745a27fe1d970648a4d02c52cce12"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "9094CCD6-89A9-4592-B43E-610BB6254E05"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.304Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "7E8CE7EE-06FC-4BB9-899A-036A72FC5328"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.345Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "EF45FF68-AE34-4084-80A2-2BDB49EED110"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.353Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OBJECTNAME",
+            "IsSuccess": false,
+            "Description": "ObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "7BE4B512-9BA3-45CE-AD3A-22E74BDF3F23"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.360Z",
+            "checksum": "babbbe481c85d0c687d9ffbedd6dd68df6915afa895111536286f653f4264464"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "362CCD14-9107-4CAA-8A68-EC582D9AA6E7"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.371Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "11637339-5F0A-4C41-940F-553EE65F264C"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.666Z",
+      "checksum": "6d280478deba5e0453cb03f1ddf55b618df8565202c1e99777095278dbc360a3"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Get Upload URL",
+      "Description": "Generate a pre-authenticated upload URL for a file. The URL can be used to upload a file without additional authentication.",
+      "DriverClass": "File Storage: Get Upload URL",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-upload"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0B757F8D-8595-436A-93A5-007364C2BB48"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.382Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object to upload",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A2902361-0533-4CA2-BEE3-B71E119FA184"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.393Z",
+            "checksum": "1a0105549102397a24748d9955fef22f425bed3e4b75afd162bdc61f9436a312"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "UploadUrl",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pre-authenticated upload URL",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "35FAB684-5CAE-4D86-BFA1-5D5893BE68BD"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.403Z",
+            "checksum": "42d7d3c4cf2118566d36fe2d7be48b6dca6045e8f7c557f542c701c61ab848c1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ProviderKey",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Provider-specific key (if returned by provider)",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "987820EE-0F11-48E4-8B98-6CF4B0812D17"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.412Z",
+            "checksum": "61e713d453fb926bde71fefb042fb1c4d051857aa8591f77a7245d9e55c701fc"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "E86038C5-1C73-43F4-906C-DC45D3AC454F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.421Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "3DC3CA0F-8698-4F56-8D38-9CF66DE4765F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.431Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "F370D038-193A-47E6-91D4-845CB6C1F7FB"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.482Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OBJECTNAME",
+            "IsSuccess": false,
+            "Description": "ObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "A58467C6-589F-4FA9-9FC2-7114D3E94215"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.490Z",
+            "checksum": "babbbe481c85d0c687d9ffbedd6dd68df6915afa895111536286f653f4264464"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "D115F319-82D9-4D89-A04E-8698EB79E5A8"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.498Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F232CA70-C655-4455-B920-3E488ED224F3"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.679Z",
+      "checksum": "cb2d50fdca302c835ac3b5511ff42b264156918021746320997ad12cdc8f771a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Check Object Exists",
+      "Description": "Check if a file object exists in a storage provider.",
+      "DriverClass": "File Storage: Check Object Exists",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-file-circle-question"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "96B17A38-97D0-419B-85F5-77C81CE6E0BB"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.507Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "1E785401-52D1-4D85-A1E5-C4E0AB7E5E17"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.517Z",
+            "checksum": "7277fe0dd59c9a6bf175bb15cbd40c4f47eab7e1c72c92f0697d1da6a56d82c2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Exists",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if the object exists",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "185BB907-F537-407F-8414-1338C4110A30"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.526Z",
+            "checksum": "9dcec3f3da764ea1d3a74c093368599eeeeea28a1a353ed0ac469ce673d80fff"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "A3773271-860E-4F4E-85FD-700F1102ED74"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.534Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "F6B2EF76-42D3-428D-BAA0-6DB244FADC28"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.541Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "B88D8685-7503-4F8E-A376-14ED1F272E4F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.549Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OBJECTNAME",
+            "IsSuccess": false,
+            "Description": "ObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "A5B05AA4-CB9D-45E2-90E5-512D47072F97"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.559Z",
+            "checksum": "babbbe481c85d0c687d9ffbedd6dd68df6915afa895111536286f653f4264464"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "7C58475F-E13E-4500-A6E5-E1A62D002D20"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.601Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "AF60D984-E15D-4B38-9219-9D080F330346"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.690Z",
+      "checksum": "09737d267334012ce12ccd418fb5eb9649b124a38c237ce01df74bb870733802"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Check Directory Exists",
+      "Description": "Check if a directory exists in a storage provider.",
+      "DriverClass": "File Storage: Check Directory Exists",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-folder-circle-question"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "8B9F0FC4-8245-48E8-8BC4-EDD00AD4B555"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.610Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DirectoryPath",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Path to the directory",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "710913CD-4D02-4F98-AF96-CBC26548B60D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.619Z",
+            "checksum": "a05552bfc1c12834398c78ed0a3a13adcf16ff7576a56a2aa2f64c2b01abef81"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Exists",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if the directory exists",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "30A10BFD-C2E7-4E84-82A6-5AC8E2205D64"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.628Z",
+            "checksum": "1a02b0e9ddd9de980adb4990baa8fb1e223275ed26c57487aee44ec062a102c9"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "FAB2BD97-3679-4E63-9070-E9D7B929DC03"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.637Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "0536028B-B3B5-4510-A8BA-942DA078AFAF"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.646Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "266E8F29-A62E-44D1-9272-AA08825DF77D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.654Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DIRECTORYPATH",
+            "IsSuccess": false,
+            "Description": "DirectoryPath parameter is required"
+          },
+          "primaryKey": {
+            "ID": "E7A32F1F-77AF-4C91-B661-D43A8825E0C8"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.661Z",
+            "checksum": "916186ddf58b7984fc5471f05c2726949cfadaab7f87a7f902ac9e3fd5ca6082"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "4E5FAFCB-1ACC-4300-A48D-8AB1A44AAF46"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.670Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "651876F1-68A5-4D16-840A-B607C2503452"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.702Z",
+      "checksum": "172397831b821b1267e38269097b6fbbd7d06afb424a25c632411c29a05255db"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Copy Object",
+      "Description": "Copy a file object within a storage provider from one location to another.",
+      "DriverClass": "File Storage: Copy Object",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-copy"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "6E31178C-4E1E-4E48-9188-A381FA25AEFF"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.678Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Source file path",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "19280C50-ECEA-465F-872B-32125AFE9667"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.722Z",
+            "checksum": "ff4071fa2f785f42bcaa8965e3e3cc3688666af7686cb51040549b13c2e7b093"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DestinationObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Destination file path",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "17BCF6FD-0169-4F29-8167-06597D4245E5"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.731Z",
+            "checksum": "a71f05b21918b78aa60ac7b30ae2c387938af5382090ea135b75dced95454b73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if the copy succeeded",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "7C00F02A-B397-4947-885A-724509FF52F2"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.740Z",
+            "checksum": "c2edceda3a425b476f8565f63616d8f80c1211160f6001936890c2075e404a44"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "68B2C2CA-6D2A-4880-A8BD-5B468C4A27C1"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.749Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "DADADD1D-4236-4292-A755-9ACF4DA74B9E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.757Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "59DEF31B-C45C-403B-A4A6-93ADA9152E11"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.765Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_SOURCE",
+            "IsSuccess": false,
+            "Description": "SourceObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "0236E347-042B-4C21-B138-6A1290EF0A7F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.773Z",
+            "checksum": "207626bec17390b62c32134344df427a214ee047ed1eff5629700f960dcecded"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DESTINATION",
+            "IsSuccess": false,
+            "Description": "DestinationObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "D4B11BAF-A224-4D82-BF7C-7683F988433F"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.783Z",
+            "checksum": "e03cb148f8becefc7a80d4783ad8ae401cf7d88ba7d4b8235faf871c02b9e0b9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "FFAA0C3D-549D-450E-8E8E-8FB063605598"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.792Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C7A56108-A83F-4885-80A4-FC2F3D9A78A1"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.714Z",
+      "checksum": "7fc85be257634e9d1ddc09373364f3741d2ef2d57ba9f8093bf7dd92efda56ba"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Move Object",
+      "Description": "Move or rename a file object within a storage provider.",
+      "DriverClass": "File Storage: Move Object",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-arrows-turn-right"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "C6B1D11E-5461-4BF6-A8FD-944764CC705B"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.801Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SourceObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Source file path",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "91B62FEB-2C4E-4592-B4E8-B5988C067B14"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.841Z",
+            "checksum": "ff4071fa2f785f42bcaa8965e3e3cc3688666af7686cb51040549b13c2e7b093"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DestinationObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Destination file path",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "ABE079FC-CC5E-4E42-85A1-617AE5C76E3A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.850Z",
+            "checksum": "a71f05b21918b78aa60ac7b30ae2c387938af5382090ea135b75dced95454b73"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if the move succeeded",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "44FDEBC8-1DDC-4672-B225-39FA735583BE"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.859Z",
+            "checksum": "a22d4975bed8d8b7f4a45a73370574522a21c360e9142826e723544183e542dd"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "C22277D8-9ADB-43EC-B7A4-7AF11699832C"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.870Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "1E88ED2D-FE93-4FAB-8D67-969F1F991B0A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.879Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "DB443CEE-8AD1-4FD8-9280-0D295B95BBAA"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.888Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_SOURCE",
+            "IsSuccess": false,
+            "Description": "SourceObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "F1DA1D8D-20F5-40FA-88A6-21F86E10DBFE"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.896Z",
+            "checksum": "207626bec17390b62c32134344df427a214ee047ed1eff5629700f960dcecded"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DESTINATION",
+            "IsSuccess": false,
+            "Description": "DestinationObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "C002C5DB-6D44-42D3-8956-D23CB774E61A"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.905Z",
+            "checksum": "e03cb148f8becefc7a80d4783ad8ae401cf7d88ba7d4b8235faf871c02b9e0b9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "37E6F00E-FD7D-4BC6-BC8B-85B312D02EC7"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.915Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F41B61FE-2935-4DFC-A014-1007137310C8"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.726Z",
+      "checksum": "8bafc31adf782bf5279fdeba1ff2cb7e180a531644f0de5536accfc01f278a12"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Delete Object",
+      "Description": "Delete a file object from a storage provider.",
+      "DriverClass": "File Storage: Delete Object",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-trash"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "1CD162D0-610A-4E1E-9009-1B91B682ED3D"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.925Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ObjectName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name/path of the file object to delete",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "84DC5C46-5AA6-4F58-BA23-E71329160FE1"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.970Z",
+            "checksum": "109523687d4af01d3f470a067ad4c21b9432b2be7d4b7a3ec4e06d89f54ebb05"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if the delete succeeded",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "80472DD1-5110-446C-9F46-F0E15EE08F91"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.979Z",
+            "checksum": "de467d5662dfdc60670fea21cd0176874d1956fbab1795058a6d6523a9ce96d2"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "F59F791E-6903-4B14-B4F6-74E6BC2D1A5B"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.987Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "44F6503C-B737-4220-B0A7-16554A3930F1"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:01.996Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "51AD279E-5CAD-44BA-8542-D685D84286B8"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.005Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_OBJECTNAME",
+            "IsSuccess": false,
+            "Description": "ObjectName parameter is required"
+          },
+          "primaryKey": {
+            "ID": "39156E94-3164-4B3D-9E44-2B7AD9C40A52"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.013Z",
+            "checksum": "babbbe481c85d0c687d9ffbedd6dd68df6915afa895111536286f653f4264464"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "F0DA1DF8-2FFB-4B38-8541-B50979E91195"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.023Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "A27F079D-7E3A-442C-A971-DE242F3B6B02"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.738Z",
+      "checksum": "ed9eefb2fea21d9df4dca1c33eda2a5015bc749855b4e0b01b4e3be960e0fd9a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Create Directory",
+      "Description": "Create a directory in a storage provider.",
+      "DriverClass": "File Storage: Create Directory",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-folder-plus"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A839434D-A468-465D-8B6B-684CCF228404"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.033Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DirectoryPath",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Path for the new directory",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0E7C850B-D5EE-4708-B3E3-FFC5C382C782"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.043Z",
+            "checksum": "d328267162b4795b2b12282723636c16c69bbe1bbb2bc1b6e1b5de7d70f329fe"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if the directory was created",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "44E9903F-1110-4AB2-8B20-7CCC288D764E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.052Z",
+            "checksum": "07b39ef576dac413b14b1d3eba17977d79a7c6068fc716a4e8f1b4dd51340dec"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "36BFD22C-9863-448E-BF4D-67FFF8946B72"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.093Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "C50FD3D8-AE76-4534-A7BD-0F53CC172E8C"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.103Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "C1EF2B17-C0D9-46EA-AF28-08F785C8B73E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.112Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DIRECTORYPATH",
+            "IsSuccess": false,
+            "Description": "DirectoryPath parameter is required"
+          },
+          "primaryKey": {
+            "ID": "B14415AD-30DD-439F-BA5A-97E3F3038030"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.122Z",
+            "checksum": "916186ddf58b7984fc5471f05c2726949cfadaab7f87a7f902ac9e3fd5ca6082"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "C23EF225-205A-4B26-8E65-ADE6C3DFA58B"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.131Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7CF5A461-0115-4686-80E7-745AED222ED0"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.764Z",
+      "checksum": "27f26e485c7500f545c059f0ac1e3dc441310e8dd72885ef2de10846131c48f5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Storage: Delete Directory",
+      "Description": "Delete a directory from a storage provider. Optionally delete recursively.",
+      "DriverClass": "File Storage: Delete Directory",
+      "Type": "Custom",
+      "CategoryID": "@lookup:Action Categories.Name=File Storage",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-folder-minus"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "StorageProvider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the storage provider",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "48291DEE-DEF7-4E91-AED2-4034C10FCD45"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.140Z",
+            "checksum": "88741923351eb3427362cb16f99a84e379436616883e79adf9bd487a3d176a18"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "DirectoryPath",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Path to the directory to delete",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "5771F3D2-7885-4B88-BA47-6BDDABB4ECB7"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.149Z",
+            "checksum": "dbd16e6eb327e55bcc81ae9e6e5476acc006c2d89c7b20f490d2e2465964e500"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Recursive",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean flag for recursive directory deletion",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "723A9654-50E0-4C01-961D-6A30F4CBF908"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.159Z",
+            "checksum": "15e86ec18a700722b1916addb560c32d1fe46bb28fce2c1498b5dbbb6d33a35f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Success",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Boolean indicating if the directory was deleted",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "47624CBC-FC48-4904-8E71-6A49D3CD8366"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.167Z",
+            "checksum": "69f215ca1fcc3c53bea2802958435cd0a7e612fc0c56d4e052a24f473e7347ab"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Operation completed successfully"
+          },
+          "primaryKey": {
+            "ID": "F81113DD-21DD-41AB-868C-4953E5BAA332"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.175Z",
+            "checksum": "00ce4e252844da4d74d4f6cdcca5766fbaa9447cbd7b5e4acec8b9327fd1daef"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROVIDER",
+            "IsSuccess": false,
+            "Description": "StorageProvider parameter is required"
+          },
+          "primaryKey": {
+            "ID": "9FB89560-9281-4AA1-8041-65398008D88E"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.200Z",
+            "checksum": "a4fcc94b8bf49f635dbc8a13077810b4a51d64b1e54581686ca499f7fff51298"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROVIDER_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "Specified storage provider not found"
+          },
+          "primaryKey": {
+            "ID": "DB444D4C-FAC3-4C7B-A7AB-AE67BA9FEA50"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.210Z",
+            "checksum": "0d32cbd576ed89be3c1b9f6a865f923664a930b9f0f9e365cf2ef593252f5635"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_DIRECTORYPATH",
+            "IsSuccess": false,
+            "Description": "DirectoryPath parameter is required"
+          },
+          "primaryKey": {
+            "ID": "DE411F6E-A922-42BF-B697-6C5E5FA06ED1"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.219Z",
+            "checksum": "916186ddf58b7984fc5471f05c2726949cfadaab7f87a7f902ac9e3fd5ca6082"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "OPERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Operation failed"
+          },
+          "primaryKey": {
+            "ID": "E437CF29-C2B2-44CC-B3C1-774FF6695915"
+          },
+          "sync": {
+            "lastModified": "2025-10-02T05:50:02.227Z",
+            "checksum": "89c2ef0727f3ea04d9ae92e5a097f4a3e40cb12096a785de9d813d4bdf68c2b1"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7A21C9D9-4718-4E09-BAD1-6F4C5252D840"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:50:00.777Z",
+      "checksum": "e75022d59a85de3df3de58cf00fe8e8053044504f7169b5538ff4dbec2f99170"
+    }
+  }
+]

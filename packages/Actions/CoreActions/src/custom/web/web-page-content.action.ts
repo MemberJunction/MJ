@@ -1,37 +1,53 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
+import TurndownService from 'turndown';
+import { JSDOM } from 'jsdom';
+
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
+const xml2js = require('xml2js');
+const Papa = require('papaparse');
 
 /**
- * Action that retrieves and processes web page content with various output formats
- * Supports text extraction, HTML parsing, and basic document conversion
- * 
+ * Action that retrieves and processes web content in various formats
+ * Supports JSON, PDF, DOCX, XML, CSV, HTML and more - similar to Claude's web reading capabilities
+ *
  * @example
  * ```typescript
- * // Get page content as text
+ * // Get JSON API response
  * await runAction({
  *   ActionName: 'Web Page Content',
  *   Params: [{
  *     Name: 'URL',
- *     Value: 'https://example.com'
+ *     Value: 'https://api.example.com/data'
+ *   }, {
+ *     Name: 'ContentType',
+ *     Value: 'json'
+ *   }]
+ * });
+ *
+ * // Get PDF content as text
+ * await runAction({
+ *   ActionName: 'Web Page Content',
+ *   Params: [{
+ *     Name: 'URL',
+ *     Value: 'https://example.com/document.pdf'
  *   }, {
  *     Name: 'ContentType',
  *     Value: 'text'
  *   }]
  * });
- * 
- * // Get main content only (removes navigation, ads, etc.)
+ *
+ * // Get DOCX content as markdown
  * await runAction({
  *   ActionName: 'Web Page Content',
  *   Params: [{
  *     Name: 'URL',
- *     Value: 'https://news.example.com/article'
+ *     Value: 'https://example.com/document.docx'
  *   }, {
  *     Name: 'ContentType',
  *     Value: 'markdown'
- *   }, {
- *     Name: 'ExtractMainContent',
- *     Value: true
  *   }]
  * });
  * ```
@@ -39,20 +55,30 @@ import { RegisterClass } from "@memberjunction/global";
 @RegisterClass(BaseAction, "__WebPageContent")
 export class WebPageContentAction extends BaseAction {
 
-    private readonly MAX_CONTENT_SIZE = 5 * 1024 * 1024; // 5MB limit
-    private readonly MAX_IMAGE_SIZE = 2 * 1024 * 1024; // 2MB limit for images
+    private readonly MAX_CONTENT_SIZE = 10 * 1024 * 1024; // 10MB limit
+    private readonly MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB limit for images
+    private turndown: TurndownService;
+
+    constructor() {
+        super();
+        this.turndown = new TurndownService({
+            headingStyle: 'atx',
+            codeBlockStyle: 'fenced',
+            emDelimiter: '*'
+        });
+    }
 
     /**
-     * Executes the web page content retrieval and processing
-     * 
+     * Executes web content retrieval and processing
+     *
      * @param params - The action parameters containing:
-     *   - URL: Web page URL to fetch (required)
-     *   - ContentType: Output format - 'text', 'html', 'markdown', 'json' (default: 'text')
+     *   - URL: Web resource URL to fetch (required)
+     *   - ContentType: Output format - 'auto', 'text', 'html', 'markdown', 'json' (default: 'auto')
      *   - ExtractMainContent: Extract only main content vs full page (default: false)
-     *   - IncludeMetadata: Include page metadata in response (default: true)
-     *   - MaxContentLength: Maximum content length to return (default: 50000 chars)
-     * 
-     * @returns Processed web page content in the specified format
+     *   - IncludeMetadata: Include resource metadata in response (default: true)
+     *   - MaxContentLength: Maximum content length to return (default: 100000 chars)
+     *
+     * @returns Processed content in the specified format
      */
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         try {
@@ -71,10 +97,10 @@ export class WebPageContentAction extends BaseAction {
             }
 
             const url = urlParam.Value.toString().trim();
-            const contentType = contentTypeParam?.Value?.toString().toLowerCase() || 'text';
+            const requestedContentType = contentTypeParam?.Value?.toString().toLowerCase() || 'auto';
             const extractMain = extractMainParam?.Value === true || extractMainParam?.Value === 'true';
             const includeMetadata = includeMetadataParam?.Value !== false && includeMetadataParam?.Value !== 'false';
-            const maxLength = parseInt(maxLengthParam?.Value?.toString() || '50000');
+            const maxLength = parseInt(maxLengthParam?.Value?.toString() || '100000');
 
             // Validate URL
             let parsedUrl: URL;
@@ -92,23 +118,19 @@ export class WebPageContentAction extends BaseAction {
             }
 
             // Validate content type
-            if (!['text', 'html', 'markdown', 'json'].includes(contentType)) {
+            if (!['auto', 'text', 'html', 'markdown', 'json'].includes(requestedContentType)) {
                 return {
                     Success: false,
-                    Message: "ContentType must be one of: text, html, markdown, json",
+                    Message: "ContentType must be one of: auto, text, html, markdown, json",
                     ResultCode: "INVALID_CONTENT_TYPE"
                 };
             }
 
-            // Fetch the web page
-            const response = await fetch(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 (compatible; MemberJunction/1.0; +https://memberjunction.org)',
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.5',
-                    'Accept-Encoding': 'gzip, deflate'
-                },
-                redirect: 'follow'
+            // Fetch the resource with browser-like headers
+            const response = await this.fetchWithRetry(url, {
+                headers: this.getBrowserHeaders(parsedUrl.hostname),
+                redirect: 'follow',
+                signal: AbortSignal.timeout(30000) // 30 second timeout
             });
 
             if (!response.ok) {
@@ -119,7 +141,7 @@ export class WebPageContentAction extends BaseAction {
                 };
             }
 
-            // Check content type and size
+            // Get response metadata
             const responseContentType = response.headers.get('content-type') || '';
             const contentLength = parseInt(response.headers.get('content-length') || '0');
 
@@ -131,303 +153,543 @@ export class WebPageContentAction extends BaseAction {
                 };
             }
 
-            // Handle different content types
-            if (responseContentType.startsWith('image/')) {
-                if (contentLength > this.MAX_IMAGE_SIZE) {
-                    return {
-                        Success: false,
-                        Message: `Image too large: ${contentLength} bytes (max: ${this.MAX_IMAGE_SIZE})`,
-                        ResultCode: "IMAGE_TOO_LARGE"
-                    };
-                }
-                
-                // For images, return base64 encoded data
-                const buffer = await response.arrayBuffer();
-                const base64 = Buffer.from(buffer).toString('base64');
-                
-                const result = {
-                    url,
-                    contentType: responseContentType,
-                    contentLength,
-                    isImage: true,
-                    base64Data: base64,
-                    dataUrl: `data:${responseContentType};base64,${base64}`
-                };
+            // Process based on detected content type
+            const detectedType = this.detectContentType(responseContentType, parsedUrl.pathname);
+            const processResult = await this.processResponse(
+                response,
+                detectedType,
+                requestedContentType,
+                extractMain,
+                includeMetadata,
+                maxLength
+            );
 
-                return {
-                    Success: true,
-                    ResultCode: "SUCCESS",
-                    Message: JSON.stringify(result, null, 2)
-                };
-            }
-
-            // Handle text-based content
-            if (!responseContentType.includes('text/html') && !responseContentType.includes('application/xhtml') && !responseContentType.includes('text/')) {
-                return {
-                    Success: false,
-                    Message: `Unsupported content type: ${responseContentType}`,
-                    ResultCode: "UNSUPPORTED_CONTENT_TYPE"
-                };
-            }
-
-            const html = await response.text();
-            
-            if (html.length > this.MAX_CONTENT_SIZE) {
-                return {
-                    Success: false,
-                    Message: `Content too large: ${html.length} characters (max: ${this.MAX_CONTENT_SIZE})`,
-                    ResultCode: "CONTENT_TOO_LARGE"
-                };
-            }
-
-            // Process the content based on requested format
-            const processedContent = await this.processContent(html, contentType, extractMain, includeMetadata, maxLength);
-            processedContent.url = url;
-            processedContent.fetchedAt = new Date().toISOString();
+            processResult.url = url;
+            processResult.fetchedAt = new Date().toISOString();
+            processResult.responseContentType = responseContentType;
 
             return {
                 Success: true,
                 ResultCode: "SUCCESS",
-                Message: JSON.stringify(processedContent, null, 2)
+                Message: JSON.stringify(processResult, null, 2)
             };
 
         } catch (error) {
             return {
                 Success: false,
-                Message: `Failed to retrieve web page content: ${error instanceof Error ? error.message : String(error)}`,
+                Message: `Failed to retrieve web content: ${error instanceof Error ? error.message : String(error)}`,
                 ResultCode: "FAILED"
             };
         }
     }
 
     /**
-     * Processes HTML content into the requested format
+     * Detects content type from response headers and URL
      */
-    private async processContent(html: string, contentType: string, extractMain: boolean, includeMetadata: boolean, maxLength: number): Promise<any> {
-        const result: any = {
-            contentType,
-            extractMainContent: extractMain,
-            includeMetadata
+    private detectContentType(contentType: string, pathname: string): string {
+        const lowerContentType = contentType.toLowerCase();
+        const lowerPath = pathname.toLowerCase();
+
+        // Check content-type header first
+        if (lowerContentType.includes('application/json')) return 'json';
+        if (lowerContentType.includes('application/pdf')) return 'pdf';
+        if (lowerContentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml')) return 'docx';
+        if (lowerContentType.includes('application/msword')) return 'doc';
+        if (lowerContentType.includes('text/csv') || lowerContentType.includes('application/csv')) return 'csv';
+        if (lowerContentType.includes('text/xml') || lowerContentType.includes('application/xml')) return 'xml';
+        if (lowerContentType.includes('text/html') || lowerContentType.includes('application/xhtml')) return 'html';
+        if (lowerContentType.includes('text/plain')) return 'text';
+        if (lowerContentType.includes('image/')) return 'image';
+
+        // Check file extension if content-type is ambiguous
+        if (lowerPath.endsWith('.json')) return 'json';
+        if (lowerPath.endsWith('.pdf')) return 'pdf';
+        if (lowerPath.endsWith('.docx')) return 'docx';
+        if (lowerPath.endsWith('.doc')) return 'doc';
+        if (lowerPath.endsWith('.csv')) return 'csv';
+        if (lowerPath.endsWith('.xml')) return 'xml';
+        if (lowerPath.endsWith('.html') || lowerPath.endsWith('.htm')) return 'html';
+        if (lowerPath.endsWith('.txt')) return 'text';
+
+        // Default to text
+        return 'text';
+    }
+
+    /**
+     * Processes response based on detected content type
+     */
+    private async processResponse(
+        response: Response,
+        detectedType: string,
+        requestedType: string,
+        extractMain: boolean,
+        includeMetadata: boolean,
+        maxLength: number
+    ): Promise<Record<string, unknown>> {
+
+        const outputType = requestedType === 'auto' ? this.inferOutputType(detectedType) : requestedType;
+
+        switch (detectedType) {
+            case 'json':
+                return this.processJson(response, outputType, includeMetadata);
+
+            case 'pdf':
+                return this.processPdf(response, outputType, includeMetadata, maxLength);
+
+            case 'docx':
+                return this.processDocx(response, outputType, includeMetadata, maxLength);
+
+            case 'csv':
+                return this.processCsv(response, outputType, includeMetadata);
+
+            case 'xml':
+                return this.processXml(response, outputType, includeMetadata);
+
+            case 'html':
+                return this.processHtml(response, outputType, extractMain, includeMetadata, maxLength);
+
+            case 'image':
+                return this.processImage(response, includeMetadata);
+
+            case 'text':
+            default:
+                return this.processText(response, outputType, maxLength);
+        }
+    }
+
+    /**
+     * Infers best output type based on detected content type
+     */
+    private inferOutputType(detectedType: string): string {
+        switch (detectedType) {
+            case 'json':
+            case 'csv':
+            case 'xml':
+                return 'json';
+            case 'html':
+                return 'markdown';
+            case 'pdf':
+            case 'docx':
+            case 'text':
+            default:
+                return 'text';
+        }
+    }
+
+    /**
+     * Process JSON content
+     */
+    private async processJson(response: Response, outputType: string, includeMetadata: boolean): Promise<Record<string, unknown>> {
+        const text = await response.text();
+        const parsed = JSON.parse(text);
+
+        const result: Record<string, unknown> = {
+            detectedType: 'json',
+            outputType
         };
 
-        // Extract metadata if requested
         if (includeMetadata) {
-            result.metadata = this.extractMetadata(html);
+            result.metadata = {
+                size: text.length,
+                isArray: Array.isArray(parsed),
+                isObject: typeof parsed === 'object' && !Array.isArray(parsed),
+                keys: typeof parsed === 'object' && !Array.isArray(parsed) ? Object.keys(parsed) : undefined
+            };
         }
 
-        // Extract main content or use full HTML
-        let contentHtml = html;
-        if (extractMain) {
-            contentHtml = this.extractMainContent(html);
+        if (outputType === 'json') {
+            result.content = parsed;
+        } else if (outputType === 'text' || outputType === 'markdown') {
+            result.content = JSON.stringify(parsed, null, 2);
+        } else {
+            result.content = text;
         }
-
-        // Convert based on content type
-        switch (contentType) {
-            case 'html':
-                result.content = this.truncateContent(contentHtml, maxLength);
-                break;
-            case 'text':
-                result.content = this.truncateContent(this.htmlToText(contentHtml), maxLength);
-                break;
-            case 'markdown':
-                result.content = this.truncateContent(this.htmlToMarkdown(contentHtml), maxLength);
-                break;
-            case 'json':
-                result.content = {
-                    html: this.truncateContent(contentHtml, maxLength),
-                    text: this.truncateContent(this.htmlToText(contentHtml), maxLength),
-                    structure: this.extractStructure(contentHtml)
-                };
-                break;
-        }
-
-        result.contentLength = typeof result.content === 'string' ? result.content.length : JSON.stringify(result.content).length;
 
         return result;
     }
 
     /**
-     * Extracts page metadata from HTML
+     * Process PDF content
      */
-    private extractMetadata(html: string): any {
-        const metadata: any = {};
+    private async processPdf(response: Response, outputType: string, includeMetadata: boolean, maxLength: number): Promise<Record<string, unknown>> {
+        const buffer = await response.arrayBuffer();
+        const pdfData = await pdfParse(Buffer.from(buffer));
+
+        const result: Record<string, unknown> = {
+            detectedType: 'pdf',
+            outputType
+        };
+
+        if (includeMetadata) {
+            result.metadata = {
+                pages: pdfData.numpages,
+                info: pdfData.info,
+                version: pdfData.version
+            };
+        }
+
+        const text = pdfData.text || '';
+
+        if (outputType === 'json') {
+            result.content = {
+                text: this.truncateContent(text, maxLength),
+                pages: pdfData.numpages,
+                metadata: pdfData.info
+            };
+        } else {
+            result.content = this.truncateContent(text, maxLength);
+        }
+
+        return result;
+    }
+
+    /**
+     * Process DOCX content
+     */
+    private async processDocx(response: Response, outputType: string, includeMetadata: boolean, maxLength: number): Promise<Record<string, unknown>> {
+        const buffer = await response.arrayBuffer();
+        const docxResult = await mammoth.convertToHtml({ buffer: Buffer.from(buffer) });
+        const htmlContent = docxResult.value;
+
+        const result: Record<string, unknown> = {
+            detectedType: 'docx',
+            outputType
+        };
+
+        if (includeMetadata) {
+            result.metadata = {
+                warnings: docxResult.messages,
+                htmlLength: htmlContent.length
+            };
+        }
+
+        let content: string;
+        if (outputType === 'markdown') {
+            content = this.turndown.turndown(htmlContent);
+        } else if (outputType === 'html') {
+            content = htmlContent;
+        } else {
+            content = this.htmlToText(htmlContent);
+        }
+
+        if (outputType === 'json') {
+            result.content = {
+                text: this.truncateContent(content, maxLength),
+                html: this.truncateContent(htmlContent, maxLength)
+            };
+        } else {
+            result.content = this.truncateContent(content, maxLength);
+        }
+
+        return result;
+    }
+
+    /**
+     * Process CSV content
+     */
+    private async processCsv(response: Response, outputType: string, includeMetadata: boolean): Promise<Record<string, unknown>> {
+        const text = await response.text();
+        const parsed = Papa.parse(text, {
+            header: true,
+            skipEmptyLines: true,
+            dynamicTyping: true
+        });
+
+        const result: Record<string, unknown> = {
+            detectedType: 'csv',
+            outputType
+        };
+
+        if (includeMetadata) {
+            result.metadata = {
+                rows: parsed.data.length,
+                fields: parsed.meta.fields,
+                errors: parsed.errors
+            };
+        }
+
+        if (outputType === 'json') {
+            result.content = parsed.data;
+        } else if (outputType === 'markdown') {
+            result.content = this.csvToMarkdownTable(parsed.data, parsed.meta.fields || []);
+        } else {
+            result.content = text;
+        }
+
+        return result;
+    }
+
+    /**
+     * Process XML content
+     */
+    private async processXml(response: Response, outputType: string, includeMetadata: boolean): Promise<Record<string, unknown>> {
+        const text = await response.text();
+        const parser = new xml2js.Parser({
+            explicitArray: false,
+            mergeAttrs: true,
+            normalizeTags: true
+        });
+
+        const parsed = await parser.parseStringPromise(text);
+
+        const result: Record<string, unknown> = {
+            detectedType: 'xml',
+            outputType
+        };
+
+        if (includeMetadata) {
+            result.metadata = {
+                size: text.length,
+                rootElement: Object.keys(parsed)[0]
+            };
+        }
+
+        if (outputType === 'json') {
+            result.content = parsed;
+        } else if (outputType === 'markdown' || outputType === 'text') {
+            result.content = JSON.stringify(parsed, null, 2);
+        } else {
+            result.content = text;
+        }
+
+        return result;
+    }
+
+    /**
+     * Process HTML content
+     */
+    private async processHtml(
+        response: Response,
+        outputType: string,
+        extractMain: boolean,
+        includeMetadata: boolean,
+        maxLength: number
+    ): Promise<Record<string, unknown>> {
+        const html = await response.text();
+
+        const result: Record<string, unknown> = {
+            detectedType: 'html',
+            outputType,
+            extractMainContent: extractMain
+        };
+
+        if (includeMetadata) {
+            result.metadata = this.extractHtmlMetadata(html);
+        }
+
+        let contentHtml = html;
+        if (extractMain) {
+            contentHtml = this.extractMainContent(html);
+        }
+
+        let content: string;
+        if (outputType === 'markdown') {
+            content = this.turndown.turndown(contentHtml);
+        } else if (outputType === 'text') {
+            content = this.htmlToText(contentHtml);
+        } else if (outputType === 'json') {
+            const dom = new JSDOM(contentHtml);
+            result.content = {
+                html: this.truncateContent(contentHtml, maxLength),
+                text: this.truncateContent(this.htmlToText(contentHtml), maxLength),
+                markdown: this.truncateContent(this.turndown.turndown(contentHtml), maxLength),
+                structure: this.extractStructure(dom.window.document)
+            };
+            return result;
+        } else {
+            content = contentHtml;
+        }
+
+        result.content = this.truncateContent(content, maxLength);
+        return result;
+    }
+
+    /**
+     * Process image content
+     */
+    private async processImage(response: Response, includeMetadata: boolean): Promise<Record<string, unknown>> {
+        const buffer = await response.arrayBuffer();
+        const contentType = response.headers.get('content-type') || 'image/unknown';
+
+        if (buffer.byteLength > this.MAX_IMAGE_SIZE) {
+            throw new Error(`Image too large: ${buffer.byteLength} bytes (max: ${this.MAX_IMAGE_SIZE})`);
+        }
+
+        const base64 = Buffer.from(buffer).toString('base64');
+
+        const result: Record<string, unknown> = {
+            detectedType: 'image',
+            outputType: 'base64',
+            contentType,
+            size: buffer.byteLength,
+            base64Data: base64,
+            dataUrl: `data:${contentType};base64,${base64}`
+        };
+
+        if (includeMetadata) {
+            result.metadata = {
+                mimeType: contentType,
+                sizeBytes: buffer.byteLength,
+                sizeMB: (buffer.byteLength / (1024 * 1024)).toFixed(2)
+            };
+        }
+
+        return result;
+    }
+
+    /**
+     * Process plain text content
+     */
+    private async processText(response: Response, outputType: string, maxLength: number): Promise<Record<string, unknown>> {
+        const text = await response.text();
+
+        const result: Record<string, unknown> = {
+            detectedType: 'text',
+            outputType
+        };
+
+        if (outputType === 'json') {
+            result.content = {
+                text: this.truncateContent(text, maxLength),
+                lines: text.split('\n').length
+            };
+        } else {
+            result.content = this.truncateContent(text, maxLength);
+        }
+
+        return result;
+    }
+
+    /**
+     * Extracts HTML metadata
+     */
+    private extractHtmlMetadata(html: string): Record<string, unknown> {
+        const dom = new JSDOM(html);
+        const doc = dom.window.document;
+        const metadata: Record<string, unknown> = {};
 
         // Title
-        const titleMatch = html.match(/<title[^>]*>(.*?)<\/title>/is);
-        if (titleMatch) {
-            metadata.title = this.stripHtml(titleMatch[1]).trim();
+        const title = doc.querySelector('title');
+        if (title) {
+            metadata.title = title.textContent?.trim();
         }
 
         // Meta tags
-        const metaRegex = /<meta[^>]+>/gi;
-        const metas = html.match(metaRegex) || [];
-        
-        for (const meta of metas) {
-            const nameMatch = meta.match(/name=['"]([^'"]+)['"]/i);
-            const propertyMatch = meta.match(/property=['"]([^'"]+)['"]/i);
-            const contentMatch = meta.match(/content=['"]([^'"]*)['"]/i);
-            
-            if (contentMatch) {
-                const content = contentMatch[1];
-                if (nameMatch) {
-                    metadata[nameMatch[1]] = content;
-                } else if (propertyMatch) {
-                    metadata[propertyMatch[1]] = content;
-                }
+        const metas = doc.querySelectorAll('meta');
+        metas.forEach(meta => {
+            const name = meta.getAttribute('name') || meta.getAttribute('property');
+            const content = meta.getAttribute('content');
+            if (name && content) {
+                metadata[name] = content;
             }
-        }
+        });
 
         // Canonical URL
-        const canonicalMatch = html.match(/<link[^>]+rel=['"]canonical['"][^>]+href=['"]([^'"]+)['"]/i);
-        if (canonicalMatch) {
-            metadata.canonical = canonicalMatch[1];
+        const canonical = doc.querySelector('link[rel="canonical"]');
+        if (canonical) {
+            metadata.canonical = canonical.getAttribute('href');
         }
 
         return metadata;
     }
 
     /**
-     * Attempts to extract main content from HTML (removes navigation, ads, etc.)
+     * Attempts to extract main content from HTML
      */
     private extractMainContent(html: string): string {
+        const dom = new JSDOM(html);
+        const doc = dom.window.document;
+
         // Remove scripts and styles
-        let content = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-        content = content.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-        
+        doc.querySelectorAll('script, style, nav, header, footer, aside').forEach(el => el.remove());
+
         // Try to find main content containers
-        const mainSelectors = [
-            /<main[^>]*>([\s\S]*?)<\/main>/i,
-            /<article[^>]*>([\s\S]*?)<\/article>/i,
-            /<div[^>]*class=['"][^'"]*content[^'"]*['"][^>]*>([\s\S]*?)<\/div>/i,
-            /<div[^>]*id=['"][^'"]*content[^'"]*['"][^>]*>([\s\S]*?)<\/div>/i,
-            /<div[^>]*class=['"][^'"]*post[^'"]*['"][^>]*>([\s\S]*?)<\/div>/i
-        ];
+        const mainSelectors = ['main', 'article', '[role="main"]', '.content', '#content', '.post', '.article'];
 
         for (const selector of mainSelectors) {
-            const match = content.match(selector);
-            if (match && match[1].trim().length > 100) {
-                return match[1];
+            const element = doc.querySelector(selector);
+            if (element && element.textContent && element.textContent.trim().length > 100) {
+                return element.innerHTML;
             }
         }
 
-        // If no main content found, remove common non-content elements
-        content = content.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
-        content = content.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '');
-        content = content.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
-        content = content.replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '');
-        content = content.replace(/<div[^>]*class=['"][^'"]*nav[^'"]*['"][^>]*>[\s\S]*?<\/div>/gi, '');
-
-        return content;
+        // If no main content found, return body without nav/header/footer
+        const body = doc.querySelector('body');
+        return body ? body.innerHTML : html;
     }
 
     /**
      * Converts HTML to plain text
      */
     private htmlToText(html: string): string {
-        return html
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<\/p>/gi, '\n\n')
-            .replace(/<\/h[1-6]>/gi, '\n\n')
-            .replace(/<\/div>/gi, '\n')
-            .replace(/<\/li>/gi, '\n')
-            .replace(/<[^>]*>/g, '')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&nbsp;/g, ' ')
-            .replace(/\s+/g, ' ')
-            .replace(/\n\s+/g, '\n')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
+        const dom = new JSDOM(html);
+        const doc = dom.window.document;
+
+        // Remove script and style elements
+        doc.querySelectorAll('script, style').forEach(el => el.remove());
+
+        return doc.body.textContent || '';
     }
 
     /**
-     * Converts HTML to basic Markdown
+     * Extracts document structure from HTML
      */
-    private htmlToMarkdown(html: string): string {
-        return html
-            .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-            .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-            .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n')
-            .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n')
-            .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n')
-            .replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n')
-            .replace(/<h5[^>]*>(.*?)<\/h5>/gi, '##### $1\n\n')
-            .replace(/<h6[^>]*>(.*?)<\/h6>/gi, '###### $1\n\n')
-            .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
-            .replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
-            .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
-            .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
-            .replace(/<a[^>]+href=['"]([^'"]+)['"][^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-            .replace(/<img[^>]+src=['"]([^'"]+)['"][^>]*alt=['"]([^'"]*)['"]/gi, '![$2]($1)')
-            .replace(/<img[^>]+src=['"]([^'"]+)['"][^>]*/gi, '![]($1)')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<\/p>/gi, '\n\n')
-            .replace(/<\/div>/gi, '\n')
-            .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-            .replace(/<[^>]*>/g, '')
-            .replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<')
-            .replace(/&gt;/g, '>')
-            .replace(/&quot;/g, '"')
-            .replace(/&#39;/g, "'")
-            .replace(/&nbsp;/g, ' ')
-            .replace(/\s+/g, ' ')
-            .replace(/\n\s+/g, '\n')
-            .replace(/\n{3,}/g, '\n\n')
-            .trim();
-    }
-
-    /**
-     * Extracts basic document structure
-     */
-    private extractStructure(html: string): any {
-        const structure: any = {
+    private extractStructure(doc: Document): Record<string, unknown> {
+        const structure: Record<string, unknown> = {
             headings: [],
             links: [],
             images: []
         };
 
         // Extract headings
-        const headingRegex = /<h([1-6])[^>]*>(.*?)<\/h[1-6]>/gi;
-        let match;
-        while ((match = headingRegex.exec(html)) !== null) {
-            structure.headings.push({
-                level: parseInt(match[1]),
-                text: this.stripHtml(match[2]).trim()
-            });
-        }
+        const headings = doc.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        (structure.headings as Array<Record<string, unknown>>) = Array.from(headings).map(h => ({
+            level: parseInt(h.tagName[1]),
+            text: h.textContent?.trim() || ''
+        }));
 
         // Extract links
-        const linkRegex = /<a[^>]+href=['"]([^'"]+)['"][^>]*>(.*?)<\/a>/gi;
-        while ((match = linkRegex.exec(html)) !== null) {
-            structure.links.push({
-                url: match[1],
-                text: this.stripHtml(match[2]).trim()
-            });
-        }
+        const links = doc.querySelectorAll('a[href]');
+        (structure.links as Array<Record<string, unknown>>) = Array.from(links).map(a => ({
+            url: a.getAttribute('href'),
+            text: a.textContent?.trim() || ''
+        }));
 
         // Extract images
-        const imgRegex = /<img[^>]+src=['"]([^'"]+)['"][^>]*(?:alt=['"]([^'"]*)['"]*)?/gi;
-        while ((match = imgRegex.exec(html)) !== null) {
-            structure.images.push({
-                src: match[1],
-                alt: match[2] || ''
-            });
-        }
+        const images = doc.querySelectorAll('img[src]');
+        (structure.images as Array<Record<string, unknown>>) = Array.from(images).map(img => ({
+            src: img.getAttribute('src'),
+            alt: img.getAttribute('alt') || ''
+        }));
 
         return structure;
     }
 
     /**
-     * Strips HTML tags from text
+     * Converts CSV data to markdown table
      */
-    private stripHtml(html: string): string {
-        return html.replace(/<[^>]*>/g, '');
+    private csvToMarkdownTable(data: Array<Record<string, string | number | boolean>>, fields: string[]): string {
+        if (data.length === 0) return '';
+
+        const headers = fields.length > 0 ? fields : Object.keys(data[0] || {});
+        if (headers.length === 0) return '';
+
+        // Header row
+        let markdown = '| ' + headers.join(' | ') + ' |\n';
+
+        // Separator row
+        markdown += '| ' + headers.map(() => '---').join(' | ') + ' |\n';
+
+        // Data rows
+        data.forEach(row => {
+            const values = headers.map(header => {
+                const value = row[header];
+                return value != null ? String(value) : '';
+            });
+            markdown += '| ' + values.join(' | ') + ' |\n';
+        });
+
+        return markdown;
     }
 
     /**
@@ -438,6 +700,109 @@ export class WebPageContentAction extends BaseAction {
             return content;
         }
         return content.substring(0, maxLength) + '...';
+    }
+
+    /**
+     * Returns browser-like headers to avoid bot detection
+     */
+    private getBrowserHeaders(hostname: string): Record<string, string> {
+        return {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-User': '?1',
+            'Upgrade-Insecure-Requests': '1',
+            'Connection': 'keep-alive',
+            'DNT': '1',
+            'Referer': `https://${hostname}/`
+        };
+    }
+
+    /**
+     * Fetches URL with retry logic for transient failures
+     */
+    private async fetchWithRetry(
+        url: string,
+        options: RequestInit,
+        maxRetries: number = 3
+    ): Promise<Response> {
+        let lastError: Error | undefined;
+
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch(url, options);
+
+                // Retry on specific status codes that might be transient
+                if (attempt < maxRetries && this.shouldRetry(response.status)) {
+                    await this.delay(this.getRetryDelay(attempt));
+                    continue;
+                }
+
+                return response;
+            } catch (error) {
+                lastError = error instanceof Error ? error : new Error(String(error));
+
+                // Don't retry on timeout or abort errors on the last attempt
+                if (attempt === maxRetries) {
+                    throw lastError;
+                }
+
+                // Check if error is retryable (network errors, timeouts)
+                if (this.isRetryableError(lastError)) {
+                    await this.delay(this.getRetryDelay(attempt));
+                    continue;
+                }
+
+                // Non-retryable error, throw immediately
+                throw lastError;
+            }
+        }
+
+        throw lastError || new Error('Failed to fetch URL after retries');
+    }
+
+    /**
+     * Determines if HTTP status code warrants a retry
+     */
+    private shouldRetry(status: number): boolean {
+        // Retry on rate limiting, server errors, and gateway issues
+        return status === 429 || status === 502 || status === 503 || status === 504;
+    }
+
+    /**
+     * Determines if an error is retryable
+     */
+    private isRetryableError(error: Error): boolean {
+        const message = error.message.toLowerCase();
+        return (
+            message.includes('timeout') ||
+            message.includes('network') ||
+            message.includes('econnrefused') ||
+            message.includes('econnreset') ||
+            message.includes('etimedout') ||
+            message.includes('fetch failed')
+        );
+    }
+
+    /**
+     * Calculates exponential backoff delay for retries
+     */
+    private getRetryDelay(attempt: number): number {
+        // Exponential backoff: 1s, 2s, 4s
+        return Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+    }
+
+    /**
+     * Delays execution for specified milliseconds
+     */
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
 

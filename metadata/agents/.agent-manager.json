@@ -1,0 +1,625 @@
+[
+  {
+    "fields": {
+      "Name": "Agent Manager",
+      "Description": "Top-level orchestrator agent responsible for creating, editing, and managing other AI agents in the MemberJunction system. Uses specialized sub-agents to gather requirements, design architecture, and craft prompts.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ArtifactCreationMode": "System Only",
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-robot",
+      "PayloadSelfWritePaths": [
+        "ID"
+      ]
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Data Sources": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "ARTIFACT_TYPES",
+            "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Artifact Types",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": [
+              "ID",
+              "Name",
+              "Description"
+            ],
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 1,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "2EA061FE-A424-4D7C-AFD5-B33B48E1F01C"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:25.588Z",
+            "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+          }
+        }
+      ],
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Agent Manager - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C2678C03-96CE-4282-B480-41437CA641EB"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:09.429Z",
+            "checksum": "7af06b52ed455e30184e6b191ce985e98745b7e5bc3f897726b4aa7d3aa8ae47"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Find Candidate Actions",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9E6E5CA6-F357-45E0-B8FA-05A4E1967EA2"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T17:55:18.795Z",
+            "checksum": "34297e20fe57eaf4a7c0de8d2bca82255ff52fcc237b0c79d15bd95765bb1ba3"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Find Candidate Agents",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CDAEFBEC-310B-488C-86E8-27426D584626"
+          },
+          "sync": {
+            "lastModified": "2025-10-24T17:55:18.796Z",
+            "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CDAD6D7F-A1A2-40E4-A34C-A133B6DCBA1E"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:09.615Z",
+            "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Text Analyzer",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "B9848425-AE9E-4D55-944D-721A2D3BEA06"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:09.626Z",
+            "checksum": "886cf8aebf28d972c031e5cd7471325a3e6c0e55e1eae670d630dbd999485067"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Web Page Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D9C16645-1C1B-4B2F-AB38-C6BD00F2EFF6"
+          },
+          "sync": {
+            "lastModified": "2025-07-19T17:05:09.637Z",
+            "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+          }
+        }
+      ],
+      "AI Agents": [
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Requirements Analyst Agent",
+            "Description": "MBA-type business analyst with technical expertise, specialized in gathering and clarifying detailed requirements through iterative conversations. Ensures clear definition of agent objectives before design begins.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 1,
+            "ExposeAsAction": false,
+            "IconClass": "fa-solid fa-clipboard-list",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "FunctionalRequirements"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Requirements Analyst Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "28C7D329-21B7-4FA4-AA4D-2BCD57CA0FFF"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.670Z",
+                  "checksum": "708c83855d54301d848034fadb03a6413ad2a3ae34e4cf45a987460e14660de4"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "1EF10457-D3E5-43E2-82BD-6AD7F6C30968"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.679Z",
+                  "checksum": "886cf8aebf28d972c031e5cd7471325a3e6c0e55e1eae670d630dbd999485067"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Find Candidate Actions",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "2EA67FAD-E5F5-45B7-9CB0-574F2084AD55"
+                },
+                "sync": {
+                  "lastModified": "2025-10-24T17:55:18.954Z",
+                  "checksum": "34297e20fe57eaf4a7c0de8d2bca82255ff52fcc237b0c79d15bd95765bb1ba3"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "80761138-B0DA-4A63-94B4-EC89B45E6F2E"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.699Z",
+                  "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Page Content",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "C34DCD7B-1172-4EEB-96FF-6F91BCCEF826"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.708Z",
+                  "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "A15E6AC3-CE68-4D08-A52A-505019BB2099"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:26:32.340Z",
+            "checksum": "41d5d4520e9b6a05a8ed96984760bbca3777355132a877fe1c7604242e94335b"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Planning Designer Agent",
+            "Description": "System architect specialized in designing agent hierarchies, selecting appropriate actions from the library, and creating optimal agent structures based on requirements.",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 2,
+            "ExposeAsAction": false,
+            "DriverClass": "AgentPlanningDesigner",
+            "IconClass": "fa-solid fa-sitemap",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "TechnicalDesign",
+              "modificationPlan"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ARTIFACT_TYPES",
+                  "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Artifact Types",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Description"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "11766FF5-2079-439C-B36F-5BB6CAB74B80"
+                },
+                "sync": {
+                  "lastModified": "2025-10-26T19:46:25.905Z",
+                  "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+                }
+              }
+            ],
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Planning Designer Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "93F54351-E9E8-498F-A2C4-AFDAB9A22E87"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.741Z",
+                  "checksum": "15e8953ce5710cb3e75d6d15efebbd08a60070255b421277885d2ba96ecc425b"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Find Candidate Actions",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "33CE2DC3-A8B7-436A-8257-A6EC028C6DD1"
+                },
+                "sync": {
+                  "lastModified": "2025-10-24T17:55:18.959Z",
+                  "checksum": "34297e20fe57eaf4a7c0de8d2bca82255ff52fcc237b0c79d15bd95765bb1ba3"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Find Candidate Agents",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B2D9B34B-891A-4C66-8450-D135BDE05F26"
+                },
+                "sync": {
+                  "lastModified": "2025-10-26T19:46:25.976Z",
+                  "checksum": "3ba0ba1e63c5effd7ffb8d2bd6e190d199ae7118510857c71a5d2ff1a913cff2"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Text Analyzer",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "AB097138-FC39-439B-ADD4-EA0A8F7BBB24"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.763Z",
+                  "checksum": "886cf8aebf28d972c031e5cd7471325a3e6c0e55e1eae670d630dbd999485067"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Search",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "658B7296-90D7-4C2F-BEFF-1485E981E46B"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.774Z",
+                  "checksum": "4fe81daf59af953a74ce8cb73cd8bd98cb97b2f4156a6e772ecd2badde761c8a"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Web Page Content",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "11B2D45A-FD00-47B1-BF61-62B9F9D27F91"
+                },
+                "sync": {
+                  "lastModified": "2025-07-19T17:05:09.784Z",
+                  "checksum": "23c91211cd6a590c988cc76b6ff2dc47b294058208c85b1a1361e9dcecc91d09"
+                }
+              }
+            ],
+            "MJ: AI Agent Relationships": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": "{\"*\": \"TechnicalDesign.databaseSchema\"}",
+                  "SubAgentContextPaths": [
+                    "*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "D1F2F505-309E-48FD-9DB7-CC3B11EF71FF"
+                },
+                "sync": {
+                  "lastModified": "2025-10-27T12:24:00.382Z",
+                  "checksum": "e72291a29a2a441a32452de192a645e6b1c145c884230149c192ff31c80b3054"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "644674DB-7791-44C4-8360-3914111C0E10"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:26:32.361Z",
+            "checksum": "156dc21e631fc2cd73ac7dfd35e89d9e7597f6e23bb7333d392ca5d42872598d"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Architect Agent",
+            "Description": "Transforms technical design into validated AgentSpec JSON using AgentSpec interface",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 3,
+            "ExposeAsAction": false,
+            "DriverClass": "AgentArchitectAgent",
+            "IconClass": "fa-solid fa-drafting-compass",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "*"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Data Sources": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "ARTIFACT_TYPES",
+                  "Description": "Complete list of all artifact types for DefaultArtifactTypeID assignment",
+                  "SourceType": "RunView",
+                  "EntityName": "MJ: Artifact Types",
+                  "OrderBy": "Name ASC",
+                  "FieldsToRetrieve": [
+                    "ID",
+                    "Name",
+                    "Description"
+                  ],
+                  "ResultType": "simple",
+                  "DestinationType": "Data",
+                  "DestinationPath": null,
+                  "ExecutionOrder": 1,
+                  "Status": "Active",
+                  "CachePolicy": "PerAgent",
+                  "CacheTimeoutSeconds": 3600
+                },
+                "primaryKey": {
+                  "ID": "25107FD1-8086-4EA6-B75B-E2F7BFE01D5B"
+                },
+                "sync": {
+                  "lastModified": "2025-10-26T19:46:26.100Z",
+                  "checksum": "383c153704f19ca11720a286b2078fc0443aeb02603b1d7aff9fa600fd23916f"
+                }
+              }
+            ],
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Architect Agent - Main Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "58AEEB52-ED16-48A7-BF04-3DF0CC85FB2A"
+                },
+                "sync": {
+                  "lastModified": "2025-10-21T19:26:54.043Z",
+                  "checksum": "533b4d35f14b785e4366725b0d7326a44b6f4923cd225255c2304fff2d721784"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "F80CB55D-7C89-41B4-9E99-73A53EF3D92A"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:26:32.378Z",
+            "checksum": "7e788a9ebaaf71b1429efc3c82543164428ecd385ac9a20a66b6dca57ec12185"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Builder Agent",
+            "Description": "Persists validated AgentSpec to database via AgentSpecSync",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ExecutionOrder": 4,
+            "ExposeAsAction": false,
+            "DriverClass": "AgentBuilderAgent",
+            "IconClass": "fa-solid fa-hammer",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": []
+          },
+          "primaryKey": {
+            "ID": "F3686377-DD93-480D-89AB-8427A36A5C2E"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:26:32.474Z",
+            "checksum": "22e9a92aa31696ad2f925919478239497cd41287e913b4bdd8625aac2a4579cd"
+          }
+        },
+        {
+          "fields": {
+            "ParentID": "@parent:ID",
+            "Name": "Agent Spec Loader",
+            "Description": "Simple flow agent that loads complete agent specification from database by agent ID",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+            "Status": "Active",
+            "ExecutionOrder": 5,
+            "ExposeAsAction": false,
+            "InvocationMode": "Sub-Agent",
+            "IconClass": "fa-solid fa-download",
+            "PayloadDownstreamPaths": [
+              "ID"
+            ],
+            "PayloadUpstreamPaths": [
+              "*"
+            ]
+          },
+          "relatedEntities": {
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Load Agent Spec",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "90BB672E-1837-4CF3-8C75-6F1A454C6D3A"
+                },
+                "sync": {
+                  "lastModified": "2025-10-24T03:18:40.862Z",
+                  "checksum": "45c1e8f070df671f059637bb70f8d5d126e5251246f3241ad0457121b0a46ab5"
+                }
+              }
+            ],
+            "MJ: AI Agent Steps": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "Name": "Load Agent Spec",
+                  "StepType": "Action",
+                  "StartingStep": true,
+                  "ActionID": "@lookup:Actions.Name=Load Agent Spec",
+                  "ActionInputMapping": {
+                    "AgentID": "payload.ID"
+                  },
+                  "ActionOutputMapping": {
+                    "AgentSpec.ID": "ID",
+                    "AgentSpec.Name": "Name",
+                    "AgentSpec.Description": "Description",
+                    "AgentSpec.TypeID": "TypeID",
+                    "AgentSpec.Status": "Status",
+                    "AgentSpec.FunctionalRequirement": "FunctionalRequirement",
+                    "AgentSpec.TechnicalDesign": "TechnicalDesign",
+                    "AgentSpec.IconClass": "IconClass",
+                    "AgentSpec.LogoURL": "LogoURL",
+                    "AgentSpec.ParentID": "ParentID",
+                    "AgentSpec.DriverClass": "DriverClass",
+                    "AgentSpec.ModelSelectionMode": "ModelSelectionMode",
+                    "AgentSpec.PayloadDownstreamPaths": "PayloadDownstreamPaths",
+                    "AgentSpec.PayloadUpstreamPaths": "PayloadUpstreamPaths",
+                    "AgentSpec.PayloadSelfReadPaths": "PayloadSelfReadPaths",
+                    "AgentSpec.PayloadSelfWritePaths": "PayloadSelfWritePaths",
+                    "AgentSpec.PayloadScope": "PayloadScope",
+                    "AgentSpec.FinalPayloadValidation": "FinalPayloadValidation",
+                    "AgentSpec.FinalPayloadValidationMode": "FinalPayloadValidationMode",
+                    "AgentSpec.FinalPayloadValidationMaxRetries": "FinalPayloadValidationMaxRetries",
+                    "AgentSpec.MaxCostPerRun": "MaxCostPerRun",
+                    "AgentSpec.MaxTokensPerRun": "MaxTokensPerRun",
+                    "AgentSpec.MaxIterationsPerRun": "MaxIterationsPerRun",
+                    "AgentSpec.MaxTimePerRun": "MaxTimePerRun",
+                    "AgentSpec.MinExecutionsPerRun": "MinExecutionsPerRun",
+                    "AgentSpec.MaxExecutionsPerRun": "MaxExecutionsPerRun",
+                    "AgentSpec.StartingPayloadValidation": "StartingPayloadValidation",
+                    "AgentSpec.StartingPayloadValidationMode": "StartingPayloadValidationMode",
+                    "AgentSpec.DefaultPromptEffortLevel": "DefaultPromptEffortLevel",
+                    "AgentSpec.ChatHandlingOption": "ChatHandlingOption",
+                    "AgentSpec.DefaultArtifactTypeID": "DefaultArtifactTypeID",
+                    "AgentSpec.OwnerUserID": "OwnerUserID",
+                    "AgentSpec.InvocationMode": "InvocationMode",
+                    "AgentSpec.Actions": "Actions",
+                    "AgentSpec.SubAgents": "SubAgents",
+                    "AgentSpec.Prompts": "Prompts",
+                    "AgentSpec.Steps": "Steps",
+                    "AgentSpec.Paths": "Paths"
+                  },
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "33533220-480D-4693-BAC0-980E98077CC7"
+                },
+                "sync": {
+                  "lastModified": "2025-10-24T03:18:40.885Z",
+                  "checksum": "34ca06e24cb328d1d99f1c25d092f7926454227a76f638afeb356b59d2ade564"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "09D7E6EE-A3DC-4DBD-BA72-349FC68FE8C0"
+          },
+          "sync": {
+            "lastModified": "2025-10-29T15:26:32.492Z",
+            "checksum": "2485b76ca46428ac802b5ff6c100052132924fa2591780618e327caddb7944fb"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
+    },
+    "sync": {
+      "lastModified": "2025-10-29T15:26:32.003Z",
+      "checksum": "49b96c61edeccba3966b05edf89f62ac366eab15ed38ab0bdbc7928406ec0086"
+    }
+  }
+]

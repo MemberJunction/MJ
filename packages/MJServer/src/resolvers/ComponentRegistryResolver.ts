@@ -1,225 +1,38 @@
-import { Arg, Ctx, Field, InputType, ObjectType, Query, Resolver } from 'type-graphql';
-import { UserInfo, Metadata, LogError } from '@memberjunction/core';
+import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
+import { UserInfo, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { ComponentEntity, ComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
-import { 
+import {
     ComponentRegistryClient,
+    ComponentResponse,
     ComponentSearchResult,
     DependencyTree,
     RegistryError,
-    RegistryErrorCode
+    RegistryErrorCode,
+    ComponentFeedbackParams as SDKComponentFeedbackParams,
+    ComponentFeedbackResponse as SDKComponentFeedbackResponse
 } from '@memberjunction/component-registry-client-sdk';
-import { AppContext } from '../types';
-import * as fs from 'fs';
-import * as path from 'path';
-
-// Load configuration using cosmiconfig pattern
-let mjConfig: any = {};
-try {
-    // Try to load from mj.config.cjs in the repository root
-    const configPath = path.resolve(process.cwd(), 'mj.config.cjs');
-    if (fs.existsSync(configPath)) {
-        mjConfig = require(configPath);
-    }
-} catch (error) {
-    console.warn('Could not load mj.config.cjs:', error);
-}
+import { AppContext } from '../types.js';
+import { configInfo } from '../config.js';
 
 /**
  * GraphQL types for Component Registry operations
  */
 
 @ObjectType()
-class ComponentPropertyType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    required: boolean;
-
-    @Field({ nullable: true })
-    defaultValue?: string;
-}
-
-@ObjectType()
-class ComponentEventParameterType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    required: boolean;
-}
-
-@ObjectType()
-class ComponentEventType {
-    @Field()
-    name: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field(() => [ComponentEventParameterType], { nullable: true })
-    parameters?: ComponentEventParameterType[];
-}
-
-@ObjectType()
-class ComponentLibraryType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    provider?: string;
-
-    @Field({ nullable: true })
-    cdn?: string;
-
-    @Field({ nullable: true })
-    description?: string;
-}
-
-@ObjectType()
-class EntityJoinType {
-    @Field()
-    sourceEntity: string;
-
-    @Field()
-    sourceField: string;
-
-    @Field()
-    targetEntity: string;
-
-    @Field()
-    targetField: string;
-
-    @Field()
-    type: string;
-}
-
-@ObjectType()
-class EntityRequirementType {
-    @Field()
-    name: string;
-
-    @Field()
-    type: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field(() => [String], { nullable: true })
-    fields?: string[];
-
-    @Field({ nullable: true })
-    filters?: string;
-
-    @Field({ nullable: true })
-    sortBy?: string;
-
-    @Field(() => [EntityJoinType], { nullable: true })
-    joins?: EntityJoinType[];
-}
-
-@ObjectType()
-class QueryRequirementType {
-    @Field()
-    name: string;
-
-    @Field({ nullable: true })
-    description?: string;
-
-    @Field()
-    query: string;
-
-    @Field({ nullable: true })
-    variables?: string;
-
-    @Field()
-    returnType: string;
-}
-
-@ObjectType()
-class ComponentDataRequirementsType {
-    @Field(() => [EntityRequirementType], { nullable: true })
-    entities?: EntityRequirementType[];
-
-    @Field(() => [QueryRequirementType], { nullable: true })
-    queries?: QueryRequirementType[];
-}
-
-@ObjectType()
-class ComponentSpecType {
-    @Field()
-    name: string;
-
-    @Field()
-    location: string;
-
-    @Field({ nullable: true })
-    registry?: string;
-
-    @Field({ nullable: true })
-    namespace?: string;
-
-    @Field({ nullable: true })
-    version?: string;
-
-    @Field({ nullable: true })
-    selectionReasoning?: string;
-
-    @Field({ nullable: true })
-    createNewVersion?: boolean;
-
-    @Field()
-    description: string;
-
-    @Field()
-    title: string;
-
-    @Field()
-    type: string;
-
-    @Field()
-    code: string;
-
-    @Field()
-    functionalRequirements: string;
-
-    @Field(() => ComponentDataRequirementsType, { nullable: true })
-    dataRequirements?: ComponentDataRequirementsType;
-
-    @Field()
-    technicalDesign: string;
-
-    @Field(() => [ComponentPropertyType], { nullable: true })
-    properties?: ComponentPropertyType[];
-
-    @Field(() => [ComponentEventType], { nullable: true })
-    events?: ComponentEventType[];
-
-    @Field(() => [ComponentLibraryType], { nullable: true })
-    libraries?: ComponentLibraryType[];
-
-    @Field(() => [ComponentSpecType], { nullable: true })
-    dependencies?: ComponentSpecType[];
+class ComponentSpecWithHashType {
+    @Field(() => String, { nullable: true })
+    specification?: string; // JSON string of ComponentSpec
+    
+    @Field(() => String)
+    hash: string;
+    
+    @Field(() => Boolean)
+    notModified: boolean;
+    
+    @Field(() => String, { nullable: true })
+    message?: string;
 }
 
 @InputType()
@@ -248,8 +61,8 @@ class SearchRegistryComponentsInput {
 
 @ObjectType()
 class RegistryComponentSearchResultType {
-    @Field(() => [ComponentSpecType])
-    components: ComponentSpecType[];
+    @Field(() => [String])
+    components: string[]; // Array of JSON strings of ComponentSpec
 
     @Field()
     total: number;
@@ -286,115 +99,162 @@ class ComponentDependencyTreeType {
 }
 
 /**
+ * Input type for submitting component feedback
+ * Registry-agnostic feedback collection for any component from any registry
+ */
+@InputType()
+class ComponentFeedbackInput {
+    @Field()
+    componentName: string;
+
+    @Field()
+    componentNamespace: string;
+
+    @Field({ nullable: true })
+    componentVersion?: string;
+
+    @Field({ nullable: true })
+    registryName?: string;
+
+    @Field()
+    rating: number;
+
+    @Field({ nullable: true })
+    feedbackType?: string;
+
+    @Field({ nullable: true })
+    comments?: string;
+
+    @Field({ nullable: true })
+    conversationID?: string;
+
+    @Field({ nullable: true })
+    conversationDetailID?: string;
+
+    @Field({ nullable: true })
+    reportID?: string;
+
+    @Field({ nullable: true })
+    dashboardID?: string;
+}
+
+/**
+ * Response type for component feedback submission
+ */
+@ObjectType()
+class ComponentFeedbackResponse {
+    @Field()
+    success: boolean;
+
+    @Field({ nullable: true })
+    feedbackID?: string;
+
+    @Field({ nullable: true })
+    error?: string;
+}
+
+/**
  * Resolver for Component Registry operations
+ * 
+ * Environment Variables for Development:
+ * - REGISTRY_URI_OVERRIDE_<REGISTRY_NAME>: Override the URI for a specific registry
+ *   Example: REGISTRY_URI_OVERRIDE_MJ_CENTRAL=http://localhost:8080
+ *   Registry names are converted to uppercase with non-alphanumeric chars replaced by underscores
+ * 
+ * - REGISTRY_API_KEY_<REGISTRY_NAME>: API key for authenticating with the registry
+ *   Example: REGISTRY_API_KEY_MJ_CENTRAL=your-api-key-here
  */
 @Resolver()
 export class ComponentRegistryExtendedResolver {
-    private registryClients = new Map<string, ComponentRegistryClient>();
     private componentEngine = ComponentMetadataEngine.Instance;
     
     constructor() {
-        this.initializeFromConfig();
+        // No longer pre-initialize clients - create on demand
     }
     
     /**
-     * Initialize registry clients from configuration
+     * Get a component from a registry with optional hash for caching
      */
-    private initializeFromConfig() {
-        try {
-            // Get component registries configuration
-            const registries = mjConfig.componentRegistries || [];
-            
-            // Initialize a client for each configured registry
-            registries.forEach((registry: any) => {
-                // Get API key from environment variable or config
-                const apiKey = process.env[`REGISTRY_API_KEY_${registry.id.replace(/-/g, '_').toUpperCase()}`] || 
-                               registry.apiKey;
-                
-                const client = new ComponentRegistryClient({
-                    baseUrl: registry.url,
-                    apiKey: apiKey,
-                    timeout: registry.timeout || 30000,
-                    retryPolicy: registry.retryPolicy || {
-                        maxRetries: 3,
-                        initialDelay: 1000,
-                        maxDelay: 10000,
-                        backoffMultiplier: 2
-                    },
-                    headers: registry.headers
-                });
-                
-                this.registryClients.set(registry.id, client);
-                
-                console.log(`Initialized Component Registry client for: ${registry.id} (${registry.url})`);
-            });
-            
-            if (registries.length === 0) {
-                console.warn('No component registries configured in mj.config.cjs');
-            }
-        } catch (error) {
-            console.error('Failed to initialize Component Registry clients:', error);
-        }
-    }
-    
-    /**
-     * Get a component from a registry
-     */
-    @Query(() => ComponentSpecType, { nullable: true })
+    @Query(() => ComponentSpecWithHashType)
     async GetRegistryComponent(
-        @Arg('registryId') registryId: string,
+        @Arg('registryName') registryName: string,
         @Arg('namespace') namespace: string,
         @Arg('name') name: string,
         @Ctx() { userPayload }: AppContext,
-        @Arg('version', { nullable: true }) version?: string
-    ): Promise<ComponentSpec | null> {
+        @Arg('version', { nullable: true }) version?: string,
+        @Arg('hash', { nullable: true }) hash?: string
+    ): Promise<ComponentSpecWithHashType> {
         try {
             // Get user from cache
             const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
-            // Check user permissions
-            await this.checkUserAccess(user, registryId);
+            // Get registry from database by name
+            const registry = await this.getRegistryByName(registryName, user);
+            if (!registry) {
+                throw new Error(`Registry not found: ${registryName}`);
+            }
+            
+            // Check user permissions (use registry ID for permission check)
+            await this.checkUserAccess(user, registry.ID);
             
             // Initialize component engine
             await this.componentEngine.Config(false, user);
             
-            // Get registry from database
-            const registry = await this.getRegistry(registryId, user);
-            if (!registry) {
-                throw new Error(`Registry not found: ${registryId}`);
-            }
+            // Create client on-demand for this registry
+            const registryClient = this.createClientForRegistry(registry);
             
-            // Get client for this registry
-            const client = this.registryClients.get(registryId);
-            if (!client) {
-                // If no pre-configured client, create one dynamically
-                const dynamicClient = this.createDynamicClient(registry);
-                this.registryClients.set(registryId, dynamicClient);
-            }
-            
-            const registryClient = this.registryClients.get(registryId)!;
-            
-            // Fetch component from registry
-            const component = await registryClient.getComponent({
+            // Fetch component from registry with hash support
+            const response = await registryClient.getComponentWithHash({
                 registry: registry.Name,
                 namespace,
                 name,
-                version: version || 'latest'
+                version: version || 'latest',
+                hash: hash,
+                userEmail: user.Email
             });
+            
+            // If not modified (304), return response with notModified flag
+            if (response.notModified) {
+                LogStatus(`Component ${namespace}/${name} not modified (hash: ${response.hash})`);
+                return {
+                    specification: undefined,
+                    hash: response.hash,
+                    notModified: true,
+                    message: response.message || 'Not modified'
+                };
+            }
+            
+            // Extract the specification from the response
+            const component = response.specification;
+            if (!component) {
+                throw new Error(`Component ${namespace}/${name} returned without specification`);
+            }
             
             // Optional: Cache in database if configured
             if (this.shouldCache(registry)) {
-                await this.cacheComponent(component, registryId, user);
+                await this.cacheComponent(component, registry.ID, user);
             }
             
-            return component;
+            // Return the ComponentSpec as a JSON string
+            return {
+                specification: JSON.stringify(component),
+                hash: response.hash,
+                notModified: false,
+                message: undefined
+            };
         } catch (error) {
             if (error instanceof RegistryError) {
                 // Log specific registry errors
                 LogError(`Registry error [${error.code}]: ${error.message}`);
                 if (error.code === RegistryErrorCode.COMPONENT_NOT_FOUND) {
-                    return null;
+                    // Return an error response structure
+                    return {
+                        specification: undefined,
+                        hash: '',
+                        notModified: false,
+                        message: 'Component not found'
+                    };
                 }
             }
             LogError(error);
@@ -419,10 +279,13 @@ export class ComponentRegistryExtendedResolver {
             if (params.registryId) {
                 await this.checkUserAccess(user, params.registryId);
                 
-                const client = this.registryClients.get(params.registryId);
-                if (!client) {
-                    throw new Error(`No client configured for registry: ${params.registryId}`);
+                // Get registry and create client on-demand
+                const registry = await this.getRegistry(params.registryId, user);
+                if (!registry) {
+                    throw new Error(`Registry not found: ${params.registryId}`);
                 }
+                
+                const client = this.createClientForRegistry(registry);
                 
                 const result = await client.searchComponents({
                     namespace: params.namespace,
@@ -436,13 +299,20 @@ export class ComponentRegistryExtendedResolver {
                 return this.mapSearchResult(result);
             }
             
-            // Otherwise, search across all configured registries
+            // Otherwise, search across all active registries
             const allResults: ComponentSpec[] = [];
             
-            for (const [registryId, client] of this.registryClients.entries()) {
+            // Get all active registries from database
+            await this.componentEngine.Config(false, user);
+            const activeRegistries = this.componentEngine.ComponentRegistries?.filter(
+                r => r.Status === 'Active'
+            ) || [];
+            
+            for (const registry of activeRegistries) {
                 try {
-                    await this.checkUserAccess(user, registryId);
+                    await this.checkUserAccess(user, registry.ID);
                     
+                    const client = this.createClientForRegistry(registry);
                     const result = await client.searchComponents({
                         namespace: params.namespace,
                         query: params.query,
@@ -455,7 +325,7 @@ export class ComponentRegistryExtendedResolver {
                     allResults.push(...result.components);
                 } catch (error) {
                     // Log but continue with other registries
-                    LogError(`Failed to search registry ${registryId}:`);
+                    LogError(`Failed to search registry ${registry.Name}: ${error}`);
                 }
             }
             
@@ -465,7 +335,7 @@ export class ComponentRegistryExtendedResolver {
             const paginatedResults = allResults.slice(offset, offset + limit);
             
             return {
-                components: this.convertComponentSpecs(paginatedResults),
+                components: paginatedResults.map(spec => JSON.stringify(spec)),
                 total: allResults.length,
                 offset,
                 limit
@@ -481,7 +351,7 @@ export class ComponentRegistryExtendedResolver {
      */
     @Query(() => ComponentDependencyTreeType, { nullable: true })
     async ResolveComponentDependencies(
-        @Arg('registryId') registryId: string,
+        @Arg('registryName') registryName: string,
         @Arg('componentId') componentId: string,
         @Ctx() { userPayload }: AppContext
     ): Promise<ComponentDependencyTreeType | null> {
@@ -490,12 +360,16 @@ export class ComponentRegistryExtendedResolver {
             const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
             
-            await this.checkUserAccess(user, registryId);
-            
-            const client = this.registryClients.get(registryId);
-            if (!client) {
-                throw new Error(`No client configured for registry: ${registryId}`);
+            // Get registry to find its ID for permission check
+            const registry = await this.getRegistryByName(registryName, user);
+            if (!registry) {
+                throw new Error(`Registry not found: ${registryName}`);
             }
+            
+            await this.checkUserAccess(user, registry.ID);
+            
+            // Create client on-demand
+            const client = this.createClientForRegistry(registry);
             
             const tree = await client.resolveDependencies(componentId);
             return tree as ComponentDependencyTreeType;
@@ -517,7 +391,7 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
-     * Get registry entity from database
+     * Get registry entity from database by ID
      */
     private async getRegistry(registryId: string, userInfo: UserInfo): Promise<ComponentRegistryEntity | null> {
         try {
@@ -535,21 +409,81 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
-     * Create a dynamic client for a registry not in config
+     * Get registry entity from database by Name
      */
-    private createDynamicClient(registry: ComponentRegistryEntity): ComponentRegistryClient {
-        const apiKey = process.env[`REGISTRY_API_KEY_${registry.ID.replace(/-/g, '_').toUpperCase()}`];
+    private async getRegistryByName(registryName: string, userInfo: UserInfo): Promise<ComponentRegistryEntity | null> {
+        try {
+            await this.componentEngine.Config(false, userInfo);
+            
+            const registry = this.componentEngine.ComponentRegistries?.find(
+                r => r.Name === registryName && r.Status === 'Active'
+            );
+            
+            return registry || null;
+        } catch (error) {
+            LogError(error);
+            return null;
+        }
+    }
+    
+    /**
+     * Get the registry URI, checking for environment variable override first
+     * Environment variable format: REGISTRY_URI_OVERRIDE_<REGISTRY_NAME>
+     * Example: REGISTRY_URI_OVERRIDE_MJ_CENTRAL=http://localhost:8080
+     */
+    private getRegistryUri(registry: ComponentRegistryEntity): string {
+        if (!registry.Name) {
+            return registry.URI || '';
+        }
         
+        // Convert registry name to environment variable format
+        // Replace spaces, hyphens, and other non-alphanumeric chars with underscores
+        const envVarName = `REGISTRY_URI_OVERRIDE_${registry.Name.replace(/[^A-Za-z0-9]/g, '_').toUpperCase()}`;
+        
+        // Check for environment variable override
+        const override = process.env[envVarName];
+        if (override) {
+            LogStatus(`Using URI override for registry ${registry.Name}: ${override}`);
+            return override;
+        }
+        
+        // Use production URI from database
+        return registry.URI || '';
+    }
+
+    /**
+     * Create a client for a registry on-demand
+     * Checks configuration first, then falls back to default settings
+     */
+    private createClientForRegistry(registry: ComponentRegistryEntity): ComponentRegistryClient {
+        // Check if there's a configuration for this registry
+        const config = configInfo.componentRegistries?.find(r => 
+            r.id === registry.ID || r.name === registry.Name
+        );
+        
+        // Get API key from environment or config
+        const apiKey = process.env[`REGISTRY_API_KEY_${registry.ID.replace(/-/g, '_').toUpperCase()}`] ||
+                      process.env[`REGISTRY_API_KEY_${registry.Name?.replace(/-/g, '_').toUpperCase()}`] ||
+                      config?.apiKey;
+        
+        // Get the registry URI (with possible override)
+        const baseUrl = this.getRegistryUri(registry);
+        
+        // Build retry policy with defaults
+        const retryPolicy = {
+            maxRetries: config?.retryPolicy?.maxRetries ?? 3,
+            initialDelay: config?.retryPolicy?.initialDelay ?? 1000,
+            maxDelay: config?.retryPolicy?.maxDelay ?? 10000,
+            backoffMultiplier: config?.retryPolicy?.backoffMultiplier ?? 2
+        };
+        
+        // Use config settings if available, otherwise defaults
         return new ComponentRegistryClient({
-            baseUrl: registry.URI || '',
+            baseUrl: baseUrl,
             apiKey: apiKey,
-            timeout: 30000,
-            retryPolicy: {
-                maxRetries: 3,
-                initialDelay: 1000,
-                maxDelay: 10000,
-                backoffMultiplier: 2
-            }
+            timeout: config?.timeout || 30000,
+            retryPolicy: retryPolicy,
+            headers: config?.headers
         });
     }
     
@@ -558,7 +492,9 @@ export class ComponentRegistryExtendedResolver {
      */
     private shouldCache(registry: ComponentRegistryEntity): boolean {
         // Check config for caching settings
-        const config = mjConfig.componentRegistries?.find((r: any) => r.id === registry.ID);
+        const config = configInfo.componentRegistries?.find(r => 
+            r.id === registry.ID || r.name === registry.Name
+        );
         return config?.cache !== false; // Cache by default
     }
     
@@ -644,86 +580,85 @@ export class ComponentRegistryExtendedResolver {
     }
     
     /**
-     * Convert ComponentSpec array to ComponentSpecType array
-     */
-    private convertComponentSpecs(specs: ComponentSpec[]): ComponentSpecType[] {
-        return specs.map(spec => this.convertComponentSpec(spec));
-    }
-    
-    /**
-     * Convert a single ComponentSpec to ComponentSpecType
-     */
-    private convertComponentSpec(spec: ComponentSpec): ComponentSpecType {
-        return {
-            name: spec.name,
-            location: spec.location,
-            registry: spec.registry,
-            namespace: spec.namespace,
-            version: spec.version,
-            selectionReasoning: spec.selectionReasoning,
-            createNewVersion: spec.createNewVersion,
-            description: spec.description,
-            title: spec.title,
-            type: spec.type,
-            code: spec.code,
-            functionalRequirements: spec.functionalRequirements,
-            dataRequirements: spec.dataRequirements ? {
-                entities: spec.dataRequirements.entities?.map(e => ({
-                    name: e.name,
-                    type: 'entity', // EntityRequirementType requires this field
-                    description: e.description,
-                    fields: e.displayFields, // Map displayFields to fields
-                    filters: e.filterFields?.join(', '), // Convert array to string
-                    sortBy: e.sortFields?.join(', '), // Convert array to string
-                    joins: undefined // ComponentEntityDataRequirement doesn't have joins
-                })),
-                queries: spec.dataRequirements.queries?.map(q => ({
-                    name: q.name,
-                    description: q.description,
-                    query: q.newQuerySQL || '', // Use newQuerySQL if available
-                    variables: q.parameters ? JSON.stringify(q.parameters) : undefined, // Map parameters to variables
-                    returnType: 'object' // Default return type
-                }))
-            } : undefined,
-            technicalDesign: spec.technicalDesign,
-            properties: spec.properties?.map(p => ({
-                name: p.name,
-                type: p.type,
-                description: p.description,
-                required: p.required,
-                defaultValue: p.defaultValue ? String(p.defaultValue) : undefined
-            })),
-            events: spec.events?.map(e => ({
-                name: e.name,
-                description: e.description,
-                parameters: e.parameters?.map(p => ({
-                    name: p.name,
-                    type: p.type,
-                    description: p.description,
-                    required: false // ComponentEventParameter doesn't have required field
-                }))
-            })),
-            libraries: spec.libraries?.map(l => ({
-                name: l.name,
-                type: 'npm', // Default type since ComponentLibraryDependency doesn't have type
-                version: l.version,
-                provider: undefined, // ComponentLibraryDependency doesn't have provider
-                cdn: undefined, // ComponentLibraryDependency doesn't have cdn
-                description: undefined // ComponentLibraryDependency doesn't have description
-            })),
-            dependencies: spec.dependencies ? this.convertComponentSpecs(spec.dependencies) : undefined
-        };
-    }
-    
-    /**
      * Map search result to GraphQL type
      */
     private mapSearchResult(result: ComponentSearchResult): RegistryComponentSearchResultType {
         return {
-            components: this.convertComponentSpecs(result.components),
+            components: result.components.map(spec => JSON.stringify(spec)),
             total: result.total,
             offset: result.offset,
             limit: result.limit
         };
+    }
+
+    /**
+     * Send feedback for a component from any registry
+     * This is a registry-agnostic mutation that allows feedback collection
+     * for components from any source registry (Skip, MJ Central, etc.)
+     */
+    @Mutation(() => ComponentFeedbackResponse)
+    async SendComponentFeedback(
+        @Arg('feedback') feedback: ComponentFeedbackInput,
+        @Ctx() { userPayload }: AppContext
+    ): Promise<ComponentFeedbackResponse> {
+        try {
+            // Get user from cache
+            const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
+            if (!user) {
+                return {
+                    success: false,
+                    error: `User ${userPayload.email} not found in UserCache`
+                };
+            }
+
+            // Registry name is required for feedback submission
+            if (!feedback.registryName) {
+                return {
+                    success: false,
+                    error: 'Registry name is required for feedback submission'
+                };
+            }
+
+            // Get registry configuration
+            const registry = await this.getRegistryByName(feedback.registryName, user);
+            if (!registry) {
+                return {
+                    success: false,
+                    error: `Registry not found: ${feedback.registryName}`
+                };
+            }
+
+            // Check user permissions
+            await this.checkUserAccess(user, registry.ID);
+
+            // Create client using the same pattern as GetRegistryComponent
+            // This respects REGISTRY_URI_OVERRIDE_* and REGISTRY_API_KEY_* environment variables
+            const registryClient = this.createClientForRegistry(registry);
+
+            const sdkParams: SDKComponentFeedbackParams = {
+                componentName: feedback.componentName,
+                componentNamespace: feedback.componentNamespace,
+                componentVersion: feedback.componentVersion,
+                registryName: feedback.registryName,
+                rating: feedback.rating,
+                feedbackType: feedback.feedbackType,
+                comments: feedback.comments,
+                conversationID: feedback.conversationID,
+                conversationDetailID: feedback.conversationDetailID,
+                reportID: feedback.reportID,
+                dashboardID: feedback.dashboardID,
+                userEmail: user.Email  // Pass the authenticated user's email to the registry
+            };
+
+            const result = await registryClient.submitFeedback(sdkParams);
+
+            return result;
+        } catch (error) {
+            LogError(error);
+            return {
+                success: false,
+                error: error instanceof Error ? error.message : 'Unknown error'
+            };
+        }
     }
 }

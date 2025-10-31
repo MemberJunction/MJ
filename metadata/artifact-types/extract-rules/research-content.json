@@ -1,0 +1,54 @@
+[
+    {
+        "name": "name",
+        "description": "Extracts the research report title/name",
+        "type": "string",
+        "standardProperty": "name",
+        "extractor": "@file:research-content/research-content-name.js"
+    },
+    {
+        "name": "description",
+        "description": "Extracts the research report summary/description",
+        "type": "string",
+        "standardProperty": "description",
+        "extractor": "@file:research-content/research-content-description.js"
+    },
+    {
+        "name": "displayHtml",
+        "description": "Extracts rich HTML report with charts, graphs, and advanced styling",
+        "type": "string",
+        "standardProperty": "displayHtml",
+        "extractor": "@file:research-content/research-content-html.js"
+    },
+    {
+        "name": "displayMarkdown",
+        "description": "Extracts the full research report in markdown format (fallback if HTML not available)",
+        "type": "string",
+        "standardProperty": "displayMarkdown",
+        "extractor": "@file:research-content/research-content-markdown.js"
+    },
+    {
+        "name": "researchGoal",
+        "description": "The original research request/goal",
+        "type": "string",
+        "extractor": "@file:research-content/research-goal.js"
+    },
+    {
+        "name": "sourceCount",
+        "description": "Total number of sources consulted",
+        "type": "number",
+        "extractor": "@file:research-content/research-source-count.js"
+    },
+    {
+        "name": "iterationCount",
+        "description": "Number of research iterations performed",
+        "type": "number",
+        "extractor": "@file:research-content/research-iteration-count.js"
+    },
+    {
+        "name": "hasContradictions",
+        "description": "Whether contradictory information was found",
+        "type": "boolean",
+        "extractor": "@file:research-content/research-has-contradictions.js"
+    }
+]

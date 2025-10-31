@@ -122,8 +122,72 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     private _sessionId: string;
     private _aiClient: GraphQLAIClient;
 
-    public get ConfigData(): GraphQLProviderConfigData { 
-        return this._configData; 
+    public get ConfigData(): GraphQLProviderConfigData {
+        return this._configData;
+    }
+
+    /**
+     * The core schema name constant. This should match the mjCoreSchema config value.
+     * TODO: Move this to @memberjunction/core once npm registration issues are resolved
+     * @see https://github.com/MemberJunction/MJ/issues/1452
+     */
+    protected static readonly MJ_CORE_SCHEMA = '__mj';
+
+    /**
+     * Sanitizes a string to be a valid GraphQL name component, preserving original capitalization.
+     * GraphQL names must match the pattern [_A-Za-z][_0-9A-Za-z]* and cannot start with double underscore
+     *
+     * TODO: Move this to @memberjunction/core once npm registration issues are resolved
+     * @see https://github.com/MemberJunction/MJ/issues/1452
+     *
+     * Copied from @memberjunction/codegen-lib GraphQLServerGeneratorBase.sanitizeGraphQLName()
+     */
+    protected sanitizeGraphQLName(input: string): string {
+        if (!input || input.length === 0) {
+            return '';
+        }
+
+        // Replace any non-alphanumeric characters (except underscore) with nothing to preserve capitalization
+        let sanitized = input.replace(/[^A-Za-z0-9_]/g, '');
+
+        // If the name starts with two underscores, remove them
+        // (double underscore is reserved for GraphQL introspection)
+        if (sanitized.startsWith('__')) {
+            sanitized = sanitized.substring(2);
+        }
+
+        // Remove any remaining underscores
+        sanitized = sanitized.replace(/_/g, '');
+
+        // If the result starts with a digit or is empty, prepend an underscore
+        if (sanitized.length === 0 || /^[0-9]/.test(sanitized)) {
+            return '_' + sanitized;
+        }
+
+        return sanitized;
+    }
+
+    /**
+     * Generates the base GraphQL type name for an entity using SchemaBaseTable pattern.
+     * Preserves original capitalization. Special case: MJ core schema uses "MJ" prefix.
+     * This ensures unique type names across different schemas.
+     *
+     * TODO: Move this to @memberjunction/core once npm registration issues are resolved
+     * @see https://github.com/MemberJunction/MJ/issues/1452
+     *
+     * Copied from @memberjunction/codegen-lib GraphQLServerGeneratorBase.getServerGraphQLTypeNameBase()
+     *
+     * @param entity - The entity to generate the type name for
+     * @returns The base GraphQL type name (without suffix like ViewByID, DynamicView, etc.)
+     */
+    protected getGraphQLTypeNameBase(entity: EntityInfo): string {
+        // Special case for MJ core schema - use "MJ" instead of the schema name
+        const schemaPrefix = entity.SchemaName.trim().toLowerCase() === GraphQLDataProvider.MJ_CORE_SCHEMA.trim().toLowerCase()
+            ? 'MJ'
+            : this.sanitizeGraphQLName(entity.SchemaName);
+
+        const sanitizedBaseTable = this.sanitizeGraphQLName(entity.BaseTable);
+        return `${schemaPrefix}${sanitizedBaseTable}`;
     }
 
     /**
@@ -464,20 +528,21 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     throw new Error(`Entity ${entity} not found in metadata`);
 
                 let dynamicView = false;
+                const graphQLTypeName = this.getGraphQLTypeNameBase(e);
 
                 if (params.ViewID) {
-                    qName = `Run${e.ClassName}ViewByID`;
+                    qName = `Run${graphQLTypeName}ViewByID`;
                     paramType = 'RunViewByIDInput';
                     innerParams.ViewID = params.ViewID;
                 }
                 else if (params.ViewName) {
-                    qName = `Run${e.ClassName}ViewByName`;
+                    qName = `Run${graphQLTypeName}ViewByName`;
                     paramType = 'RunViewByNameInput';
                     innerParams.ViewName = params.ViewName;
                 }
                 else {
                     dynamicView = true;
-                    qName = `Run${e.ClassName}DynamicView`;
+                    qName = `Run${graphQLTypeName}DynamicView`;
                     paramType = 'RunDynamicViewInput';
                     innerParams.EntityName = params.EntityName;
                 }
@@ -586,20 +651,21 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
                     entityInfos.push(e);
                     let dynamicView: boolean = false;
+                    const graphQLTypeName = this.getGraphQLTypeNameBase(e);
 
                     if (param.ViewID) {
-                        qName = `Run${e.ClassName}ViewByID`;
+                        qName = `Run${graphQLTypeName}ViewByID`;
                         paramType = 'RunViewByIDInput';
                         innerParam.ViewID = param.ViewID;
                     }
                     else if (param.ViewName) {
-                        qName = `Run${e.ClassName}ViewByName`;
+                        qName = `Run${graphQLTypeName}ViewByName`;
                         paramType = 'RunViewByNameInput';
                         innerParam.ViewName = param.ViewName;
                     }
                     else {
                         dynamicView = true;
-                        qName = `Run${e.ClassName}DynamicView`;
+                        qName = `Run${graphQLTypeName}DynamicView`;
                         paramType = 'RunDynamicViewInput';
                         innerParam.EntityName = param.EntityName;
                     }
@@ -968,7 +1034,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // values for the entity and we need to have those values to update the entity after the
             // save
 
-            const mutationName = `${type}${entity.EntityInfo.ClassName}`
+            const graphQLTypeName = this.getGraphQLTypeNameBase(entity.EntityInfo);
+            const mutationName = `${type}${graphQLTypeName}`
 
             // only pass along writable fields, AND the PKEY value if this is an update
             const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
@@ -976,7 +1043,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => mapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`
-            const outer = gql`mutation ${type}${entity.EntityInfo.ClassName} ($input: ${mutationName}Input!) {
+            const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
             }
             `
@@ -1086,10 +1153,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             else {
                 // not part of a transaction group, so just go for it and send across our GQL
                 const d = await this.ExecuteGQL(outer, vars)
-                if (d && d[type + entity.EntityInfo.ClassName]) {
+                if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
-                    result.NewValues = this.ConvertBackToMJFields(d[type + entity.EntityInfo.ClassName]);
+                    result.NewValues = this.ConvertBackToMJFields(d[mutationName]);
                     return result.NewValues;
                 }
                 else
@@ -1137,9 +1204,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
+            const graphQLTypeName = this.getGraphQLTypeNameBase(entity.EntityInfo);
             const mapper = new FieldMapper();
-            const query = gql`query Single${entity.EntityInfo.ClassName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
-                ${entity.EntityInfo.ClassName}(${pkeyInnerParamString}) {
+            const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
+                ${graphQLTypeName}(${pkeyInnerParamString}) {
                                     ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
                                       .map((f) => {
                                         if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
@@ -1156,9 +1224,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             `;
 
             const d = await this.ExecuteGQL(query, vars)
-            if (d && d[entity.EntityInfo.ClassName]) {
+            if (d && d[graphQLTypeName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
-                return this.ConvertBackToMJFields(d[entity.EntityInfo.ClassName]);
+                return this.ConvertBackToMJFields(d[graphQLTypeName]);
             }
             else
                 return null;
@@ -1238,7 +1306,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             mutationInputTypes.push({varName: "options___", inputType: 'DeleteOptionsInput!'}); // only used when doing a transaction group, but it is easier to do in this main loop
             vars["options___"] = options ? options : {SkipEntityAIActions: false, SkipEntityActions: false};
 
-            const queryName: string = 'Delete' + entity.EntityInfo.ClassName;
+            const graphQLTypeName = this.getGraphQLTypeNameBase(entity.EntityInfo);
+            const queryName: string = 'Delete' + graphQLTypeName;
             const inner = gql`${queryName}(${pkeyInnerParamString}, options___: $options___) {
                 ${returnValues}
             }
@@ -1790,8 +1859,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const unsubscribe = this._wsClient.subscribe(
               { query: SUBSCRIBE_TO_STATUS, variables: { sessionId } },
               {
-                next: (data) => {
-                    return observer.next(<string>data.data.statusUpdates)
+                next: (data: any) => {
+                    // Extract the message field from the statusUpdates object
+                    // data.data.statusUpdates = { message: string, date: Date, sessionId: string }
+                    return observer.next(data.data.statusUpdates.message)
                 },
                 error: (error) => {
                     return observer.error(error)
@@ -1804,8 +1875,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
 
             return () => {
               // Cleanup logic
-              console.log('would unsub here')
-              //unsubscribe();
+              unsubscribe();
             };
         });
         this._pushStatusRequests.push({sessionId, observable: newObservable});

@@ -239,9 +239,6 @@ export default class Pull extends Command {
     } finally {
       // Reset singletons
       resetSyncEngine();
-      
-      // Exit process to prevent background MJ tasks from throwing errors
-      process.exit(0);
     }
   }
   

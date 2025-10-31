@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { BaseEntity } from '@memberjunction/core';
+import { METADATA_KEYWORDS, extractKeywordValue, createKeywordReference } from '../constants/metadata-keywords';
 
 /**
  * Handles externalization of field values to separate files with @file: references
@@ -63,21 +64,21 @@ export class FieldExternalizer {
    * Checks if we should use an existing file reference
    */
   private shouldUseExistingReference(existingFileReference?: string, mergeStrategy: string = 'merge'): boolean {
-    return mergeStrategy === 'merge' && 
-           !!existingFileReference && 
-           typeof existingFileReference === 'string' && 
-           existingFileReference.startsWith('@file:');
+    return mergeStrategy === 'merge' &&
+           !!existingFileReference &&
+           typeof existingFileReference === 'string' &&
+           existingFileReference.startsWith(METADATA_KEYWORDS.FILE);
   }
 
   /**
    * Uses an existing file reference
    */
   private useExistingFileReference(
-    existingFileReference: string, 
-    targetDir: string, 
+    existingFileReference: string,
+    targetDir: string,
     verbose?: boolean
   ): { finalFilePath: string; fileReference: string } {
-    const existingPath = existingFileReference.substring(6); // Remove @file: prefix
+    const existingPath = extractKeywordValue(existingFileReference) as string;
     const finalFilePath = path.resolve(targetDir, existingPath);
     
     if (verbose) {
@@ -100,7 +101,7 @@ export class FieldExternalizer {
     const processedPattern = this.processPattern(pattern, recordData, fieldName);
     const cleanPattern = this.removeFilePrefix(processedPattern);
     const finalFilePath = path.resolve(targetDir, cleanPattern);
-    const fileReference = `@file:${cleanPattern}`;
+    const fileReference = createKeywordReference('file', cleanPattern);
     
     if (verbose) {
       console.log(`Creating new external file: ${finalFilePath}`);
@@ -157,7 +158,7 @@ export class FieldExternalizer {
    * Removes @file: prefix if present
    */
   private removeFilePrefix(pattern: string): string {
-    return pattern.startsWith('@file:') ? pattern.substring(6) : pattern;
+    return pattern.startsWith(METADATA_KEYWORDS.FILE) ? (extractKeywordValue(pattern) as string) : pattern;
   }
 
   /**

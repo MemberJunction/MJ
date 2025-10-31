@@ -20,8 +20,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/core": "2.99.0",
-    "@memberjunction/global": "2.99.0",
+    "@memberjunction/core": "2.112.0",
+    "@memberjunction/global": "2.112.0",
     "zod": "^3.23.8"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

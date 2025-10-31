@@ -4,13 +4,16 @@ import {
   GetComponentParams,
   SearchComponentsParams,
   ComponentSearchResult,
+  ComponentResponse,
   ResolvedVersion,
   RegistryInfo,
   Namespace,
   DependencyTree,
   RegistryError,
   RegistryErrorCode,
-  RetryPolicy
+  RetryPolicy,
+  ComponentFeedbackParams,
+  ComponentFeedbackResponse
 } from './types';
 
 /**
@@ -40,22 +43,61 @@ export class ComponentRegistryClient {
   }
 
   /**
-   * Get a specific component from the registry
+   * Get a specific component from the registry (backward compatible)
    */
   async getComponent(params: GetComponentParams): Promise<ComponentSpec> {
-    const { registry, namespace, name, version = 'latest' } = params;
+    const response = await this.getComponentWithHash(params);
     
-    const path = `/api/v1/components/${encodeURIComponent(registry)}/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}/${encodeURIComponent(version)}`;
+    if (!response.specification) {
+      throw new RegistryError(
+        `Component ${params.namespace}/${params.name} returned without specification`,
+        RegistryErrorCode.UNKNOWN
+      );
+    }
     
+    return response.specification;
+  }
+
+  /**
+   * Get a specific component from the registry with hash support
+   * Returns ComponentResponse which includes hash and notModified flag
+   */
+  async getComponentWithHash(params: GetComponentParams): Promise<ComponentResponse> {
+    const { namespace, name, version = 'latest', hash, userEmail } = params;
+
+    // Build query parameters
+    const queryParams = new URLSearchParams();
+    if (version !== 'latest') {
+      queryParams.append('version', version);
+    }
+    if (hash) {
+      queryParams.append('hash', hash);
+    }
+    if (userEmail) {
+      queryParams.append('userEmail', userEmail);
+    }
+
+    const queryString = queryParams.toString();
+    const path = `/api/v1/components/${encodeURIComponent(namespace)}/${encodeURIComponent(name)}${queryString ? `?${queryString}` : ''}`;
+
     try {
       const response = await this.makeRequest('GET', path);
-      return response as ComponentSpec;
+
+      // Handle 304 Not Modified response
+      if (response && typeof response === 'object' && 'message' in response && response.message === 'Not modified') {
+        return {
+          ...response,
+          notModified: true
+        } as ComponentResponse;
+      }
+
+      return response as ComponentResponse;
     } catch (error) {
       if (error instanceof RegistryError) {
         throw error;
       }
       throw new RegistryError(
-        `Failed to get component ${registry}/${namespace}/${name}@${version}`,
+        `Failed to get component ${namespace}/${name}@${version}`,
         RegistryErrorCode.UNKNOWN,
         undefined,
         error
@@ -199,12 +241,37 @@ export class ComponentRegistryClient {
    */
   async ping(): Promise<boolean> {
     const path = '/api/v1/health';
-    
+
     try {
       await this.makeRequest('GET', path);
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Submit feedback for a component
+   */
+  async submitFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
+    const path = '/api/v1/feedback';
+
+    try {
+      const response = await this.makeRequest('POST', path, params);
+      return response as ComponentFeedbackResponse;
+    } catch (error) {
+      if (error instanceof RegistryError) {
+        // Return structured error response
+        return {
+          success: false,
+          error: error.message
+        };
+      }
+      // Return generic error response
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to submit feedback'
+      };
     }
   }
 
@@ -244,8 +311,8 @@ export class ComponentRegistryClient {
       
       clearTimeout(timeoutId);
       
-      // Handle response
-      if (response.ok) {
+      // Handle response - include 304 Not Modified as success
+      if (response.ok || response.status === 304) {
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           return await response.json();

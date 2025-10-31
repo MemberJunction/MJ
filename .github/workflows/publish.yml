@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 concurrency:
   group: "publish"
@@ -25,6 +26,9 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Validate migration filenames
+        run: ./.github/scripts/validate-migration-filenames.sh
 
       - name: Create docker network
         run: docker network create -d bridge local-net
@@ -39,7 +43,7 @@ jobs:
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
 
       - name: Install MJ CLI globally
-        run: npm install --global @memberjunction/cli
+        run: npm install --global @memberjunction/cli@2.100.3
 
       - name: Run mj migrate locally
         run: mj migrate
@@ -69,9 +73,9 @@ jobs:
           fetch-tags: true
 
       - name: Set up node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: 'npm'
           cache-dependency-path: 'package-lock.json'
 
@@ -91,7 +95,8 @@ jobs:
         id: version_check
         run: |
           git fetch --tags
-          CURRENT_VERSION=$(jq -r .version packages/MJCore/package.json)
+          # Use MJServer package as version reference since core and global are pinned at 2.100.3
+          CURRENT_VERSION=$(jq -r .version packages/MJServer/package.json)
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
           NEXT_MINOR_VERSION="${VERSION_PARTS[0]}.$(( ${VERSION_PARTS[1]} + 1 )).0"
           NEXT_PATCH_VERSION="${VERSION_PARTS[0]}.${VERSION_PARTS[1]}.$(( ${VERSION_PARTS[2]} + 1 ))"
@@ -106,18 +111,12 @@ jobs:
         if: ${{ env.BRANCH == 'main' }}
         run: |
           EXPECTED_NEXT_VERSION="${{ github.event.inputs.targetVersion || steps.version_check.outputs.EXPECTED_NEXT_VERSION }}"
-          npm run change version
-          NEXT_VERSION=$(jq -r .version packages/MJCore/package.json)
+          npm run version
+
+          NEXT_VERSION=$(jq -r .version packages/MJServer/package.json)
           echo "::notice::Version to be published: $NEXT_VERSION"
           if [ "$NEXT_VERSION" != "$EXPECTED_NEXT_VERSION" ]; then
             echo "::error::The version to be published ($NEXT_VERSION) does not match the expected version ($EXPECTED_NEXT_VERSION)"
-            exit 1
-          fi
-          MJ_PACKAGE_COUNT=$(grep --exclude-dir node_modules  --include package.json -R '"name": "@memberjunction/' | wc -l)
-          NEXT_VERSION_PACKAGE_COUNT=$(grep --exclude-dir node_modules  --include package.json -R '"version": "'$NEXT_VERSION'"' | wc -l)
-          if [ "$MJ_PACKAGE_COUNT" != "$NEXT_VERSION_PACKAGE_COUNT" ]; then
-            echo "::error::One or more packages would not be published with the expected next version ($EXPECTED_NEXT_VERSION)"
-            grep --exclude-dir node_modules  --include package.json -RL '"version": "'$NEXT_VERSION'"' | xargs grep '"name": "@memberjunction/'
             exit 1
           fi
 
@@ -125,14 +124,9 @@ jobs:
         run: npm run build
 
       - name: Publish to npm
-        run: |
-          cat << EOF > "$HOME/.npmrc"
-            //registry.npmjs.org/:_authToken=$NPM_TOKEN
-          EOF
-
-          npm run change publish
+        run: npm run change publish
         env:
-          NPM_TOKEN: ${{ secrets.CRAIG_BC_NPM_TOKEN }}
+          NPM_TOKEN: ''
 
       - name: Get version string
         if: ${{ env.BRANCH == 'main' }}
@@ -140,7 +134,7 @@ jobs:
         run: |
           git pull
           git log -n1
-          VERSION="v"$(jq -r .version packages/MJCore/package.json)
+          VERSION="v"$(jq -r .version packages/MJServer/package.json)
           echo "Release for verison $VERSION" >> $GITHUB_STEP_SUMMARY
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
@@ -158,11 +152,11 @@ jobs:
           echo "Distribution zip created at $ARTIFACT" >> $GITHUB_STEP_SUMMARY
           echo "Distribution commit: \`$SHA\`" >> $GITHUB_STEP_SUMMARY
 
-      - name: Merge main into next
+      - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}
         run: |
           git checkout next
           git log -n1
-          npm run mergemain
+          npm run mergemain:update-lock
 
 

@@ -69,6 +69,20 @@ Located in the [providers](./providers) subdirectory:
   - Thread management
   - Label support
 
+### Provider Capabilities
+
+| Feature | SendGrid | Gmail | MS Graph | Twilio |
+|---------|----------|-------|----------|--------|
+| Send Single | ✅ | ✅ | ✅ | ✅ |
+| Get Messages | ❌ | ✅ | ✅ | ✅ |
+| Forward | ❌ | ✅ | ✅ | ✅ |
+| Reply | ❌ | ✅ | ✅ | ✅ |
+| **Create Draft** | **❌** | **✅** | **✅** | **❌** |
+| Scheduled Send | ✅ | ❌ | ❌ | ❌ |
+| HTML/Text | ✅ | ✅ | ✅ | Limited |
+| Threading | ❌ | ✅ | ✅ | ❌ |
+| CC/BCC | ✅ | ✅ | ✅ | ❌ |
+
 ## Architecture
 
 ### Communication Flow
@@ -98,6 +112,12 @@ Application Request → Communication Engine → Provider Selection
 - **SMS** - Text messaging with media
 - **Social Media** - WhatsApp, Facebook Messenger
 - **Push Notifications** - Mobile app notifications (planned)
+
+### Draft Support
+- **Create Drafts** - Save messages as drafts before sending
+- **Provider Support** - Gmail and MS Graph support drafts
+- **Template Rendering** - Drafts use the same template engine
+- **No Logging** - Drafts are not tracked in Communication Logs
 
 ### Template System
 - Dynamic content rendering
@@ -178,6 +198,47 @@ await EntityCommunicationsEngine.Instance.RunEntityCommunication({
 });
 ```
 
+### Creating Draft Messages
+
+Create a draft message that can be edited and sent later:
+
+```typescript
+import { CommunicationEngine } from '@memberjunction/communication-engine';
+import { Message } from '@memberjunction/communication-types';
+
+// Get engine instance
+const engine = CommunicationEngine.Instance;
+await engine.Config(false, contextUser);
+
+// Create a message
+const message = new Message();
+message.To = 'recipient@example.com';
+message.From = 'sender@example.com';
+message.Subject = 'Draft Message';
+message.Body = 'This is a draft message';
+
+// Create draft using Gmail
+const result = await engine.CreateDraft(
+    message,
+    'Gmail',
+    contextUser
+);
+
+if (result.Success) {
+    console.log(`Draft created with ID: ${result.DraftID}`);
+} else {
+    console.error(`Failed to create draft: ${result.ErrorMessage}`);
+}
+```
+
+**Supported Providers**:
+- **Gmail**: Drafts are created in the user's Gmail drafts folder
+- **MS Graph**: Drafts are created in the user's Outlook/Exchange drafts folder
+- **SendGrid**: Not supported (service-based email, no mailbox)
+- **Twilio**: Not supported (SMS/messaging service, no draft concept)
+
+**Note**: Only providers with mailbox access support drafts. Service-based providers (SendGrid, Twilio) return an error when `CreateDraft()` is called.
+
 ## Provider Implementation
 
 To add a new communication provider:
@@ -188,12 +249,28 @@ import { RegisterClass } from '@memberjunction/global';
 
 @RegisterClass(BaseCommunicationProvider, 'MyProvider')
 export class MyProvider extends BaseCommunicationProvider {
-    async SendSingleMessage(message: Message): Promise<ProcessedMessage> {
+    async SendSingleMessage(message: ProcessedMessage): Promise<MessageResult> {
         // Implementation
     }
-    
-    async GetMessages(options: GetMessagesOptions): Promise<GetMessagesResult> {
+
+    async GetMessages(params: GetMessagesParams): Promise<GetMessagesResult> {
         // Implementation
+    }
+
+    async ForwardMessage(params: ForwardMessageParams): Promise<ForwardMessageResult> {
+        // Implementation
+    }
+
+    async ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult> {
+        // Implementation
+    }
+
+    async CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult> {
+        // Implementation - return error if not supported
+        return {
+            Success: false,
+            ErrorMessage: 'MyProvider does not support creating drafts'
+        };
     }
 }
 ```
@@ -282,6 +359,26 @@ When contributing to the Communication Framework:
 3. Document provider-specific features
 4. Handle errors gracefully
 5. Update relevant documentation
+
+## Package Documentation
+
+For detailed documentation on individual packages, see:
+
+### Core Packages
+- **[Communication Types](./base-types/README.md)** - Base types, interfaces, and provider abstract class
+- **[Communication Engine](./engine/readme.md)** - Main orchestration engine and message processing
+
+### Entity Communication Packages
+- **[Entity Communications Base](./entity-comm-base/README.md)** - Base classes for entity-level communications
+- **[Entity Communications Server](./entity-comm-server/README.md)** - Server-side entity communication implementation
+- **[Entity Communications Client](./entity-comm-client/README.md)** - Client-side entity communication implementation
+
+### Provider Packages
+- **[Gmail Provider](./providers/gmail/README.md)** - Gmail/Google Suite integration with draft support
+- **[Microsoft Graph Provider](./providers/MSGraph/README.md)** - Office 365/Exchange integration with draft support
+- **[SendGrid Provider](./providers/sendgrid/README.md)** - SendGrid email service integration
+- **[Twilio Provider](./providers/twilio/README.md)** - SMS, WhatsApp, and Messenger integration
+- **[Provider Overview](./providers/README.md)** - General provider information
 
 ## License
 

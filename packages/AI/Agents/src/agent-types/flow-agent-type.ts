@@ -13,7 +13,7 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, AgentPayloadChangeRequest, AgentAction, ExecuteAgentParams, AgentConfiguration, ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
 import { LogError, IsVerboseLoggingEnabled } from '@memberjunction/core';
 import { AIAgentStepEntity, AIAgentStepPathEntity, AIPromptEntityExtended } from '@memberjunction/core-entities';
 import { ActionResult } from '@memberjunction/actions-base';
@@ -32,20 +32,23 @@ interface FlowAgentNextStep<P = any> extends BaseAgentNextStep<P> {
 /**
  * Flow execution state that tracks the progress through the workflow.
  * This is maintained by the Flow Agent Type during execution.
+ *
+ * Note: Loop iteration tracking is now handled by BaseAgent._iterationContext.
+ * FlowExecutionState only tracks flow-specific navigation state.
  */
 export class FlowExecutionState {
     /** The agent ID for this flow execution */
     agentId: string;
-    
+
     /** The current step being executed */
     currentStepId?: string;
-    
+
     /** Set of completed step IDs */
     completedStepIds: Set<string> = new Set();
-    
+
     /** Map of step results by step ID */
     stepResults: Map<string, unknown> = new Map();
-    
+
     /** Ordered list of step IDs in execution order */
     executionPath: string[] = [];
 
@@ -164,13 +167,14 @@ export class FlowAgentType extends BaseAgentType {
                             previousPayload: payload
                         });
                     }
-                    
-                    // Merge the prompt response into the current payload
-                    // Update the payload with the prompt result, iterate through each key in the prompt response and update/add
-                    // that key in the payload object
-                    for (const key of Object.keys(promptResponse)) {
-                        payload[key] = promptResponse[key];
-                    }
+
+                    // Deep merge the prompt response into the current payload
+                    // This preserves existing nested properties while adding/updating from the prompt
+                    // Example: If payload has {decision: {Y: 4, Z: 2}} and prompt returns {decision: {x: "string"}},
+                    // the result will be {decision: {x: "string", Y: 4, Z: 2}} instead of losing Y and Z
+                    const mergedPayload = this._payloadManager.deepMerge(payload, promptResponse);
+                    // Copy merged result back to payload reference (modifying in place for consistency)
+                    Object.assign(payload, mergedPayload);
                 }
             }
             
@@ -324,11 +328,12 @@ export class FlowAgentType extends BaseAgentType {
                 
                 
                 const evalResult = this._evaluator.evaluate(path.Condition, context);
-               
+
                 if (evalResult.success && evalResult.value) {
                     validPaths.push(path);
                 }
-                else {
+                else if (!evalResult.success) {
+                    // Only log errors when evaluation failed, not when condition is simply false
                     LogError(`Path condition failed: ${path.Condition}\n${evalResult.error}`);
                 }
             } catch (error) {
@@ -377,8 +382,25 @@ export class FlowAgentType extends BaseAgentType {
                 
                 if (outputParam === '*') {
                     value = actionResult;
+                } else if (outputParam.includes('.')) {
+                    // Support dot notation for nested property access (e.g., "AgentSpec.ID")
+                    const parts = outputParam.split('.');
+                    value = actionResult;
+
+                    for (const part of parts) {
+                        if (value && typeof value === 'object' && !Array.isArray(value)) {
+                            // Case-insensitive lookup at each level
+                            const actualKey = Object.keys(value as Record<string, unknown>).find(
+                                key => key.toLowerCase() === part.toLowerCase()
+                            );
+                            value = actualKey ? (value as Record<string, unknown>)[actualKey] : undefined;
+                        } else {
+                            value = undefined;
+                            break;
+                        }
+                    }
                 } else {
-                    // Case-insensitive lookup for the output parameter
+                    // Simple case-insensitive lookup for non-dotted output parameters
                     const actualKey = Object.keys(actionResult).find(
                         key => key.toLowerCase() === outputParam.toLowerCase()
                     );
@@ -429,9 +451,6 @@ export class FlowAgentType extends BaseAgentType {
     ): Promise<BaseAgentNextStep<P>> {
         // Update flow state to mark this as current step
         flowState.currentStepId = node.ID;
-        const userMessages = params.conversationMessages.filter(m => m.role === 'user');
-        const latestUserMessage = userMessages ? userMessages[userMessages.length - 1].content : "";
-        const latestUserMessageString = typeof latestUserMessage === 'string' ? latestUserMessage : latestUserMessage[0].content;
 
         switch (node.StepType) {
             case 'Action':
@@ -484,7 +503,7 @@ export class FlowAgentType extends BaseAgentType {
                         previousPayload: payload
                     });
                 }
-                
+
                 // Need to get the sub-agent name
                 const subAgentName = await this.getAgentName(node.SubAgentID);
                 if (!subAgentName) {
@@ -494,11 +513,14 @@ export class FlowAgentType extends BaseAgentType {
                         previousPayload: payload
                     });
                 }
-                
+
+                // Use node description to define the sub-agent's task
+                // The full conversation history is preserved in params.conversationMessages
+                // and will be available to the sub-agent through BaseAgent.ExecuteSubAgent()
                 return this.createNextStep('Sub-Agent', {
                     subAgent: {
                         name: subAgentName,
-                        message: latestUserMessageString || node.Description || `Execute sub-agent: ${subAgentName}`,
+                        message: node.Description || `Execute sub-agent: ${subAgentName}`,
                         terminateAfter: false
                     },
                     terminate: false,
@@ -516,7 +538,7 @@ export class FlowAgentType extends BaseAgentType {
                         previousPayload: payload
                     });
                 }
-                
+
                 const retryStep: FlowAgentNextStep<P> = {
                     step: 'Retry',
                     message: node.Description || 'Executing prompt step for flow decision',
@@ -527,7 +549,13 @@ export class FlowAgentType extends BaseAgentType {
                     previousPayload: payload
                 };
                 return retryStep;
-                
+
+            case 'ForEach':
+                return await this.convertForEachStepToOperation(node, payload, flowState, params);
+
+            case 'While':
+                return await this.convertWhileStepToOperation(node, payload, flowState, params);
+
             default:
                 return this.createNextStep('Failed', {
                     errorMessage: `Unknown step type: ${node.StepType}`,
@@ -672,21 +700,48 @@ export class FlowAgentType extends BaseAgentType {
     
     /**
      * Helper method to get a value from a nested object path
-     * 
+     * Supports both dot notation (obj.prop) and array indexing (arr[0])
+     *
      * @private
      */
     private getValueFromPath(obj: any, path: string): unknown {
         const parts = path.split('.');
         let current = obj;
-        
+
         for (const part of parts) {
-            if (current && typeof current === 'object' && part in current) {
-                current = current[part];
+            if (!part) continue;
+
+            // Check if this part contains array indexing like "arrayName[0]"
+            const arrayMatch = part.match(/^([^[]+)\[(\d+)\]$/);
+
+            if (arrayMatch) {
+                // Extract array name and index
+                const arrayName = arrayMatch[1];
+                const index = parseInt(arrayMatch[2], 10);
+
+                // Navigate to the array
+                if (current && typeof current === 'object' && arrayName in current) {
+                    current = current[arrayName];
+
+                    // Access the array element
+                    if (Array.isArray(current) && index >= 0 && index < current.length) {
+                        current = current[index];
+                    } else {
+                        return undefined;
+                    }
+                } else {
+                    return undefined;
+                }
             } else {
-                return undefined;
+                // Regular property access
+                if (current && typeof current === 'object' && part in current) {
+                    current = current[part];
+                } else {
+                    return undefined;
+                }
             }
         }
-        
+
         return current;
     }
     
@@ -864,7 +919,7 @@ export class FlowAgentType extends BaseAgentType {
             // This is a prompt step in the flow, let it execute normally
             return null;
         }
-        
+
         // Get the updated payload (after action execution)
         const payloadFromStep = payload || step.newPayload || params.payload || {} as P;
         const flowState = agentTypeState as FlowExecutionState;
@@ -962,6 +1017,245 @@ export class FlowAgentType extends BaseAgentType {
         
         // For non-flow-prompt steps, use the default prompt
         return config.childPrompt || null;
+    }
+
+    /**
+     * Converts a Flow Agent ForEach step into universal ForEachOperation format
+     * that BaseAgent can execute
+     */
+    private async convertForEachStepToOperation<P>(
+        node: AIAgentStepEntity,
+        payload: P,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        if (!node.Configuration) {
+            return this.createNextStep('Failed', {
+                errorMessage: `ForEach step '${node.Name}' has no Configuration`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Parse base configuration from AIAgentStep
+        const baseConfig = JSON.parse(node.Configuration);
+
+        // Build universal ForEachOperation
+        const forEach: ForEachOperation = {
+            collectionPath: baseConfig.collectionPath,
+            itemVariable: baseConfig.itemVariable,
+            indexVariable: baseConfig.indexVariable,
+            maxIterations: baseConfig.maxIterations,
+            continueOnError: baseConfig.continueOnError,
+            delayBetweenIterationsMs: baseConfig.delayBetweenIterationsMs,
+            executionMode: baseConfig.executionMode,
+            maxConcurrency: baseConfig.maxConcurrency
+        };
+
+        // Add action or subAgent based on LoopBodyType (using cached engine data - no await needed)
+        if (node.LoopBodyType === 'Action') {
+            const action = AIEngine.Instance.Actions.find(a => a.ID === node.ActionID);
+            if (!action) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `Action not found for loop body: ${node.ActionID}`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            forEach.action = {
+                name: action.Name,
+                params: JSON.parse(node.ActionInputMapping || '{}'),
+                outputMapping: node.ActionOutputMapping || undefined
+            };
+        } else if (node.LoopBodyType === 'Sub-Agent') {
+            const subAgent = AIEngine.Instance.Agents.find(a => a.ID === node.SubAgentID);
+            if (!subAgent) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `Sub-Agent not found for loop body: ${node.SubAgentID}`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            forEach.subAgent = {
+                name: subAgent.Name,
+                message: node.Description || `Execute sub-agent: ${subAgent.Name}`,
+                templateParameters: {}
+            };
+        } else if (node.LoopBodyType === 'Prompt') {
+            return this.createNextStep('Failed', {
+                errorMessage: 'Prompt loop bodies not yet fully supported',
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Store stepId in flow state for later (when loop completes, we need to navigate paths)
+        flowState.currentStepId = node.ID;
+
+        // Return ForEach decision for BaseAgent to execute
+        return {
+            step: 'ForEach',
+            forEach,
+            terminate: false,
+            newPayload: payload,
+            previousPayload: payload,
+            agentTypeData: { stepId: node.ID }  // Flow needs to remember which step this is
+        } as BaseAgentNextStep<P> & { agentTypeData?: any };
+    }
+
+    /**
+     * Converts a Flow Agent While step into universal WhileOperation format
+     * that BaseAgent can execute
+     */
+    private async convertWhileStepToOperation<P>(
+        node: AIAgentStepEntity,
+        payload: P,
+        flowState: FlowExecutionState,
+        params: ExecuteAgentParams<P>
+    ): Promise<BaseAgentNextStep<P>> {
+        if (!node.Configuration) {
+            return this.createNextStep('Failed', {
+                errorMessage: `While step '${node.Name}' has no Configuration`,
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Parse base configuration
+        const baseConfig = JSON.parse(node.Configuration);
+
+        // Build universal WhileOperation
+        const whileOp: WhileOperation = {
+            condition: baseConfig.condition,
+            itemVariable: baseConfig.itemVariable,
+            maxIterations: baseConfig.maxIterations,
+            continueOnError: baseConfig.continueOnError,
+            delayBetweenIterationsMs: baseConfig.delayBetweenIterationsMs
+        };
+
+        // Add action or subAgent based on LoopBodyType
+        if (node.LoopBodyType === 'Action') {
+            const action = AIEngine.Instance.Actions.find(a => a.ID === node.ActionID);
+            if (!action) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `Action not found for loop body: ${node.ActionID}`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            whileOp.action = {
+                name: action.Name,
+                params: JSON.parse(node.ActionInputMapping || '{}'),
+                outputMapping: node.ActionOutputMapping || undefined
+            };
+        } else if (node.LoopBodyType === 'Sub-Agent') {
+            const subAgent = AIEngine.Instance.Agents.find(a => a.ID === node.SubAgentID);
+            if (!subAgent) {
+                return this.createNextStep('Failed', {
+                    errorMessage: `Sub-Agent not found for loop body: ${node.SubAgentID}`,
+                    newPayload: payload,
+                    previousPayload: payload
+                });
+            }
+
+            whileOp.subAgent = {
+                name: subAgent.Name,
+                message: node.Description || `Execute sub-agent: ${subAgent.Name}`,
+                templateParameters: {}
+            };
+        } else if (node.LoopBodyType === 'Prompt') {
+            return this.createNextStep('Failed', {
+                errorMessage: 'Prompt loop bodies not yet fully supported',
+                newPayload: payload,
+                previousPayload: payload
+            });
+        }
+
+        // Store stepId for later path navigation
+        flowState.currentStepId = node.ID;
+
+        // Return While decision for BaseAgent to execute
+        return {
+            step: 'While',
+            while: whileOp,
+            terminate: false,
+            newPayload: payload,
+            previousPayload: payload,
+            agentTypeData: { stepId: node.ID }
+        } as BaseAgentNextStep<P> & { agentTypeData?: any };
+    }
+
+    /**
+     * Flow agents don't need loop results injected as messages - they navigate paths
+     * @override
+     */
+    public get InjectLoopResultsAsMessage(): boolean {
+        return false;
+    }
+
+
+    /**
+     * Flow agents apply ActionOutputMapping after each iteration
+     * @override
+     */
+    public AfterLoopIteration<P>(
+        iterationResult: {
+            actionResults?: ActionResult[];
+            subAgentResult?: any;
+            currentPayload: P;
+            itemVariable: string;
+            item: any;
+            index: number;
+            loopContext: any;
+        } 
+    ): P | null {
+        const loopContext = iterationResult.loopContext;
+
+        // Only apply for actions with output mapping
+        if (!iterationResult.actionResults || !loopContext.actionOutputMapping) {
+            return null;
+        }
+
+        // Extract output parameters
+        const outputParams: Record<string, unknown> = {};
+        if (iterationResult.actionResults[0]?.Params) {
+            for (const param of iterationResult.actionResults[0].Params) {
+                if (param.Type === 'Output' || param.Type === 'Both') {
+                    outputParams[param.Name] = param.Value;
+                }
+            }
+        }
+
+        // Replace iteration variables in output mapping paths before applying
+        let resolvedOutputMapping = loopContext.actionOutputMapping;
+        const indexVar = loopContext.indexVariable || 'index';
+        const itemVar = loopContext.itemVariable || 'item';
+
+        // Replace [index] with [0], [1], etc.
+        resolvedOutputMapping = resolvedOutputMapping.replace(
+            new RegExp(`\\[${indexVar}\\]`, 'g'),
+            `[${iterationResult.index}]`
+        );
+
+        // Apply output mapping with resolved paths
+        const payloadChange = this.applyActionOutputMapping(
+            outputParams,
+            iterationResult.currentPayload,
+            resolvedOutputMapping
+        );
+
+        if (payloadChange?.updateElements) {
+            // Deep merge to preserve existing payload structure
+            return this._payloadManager.deepMerge(
+                iterationResult.currentPayload,
+                payloadChange.updateElements
+            );
+        }
+
+        return null;
     }
 }
 

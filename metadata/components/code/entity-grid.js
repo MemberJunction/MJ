@@ -50,16 +50,16 @@ function EntityGrid({
     loadEntities();
   }, [utilities]);
   
-  // Define which fields to display in the grid
+  // Define columns for the grid
   // These are optimized for entity viewing - showing most relevant info
-  const displayFields = [
+  const columns = [
     'Name',
     'DisplayName',
     'Description',
     'SchemaName',
     'BaseTable',
     'Status',
-    '__mj_UpdatedAt'
+    '__mj_CreatedAt'
   ];
   
   // Define which fields to search when user types in filter box
@@ -70,7 +70,8 @@ function EntityGrid({
     'Description',
     'SchemaName',
     'BaseTable',
-    'BaseView'
+    'BaseView',
+    'Status'
   ];
   
   // Error state: Failed to load entities
@@ -92,7 +93,7 @@ function EntityGrid({
       <DataGrid
         entityName="Entities"
         data={entities}  // null initially, then array of entity objects
-        fields={displayFields}
+        columns={columns}
         filterFields={filterFields}
         utilities={utilities}
         styles={styles}

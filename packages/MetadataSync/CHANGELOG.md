@@ -1,5 +1,191 @@
 # @memberjunction/metadata-sync
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [e237ca9]
+- Updated dependencies [c126b59]
+  - @memberjunction/sqlserver-dataprovider@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/core-entities-server@2.112.0
+  - @memberjunction/graphql-dataprovider@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/core-entities-server@2.110.1
+- @memberjunction/global@2.110.1
+- @memberjunction/sqlserver-dataprovider@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/sqlserver-dataprovider@2.110.0
+  - @memberjunction/core-entities-server@2.110.0
+  - @memberjunction/graphql-dataprovider@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Minor Changes
+
+- 1c155fb: Migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/graphql-dataprovider@2.109.0
+  - @memberjunction/core-entities-server@2.109.0
+  - @memberjunction/sqlserver-dataprovider@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Minor Changes
+
+- 8a53629: Migration
+
+### Patch Changes
+
+- 1fa712a: Add improved logging for individual record errors.
+- Updated dependencies [656d86c]
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/core-entities-server@2.108.0
+  - @memberjunction/sqlserver-dataprovider@2.108.0
+  - @memberjunction/graphql-dataprovider@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/core-entities-server@2.107.0
+- @memberjunction/global@2.107.0
+- @memberjunction/sqlserver-dataprovider@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- 3ca1b36: Fix: Database default value handling in CodeGen and MetadataSync This changeset fixes issues with non-nullable fields that have database-defined default values. CodeGen now properly handles NULL parameters for these fields by wrapping them in ISNULL checks in stored procedures, and MetadataSync correctly applies defaults from .mj-sync.json configuration files.
+  - @memberjunction/graphql-dataprovider@2.106.0
+  - @memberjunction/core@2.106.0
+  - @memberjunction/core-entities@2.106.0
+  - @memberjunction/core-entities-server@2.106.0
+  - @memberjunction/global@2.106.0
+  - @memberjunction/sqlserver-dataprovider@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/core-entities-server@2.105.0
+  - @memberjunction/sqlserver-dataprovider@2.105.0
+  - @memberjunction/graphql-dataprovider@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+- Updated dependencies [6e7f14a]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities-server@2.104.0
+  - @memberjunction/graphql-dataprovider@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/sqlserver-dataprovider@2.104.0
+  - @memberjunction/core@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/sqlserver-dataprovider@2.103.0
+  - @memberjunction/core-entities-server@2.103.0
+  - @memberjunction/graphql-dataprovider@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/global@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- 30afb26: Add alwaysPush flag for push command
+  - @memberjunction/core-entities@2.100.3
+  - @memberjunction/graphql-dataprovider@2.100.3
+  - @memberjunction/core-entities-server@2.100.3
+  - @memberjunction/sqlserver-dataprovider@2.100.3
+  - @memberjunction/core@2.100.3
+  - @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/core-entities-server@2.100.2
+- @memberjunction/global@2.100.2
+- @memberjunction/sqlserver-dataprovider@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/graphql-dataprovider@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/core-entities-server@2.100.1
+- @memberjunction/global@2.100.1
+- @memberjunction/sqlserver-dataprovider@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [b3132ec]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/graphql-dataprovider@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/core-entities-server@2.100.0
+  - @memberjunction/sqlserver-dataprovider@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

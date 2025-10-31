@@ -203,16 +203,14 @@ async function executeSQLCore(
     
     return result;
   } catch (error: any) {
-    // Log all errors along with the query and parameters
-    const errorMessage = `Error executing SQL 
+    // Build detailed error message with query and parameters
+    const errorMessage = `Error executing SQL
     Error: ${error?.message ? error.message : error}
     Query: ${query}
     Parameters: ${parameters ? JSON.stringify(parameters) : 'None'}`;
-    
-    LogError(errorMessage);
 
-    // Re-throw all errors
-    throw error;
+    // Throw error with detailed message - caller decides whether to log
+    throw new Error(errorMessage);
   }
 }
 
@@ -2400,10 +2398,10 @@ export class SQLServerDataProvider
     const spName = bNewRecord
       ? entity.EntityInfo.spCreate?.length > 0
         ? entity.EntityInfo.spCreate
-        : 'spCreate' + entity.EntityInfo.ClassName
+        : 'spCreate' + entity.EntityInfo.BaseTableCodeName
       : entity.EntityInfo.spUpdate?.length > 0
         ? entity.EntityInfo.spUpdate
-        : 'spUpdate' + entity.EntityInfo.ClassName;
+        : 'spUpdate' + entity.EntityInfo.BaseTableCodeName;
     return spName;
   }
 
@@ -2979,7 +2977,7 @@ export class SQLServerDataProvider
    */
   private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
-    const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.ClassName}`;
+    const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
       const f = entity.EntityInfo.Fields.find((f) => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase());
       const quotes = f.NeedsQuotes ? "'" : '';
@@ -3132,10 +3130,18 @@ export class SQLServerDataProvider
           }, user);
         }
 
-        if (d && d[0]) {
+        if (d && d.length > 0) {
           // SP executed, now make sure the return value matches up as that is how we know the SP was succesfully internally
+          // Note: When CASCADE operations exist, multiple result sets are returned (d is array of arrays).
+          // When no CASCADE operations exist, a single result set is returned (d is array of objects).
+          // We need to handle both cases by checking if the first element is an array.
+          const isMultipleResultSets = Array.isArray(d[0]);
+          const deletedRecord = isMultipleResultSets
+            ? d[d.length - 1][0]  // Multiple result sets: get last result set, first row
+            : d[0];               // Single result set: get first row directly
+
           for (const key of entity.PrimaryKeys) {
-            if (key.Value !== d[0][key.Name]) {
+            if (key.Value !== deletedRecord[key.Name]) {
               // we can get here if the sp returns NULL for a given key. The reason that would be the case is if the record
               // was not found in the DB. This was the existing logic prior to the SP modifications in 2.68.0, just documenting
               // it here for clarity.

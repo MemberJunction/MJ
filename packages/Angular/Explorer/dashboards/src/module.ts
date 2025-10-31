@@ -42,6 +42,7 @@ import { PromptVersionControlComponent } from './AI/components/prompts/prompt-ve
 import { ActionGalleryModule } from '@memberjunction/ng-action-gallery';
 import { AITestHarnessModule } from '@memberjunction/ng-ai-test-harness';
 import { MemberJunctionCoreEntityFormsModule } from '@memberjunction/ng-core-entity-forms';
+import { MJNotificationsModule } from '@memberjunction/ng-notifications';
 // AI Instrumentation Components
 import { KPICardComponent } from './AI/components/widgets/kpi-card.component';
 import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execution-widget.component';
@@ -52,9 +53,18 @@ import { AIInstrumentationService } from './AI/services/ai-instrumentation.servi
 import { ComponentStudioDashboardComponent } from './ComponentStudio/component-studio-dashboard.component';
 import { TextImportDialogComponent } from './ComponentStudio/components/text-import-dialog.component';
 import { ArtifactSelectionDialogComponent } from './ComponentStudio/components/artifact-selection-dialog.component';
+import { ArtifactLoadDialogComponent } from './ComponentStudio/components/artifact-load-dialog.component';
 import { GridModule } from '@progress/kendo-angular-grid';
 import { MJReactModule } from '@memberjunction/ng-react';
 import { SplitterModule } from '@progress/kendo-angular-layout';
+// Scheduling Dashboard Components
+import { SchedulingDashboardComponent } from './Scheduling/scheduling-dashboard.component';
+import { SchedulingMonitoringComponent } from './Scheduling/components/scheduling-monitoring.component';
+import { SchedulingJobsComponent } from './Scheduling/components/scheduling-jobs.component';
+import { SchedulingHistoryComponent } from './Scheduling/components/scheduling-history.component';
+import { SchedulingTypesComponent } from './Scheduling/components/scheduling-types.component';
+import { SchedulingHealthComponent } from './Scheduling/components/scheduling-health.component';
+import { SchedulingInstrumentationService } from './Scheduling/services/scheduling-instrumentation.service';
 @NgModule({
   declarations: [
     EntityAdminDashboardComponent,
@@ -92,7 +102,15 @@ import { SplitterModule } from '@progress/kendo-angular-layout';
     // Component Studio Components
     ComponentStudioDashboardComponent,
     TextImportDialogComponent,
-    ArtifactSelectionDialogComponent
+    ArtifactSelectionDialogComponent,
+    ArtifactLoadDialogComponent,
+    // Scheduling Dashboard Components
+    SchedulingDashboardComponent,
+    SchedulingMonitoringComponent,
+    SchedulingJobsComponent,
+    SchedulingHistoryComponent,
+    SchedulingTypesComponent,
+    SchedulingHealthComponent
   ],
   imports: [
     CommonModule,
@@ -116,16 +134,19 @@ import { SplitterModule } from '@progress/kendo-angular-layout';
     MJReactModule,
     SplitterModule,
     TabStripModule,
-    PanelBarModule
+    PanelBarModule,
+    MJNotificationsModule
   ],
   providers: [
-    AIInstrumentationService
+    AIInstrumentationService,
+    SchedulingInstrumentationService
   ],
   exports: [
     EntityAdminDashboardComponent,
     AIDashboardComponent,
     ActionsManagementDashboardComponent,
-    ComponentStudioDashboardComponent
+    ComponentStudioDashboardComponent,
+    SchedulingDashboardComponent
   ]
 })
 export class DashboardsModule { }

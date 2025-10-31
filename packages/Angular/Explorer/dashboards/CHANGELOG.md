@@ -1,5 +1,228 @@
 # @memberjunction/ng-dashboards
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [2ac2120]
+  - @memberjunction/ng-core-entity-forms@2.112.0
+  - @memberjunction/ng-container-directives@2.112.0
+  - @memberjunction/ng-notifications@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/templates-base-types@2.112.0
+  - @memberjunction/ng-shared@2.112.0
+  - @memberjunction/ng-ai-test-harness@2.112.0
+  - @memberjunction/ng-action-gallery@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@2.110.1
+- @memberjunction/ng-shared@2.110.1
+- @memberjunction/ng-action-gallery@2.110.1
+- @memberjunction/ng-ai-test-harness@2.110.1
+- @memberjunction/ng-container-directives@2.110.1
+- @memberjunction/ng-notifications@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/templates-base-types@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/ng-core-entity-forms@2.110.0
+  - @memberjunction/ng-shared@2.110.0
+  - @memberjunction/ng-action-gallery@2.110.0
+  - @memberjunction/ng-ai-test-harness@2.110.0
+  - @memberjunction/ng-notifications@2.110.0
+  - @memberjunction/templates-base-types@2.110.0
+  - @memberjunction/ng-container-directives@2.110.0
+  - @memberjunction/core@2.110.0
+
+## 2.109.0
+
+### Minor Changes
+
+- 6e45c17: migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ng-core-entity-forms@2.109.0
+  - @memberjunction/ng-shared@2.109.0
+  - @memberjunction/ng-action-gallery@2.109.0
+  - @memberjunction/ng-ai-test-harness@2.109.0
+  - @memberjunction/ng-notifications@2.109.0
+  - @memberjunction/templates-base-types@2.109.0
+  - @memberjunction/ng-container-directives@2.109.0
+  - @memberjunction/core@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [56dc09f]
+- Updated dependencies [656d86c]
+  - @memberjunction/ng-core-entity-forms@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/ng-shared@2.108.0
+  - @memberjunction/ng-action-gallery@2.108.0
+  - @memberjunction/ng-ai-test-harness@2.108.0
+  - @memberjunction/ng-notifications@2.108.0
+  - @memberjunction/templates-base-types@2.108.0
+  - @memberjunction/ng-container-directives@2.108.0
+  - @memberjunction/core@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@2.107.0
+- @memberjunction/ng-shared@2.107.0
+- @memberjunction/ng-action-gallery@2.107.0
+- @memberjunction/ng-ai-test-harness@2.107.0
+- @memberjunction/ng-container-directives@2.107.0
+- @memberjunction/ng-notifications@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/templates-base-types@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@2.106.0
+- @memberjunction/ng-shared@2.106.0
+- @memberjunction/ng-action-gallery@2.106.0
+- @memberjunction/ng-ai-test-harness@2.106.0
+- @memberjunction/ng-container-directives@2.106.0
+- @memberjunction/ng-notifications@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/templates-base-types@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [d66070e]
+- Updated dependencies [9b67e0c]
+- Updated dependencies [1c3a1b6]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ng-core-entity-forms@2.105.0
+  - @memberjunction/templates-base-types@2.105.0
+  - @memberjunction/ng-shared@2.105.0
+  - @memberjunction/ng-action-gallery@2.105.0
+  - @memberjunction/ng-ai-test-harness@2.105.0
+  - @memberjunction/ng-notifications@2.105.0
+  - @memberjunction/ng-container-directives@2.105.0
+  - @memberjunction/core@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- Updated dependencies [9ad6353]
+- Updated dependencies [8f2a4fa]
+- Updated dependencies [7980171]
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/ng-ai-test-harness@2.104.0
+  - @memberjunction/ng-core-entity-forms@2.104.0
+  - @memberjunction/ng-container-directives@2.104.0
+  - @memberjunction/ng-notifications@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/templates-base-types@2.104.0
+  - @memberjunction/ng-shared@2.104.0
+  - @memberjunction/ng-action-gallery@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- 1c82fc0: By default, filter out deprecated components in Component Studio Dashboard.
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+- Updated dependencies [239ae00]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/ng-container-directives@2.103.0
+  - @memberjunction/ng-core-entity-forms@2.103.0
+  - @memberjunction/ng-ai-test-harness@2.103.0
+  - @memberjunction/ng-action-gallery@2.103.0
+  - @memberjunction/ng-notifications@2.103.0
+  - @memberjunction/ng-shared@2.103.0
+  - @memberjunction/templates-base-types@2.103.0
+  - @memberjunction/core-entities@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/ng-core-entity-forms@2.100.3
+- @memberjunction/ng-shared@2.100.3
+- @memberjunction/ng-action-gallery@2.100.3
+- @memberjunction/ng-ai-test-harness@2.100.3
+- @memberjunction/ng-notifications@2.100.3
+- @memberjunction/templates-base-types@2.100.3
+- @memberjunction/ng-container-directives@2.100.3
+- @memberjunction/core@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@2.100.2
+- @memberjunction/ng-shared@2.100.2
+- @memberjunction/ng-action-gallery@2.100.2
+- @memberjunction/ng-ai-test-harness@2.100.2
+- @memberjunction/ng-container-directives@2.100.2
+- @memberjunction/ng-notifications@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/templates-base-types@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@2.100.1
+- @memberjunction/ng-shared@2.100.1
+- @memberjunction/ng-action-gallery@2.100.1
+- @memberjunction/ng-ai-test-harness@2.100.1
+- @memberjunction/ng-container-directives@2.100.1
+- @memberjunction/ng-notifications@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/templates-base-types@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/ng-core-entity-forms@2.100.0
+  - @memberjunction/ng-shared@2.100.0
+  - @memberjunction/ng-action-gallery@2.100.0
+  - @memberjunction/ng-ai-test-harness@2.100.0
+  - @memberjunction/ng-container-directives@2.100.0
+  - @memberjunction/ng-notifications@2.100.0
+  - @memberjunction/templates-base-types@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

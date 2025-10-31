@@ -7,6 +7,7 @@
 import { ComponentStyles, ComponentCallbacks } from '@memberjunction/interactive-component-types';
 import { ComponentProps } from '../types';
 import { Subject, debounceTime, Subscription } from 'rxjs';
+import { LogStatus, GetProductionStatus } from '@memberjunction/core';
 
 /**
  * Options for building component props
@@ -41,7 +42,8 @@ export function buildComponentProps(
   utilities: any = {},
   callbacks: ComponentCallbacks = {
     OpenEntityRecord: () => {},
-    RegisterMethod: () => {}
+    RegisterMethod: () => {},
+    CreateSimpleNotification: () => {}
   },
   components: Record<string, any> = {},
   styles?: ComponentStyles,
@@ -122,7 +124,8 @@ export function normalizeCallbacks(callbacks: any, debounceMs: number = 3000): C
   // Provide default implementations for required callbacks
   const normalized: ComponentCallbacks = {
     OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
-    RegisterMethod: callbacks?.RegisterMethod || (() => {})
+    RegisterMethod: callbacks?.RegisterMethod || (() => {}),
+    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {})
   };
 
   // Copy any additional callbacks that might exist
@@ -273,14 +276,17 @@ export function wrapCallbacksWithLogging(
 ): ComponentCallbacks {
   const wrapped: ComponentCallbacks = {
     OpenEntityRecord: callbacks?.OpenEntityRecord || (() => {}),
-    RegisterMethod: callbacks?.RegisterMethod || (() => {})
+    RegisterMethod: callbacks?.RegisterMethod || (() => {}),
+    CreateSimpleNotification: callbacks?.CreateSimpleNotification || (() => {})
   };
 
   // Wrap any additional callbacks that might exist
   Object.keys(callbacks).forEach(key => {
-    if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && typeof (callbacks as any)[key] === 'function') {
+    if (key !== 'OpenEntityRecord' && key !== 'RegisterMethod' && key !== 'CreateSimpleNotification' && typeof (callbacks as any)[key] === 'function') {
       (wrapped as any)[key] = (...args: any[]) => {
-        console.log(`[${componentName}] ${key} called with args:`, args);
+        if (!GetProductionStatus()) {
+          LogStatus(`[${componentName}] ${key} called with args:`, undefined, args);
+        }
         return (callbacks as any)[key](...args);
       };
     }
@@ -288,15 +294,28 @@ export function wrapCallbacksWithLogging(
 
   if (callbacks.OpenEntityRecord) {
     wrapped.OpenEntityRecord = (entityName: string, key: any) => {
-      console.log(`[${componentName}] OpenEntityRecord called:`, { entityName, key });
+      if (!GetProductionStatus()) {
+        LogStatus(`[${componentName}] OpenEntityRecord called:`, undefined, { entityName, key });
+      }
       callbacks.OpenEntityRecord!(entityName, key);
     };
   }
 
   if (callbacks.RegisterMethod) {
     wrapped.RegisterMethod = (methodName: any, handler: any) => {
-      console.log(`[${componentName}] RegisterMethod called for:`, methodName);
+      if (!GetProductionStatus()) {
+        LogStatus(`[${componentName}] RegisterMethod called for:`, undefined, methodName);
+      }
       callbacks.RegisterMethod!(methodName, handler);
+    };
+  }
+
+  if (callbacks.CreateSimpleNotification) {
+    wrapped.CreateSimpleNotification = (message: string, style: "none" | "success" | "error" | "warning" | "info", hideAfter?: number) => {
+      if (!GetProductionStatus()) {
+        LogStatus(`[${componentName}] CreateSimpleNotification called:`, undefined, { message, style, hideAfter });
+      }
+      callbacks.CreateSimpleNotification!(message, style, hideAfter);
     };
   }
 

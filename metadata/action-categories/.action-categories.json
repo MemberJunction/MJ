@@ -114,5 +114,20 @@
       "lastModified": "2025-08-17T17:37:35.972Z",
       "checksum": "3eec517e9335297d66a7a4cfe75cf322b22edbe4a212ac7f7b3304eb85767fec"
     }
+  },
+  {
+    "fields": {
+      "Name": "File Storage",
+      "Description": "File storage and cloud storage operations",
+      "ParentID": "@lookup:Action Categories.Name=Utilities",
+      "Status": "Active"
+    },
+    "primaryKey": {
+      "ID": "0750DCEB-123A-485D-9052-C72FC7BFA5F8"
+    },
+    "sync": {
+      "lastModified": "2025-10-02T05:49:54.519Z",
+      "checksum": "e46fe4dbbe07e9da4d4c6398f8467c622614a4fe9d06ff14976536d2f09c120b"
+    }
   }
 ]

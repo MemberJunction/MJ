@@ -25,7 +25,8 @@ jobs:
       - name: Get version
         id: version
         run: |
-          VERSION=$(jq -r .version packages/MJCore/package.json)
+          # Use MJServer package since core and global are pinned at 2.100.3
+          VERSION=$(jq -r .version packages/MJServer/package.json)
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Login to Docker Hub

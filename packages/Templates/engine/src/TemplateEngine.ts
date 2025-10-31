@@ -1,9 +1,9 @@
 import { IMetadataProvider, LogError, UserInfo, ValidationErrorInfo } from "@memberjunction/core";
-import { TemplateContentEntity, TemplateParamEntity } from "@memberjunction/core-entities";
+import { TemplateContentEntity, TemplateEntityExtended, TemplateParamEntity } from "@memberjunction/core-entities";
 import * as nunjucks from 'nunjucks';
 import { MJGlobal } from "@memberjunction/global";
 import { TemplateExtensionBase } from "./extensions/TemplateExtensionBase";
-import { TemplateEntityExtended, TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
+import { TemplateRenderResult, TemplateEngineBase } from '@memberjunction/templates-base-types'
   
 /**
  * This class extends the nunjucks loader to allow adding templates directly to the loader

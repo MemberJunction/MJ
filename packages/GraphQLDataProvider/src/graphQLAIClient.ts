@@ -1,6 +1,8 @@
-import { LogError } from "@memberjunction/core";
+import { LogError, LogStatusEx } from "@memberjunction/core";
 import { GraphQLDataProvider } from "./graphQLDataProvider";
 import { gql } from "graphql-request";
+import { ExecuteAgentParams, ExecuteAgentResult } from "@memberjunction/ai-core-plus";
+import { SafeJSONParse } from "@memberjunction/global";
 
 /**
  * Client for executing AI operations through GraphQL.
@@ -265,13 +267,16 @@ export class GraphQLAIClient {
 
     /**
      * Run an AI agent with the specified parameters.
-     * 
+     *
      * This method invokes an AI agent on the server through GraphQL and returns the result.
      * The agent can maintain conversation context across multiple interactions.
-     * 
+     *
+     * If a progress callback is provided in params.onProgress, this method will subscribe
+     * to real-time progress updates from the GraphQL server and forward them to the callback.
+     *
      * @param params The parameters for running the AI agent
      * @returns A Promise that resolves to a RunAIAgentResult object
-     * 
+     *
      * @example
      * ```typescript
      * const result = await aiClient.RunAIAgent({
@@ -280,9 +285,12 @@ export class GraphQLAIClient {
      *     { role: "user", content: "What's the weather like?" }
      *   ],
      *   sessionId: "session-123",
-     *   data: { location: "New York" }
+     *   data: { location: "New York" },
+     *   onProgress: (progress) => {
+     *     console.log(`Progress: ${progress.message} (${progress.percentage}%)`);
+     *   }
      * });
-     * 
+     *
      * if (result.success) {
      *   console.log('Response:', result.payload);
      *   console.log('Execution time:', result.executionTimeMs, 'ms');
@@ -291,8 +299,54 @@ export class GraphQLAIClient {
      * }
      * ```
      */
-    public async RunAIAgent(params: RunAIAgentParams): Promise<RunAIAgentResult> {
+    public async RunAIAgent(
+        params: ExecuteAgentParams,
+        sourceArtifactId?: string,
+        sourceArtifactVersionId?: string
+    ): Promise<ExecuteAgentResult> {
+        let subscription: any;
+
         try {
+            // Subscribe to progress updates if callback provided
+            if (params.onProgress) {
+                subscription = this._dataProvider.PushStatusUpdates(this._dataProvider.sessionId)
+                    .subscribe((message: string) => {
+                        try {
+                            LogStatusEx({message: '[GraphQLAIClient] Received statusUpdate message', verboseOnly: true, additionalArgs: [message]});
+                            const parsed = JSON.parse(message);
+                            LogStatusEx({message: '[GraphQLAIClient] Parsed message', verboseOnly: true, additionalArgs: [parsed]});
+
+                            // Filter for ExecutionProgress messages from RunAIAgentResolver
+                            if (parsed.resolver === 'RunAIAgentResolver' &&
+                                parsed.type === 'ExecutionProgress' &&
+                                parsed.status === 'ok' &&
+                                parsed.data?.progress) {
+
+                                LogStatusEx({message: '[GraphQLAIClient] Forwarding progress to callback', verboseOnly: true, additionalArgs: [parsed.data.progress]});
+                                // Forward progress to callback with agentRunId in metadata
+                                const progressWithRunId = {
+                                    ...parsed.data.progress,
+                                    metadata: {
+                                        ...(parsed.data.progress.metadata || {}),
+                                        agentRunId: parsed.data.agentRunId
+                                    }
+                                };
+                                params.onProgress!(progressWithRunId);
+                            } else {
+                                LogStatusEx({message: '[GraphQLAIClient] Message does not match filter criteria', verboseOnly: true, additionalArgs: [{
+                                    resolver: parsed.resolver,
+                                    type: parsed.type,
+                                    status: parsed.status,
+                                    hasProgress: !!parsed.data?.progress
+                                }]});
+                            }
+                        } catch (e) {
+                            // Log parsing errors for debugging
+                            console.error('[GraphQLAIClient] Failed to parse progress message:', e, 'Raw message:', message);
+                        }
+                    });
+            }
+
             // Build the mutation
             const mutation = gql`
                 mutation RunAIAgent(
@@ -300,67 +354,100 @@ export class GraphQLAIClient {
                     $messages: String!,
                     $sessionId: String!,
                     $data: String,
+                    $payload: String,
                     $templateData: String,
                     $lastRunId: String,
                     $autoPopulateLastRunPayload: Boolean,
-                    $configurationId: String
+                    $configurationId: String,
+                    $conversationDetailId: String,
+                    $createArtifacts: Boolean,
+                    $createNotification: Boolean,
+                    $sourceArtifactId: String,
+                    $sourceArtifactVersionId: String
                 ) {
                     RunAIAgent(
                         agentId: $agentId,
                         messages: $messages,
                         sessionId: $sessionId,
                         data: $data,
+                        payload: $payload,
                         templateData: $templateData,
                         lastRunId: $lastRunId,
                         autoPopulateLastRunPayload: $autoPopulateLastRunPayload,
-                        configurationId: $configurationId
+                        configurationId: $configurationId,
+                        conversationDetailId: $conversationDetailId,
+                        createArtifacts: $createArtifacts,
+                        createNotification: $createNotification,
+                        sourceArtifactId: $sourceArtifactId,
+                        sourceArtifactVersionId: $sourceArtifactVersionId
                     ) {
                         success
                         errorMessage
                         executionTimeMs
-                        payload
+                        result
                     }
                 }
             `;
 
             // Prepare variables
-            const variables = this.prepareAgentVariables(params);
+            const variables = this.prepareAgentVariables(params, sourceArtifactId, sourceArtifactVersionId);
 
             // Execute the mutation
             const result = await this._dataProvider.ExecuteGQL(mutation, variables);
 
             // Process and return the result
-            return this.processAgentResult(result);
+            return this.processAgentResult(result.RunAIAgent?.result);
         } catch (e) {
             return this.handleAgentError(e);
+        } finally {
+            // Always clean up subscription
+            if (subscription) {
+                subscription.unsubscribe();
+            }
         }
     }
 
     /**
      * Prepares variables for the AI agent mutation
      * @param params The agent parameters
+     * @param sourceArtifactId Optional source artifact ID for versioning
+     * @param sourceArtifactVersionId Optional source artifact version ID for versioning
      * @returns The prepared variables for GraphQL
      * @private
      */
-    private prepareAgentVariables(params: RunAIAgentParams): Record<string, any> {
+    private prepareAgentVariables(
+        params: ExecuteAgentParams,
+        sourceArtifactId?: string,
+        sourceArtifactVersionId?: string
+    ): Record<string, any> {
         const variables: Record<string, any> = {
-            agentId: params.agentId,
-            messages: JSON.stringify(params.messages),
-            sessionId: params.sessionId
+            agentId: params.agent.ID,
+            messages: JSON.stringify(params.conversationMessages),
+            sessionId: this._dataProvider.sessionId
         };
 
         // Serialize optional complex objects to JSON strings
         if (params.data !== undefined) {
             variables.data = typeof params.data === 'object' ? JSON.stringify(params.data) : params.data;
-        }
-        if (params.templateData !== undefined) {
-            variables.templateData = typeof params.templateData === 'object' ? JSON.stringify(params.templateData) : params.templateData;
+        } 
+        if (params.payload !== undefined) {
+            variables.payload = typeof params.payload === 'object' ? JSON.stringify(params.payload) : params.payload;
         }
 
         // Add optional scalar parameters
         if (params.lastRunId !== undefined) variables.lastRunId = params.lastRunId;
         if (params.autoPopulateLastRunPayload !== undefined) variables.autoPopulateLastRunPayload = params.autoPopulateLastRunPayload;
         if (params.configurationId !== undefined) variables.configurationId = params.configurationId;
+        if (params.conversationDetailId !== undefined) {
+            variables.conversationDetailId = params.conversationDetailId;
+            // When conversationDetailId is provided, enable server-side artifact and notification creation
+            // This is a GraphQL resolver-level concern, not agent execution concern
+            variables.createArtifacts = true;
+            variables.createNotification = true;
+        }
+        // Add source artifact tracking for versioning (GraphQL resolver-level concern)
+        if (sourceArtifactId !== undefined) variables.sourceArtifactId = sourceArtifactId;
+        if (sourceArtifactVersionId !== undefined) variables.sourceArtifactVersionId = sourceArtifactVersionId;
 
         return variables;
     }
@@ -371,30 +458,8 @@ export class GraphQLAIClient {
      * @returns The processed RunAIAgentResult
      * @private
      */
-    private processAgentResult(result: any): RunAIAgentResult {
-        if (!result?.RunAIAgent) {
-            throw new Error("Invalid response from server");
-        }
-
-        const agentResult = result.RunAIAgent;
-
-        // Parse the payload if it's a JSON string
-        let payload: any;
-        try {
-            if (agentResult.payload) {
-                payload = JSON.parse(agentResult.payload);
-            }
-        } catch (e) {
-            // Keep as string if parsing fails
-            payload = agentResult.payload;
-        }
-
-        return {
-            success: agentResult.success,
-            errorMessage: agentResult.errorMessage,
-            executionTimeMs: agentResult.executionTimeMs,
-            payload
-        };
+    private processAgentResult(result: string): ExecuteAgentResult {
+        return SafeJSONParse(result) as ExecuteAgentResult;        
     }
 
     /**
@@ -403,12 +468,12 @@ export class GraphQLAIClient {
      * @returns An error result
      * @private
      */
-    private handleAgentError(e: unknown): RunAIAgentResult {
+    private handleAgentError(e: unknown): ExecuteAgentResult {
         const error = e as Error;
         LogError(`Error running AI agent: ${error}`);
         return {
             success: false,
-            errorMessage: error.message || 'Unknown error occurred'
+            agentRun: undefined
         };
     }
 
@@ -876,73 +941,4 @@ export interface RunAIPromptResult {
      */
     chatResult?: any;
 }
-
-/**
- * Parameters for running an AI agent
- */
-export interface RunAIAgentParams {
-    /**
-     * The ID of the AI agent to run
-     */
-    agentId: string;
-    
-    /**
-     * Conversation messages
-     */
-    messages: Array<{ role: string; content: string }>;
-    
-    /**
-     * Session ID for maintaining conversation context
-     */
-    sessionId: string;
-    
-    /**
-     * Data context to pass to the agent (will be JSON serialized)
-     */
-    data?: Record<string, any>;
-    
-    /**
-     * Template data for agent templating (will be JSON serialized)
-     */
-    templateData?: Record<string, any>;
-    
-    /**
-     * ID of the last agent run for context continuity
-     */
-    lastRunId?: string;
-    
-    /**
-     * Auto-populate the last run payload
-     */
-    autoPopulateLastRunPayload?: boolean;
-    
-    /**
-     * Configuration ID to use
-     */
-    configurationId?: string;
-}
-
-/**
- * Result from running an AI agent
- */
-export interface RunAIAgentResult {
-    /**
-     * Whether the agent execution was successful
-     */
-    success: boolean;
-    
-    /**
-     * Error message if the execution failed
-     */
-    errorMessage?: string;
-    
-    /**
-     * Execution time in milliseconds
-     */
-    executionTimeMs?: number;
-    
-    /**
-     * The agent's response payload (parsed from JSON)
-     */
-    payload?: any;
-}
+ 

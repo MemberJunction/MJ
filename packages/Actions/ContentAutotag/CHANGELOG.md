@@ -1,5 +1,189 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [2ac2120]
+- Updated dependencies [c126b59]
+- Updated dependencies [621960a]
+  - @memberjunction/core-actions@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/actions@2.112.0
+  - @memberjunction/content-autotagging@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- Updated dependencies [47733e0]
+  - @memberjunction/core-actions@2.110.1
+  - @memberjunction/actions@2.110.1
+  - @memberjunction/content-autotagging@2.110.1
+  - @memberjunction/core@2.110.1
+  - @memberjunction/core-entities@2.110.1
+  - @memberjunction/global@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/core-actions@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/content-autotagging@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/core-actions@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/content-autotagging@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [5d51137]
+- Updated dependencies [687e2ae]
+- Updated dependencies [30ec87a]
+- Updated dependencies [4a7e34c]
+- Updated dependencies [c8983c6]
+- Updated dependencies [656d86c]
+  - @memberjunction/core-actions@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/content-autotagging@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- Updated dependencies [0dd1d04]
+- Updated dependencies [af67760]
+  - @memberjunction/core-actions@2.107.0
+  - @memberjunction/actions@2.107.0
+  - @memberjunction/content-autotagging@2.107.0
+  - @memberjunction/core@2.107.0
+  - @memberjunction/core-entities@2.107.0
+  - @memberjunction/global@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/core-actions@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/content-autotagging@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/global@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/content-autotagging@2.105.0
+  - @memberjunction/core-actions@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [9ad6353]
+- Updated dependencies [8f2a4fa]
+- Updated dependencies [3f71ef4]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/core-actions@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/content-autotagging@2.104.0
+  - @memberjunction/core@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/core-actions@2.103.0
+  - @memberjunction/content-autotagging@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/global@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/core-actions@2.100.3
+- @memberjunction/actions@2.100.3
+- @memberjunction/content-autotagging@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/core-actions@2.100.2
+- @memberjunction/actions@2.100.2
+- @memberjunction/content-autotagging@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/global@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/core-actions@2.100.1
+- @memberjunction/actions@2.100.1
+- @memberjunction/content-autotagging@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/global@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/core-actions@2.100.0
+  - @memberjunction/actions@2.100.0
+  - @memberjunction/content-autotagging@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

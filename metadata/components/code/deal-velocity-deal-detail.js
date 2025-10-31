@@ -1,11 +1,7 @@
 function DealVelocityDealDetail({ deal, onClose, utilities, styles, components, callbacks, savedUserSettings, onSaveUserSettings }) {
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount || 0);
-  };
-  
+  // Load SingleRecordView from component registry
+  const SingleRecordView = components['SingleRecordView'];
+
   return (
     <div style={{
       position: 'fixed',
@@ -21,7 +17,7 @@ function DealVelocityDealDetail({ deal, onClose, utilities, styles, components, 
     }}
     onClick={onClose}
     >
-      <div 
+      <div
         style={{
           backgroundColor: 'white',
           borderRadius: '12px',
@@ -52,62 +48,86 @@ function DealVelocityDealDetail({ deal, onClose, utilities, styles, components, 
             ×
           </button>
         </div>
-        
-        <div style={{ display: 'grid', gap: '16px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Amount</label>
-              <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#059669' }}>
-                {formatCurrency(deal.Amount)}
+
+        {/* Use SingleRecordView for consistent field display */}
+        {SingleRecordView ? (
+          <SingleRecordView
+            entityName="Deals"
+            record={deal}
+            fields={["Amount", "Stage", "CloseDate", "Probability", "DealSource", "NextStep"]}
+            layout="table"
+            showLabels={true}
+            showEmptyFields={false}
+            allowOpenRecord={false}
+            highlightFields={["Amount"]}
+            utilities={utilities}
+            styles={styles}
+            components={components}
+            callbacks={callbacks}
+            savedUserSettings={savedUserSettings}
+            onSaveUserSettings={onSaveUserSettings}
+          />
+        ) : (
+          // Fallback if SingleRecordView is not available
+          <div style={{ display: 'grid', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Amount</label>
+                <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#059669' }}>
+                  {new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD'
+                  }).format(deal.Amount || 0)}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Stage</label>
+                <div style={{ fontSize: '16px', fontWeight: '600' }}>
+                  {deal.Stage}
+                </div>
               </div>
             </div>
-            
-            <div>
-              <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Stage</label>
-              <div style={{ fontSize: '16px', fontWeight: '600' }}>
-                {deal.Stage}
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Close Date</label>
+                <div style={{ fontSize: '14px', color: '#111827' }}>
+                  {deal.CloseDate ? new Date(deal.CloseDate).toLocaleDateString() : 'Not set'}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Probability</label>
+                <div style={{ fontSize: '14px', color: '#111827' }}>
+                  {deal.Probability || 0}%
+                </div>
               </div>
             </div>
+
+            {deal.DealSource && (
+              <div>
+                <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Source</label>
+                <div style={{ fontSize: '14px', color: '#111827' }}>
+                  {deal.DealSource}
+                </div>
+              </div>
+            )}
+
+            {deal.NextStep && (
+              <div>
+                <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Next Step</label>
+                <div style={{ fontSize: '14px', color: '#111827' }}>
+                  {deal.NextStep}
+                </div>
+              </div>
+            )}
           </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Close Date</label>
-              <div style={{ fontSize: '14px', color: '#111827' }}>
-                {deal.CloseDate ? new Date(deal.CloseDate).toLocaleDateString() : 'Not set'}
-              </div>
-            </div>
-            
-            <div>
-              <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Probability</label>
-              <div style={{ fontSize: '14px', color: '#111827' }}>
-                {deal.Probability || 0}%
-              </div>
-            </div>
-          </div>
-          
-          {deal.DealSource && (
-            <div>
-              <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Source</label>
-              <div style={{ fontSize: '14px', color: '#111827' }}>
-                {deal.DealSource}
-              </div>
-            </div>
-          )}
-          
-          {deal.NextStep && (
-            <div>
-              <label style={{ fontSize: '12px', color: '#6B7280', display: 'block', marginBottom: '4px' }}>Next Step</label>
-              <div style={{ fontSize: '14px', color: '#111827' }}>
-                {deal.NextStep}
-              </div>
-            </div>
-          )}
-        </div>
-        
-        <div style={{ 
-          marginTop: '20px', 
-          paddingTop: '20px', 
+        )}
+
+        <div style={{
+          marginTop: '20px',
+          paddingTop: '20px',
           borderTop: '1px solid #E5E7EB',
           display: 'flex',
           justifyContent: 'flex-end'

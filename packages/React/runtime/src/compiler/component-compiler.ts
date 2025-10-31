@@ -121,7 +121,8 @@ export class ComponentCompiler {
         success: true,
         component: compiledComponent,
         duration: Date.now() - startTime,
-        size: transpiledCode.length
+        size: transpiledCode.length,
+        loadedLibraries: loadedLibraries
       };
 
     } catch (error) {
@@ -495,6 +496,18 @@ export class ComponentCompiler {
       // Check if library object is valid
       if (!lib || typeof lib !== 'object' || !lib.name) {
         console.warn(`⚠️ Invalid library entry detected (missing name):`, lib);
+        return false;
+      }
+      
+      // Filter out entries with 'unknown' name or missing globalVariable
+      if (lib.name === 'unknown' || lib.name === 'null' || lib.name === 'undefined') {
+        console.warn(`⚠️ Filtering out invalid library with name '${lib.name}':`, lib);
+        return false;
+      }
+      
+      // Check for missing or invalid globalVariable
+      if (!lib.globalVariable || lib.globalVariable === 'undefined' || lib.globalVariable === 'null') {
+        console.warn(`⚠️ Filtering out library '${lib.name}' with invalid globalVariable:`, lib.globalVariable);
         return false;
       }
       

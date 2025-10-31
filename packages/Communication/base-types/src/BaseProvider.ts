@@ -1,7 +1,6 @@
 import { BaseEntity, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity } from "@memberjunction/core-entities";
-import { TemplateEntityExtended } from "@memberjunction/templates-base-types";
+import { CommunicationProviderEntity, CommunicationProviderMessageTypeEntity, CommunicationRunEntity, TemplateEntityExtended } from "@memberjunction/core-entities";
 
 /**
  * Information about a single recipient
@@ -253,6 +252,30 @@ export type ReplyToMessageResult<T = Record<string, any>> = BaseMessageResult & 
     Result?: T;
 };
 
+export type CreateDraftParams = {
+    /**
+     * The message to save as a draft
+     */
+    Message: ProcessedMessage;
+
+    /**
+     * Optional provider-specific context data
+     */
+    ContextData?: Record<string, any>;
+};
+
+export type CreateDraftResult<T = Record<string, any>> = BaseMessageResult & {
+    /**
+     * The ID of the created draft in the provider's system
+     */
+    DraftID?: string;
+
+    /**
+     * If populated, holds provider-specific result data
+     */
+    Result?: T;
+};
+
 
 /**
  * Base class for all communication providers. Each provider sub-classes this base class and implements functionality specific to the provider.
@@ -277,6 +300,15 @@ export abstract class BaseCommunicationProvider {
      * Replies to a message using the provider
      */
     public abstract ReplyToMessage(params: ReplyToMessageParams): Promise<ReplyToMessageResult>
+
+    /**
+     * Creates a draft message using the provider.
+     * Providers that don't support drafts should return Success: false
+     * with an appropriate error message.
+     * @param params - Parameters for creating the draft
+     * @returns Promise<CreateDraftResult> - Result containing draft ID if successful
+     */
+    public abstract CreateDraft(params: CreateDraftParams): Promise<CreateDraftResult>
 
 }
 

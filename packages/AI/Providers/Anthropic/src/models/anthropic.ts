@@ -170,10 +170,23 @@ export class AnthropicLLM extends BaseLLM {
             const systemMsgs = params.messages.filter(m => m.role === "system");
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
+            // Determine max_tokens and thinking budget
+            // When thinking is enabled, max_tokens must be greater than budget_tokens
+            let maxTokens = params.maxOutputTokens || 32000;
+            let thinkingBudget: number | undefined = undefined;
+
+            if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
+                thinkingBudget = params.reasoningBudgetTokens || 31000;
+                // Ensure max_tokens is greater than budget_tokens
+                if (maxTokens <= thinkingBudget) {
+                    maxTokens = thinkingBudget + 1000; // Add buffer to ensure max_tokens > budget_tokens
+                }
+            }
+
             // Create the request parameters
             const createParams: MessageCreateParams = {
                 model: params.model,
-                max_tokens: params.maxOutputTokens || 32000, // large default for max_tokens if not provided
+                max_tokens: maxTokens,
                 stream: true, // even for non-streaming, we set stream to true as Anthropic prefers it for any decent sized response
                 messages: this.formatMessagesWithCaching(nonSystemMsgs, params.enableCaching || true)
             };
@@ -207,25 +220,21 @@ export class AnthropicLLM extends BaseLLM {
             if (params.seed != null) {
                 console.warn('Anthropic provider does not support seed parameter, ignoring');
             }
- 
+
             // Add system message(s), if present
             if (systemMsgs) {
                 createParams.system = this.formatSystemMessagesWithCaching(
-                    systemMsgs, 
+                    systemMsgs,
                     params.enableCaching || true
                 );
             }
-            
+
             // Add thinking parameter if effort level is set
-            // Note: Requires minimum 1 tokens or not budget set
-            if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
+            if (thinkingBudget !== undefined) {
                 createParams.thinking = {
                     type: "enabled" as const,
-                    budget_tokens: params.reasoningBudgetTokens || 1000000 // default to 1000000 if not set
+                    budget_tokens: thinkingBudget
                 };
-                if (params.reasoningBudgetTokens) {
-                    createParams.thinking.budget_tokens = params.reasoningBudgetTokens;
-                }
             }
             
             const stream = this.AnthropicClient.messages.stream(createParams).on('text', (chunk: any) => {
@@ -234,18 +243,25 @@ export class AnthropicLLM extends BaseLLM {
             result = await stream.finalMessage();
             const endTime = new Date();
             
-            // Extract thinking content if present
-            let content: string = result.content[0].text;
+            // Extract thinking and text content from response
+            let content: string = '';
             let thinkingContent: string | undefined = undefined;
-            
-            // Check if content contains thinking tags
-            if (content.startsWith('<thinking>') && content.includes('</thinking>')) {
-                // Extract thinking content
+
+            // Process content blocks - can contain both thinking and text blocks
+            for (const block of result.content) {
+                if (block.type === 'thinking') {
+                    thinkingContent = block.thinking;
+                } else if (block.type === 'text') {
+                    content += block.text;
+                }
+            }
+
+            // Fallback: check for old-style thinking tags in content (for backward compatibility)
+            if (!thinkingContent && content.startsWith('<thinking>') && content.includes('</thinking>')) {
                 const thinkStart = content.indexOf('<thinking>') + '<thinking>'.length;
                 const thinkEnd = content.indexOf('</thinking>');
                 thinkingContent = content.substring(thinkStart, thinkEnd).trim();
-                // Remove thinking content from main content
-                content = content.substring(0, content.indexOf('<thinking>')) + 
+                content = content.substring(0, content.indexOf('<thinking>')) +
                          content.substring(thinkEnd + '</thinking>'.length);
                 content = content.trim();
             }

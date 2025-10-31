@@ -9,6 +9,7 @@ import { UserManagementComponent } from '../user-management/user-management.comp
 import { RoleManagementComponent } from '../role-management/role-management.component';
 import { ApplicationManagementComponent } from '../application-management/application-management.component';
 import { EntityPermissionsComponent } from '../entity-permissions/entity-permissions.component';
+import { UserProfileSettingsComponent } from '../user-profile-settings/user-profile-settings.component';
 import { BaseNavigationComponent } from '@memberjunction/ng-shared'
 
 export interface SettingsTab {
@@ -36,7 +37,8 @@ export interface SettingsComponentState {
     UserManagementComponent,
     RoleManagementComponent,
     ApplicationManagementComponent,
-    EntityPermissionsComponent
+    EntityPermissionsComponent,
+    UserProfileSettingsComponent
   ],
   templateUrl: './settings.component.html',
   styleUrls: ['./settings.component.scss']

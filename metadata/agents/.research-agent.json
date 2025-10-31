@@ -1,0 +1,549 @@
+[
+  {
+    "fields": {
+      "Name": "Database Research Agent",
+      "Description": "Specialized sub-agent for conducting database research. Explores schema structure, formulates optimized SQL queries, executes research queries with security validation, and synthesizes findings from database analysis. Works as a component of the main Research Agent.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": false,
+      "InvocationMode": "Sub-Agent",
+      "IconClass": "fa-solid fa-database"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Database Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "9C9ECAB8-139C-4452-8EF3-896D2E1834CE"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.428Z",
+            "checksum": "d5a50f5823a63b71f75c6f7f3e9070dfc92bb010c6ab8428d5b5570fd60d67eb"
+          }
+        }
+      ],
+      "MJ: AI Agent Data Sources": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "ALL_ENTITIES",
+            "Description": "Complete list of all entities in the system for schema exploration and research",
+            "SourceType": "RunView",
+            "EntityName": "Entities",
+            "OrderBy": "Name ASC",
+            "FieldsToRetrieve": "[\"Name\", \"Description\", \"SchemaName\", \"BaseTable\", \"BaseView\"]",
+            "ResultType": "simple",
+            "DestinationType": "Data",
+            "DestinationPath": null,
+            "ExecutionOrder": 1,
+            "Status": "Active",
+            "CachePolicy": "PerAgent",
+            "CacheTimeoutSeconds": 3600
+          },
+          "primaryKey": {
+            "ID": "2F22C90E-05BF-4226-8F6F-209C74873D6F"
+          },
+          "sync": {
+            "lastModified": "2025-10-21T19:26:55.184Z",
+            "checksum": "7ea0d7ed9bac9b78f5ef992deb0eaf14f6602d0a6f667dcd28561de39e3573f1"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Get Entity Details",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "E7BC67D1-22F6-47AC-9A3E-8EEA172BB349"
+          },
+          "sync": {
+            "lastModified": "2025-10-16T22:41:51.042Z",
+            "checksum": "9b6206432e7862cdd3a449f23b70bad8575beac4319b1259b68fe1145257ab50"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Execute Research Query",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "ED43ED4D-2701-4978-A971-A00106E8757F"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.455Z",
+            "checksum": "616a50e782ee92895f6f2982620728edf2559ee9183981058c4d8946f5b18fc8"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
+    },
+    "sync": {
+      "lastModified": "2025-10-18T13:29:52.063Z",
+      "checksum": "5775beb8bd6ce1d1e1315f51709b7b830d363869d6ad2e3b6d6b89e94b661fdc"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File Research Agent",
+      "Description": "Specialized agent for document and file system research. Expert at file type handling, content extraction strategies, document structure understanding, and cross-document synthesis. Handles storage provider enumeration, file search, and document analysis.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "InvocationMode": "Sub-Agent",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-folder-open"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=File Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CDC20F26-DE77-42D1-A30F-A3B34EBA8106"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.465Z",
+            "checksum": "824b9cf2907c06be91b2937035cf6d889b4ed568f50a0233147d394900893b9a"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=List Storage Providers",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1755B56E-6648-4198-9B70-0DFED107F827"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.474Z",
+            "checksum": "3bbe96df0ef692283ff09753b3d6b646f731257abcdba6959f082be2fe0862af"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Search Storage Files",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5CBAF259-2028-4643-981F-6B740B7C4CB2"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.485Z",
+            "checksum": "50cf04ad8ea727f08056ca68fe58f56412df1315f8726ef227853a78cd257d9c"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: Get File Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "1A53B7ED-BCF4-4656-AF5C-277E21E12F36"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.231Z",
+            "checksum": "7ef6f0eb8f8090090edd92742a0cd683e0e5eba8752194c1928685f22a6f19ce"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: Get Object Metadata",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "BECD0806-3A02-4A0B-A747-058BF2EC7054"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.251Z",
+            "checksum": "0a07b0149fcd6fbe5545f18bff56d510f65d4fc00d4660821ad93842702d0b00"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: Get Download URL",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "99897734-2055-4DEF-A0A2-519E2CE8EA37"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.270Z",
+            "checksum": "5d8551411882946da1cf4e14048c6a23af6fd31f57e286f2febe4cf47e3965c7"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=File Storage: List Objects",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "3E42D14C-B739-4ADA-AA40-9DE95CEDCC24"
+          },
+          "sync": {
+            "lastModified": "2025-10-26T19:46:28.489Z",
+            "checksum": "d8b358da42739a5d23ca02dd91c36d37c6c6467e2a6eba9c6f78dfdd64c0abbf"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
+    },
+    "sync": {
+      "lastModified": "2025-10-18T13:29:52.085Z",
+      "checksum": "e66912ce58a77610ecba15779b417c06b53ca5c02f09ec2cce4cf3fae347da07"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Web Research Agent",
+      "Description": "Specialized agent for internet and web-based research. Expert at search query formulation, source credibility evaluation, citation extraction, and content summarization. Handles Google search, web page retrieval, and content analysis.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ModelSelectionMode": "Agent",
+      "InvocationMode": "Sub-Agent",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-globe"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Web Research Agent Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "A43CFA03-C714-4BEF-80CE-C0D120EF6EB8"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.495Z",
+            "checksum": "926d82c06919a79d182e63ed7de90edc87458169339ef544fa28823d58986e28"
+          }
+        }
+      ],
+      "AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Google Custom Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "206B25BD-3E23-48DF-96D6-651A8459BEDD"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.503Z",
+            "checksum": "fcde5d995f0d27d73dc9a26b97ab447c2e838cc334af18c70b6baea61f951032"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:Actions.Name=Summarize Content",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "6D3D1967-346E-494F-B448-D0B23F88FCD7"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.521Z",
+            "checksum": "e4a517c48df4a1d9a19b7d584214d6d9a7ac2371073b79e72070e9d4cb0e1b75"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
+    },
+    "sync": {
+      "lastModified": "2025-10-18T13:29:52.102Z",
+      "checksum": "5b6fd951f559117d1513a8c93eaafd7a48a77073276d2b641847f86aa7d86e00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Research Agent",
+      "Description": "Orchestrator agent for comprehensive research across multiple domains. Analyzes research requests, delegates tasks to specialized sub-agents (Web Research, Database Research, File Research, Report Writer), and coordinates the research workflow. Uses iterative methodology with source validation and contradiction detection. Delegates final synthesis and report generation to the Report Writer sub-agent.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "DefaultArtifactTypeID": "@lookup:MJ: Artifact Types.Name=Research Content",
+      "ExecutionOrder": 0,
+      "ModelSelectionMode": "Agent",
+      "ExposeAsAction": true,
+      "IconClass": "fa-solid fa-magnifying-glass-chart",
+      "PayloadSelfWritePaths": [
+        "metadata.*",
+        "plan.*",
+        "findings.*",
+        "comparisons.*",
+        "contradictions.*",
+        "iterations.*"
+      ],
+      "FinalPayloadValidation": "@file:validation/research-agent-validation.json",
+      "FinalPayloadValidationMode": "Retry",
+      "FinalPayloadValidationMaxRetries": 3
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:AI Prompts.Name=Research Agent - Main Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D66B33D5-9066-4563-BF1B-88F28DFD2BCA"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:37.612Z",
+            "checksum": "b8078017d3b67732526530140a85c0410f1c395cd9c36a6d4bfe82bb2a6ebd11"
+          }
+        }
+      ],
+      "AI Agents": [
+        {
+          "fields": {
+            "Name": "Research Report Writer",
+            "Description": "Expert report writer and analyst that synthesizes research findings into comprehensive, insightful reports. Analyzes patterns across data sources, draws well-reasoned conclusions, and presents findings with appropriate confidence levels and citations. Uses high-effort models for deep analytical thinking.",
+            "ParentID": "@parent:ID",
+            "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+            "Status": "Active",
+            "ModelSelectionMode": "Agent",
+            "ExposeAsAction": false,
+            "IconClass": "fa-solid fa-file-pen",
+            "PayloadDownstreamPaths": [
+              "*"
+            ],
+            "PayloadUpstreamPaths": [
+              "synthesis.*",
+              "report.*",
+              "visualizations.*"
+            ]
+          },
+          "relatedEntities": {
+            "MJ: AI Agent Prompts": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "PromptID": "@lookup:AI Prompts.Name=Research Report Writer Prompt",
+                  "ExecutionOrder": 0,
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A11D2711-6A5B-4FF9-B5B3-F2F506F1EEF2"
+                },
+                "sync": {
+                  "lastModified": "2025-10-17T01:10:53.717Z",
+                  "checksum": "d5c6f0be6e3ba0fb29f9f04846202041491cd08e8475d1b41989dc68c0ae06c8"
+                }
+              }
+            ],
+            "AI Agent Actions": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Sketch Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9D2DACDB-49F0-4783-91D9-A2EF348B87DC"
+                },
+                "sync": {
+                  "lastModified": "2025-10-21T19:26:55.405Z",
+                  "checksum": "1f69440928e58cb33af27126b17dd476328b83810309708f6593e2bbc6bdc0b7"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Chart",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "4F3EA387-6CCC-4364-BB0C-C8ACAF1C5343"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.447Z",
+                  "checksum": "b29c665b6e6389ba72c6c555cd6dd2be21273d586f50e12644a4df76e7a76648"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "F5D1AF9E-09DA-4DD1-82CB-175120DD7498"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.461Z",
+                  "checksum": "dc864a22279dadcb4f627c6057446370e03779a14540d02262450ed5301aab66"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Network",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "A6A64D5E-1061-4845-B539-9CC5355B5227"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.474Z",
+                  "checksum": "b9895c351ca1b6f190441acff08df924cf5c716ca3f5a23dec3116543e83d012"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create SVG Word Cloud",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "B6A57192-803F-46B4-9A91-ABBE99ABA551"
+                },
+                "sync": {
+                  "lastModified": "2025-10-20T02:09:52.485Z",
+                  "checksum": "b98d16398b0f08d0244872e2b3ecd5a55625b9cf702602a2a7cb744bdbce22b1"
+                }
+              },
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "ActionID": "@lookup:Actions.Name=Create Mermaid Diagram",
+                  "Status": "Active"
+                },
+                "primaryKey": {
+                  "ID": "9FD498B7-423E-4039-8AE3-10260202549C"
+                },
+                "sync": {
+                  "lastModified": "2025-10-26T19:46:28.764Z",
+                  "checksum": "71d83cfcb0c7b18241d34b70d23557c0249fe07da16dd7f01ec685317d11ec66"
+                }
+              }
+            ],
+            "MJ: AI Agent Relationships": [
+              {
+                "fields": {
+                  "AgentID": "@parent:ID",
+                  "SubAgentID": "@lookup:AI Agents.Name=Infographic Agent",
+                  "Status": "Active",
+                  "SubAgentOutputMapping": "{\"*\": \"visualizations\"}",
+                  "SubAgentContextPaths": [
+                    "*"
+                  ]
+                },
+                "primaryKey": {
+                  "ID": "75E27303-EA65-4EC6-A104-DF63359BCA61"
+                },
+                "sync": {
+                  "lastModified": "2025-10-19T17:24:37.534Z",
+                  "checksum": "6f01c3651388e68e96bed9d2805bcef0c5eb86061c8714b8a3df9c3fd2687177"
+                }
+              }
+            ]
+          },
+          "primaryKey": {
+            "ID": "B0753715-8CE2-4218-B021-6F19E5B4F6F7"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T20:35:28.352Z",
+            "checksum": "b2ea69d4c29a9eeef5384b1ced3789c1dfb624e7a74925b55a10d3c5219610b7"
+          }
+        }
+      ],
+      "MJ: AI Agent Relationships": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Web Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"webResearch\"}",
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "EC2EE264-31B8-42CE-AE9A-9177ACFC2947"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T20:46:39.202Z",
+            "checksum": "174ae5edf5013f1cbab0fa834134f58d7f3b470d7ef1842257409c62fd479a55"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=Database Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"databaseResearch\"}",
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "8DB9A71A-FD38-43A3-BE9C-759F4332ADD8"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T20:46:39.213Z",
+            "checksum": "91dc174c9236c52b7a264e180df4e2cc4855247fccdc433f691dff6cd56b321f"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SubAgentID": "@lookup:AI Agents.Name=File Research Agent",
+            "Status": "Active",
+            "SubAgentOutputMapping": "{\"*\": \"fileResearch\"}",
+            "SubAgentContextPaths": [
+              "*"
+            ]
+          },
+          "primaryKey": {
+            "ID": "D73FE865-6363-43B2-A17E-B1E76EA8A2C8"
+          },
+          "sync": {
+            "lastModified": "2025-10-17T20:46:39.223Z",
+            "checksum": "81dbee9db56f4de70b4a546401709691b6d115cc5202f9ade0c3ff9f9aeaebe0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T22:05:03.490Z",
+      "checksum": "a92fd9781968b0104365800a4116c45308ecaa08d436cde2cff7d35ea1fffdda"
+    }
+  }
+]

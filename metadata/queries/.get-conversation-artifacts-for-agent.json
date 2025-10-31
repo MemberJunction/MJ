@@ -1,0 +1,23 @@
+[
+  {
+    "fields": {
+      "Name": "GetConversationArtifactsForAgent",
+      "CategoryID": "@lookup:Query Categories.Name=Conversations",
+      "UserQuestion": "What are all the artifacts with their full configurations that were created by a specific agent in this conversation?",
+      "Description": "Returns all OUTPUT artifacts with their complete version history and configuration data for a conversation, optionally filtered by the agent that created them. Optimized for AI agent API requests that need to build artifact context.",
+      "SQL": "@file:SQL/get-conversation-artifacts-for-agent.sql",
+      "TechnicalDescription": "Single-query optimization that returns artifacts with full version history including Configuration field (needed for component spec extraction in modification workflows). Uses JSON aggregation to include all versions per artifact. Filters by Direction='Output' to only get agent-produced artifacts. Optional AgentID parameter allows filtering to specific agent (e.g., Skip). Replaces 4+ RunView calls with 1 query for significant performance improvement. Groups by artifact ID to avoid duplicates when same artifact is linked to multiple conversation details.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true
+    },
+    "primaryKey": {
+      "ID": "A1B2C3D4-E5F6-4789-ABCD-123456789ABC"
+    },
+    "sync": {
+      "lastModified": "2025-10-28T15:04:42.876Z",
+      "checksum": "f439f73c1a665dab72fcc64cba720fbb4fc475286236e32658384da00977e575"
+    }
+  }
+]

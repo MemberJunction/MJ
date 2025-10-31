@@ -79,6 +79,13 @@ export interface SyncConfig {
      * Defaults to false - will warn instead of creating
      */
     autoCreateMissingRecords?: boolean;
+    /** 
+     * When true, forces all records to be saved to database regardless of dirty state.
+     * This bypasses dirty checking and always performs database updates.
+     * Useful for ensuring complete synchronization or when dirty detection may miss changes.
+     * Defaults to false.
+     */
+    alwaysPush?: boolean;
   };
   /** SQL logging configuration (only applies to root-level config, not inherited by subdirectories) */
   sqlLogging?: {

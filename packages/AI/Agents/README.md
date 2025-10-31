@@ -35,6 +35,10 @@ Concrete implementation of BaseAgentType that:
 - Executes in a loop until task completion
 - Parses structured JSON responses from prompts
 - Supports actions, sub-agents, and conditional termination
+- ForEach and While iteration operations (v2.112+)
+  - LLM can request batch processing over collections
+  - Conditional loops with While operations
+  - 90% token reduction for iterative tasks
 
 ### FlowAgentType
 Deterministic workflow agent type that:
@@ -43,6 +47,11 @@ Deterministic workflow agent type that:
 - Supports parallel starting steps (Sequence=0)
 - Provides action output mapping to payload
 - Enables hybrid AI/deterministic workflows
+- ForEach and While loop step types (v2.112+)
+  - Iterate over collections with ForEach steps
+  - Conditional loops with While steps
+  - Self-contained loop configuration
+  - Support for Action, Sub-Agent, and Prompt loop bodies
 
 ### AgentRunner
 Simple orchestrator that:
@@ -97,6 +106,59 @@ const followUpResult = await runner.RunAgent({
     autoPopulateLastRunPayload: true // Automatically use previous run's final payload
 });
 ```
+
+## Iterative Operations (v2.112+)
+
+Both Flow and Loop agents support native ForEach and While iterations for efficient batch processing and retry logic.
+
+**📘 Complete Guide:** [Guide to Iterative Operations in Agents](./guide-to-iterative-operations-in-agents.md)
+
+### Quick Start
+
+**Flow Agent - ForEach Example:**
+```typescript
+// Create a ForEach step that sends email to each customer
+const forEachStep = await md.GetEntityObject<AIAgentStepEntity>('MJ: AI Agent Steps');
+forEachStep.StepType = 'ForEach';
+forEachStep.LoopBodyType = 'Action';
+forEachStep.ActionID = sendEmailActionId;
+forEachStep.Configuration = JSON.stringify({
+    type: 'ForEach',
+    collectionPath: 'payload.customers',
+    itemVariable: 'customer',
+    maxIterations: 500
+});
+forEachStep.ActionInputMapping = JSON.stringify({
+    to: 'customer.email',
+    subject: 'Welcome!'
+});
+```
+
+**Loop Agent - ForEach Example:**
+```json
+{
+    "taskComplete": false,
+    "message": "Processing all documents",
+    "nextStep": {
+        "type": "ForEach",
+        "forEach": {
+            "collectionPath": "payload.documents",
+            "action": {
+                "name": "Analyze Document",
+                "params": { "path": "item.path" }
+            }
+        }
+    }
+}
+```
+
+**Benefits:**
+- 90% token reduction (Loop agents)
+- Deterministic iteration (Flow agents)
+- Type-safe loop variables
+- Built-in error handling
+
+See the [complete guide](./guide-to-iterative-operations-in-agents.md) for While loops, nested iterations, and advanced patterns.
 
 ## Agent Configuration
 
@@ -267,6 +329,302 @@ The callback is invoked:
 - **Sub-Agent Tracking**: BaseAgent automatically uses this callback to link sub-agent runs to their parent step's TargetLogID
 
 ## Advanced Features
+
+### Agent Data Preloading
+
+Agents can declaratively preload reference data without requiring custom application code or action calls. Data sources are configured through the `AIAgentDataSource` entity and automatically loaded before agent execution.
+
+#### Overview
+
+Data preloading solves the common problem of agents needing access to reference data (like entity lists, configuration values, or initial state) that doesn't change during execution. Instead of:
+- Writing custom application code to load data
+- Having agents call actions to fetch data (which bloats conversation context)
+- Manually passing the same data to every agent invocation
+
+Agents can now specify data sources that are automatically loaded and injected into the appropriate destination (`data`, `context`, or `payload`).
+
+#### Three Destination Types
+
+**1. Data Destination** - For Nunjucks templates in prompts (visible to LLMs)
+```typescript
+// Configuration
+{
+  "Name": "ALL_ENTITIES",
+  "SourceType": "RunView",
+  "EntityName": "Entities",
+  "OrderBy": "Name ASC",
+  "DestinationType": "Data",
+  "DestinationPath": null  // Uses "ALL_ENTITIES" at root level
+}
+
+// Result in agent prompt:
+// params.data.ALL_ENTITIES = [{ Name: "Users", ... }, { Name: "Entities", ... }]
+
+// Prompt can use Nunjucks:
+// You have access to {{ALL_ENTITIES.length}} entities:
+// {% for entity in ALL_ENTITIES %}
+// - {{entity.Name}}: {{entity.Description}}
+// {% endfor %}
+```
+
+**2. Context Destination** - For actions only (NOT visible to LLMs)
+```typescript
+// Configuration
+{
+  "Name": "ORG_SETTINGS",
+  "SourceType": "RunView",
+  "EntityName": "Organization Settings",
+  "ExtraFilter": "OrgID='${context.organizationId}'",
+  "DestinationType": "Context",
+  "DestinationPath": "organization.settings"
+}
+
+// Result:
+// params.context.organization.settings = { apiEndpoint: "...", features: [...] }
+
+// Actions can access context, but prompts/LLMs cannot
+// This keeps API keys and sensitive configuration away from LLMs
+```
+
+**3. Payload Destination** - For agent state initialization
+```typescript
+// Configuration
+{
+  "Name": "CustomerOrders",
+  "SourceType": "RunQuery",
+  "QueryName": "Recent Orders by Customer",
+  "Parameters": JSON.stringify({ customerId: "{{context.customerId}}" }),
+  "DestinationType": "Payload",
+  "DestinationPath": "analysis.orders.recent"
+}
+
+// Result:
+// params.payload.analysis.orders.recent = [{ OrderID: "123", ... }]
+
+// Agent starts with rich initial state without caller manually loading it
+```
+
+#### Data Source Types
+
+**RunView Data Sources** - Query entities with filters
+```typescript
+{
+  "Name": "ACTIVE_MODELS",
+  "SourceType": "RunView",
+  "EntityName": "AI Models",
+  "ExtraFilter": "IsActive=1 AND Vendor='OpenAI'",
+  "OrderBy": "Priority DESC",
+  "FieldsToRetrieve": JSON.stringify(["ID", "Name", "Vendor", "MaxInputTokens"]),
+  "ResultType": "simple",  // or "entity_object"
+  "MaxRows": 100,
+  "DestinationType": "Data"
+}
+```
+
+**RunQuery Data Sources** - Execute stored queries
+```typescript
+{
+  "Name": "MONTHLY_STATS",
+  "SourceType": "RunQuery",
+  "QueryName": "Monthly Analytics",
+  "CategoryPath": "/Reports/Analytics",
+  "Parameters": JSON.stringify({
+    month: "{{context.currentMonth}}",
+    year: "{{context.currentYear}}"
+  }),
+  "DestinationType": "Payload",
+  "DestinationPath": "stats.monthly"
+}
+```
+
+#### Path Support
+
+The `DestinationPath` field supports nested paths using dot notation:
+
+```typescript
+// Simple root-level
+{
+  "Name": "ENTITIES",
+  "DestinationPath": null  // Uses "ENTITIES" at root
+}
+// Result: data.ENTITIES
+
+// Nested paths
+{
+  "Name": "ModelList",
+  "DestinationPath": "config.ai.models"
+}
+// Result: data.config.ai.models
+
+// Deep nesting
+{
+  "Name": "CustomerData",
+  "DestinationPath": "analysis.customer.profile.orders"
+}
+// Result: payload.analysis.customer.profile.orders
+```
+
+#### Caching Policies
+
+Data sources support three caching strategies:
+
+**1. None** - No caching (default)
+```typescript
+{
+  "CachePolicy": "None"
+  // Data is loaded fresh every time
+}
+```
+
+**2. PerRun** - Cache for duration of a single agent run
+```typescript
+{
+  "CachePolicy": "PerRun"
+  // Multiple data sources with same AgentID+Name share cached data within one run
+  // Cache is cleared when agent run completes
+}
+```
+
+**3. PerAgent** - Global cache with TTL
+```typescript
+{
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 3600  // 1 hour
+  // Cached across all runs for this agent until TTL expires
+  // Good for rarely-changing reference data like entity lists
+}
+```
+
+#### Execution Control
+
+**Disable data preloading** for specific executions:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    disableDataPreloading: true  // Skip automatic data preloading
+});
+```
+
+**Caller precedence**: Caller-provided data always takes precedence over preloaded data:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    data: {
+        CUSTOM_ENTITIES: myEntities  // Overrides preloaded CUSTOM_ENTITIES
+    }
+});
+```
+
+#### Configuration Examples
+
+**Database Research Agent** - Preload entity metadata
+```typescript
+// Data source 1: All entities for reference
+{
+  "AgentID": "database-research-agent-id",
+  "Name": "ALL_ENTITIES",
+  "SourceType": "RunView",
+  "EntityName": "Entities",
+  "OrderBy": "Name ASC",
+  "FieldsToRetrieve": JSON.stringify(["ID", "Name", "SchemaName", "Description", "BaseView"]),
+  "DestinationType": "Data",
+  "ExecutionOrder": 1,
+  "Status": "Active",
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 3600
+}
+
+// Data source 2: Schema information
+{
+  "AgentID": "database-research-agent-id",
+  "Name": "SCHEMA_INFO",
+  "SourceType": "RunView",
+  "EntityName": "Entity Fields",
+  "DestinationType": "Data",
+  "DestinationPath": "schema.fields",
+  "ExecutionOrder": 2,
+  "Status": "Active",
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 3600
+}
+```
+
+**Customer Service Agent** - Preload customer context
+```typescript
+// Preload customer data into payload
+{
+  "AgentID": "customer-service-agent-id",
+  "Name": "CUSTOMER_PROFILE",
+  "SourceType": "RunView",
+  "EntityName": "Customers",
+  "ExtraFilter": "ID='{{context.customerId}}'",
+  "DestinationType": "Payload",
+  "DestinationPath": "customer.profile",
+  "Status": "Active",
+  "CachePolicy": "PerRun"
+}
+
+// Preload recent orders
+{
+  "AgentID": "customer-service-agent-id",
+  "Name": "RECENT_ORDERS",
+  "SourceType": "RunQuery",
+  "QueryName": "Recent Orders by Customer",
+  "Parameters": JSON.stringify({ customerId: "{{context.customerId}}", days: 30 }),
+  "DestinationType": "Payload",
+  "DestinationPath": "customer.orders",
+  "Status": "Active",
+  "CachePolicy": "PerRun"
+}
+
+// Preload organization settings (for actions)
+{
+  "AgentID": "customer-service-agent-id",
+  "Name": "ORG_CONFIG",
+  "SourceType": "RunView",
+  "EntityName": "Organization Settings",
+  "ExtraFilter": "OrgID='{{context.organizationId}}'",
+  "DestinationType": "Context",
+  "DestinationPath": "organization.config",
+  "Status": "Active",
+  "CachePolicy": "PerAgent",
+  "CacheTimeoutSeconds": 1800
+}
+```
+
+#### Benefits
+
+- **Declarative**: Configure data preloading through metadata, not code
+- **Reusable**: Same agent works across different environments
+- **Efficient**: Caching reduces redundant database queries
+- **Clean Separation**: Keeps data in appropriate destinations (data/context/payload)
+- **Flexible**: Supports both RunView and RunQuery with full parameter control
+- **Secure**: Context destination keeps sensitive data away from LLMs
+- **Performance**: Multiple caching strategies for different use cases
+
+#### Database Schema
+
+The `AIAgentDataSource` table includes:
+- **AgentID**: The agent using this data source
+- **Name**: Variable name (used as fallback if DestinationPath is null)
+- **SourceType**: RunView or RunQuery
+- **EntityName**, **ExtraFilter**, **OrderBy**, **FieldsToRetrieve**, **ResultType**: RunView parameters
+- **QueryName**, **CategoryPath**, **Parameters**: RunQuery parameters
+- **MaxRows**: Limit results (applies to both source types)
+- **DestinationType**: Data, Context, or Payload
+- **DestinationPath**: Nested path using dot notation (optional)
+- **ExecutionOrder**: Order to execute when multiple sources exist
+- **Status**: Active or Disabled
+- **CachePolicy**: None, PerRun, or PerAgent
+- **CacheTimeoutSeconds**: TTL for PerAgent cache
+
+**Unique Constraint**: `AgentID + Name + DestinationType + DestinationPath`
+- Allows same Name across different destinations/paths
+- Example: "ENTITIES" can exist in both Data and Payload destinations
 
 ### Payload Scoping for Sub-Agents
 
@@ -498,9 +856,163 @@ const result = await agent.ExecutePrompt({
 ### Context Management
 Agents automatically manage conversation context:
 - Maintains message history across steps
+- **Intelligent message expiration** - Automatically compacts or removes old action results
 - Compresses context when approaching token limits
 - Handles placeholder replacement in prompts
 - Preserves important context during compression
+
+### Message Expiration and Compaction
+
+The framework provides sophisticated message lifecycle management to prevent context bloat from large action results:
+
+**Per-Action Configuration** (in `AIAgentAction` table):
+- `ResultExpirationTurns`: Number of turns before message expires (e.g., 2)
+- `ResultExpirationMode`: 'None' | 'Remove' | 'Compact'
+- `CompactMode`: 'First N Chars' | 'AI Summary'
+- `CompactLength`: Character limit for 'First N Chars' mode
+- `CompactPromptID`: Custom AI prompt for 'AI Summary' mode
+
+**How It Works**:
+```typescript
+// Configure a Google Search action to compact results after 2 turns
+await agentAction.Save({
+    ResultExpirationTurns: 2,
+    ResultExpirationMode: 'Compact',
+    CompactMode: 'First N Chars',
+    CompactLength: 500
+});
+
+// Turn 1: Action returns 10,000 char search results
+// Turn 2: Results still in conversation (turn 1, limit 2)
+// Turn 3: Results still in conversation (turn 2, limit 2)
+// Turn 4: Results compacted to 500 chars (turn 3 > limit 2)
+//         Original content preserved in metadata for expansion
+```
+
+**Compaction Modes**:
+1. **First N Chars**: Fast truncation with annotation
+   ```
+   First 500 chars of result...
+
+   [Compacted: showing first 500 of 10000 characters. Agent can request expansion if needed.]
+   ```
+
+2. **AI Summary**: Intelligent LLM-based summarization
+   ```
+   [AI Summary of 10000 chars. Agent can request full expansion if needed.]
+
+   Search found 47 results for "MemberJunction". Top results include...
+   ```
+
+**Message Expansion**:
+Agents can restore compacted messages when needed:
+```typescript
+// In agent's JSON response
+{
+    "taskComplete": false,
+    "nextStep": {
+        "type": "Retry",
+        "messageIndex": 5,  // Index of compacted message
+        "reason": "Need full search results to answer user's question about item #47"
+    }
+}
+```
+
+**Runtime Override**:
+Test different expiration strategies without modifying database:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    messageExpirationOverride: {
+        expirationTurns: 1,
+        expirationMode: 'Compact',
+        compactMode: 'First N Chars',
+        compactLength: 200,
+        preserveOriginalContent: true
+    }
+});
+```
+
+**Lifecycle Monitoring**:
+Track message compaction for debugging and token savings analysis:
+```typescript
+const result = await runner.RunAgent({
+    agent: myAgent,
+    conversationMessages: messages,
+    contextUser: user,
+    onMessageLifecycle: (event) => {
+        console.log(`[Turn ${event.turn}] ${event.type}: ${event.reason}`);
+        if (event.tokensSaved) {
+            console.log(`  Tokens saved: ${event.tokensSaved}`);
+        }
+    }
+});
+// Output:
+// [Turn 3] message-compacted: Compacted using First N Chars (saved 2375 tokens)
+// [Turn 5] message-removed: Removed due to expiration
+```
+
+**Prompt Lookup Hierarchy**:
+For AI Summary mode, prompts are resolved in this order:
+1. Runtime override (`messageExpirationOverride.compactPromptId`)
+2. Agent action configuration (`AIAgentAction.CompactPromptID`)
+3. Action default (`Action.DefaultCompactPromptID`)
+4. System default ("Compact Agent Message" prompt)
+
+**Benefits**:
+- **Addresses Large Action Results**: Automatically handles the most common cause of context bloat
+- **Configurable Per-Action**: Different expiration strategies for different action types
+- **Non-Destructive**: Original content preserved in metadata for on-demand expansion
+- **Token Savings**: Reduces context window usage by 70-95% for large results
+- **Agent-Aware**: Agents can detect compacted messages and request full expansion when needed
+
+### Context Length Recovery
+
+When a prompt execution fails due to context length overflow (even after model failover), BaseAgent provides **one-time automatic recovery** instead of immediately terminating. This gives the agent an opportunity to adapt its approach.
+
+**How It Works**:
+1. **Prompt fails with ContextLengthExceeded** → Detected as fatal error
+2. **First occurrence**: Recovery is attempted automatically (once per run)
+3. **Last user message is trimmed** using smart strategies:
+   - JSON arrays: Keeps first 10 items with truncation notice
+   - CSV data: Keeps header + first 10 rows
+   - Plain text: Keeps first 1000 characters
+4. **Agent receives clear guidance** explaining what happened and recommended actions
+5. **Agent gets Retry step** to choose alternative approach (e.g., more specific filters, batch requests)
+6. **If recovery fails again**: Normal fatal error handling (agent terminates)
+
+**Example Recovery Message**:
+```
+⚠️ CONTEXT OVERFLOW RECOVERY ⚠️
+
+The previous step returned a result that exceeded the context window (147,532 characters truncated).
+
+Here is a PARTIAL result from the previous action:
+---
+[First 10 items from JSON array...]
+... (487 more items truncated due to context length)
+---
+
+❗ THE ABOVE IS INCOMPLETE - the full result was too large for the context window.
+
+RECOMMENDED ACTIONS:
+1. Use a different action with more specific filters to get smaller result sets
+2. Request data in batches or pages instead of all at once
+3. Ask the user to clarify scope to narrow the query
+4. If you need the full data, acknowledge the limitation and ask the user how to proceed
+
+Please choose an alternative approach to complete your task.
+```
+
+**Benefits**:
+- **Resilient**: Agents can adapt instead of failing immediately
+- **Informative**: Clear explanation of what went wrong and how to recover
+- **Safe**: ONE-TIME recovery prevents infinite loops
+- **Smart**: Preserves data structure when possible (JSON, CSV)
+
+This feature is particularly useful when agents call actions that can return very large datasets (e.g., "Get Entity List" without filters).
 
 ### Action Integration
 ```typescript
@@ -528,12 +1040,183 @@ return {
 };
 ```
 
+## Agent Permissions System
+
+The agent framework includes a comprehensive ACL-based permissions system that controls who can view, run, edit, and delete agents.
+
+### Permission Model
+
+The permissions system uses **hierarchical permissions** with the following levels:
+
+1. **View** - See agent configuration and details
+2. **Run** - Execute the agent (implies View)
+3. **Edit** - Modify agent configuration (implies Run and View)
+4. **Delete** - Remove the agent (implies Edit, Run, and View)
+
+### Default Permission Behavior
+
+The system uses an **"open by default"** approach to minimize administrative overhead:
+
+- **No permission records exist**: Anyone can **View** and **Run** the agent
+- **Owner**: Always has full permissions (View, Run, Edit, Delete)
+- **Explicit permissions**: When permission records exist, only users/roles with matching permissions can access
+
+**Why this approach?**
+- Minimizes setup overhead for most agents
+- Allows broad access for running agents (common use case)
+- Protects modification operations (Edit/Delete) through ownership
+- Explicit permissions provide fine-grained control when needed
+
+### Ownership
+
+Every agent has an `OwnerUserID` field:
+- Owners always have full permissions regardless of ACL records
+- Defaults to the user who created the agent
+- Can be transferred by editing the agent
+
+### Permission Records
+
+Permission records are stored in the `AIAgentPermission` table with these fields:
+
+- **AgentID** - The agent being controlled
+- **UserID** - Direct user permission (mutually exclusive with RoleID)
+- **RoleID** - Role-based permission (mutually exclusive with UserID)
+- **CanView** - Boolean flag for view permission
+- **CanRun** - Boolean flag for run permission
+- **CanEdit** - Boolean flag for edit permission
+- **CanDelete** - Boolean flag for delete permission
+- **Comments** - Optional description of why permission was granted
+
+**Important**: Each record must have either `UserID` OR `RoleID` set, but not both.
+
+### Permission Resolution
+
+When checking if a user can perform an operation:
+
+1. **Check ownership** - If user is the owner, grant all permissions
+2. **Check if no permissions exist** - Grant View and Run by default
+3. **Find matching permissions** - Get all records for the user OR their roles
+4. **Apply OR logic** - If ANY permission grants access, allow the operation
+5. **Apply hierarchy** - Higher permissions automatically grant lower ones:
+   - Delete → Edit → Run → View
+   - If you have Run permission, you automatically get View
+   - If you have Edit permission, you automatically get Run and View
+
+### Using Permissions in Code
+
+The framework provides helper methods for checking permissions:
+
+```typescript
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
+
+// Check specific permission
+const canRun = await AIEngineBase.Instance.CanUserRunAgent(agentId, user);
+const canEdit = await AIEngineBase.Instance.CanUserEditAgent(agentId, user);
+
+// Get all effective permissions
+const permissions = await AIEngineBase.Instance.GetUserAgentPermissions(agentId, user);
+console.log(permissions);
+// {
+//   canView: true,
+//   canRun: true,
+//   canEdit: false,
+//   canDelete: false,
+//   isOwner: false
+// }
+
+// Get all agents user can access with specific permission
+const runnableAgents = await AIEngineBase.Instance.GetAccessibleAgents(user, 'run');
+
+// Using the helper directly
+const hasPermission = await AIAgentPermissionHelper.HasPermission(agentId, user, 'run');
+```
+
+### Runtime Permission Enforcement
+
+The BaseAgent class automatically enforces run permissions:
+
+```typescript
+// BaseAgent.Execute() checks permissions before running
+const result = await agent.Execute({
+    agent: agentEntity,
+    conversationMessages: messages,
+    contextUser: user
+});
+
+// If user lacks run permission, execution fails with:
+// Error: "User {email} does not have permission to run agent '{name}'"
+```
+
+### Managing Permissions in the UI
+
+The AI Agent form includes a "Permissions" button that opens a dialog for managing permissions:
+
+- View all existing permissions for the agent
+- Add new user or role-based permissions
+- Edit existing permissions with hierarchical checkboxes
+- Delete permissions to return to default behavior
+- See effective permissions after hierarchy is applied
+- Display owner information with visual indicator
+
+### Permission Caching
+
+Permissions are cached in the AIEngineBase metadata system for performance:
+
+```typescript
+// Clear cache after modifying permissions
+AIEngineBase.Instance.ClearAgentPermissionsCache();
+
+// Refresh cache for specific agent
+await AIEngineBase.Instance.RefreshAgentPermissionsCache(agentId, user);
+```
+
+### Best Practices for Permissions
+
+1. **Start Open**: Let anyone run new agents by default, add restrictions only when needed
+2. **Use Roles**: Grant permissions to roles instead of individual users when possible
+3. **Document Permissions**: Use the Comments field to explain why permissions were granted
+4. **Ownership Transfer**: Transfer ownership when primary maintainers change
+5. **Hierarchical Thinking**: Set the highest permission needed; lower ones are automatic
+6. **Test Access**: Verify permissions work as expected before deploying agents
+7. **Regular Audits**: Review permission records periodically to remove unnecessary entries
+
+### Example Permission Scenarios
+
+**Scenario 1: Public Agent**
+- No permission records
+- Anyone can view and run
+- Only owner can edit/delete
+
+**Scenario 2: Department Agent**
+- Permission record: Role="Sales Team", CanRun=true
+- Sales team members can view and run
+- Owner can edit/delete
+- Others cannot access
+
+**Scenario 3: Restricted Agent**
+- Permission record: Role="Admins", CanEdit=true
+- Admins can view, run, edit (and delete via hierarchy)
+- Permission record: Role="Developers", CanRun=true
+- Developers can view and run
+- Owner has full access
+- Others cannot access
+
+**Scenario 4: Shared Ownership**
+- Permission record: User="alice@example.com", CanEdit=true
+- Alice can view, run, and edit
+- Permission record: User="bob@example.com", CanEdit=true
+- Bob can view, run, and edit
+- Owner can delete
+- Creates "co-owner" scenario for collaborative development
+
 ## Database Schema
 
 Key entities used by the agent framework:
 
 - **AIAgentType**: Agent behavior patterns and system prompts
 - **AIAgent**: Configured agent instances
+  - `OwnerUserID`: User who owns the agent (defaults to creator, grants full permissions)
   - `PayloadDownstreamPaths`: JSON array of paths sub-agents can read
   - `PayloadUpstreamPaths`: JSON array of paths sub-agents can write
   - **NEW** `PayloadScope`: Path to narrow payload for sub-agents (e.g., "/functionalRequirements")
@@ -546,6 +1229,15 @@ Key entities used by the agent framework:
   - **NEW** `MaxTokensPerRun`: Token limit per agent run
   - **NEW** `MaxIterationsPerRun`: Iteration limit per agent run
   - **NEW** `MaxTimePerRun`: Time limit in seconds per agent run
+- **AIAgentPermission**: Permission records for agent access control
+  - `AgentID`: The agent being controlled
+  - `UserID`: Direct user permission (exclusive with RoleID)
+  - `RoleID`: Role-based permission (exclusive with UserID)
+  - `CanView`: View agent configuration
+  - `CanRun`: Execute the agent
+  - `CanEdit`: Modify agent configuration
+  - `CanDelete`: Remove the agent
+  - `Comments`: Optional permission description
 - **AIPrompt**: Reusable prompt templates with placeholders
 - **AIAgentPrompt**: Links agents to prompts with execution order
 - **AIAgentRun**: Tracks complete agent executions
@@ -578,6 +1270,9 @@ Key entities used by the agent framework:
 13. **Set Guardrails**: Configure cost/token/time limits to prevent runaway execution
 14. **Monitor Retries**: Track validation retry counts to avoid infinite loops
 15. **Fail Fast**: Use StartingPayloadValidation with 'Fail' mode for deterministic behavior
+16. **Permission Strategy**: Start with open access, add restrictions only when needed
+17. **Role-Based Permissions**: Use role-based permissions for easier management at scale
+18. **Document Access**: Use Comments field in permission records to explain grant rationale
 
 ## Examples
 
@@ -650,70 +1345,309 @@ export class DecisionTreeAgent extends BaseAgentType {
 }
 ```
 
-### Flow Agent Configuration
+## Flow Agent Type - Deterministic Workflows
 
-Flow agents enable deterministic workflow execution through graph-based step definitions:
+Flow agents execute **deterministic, graph-based workflows** where the execution path is determined by boolean conditions evaluated against the payload and step results. Unlike Loop agents that rely on LLM decision-making at each step, Flow agents follow predefined paths through a directed graph.
+
+### When to Use Flow Agents
+
+Flow agents are ideal for:
+- **Predictable workflows** with well-defined decision points
+- **Approval processes** with conditional routing
+- **Data pipelines** with validation and transformation steps
+- **Hybrid workflows** combining deterministic logic with AI prompts
+- **Multi-step processes** where you need guaranteed execution order
+
+### Core Concepts
+
+#### 1. Workflow Steps (AIAgentStep)
+
+Steps are the nodes in your workflow graph. Each step represents an action to perform:
 
 ```typescript
-// Database configuration for a Flow agent workflow
-// AIAgentStep records define the workflow nodes
-const approvalWorkflowSteps = [
+// Three types of steps:
+{
+    Name: 'ValidateInput',
+    StepType: 'Action',           // Execute a MJ Action
+    ActionID: 'validation-action-id',
+    StartingStep: true,           // Marks this as an entry point
+    Sequence: 0,                  // For parallel starting steps
+    Status: 'Active',             // Active, Disabled, or Pending
+    TimeoutSeconds: 30            // Optional timeout
+}
+
+{
+    Name: 'AnalyzeData',
+    StepType: 'Prompt',           // Execute an AI prompt
+    PromptID: 'analysis-prompt-id',
+    Description: 'Analyze data quality and completeness'
+}
+
+{
+    Name: 'ProcessWithSubAgent',
+    StepType: 'Sub-Agent',        // Invoke another agent
+    SubAgentID: 'processing-agent-id'
+}
+```
+
+#### 2. Workflow Paths (AIAgentStepPath)
+
+Paths are the edges connecting your workflow nodes. They determine the flow:
+
+```typescript
+{
+    OriginStepID: 'step-a-id',
+    DestinationStepID: 'step-b-id',
+    Condition: 'payload.amount > 1000 && payload.approved === true',
+    Priority: 10                  // Higher priority paths evaluated first
+}
+
+// Path without condition (always valid)
+{
+    OriginStepID: 'step-a-id',
+    DestinationStepID: 'default-step-id',
+    Condition: null,              // No condition = always valid
+    Priority: 0                   // Lower priority = fallback
+}
+```
+
+#### 3. Action Input/Output Mapping
+
+**Action Input Mapping** (`ActionInputMapping`) - Maps payload values to action parameters:
+
+```typescript
+// In AIAgentStep.ActionInputMapping
+{
+    "customerId": "payload.customer.id",              // Map from payload
+    "orderDate": "static:2024-01-01",                 // Static value
+    "includeDetails": true,                           // Boolean literal
+    "maxResults": 100,                                // Numeric literal
+    "filters": {                                      // Nested object
+        "status": "payload.filters.orderStatus",
+        "region": "static:US-WEST"
+    },
+    "itemIds": "payload.order.items"                  // Can map arrays
+}
+
+// Supports nested resolution
+{
+    "searchParams": {
+        "query": "payload.searchTerm",
+        "filters": {
+            "category": "payload.category",
+            "tags": "payload.selectedTags"
+        },
+        "options": {
+            "maxResults": 50,
+            "includeMetadata": true
+        }
+    }
+}
+```
+
+**Action Output Mapping** (`ActionOutputMapping`) - Maps action results back to payload:
+
+```typescript
+// In AIAgentStep.ActionOutputMapping
+{
+    "userId": "payload.customer.id",                  // Map specific output param
+    "orderTotal": "payload.order.total",              // Nested path in payload
+    "metadata": "payload.action.lastResult",          // Arbitrary nesting
+    "*": "payload.rawResults.fullData"                // Wildcard = entire result
+}
+
+// Case-insensitive output parameter matching
+// If action returns { UserId: "123" }, it matches "userId" in mapping
+```
+
+#### 4. Prompt Result Merging
+
+When a Prompt step executes, its JSON response is **deep merged** into the payload:
+
+```typescript
+// Before prompt execution
+payload = {
+    decision: {
+        status: "pending",
+        reviewerId: "user-123"
+    },
+    metadata: { startTime: "..." }
+};
+
+// Prompt returns
+promptResponse = {
+    decision: {
+        approved: true,
+        confidence: 0.95
+    }
+};
+
+// After deep merge (preserves existing keys!)
+payload = {
+    decision: {
+        approved: true,        // NEW from prompt
+        confidence: 0.95,      // NEW from prompt
+        status: "pending",     // PRESERVED from before
+        reviewerId: "user-123" // PRESERVED from before
+    },
+    metadata: { startTime: "..." }  // PRESERVED
+};
+```
+
+**Why Deep Merge?**
+- **Preserves context** - Existing payload data isn't lost
+- **Incremental updates** - Prompts can add fields without destroying structure
+- **Composable decisions** - Multiple prompts can build up complex objects
+
+**Special Prompt Response Handling**:
+```typescript
+// If prompt response contains Chat step request
+{
+    "nextStep": { "type": "Chat" },
+    "message": "I need more information from the user",
+    "taskComplete": false
+}
+// OR
+{
+    "taskComplete": true,
+    "message": "Here's the final result..."
+}
+
+// Flow agent returns Chat step to bubble message to user
+// This allows prompts within flows to communicate with users
+```
+
+### Complete Flow Agent Example
+
+```typescript
+// Database configuration for a complete approval workflow
+// 1. Define the workflow steps
+const steps = [
+    {
+        Name: 'ValidateRequest',
+        StepType: 'Action',
+        ActionID: validateActionId,
+        StartingStep: true,
+        Sequence: 0,
+        ActionInputMapping: JSON.stringify({
+            "requestData": "payload.request",
+            "validationRules": "payload.rules"
+        }),
+        ActionOutputMapping: JSON.stringify({
+            "isValid": "payload.validation.isValid",
+            "errors": "payload.validation.errors"
+        })
+    },
     {
         Name: 'CheckAmount',
-        StepType: 'Action',
-        ActionID: checkAmountActionId,
-        StartingStep: true,
-        Sequence: 0
+        StepType: 'Prompt',
+        PromptID: amountCheckPromptId,
+        Description: 'AI analyzes amount and risk factors'
+        // Prompt returns: { risk: "low"|"medium"|"high", reasoning: "..." }
+        // Deep merged into payload.risk and payload.reasoning
     },
     {
         Name: 'AutoApprove',
         StepType: 'Action',
         ActionID: approveActionId,
+        ActionInputMapping: JSON.stringify({
+            "requestId": "payload.request.id",
+            "approvedBy": "static:SYSTEM_AUTO"
+        }),
         ActionOutputMapping: JSON.stringify({
-            'approvalId': 'payload.approval.id',
-            'timestamp': 'payload.approval.approvedAt'
+            "approvalId": "payload.approval.id",
+            "timestamp": "payload.approval.timestamp"
         })
     },
     {
         Name: 'ManagerReview',
-        StepType: 'Prompt',
-        PromptID: managerReviewPromptId,
-        Description: 'Get manager approval decision'
+        StepType: 'Sub-Agent',
+        SubAgentID: managerReviewAgentId
+        // Sub-agent payload inherits and can modify parent payload
     },
     {
-        Name: 'NotifyRejection',
+        Name: 'NotifyUser',
         StepType: 'Action',
-        ActionID: sendNotificationActionId
+        ActionID: notificationActionId,
+        ActionInputMapping: JSON.stringify({
+            "userId": "payload.request.userId",
+            "message": "payload.approval.notificationMessage",
+            "channel": "static:email"
+        })
     }
 ];
 
-// AIAgentStepPath records define the workflow edges
-const approvalWorkflowPaths = [
+// 2. Define the workflow paths
+const paths = [
+    // From validation
     {
-        OriginStepID: checkAmountStep.ID,
-        DestinationStepID: autoApproveStep.ID,
-        Condition: 'payload.amount <= 1000',
+        OriginStepID: validateStepId,
+        DestinationStepID: checkAmountStepId,
+        Condition: 'payload.validation.isValid === true',
         Priority: 10
     },
     {
-        OriginStepID: checkAmountStep.ID,
-        DestinationStepID: managerReviewStep.ID,
-        Condition: 'payload.amount > 1000',
+        OriginStepID: validateStepId,
+        DestinationStepID: notifyUserStepId,
+        Condition: 'payload.validation.isValid === false',
+        Priority: 10
+    },
+
+    // From AI risk assessment
+    {
+        OriginStepID: checkAmountStepId,
+        DestinationStepID: autoApproveStepId,
+        Condition: 'payload.risk === "low" && payload.request.amount <= 1000',
         Priority: 10
     },
     {
-        OriginStepID: managerReviewStep.ID,
-        DestinationStepID: autoApproveStep.ID,
-        Condition: 'stepResult.approved === true',
+        OriginStepID: checkAmountStepId,
+        DestinationStepID: managerReviewStepId,
+        Condition: 'payload.risk === "medium" || payload.risk === "high"',
+        Priority: 10
+    },
+
+    // From manager review
+    {
+        OriginStepID: managerReviewStepId,
+        DestinationStepID: autoApproveStepId,
+        Condition: 'payload.managerDecision.approved === true',
         Priority: 10
     },
     {
-        OriginStepID: managerReviewStep.ID,
-        DestinationStepID: notifyRejectionStep.ID,
-        Condition: 'stepResult.approved === false',
-        Priority: 10
+        OriginStepID: managerReviewStepId,
+        DestinationStepID: notifyUserStepId,
+        Condition: 'payload.managerDecision.approved === false',
+        Priority: 5
+    },
+
+    // Final notification after approval
+    {
+        OriginStepID: autoApproveStepId,
+        DestinationStepID: notifyUserStepId,
+        Condition: null,  // Always execute
+        Priority: 0
     }
 ];
+
+// 3. Execute the flow agent
+const result = await runner.RunAgent({
+    agent: flowAgentEntity,
+    conversationMessages: messages,
+    contextUser: user,
+    payload: {
+        request: {
+            id: "req-123",
+            userId: "user-456",
+            amount: 5000,
+            description: "Equipment purchase"
+        },
+        rules: {
+            maxAutoApprove: 1000,
+            requiresManagerReview: true
+        }
+    }
+});
 ```
 
 ### Flow Agent Features

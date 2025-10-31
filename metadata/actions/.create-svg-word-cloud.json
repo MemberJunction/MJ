@@ -1,0 +1,310 @@
+[
+  {
+    "fields": {
+      "Name": "Create SVG Word Cloud",
+      "Description": "Generates SVG word clouds and tag bars from weighted word lists. Uses d3-cloud for cloud layouts. Designed for AI agents and workflows to create publication-quality text visualizations from data.",
+      "DriverClass": "__CreateSVGWordCloud",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-cloud",
+      "CategoryID": "@lookup:Action Categories.Name=Data"
+    },
+    "relatedEntities": {
+      "Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CloudType",
+            "DefaultValue": "cloud",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Type of visualization: 'cloud' (word cloud) or 'tagbar' (horizontal tag bars). Default: 'cloud'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "820F9CE5-6A53-446C-8D53-C94C93E53AF0"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.356Z",
+            "checksum": "72c0e911f948ab175f740c2d34caea55ddc2eb6ed7701578bfdc19b770000a3d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Words",
+            "Type": "Input",
+            "ValueType": "Other",
+            "IsArray": true,
+            "Description": "JSON array of word objects: [{text: 'word', weight: number}, ...]. Required.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "16E94BC7-C993-4B15-9F58-42F57DD93627"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.366Z",
+            "checksum": "716c01d6f9c4180b3f9074b7ab6b891aabfff242c4b6a7adc136cd4e624f1e35"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxWords",
+            "DefaultValue": "50",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of words to display. Default: 50.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4EF2C606-A2E0-4B14-9079-A955D0742C86"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.377Z",
+            "checksum": "6de2d4257c92e7d2262c263186ebe30a41516d91345f3fea2341470ff97f39d9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Rotation",
+            "DefaultValue": "few",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Rotation strategy for word clouds: 'none' (horizontal only), 'few' (0° or -90°), 'mixed' (multiple angles). Default: 'few'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5074AE2E-DEE8-4A64-959D-132CDE434CA6"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.386Z",
+            "checksum": "074a520b8b746afb91772924ffe508fb4ffceb590815c31969a385affaebb3cf"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MinFont",
+            "DefaultValue": "10",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Minimum font size in pixels. Default: 10.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C972D36C-F83A-4010-9448-DDFBCADB10BE"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.395Z",
+            "checksum": "b7adca0e0945345dc9b96fdcd1a863ae56c5a8155cc11845f3c43740c21f911a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "MaxFont",
+            "DefaultValue": "80",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum font size in pixels. Default: 80.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "67BD0A0F-7884-4C66-BC40-750EF99F0512"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.405Z",
+            "checksum": "0a3df0f63bc6886886834161863141a44f39949cdf95e8934e012c13a2a066ff"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Seed",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Random seed for deterministic layouts (optional). Use same seed for reproducible clouds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "860E2628-8BB8-49FF-890A-FD386B5BC6BD"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.416Z",
+            "checksum": "b6bd696af4a5870c442cd5859aaacf09d22a6c9b5058ea95abafd7ca60309e01"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Width",
+            "DefaultValue": "800",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Visualization width in pixels. Default: 800.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D324EC56-35BD-4780-A1E2-0577C5426B89"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.427Z",
+            "checksum": "bd731fc2c1c947992dc4f7ca46248ac12f56f697d021200e4cc1ab102f888360"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Height",
+            "DefaultValue": "600",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Visualization height in pixels. Default: 600.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FE226FA3-BAEF-45D4-A0C8-345AC666CA09"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.438Z",
+            "checksum": "d3b5a761854739faf78b46b9ba98640070497f9dcb73e7364294b2668d540a64"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Title",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Visualization title (optional). Displayed at the top.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "683A718C-FEB3-45E8-AFF1-BB96E674B9D2"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.447Z",
+            "checksum": "82ecff0eff70d15b6f8e7f22bd5124a602caafb7ae4d89a647cbdecf550b64a0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Palette",
+            "DefaultValue": "mjDefault",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Color palette: 'mjDefault', 'gray', 'pastel', or 'highContrast'. Default: 'mjDefault'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "2A388993-9AB3-4C05-8D45-490D40C3EDA3"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.471Z",
+            "checksum": "bf8052abe7b8b8da369abee23ea22d6c33337212ae172bacbdcd071194400ca3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SVG",
+            "Type": "Output",
+            "ValueType": "Other",
+            "IsArray": false,
+            "Description": "Generated SVG markup as a string. Can be embedded directly in HTML or saved to a file.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "61DD14FA-50E7-48E8-A747-10645F3A00F7"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.480Z",
+            "checksum": "754788aedce1a97f89fd0926253b3a2e933fcc737baeb922527ef759531f2446"
+          }
+        }
+      ],
+      "Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Word cloud generated successfully. SVG markup returned in Message field."
+          },
+          "primaryKey": {
+            "ID": "1C624C62-FDD4-41DA-A0DD-8D37E75D72DB"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.489Z",
+            "checksum": "d41bb17d9e9a34c8182a7ec38eddba33cdc6f5c6ba2813a8462e98b68ea4e2eb"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PARAMETERS",
+            "IsSuccess": false,
+            "Description": "Required parameter Words is missing."
+          },
+          "primaryKey": {
+            "ID": "CD13CC06-0B5B-4578-9B7D-86555132FAD2"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.498Z",
+            "checksum": "623af59db7ac1ecc7cca9643c8c09ef500af60c7cfcd562c256c9fa32b7e74e4"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "INVALID_CLOUD_TYPE",
+            "IsSuccess": false,
+            "Description": "CloudType must be 'cloud' or 'tagbar'."
+          },
+          "primaryKey": {
+            "ID": "8C12F0F6-FE82-4CCE-95FB-C9CE38B3FEEB"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.507Z",
+            "checksum": "f09f07fbdc5338a7e4c702d69e2a081ea140dd0d8adcd8fd69d75970efbc2c15"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "WORD_CLOUD_GENERATION_FAILED",
+            "IsSuccess": false,
+            "Description": "Failed to generate word cloud due to invalid configuration or data. Check error message for specific details."
+          },
+          "primaryKey": {
+            "ID": "42CD47F4-1D6C-477E-820E-F8DDD2246EF8"
+          },
+          "sync": {
+            "lastModified": "2025-10-19T17:24:30.515Z",
+            "checksum": "861ed00c3ef4e7ecc5582f3f3fb4f47f7c3e742c353d8fe7280e2772656195f3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F046406A-0F53-4123-B07A-5B109C7D1E98"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T17:24:30.325Z",
+      "checksum": "3b47194770910439d29ba0ae34f9ed3b114a7952e4f0f73e70fa1aec77be5113"
+    }
+  }
+]

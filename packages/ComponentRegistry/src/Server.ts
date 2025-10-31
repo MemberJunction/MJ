@@ -1,5 +1,6 @@
-import express, { Request, Response, NextFunction } from 'express';
+import express, { Request, Response, NextFunction, Router } from 'express';
 import cors from 'cors';
+import { createHash } from 'crypto';
 import { 
   Metadata, 
   RunView, 
@@ -11,7 +12,7 @@ import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjuncti
 import sql from 'mssql';
 import { configInfo, componentRegistrySettings, dbDatabase, dbHost, dbPort, dbUsername, dbReadOnlyUsername, dbReadOnlyPassword } from './config.js';
 import createMSSQLConfig from './orm.js';
-import { DataSourceInfo } from './types.js';
+import { DataSourceInfo, ComponentRegistryServerOptions, ComponentFeedbackParams, ComponentFeedbackResponse, FeedbackHandler } from './types.js';
 
 /**
  * Base class for the Component Registry API Server.
@@ -34,34 +35,71 @@ import { DataSourceInfo } from './types.js';
  * ```
  */
 export class ComponentRegistryAPIServer {
-  protected app: express.Application;
+  protected app: express.Application | null = null;
+  protected router: express.Router | null = null;
   protected registry: ComponentRegistryEntity | null = null;
   protected metadata: Metadata;
   protected pool: sql.ConnectionPool | null = null;
   protected readOnlyPool: sql.ConnectionPool | null = null;
   protected dataSources: DataSourceInfo[] = [];
-  
-  constructor() {
-    this.app = express();
+  protected options: ComponentRegistryServerOptions;
+
+  constructor(options: ComponentRegistryServerOptions = {}) {
+    // Set default options
+    this.options = {
+      mode: 'standalone',
+      basePath: '/api/v1',
+      skipDatabaseSetup: false,
+      ...options
+    };
+
+    // Create app or router based on mode
+    if (this.options.mode === 'standalone') {
+      this.app = express();
+      this.router = null;
+    } else {
+      this.app = null;
+      this.router = express.Router();
+    }
+
     this.metadata = new Metadata();
   }
   
   /**
+   * Get the Express Router for mounting on an existing app.
+   * Only available in 'router' mode.
+   *
+   * @returns The Express Router with all registry routes configured
+   * @throws Error if called in standalone mode
+   */
+  public getRouter(): express.Router {
+    if (this.options.mode !== 'router') {
+      throw new Error('getRouter() is only available in router mode');
+    }
+    if (!this.router) {
+      throw new Error('Router not initialized. Call initialize() first.');
+    }
+    return this.router;
+  }
+
+  /**
    * Initialize the server, including database connection, middleware, and routes.
    * This method should be called before starting the server.
-   * 
+   *
    * @returns Promise that resolves when initialization is complete
    * @throws Error if database connection fails or registry cannot be loaded
    */
   public async initialize(): Promise<void> {
-    // Setup database connection
-    await this.setupDatabase();
-    
+    // Setup database connection only if not skipped
+    if (!this.options.skipDatabaseSetup) {
+      await this.setupDatabase();
+    }
+
     // Load registry metadata if ID provided
     if (componentRegistrySettings?.registryId) {
       await this.loadRegistry();
     }
-    
+
     // Setup middleware and routes
     this.setupMiddleware();
     this.setupRoutes();
@@ -70,16 +108,24 @@ export class ComponentRegistryAPIServer {
   /**
    * Start the Express server on the configured port.
    * Must be called after `initialize()`.
-   * 
+   *
    * @returns Promise that resolves when the server is listening
    */
   public async start(): Promise<void> {
+    if (this.options.mode !== 'standalone') {
+      throw new Error('start() is only available in standalone mode. Use getRouter() in router mode.');
+    }
+
+    if (!this.app) {
+      throw new Error('Express app not initialized');
+    }
+
     const port = componentRegistrySettings?.port || 3200;
-    
+
     return new Promise((resolve) => {
-      this.app.listen(port, () => {
+      this.app!.listen(port, () => {
         LogStatus(`Component Registry API Server running on port ${port}`);
-        LogStatus(`API endpoint: http://localhost:${port}/api/v1`);
+        LogStatus(`API endpoint: http://localhost:${port}${this.options.basePath}`);
         resolve();
       });
     });
@@ -166,22 +212,41 @@ export class ComponentRegistryAPIServer {
   /**
    * Set up Express middleware.
    * Override this method to add custom middleware or modify the middleware stack.
-   * 
+   *
    * @protected
    * @virtual
    */
   protected setupMiddleware(): void {
-    // CORS
-    this.app.use(cors({
-      origin: componentRegistrySettings?.corsOrigins || ['*']
-    }));
-    
-    // JSON parsing
-    this.app.use(express.json());
-    
-    // Auth middleware (if enabled)
+    // Get the target for middleware (app or router)
+    const target = this.options.mode === 'standalone' ? this.app : this.router;
+
+    if (!target) {
+      throw new Error('No app or router available for middleware setup');
+    }
+
+    // In standalone mode, setup CORS and JSON parsing
+    // In router mode, assume parent app handles these
+    if (this.options.mode === 'standalone') {
+      // CORS
+      target.use(cors({
+        origin: componentRegistrySettings?.corsOrigins || ['*']
+      }));
+
+      // JSON parsing
+      target.use(express.json());
+    }
+
+    // Auth middleware applies in both modes (if enabled)
     if (componentRegistrySettings?.requireAuth) {
-      this.app.use('/api/v1/components', this.authMiddleware.bind(this));
+      // In router mode, paths are relative to where router is mounted
+      // In standalone mode, use full paths
+      if (this.options.mode === 'router') {
+        // Apply auth to all /components routes relative to router mount point
+        target.use('/components', this.authMiddleware.bind(this));
+      } else {
+        // Apply auth to full path in standalone mode
+        target.use(`${this.options.basePath}/components`, this.authMiddleware.bind(this));
+      }
     }
   }
   
@@ -242,19 +307,36 @@ export class ComponentRegistryAPIServer {
   /**
    * Set up the API routes.
    * Override this method to add custom routes or modify existing ones.
-   * 
+   *
    * @protected
    * @virtual
    */
   protected setupRoutes(): void {
-    // Registry info
-    this.app.get('/api/v1/registry', this.getRegistryInfo.bind(this));
-    this.app.get('/api/v1/health', this.getHealth.bind(this));
-    
-    // Component operations
-    this.app.get('/api/v1/components', this.listComponents.bind(this));
-    this.app.get('/api/v1/components/search', this.searchComponents.bind(this));
-    this.app.get('/api/v1/components/:namespace/:name', this.getComponent.bind(this));
+    // Get the target for routes (app or router)
+    const target = this.options.mode === 'standalone' ? this.app : this.router;
+
+    if (!target) {
+      throw new Error('No app or router available for route setup');
+    }
+
+    if (this.options.mode === 'router') {
+      // Router mode: paths are relative to where router is mounted
+      target.get('/registry', this.getRegistryInfo.bind(this));
+      target.get('/health', this.getHealth.bind(this));
+      target.get('/components', this.listComponents.bind(this));
+      target.get('/components/search', this.searchComponents.bind(this));
+      target.get('/components/:namespace/:name', this.getComponent.bind(this));
+      target.post('/feedback', this.submitFeedback.bind(this));
+    } else {
+      // Standalone mode: use full paths with basePath
+      const basePath = this.options.basePath;
+      target.get(`${basePath}/registry`, this.getRegistryInfo.bind(this));
+      target.get(`${basePath}/health`, this.getHealth.bind(this));
+      target.get(`${basePath}/components`, this.listComponents.bind(this));
+      target.get(`${basePath}/components/search`, this.searchComponents.bind(this));
+      target.get(`${basePath}/components/:namespace/:name`, this.getComponent.bind(this));
+      target.post(`${basePath}/feedback`, this.submitFeedback.bind(this));
+    }
   }
   
   /**
@@ -436,9 +518,19 @@ export class ComponentRegistryAPIServer {
   }
   
   /**
+   * Generate SHA-256 hash of component specification
+   * @param specification - The component specification JSON string
+   * @returns SHA-256 hash as hex string
+   */
+  protected generateSpecificationHash(specification: string): string {
+    return createHash('sha256').update(specification).digest('hex');
+  }
+
+  /**
    * Handler for GET /api/v1/components/:namespace/:name
    * Get a specific component by namespace and name.
    * Optionally specify a version with ?version=x.x.x query parameter.
+   * Optionally specify a hash with ?hash=abc123 to enable caching (returns 304 if unchanged).
    * 
    * @protected
    * @virtual
@@ -446,7 +538,7 @@ export class ComponentRegistryAPIServer {
   protected async getComponent(req: Request, res: Response): Promise<void> {
     try {
       const { namespace, name } = req.params;
-      const { version } = req.query;
+      const { version, hash } = req.query;
       
       // Escape single quotes in parameters
       const escapedNamespace = namespace.replace(/'/g, "''");
@@ -473,12 +565,31 @@ export class ComponentRegistryAPIServer {
       }
       
       const component = result.Results[0];
+      
+      // Generate hash of the current specification
+      const currentHash = this.generateSpecificationHash(component.Specification);
+      
+      // If client provided a hash and it matches, return 304 Not Modified
+      if (hash && typeof hash === 'string' && hash === currentHash) {
+        res.status(304).json({
+          message: 'Not modified',
+          hash: currentHash,
+          id: component.ID,
+          namespace: component.Namespace,
+          name: component.Name,
+          version: component.Version
+        });
+        return;
+      }
+      
+      // Return full specification with hash
       res.json({
         id: component.ID,
         namespace: component.Namespace,
         name: component.Name,
         version: component.Version,
-        specification: JSON.parse(component.Specification)
+        specification: JSON.parse(component.Specification),
+        hash: currentHash
       });
     } catch (error) {
       LogError(`Failed to fetch component: ${error instanceof Error ? error.message : String(error)}`);
@@ -506,6 +617,91 @@ export class ComponentRegistryAPIServer {
     }
     
     return Array.from(latestComponents.values());
+  }
+
+  /**
+   * Default feedback handler implementation.
+   * Simply logs feedback and returns success.
+   * Override by calling setFeedbackHandler() with a custom implementation.
+   *
+   * @protected
+   */
+  protected feedbackHandler: FeedbackHandler = {
+    async submitFeedback(params: ComponentFeedbackParams): Promise<ComponentFeedbackResponse> {
+      LogStatus('Component feedback received (default handler):', undefined, {
+        component: `${params.componentNamespace}/${params.componentName}`,
+        version: params.componentVersion,
+        rating: params.rating,
+        feedbackType: params.feedbackType
+      });
+
+      return {
+        success: true,
+        feedbackID: undefined
+      };
+    }
+  };
+
+  /**
+   * Set a custom feedback handler.
+   * This allows external code (e.g., Skip) to override feedback handling logic.
+   *
+   * @param handler - Custom feedback handler implementation
+   *
+   * @example
+   * ```typescript
+   * const server = new ComponentRegistryAPIServer();
+   * server.setFeedbackHandler({
+   *   async submitFeedback(params, context) {
+   *     // Custom logic here
+   *     return { success: true, feedbackID: '...' };
+   *   }
+   * });
+   * ```
+   */
+  public setFeedbackHandler(handler: FeedbackHandler): void {
+    this.feedbackHandler = handler;
+  }
+
+  /**
+   * Handler for POST /api/v1/feedback
+   * Submit feedback for a component.
+   *
+   * @protected
+   * @virtual
+   */
+  protected async submitFeedback(req: Request, res: Response): Promise<void> {
+    try {
+      const params: ComponentFeedbackParams = req.body;
+
+      // Basic validation
+      if (!params.componentName || !params.componentNamespace) {
+        res.status(400).json({
+          success: false,
+          error: 'componentName and componentNamespace are required'
+        });
+        return;
+      }
+
+      if (params.rating === undefined || params.rating < 0 || params.rating > 5) {
+        res.status(400).json({
+          success: false,
+          error: 'rating must be between 0 and 5'
+        });
+        return;
+      }
+
+      // Call the feedback handler (default or custom)
+      const result = await this.feedbackHandler.submitFeedback(params, req.body.context);
+
+      res.json(result);
+    } catch (error) {
+      LogError(`Failed to submit feedback: ${error instanceof Error ? error.message : String(error)}`);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to submit feedback'
+      });
+    }
   }
 }
 

@@ -1,4 +1,7 @@
-import { AgentPayloadChangeRequest } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, BaseAgentSuggestedResponse, ForEachOperation, WhileOperation } from "@memberjunction/ai-core-plus";
+
+// Re-export universal types for backward compatibility
+export type { ForEachOperation, WhileOperation };
 
 /**
  * Response structure for Loop Agent Type
@@ -13,6 +16,12 @@ export interface LoopAgentResponse<P = any> {
      * Plain text message (<100 words). Required for 'Chat' type, omit for others
      */
     message?: string;
+
+    /**
+     * Optional, when nextStep.type is 'Chat' or 'Success', this is a list of suggested responses
+     * to show the user for quick selection in a UI.
+     */
+    suggestedResponses?: Array<BaseAgentSuggestedResponse>;
 
     /**
      * Payload changes. Omit if no changes needed
@@ -34,10 +43,10 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'Sub-Agent' | 'Chat'
+         * Operation type: 'Actions' | 'Sub-Agent' | 'Chat' | 'ForEach' | 'While'
          */
-        type: 'Actions' | 'Sub-Agent' | 'Chat';
-        
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'ForEach' | 'While';
+
         /**
          * Actions to execute (when type='Actions')
          */
@@ -45,7 +54,7 @@ export interface LoopAgentResponse<P = any> {
             name: string;
             params: Record<string, unknown>;
         }>;
-         
+
         /**
          * Sub-agent details (when type='Sub-Agent')
          */
@@ -55,10 +64,10 @@ export interface LoopAgentResponse<P = any> {
             /**
              * Instructions for the sub-agent, NOT the payload, that is handled elsewhere
              */
-            message: string;  
+            message: string;
 
             /**
-             * Extra parameters - NOT the payload, only use these if the sub-agent 
+             * Extra parameters - NOT the payload, only use these if the sub-agent
              * specifically **defines** parameters in its metadata, otherwise these will be
              * ignored and waste tokens!
              */
@@ -67,8 +76,18 @@ export interface LoopAgentResponse<P = any> {
             /**
              * true=end parent, false=continue
              */
-            terminateAfter: boolean; 
+            terminateAfter: boolean;
         };
+
+        /**
+         * ForEach operation details (when type='ForEach')
+         */
+        forEach?: ForEachOperation;
+
+        /**
+         * While operation details (when type='While')
+         */
+        while?: WhileOperation;
     };
 }
 

@@ -2530,6 +2530,7 @@ Valid properties: EntityName, ExtraFilter, Fields, OrderBy, MaxRows, StartRow, R
                   message: `RunQuery requires a RunQueryParams object as the first parameter.
 Use: RunQuery({ 
   QueryName: 'YourQuery',             // Or use QueryID: 'uuid'
+  CategoryPath: 'Category/Subcategory', // Optional. Used when QueryName is provided to provide a better filter
   Parameters: {                       // Optional query parameters
     param1: 'value1'
   },
@@ -2551,6 +2552,7 @@ Use: RunQuery({
                   message: `RunQuery expects a RunQueryParams object, not a ${argType}.
 Use: RunQuery({ 
   QueryName: 'YourQuery',             // Or use QueryID: 'uuid'
+  CategoryPath: 'Category/Subcategory', // Optional. Used when QueryName is provided to provide a better filter
   Parameters: {                       // Optional query parameters
     startDate: '2024-01-01',
     endDate: '2024-12-31'
@@ -2567,13 +2569,17 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 // Check for required properties (must have QueryID or QueryName)
                 let hasQueryID = false;
                 let hasQueryName = false;
-                
+                let hasCategoryPath = false;
+                const foundProps: string[] = [];
+
                 for (const prop of config.properties) {
                   if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
                     const propName = prop.key.name;
-                    
+                    foundProps.push(propName);
+
                     if (propName === 'QueryID') hasQueryID = true;
                     if (propName === 'QueryName') hasQueryName = true;
+                    if (propName === 'CategoryPath') hasCategoryPath = true;
                     
                     if (!validRunQueryProps.has(propName)) {
                       let message = `Invalid property '${propName}' on RunQuery. Valid properties: ${Array.from(validRunQueryProps).join(', ')}`;
@@ -2710,20 +2716,146 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                 
                 // Check that at least one required property is present
                 if (!hasQueryID && !hasQueryName) {
+                  // Build helpful context about what properties were found
+                  const propsContext = foundProps.length > 0
+                    ? ` Found properties: ${foundProps.join(', ')}.`
+                    : '';
+
+                  // Special message if CategoryPath was provided without QueryName
+                  const message = hasCategoryPath
+                    ? `RunQuery requires QueryName (or QueryID). CategoryPath alone is insufficient - it's only used to help filter when QueryName is ambiguous.${propsContext}`
+                    : `RunQuery requires either QueryID or QueryName property to identify which query to run.${propsContext}`;
+
+                  // Suggest QueryName from spec if available
+                  const exampleQueryName = componentSpec?.dataRequirements?.queries?.[0]?.name || 'YourQueryName';
+
                   violations.push({
                     rule: 'runview-runquery-valid-properties',
                     severity: 'critical',
                     line: config.loc?.start.line || 0,
                     column: config.loc?.start.column || 0,
-                    message: `RunQuery requires either QueryID or QueryName property. Add one of these to identify the query to run.`,
-                    code: `RunQuery({ ... })`
+                    message,
+                    code: `RunQuery({ QueryName: '${exampleQueryName}', ... })`,
+                    suggestion: {
+                      text: 'Add QueryName property to identify the query',
+                      example: `await utilities.rq.RunQuery({\n  QueryName: '${exampleQueryName}',${hasCategoryPath ? '\n  CategoryPath: \'...\',  // Optional, helps disambiguate' : ''}\n  Parameters: { ... }  // Optional query parameters\n})`
+                    }
+                  });
+                }
+
+                // Special check for CategoryPath-only calls (common Skip generation issue)
+                // This provides a more targeted error for this specific anti-pattern
+                if (!hasQueryID && !hasQueryName && hasCategoryPath) {
+                  const exampleQueryName = componentSpec?.dataRequirements?.queries?.[0]?.name || 'YourQueryName';
+                  const categoryPathProp = config.properties.find(
+                    p => t.isObjectProperty(p) && t.isIdentifier(p.key) && p.key.name === 'CategoryPath'
+                  ) as t.ObjectProperty | undefined;
+
+                  violations.push({
+                    rule: 'runquery-categorypath-without-queryname',
+                    severity: 'critical',
+                    line: categoryPathProp?.loc?.start.line || config.loc?.start.line || 0,
+                    column: categoryPathProp?.loc?.start.column || config.loc?.start.column || 0,
+                    message: `CategoryPath cannot be used alone - it requires QueryName. CategoryPath is only used to disambiguate when multiple queries share the same name. You must specify which query to run using QueryName.`,
+                    code: `CategoryPath: '...'  // Missing: QueryName`,
+                    suggestion: {
+                      text: 'Add QueryName property alongside CategoryPath. The query name should come from your dataRequirements.queries[].name',
+                      example: `// Query name from your spec: "${exampleQueryName}"\nawait utilities.rq.RunQuery({\n  QueryName: '${exampleQueryName}',  // Required: identifies which query to run\n  CategoryPath: '...',  // Optional: helps disambiguate if multiple queries have same name\n  Parameters: {\n    // Your query parameters here\n  }\n})`
+                    }
                   });
                 }
               }
             }
           }
         });
-        
+
+        return violations;
+      }
+    },
+
+    {
+      name: 'runquery-missing-categorypath',
+      appliesTo: 'all',
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Build a map of query names to their category paths from the spec
+        const queryCategories = new Map<string, string>();
+        if (componentSpec?.dataRequirements?.queries) {
+          for (const query of componentSpec.dataRequirements.queries) {
+            // Only track queries with non-empty categoryPath (empty string means no categoryPath requirement)
+            if (query.name && query.categoryPath && query.categoryPath.trim().length > 0) {
+              queryCategories.set(query.name, query.categoryPath);
+            }
+          }
+        }
+
+        // If no queries with categoryPath in spec, this rule doesn't apply
+        if (queryCategories.size === 0) {
+          return violations;
+        }
+
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            const callee = path.node.callee;
+
+            // Check for utilities.rq.RunQuery
+            if (t.isMemberExpression(callee) &&
+                t.isMemberExpression(callee.object) &&
+                t.isIdentifier(callee.object.object) &&
+                callee.object.object.name === 'utilities' &&
+                t.isIdentifier(callee.object.property) &&
+                callee.object.property.name === 'rq' &&
+                t.isIdentifier(callee.property) &&
+                callee.property.name === 'RunQuery') {
+
+              // Get the first argument (RunQuery params object)
+              const runQueryParams = path.node.arguments[0];
+              if (!t.isObjectExpression(runQueryParams)) return;
+
+              // Extract QueryName and CategoryPath from the call
+              let queryName: string | null = null;
+              let hasCategoryPath = false;
+              let queryNameProp: t.ObjectProperty | undefined;
+
+              for (const prop of runQueryParams.properties) {
+                if (t.isObjectProperty(prop) && t.isIdentifier(prop.key)) {
+                  if (prop.key.name === 'QueryName' && t.isStringLiteral(prop.value)) {
+                    queryName = prop.value.value;
+                    queryNameProp = prop;
+                  } else if (prop.key.name === 'CategoryPath') {
+                    hasCategoryPath = true;
+                  }
+                }
+              }
+
+              // Check if this query requires a CategoryPath based on the spec
+              if (queryName && queryCategories.has(queryName) && !hasCategoryPath) {
+                const expectedCategoryPath = queryCategories.get(queryName)!;
+
+                violations.push({
+                  rule: 'runquery-missing-categorypath',
+                  severity: 'critical',
+                  line: queryNameProp?.loc?.start.line || path.node.loc?.start.line || 0,
+                  column: queryNameProp?.loc?.start.column || path.node.loc?.start.column || 0,
+                  message: `RunQuery with QueryName '${queryName}' is missing required CategoryPath parameter. Queries are uniquely identified by both QueryName and CategoryPath together. Without CategoryPath, RunQuery may find a different query with the same name, causing collisions and unintended behavior.`,
+                  code: `RunQuery({ QueryName: '${queryName}' })  // Missing: CategoryPath`,
+                  suggestion: {
+                    text: `Add CategoryPath property to uniquely identify the query. The CategoryPath should match what's defined in your dataRequirements.queries[].categoryPath`,
+                    example: `await utilities.rq.RunQuery({
+  QueryName: '${queryName}',
+  CategoryPath: '${expectedCategoryPath}',  // Required: ensures correct query is used
+  Parameters: {
+    // Your query parameters here
+  }
+})`
+                  }
+                });
+              }
+            }
+          }
+        });
+
         return violations;
       }
     },
@@ -4333,9 +4465,20 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
                     });
                   }
                 }
+                else {
+                  // Missing QueryName property
+                  violations.push({
+                    rule: 'runquery-runview-validation',
+                    severity: 'critical',
+                    line: path.node.loc?.start.line || 0,
+                    column: path.node.loc?.start.column || 0,
+                    message: `RunQuery call is missing the required "QueryName" property.`,
+                    code: path.toString().substring(0, 100)
+                  });
+                }
               }
             }
-            
+
             // RunView validation removed - handled by data-requirements-validation
           }
         });
@@ -6915,7 +7058,7 @@ const [state, setState] = useState(initialValue);`
         const violations: Violation[] = [];
         
         // Define the allowed methods on ComponentCallbacks interface
-        const allowedCallbackMethods = new Set(['OpenEntityRecord', 'RegisterMethod']);
+        const allowedCallbackMethods = new Set(['OpenEntityRecord', 'RegisterMethod', 'CreateSimpleNotification']);
         
         // Build list of component's event names from spec
         const componentEvents = new Set<string>();
@@ -6971,6 +7114,7 @@ function MyComponent({ ..., ${methodName} }) {
                       example: `// Allowed callbacks methods:
 callbacks?.OpenEntityRecord?.(entityName, key);
 callbacks?.RegisterMethod?.(methodName, handler);
+callbacks?.CreateSimpleNotification?.(message, style, hideAfter);
 
 // For custom events, define them in the spec and use as props:
 function MyComponent({ onCustomEvent }) {
@@ -7388,6 +7532,206 @@ const extendedCallbacks = { ...callbacks, onCustomEvent: handler };
         
         return violations;
       }
+    },
+
+    {
+      name: 'callback-parameter-validation',
+      appliesTo: 'all',
+      test: (ast: t.File, _componentName: string, _componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+        
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for callbacks?.method() calls
+            if (t.isOptionalMemberExpression(path.node.callee) || t.isMemberExpression(path.node.callee)) {
+              const callee = path.node.callee;
+              
+              // Check if it's callbacks.something or callbacks?.something
+              if ((t.isIdentifier(callee.object) && callee.object.name === 'callbacks') ||
+                  (t.isOptionalMemberExpression(callee) && t.isIdentifier(callee.object) && callee.object.name === 'callbacks')) {
+                
+                if (t.isIdentifier(callee.property)) {
+                  const methodName = callee.property.name;
+                  const args = path.node.arguments;
+                  
+                  // Validate parameters based on the method
+                  if (methodName === 'OpenEntityRecord') {
+                    // OpenEntityRecord(entityName: string, key: any)
+                    if (args.length < 2) {
+                      violations.push({
+                        rule: 'callback-parameter-validation',
+                        severity: 'high',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `OpenEntityRecord requires 2 parameters (entityName, key), but ${args.length} provided`,
+                        suggestion: {
+                          text: `OpenEntityRecord expects an entity name and a key parameter.`,
+                          example: `callbacks?.OpenEntityRecord?.(entityName, recordKey);`
+                        }
+                      });
+                    }
+                  } else if (methodName === 'RegisterMethod') {
+                    // RegisterMethod(methodName: string, handler: Function)
+                    if (args.length < 2) {
+                      violations.push({
+                        rule: 'callback-parameter-validation',
+                        severity: 'high',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `RegisterMethod requires 2 parameters (methodName, handler), but ${args.length} provided`,
+                        suggestion: {
+                          text: `RegisterMethod expects a method name and a handler function.`,
+                          example: `callbacks?.RegisterMethod?.('myMethod', myHandler);`
+                        }
+                      });
+                    }
+                  } else if (methodName === 'CreateSimpleNotification') {
+                    // CreateSimpleNotification(message: string, style?: NotificationStyle, hideAfter?: number)
+                    if (args.length < 1) {
+                      violations.push({
+                        rule: 'callback-parameter-validation',
+                        severity: 'high',
+                        line: path.node.loc?.start.line || 0,
+                        column: path.node.loc?.start.column || 0,
+                        message: `CreateSimpleNotification requires at least 1 parameter (message), but ${args.length} provided`,
+                        suggestion: {
+                          text: `CreateSimpleNotification expects a message and optional style and hideAfter parameters.`,
+                          example: `callbacks?.CreateSimpleNotification?.('Success!', 'success', 3000);`
+                        }
+                      });
+                    } else if (args.length >= 2) {
+                      // Validate style parameter (second argument)
+                      const styleArg = args[1];
+                      if (t.isStringLiteral(styleArg)) {
+                        const validStyles = ['none', 'success', 'error', 'warning', 'info'];
+                        if (!validStyles.includes(styleArg.value)) {
+                          violations.push({
+                            rule: 'callback-parameter-validation',
+                            severity: 'medium',
+                            line: styleArg.loc?.start.line || 0,
+                            column: styleArg.loc?.start.column || 0,
+                            message: `Invalid notification style "${styleArg.value}". Must be one of: ${validStyles.join(', ')}`,
+                            suggestion: {
+                              text: `Use one of the valid notification styles.`,
+                              example: `callbacks?.CreateSimpleNotification?.('Message', 'success', 3000);`
+                            }
+                          });
+                        }
+                      }
+                    }
+                    
+                    // Validate hideAfter parameter (third argument) if provided
+                    if (args.length >= 3) {
+                      const hideAfterArg = args[2];
+                      if (t.isNumericLiteral(hideAfterArg) && hideAfterArg.value < 0) {
+                        violations.push({
+                          rule: 'callback-parameter-validation',
+                          severity: 'low',
+                          line: hideAfterArg.loc?.start.line || 0,
+                          column: hideAfterArg.loc?.start.column || 0,
+                          message: `hideAfter parameter should be a positive number (milliseconds)`,
+                          suggestion: {
+                            text: `Use a positive number for auto-hide duration in milliseconds.`,
+                            example: `callbacks?.CreateSimpleNotification?.('Message', 'success', 3000); // Hide after 3 seconds`
+                          }
+                        });
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+        
+        return violations;
+      }
+    },
+
+    {
+      name: 'required-queries-not-called',
+      appliesTo: 'root',  // Only apply to root components
+      test: (ast: t.File, componentName: string, componentSpec?: ComponentSpec) => {
+        const violations: Violation[] = [];
+
+        // Check the mode - only enforce for 'queries' or 'hybrid' mode
+        const mode = componentSpec?.dataRequirements?.mode;
+        if (mode !== 'queries' && mode !== 'hybrid') {
+          // Mode is not 'queries' or 'hybrid', so this rule doesn't apply
+          return violations;
+        }
+
+        // Check if there are any queries defined in dataRequirements
+        const hasQueries = componentSpec?.dataRequirements?.queries &&
+                          componentSpec.dataRequirements.queries.length > 0;
+
+        if (!hasQueries) {
+          // No queries defined, so no violation
+          return violations;
+        }
+
+        // Track whether RunQuery is called anywhere
+        let hasRunQueryCall = false;
+        const queryNames = componentSpec!.dataRequirements!.queries!.map(q => q.name).filter(Boolean);
+
+        traverse(ast, {
+          CallExpression(path: NodePath<t.CallExpression>) {
+            // Check for utilities.rq.RunQuery pattern
+            if (t.isMemberExpression(path.node.callee) &&
+                t.isMemberExpression(path.node.callee.object) &&
+                t.isIdentifier(path.node.callee.object.object) &&
+                path.node.callee.object.object.name === 'utilities' &&
+                t.isIdentifier(path.node.callee.object.property) &&
+                path.node.callee.object.property.name === 'rq' &&
+                t.isIdentifier(path.node.callee.property) &&
+                path.node.callee.property.name === 'RunQuery') {
+              hasRunQueryCall = true;
+            }
+
+            // Also check for destructured pattern: rq.RunQuery
+            if (t.isMemberExpression(path.node.callee) &&
+                t.isIdentifier(path.node.callee.object) &&
+                path.node.callee.object.name === 'rq' &&
+                t.isIdentifier(path.node.callee.property) &&
+                path.node.callee.property.name === 'RunQuery') {
+              hasRunQueryCall = true;
+            }
+          }
+        });
+
+        // If queries are defined but RunQuery is never called, that's a critical violation
+        if (!hasRunQueryCall) {
+          violations.push({
+            rule: 'required-queries-not-called',
+            severity: 'critical',
+            line: 1,
+            column: 0,
+            message: `Component has ${queryNames.length} defined ${queryNames.length === 1 ? 'query' : 'queries'} in dataRequirements (mode: '${mode}') but never calls RunQuery. Queries defined: ${queryNames.join(', ')}`,
+            suggestion: {
+              text: `When dataRequirements.mode is '${mode}' and includes queries, you must use utilities.rq.RunQuery to execute them, not RunView.`,
+              example: `// Your dataRequirements defines these queries: ${queryNames.join(', ')}
+// Mode is set to: '${mode}'
+
+// ❌ WRONG - Using RunView for a query:
+const result = await utilities.rv.RunView({
+  EntityName: '${queryNames[0] || 'QueryName'}'
+});
+
+// ✅ CORRECT - Using RunQuery for queries:
+const result = await utilities.rq.RunQuery({
+  QueryName: '${queryNames[0] || 'QueryName'}'
+});
+
+// Key differences:
+// - RunView: For entity-based data access (uses EntityName)
+// - RunQuery: For pre-defined queries (uses QueryName)
+// - dataRequirements.mode: '${mode}' requires RunQuery for queries`
+            }
+          });
+        }
+
+        return violations;
+      }
     }
   ];
   
@@ -7499,9 +7843,9 @@ const extendedCallbacks = { ...callbacks, onCustomEvent: handler };
         // Child components: include 'all' and 'child' rules
         rules = rules.filter(rule => rule.appliesTo === 'all' || rule.appliesTo === 'child');
       }
-      
+
       const violations: Violation[] = [];
-      
+
       // Run each rule
       for (const rule of rules) {
         const ruleViolations = rule.test(ast, componentName, componentSpec, options);
@@ -8925,7 +9269,7 @@ await utilities.rq.RunQuery({
 
 // Valid RunQuery properties:
 // - QueryName (required)
-// - CategoryName, CategoryID, Parameters (optional)`
+// - CategoryPath, CategoryID, Parameters (optional)`
           };
           break;
           

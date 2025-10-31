@@ -1,5 +1,105 @@
 # @memberjunction/ai-agent-manager
 
+## 2.112.0
+
+### Minor Changes
+
+- 2ac2120: Migration
+
+### Patch Changes
+
+- 621960a: Patch
+- Updated dependencies [2ac2120]
+- Updated dependencies [c126b59]
+- Updated dependencies [ed74bb8]
+  - @memberjunction/ai-agents@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ai-agents@2.110.1
+- @memberjunction/ai-core-plus@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+
+## 2.110.0
+
+### Minor Changes
+
+- c8b9aca: Migration
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+- Updated dependencies [8f1384a]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/ai-core-plus@2.110.0
+  - @memberjunction/ai-agents@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Minor Changes
+
+- a38989b: Migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [e2a6338]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ai-agents@2.109.0
+  - @memberjunction/ai-core-plus@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Minor Changes
+
+- d205a6c: migration
+
+### Patch Changes
+
+- Updated dependencies [d205a6c]
+- Updated dependencies [656d86c]
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+## 2.106.0
+
+## 2.105.0
+
+## 2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+
+## 2.100.3
+
+## 2.100.2
+
+## 2.100.1
+
+## 2.100.0
+
 ## 2.99.0
 
 ## 2.98.0

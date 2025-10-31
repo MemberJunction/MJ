@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, EntityFieldTSType } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo } from '@memberjunction/core';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -13,6 +13,7 @@ import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { EntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
+import { TempBatchFile } from '../Misc/temp_batch_file';
 
 
 export const SPType = {
@@ -99,9 +100,16 @@ export class SQLCodeGenBase {
             succeedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
 
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
-            const baselineEntities = entities.filter(e => e.IncludeInAPI);
+            // Sort entities by name for deterministic processing order (workaround until MJCore fix in issue #1436)
+            const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
+            const baselineEntities = sortedEntities.filter(e => e.IncludeInAPI);
             const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
             const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
+
+            // Initialize temp batch files for each schema
+            // These will be populated as SQL is generated and will be used for actual execution
+            const schemas = Array.from(new Set(baselineEntities.map(e => e.SchemaName)));
+            TempBatchFile.initialize(directory, schemas);
 
             // STEP 1.5 - Check for cascade delete dependencies that require regeneration
             startSpinner('Analyzing cascade delete dependencies...');
@@ -181,12 +189,30 @@ export class SQLCodeGenBase {
             startSpinner('Creating combined SQL files...');
             const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
             succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} schemas`);
-            
-            // STEP 2(e) ---- FINALLY, we now execute all the combined files by schema;
-            startSpinner('Executing combined entity SQL files...');
+
+            // STEP 2(e) ---- FINALLY, we execute SQL in proper dependency order
+            // Use temp batch files (which maintain CodeGen log order) if available, otherwise fall back to combined files
+            startSpinner('Executing entity SQL files...');
             const step2eStartTime: Date = new Date();
-            if (! await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false)) {
-                failSpinner('Failed to execute combined entity SQL files');
+
+            let executionSuccess = false;
+            if (TempBatchFile.hasContent()) {
+                // Execute temp batch files in dependency order (matches CodeGen run log)
+                const tempFiles = TempBatchFile.getTempFilePaths();
+                logIf(configInfo?.verboseOutput ?? false, `Executing ${tempFiles.length} temp batch file(s) in dependency order`);
+                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(tempFiles, configInfo?.verboseOutput ?? false);
+
+                // Clean up temp files after execution
+                TempBatchFile.cleanup();
+            } else {
+                // Fall back to combined files (for backward compatibility or if temp files weren't created)
+                logIf(configInfo?.verboseOutput ?? false, `Executing ${allEntityFiles.length} combined file(s)`);
+                executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
+            }
+
+            if (!executionSuccess) {
+                failSpinner('Failed to execute entity SQL files');
+                TempBatchFile.cleanup(); // Cleanup on error
                 return false;
             }
             const step2eEndTime: Date = new Date();
@@ -231,6 +257,8 @@ export class SQLCodeGenBase {
         }
         catch (err) {
             logError(err as string);
+            // Clean up temp batch files on error
+            TempBatchFile.cleanup();
             return false;
         }
     }
@@ -457,14 +485,15 @@ export class SQLCodeGenBase {
             // Check if force regeneration is enabled for relevant SQL types
             const isForceRegeneration = configInfo.forceRegeneration?.enabled && (
                 (description.toLowerCase().includes('base view') && configInfo.forceRegeneration.baseViews) ||
+                (description.toLowerCase().includes('root id function') && configInfo.forceRegeneration.baseViews) || // TVFs are part of base view infrastructure
                 (description.toLowerCase().includes('spcreate') && configInfo.forceRegeneration.spCreate) ||
                 (description.toLowerCase().includes('spupdate') && configInfo.forceRegeneration.spUpdate) ||
                 (description.toLowerCase().includes('spdelete') && configInfo.forceRegeneration.spDelete) ||
                 (description.toLowerCase().includes('index') && configInfo.forceRegeneration.indexes) ||
                 (description.toLowerCase().includes('full text search') && configInfo.forceRegeneration.fullTextSearch) ||
-                (configInfo.forceRegeneration.allStoredProcedures && 
-                 (description.toLowerCase().includes('spcreate') || 
-                  description.toLowerCase().includes('spupdate') || 
+                (configInfo.forceRegeneration.allStoredProcedures &&
+                 (description.toLowerCase().includes('spcreate') ||
+                  description.toLowerCase().includes('spupdate') ||
                   description.toLowerCase().includes('spdelete')))
             );
             
@@ -490,8 +519,10 @@ export class SQLCodeGenBase {
         
         if (shouldLog) {
             SQLLogging.appendToSQLLogFile(sql, description);
+            // Also write to temp batch file for actual execution (matches CodeGen log order)
+            TempBatchFile.appendToTempBatchFile(sql, entity.SchemaName);
         }
-        
+
         logIf(configInfo.verboseOutput, `SQL Generated for ${entity.Name}: ${description}`);
     }
 
@@ -531,11 +562,34 @@ export class SQLCodeGenBase {
                 sRet += s + '\nGO\n';
             }
 
-            // BASE VIEW
-            if (!options.onlyPermissions && 
-                (options.entity.BaseViewGenerated || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.baseViews)) && 
+            // BASE VIEW AND RELATED TVFs
+            // Only generate if BaseViewGenerated is true (respects custom views where it's false)
+            // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
+            if (!options.onlyPermissions &&
+                options.entity.BaseViewGenerated &&
                 !options.entity.VirtualEntity) {
-                // generate the base view
+
+                // ROOT ID FUNCTIONS (TVFs)
+                // Generate inline Table Value Functions for recursive foreign keys
+                // These must be created BEFORE the view that references them
+                const recursiveFKs = this.detectRecursiveForeignKeys(options.entity);
+                if (recursiveFKs.length > 0) {
+                    for (const field of recursiveFKs) {
+                        const functionName = `fn${options.entity.BaseTable}${field.Name}_GetRootID`;
+                        const s = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
+                                  this.generateRootIDFunction(options.entity, field);
+                        const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
+                        if (options.writeFiles) {
+                            this.logSQLForNewOrModifiedEntity(options.entity, s, `Root ID Function SQL for ${options.entity.Name}.${field.Name}`, options.enableSQLLoggingForNewOrModifiedEntities);
+                            fs.writeFileSync(filePath, s);
+                            files.push(filePath);
+                        }
+                        // Add function SQL to output BEFORE the view
+                        sRet += s + '\nGO\n';
+                    }
+                }
+
+                // Generate the base view (which may reference the TVFs created above)
                 const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
                 const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
                 if (options.writeFiles) {
@@ -565,9 +619,9 @@ export class SQLCodeGenBase {
             // CREATE SP
             if (options.entity.AllowCreateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Create);
-                if (!options.onlyPermissions && 
-                    (options.entity.spCreateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spCreate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spCreateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spCreateGenerated=true
+                if (!options.onlyPermissions && options.entity.spCreateGenerated) {
                     // generate the create SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPCreate(options.entity)
                     if (options.writeFiles) {
@@ -601,9 +655,9 @@ export class SQLCodeGenBase {
             // UPDATE SP
             if (options.entity.AllowUpdateAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Update);
-                if (!options.onlyPermissions && 
-                    (options.entity.spUpdateGenerated || 
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spUpdate || configInfo.forceRegeneration?.allStoredProcedures)))) {
+                // Only generate if spUpdateGenerated is true (respects custom SPs where it's false)
+                // forceRegeneration only forces regeneration of SPs where spUpdateGenerated=true
+                if (!options.onlyPermissions && options.entity.spUpdateGenerated) {
                     // generate the update SP
                     const s = this.generateSingleEntitySQLFileHeader(options.entity, spName) + this.generateSPUpdate(options.entity)
                     if (options.writeFiles) {
@@ -637,9 +691,11 @@ export class SQLCodeGenBase {
             // DELETE SP
             if (options.entity.AllowDeleteAPI && !options.entity.VirtualEntity) {
                 const spName: string = this.getSPName(options.entity, SPType.Delete);
-                if (!options.onlyPermissions && 
-                    (options.entity.spDeleteGenerated || // Generate if marked as generated (not custom)
-                     (configInfo.forceRegeneration?.enabled && (configInfo.forceRegeneration?.spDelete || configInfo.forceRegeneration?.allStoredProcedures)) ||
+                // Only generate if spDeleteGenerated is true (respects custom SPs where it's false)
+                // OR if this entity has cascade delete dependencies that require regeneration
+                // forceRegeneration only forces regeneration of SPs where spDeleteGenerated=true
+                if (!options.onlyPermissions &&
+                    (options.entity.spDeleteGenerated ||
                      this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID))) {
                     // generate the delete SP
                     if (this.entitiesNeedingDeleteSPRegeneration.has(options.entity.ID)) {
@@ -719,11 +775,11 @@ export class SQLCodeGenBase {
     public getSPName(entity: EntityInfo, type: SPType): string {
         switch (type) {
             case SPType.Create:
-                return entity.spCreate && entity.spCreate.length > 0 ? entity.spCreate : 'spCreate' + entity.ClassName;
+                return entity.spCreate && entity.spCreate.length > 0 ? entity.spCreate : 'spCreate' + entity.BaseTableCodeName;
             case SPType.Update:
-                return entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.ClassName;
+                return entity.spUpdate && entity.spUpdate.length > 0 ? entity.spUpdate : 'spUpdate' + entity.BaseTableCodeName;
             case SPType.Delete:
-                return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.ClassName;
+                return entity.spDelete && entity.spDelete.length > 0 ? entity.spDelete : 'spDelete' + entity.BaseTableCodeName;
         }
     }
 
@@ -972,6 +1028,144 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         return sOutput;
     }
 
+    /**
+     * Detects self-referential foreign keys in an entity (e.g., ParentTaskID pointing back to Task table)
+     * Returns array of field info objects representing recursive relationships
+     */
+    protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
+        return entity.Fields.filter(field =>
+            field.RelatedEntityID != null &&
+            field.RelatedEntityID === entity.ID
+        );
+    }
+
+    /**
+     * Generates an inline Table Value Function for calculating root ID for a recursive FK field
+     * The function takes both the record ID and parent ID for optimization
+     * Returns SQL to create the function including DROP IF EXISTS
+     */
+    protected generateRootIDFunction(entity: EntityInfo, field: EntityFieldInfo): string {
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+        const fieldName = field.Name;
+        const functionName = `fn${entity.BaseTable}${fieldName}_GetRootID`;
+
+        return `------------------------------------------------------------
+----- ROOT ID FUNCTION FOR: [${tableName}].[${fieldName}]
+------------------------------------------------------------
+IF OBJECT_ID('[${schemaName}].[${functionName}]', 'IF') IS NOT NULL
+    DROP FUNCTION [${schemaName}].[${functionName}];
+GO
+
+CREATE FUNCTION [${schemaName}].[${functionName}]
+(
+    @RecordID ${primaryKeyType},
+    @ParentID ${primaryKeyType}
+)
+RETURNS TABLE
+AS
+RETURN
+(
+    WITH CTE_RootParent AS (
+        -- Anchor: Start from @ParentID if not null, otherwise start from @RecordID
+        SELECT
+            [${primaryKey}],
+            [${fieldName}],
+            [${primaryKey}] AS [RootParentID],
+            0 AS [Depth]
+        FROM
+            [${schemaName}].[${tableName}]
+        WHERE
+            [${primaryKey}] = COALESCE(@ParentID, @RecordID)
+
+        UNION ALL
+
+        -- Recursive: Keep going up the hierarchy until ${fieldName} is NULL
+        -- Includes depth counter to prevent infinite loops from circular references
+        SELECT
+            c.[${primaryKey}],
+            c.[${fieldName}],
+            c.[${primaryKey}] AS [RootParentID],
+            p.[Depth] + 1 AS [Depth]
+        FROM
+            [${schemaName}].[${tableName}] c
+        INNER JOIN
+            CTE_RootParent p ON c.[${primaryKey}] = p.[${fieldName}]
+        WHERE
+            p.[Depth] < 100  -- Prevent infinite loops, max 100 levels
+    )
+    SELECT TOP 1
+        [RootParentID] AS RootID
+    FROM
+        CTE_RootParent
+    WHERE
+        [${fieldName}] IS NULL
+    ORDER BY
+        [RootParentID]
+);
+GO
+`;
+    }
+
+    /**
+     * Generates all inline Table Value Functions for an entity's recursive foreign keys
+     * Returns empty string if no recursive FKs exist
+     */
+    protected generateAllRootIDFunctions(entity: EntityInfo, recursiveFKs: EntityFieldInfo[]): string {
+        if (recursiveFKs.length === 0) {
+            return '';
+        }
+
+        return recursiveFKs
+            .map(field => this.generateRootIDFunction(entity, field))
+            .join('\n');
+    }
+
+
+    /**
+     * Generates the SELECT clause additions for root fields from TVFs
+     * Example: , root_ParentID.RootID AS [RootParentID]
+     */
+    protected generateRootFieldSelects(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+        return recursiveFKs.map(field => {
+            const alias = `root_${field.Name}`;
+            const columnName = `Root${field.Name}`;
+            return `,\n    ${alias}.RootID AS [${columnName}]`;
+        }).join('');
+    }
+
+    /**
+     * Generates OUTER APPLY joins to inline Table Value Functions for root ID calculation
+     * Each recursive FK gets an OUTER APPLY that calls its corresponding function
+     */
+    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        if (recursiveFKs.length === 0) {
+            return '';
+        }
+
+        const primaryKey = entity.FirstPrimaryKey.Name;
+        const schemaName = entity.SchemaName;
+        const tableName = entity.BaseTable;
+
+        const joins = recursiveFKs.map(field => {
+            const functionName = `fn${tableName}${field.Name}_GetRootID`;
+            const alias = `root_${field.Name}`;
+            return `OUTER APPLY\n    [${schemaName}].[${functionName}]([${classNameFirstChar}].[${primaryKey}], [${classNameFirstChar}].[${field.Name}]) AS ${alias}`;
+        }).join('\n');
+
+        return '\n' + joins;
+    }
+
+    /**
+     * @deprecated Use generateRootIDJoins instead - kept for backward compatibility during migration
+     * Generates LEFT OUTER JOINs to the recursive CTEs
+     */
+    protected generateRecursiveCTEJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        return this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity);
+    }
+
     async generateBaseView(pool: sql.ConnectionPool, entity: EntityInfo): Promise<string> {
         const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
         const classNameFirstChar: string = entity.ClassName.charAt(0).toLowerCase();
@@ -981,6 +1175,12 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
         const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
     ${classNameFirstChar}.[${EntityInfo.DeletedAtFieldName}] IS NULL
 ` : '';
+
+        // Detect recursive foreign keys and generate TVF joins and root field selects
+        const recursiveFKs = this.detectRecursiveForeignKeys(entity);
+        const rootFields = recursiveFKs.length > 0 ? this.generateRootFieldSelects(recursiveFKs, classNameFirstChar) : '';
+        const rootJoins = recursiveFKs.length > 0 ? this.generateRootIDJoins(recursiveFKs, classNameFirstChar, entity) : '';
+
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -988,15 +1188,16 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] ([${f.
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map(pk => pk.Name).join(', ')}
 ------------------------------------------------------------
-DROP VIEW IF EXISTS [${entity.SchemaName}].[${viewName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${viewName}]', 'V') IS NOT NULL
+    DROP VIEW [${entity.SchemaName}].[${viewName}];
 GO
 
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}
+    ${classNameFirstChar}.*${relatedFieldsString.length > 0 ? ',' : ''}${relatedFieldsString}${rootFields}
 FROM
-    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}
+    [${entity.SchemaName}].[${entity.BaseTable}] AS ${classNameFirstChar}${relatedFieldsJoinString ? '\n' + relatedFieldsJoinString : ''}${rootJoins}
 ${whereClause}GO${permissions}
     `
     }
@@ -1123,7 +1324,7 @@ ${whereClause}GO${permissions}
 
 
     protected generateSPCreate(entity: EntityInfo): string {
-        const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.ClassName}`;
+        const spName: string = entity.spCreate ? entity.spCreate : `spCreate${entity.BaseTableCodeName}`;
         const firstKey = entity.FirstPrimaryKey;
 
         //double exclamations used on the firstKey.DefaultValue property otherwise the type of this variable is 'number | ""';
@@ -1212,7 +1413,8 @@ ${whereClause}GO${permissions}
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1247,7 +1449,8 @@ GO${permissions}
 ------------------------------------------------------------
 ----- TRIGGER FOR ${EntityInfo.UpdatedAtFieldName} field for the ${entity.BaseTable} table
 ------------------------------------------------------------
-DROP TRIGGER IF EXISTS [${entity.SchemaName}].trgUpdate${entity.ClassName}
+IF OBJECT_ID('[${entity.SchemaName}].[trgUpdate${entity.ClassName}]', 'TR') IS NOT NULL
+    DROP TRIGGER [${entity.SchemaName}].[trgUpdate${entity.ClassName}];
 GO
 CREATE TRIGGER [${entity.SchemaName}].trgUpdate${entity.ClassName}
 ON [${entity.SchemaName}].[${entity.BaseTable}]
@@ -1270,7 +1473,7 @@ GO`;
     }
 
     protected generateSPUpdate(entity: EntityInfo): string {
-        const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.ClassName}`;
+        const spName: string = entity.spUpdate ? entity.spUpdate : `spUpdate${entity.BaseTableCodeName}`;
         const efParamString: string = this.createEntityFieldsParamString(entity.Fields, true);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Update);
         const hasUpdatedAtField: boolean = entity.Fields.find(f => f.Name.toLowerCase().trim() === EntityInfo.UpdatedAtFieldName.trim().toLowerCase()) !== undefined;
@@ -1287,7 +1490,8 @@ GO`;
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1317,7 +1521,58 @@ ${updatedAtTrigger}
         `
     }
 
-    private __specialUUIDValue = '00000000-0000-0000-0000-000000000000';
+    /**
+     * Formats a default value for use in SQL, handling special cases like SQL functions
+     * @param defaultValue The default value from the database metadata
+     * @param needsQuotes Whether the field type typically needs quotes
+     * @returns Properly formatted default value for SQL
+     */
+    protected formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
+        if (!defaultValue || defaultValue.trim().length === 0) {
+            return 'NULL';
+        }
+
+        let trimmedValue = defaultValue.trim();
+        const lowerValue = trimmedValue.toLowerCase();
+
+        // SQL functions that should not be quoted
+        const sqlFunctions = [
+            'newid()',
+            'newsequentialid()',
+            'getdate()',
+            'getutcdate()',
+            'sysdatetime()',
+            'sysdatetimeoffset()',
+            'current_timestamp',
+            'user_name()',
+            'suser_name()',
+            'system_user'
+        ];
+
+        // Check if this is a SQL function
+        for (const func of sqlFunctions) {
+            if (lowerValue.includes(func)) {
+                // Remove outer parentheses if they exist (e.g., "(getutcdate())" -> "getutcdate()")
+                if (trimmedValue.startsWith('(') && trimmedValue.endsWith(')')) {
+                    trimmedValue = trimmedValue.substring(1, trimmedValue.length - 1);
+                }
+                return trimmedValue;
+            }
+        }
+
+        // If the value already has quotes, remove them first
+        let cleanValue = trimmedValue;
+        if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
+            cleanValue = cleanValue.substring(1, cleanValue.length - 1);
+        }
+
+        // Add quotes if needed
+        if (needsQuotes) {
+            return `'${cleanValue}'`;
+        }
+
+        return cleanValue;
+    }
 
     protected createEntityFieldsParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
         let sOutput: string = '', isFirst: boolean = true;
@@ -1342,6 +1597,11 @@ ${updatedAtTrigger}
                     // This allows callers to omit the PK and let the DB/sproc handle it
                     defaultParamValue = ' = NULL';
                 }
+                else if (!isUpdate && ef.HasDefaultValue && !ef.AllowsNull) {
+                    // For non-nullable fields with database defaults, make the parameter optional
+                    // This allows callers to pass NULL and let the database default be used
+                    defaultParamValue = ' = NULL';
+                }
                 sOutput += `@${ef.CodeName} ${ef.SQLFullType}${defaultParamValue}`;
             }
         }
@@ -1353,13 +1613,12 @@ ${updatedAtTrigger}
         let sOutput: string = '', isFirst: boolean = true;
         for (let i: number = 0; i < entityFields.length; ++i) {
             const ef: EntityFieldInfo = entityFields[i];
-            const quotes: string = ef.NeedsQuotes ? "'" : "";
             // we only want fields that are (a) not primary keys, or if a pkey, not an auto-increment pkey and (b) not virtual fields and (c) updateable fields and (d) not auto-increment fields if they're not pkeys)
             // ALSO: if excludePrimaryKey is true, skip all primary key fields
             if ( (excludePrimaryKey && ef.IsPrimaryKey) || (ef.IsPrimaryKey && autoGeneratedPrimaryKey) || ef.IsVirtual || !ef.AllowUpdateAPI || ef.AutoIncrement) {
                 continue; // skip this field
             }
-            
+
             if (!isFirst)
                 sOutput += ',\n                '
             else
@@ -1371,35 +1630,35 @@ ${updatedAtTrigger}
                 else
                     sOutput += `NULL`; // we don't set the deleted at field on an insert, only on a delete
             }
-            else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue) {
-                // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column, and has a default value specified
-                // in this situation we need to check if the value being passed in is the special value '00000000-0000-0000-0000-000000000000' (which is in __specialUUIDValue) if it is, we substitute it with the actual default value
-                // When the uniqueidentifier default value is set to NEWID() or NEWSEQUENTIALID(), we need to ensure that the value is not wrapped in quotes, so we check for that
-                // otherwise we use the value passed in
-                // next check to make sure ef.DefaultValue does not contain quotes around the value if it is a string type, if it does, we need to remove them
-                let defValue = ef.DefaultValue;
-                if (ef.TSType === EntityFieldTSType.String) {
-                    if (defValue.startsWith("'") && defValue.endsWith("'")) {
-                        defValue = defValue.substring(1, defValue.length - 1).trim(); // remove the quotes
-                    }
-                }
-
-                const defValueLowered = defValue.toLowerCase().trim();
-
-                //If the default value is NEWID or NEWSEQUENTIALID, we will use the default value as is, without quotes.
-                //Otherwise, wrap the default value with the quotes variable value.
-                if (!defValueLowered.includes('newid()') && !defValueLowered.includes('newsequentialid()')) {
-                    defValue = `${quotes}${defValue}${quotes}`;
-                }
-
-                sOutput += `CASE @${ef.CodeName} WHEN '${this.__specialUUIDValue}' THEN ${defValue} ELSE @${ef.CodeName} END`;
+            else if ((prefix && prefix !== '') && !ef.IsPrimaryKey && ef.IsUniqueIdentifier && ef.HasDefaultValue && !ef.AllowsNull) {
+                // this is the VALUE side (prefix not null/blank), is NOT a primary key, and is a uniqueidentifier column with a default value and does NOT allow NULL
+                // We need to handle both NULL and the special value '00000000-0000-0000-0000-000000000000' for backward compatibility
+                // Existing code uses the special value to indicate "use the default", so we preserve that behavior
+                const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+                sOutput += `CASE @${ef.CodeName} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(@${ef.CodeName}, ${formattedDefault}) END`;
             }
             else {
                 let sVal: string = '';
-                if (!prefix || prefix.length === 0)
+                if (!prefix || prefix.length === 0) {
+                    // Column name side
                     sVal = '[' + ef.Name + ']'; // always put field names in brackets so that if reserved words are being used for field names in a table like "USER" and so on, they still work
-                else
+                }
+                else {
+                    // Value/parameter side
                     sVal = prefix + ef.CodeName;
+
+                    // If this field has a default value and doesn't allow NULL, wrap with ISNULL
+                    // For UniqueIdentifier fields, also handle the special value '00000000-0000-0000-0000-000000000000' for backward compatibility
+                    if (ef.HasDefaultValue && !ef.AllowsNull) {
+                        const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+                        if (ef.IsUniqueIdentifier) {
+                            // Handle both NULL and the special UUID value for backward compatibility with existing code
+                            sVal = `CASE ${sVal} WHEN '00000000-0000-0000-0000-000000000000' THEN ${formattedDefault} ELSE ISNULL(${sVal}, ${formattedDefault}) END`;
+                        } else {
+                            sVal = `ISNULL(${sVal}, ${formattedDefault})`;
+                        }
+                    }
+                }
 
                 sOutput += sVal;
             }
@@ -1430,7 +1689,7 @@ ${updatedAtTrigger}
 
 
     protected generateSPDelete(entity: EntityInfo): string {
-        const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.ClassName}`;
+        const spName: string = entity.spDelete ? entity.spDelete : `spDelete${entity.BaseTableCodeName}`;
         const sCascadeDeletes: string = this.generateCascadeDeletes(entity);
         const permissions: string = this.generateSPPermissions(entity, spName, SPType.Delete);
         let sVariables: string = '';
@@ -1475,7 +1734,8 @@ ${deleteCode}        AND ${EntityInfo.DeletedAtFieldName} IS NULL -- don't updat
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR ${entity.BaseTable}
 ------------------------------------------------------------
-DROP PROCEDURE IF EXISTS [${entity.SchemaName}].[${spName}]
+IF OBJECT_ID('[${entity.SchemaName}].[${spName}]', 'P') IS NOT NULL
+    DROP PROCEDURE [${entity.SchemaName}].[${spName}];
 GO
 
 CREATE PROCEDURE [${entity.SchemaName}].[${spName}]
@@ -1531,7 +1791,7 @@ GO${permissions}
         else if (fkField.AllowsNull && !relatedEntity.AllowUpdateAPI) {
             // Nullable FK but no update API - this is a configuration error
             const sqlComment = `WARNING: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
-            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.BaseTableCodeName} generation: ${relatedEntity.BaseTable} has nullable FK to ${parentEntity.BaseTable} but doesn't allow update API - cascade operation will fail`;
             logWarning(consoleMsg);
             return `
     -- ${sqlComment}
@@ -1540,7 +1800,7 @@ GO${permissions}
         else if (!relatedEntity.AllowDeleteAPI) {
             // Entity doesn't allow delete API, so we can't cascade delete
             const sqlComment = `WARNING: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
-            const consoleMsg = `WARNING in spDelete${parentEntity.ClassName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
+            const consoleMsg = `WARNING in spDelete${parentEntity.BaseTableCodeName} generation: ${relatedEntity.BaseTable} has non-nullable FK to ${parentEntity.BaseTable} but doesn't allow delete API - cascade operation will fail`;
             logWarning(consoleMsg);
             return `
     -- ${sqlComment}
@@ -1717,11 +1977,17 @@ GO${permissions}
             for (const e of md.Entities) {
                 for (const ef of e.Fields) {
                     if (ef.RelatedEntityID === entity.ID && ef.IsVirtual === false) {
+                        // Skip self-referential foreign keys (e.g., ParentID pointing to same entity)
+                        // These don't create inter-entity dependencies for ordering purposes
+                        if (e.ID === entity.ID) {
+                            continue;
+                        }
+
                         // Check if this would generate a cascade operation
-                        const wouldGenerateOperation = 
+                        const wouldGenerateOperation =
                             (ef.AllowsNull === false && e.AllowDeleteAPI) || // Non-nullable FK: cascade delete
                             (ef.AllowsNull && e.AllowUpdateAPI); // Nullable FK: cascade update
-                        
+
                         if (wouldGenerateOperation) {
                             // Track the dependency: entity's delete SP depends on e's update/delete SP
                             if (ef.AllowsNull && e.AllowUpdateAPI) {
@@ -1787,20 +2053,20 @@ GO${permissions}
      */
     protected async getModifiedEntitiesWithUpdateAPI(entities: EntityInfo[]): Promise<Map<string, string>> {
         const modifiedEntitiesMap = new Map<string, string>();
-        
+
         // Get the list of modified entity names from the metadata management phase
         const modifiedEntityNames = ManageMetadataBase.modifiedEntityList;
-        
+
         logStatus(`Modified entities from metadata phase: ${modifiedEntityNames.join(', ')}`);
-        
+
         // Convert entity names to IDs and filter for those with update API
         for (const entityName of modifiedEntityNames) {
-            const entity = entities.find(e => 
-                e.Name === entityName && 
-                e.AllowUpdateAPI && 
+            const entity = entities.find(e =>
+                e.Name === entityName &&
+                e.AllowUpdateAPI &&
                 e.spUpdateGenerated
             );
-            
+
             if (entity) {
                 modifiedEntitiesMap.set(entity.Name, entity.ID);
                 logStatus(`  - ${entity.Name} (${entity.ID}) has update API and will be tracked`);
@@ -1813,7 +2079,7 @@ GO${permissions}
                 }
             }
         }
-        
+
         return modifiedEntitiesMap;
     }
 
@@ -1822,7 +2088,7 @@ GO${permissions}
      * due to cascade dependencies on entities that had schema changes.
      */
     protected async getEntitiesRequiringCascadeDeleteRegeneration(
-        pool: sql.ConnectionPool, 
+        pool: sql.ConnectionPool,
         changedEntityIds: Set<string>
     ): Promise<Set<string>> {
         const entitiesNeedingRegeneration = new Set<string>();
@@ -1877,13 +2143,13 @@ GO${permissions}
                             logStatus(`  - Skipping ${entity.Name} - has cascade dependency but spDeleteGenerated=false (custom SP)`);
                         }
                     }
-                    
+
                     // Order entities by dependencies for proper regeneration
                     this.orderedEntitiesForDeleteSPRegeneration = this.orderEntitiesByDependencies(
                         entities,
                         this.entitiesNeedingDeleteSPRegeneration
                     );
-                    
+
                     if (this.orderedEntitiesForDeleteSPRegeneration.length > 0) {
                         logStatus(`Ordered entities for delete SP regeneration:`);
                         this.orderedEntitiesForDeleteSPRegeneration.forEach((entityId, index) => {
@@ -1912,15 +2178,15 @@ GO${permissions}
         const ordered: string[] = [];
         const visited = new Set<string>();
         const visiting = new Set<string>();
-        
+
         // Build reverse dependency map for entities we're ordering
         // If A depends on B, then reverseMap[A] contains B
         const reverseMap = new Map<string, Set<string>>();
-        
+
         for (const entityId of entityIdsToOrder) {
             reverseMap.set(entityId, new Set<string>());
         }
-        
+
         // For each entity in our set, find what it depends on
         for (const [dependedOnId, dependentIds] of this.cascadeDeleteDependencies) {
             for (const dependentId of dependentIds) {
@@ -1930,42 +2196,58 @@ GO${permissions}
                 }
             }
         }
-        
-        // Topological sort using DFS
+
+        // Topological sort using DFS with circular dependency handling
+        const circularDeps = new Set<string>();
+
         const visit = (entityId: string): boolean => {
             if (visited.has(entityId)) {
                 return true;
             }
-            
+
             if (visiting.has(entityId)) {
-                // Circular dependency detected
+                // Circular dependency detected - mark it but don't fail
                 const entity = entities.find(e => e.ID === entityId);
                 logStatus(`Warning: Circular cascade delete dependency detected involving ${entity?.Name || entityId}`);
-                return false;
+                circularDeps.add(entityId);
+                return false; // Signal circular dependency but continue processing
             }
-            
+
             visiting.add(entityId);
-            
+
             // Visit dependencies first
             const dependencies = reverseMap.get(entityId) || new Set();
             for (const depId of dependencies) {
                 if (!visit(depId)) {
-                    return false;
+                    // If dependency visit failed (circular), skip this dependency edge
+                    // but continue processing other dependencies
+                    continue;
                 }
             }
-            
+
             visiting.delete(entityId);
             visited.add(entityId);
             ordered.push(entityId);
-            
+
             return true;
         };
-        
+
         // Visit all entities that need ordering
         for (const entityId of entityIdsToOrder) {
             if (!visited.has(entityId)) {
-                visit(entityId);
+                const success = visit(entityId);
+                if (!success && circularDeps.has(entityId)) {
+                    // Entity is part of circular dependency - add it anyway in arbitrary order
+                    // The SQL will still be generated, just not in perfect dependency order
+                    logStatus(`  - Adding ${entities.find(e => e.ID === entityId)?.Name || entityId} despite circular dependency`);
+                    visited.add(entityId);
+                    ordered.push(entityId);
+                }
             }
+        }
+
+        if (circularDeps.size > 0) {
+            logStatus(`Note: ${circularDeps.size} entities have circular cascade delete dependencies and will be regenerated in arbitrary order.`);
         }
         
         return ordered;

@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/scheduling-engine",
+  "version": "2.112.0",
+  "description": "MemberJunction: Scheduling Engine - core engine for executing scheduled jobs with plugin architecture",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "author": "MemberJunction.com",
+  "license": "ISC",
+  "dependencies": {
+    "@memberjunction/core": "2.112.0",
+    "@memberjunction/core-entities": "2.112.0",
+    "@memberjunction/global": "2.112.0",
+    "@memberjunction/scheduling-base-types": "2.112.0",
+    "@memberjunction/scheduling-engine-base": "2.112.0",
+    "@memberjunction/ai-agents": "2.112.0",
+    "@memberjunction/actions": "2.112.0",
+    "@memberjunction/sqlserver-dataprovider": "2.112.0",
+    "cron-parser": "^4.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.2",
+    "typescript": "^5.4.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

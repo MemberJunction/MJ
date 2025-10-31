@@ -26,13 +26,15 @@
             "styles": [
               {
                 "input": "src/styles/main.scss"
+              },
+              {
+                "input": "../../node_modules/dhtmlx-gantt/codebase/dhtmlxgantt.css"
               }
             ],
             "scripts": []
           },
           "configurations": {
             "production": {
-              "optimization": false,
               "budgets": [
                 {
                   "type": "initial",

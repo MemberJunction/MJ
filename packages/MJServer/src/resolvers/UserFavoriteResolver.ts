@@ -15,7 +15,7 @@ import {
 } from '@memberjunction/server';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 
-import { UserFavorite_, UserFavoriteResolverBase } from '../generated/generated.js';
+import { MJUserFavorite_, MJUserFavoriteResolverBase } from '../generated/generated.js';
 import { GetReadOnlyProvider } from '../util.js';
 
 //****************************************************************************
@@ -66,15 +66,15 @@ export class UserFavoriteResult {
   Success: boolean;
 }
 
-@Resolver(UserFavorite_)
-export class UserFavoriteResolver extends UserFavoriteResolverBase {
-  @Query(() => [UserFavorite_])
+@Resolver(MJUserFavorite_)
+export class UserFavoriteResolver extends MJUserFavoriteResolverBase {
+  @Query(() => [MJUserFavorite_])
   async UserFavoritesByUserID(@Arg('UserID', () => Int) UserID: number, @Ctx() { providers, userPayload }: AppContext) {
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
     return await this.findBy(provider, 'User Favorites', { UserID }, userPayload.userRecord);
   }
 
-  @Query(() => [UserFavorite_])
+  @Query(() => [MJUserFavorite_])
   async UserFavoriteSearchByParams(@Arg('params', () => Int) params: UserFavoriteSearchParams, @Ctx() { providers, userPayload }: AppContext) {
     const provider = GetReadOnlyProvider(providers, {allowFallbackToReadWrite: true})    
     return await this.findBy(provider, 'User Favorites', params, userPayload.userRecord);

@@ -1,5 +1,344 @@
 # Change Log - @memberjunction/core-actions
 
+## 2.112.0
+
+### Minor Changes
+
+- 2ac2120: migration
+
+### Patch Changes
+
+- 621960a: Patch
+- Updated dependencies [2ac2120]
+- Updated dependencies [e237ca9]
+- Updated dependencies [c126b59]
+- Updated dependencies [2ac2120]
+- Updated dependencies [ed74bb8]
+- Updated dependencies [2ac2120]
+  - @memberjunction/ai-agents@2.112.0
+  - @memberjunction/sqlserver-dataprovider@2.112.0
+  - @memberjunction/aiengine@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/storage@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/external-change-detection@2.112.0
+  - @memberjunction/core-entities-server@2.112.0
+  - @memberjunction/ai-vector-sync@2.112.0
+  - @memberjunction/actions@2.112.0
+  - @memberjunction/content-autotagging@2.112.0
+  - @memberjunction/ai-engine-base@2.112.0
+  - @memberjunction/code-execution@2.112.0
+  - @memberjunction/communication-engine@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- 47733e0: Remove broken Vega packages from dependencies and remove implementation of Create SVG Chart action.
+  - @memberjunction/ai-agents@2.110.1
+  - @memberjunction/ai-engine-base@2.110.1
+  - @memberjunction/ai-core-plus@2.110.1
+  - @memberjunction/aiengine@2.110.1
+  - @memberjunction/ai-vector-sync@2.110.1
+  - @memberjunction/code-execution@2.110.1
+  - @memberjunction/actions@2.110.1
+  - @memberjunction/communication-engine@2.110.1
+  - @memberjunction/content-autotagging@2.110.1
+  - @memberjunction/external-change-detection@2.110.1
+  - @memberjunction/core@2.110.1
+  - @memberjunction/core-entities@2.110.1
+  - @memberjunction/core-entities-server@2.110.1
+  - @memberjunction/global@2.110.1
+  - @memberjunction/storage@2.110.1
+  - @memberjunction/sqlserver-dataprovider@2.110.1
+
+## 2.110.0
+
+### Minor Changes
+
+- c8b9aca: Migration
+
+### Patch Changes
+
+- 02d72ff: - Sort Zod schema entity field values by sequence in CodeGen for consistent ordering
+  - Add unique constraints to QueryCategory and Query tables to prevent duplicates
+  - Improve concurrent query creation handling in CreateQueryResolver
+  - Fix metadata provider usage in entity server classes
+  - Remove automatic error logging from SQLServerDataProvider
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+- Updated dependencies [93c00ac]
+- Updated dependencies [8f1384a]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/sqlserver-dataprovider@2.110.0
+  - @memberjunction/core-entities-server@2.110.0
+  - @memberjunction/ai-core-plus@2.110.0
+  - @memberjunction/ai-agents@2.110.0
+  - @memberjunction/communication-engine@2.110.0
+  - @memberjunction/ai-engine-base@2.110.0
+  - @memberjunction/aiengine@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/content-autotagging@2.110.0
+  - @memberjunction/external-change-detection@2.110.0
+  - @memberjunction/storage@2.110.0
+  - @memberjunction/ai-vector-sync@2.110.0
+  - @memberjunction/code-execution@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Minor Changes
+
+- a38989b: Migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [e2a6338]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ai-agents@2.109.0
+  - @memberjunction/ai-core-plus@2.109.0
+  - @memberjunction/aiengine@2.109.0
+  - @memberjunction/ai-engine-base@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/communication-engine@2.109.0
+  - @memberjunction/content-autotagging@2.109.0
+  - @memberjunction/external-change-detection@2.109.0
+  - @memberjunction/core-entities-server@2.109.0
+  - @memberjunction/storage@2.109.0
+  - @memberjunction/sqlserver-dataprovider@2.109.0
+  - @memberjunction/ai-vector-sync@2.109.0
+  - @memberjunction/code-execution@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Minor Changes
+
+- 5d51137: Major enhancement to the Sage conversation manager agent adding semantic agent search using local embeddings, scheduling job actions, improved prompts, agent permission checking, and user plan confirmation workflow.
+- 30ec87a: migration needed
+- 4a7e34c: Migration
+- c8983c6: migration
+- 656d86c: Migration
+
+### Patch Changes
+
+- 687e2ae: UI Fixes for Conversation Artifacts and Refactoring of the Agent Embedding System
+- Updated dependencies [5d51137]
+- Updated dependencies [687e2ae]
+- Updated dependencies [d205a6c]
+- Updated dependencies [656d86c]
+  - @memberjunction/ai-agents@2.108.0
+  - @memberjunction/aiengine@2.108.0
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/ai-vector-sync@2.108.0
+  - @memberjunction/content-autotagging@2.108.0
+  - @memberjunction/core-entities-server@2.108.0
+  - @memberjunction/sqlserver-dataprovider@2.108.0
+  - @memberjunction/ai-engine-base@2.108.0
+  - @memberjunction/communication-engine@2.108.0
+  - @memberjunction/external-change-detection@2.108.0
+  - @memberjunction/storage@2.108.0
+  - @memberjunction/code-execution@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+### Minor Changes
+
+- 0dd1d04: migration
+- af67760: migration
+
+### Patch Changes
+
+- Updated dependencies [0dd1d04]
+  - @memberjunction/storage@2.107.0
+  - @memberjunction/ai-core-plus@2.107.0
+  - @memberjunction/ai-vector-sync@2.107.0
+  - @memberjunction/actions@2.107.0
+  - @memberjunction/communication-engine@2.107.0
+  - @memberjunction/content-autotagging@2.107.0
+  - @memberjunction/external-change-detection@2.107.0
+  - @memberjunction/core@2.107.0
+  - @memberjunction/core-entities@2.107.0
+  - @memberjunction/core-entities-server@2.107.0
+  - @memberjunction/global@2.107.0
+  - @memberjunction/sqlserver-dataprovider@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- Updated dependencies [6f2cd0c]
+  - @memberjunction/communication-engine@2.106.0
+  - @memberjunction/ai-core-plus@2.106.0
+  - @memberjunction/ai-vector-sync@2.106.0
+  - @memberjunction/actions@2.106.0
+  - @memberjunction/content-autotagging@2.106.0
+  - @memberjunction/external-change-detection@2.106.0
+  - @memberjunction/core@2.106.0
+  - @memberjunction/core-entities@2.106.0
+  - @memberjunction/core-entities-server@2.106.0
+  - @memberjunction/global@2.106.0
+  - @memberjunction/storage@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/ai-core-plus@2.105.0
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ai-vector-sync@2.105.0
+  - @memberjunction/content-autotagging@2.105.0
+  - @memberjunction/core-entities-server@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/communication-engine@2.105.0
+  - @memberjunction/external-change-detection@2.105.0
+  - @memberjunction/storage@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- 8f2a4fa: Enhance Web Page Content action with comprehensive format support (resolves #1414)
+
+  **New Format Support**:
+
+  - JSON APIs, PDF, DOCX, XML, CSV, HTML, and images
+  - Intelligent content type detection from headers and file extensions
+  - New 'auto' mode for automatic format selection (default)
+
+  **Improvements**:
+
+  - Enhanced HTML to Markdown conversion (Turndown library)
+  - Robust HTML parsing with JSDOM
+  - Increased default MaxContentLength to 100,000 characters
+  - Fix '[object Object]' display in Prompt Runner UI
+
+- 3f71ef4: Add new storage actions and external API integrations
+
+  - Add 13 individual file storage actions
+  - Add Gamma API integration for AI-powered presentation generation
+  - Add Perplexity Search action for AI-powered web search with
+    citations
+  - Add centralized configuration system for MJStorage drivers and
+    Core Actions
+  - Complete Box SDK v10 migration for BoxFileStorage driver
+  - Fix Box storage driver API endpoint errors (405 Method Not
+    Allowed)
+  - Fix CLI action parameter passing bug
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+- Updated dependencies [3f71ef4]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities-server@2.104.0
+  - @memberjunction/ai-core-plus@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/storage@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai-vector-sync@2.104.0
+  - @memberjunction/communication-engine@2.104.0
+  - @memberjunction/content-autotagging@2.104.0
+  - @memberjunction/external-change-detection@2.104.0
+  - @memberjunction/core@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/external-change-detection@2.103.0
+  - @memberjunction/communication-engine@2.103.0
+  - @memberjunction/core-entities-server@2.103.0
+  - @memberjunction/content-autotagging@2.103.0
+  - @memberjunction/ai-vector-sync@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/ai-core-plus@2.103.0
+  - @memberjunction/global@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/ai-core-plus@2.100.3
+- @memberjunction/actions@2.100.3
+- @memberjunction/communication-engine@2.100.3
+- @memberjunction/content-autotagging@2.100.3
+- @memberjunction/external-change-detection@2.100.3
+- @memberjunction/core-entities-server@2.100.3
+- @memberjunction/ai-vector-sync@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.100.2
+- @memberjunction/ai-vector-sync@2.100.2
+- @memberjunction/actions@2.100.2
+- @memberjunction/communication-engine@2.100.2
+- @memberjunction/content-autotagging@2.100.2
+- @memberjunction/external-change-detection@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/core-entities-server@2.100.2
+- @memberjunction/global@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@2.100.1
+- @memberjunction/ai-vector-sync@2.100.1
+- @memberjunction/actions@2.100.1
+- @memberjunction/communication-engine@2.100.1
+- @memberjunction/content-autotagging@2.100.1
+- @memberjunction/external-change-detection@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/core-entities-server@2.100.1
+- @memberjunction/global@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/ai-core-plus@2.100.0
+  - @memberjunction/ai-vector-sync@2.100.0
+  - @memberjunction/actions@2.100.0
+  - @memberjunction/communication-engine@2.100.0
+  - @memberjunction/content-autotagging@2.100.0
+  - @memberjunction/external-change-detection@2.100.0
+  - @memberjunction/core-entities-server@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

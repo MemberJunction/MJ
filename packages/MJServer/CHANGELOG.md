@@ -1,5 +1,736 @@
 # Change Log - @memberjunction/server
 
+## 2.112.0
+
+### Patch Changes
+
+- e237ca9: - Optimize AIEngine embedding generation to eliminate wasteful auto-refresh regeneration (~3s → <1ms)
+  - Enhance Skip artifact retrieval with optimized query and conversationDetailID for reliable modification workflow
+  - Add Query Parameter Processor to SQLServerDataProvider index exports
+  - Replace 4 RunView calls with single optimized query for Skip artifact retrieval
+- Updated dependencies [2ac2120]
+- Updated dependencies [2ac2120]
+- Updated dependencies [e237ca9]
+- Updated dependencies [c126b59]
+- Updated dependencies [2ac2120]
+- Updated dependencies [ed74bb8]
+- Updated dependencies [621960a]
+- Updated dependencies [2ac2120]
+  - @memberjunction/ai-agent-manager@2.112.0
+  - @memberjunction/ai-agents@2.112.0
+  - @memberjunction/core-actions@2.112.0
+  - @memberjunction/sqlserver-dataprovider@2.112.0
+  - @memberjunction/aiengine@2.112.0
+  - @memberjunction/skip-types@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/storage@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/ai-agent-manager-actions@2.112.0
+  - @memberjunction/scheduling-engine@2.112.0
+  - @memberjunction/external-change-detection@2.112.0
+  - @memberjunction/core-entities-server@2.112.0
+  - @memberjunction/ai-prompts@2.112.0
+  - @memberjunction/ai-vectors-pinecone@2.112.0
+  - @memberjunction/actions@2.112.0
+  - @memberjunction/queue@2.112.0
+  - @memberjunction/templates@2.112.0
+  - @memberjunction/ai@2.112.0
+  - @memberjunction/actions-apollo@2.112.0
+  - @memberjunction/actions-bizapps-accounting@2.112.0
+  - @memberjunction/actions-bizapps-crm@2.112.0
+  - @memberjunction/actions-bizapps-lms@2.112.0
+  - @memberjunction/actions-bizapps-social@2.112.0
+  - @memberjunction/entity-communications-server@2.112.0
+  - @memberjunction/component-registry-client-sdk@2.112.0
+  - @memberjunction/doc-utils@2.112.0
+  - @memberjunction/graphql-dataprovider@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/data-context@2.112.0
+  - @memberjunction/data-context-server@2.112.0
+  - @memberjunction/scheduling-actions@2.112.0
+  - @memberjunction/scheduling-engine-base@2.112.0
+  - @memberjunction/scheduling-base-types@2.112.0
+  - @memberjunction/ai-provider-bundle@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- Updated dependencies [47733e0]
+  - @memberjunction/core-actions@2.110.1
+  - @memberjunction/ai-agent-manager-actions@2.110.1
+  - @memberjunction/ai-agent-manager@2.110.1
+  - @memberjunction/ai-agents@2.110.1
+  - @memberjunction/ai@2.110.1
+  - @memberjunction/ai-core-plus@2.110.1
+  - @memberjunction/aiengine@2.110.1
+  - @memberjunction/ai-prompts@2.110.1
+  - @memberjunction/ai-provider-bundle@2.110.1
+  - @memberjunction/ai-vectors-pinecone@2.110.1
+  - @memberjunction/actions-apollo@2.110.1
+  - @memberjunction/actions-bizapps-accounting@2.110.1
+  - @memberjunction/actions-bizapps-crm@2.110.1
+  - @memberjunction/actions-bizapps-lms@2.110.1
+  - @memberjunction/actions-bizapps-social@2.110.1
+  - @memberjunction/actions@2.110.1
+  - @memberjunction/entity-communications-server@2.110.1
+  - @memberjunction/component-registry-client-sdk@2.110.1
+  - @memberjunction/doc-utils@2.110.1
+  - @memberjunction/external-change-detection@2.110.1
+  - @memberjunction/graphql-dataprovider@2.110.1
+  - @memberjunction/core@2.110.1
+  - @memberjunction/core-entities@2.110.1
+  - @memberjunction/core-entities-server@2.110.1
+  - @memberjunction/data-context@2.110.1
+  - @memberjunction/data-context-server@2.110.1
+  - @memberjunction/global@2.110.1
+  - @memberjunction/queue@2.110.1
+  - @memberjunction/storage@2.110.1
+  - @memberjunction/sqlserver-dataprovider@2.110.1
+  - @memberjunction/scheduling-actions@2.110.1
+  - @memberjunction/scheduling-engine-base@2.110.1
+  - @memberjunction/scheduling-base-types@2.110.1
+  - @memberjunction/scheduling-engine@2.110.1
+  - @memberjunction/skip-types@2.110.1
+  - @memberjunction/templates@2.110.1
+
+## 2.110.0
+
+### Minor Changes
+
+- d2d7ab9: migration
+- c8b9aca: Migration
+
+### Patch Changes
+
+- 02d72ff: - Sort Zod schema entity field values by sequence in CodeGen for consistent ordering
+  - Add unique constraints to QueryCategory and Query tables to prevent duplicates
+  - Improve concurrent query creation handling in CreateQueryResolver
+  - Fix metadata provider usage in entity server classes
+  - Remove automatic error logging from SQLServerDataProvider
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+- Updated dependencies [93c00ac]
+- Updated dependencies [8f1384a]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/sqlserver-dataprovider@2.110.0
+  - @memberjunction/core-entities-server@2.110.0
+  - @memberjunction/core-actions@2.110.0
+  - @memberjunction/graphql-dataprovider@2.110.0
+  - @memberjunction/ai-agent-manager@2.110.0
+  - @memberjunction/ai-core-plus@2.110.0
+  - @memberjunction/ai-agents@2.110.0
+  - @memberjunction/entity-communications-server@2.110.0
+  - @memberjunction/ai-agent-manager-actions@2.110.0
+  - @memberjunction/aiengine@2.110.0
+  - @memberjunction/ai-prompts@2.110.0
+  - @memberjunction/actions-apollo@2.110.0
+  - @memberjunction/actions-bizapps-accounting@2.110.0
+  - @memberjunction/actions-bizapps-lms@2.110.0
+  - @memberjunction/actions-bizapps-social@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/doc-utils@2.110.0
+  - @memberjunction/external-change-detection@2.110.0
+  - @memberjunction/data-context@2.110.0
+  - @memberjunction/queue@2.110.0
+  - @memberjunction/storage@2.110.0
+  - @memberjunction/scheduling-actions@2.110.0
+  - @memberjunction/scheduling-engine-base@2.110.0
+  - @memberjunction/scheduling-engine@2.110.0
+  - @memberjunction/templates@2.110.0
+  - @memberjunction/ai-vectors-pinecone@2.110.0
+  - @memberjunction/actions-bizapps-crm@2.110.0
+  - @memberjunction/data-context-server@2.110.0
+  - @memberjunction/skip-types@2.110.0
+  - @memberjunction/ai@2.110.0
+  - @memberjunction/ai-provider-bundle@2.110.0
+  - @memberjunction/component-registry-client-sdk@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+  - @memberjunction/scheduling-base-types@2.110.0
+
+## 2.109.0
+
+### Minor Changes
+
+- a38989b: Migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [e9e8a36]
+- Updated dependencies [e2a6338]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/doc-utils@2.109.0
+  - @memberjunction/ai-agents@2.109.0
+  - @memberjunction/ai-agent-manager@2.109.0
+  - @memberjunction/core-actions@2.109.0
+  - @memberjunction/ai-core-plus@2.109.0
+  - @memberjunction/aiengine@2.109.0
+  - @memberjunction/ai-agent-manager-actions@2.109.0
+  - @memberjunction/ai-prompts@2.109.0
+  - @memberjunction/actions-apollo@2.109.0
+  - @memberjunction/actions-bizapps-accounting@2.109.0
+  - @memberjunction/actions-bizapps-lms@2.109.0
+  - @memberjunction/actions-bizapps-social@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/entity-communications-server@2.109.0
+  - @memberjunction/external-change-detection@2.109.0
+  - @memberjunction/graphql-dataprovider@2.109.0
+  - @memberjunction/core-entities-server@2.109.0
+  - @memberjunction/data-context@2.109.0
+  - @memberjunction/queue@2.109.0
+  - @memberjunction/storage@2.109.0
+  - @memberjunction/sqlserver-dataprovider@2.109.0
+  - @memberjunction/scheduling-actions@2.109.0
+  - @memberjunction/scheduling-engine-base@2.109.0
+  - @memberjunction/scheduling-engine@2.109.0
+  - @memberjunction/templates@2.109.0
+  - @memberjunction/ai-vectors-pinecone@2.109.0
+  - @memberjunction/actions-bizapps-crm@2.109.0
+  - @memberjunction/data-context-server@2.109.0
+  - @memberjunction/skip-types@2.109.0
+  - @memberjunction/ai@2.109.0
+  - @memberjunction/ai-provider-bundle@2.109.0
+  - @memberjunction/component-registry-client-sdk@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+  - @memberjunction/scheduling-base-types@2.109.0
+
+## 2.108.0
+
+### Minor Changes
+
+- a4d545b: migration
+- 656d86c: Migration
+
+### Patch Changes
+
+- Updated dependencies [5d51137]
+- Updated dependencies [687e2ae]
+- Updated dependencies [30ec87a]
+- Updated dependencies [d205a6c]
+- Updated dependencies [4a7e34c]
+- Updated dependencies [c8983c6]
+- Updated dependencies [656d86c]
+  - @memberjunction/core-actions@2.108.0
+  - @memberjunction/ai-agents@2.108.0
+  - @memberjunction/aiengine@2.108.0
+  - @memberjunction/ai-agent-manager-actions@2.108.0
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/scheduling-engine@2.108.0
+  - @memberjunction/ai-prompts@2.108.0
+  - @memberjunction/ai-vectors-pinecone@2.108.0
+  - @memberjunction/core-entities-server@2.108.0
+  - @memberjunction/queue@2.108.0
+  - @memberjunction/sqlserver-dataprovider@2.108.0
+  - @memberjunction/templates@2.108.0
+  - @memberjunction/graphql-dataprovider@2.108.0
+  - @memberjunction/actions-bizapps-lms@2.108.0
+  - @memberjunction/actions-bizapps-social@2.108.0
+  - @memberjunction/scheduling-actions@2.108.0
+  - @memberjunction/actions-apollo@2.108.0
+  - @memberjunction/actions-bizapps-accounting@2.108.0
+  - @memberjunction/actions-bizapps-crm@2.108.0
+  - @memberjunction/entity-communications-server@2.108.0
+  - @memberjunction/doc-utils@2.108.0
+  - @memberjunction/external-change-detection@2.108.0
+  - @memberjunction/data-context@2.108.0
+  - @memberjunction/storage@2.108.0
+  - @memberjunction/scheduling-engine-base@2.108.0
+  - @memberjunction/ai-provider-bundle@2.108.0
+  - @memberjunction/data-context-server@2.108.0
+  - @memberjunction/skip-types@2.108.0
+  - @memberjunction/component-registry-client-sdk@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+  - @memberjunction/scheduling-base-types@2.108.0
+
+## 2.107.0
+
+### Minor Changes
+
+- e05a672: migration
+- c4291f9: MJ migration
+- 0dd1d04: migration
+
+### Patch Changes
+
+- Updated dependencies [e05a672]
+- Updated dependencies [0dd1d04]
+- Updated dependencies [af67760]
+- Updated dependencies [0be127f]
+  - @memberjunction/scheduling-engine-base@2.107.0
+  - @memberjunction/scheduling-base-types@2.107.0
+  - @memberjunction/scheduling-engine@2.107.0
+  - @memberjunction/core-actions@2.107.0
+  - @memberjunction/storage@2.107.0
+  - @memberjunction/scheduling-actions@2.107.0
+  - @memberjunction/ai-agent-manager-actions@2.107.0
+  - @memberjunction/ai-agents@2.107.0
+  - @memberjunction/ai@2.107.0
+  - @memberjunction/ai-core-plus@2.107.0
+  - @memberjunction/aiengine@2.107.0
+  - @memberjunction/ai-prompts@2.107.0
+  - @memberjunction/ai-provider-bundle@2.107.0
+  - @memberjunction/ai-vectors-pinecone@2.107.0
+  - @memberjunction/actions-apollo@2.107.0
+  - @memberjunction/actions-bizapps-accounting@2.107.0
+  - @memberjunction/actions-bizapps-crm@2.107.0
+  - @memberjunction/actions-bizapps-lms@2.107.0
+  - @memberjunction/actions-bizapps-social@2.107.0
+  - @memberjunction/actions@2.107.0
+  - @memberjunction/entity-communications-server@2.107.0
+  - @memberjunction/component-registry-client-sdk@2.107.0
+  - @memberjunction/doc-utils@2.107.0
+  - @memberjunction/external-change-detection@2.107.0
+  - @memberjunction/graphql-dataprovider@2.107.0
+  - @memberjunction/core@2.107.0
+  - @memberjunction/core-entities@2.107.0
+  - @memberjunction/core-entities-server@2.107.0
+  - @memberjunction/data-context@2.107.0
+  - @memberjunction/data-context-server@2.107.0
+  - @memberjunction/global@2.107.0
+  - @memberjunction/queue@2.107.0
+  - @memberjunction/sqlserver-dataprovider@2.107.0
+  - @memberjunction/skip-types@2.107.0
+  - @memberjunction/templates@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/core-actions@2.106.0
+- @memberjunction/entity-communications-server@2.106.0
+- @memberjunction/ai-agent-manager-actions@2.106.0
+- @memberjunction/ai-agents@2.106.0
+- @memberjunction/ai@2.106.0
+- @memberjunction/ai-core-plus@2.106.0
+- @memberjunction/aiengine@2.106.0
+- @memberjunction/ai-prompts@2.106.0
+- @memberjunction/ai-provider-bundle@2.106.0
+- @memberjunction/ai-vectors-pinecone@2.106.0
+- @memberjunction/actions-apollo@2.106.0
+- @memberjunction/actions-bizapps-accounting@2.106.0
+- @memberjunction/actions-bizapps-crm@2.106.0
+- @memberjunction/actions-bizapps-lms@2.106.0
+- @memberjunction/actions-bizapps-social@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/component-registry-client-sdk@2.106.0
+- @memberjunction/doc-utils@2.106.0
+- @memberjunction/external-change-detection@2.106.0
+- @memberjunction/graphql-dataprovider@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/core-entities-server@2.106.0
+- @memberjunction/data-context@2.106.0
+- @memberjunction/data-context-server@2.106.0
+- @memberjunction/global@2.106.0
+- @memberjunction/queue@2.106.0
+- @memberjunction/storage@2.106.0
+- @memberjunction/sqlserver-dataprovider@2.106.0
+- @memberjunction/skip-types@2.106.0
+- @memberjunction/templates@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- 1d7a841: migration
+- 9b67e0c: This release addresses critical stability issues across build processes, runtime execution, and AI model management in the MemberJunction platform. The changes focus on three main areas: production build reliability, database migration consistency, and intelligent AI error handling.
+
+  Resolved critical issues where Angular production builds with optimization enabled would remove essential classes through aggressive tree-shaking. Moved `TemplateEntityExtended` to `@memberjunction/core-entities` and created new `@memberjunction/ai-provider-bundle` package to centralize AI provider loading while maintaining clean separation between core infrastructure and provider implementations. Added `LoadEntityCommunicationsEngineClient()` calls to prevent removal of inherited singleton methods. These changes prevent runtime errors in production deployments where previously registered classes would become inaccessible, while improving architectural separation of concerns.
+
+  Enhanced CodeGen SQL generation to use `IF OBJECT_ID()` patterns instead of `DROP ... IF EXISTS` syntax, fixing silent failures with Flyway placeholder substitution. Improved validator generation to properly handle nullable fields and correctly set `result.Success` status. Centralized GraphQL type name generation using schema-aware naming (`{schema}_{basetable}_`) to eliminate type collisions between entities with identical base table names across different schemas. These changes ensure reliable database migrations and prevent recurring cascade delete regressions.
+
+  Implemented sophisticated error classification with new `NoCredit` error type for billing failures, message-first error detection, and permissive failover for 403 errors. Added hierarchical configuration-aware failover that respects configuration boundaries (Production vs Development models) while maintaining candidate list caching for performance. Enhanced error analysis to properly classify credit/quota issues and enable appropriate failover behavior.
+
+  Improved model selection caching by checking all candidates for valid API keys instead of stopping at first match, ensuring retry logic has access to complete list of viable model/vendor combinations. Added `extractValidCandidates()` method to `AIModelSelectionInfo` class and `buildCandidatesFromSelectionInfo()` helper to properly reconstruct candidate lists from selection metadata during hierarchical template execution.
+
+  Enhanced error-based retry and failover with intelligent handling for authentication and rate limit errors. Authentication errors now trigger vendor-level filtering (excluding all models from vendors with invalid API keys) and immediate failover to different vendors. Rate limit errors now retry the same model/vendor using configurable `MaxRetries` (default: 3) with backoff delay based on `RetryStrategy` (Fixed/Linear/Exponential) before failing over. Improved log messages with human-readable formatting showing model/vendor names, time in seconds, and clear status indicators. Fixed MJCLI sync commands to properly propagate exit codes for CI/CD integration.
+
+- Updated dependencies [4807f35]
+- Updated dependencies [d66070e]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/ai-core-plus@2.105.0
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ai-agents@2.105.0
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/aiengine@2.105.0
+  - @memberjunction/ai-prompts@2.105.0
+  - @memberjunction/ai-provider-bundle@2.105.0
+  - @memberjunction/ai-vectors-pinecone@2.105.0
+  - @memberjunction/entity-communications-server@2.105.0
+  - @memberjunction/core-entities-server@2.105.0
+  - @memberjunction/queue@2.105.0
+  - @memberjunction/sqlserver-dataprovider@2.105.0
+  - @memberjunction/templates@2.105.0
+  - @memberjunction/core-actions@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/graphql-dataprovider@2.105.0
+  - @memberjunction/ai-agent-manager-actions@2.105.0
+  - @memberjunction/actions-apollo@2.105.0
+  - @memberjunction/actions-bizapps-accounting@2.105.0
+  - @memberjunction/actions-bizapps-lms@2.105.0
+  - @memberjunction/actions-bizapps-social@2.105.0
+  - @memberjunction/doc-utils@2.105.0
+  - @memberjunction/external-change-detection@2.105.0
+  - @memberjunction/data-context@2.105.0
+  - @memberjunction/storage@2.105.0
+  - @memberjunction/actions-bizapps-crm@2.105.0
+  - @memberjunction/data-context-server@2.105.0
+  - @memberjunction/skip-types@2.105.0
+  - @memberjunction/component-registry-client-sdk@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- 4567af3: **Component Feedback System (Registry-Agnostic)**
+
+  Implement comprehensive component feedback system that works across any component registry (Skip, MJ Central, etc.) with support for custom feedback handlers.
+
+  - Add skip-component-feedback-panel component with sliding panel UI (444 lines CSS, 161 lines HTML, 274 lines TS)
+  - Add star ratings (0-5 scale), comments, and component hierarchy visualization
+  - Add FeedbackHandler interface for customizable feedback logic per registry
+  - Add ComponentFeedbackParams and ComponentFeedbackResponse types with full parameter set
+  - Add POST /api/v1/feedback endpoint to ComponentRegistryAPIServer
+  - Add submitFeedback() method to ComponentRegistryClient SDK
+  - Add SendComponentFeedback mutation to ComponentRegistryResolver (replaces AskSkipResolver implementation)
+  - Use ComponentRegistryClient SDK with REGISTRY*URI_OVERRIDE*_ and REGISTRY*API_KEY*_ support
+  - Update skip-artifact-viewer to use GraphQLComponentRegistryClient for feedback submission
+  - Extract registry name from component spec with fallback to 'Skip'
+  - Update dynamic-ui-component and linear-report with component hierarchy tracking
+  - Pass conversationID and authenticated user email for contact resolution
+
+  **React Runtime Debug Logging Enhancements**
+
+  Restore debug logging with production guards for better debugging capabilities.
+
+  - Restore 12 debug console.log statements throughout React runtime (prop-builder, component-hierarchy)
+  - Wrap all debug logs with LogStatus/GetProductionStatus checks
+  - Add comprehensive README.md documentation (95 lines) for debug configuration
+  - Logs only execute when not in production mode
+  - Update ReactDebugConfig with enhanced environment variable support
+
+  **AI Prompt Error Handling Improvements**
+
+  Replace hardcoded error truncation with configurable maxErrorLength parameter.
+
+  - Add maxErrorLength?: number property to AIPromptParams class
+  - Update AIPromptRunner.logError() to accept maxErrorLength in options
+  - Thread maxErrorLength through 18 logError calls throughout AIPromptRunner
+  - Remove hardcoded MAX_ERROR_LENGTH constant (500 chars)
+  - When undefined (default), errors are returned in full for debugging
+  - When set, errors are truncated with "... [truncated]" suffix
+
+  **Bug Fixes**
+
+  - Fix AI parameter extraction edge cases in AIPromptRunner and QueryEntity
+  - Fix mj.config.cjs configuration
+  - Fix component hierarchy tracking in dynamic reports
+
+  Addresses PR #1426 comments #5, #7, and #8
+
+- 16b2084: tweaks
+- cd95686: Add user email support to Component Registry Client SDK for usage tracking. The SDK now sends authenticated user email to component registry servers via query parameters (GET requests) or request body (POST requests), enabling per-user analytics and contact tracking.
+- Updated dependencies [aafa827]
+- Updated dependencies [49171c3]
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+- Updated dependencies [8f2a4fa]
+- Updated dependencies [6e7f14a]
+- Updated dependencies [3f71ef4]
+- Updated dependencies [cd95686]
+- Updated dependencies [e6df147]
+- Updated dependencies [7980171]
+  - @memberjunction/ai-prompts@2.104.0
+  - @memberjunction/ai-anthropic@2.104.0
+  - @memberjunction/ai-openai@2.104.0
+  - @memberjunction/ai-agent-manager-actions@2.104.0
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities-server@2.104.0
+  - @memberjunction/component-registry-client-sdk@2.104.0
+  - @memberjunction/graphql-dataprovider@2.104.0
+  - @memberjunction/ai-core-plus@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/core-actions@2.104.0
+  - @memberjunction/sqlserver-dataprovider@2.104.0
+  - @memberjunction/storage@2.104.0
+  - @memberjunction/ai-agents@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai-openrouter@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/aiengine@2.104.0
+  - @memberjunction/ai-cerebras@2.104.0
+  - @memberjunction/ai-groq@2.104.0
+  - @memberjunction/ai-lmstudio@2.104.0
+  - @memberjunction/ai-local-embeddings@2.104.0
+  - @memberjunction/ai-mistral@2.104.0
+  - @memberjunction/ai-ollama@2.104.0
+  - @memberjunction/ai-vectors-pinecone@2.104.0
+  - @memberjunction/actions-apollo@2.104.0
+  - @memberjunction/actions-bizapps-accounting@2.104.0
+  - @memberjunction/actions-bizapps-crm@2.104.0
+  - @memberjunction/actions-bizapps-lms@2.104.0
+  - @memberjunction/actions-bizapps-social@2.104.0
+  - @memberjunction/entity-communications-server@2.104.0
+  - @memberjunction/doc-utils@2.104.0
+  - @memberjunction/external-change-detection@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/data-context@2.104.0
+  - @memberjunction/data-context-server@2.104.0
+  - @memberjunction/queue@2.104.0
+  - @memberjunction/templates@2.104.0
+  - @memberjunction/skip-types@2.104.0
+
+## 2.103.0
+
+### Minor Changes
+
+- 3ba01de: migration
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/entity-communications-server@2.103.0
+  - @memberjunction/ai-vectors-pinecone@2.103.0
+  - @memberjunction/ai-local-embeddings@2.103.0
+  - @memberjunction/actions-bizapps-accounting@2.103.0
+  - @memberjunction/component-registry-client-sdk@2.103.0
+  - @memberjunction/actions-apollo@2.103.0
+  - @memberjunction/ai-agent-manager-actions@2.103.0
+  - @memberjunction/ai-openrouter@2.103.0
+  - @memberjunction/external-change-detection@2.103.0
+  - @memberjunction/ai-anthropic@2.103.0
+  - @memberjunction/actions-bizapps-social@2.103.0
+  - @memberjunction/ai-cerebras@2.103.0
+  - @memberjunction/ai-lmstudio@2.103.0
+  - @memberjunction/sqlserver-dataprovider@2.103.0
+  - @memberjunction/ai-mistral@2.103.0
+  - @memberjunction/core-entities-server@2.103.0
+  - @memberjunction/ai-ollama@2.103.0
+  - @memberjunction/ai-openai@2.103.0
+  - @memberjunction/actions-bizapps-crm@2.103.0
+  - @memberjunction/actions-bizapps-lms@2.103.0
+  - @memberjunction/core-actions@2.103.0
+  - @memberjunction/graphql-dataprovider@2.103.0
+  - @memberjunction/data-context-server@2.103.0
+  - @memberjunction/ai-groq@2.103.0
+  - @memberjunction/templates@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/data-context@2.103.0
+  - @memberjunction/ai-core-plus@2.103.0
+  - @memberjunction/ai-prompts@2.103.0
+  - @memberjunction/ai-agents@2.103.0
+  - @memberjunction/aiengine@2.103.0
+  - @memberjunction/storage@2.103.0
+  - @memberjunction/skip-types@2.103.0
+  - @memberjunction/doc-utils@2.103.0
+  - @memberjunction/global@2.103.0
+  - @memberjunction/ai@2.103.0
+  - @memberjunction/queue@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- 5d48c71: Component Registry Cache Fix. Pass Registry ID, not Name to cache method
+  - @memberjunction/component-registry-client-sdk@2.100.3
+  - @memberjunction/core-entities@2.100.3
+  - @memberjunction/skip-types@2.100.3
+  - @memberjunction/ai-agent-manager-actions@2.100.3
+  - @memberjunction/ai-agents@2.100.3
+  - @memberjunction/ai-core-plus@2.100.3
+  - @memberjunction/aiengine@2.100.3
+  - @memberjunction/ai-prompts@2.100.3
+  - @memberjunction/actions-apollo@2.100.3
+  - @memberjunction/actions-bizapps-accounting@2.100.3
+  - @memberjunction/actions-bizapps-lms@2.100.3
+  - @memberjunction/actions-bizapps-social@2.100.3
+  - @memberjunction/core-actions@2.100.3
+  - @memberjunction/actions@2.100.3
+  - @memberjunction/entity-communications-server@2.100.3
+  - @memberjunction/doc-utils@2.100.3
+  - @memberjunction/external-change-detection@2.100.3
+  - @memberjunction/graphql-dataprovider@2.100.3
+  - @memberjunction/core-entities-server@2.100.3
+  - @memberjunction/data-context@2.100.3
+  - @memberjunction/queue@2.100.3
+  - @memberjunction/storage@2.100.3
+  - @memberjunction/sqlserver-dataprovider@2.100.3
+  - @memberjunction/templates@2.100.3
+  - @memberjunction/ai-vectors-pinecone@2.100.3
+  - @memberjunction/actions-bizapps-crm@2.100.3
+  - @memberjunction/data-context-server@2.100.3
+  - @memberjunction/ai@2.100.3
+  - @memberjunction/ai-anthropic@2.100.3
+  - @memberjunction/ai-cerebras@2.100.3
+  - @memberjunction/ai-groq@2.100.3
+  - @memberjunction/ai-lmstudio@2.100.3
+  - @memberjunction/ai-local-embeddings@2.100.3
+  - @memberjunction/ai-mistral@2.100.3
+  - @memberjunction/ai-ollama@2.100.3
+  - @memberjunction/ai-openai@2.100.3
+  - @memberjunction/ai-openrouter@2.100.3
+  - @memberjunction/core@2.100.3
+  - @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- 1e3e5e6: Update ComponentRegistryResolver.ts to add .js extensions to match other resolvers.
+  - @memberjunction/ai-agent-manager-actions@2.100.2
+  - @memberjunction/ai-agents@2.100.2
+  - @memberjunction/ai@2.100.2
+  - @memberjunction/ai-core-plus@2.100.2
+  - @memberjunction/aiengine@2.100.2
+  - @memberjunction/ai-prompts@2.100.2
+  - @memberjunction/ai-anthropic@2.100.2
+  - @memberjunction/ai-cerebras@2.100.2
+  - @memberjunction/ai-groq@2.100.2
+  - @memberjunction/ai-lmstudio@2.100.2
+  - @memberjunction/ai-local-embeddings@2.100.2
+  - @memberjunction/ai-mistral@2.100.2
+  - @memberjunction/ai-ollama@2.100.2
+  - @memberjunction/ai-openai@2.100.2
+  - @memberjunction/ai-openrouter@2.100.2
+  - @memberjunction/ai-vectors-pinecone@2.100.2
+  - @memberjunction/actions-apollo@2.100.2
+  - @memberjunction/actions-bizapps-accounting@2.100.2
+  - @memberjunction/actions-bizapps-crm@2.100.2
+  - @memberjunction/actions-bizapps-lms@2.100.2
+  - @memberjunction/actions-bizapps-social@2.100.2
+  - @memberjunction/core-actions@2.100.2
+  - @memberjunction/actions@2.100.2
+  - @memberjunction/entity-communications-server@2.100.2
+  - @memberjunction/component-registry-client-sdk@2.100.2
+  - @memberjunction/doc-utils@2.100.2
+  - @memberjunction/external-change-detection@2.100.2
+  - @memberjunction/graphql-dataprovider@2.100.2
+  - @memberjunction/core@2.100.2
+  - @memberjunction/core-entities@2.100.2
+  - @memberjunction/core-entities-server@2.100.2
+  - @memberjunction/data-context@2.100.2
+  - @memberjunction/data-context-server@2.100.2
+  - @memberjunction/global@2.100.2
+  - @memberjunction/queue@2.100.2
+  - @memberjunction/storage@2.100.2
+  - @memberjunction/sqlserver-dataprovider@2.100.2
+  - @memberjunction/skip-types@2.100.2
+  - @memberjunction/templates@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- b617834: Add @memberjunction/component-registry-client-sdk to MJServer's dependency
+  - @memberjunction/ai-agent-manager-actions@2.100.1
+  - @memberjunction/ai-agents@2.100.1
+  - @memberjunction/ai@2.100.1
+  - @memberjunction/ai-core-plus@2.100.1
+  - @memberjunction/aiengine@2.100.1
+  - @memberjunction/ai-prompts@2.100.1
+  - @memberjunction/ai-anthropic@2.100.1
+  - @memberjunction/ai-cerebras@2.100.1
+  - @memberjunction/ai-groq@2.100.1
+  - @memberjunction/ai-lmstudio@2.100.1
+  - @memberjunction/ai-local-embeddings@2.100.1
+  - @memberjunction/ai-mistral@2.100.1
+  - @memberjunction/ai-ollama@2.100.1
+  - @memberjunction/ai-openai@2.100.1
+  - @memberjunction/ai-openrouter@2.100.1
+  - @memberjunction/ai-vectors-pinecone@2.100.1
+  - @memberjunction/actions-apollo@2.100.1
+  - @memberjunction/actions-bizapps-accounting@2.100.1
+  - @memberjunction/actions-bizapps-crm@2.100.1
+  - @memberjunction/actions-bizapps-lms@2.100.1
+  - @memberjunction/actions-bizapps-social@2.100.1
+  - @memberjunction/core-actions@2.100.1
+  - @memberjunction/actions@2.100.1
+  - @memberjunction/entity-communications-server@2.100.1
+  - @memberjunction/component-registry-client-sdk@2.100.1
+  - @memberjunction/doc-utils@2.100.1
+  - @memberjunction/external-change-detection@2.100.1
+  - @memberjunction/graphql-dataprovider@2.100.1
+  - @memberjunction/core@2.100.1
+  - @memberjunction/core-entities@2.100.1
+  - @memberjunction/core-entities-server@2.100.1
+  - @memberjunction/data-context@2.100.1
+  - @memberjunction/data-context-server@2.100.1
+  - @memberjunction/global@2.100.1
+  - @memberjunction/queue@2.100.1
+  - @memberjunction/storage@2.100.1
+  - @memberjunction/sqlserver-dataprovider@2.100.1
+  - @memberjunction/skip-types@2.100.1
+  - @memberjunction/templates@2.100.1
+
+## 2.100.0
+
+### Minor Changes
+
+- b3132ec: migration
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [b3132ec]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/graphql-dataprovider@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/ai-agent-manager-actions@2.100.0
+  - @memberjunction/ai-agents@2.100.0
+  - @memberjunction/ai-core-plus@2.100.0
+  - @memberjunction/aiengine@2.100.0
+  - @memberjunction/ai-prompts@2.100.0
+  - @memberjunction/ai-vectors-pinecone@2.100.0
+  - @memberjunction/actions-apollo@2.100.0
+  - @memberjunction/actions-bizapps-accounting@2.100.0
+  - @memberjunction/actions-bizapps-crm@2.100.0
+  - @memberjunction/actions-bizapps-lms@2.100.0
+  - @memberjunction/actions-bizapps-social@2.100.0
+  - @memberjunction/core-actions@2.100.0
+  - @memberjunction/actions@2.100.0
+  - @memberjunction/entity-communications-server@2.100.0
+  - @memberjunction/doc-utils@2.100.0
+  - @memberjunction/external-change-detection@2.100.0
+  - @memberjunction/core-entities-server@2.100.0
+  - @memberjunction/data-context@2.100.0
+  - @memberjunction/queue@2.100.0
+  - @memberjunction/storage@2.100.0
+  - @memberjunction/sqlserver-dataprovider@2.100.0
+  - @memberjunction/skip-types@2.100.0
+  - @memberjunction/templates@2.100.0
+  - @memberjunction/data-context-server@2.100.0
+  - @memberjunction/ai@2.100.0
+  - @memberjunction/ai-anthropic@2.100.0
+  - @memberjunction/ai-cerebras@2.100.0
+  - @memberjunction/ai-groq@2.100.0
+  - @memberjunction/ai-lmstudio@2.100.0
+  - @memberjunction/ai-local-embeddings@2.100.0
+  - @memberjunction/ai-mistral@2.100.0
+  - @memberjunction/ai-ollama@2.100.0
+  - @memberjunction/ai-openai@2.100.0
+  - @memberjunction/ai-openrouter@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Minor Changes

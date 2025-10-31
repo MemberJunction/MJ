@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ai-heygen",
-  "version": "2.99.0",
+  "version": "2.112.0",
   "description": "MemberJunction Wrapper for HeyGen Video Generation",
   "main": "dist/index.js",
   "scripts": {
@@ -15,8 +15,12 @@
     "typescript": "^5.4.5"
   },
   "dependencies": {
-    "@memberjunction/ai": "2.99.0",
-    "@memberjunction/global": "2.99.0",
+    "@memberjunction/ai": "2.112.0",
+    "@memberjunction/global": "2.112.0",
     "elevenlabs": "^1.51.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
   }
 }

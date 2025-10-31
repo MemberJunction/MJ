@@ -1,0 +1,990 @@
+.message-item {
+  display: flex;
+  gap: 12px;
+  padding: 8px 24px;
+  transition: background-color 150ms ease;
+  animation: fadeIn 0.3s ease;
+  position: relative;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-item.ai-message {
+  background-color: transparent;
+}
+
+.message-item.user-message {
+  background-color: transparent;
+}
+
+.message-item.pinned {
+  border-left: 3px solid #0076B6;
+  background-color: rgba(0, 118, 182, 0.08);
+}
+
+.message-item.in-progress {
+  background: linear-gradient(90deg,
+    rgba(59, 130, 246, 0.08) 0%,
+    rgba(59, 130, 246, 0.12) 50%,
+    rgba(59, 130, 246, 0.08) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+  border-left: 3px solid #3B82F6;
+  position: relative;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* Progress message styling - make it visually distinct */
+.message-item.in-progress .message-text {
+  color: #1F2937;
+  font-weight: 500;
+  max-height: 150px;
+  overflow-y: auto;
+  display: block;
+}
+
+
+/* Pulse effect for avatar */
+.message-item.in-progress .avatar-circle {
+  box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+.message-item:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Mention Pills */
+:host ::ng-deep .mention-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  margin: 0 2px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+:host ::ng-deep .mention-badge.agent {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+:host ::ng-deep .mention-badge.user {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  color: white;
+}
+
+:host ::ng-deep .mention-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.message-avatar {
+  flex-shrink: 0;
+}
+
+.avatar-circle {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: white;
+}
+
+/* User avatars are circular */
+.avatar-circle.user-avatar {
+  border-radius: 50%;
+  background-color: #333;
+}
+
+/* Agent avatars are square with rounded corners */
+.avatar-circle.ai-avatar {
+  border-radius: 8px;
+  background-color: #9333EA; /* Purple for agents */
+}
+
+/* Avatar images (for users with uploaded photos or URLs) */
+.avatar-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* System artifact styling - subtle visual distinction */
+.artifact-wrapper.system-artifact {
+  opacity: 0.85;
+  position: relative;
+}
+
+.artifact-wrapper.system-artifact::before {
+  content: 'SYSTEM';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  color: #9CA3AF;
+  background: #F3F4F6;
+  padding: 2px 6px;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  z-index: 10;
+}
+
+.message-content {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.message-sender {
+  font-weight: 600;
+  color: #333;
+}
+
+/* Agent role badge */
+.agent-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #F3F4F6;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.message-time {
+  color: #9CA3AF;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Time pill - unified styling for all AI message states */
+.time-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: auto;
+  transition: all 0.3s ease;
+}
+
+.time-pill i {
+  font-size: 10px;
+}
+
+/* Complete state - light blue (default) */
+.time-pill.complete {
+  background: #E0F2FE;
+  color: #0369A1;
+}
+
+/* In-progress state - purple/violet with subtle pulse */
+.time-pill.in-progress {
+  background: #F3E8FF;
+  color: #7C3AED;
+}
+
+/* Active agent run state - indigo with subtle pulse */
+.time-pill.active {
+  background: #E0E7FF;
+  color: #4F46E5;
+}
+
+/* Failed state - red */
+.time-pill.failed {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+@keyframes pillPulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+/* Deprecated - keeping for backward compatibility but no longer used */
+.generation-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  background: #E0F2FE;
+  border-radius: 10px;
+  font-size: 11px;
+  color: #0369A1;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.generation-time i {
+  font-size: 10px;
+}
+
+/* Deprecated - keeping for backward compatibility but no longer used */
+.message-elapsed {
+  color: #AAA;
+  font-size: 11px;
+  font-style: italic;
+}
+
+.message-body {
+  margin-bottom: 0;
+}
+
+.message-text {
+  color: #333;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+
+/* Remove extra margin from markdown paragraphs */
+.message-text markdown > :first-child {
+  margin-top: 0;
+}
+
+.message-text markdown > :last-child {
+  margin-bottom: 0;
+}
+
+/* Asymmetric bubble shapes for message content */
+.message-item.user-message .message-content {
+  border-radius: 12px 12px 12px 4px;
+}
+
+.message-item.ai-message .message-content {
+  border-radius: 4px 12px 12px 12px;
+}
+
+/* Reaction Buttons */
+.message-reactions {
+  display: none; /* Hide reactions for now - not implemented */
+}
+
+/* Artifact Card - Claude.ai Style */
+.artifact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #F8F7FF 0%, #F3F2FF 100%);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  max-width: 500px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.artifact-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: linear-gradient(180deg, #8B5CF6 0%, #6366F1 100%);
+  opacity: 1;
+}
+
+.artifact-card:hover {
+  background: linear-gradient(135deg, #F3F2FF 0%, #EBE9FF 100%);
+  border-color: rgba(139, 92, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.12);
+  transform: translateY(-1px);
+}
+
+.artifact-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.artifact-card-icon {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8B5CF6;
+  flex-shrink: 0;
+  background: rgba(139, 92, 246, 0.1);
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.artifact-card:hover .artifact-card-icon {
+  background: rgba(139, 92, 246, 0.15);
+  transform: scale(1.05);
+}
+
+.artifact-card-icon i {
+  font-size: 18px;
+}
+
+.artifact-card-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.artifact-card-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.artifact-card-description {
+  font-size: 13px;
+  color: #6B7280;
+  line-height: 1.5;
+}
+
+.message-actions {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: all 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  background: white;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  pointer-events: none;
+}
+
+.message-item:hover .message-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.message-action-btn {
+  padding: 6px 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #6B7280;
+  font-size: 13px;
+  transition: all 150ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+}
+
+.message-action-btn:hover {
+  background-color: #F3F4F6;
+  color: #111827;
+}
+
+.message-action-btn.danger:hover {
+  background-color: #FEE2E2;
+  color: #DC2626;
+}
+
+.message-action-btn.retry-btn {
+  color: #3B82F6;
+  background: #EFF6FF;
+  font-weight: 600;
+  gap: 6px;
+  padding: 6px 12px;
+  min-width: auto;
+}
+
+.message-action-btn.retry-btn:hover {
+  background-color: #DBEAFE;
+  color: #2563EB;
+}
+
+/* Thread indicator badge */
+.thread-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  margin-top: 8px;
+  background: #EFF6FF;
+  border: 1px solid #DBEAFE;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 150ms ease;
+  font-size: 12px;
+  color: #1E40AF;
+  font-weight: 500;
+}
+
+.thread-indicator:hover {
+  background: #DBEAFE;
+  border-color: #93C5FD;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(30, 64, 175, 0.1);
+}
+
+.thread-indicator i {
+  font-size: 14px;
+}
+
+.thread-count {
+  font-weight: 600;
+}
+
+/* Edit mode styles */
+.message-item.editing {
+  background-color: rgba(255, 243, 205, 0.3);
+  border-left: 3px solid #FFA726;
+}
+
+.message-edit-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message-edit-textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #D9D9D9;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.6;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 150ms ease;
+}
+
+.message-edit-textarea:focus {
+  outline: none;
+  border-color: #0076B6;
+  box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.1);
+}
+
+.edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.edit-action-btn.save {
+  background-color: #0076B6;
+  color: white;
+}
+
+.edit-action-btn.save:hover {
+  background-color: #005A8F;
+}
+
+.edit-action-btn.cancel {
+  background-color: #F4F4F4;
+  color: #666;
+}
+
+.edit-action-btn.cancel:hover {
+  background-color: #E0E0E0;
+  color: #333;
+}
+
+.edit-hint {
+  font-size: 12px;
+  color: #AAA;
+  font-style: italic;
+}
+
+.edited-badge {
+  margin-left: 8px;
+  font-size: 11px;
+  color: #AAA;
+  font-style: italic;
+  font-weight: normal;
+}
+
+/* Message status indicator */
+.message-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #6B7280;
+  padding: 2px 8px;
+  background: #F3F4F6;
+  border-radius: 4px;
+  margin-left: 8px;
+  animation: statusPulse 2s ease-in-out infinite;
+}
+
+.message-status i {
+  color: #0076B6;
+  font-size: 11px;
+}
+
+.message-status.error {
+  background: #FEE2E2;
+  color: #DC2626;
+}
+
+.message-status.error i {
+  color: #DC2626;
+}
+
+.status-text {
+  font-weight: 500;
+}
+
+@keyframes statusPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ============================================
+   Agent Run Icon & Details Panel
+   ============================================ */
+
+/* Agent run gear icon in header - muted style for power users */
+.agent-run-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #9CA3AF;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  margin-left: 8px;
+}
+
+.agent-run-icon i.fa-cog {
+  font-size: 13px;
+}
+
+.agent-run-icon:hover {
+  color: #6B7280;
+}
+
+.agent-run-icon.expanded {
+  color: #9333EA;
+  transform: scale(1.1);
+}
+
+@keyframes rotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Agent details panel */
+.agent-details-panel {
+  margin-top: 12px;
+  padding: 16px;
+  background: #F9FAFB;
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  animation: slideDown 0.2s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Loading state */
+.agent-details-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6B7280;
+  font-size: 13px;
+}
+
+.agent-details-loading i {
+  color: #9333EA;
+}
+
+/* Error state */
+.agent-details-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #DC2626;
+  font-size: 13px;
+}
+
+.agent-details-error i {
+  color: #DC2626;
+}
+
+/* Content header */
+.agent-details-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #E5E7EB;
+  font-weight: 600;
+  font-size: 13px;
+  color: #374151;
+}
+
+.agent-details-header i {
+  color: #9333EA;
+}
+
+.agent-name-link {
+  color: #9333EA;
+  cursor: pointer;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.agent-name-link:hover {
+  color: #7C3AED;
+  text-decoration: underline;
+}
+
+/* Details grid */
+.agent-details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #E5E7EB;
+}
+
+.detail-label {
+  font-size: 12px;
+  color: #6B7280;
+  font-weight: 500;
+}
+
+.detail-value {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 600;
+  font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+}
+
+/* Status badge in details */
+.status-badge {
+  padding: 3px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-badge.status-pending {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.status-badge.status-running {
+  background: #DBEAFE;
+  color: #1E40AF;
+}
+
+.status-badge.status-complete {
+  background: #D1FAE5;
+  color: #065F46;
+}
+
+.status-badge.status-failed,
+.status-badge.status-error {
+  background: #FEE2E2;
+  color: #991B1B;
+}
+
+.status-badge.status-cancelled {
+  background: #F3F4F6;
+  color: #4B5563;
+}
+
+/* Run ID link styling */
+.run-id-link {
+  color: #3B82F6;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+}
+
+.run-id-link:hover {
+  color: #2563EB;
+  text-decoration: underline;
+}
+
+.run-id-link i.fa-external-link-alt {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Tasks section in agent details */
+.agent-details-tasks {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #E5E7EB;
+}
+
+.tasks-section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  font-weight: 600;
+  font-size: 12px;
+  color: #374151;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tasks-section-header i {
+  color: #3B82F6;
+  font-size: 11px;
+}
+
+.tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tasks-list mj-task-widget {
+  display: block;
+}
+
+/* Artifact version badge */
+.artifact-version-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  background: #EEF2FF;
+  color: #4F46E5;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: monospace;
+  border-radius: 4px;
+  vertical-align: middle;
+}
+/* Message Action Bar (separate panel above agent details) */
+.message-action-bar {
+  margin-top: 12px;
+  margin-bottom: 8px;
+  background: #F9FAFB;
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.action-bar-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 4px;
+  margin-left: 16px;
+  padding-left: 16px;
+  border-left: 1px solid #E5E7EB;
+}
+
+.action-bar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #9CA3AF;
+  border-radius: 6px;
+  font-size: 16px;
+  line-height: 1;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 36px;
+  height: 32px;
+  opacity: 0.6;
+}
+
+.action-bar-btn i {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.action-bar-btn:hover {
+  opacity: 1;
+  border-color: #6B7280;
+}
+
+.action-bar-btn.danger {
+  color: #DC2626;
+}
+
+.action-bar-btn.danger:hover {
+  opacity: 1;
+  background: #FEF2F2;
+  border-color: #DC2626;
+}
+
+.action-bar-btn i.pinned {
+  color: #3B82F6;
+}
+
+/* Rating badge on gear icon */
+.agent-run-icon {
+  position: relative;
+}
+
+.rating-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: #3B82F6;
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+/* Message Footer (rating counts and inline actions) */
+.message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #F3F4F6;
+}
+
+.rating-counts {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: #6B7280;
+}
+
+.rating-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rating-count.thumbs-up {
+  color: #16A34A;
+}
+
+.rating-count.thumbs-down {
+  color: #DC2626;
+}
+
+.rating-total {
+  font-size: 12px;
+  color: #9CA3AF;
+}
+
+.inline-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+/* Agent details section wrapper */
+.agent-details-section {
+  margin-top: 8px;
+}

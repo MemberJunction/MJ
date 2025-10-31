@@ -11,7 +11,7 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - **NEVER ask to commit** - wait for the user to request it
 - **ONLY commit what is staged** - never modify or add to staged changes
 - **NEVER commit work-in-progress** that isn't staged by the user
-
+ 
 ### 2. NO `any` TYPES - EVER
 - **NEVER use `any` types in TypeScript code**
 - **ALWAYS ask the user** if you think you need to use `any`
@@ -62,6 +62,79 @@ Don't say "You're absolutely right" each time I correct you. Mix it up, that's s
 - This ensures code quality and prevents runtime issues
 - **Package-Specific Builds**: When building individual packages for testing/compilation, always use `npm run build` in the specific package directory (NOT turbo from root)
 - **Tasks** whenever you need to spin up tasks - if they do not require interaction with the user and if they are not interdependent in an way, ALWAYS spin up multiple parallel tasks to work together for faster responses. **NEVER** process tasks sequentially if they are candidates for parallelization
+
+## Actions Design Philosophy
+
+### What Are Actions?
+Actions are a **metadata-driven abstraction layer** for exposing functionality in workflow systems, agents, and low-code environments. They serve as a pluggable interface that allows non-technical users and AI systems to discover and invoke functionality through a consistent, declarative API.
+
+### When to Use Actions (Code → Workflow)
+Actions are designed for **integration points** where code needs to be exposed to:
+- **AI Agents**: LLMs discovering and executing business logic
+- **Workflow Engines**: Orchestration systems chaining operations
+- **Low-Code Builders**: Visual designers assembling processes
+- **External Systems**: API consumers needing standardized interfaces
+
+Examples of appropriate Action usage:
+- "Send Email" - Wraps email service for agent/workflow use
+- "Create Invoice" - Business process exposed to orchestration
+- "Get Web Page Content" - Utility function for AI agents
+- "Validate Data" - Reusable validation step in workflows
+
+### When NOT to Use Actions (Code → Code)
+**NEVER use Actions for internal code-to-code communication.** This creates unnecessary abstraction layers and loses type safety.
+
+Instead of calling Actions from within other Actions or code:
+- **Use the underlying classes directly** (e.g., `AIPromptRunner`, `EmailService`)
+- **Import and call functions/methods** with proper TypeScript types
+- **Share code via packages** in the monorepo
+- **Create base classes** for common functionality
+
+#### Anti-Pattern Example
+```typescript
+// ❌ BAD - Action calling another Action
+class SummarizeContentAction extends BaseAction {
+    async generateSummary() {
+        // Loses type safety, adds overhead, obscures logic
+        const result = await this.executeAction("Execute AI Prompt", params, user);
+    }
+}
+```
+
+#### Correct Pattern
+```typescript
+// ✅ GOOD - Direct use of AI Prompts package
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+import { AIPromptParams } from '@memberjunction/ai-core-plus';
+
+class SummarizeContentAction extends BaseAction {
+    async generateSummary() {
+        const promptParams = new AIPromptParams();
+        promptParams.prompt = this.getPrompt('Summarize Content');
+        promptParams.data = { content, sourceUrl };
+
+        const runner = new AIPromptRunner();
+        const result = await runner.ExecutePrompt(promptParams);
+        return result;
+    }
+}
+```
+
+### Benefits of Proper Separation
+- **Type Safety**: TypeScript enforces contracts between code components
+- **Performance**: No metadata lookup or serialization overhead
+- **Clarity**: Code is explicit about dependencies and flow
+- **Debugging**: Stack traces show actual execution path
+- **Maintainability**: Refactoring tools work correctly with direct imports
+
+### Action Best Practices
+1. **Actions are Boundaries**: Use them at system edges, not internally
+2. **Keep Actions Thin**: Minimal logic, delegate to service classes
+3. **Direct Imports for Code**: Use packages and classes for internal calls
+4. **Metadata for Discovery**: Actions expose capabilities, don't implement them
+5. **Type Safety First**: Preserve TypeScript types throughout your code
+
+See [packages/Actions/CLAUDE.md](packages/Actions/CLAUDE.md) for detailed implementation guidance.
 
 ## Debugging Build Failures
 
@@ -213,6 +286,29 @@ protected generateSingleOperation(operation: Operation): string {
 - Use for entity object creation: `const entity = await md.GetEntityObject<EntityType>('Entity Name')`
 - **NEVER** directly instantiate entity classes with `new EntityClass()`
 - **NEVER** look up entity names at runtime - they are fixed in the schema
+
+### 🚨 CRITICAL: Entity Naming Convention Warning
+
+**ALWAYS** use the correct entity names with the "MJ: " prefix where required. To prevent naming collisions on client systems, all new core entities use the "MJ: " prefix, while older entities do not.
+
+#### Core Entities with "MJ: " Prefix (MUST use full name):
+- **AI Entities**: `MJ: AI Agent Prompts`, `MJ: AI Agent Run Steps`, `MJ: AI Agent Runs`, `MJ: AI Agent Types`, `MJ: AI Configuration Params`, `MJ: AI Configurations`, `MJ: AI Model Costs`, `MJ: AI Model Price Types`, `MJ: AI Model Price Unit Types`, `MJ: AI Model Vendors`, `MJ: AI Prompt Models`, `MJ: AI Prompt Runs`, `MJ: AI Vendor Type Definitions`, `MJ: AI Vendor Types`, `MJ: AI Vendors`
+- **Artifact Entities**: `MJ: Artifact Types`, `MJ: Conversation Artifact Permissions`, `MJ: Conversation Artifact Versions`, `MJ: Conversation Artifacts`
+- **Dashboard Entities**: `MJ: Dashboard User Preferences`, `MJ: Dashboard User States`
+- **Report Entities**: `MJ: Report User States`, `MJ: Report Versions`
+
+#### Common Mistakes to Avoid:
+```typescript
+// ❌ WRONG - Missing "MJ: " prefix
+const agentRun = await md.GetEntityObject<AIAgentRunEntity>('AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('AI Agent Prompts', contextUser);
+
+// ✅ CORRECT - Full entity name with "MJ: " prefix
+const agentRun = await md.GetEntityObject<AIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
+const agentPrompt = await md.GetEntityObject<AIAgentPromptEntity>('MJ: AI Agent Prompts', contextUser);
+```
+
+**Always verify entity names** by checking `/packages/MJCoreEntities/src/generated/entity_subclasses.ts` or the `@RegisterClass` decorator JSDoc comments.
 
 ## Performance Best Practices
 

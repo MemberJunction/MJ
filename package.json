@@ -19,7 +19,8 @@
     "packages/Angular/Explorer/*",
     "packages/Angular/Generic/*",
     "packages/AngularElements/*",
-    "packages/React/*"
+    "packages/React/*",
+    "packages/Scheduling/*"
   ],
   "scripts": {
     "build": "npm run build:stream",
@@ -37,10 +38,15 @@
     "deps:update": "syncpack update",
     "docs": "typedoc",
     "change": "changeset",
+    "version": "changeset version",
     "mergemain": "node ci/merge_main.mjs",
+    "mergemain:update-lock": "node ci/merge_main_and_update_lock.mjs",
     "commitpush": "node ci/commit_push.mjs"
   },
-  "repository": "https://github.com/MemberJunction/MJ.git",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  },
   "dependencies": {
     "archiver": "~7.0.0",
     "extract-files": "~13.0.0",

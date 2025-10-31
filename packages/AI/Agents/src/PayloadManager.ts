@@ -537,6 +537,9 @@ export class PayloadManager {
             }
         }
         
+        // Clean up any empty objects that resulted from property deletions in arrays
+        this.cleanupEmptyArrayElements(result);
+        
         // Initialize counts
         const counts = { additions: 0, updates: 0, deletions: 0 };
         const warnings: string[] = [];
@@ -707,6 +710,55 @@ export class PayloadManager {
     }
 
     /**
+     * Recursively cleans up empty objects from arrays after merge operations.
+     * This is necessary because property-level deletions can leave empty object shells in arrays.
+     * 
+     * @private
+     */
+    private cleanupEmptyArrayElements(obj: any): void {
+        if (!obj || typeof obj !== 'object') {
+            return;
+        }
+
+        if (Array.isArray(obj)) {
+            // Filter out empty objects from the array
+            // We need to modify the array in place to maintain references
+            let writeIndex = 0;
+            for (let readIndex = 0; readIndex < obj.length; readIndex++) {
+                const element = obj[readIndex];
+                
+                // Keep the element if it's not an empty object
+                // An empty object is one that is an object with no own properties
+                const shouldKeep = !(
+                    element !== null && 
+                    typeof element === 'object' && 
+                    !Array.isArray(element) && 
+                    Object.keys(element).length === 0
+                );
+                
+                if (shouldKeep) {
+                    // First recurse into the element to clean up any nested arrays
+                    this.cleanupEmptyArrayElements(element);
+                    
+                    // Then keep the element in the array
+                    if (writeIndex !== readIndex) {
+                        obj[writeIndex] = element;
+                    }
+                    writeIndex++;
+                }
+            }
+            
+            // Truncate the array to remove the empty slots at the end
+            obj.length = writeIndex;
+        } else {
+            // For objects, recursively clean up any nested arrays
+            for (const key of Object.keys(obj)) {
+                this.cleanupEmptyArrayElements(obj[key]);
+            }
+        }
+    }
+
+    /**
      * Checks if a path matches any of the allowed patterns.
      * 
      * @private
@@ -848,10 +900,26 @@ export class PayloadManager {
 
     /**
      * Deep merges two objects, with source overriding destination.
-     * 
-     * @private
+     *
+     * This method preserves existing nested properties in the destination while
+     * adding or updating properties from the source. It handles nested objects
+     * recursively, ensuring that partial updates don't wipe out existing data.
+     *
+     * @example
+     * ```typescript
+     * const dest = { decision: { Y: 4, Z: 2 } };
+     * const src = { decision: { x: "string" } };
+     * const result = deepMerge(dest, src);
+     * // Returns: { decision: { x: "string", Y: 4, Z: 2 } }
+     * ```
+     *
+     * @param destination The target object to merge into
+     * @param source The source object to merge from
+     * @returns A new merged object with all properties from both objects
+     *
+     * @public
      */
-    private deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
+    public deepMerge<T = any>(destination: T | null | undefined, source: Partial<T> | null | undefined): T {
         if (!source) return destination as T;
         if (!destination) return _.cloneDeep(source) as T;
         

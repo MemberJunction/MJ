@@ -791,11 +791,12 @@ class ChatResult extends BaseResult {
 ### Chat Message Types
 
 #### ChatMessage
-Supports multi-modal content:
+Supports multi-modal content and optional typed metadata:
 ```typescript
-type ChatMessage = {
+type ChatMessage<M = any> = {
     role: 'system' | 'user' | 'assistant';
     content: string | ChatMessageContentBlock[];
+    metadata?: M; // Optional typed metadata for extended functionality
 }
 
 type ChatMessageContentBlock = {
@@ -803,6 +804,13 @@ type ChatMessageContentBlock = {
     content: string; // URL or base64 encoded content
 }
 ```
+
+**Generic Metadata Parameter**:
+The `ChatMessage` type is now generic, allowing you to attach typed metadata to messages:
+- The generic parameter defaults to `any` for backward compatibility
+- Use `ChatMessage<MyMetadata>` to specify a custom metadata type
+- This enables framework extensions (like agents) to add lifecycle metadata without modifying the core type
+- Example: Agents use `ChatMessage<AgentChatMessageMetadata>` to track message expiration, compaction, and expansion state
 
 ### Streaming Callbacks
 

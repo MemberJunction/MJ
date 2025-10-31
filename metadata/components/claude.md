@@ -151,13 +151,31 @@ Each component that uses external libraries must declare them in its own spec:
     "Version": "1.0.0",
     "VersionSequence": 1,
     "Status": "Published",
-    "Specification": "@file:spec/main-component.spec.json",
-    "FunctionalRequirements": "Copy from spec file's functionalRequirements",
-    "TechnicalDesign": "Copy from spec file's technicalDesign"
+    "Specification": "@file:spec/main-component.spec.json"
   }
 }
 ```
-**Note:** FunctionalRequirements and TechnicalDesign in .components.json use PascalCase and must match the content from the spec file.
+
+#### ⚠️ CRITICAL: Specification is the Source of Truth
+
+**DO NOT manually update these fields in .components.json:**
+- `Description`
+- `FunctionalRequirements`
+- `TechnicalDesign`
+
+These fields are **automatically extracted and synced** from the component's Specification during database save operations. The `ComponentEntityExtended` class reads these values from the spec file and populates the corresponding database columns.
+
+**To update these fields:**
+1. Edit the spec file (e.g., `spec/main-component.spec.json`)
+2. Update `description`, `functionalRequirements`, or `technicalDesign` in the spec
+3. Run `mj-sync push` to sync changes to database
+4. The fields will be automatically extracted and synced during the save operation
+
+**Why this matters:**
+- Specification is the authoritative source for component metadata
+- Manual updates to these fields in .components.json will be overwritten
+- Ensures consistency between spec files and database
+- Makes component metadata easily queryable in database columns
 
 ### 7. Standard Component Props
 Root components receive these standard props:

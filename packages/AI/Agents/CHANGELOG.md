@@ -1,5 +1,310 @@
 # @memberjunction/ai-agents
 
+## 2.112.0
+
+### Minor Changes
+
+- 2ac2120: migration
+
+### Patch Changes
+
+- ed74bb8: Add parallel execution support for ForEach loops in Agent framework
+
+  ## New Features
+
+  ### Parallel ForEach Execution
+
+  - Added `executionMode` field to `ForEachOperation` interface ('sequential' | 'parallel')
+  - Added `maxConcurrency` field to control batch size for parallel execution (default: 10)
+  - Implemented batched parallel execution with sequential result application
+  - Results collected in parallel then applied to payload in original order
+  - Provides 5-10x performance improvement for I/O-bound operations
+
+  ### Performance Improvements
+
+  - Web scraping: 10x faster for independent URL fetching
+  - Document processing: 10x faster for batch file operations
+  - API calls: Dramatic speedup for independent requests
+  - Maintains correctness through sequential payload updates
+
+  ### Safety Features
+
+  - Default executionMode is 'sequential' for backward compatibility
+  - Parallel execution collects results concurrently but applies payload changes sequentially
+  - Order preservation ensures output mapping works correctly
+  - Error handling respects `continueOnError` flag
+
+  ## Updated Documentation
+
+  - Comprehensive guide in `guide-to-iterative-operations-in-agents.md`
+  - Updated TypeScript interfaces with new fields
+  - Added usage examples for both Flow and Loop agents
+  - Max concurrency guidelines by operation type
+  - Database migration to update Loop Agent Type system prompt
+
+  ## Usage Example
+
+  ```typescript
+  // Loop Agent requesting parallel execution
+  {
+      "taskComplete": false,
+      "message": "Fetching 50 search results",
+      "nextStep": {
+          "type": "ForEach",
+          "forEach": {
+              "collectionPath": "searchResults",
+              "executionMode": "parallel",
+              "maxConcurrency": 15,
+              "action": {
+                  "name": "Get Web Page Content",
+                  "params": { "url": "result.url" }
+              }
+          }
+      }
+  }
+  ```
+
+  ## Breaking Changes
+
+  None - fully backward compatible
+
+- Updated dependencies [e237ca9]
+- Updated dependencies [c126b59]
+- Updated dependencies [ed74bb8]
+  - @memberjunction/aiengine@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/ai-core-plus@2.112.0
+  - @memberjunction/ai-prompts@2.112.0
+  - @memberjunction/actions@2.112.0
+  - @memberjunction/ai@2.112.0
+  - @memberjunction/actions-base@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.110.1
+- @memberjunction/ai-core-plus@2.110.1
+- @memberjunction/aiengine@2.110.1
+- @memberjunction/ai-prompts@2.110.1
+- @memberjunction/actions-base@2.110.1
+- @memberjunction/actions@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+
+## 2.110.0
+
+### Minor Changes
+
+- c8b9aca: Migration
+
+### Patch Changes
+
+- 8f1384a: Deep merge for flow agent prompt execution
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/ai-core-plus@2.110.0
+  - @memberjunction/aiengine@2.110.0
+  - @memberjunction/ai-prompts@2.110.0
+  - @memberjunction/actions-base@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/ai@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Minor Changes
+
+- e2a6338: migration
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/ai-core-plus@2.109.0
+  - @memberjunction/aiengine@2.109.0
+  - @memberjunction/ai-prompts@2.109.0
+  - @memberjunction/actions-base@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/ai@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Minor Changes
+
+- 5d51137: Major enhancement to the Sage conversation manager agent adding semantic agent search using local embeddings, scheduling job actions, improved prompts, agent permission checking, and user plan confirmation workflow.
+- d205a6c: migration
+- 656d86c: Migration
+
+### Patch Changes
+
+- 687e2ae: UI Fixes for Conversation Artifacts and Refactoring of the Agent Embedding System
+- Updated dependencies [687e2ae]
+- Updated dependencies [d205a6c]
+- Updated dependencies [656d86c]
+  - @memberjunction/aiengine@2.108.0
+  - @memberjunction/ai-core-plus@2.108.0
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/actions-base@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/ai-prompts@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.107.0
+- @memberjunction/ai-core-plus@2.107.0
+- @memberjunction/aiengine@2.107.0
+- @memberjunction/ai-prompts@2.107.0
+- @memberjunction/actions-base@2.107.0
+- @memberjunction/actions@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/global@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.106.0
+- @memberjunction/ai-core-plus@2.106.0
+- @memberjunction/aiengine@2.106.0
+- @memberjunction/ai-prompts@2.106.0
+- @memberjunction/actions-base@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/global@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- d66070e: migration
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/ai-core-plus@2.105.0
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/aiengine@2.105.0
+  - @memberjunction/ai-prompts@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/actions-base@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- e6df147: Add array indexing support to ActionInputMapping in Flow agents. Flow
+  agent ActionInputMapping now supports JavaScript-style array indexing
+  syntax (e.g., `payload.array[0]`, `payload.nested.records[5].field`) for
+  accessing specific array elements in payload references.
+- Updated dependencies [aafa827]
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+  - @memberjunction/ai-prompts@2.104.0
+  - @memberjunction/global@2.104.0
+  - @memberjunction/ai-core-plus@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/aiengine@2.104.0
+  - @memberjunction/actions-base@2.104.0
+  - @memberjunction/core@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/actions-base@2.103.0
+  - @memberjunction/ai-core-plus@2.103.0
+  - @memberjunction/ai-prompts@2.103.0
+  - @memberjunction/aiengine@2.103.0
+  - @memberjunction/global@2.103.0
+  - @memberjunction/ai@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/ai-core-plus@2.100.3
+- @memberjunction/aiengine@2.100.3
+- @memberjunction/ai-prompts@2.100.3
+- @memberjunction/actions-base@2.100.3
+- @memberjunction/actions@2.100.3
+- @memberjunction/ai@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.100.2
+- @memberjunction/ai-core-plus@2.100.2
+- @memberjunction/aiengine@2.100.2
+- @memberjunction/ai-prompts@2.100.2
+- @memberjunction/actions-base@2.100.2
+- @memberjunction/actions@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/global@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.100.1
+- @memberjunction/ai-core-plus@2.100.1
+- @memberjunction/aiengine@2.100.1
+- @memberjunction/ai-prompts@2.100.1
+- @memberjunction/actions-base@2.100.1
+- @memberjunction/actions@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/global@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/ai-core-plus@2.100.0
+  - @memberjunction/aiengine@2.100.0
+  - @memberjunction/ai-prompts@2.100.0
+  - @memberjunction/actions-base@2.100.0
+  - @memberjunction/actions@2.100.0
+  - @memberjunction/ai@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Minor Changes

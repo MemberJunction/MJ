@@ -1,0 +1,96 @@
+.message-input-box-container {
+  display: flex;
+  flex-direction: column;
+  background: white;
+  border: 2px solid var(--border-color, #e0e0e0);
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+  overflow: visible; // Allow mention dropdown to escape container
+  position: relative;
+
+  &:focus-within {
+    border-color: var(--primary-color, #007bff);
+    box-shadow: 0 4px 16px rgba(0, 123, 255, 0.15);
+  }
+}
+
+.input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: flex-end; // Align send button to bottom
+}
+
+.message-input-box-textarea {
+  flex: 1;
+  min-height: 100px;
+  padding: 1rem;
+  padding-right: 3.5rem; // Space for send button
+  border: 0 !important;
+  outline: 0 !important;
+  box-shadow: none !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  resize: vertical;
+  background: transparent;
+  border: 0 !important;
+
+  &::placeholder {
+    color: var(--text-tertiary, #999);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    background: var(--background-disabled, #f5f5f5);
+  }
+
+  &:focus,
+  &:active,
+  &:focus-visible {
+    outline: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
+.send-button-icon {
+  position: absolute;
+  bottom: 0.75rem;
+  right: 0.75rem;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-color, #007bff);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+
+  i {
+    font-size: 1rem;
+  }
+
+  &:hover:not(:disabled) {
+    background: var(--primary-color-dark, #0056b3);
+    transform: scale(1.05);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    background: var(--background-disabled, #d0d0d0);
+    color: var(--text-disabled, #999);
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}

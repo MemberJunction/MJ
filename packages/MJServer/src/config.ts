@@ -68,6 +68,7 @@ const zodBooleanWithTransforms = () => {
 }
 
 const askSkipInfoSchema = z.object({
+  url: z.string().optional(), // Base URL for Skip API
   apiKey: z.string().optional(),
   orgID: z.string().optional(),
   organizationInfo: z.string().optional(),
@@ -78,8 +79,8 @@ const askSkipInfoSchema = z.object({
     })
     .optional(),
   chatURL: z.string().optional(),
-  learningCycleRunUponStartup: zodBooleanWithTransforms(),  
-  learningCycleEnabled: zodBooleanWithTransforms(),  
+  learningCycleRunUponStartup: zodBooleanWithTransforms(),
+  learningCycleEnabled: zodBooleanWithTransforms(),
   learningCycleURL: z.string().optional(),
   learningCycleIntervalInMinutes: z.coerce.number().optional(),
 });
@@ -114,6 +115,29 @@ const authProviderSchema = z.object({
   domain: z.string().optional(),
 }).passthrough(); // Allow additional provider-specific fields
 
+const componentRegistrySchema = z.object({
+  id: z.string().optional(),
+  name: z.string().optional(),
+  apiKey: z.string().optional(),
+  cache: z.boolean().optional().default(true),
+  timeout: z.number().optional(),
+  retryPolicy: z.object({
+    maxRetries: z.number().optional(),
+    initialDelay: z.number().optional(),
+    maxDelay: z.number().optional(),
+    backoffMultiplier: z.number().optional(),
+  }).optional(),
+  headers: z.record(z.string()).optional(),
+}).passthrough(); // Allow additional fields
+
+const scheduledJobsSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  maxConcurrentJobs: z.number().optional().default(5),
+  defaultLockTimeout: z.number().optional().default(600000), // 10 minutes in ms
+  staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
+});
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   databaseSettings: databaseSettingsInfoSchema,
@@ -122,6 +146,8 @@ const configInfoSchema = z.object({
   askSkip: askSkipInfoSchema.optional(),
   sqlLogging: sqlLoggingSchema.optional(),
   authProviders: z.array(authProviderSchema).optional(),
+  componentRegistries: z.array(componentRegistrySchema).optional(),
+  scheduledJobs: scheduledJobsSchema.optional().default({}),
 
   apiKey: z.string().optional(),
   baseUrl: z.string().default('http://localhost'),
@@ -162,6 +188,8 @@ export type AskSkipInfo = z.infer<typeof askSkipInfoSchema>;
 export type SqlLoggingOptions = z.infer<typeof sqlLoggingOptionsSchema>;
 export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
+export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
+export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
 export type ConfigInfo = z.infer<typeof configInfoSchema>;
 
 export const configInfo: ConfigInfo = loadConfig();

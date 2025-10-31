@@ -1,5 +1,288 @@
 # Change Log - @memberjunction/ng-user-view-grid
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [c126b59]
+  - @memberjunction/global@2.112.0
+  - @memberjunction/actions-base@2.112.0
+  - @memberjunction/ng-entity-form-dialog@2.112.0
+  - @memberjunction/ng-base-types@2.112.0
+  - @memberjunction/ng-container-directives@2.112.0
+  - @memberjunction/ng-entity-communications@2.112.0
+  - @memberjunction/communication-types@2.112.0
+  - @memberjunction/entity-communications-client@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/templates-base-types@2.112.0
+  - @memberjunction/ng-shared@2.112.0
+  - @memberjunction/ng-compare-records@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/actions-base@2.110.1
+- @memberjunction/ng-compare-records@2.110.1
+- @memberjunction/ng-entity-form-dialog@2.110.1
+- @memberjunction/ng-shared@2.110.1
+- @memberjunction/ng-base-types@2.110.1
+- @memberjunction/ng-container-directives@2.110.1
+- @memberjunction/ng-entity-communications@2.110.1
+- @memberjunction/communication-types@2.110.1
+- @memberjunction/entity-communications-client@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/global@2.110.1
+- @memberjunction/templates-base-types@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+- Updated dependencies [93c00ac]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/ng-shared@2.110.0
+  - @memberjunction/communication-types@2.110.0
+  - @memberjunction/entity-communications-client@2.110.0
+  - @memberjunction/actions-base@2.110.0
+  - @memberjunction/ng-compare-records@2.110.0
+  - @memberjunction/ng-entity-form-dialog@2.110.0
+  - @memberjunction/ng-base-types@2.110.0
+  - @memberjunction/ng-entity-communications@2.110.0
+  - @memberjunction/templates-base-types@2.110.0
+  - @memberjunction/ng-container-directives@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/actions-base@2.109.0
+  - @memberjunction/ng-compare-records@2.109.0
+  - @memberjunction/ng-entity-form-dialog@2.109.0
+  - @memberjunction/ng-shared@2.109.0
+  - @memberjunction/ng-base-types@2.109.0
+  - @memberjunction/ng-entity-communications@2.109.0
+  - @memberjunction/communication-types@2.109.0
+  - @memberjunction/entity-communications-client@2.109.0
+  - @memberjunction/templates-base-types@2.109.0
+  - @memberjunction/ng-container-directives@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [656d86c]
+  - @memberjunction/actions-base@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/ng-compare-records@2.108.0
+  - @memberjunction/ng-entity-form-dialog@2.108.0
+  - @memberjunction/ng-shared@2.108.0
+  - @memberjunction/ng-base-types@2.108.0
+  - @memberjunction/ng-entity-communications@2.108.0
+  - @memberjunction/communication-types@2.108.0
+  - @memberjunction/entity-communications-client@2.108.0
+  - @memberjunction/templates-base-types@2.108.0
+  - @memberjunction/ng-container-directives@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/actions-base@2.107.0
+- @memberjunction/ng-compare-records@2.107.0
+- @memberjunction/ng-entity-form-dialog@2.107.0
+- @memberjunction/ng-shared@2.107.0
+- @memberjunction/ng-base-types@2.107.0
+- @memberjunction/ng-container-directives@2.107.0
+- @memberjunction/ng-entity-communications@2.107.0
+- @memberjunction/communication-types@2.107.0
+- @memberjunction/entity-communications-client@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/global@2.107.0
+- @memberjunction/templates-base-types@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- Updated dependencies [6f2cd0c]
+  - @memberjunction/communication-types@2.106.0
+  - @memberjunction/ng-entity-communications@2.106.0
+  - @memberjunction/entity-communications-client@2.106.0
+  - @memberjunction/actions-base@2.106.0
+  - @memberjunction/ng-compare-records@2.106.0
+  - @memberjunction/ng-entity-form-dialog@2.106.0
+  - @memberjunction/ng-shared@2.106.0
+  - @memberjunction/ng-base-types@2.106.0
+  - @memberjunction/ng-container-directives@2.106.0
+  - @memberjunction/core@2.106.0
+  - @memberjunction/core-entities@2.106.0
+  - @memberjunction/global@2.106.0
+  - @memberjunction/templates-base-types@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- 9b67e0c: This release addresses critical stability issues across build processes, runtime execution, and AI model management in the MemberJunction platform. The changes focus on three main areas: production build reliability, database migration consistency, and intelligent AI error handling.
+
+  Resolved critical issues where Angular production builds with optimization enabled would remove essential classes through aggressive tree-shaking. Moved `TemplateEntityExtended` to `@memberjunction/core-entities` and created new `@memberjunction/ai-provider-bundle` package to centralize AI provider loading while maintaining clean separation between core infrastructure and provider implementations. Added `LoadEntityCommunicationsEngineClient()` calls to prevent removal of inherited singleton methods. These changes prevent runtime errors in production deployments where previously registered classes would become inaccessible, while improving architectural separation of concerns.
+
+  Enhanced CodeGen SQL generation to use `IF OBJECT_ID()` patterns instead of `DROP ... IF EXISTS` syntax, fixing silent failures with Flyway placeholder substitution. Improved validator generation to properly handle nullable fields and correctly set `result.Success` status. Centralized GraphQL type name generation using schema-aware naming (`{schema}_{basetable}_`) to eliminate type collisions between entities with identical base table names across different schemas. These changes ensure reliable database migrations and prevent recurring cascade delete regressions.
+
+  Implemented sophisticated error classification with new `NoCredit` error type for billing failures, message-first error detection, and permissive failover for 403 errors. Added hierarchical configuration-aware failover that respects configuration boundaries (Production vs Development models) while maintaining candidate list caching for performance. Enhanced error analysis to properly classify credit/quota issues and enable appropriate failover behavior.
+
+  Improved model selection caching by checking all candidates for valid API keys instead of stopping at first match, ensuring retry logic has access to complete list of viable model/vendor combinations. Added `extractValidCandidates()` method to `AIModelSelectionInfo` class and `buildCandidatesFromSelectionInfo()` helper to properly reconstruct candidate lists from selection metadata during hierarchical template execution.
+
+  Enhanced error-based retry and failover with intelligent handling for authentication and rate limit errors. Authentication errors now trigger vendor-level filtering (excluding all models from vendors with invalid API keys) and immediate failover to different vendors. Rate limit errors now retry the same model/vendor using configurable `MaxRetries` (default: 3) with backoff delay based on `RetryStrategy` (Fixed/Linear/Exponential) before failing over. Improved log messages with human-readable formatting showing model/vendor names, time in seconds, and clear status indicators. Fixed MJCLI sync commands to properly propagate exit codes for CI/CD integration.
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ng-entity-communications@2.105.0
+  - @memberjunction/communication-types@2.105.0
+  - @memberjunction/entity-communications-client@2.105.0
+  - @memberjunction/templates-base-types@2.105.0
+  - @memberjunction/actions-base@2.105.0
+  - @memberjunction/ng-compare-records@2.105.0
+  - @memberjunction/ng-entity-form-dialog@2.105.0
+  - @memberjunction/ng-shared@2.105.0
+  - @memberjunction/ng-base-types@2.105.0
+  - @memberjunction/ng-container-directives@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- Updated dependencies [2ff5428]
+- Updated dependencies [9ad6353]
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/actions-base@2.104.0
+  - @memberjunction/ng-entity-form-dialog@2.104.0
+  - @memberjunction/ng-base-types@2.104.0
+  - @memberjunction/ng-container-directives@2.104.0
+  - @memberjunction/ng-entity-communications@2.104.0
+  - @memberjunction/communication-types@2.104.0
+  - @memberjunction/entity-communications-client@2.104.0
+  - @memberjunction/core@2.104.0
+  - @memberjunction/templates-base-types@2.104.0
+  - @memberjunction/ng-shared@2.104.0
+  - @memberjunction/ng-compare-records@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/ng-container-directives@2.103.0
+  - @memberjunction/ng-entity-communications@2.103.0
+  - @memberjunction/ng-entity-form-dialog@2.103.0
+  - @memberjunction/ng-compare-records@2.103.0
+  - @memberjunction/entity-communications-client@2.103.0
+  - @memberjunction/ng-base-types@2.103.0
+  - @memberjunction/communication-types@2.103.0
+  - @memberjunction/ng-shared@2.103.0
+  - @memberjunction/templates-base-types@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/actions-base@2.103.0
+  - @memberjunction/global@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/actions-base@2.100.3
+- @memberjunction/ng-compare-records@2.100.3
+- @memberjunction/ng-entity-form-dialog@2.100.3
+- @memberjunction/ng-shared@2.100.3
+- @memberjunction/ng-base-types@2.100.3
+- @memberjunction/ng-entity-communications@2.100.3
+- @memberjunction/communication-types@2.100.3
+- @memberjunction/entity-communications-client@2.100.3
+- @memberjunction/templates-base-types@2.100.3
+- @memberjunction/ng-container-directives@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/actions-base@2.100.2
+- @memberjunction/ng-compare-records@2.100.2
+- @memberjunction/ng-entity-form-dialog@2.100.2
+- @memberjunction/ng-shared@2.100.2
+- @memberjunction/ng-base-types@2.100.2
+- @memberjunction/ng-container-directives@2.100.2
+- @memberjunction/ng-entity-communications@2.100.2
+- @memberjunction/communication-types@2.100.2
+- @memberjunction/entity-communications-client@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/global@2.100.2
+- @memberjunction/templates-base-types@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/actions-base@2.100.1
+- @memberjunction/ng-compare-records@2.100.1
+- @memberjunction/ng-entity-form-dialog@2.100.1
+- @memberjunction/ng-shared@2.100.1
+- @memberjunction/ng-base-types@2.100.1
+- @memberjunction/ng-container-directives@2.100.1
+- @memberjunction/ng-entity-communications@2.100.1
+- @memberjunction/communication-types@2.100.1
+- @memberjunction/entity-communications-client@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/global@2.100.1
+- @memberjunction/templates-base-types@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/actions-base@2.100.0
+  - @memberjunction/ng-compare-records@2.100.0
+  - @memberjunction/ng-entity-form-dialog@2.100.0
+  - @memberjunction/ng-shared@2.100.0
+  - @memberjunction/ng-base-types@2.100.0
+  - @memberjunction/ng-container-directives@2.100.0
+  - @memberjunction/ng-entity-communications@2.100.0
+  - @memberjunction/communication-types@2.100.0
+  - @memberjunction/entity-communications-client@2.100.0
+  - @memberjunction/templates-base-types@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

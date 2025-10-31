@@ -1,9 +1,9 @@
 import { BaseEngine, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity, 
+import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEntity, AIAgentNoteTypeEntity,
          AIModelActionEntity, AIModelEntityExtended,
-         AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity, 
+         AIPromptModelEntity, AIPromptTypeEntity, AIResultCacheEntity, AIVendorTypeDefinitionEntity,
          ArtifactTypeEntity, EntityAIActionEntity, VectorDatabaseEntity,
-         AIPromptCategoryEntityExtended, AIAgentEntityExtended, 
+         AIPromptCategoryEntityExtended, AIAgentEntityExtended,
          AIAgentPromptEntity,
          AIAgentTypeEntity,
          AIVendorEntity,
@@ -17,7 +17,11 @@ import { AIActionEntity, AIAgentActionEntity, AIAgentModelEntity, AIAgentNoteEnt
          AIConfigurationParamEntity,
          AIAgentStepEntity,
          AIAgentStepPathEntity,
-         AIAgentRelationshipEntity} from "@memberjunction/core-entities";
+         AIAgentRelationshipEntity,
+         AIAgentPermissionEntity,
+         AIAgentDataSourceEntity,
+         AIAgentExampleEntity} from "@memberjunction/core-entities";
+import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
  
 // this class handles execution of AI Actions
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
@@ -32,6 +36,8 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _agentPrompts: AIAgentPromptEntity[] = [];
     private _agentNoteTypes: AIAgentNoteTypeEntity[] = [];
     private _agentNotes: AIAgentNoteEntity[] = [];
+    private _agentExamples: AIAgentExampleEntity[] = [];
+    private _agentDataSources: AIAgentDataSourceEntity[] = [];
     private _agents: AIAgentEntityExtended[] = [];
     private _agentRelationships: AIAgentRelationshipEntity[] = [];
     private _agentTypes: AIAgentTypeEntity[] = [];
@@ -46,6 +52,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _configurationParams: AIConfigurationParamEntity[] = [];
     private _agentSteps: AIAgentStepEntity[] = [];
     private _agentStepPaths: AIAgentStepPathEntity[] = [];
+    private _agentPermissions: AIAgentPermissionEntity[] = [];
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const params = [
@@ -88,6 +95,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentNotes',
                 EntityName: 'AI Agent Notes'
+            },
+            {
+                PropertyName: '_agentExamples',
+                EntityName: 'MJ: AI Agent Examples'
             },
             {
                 PropertyName: '_agents',
@@ -148,7 +159,15 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentStepPaths',
                 EntityName: 'MJ: AI Agent Step Paths'
-            }            
+            },
+            {
+                PropertyName: '_agentPermissions',
+                EntityName: 'MJ: AI Agent Permissions'
+            },
+            {
+                PropertyName: '_agentDataSources',
+                EntityName: 'MJ: AI Agent Data Sources'
+            }
         ];
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
@@ -261,13 +280,49 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     /**
      * Returns the sub-agents for a given agent ID, optionally filtering by status.
+     * Includes both child agents (ParentID relationship) and related agents (AgentRelationships).
+     *
      * @param agentID - The ID of the parent agent to get sub-agents for
      * @param status - Optional status to filter sub-agents by (e.g., 'Active', 'Inactive'). If not provided, all sub-agents are returned.
-     * @returns AIAgentEntityExtended[] - Array of sub-agent entities matching the criteria.
+     * @param relationshipStatus - Optional status to filter agent relationships by. Defaults to 'Active' if not provided.
+     * @returns AIAgentEntityExtended[] - Array of sub-agent entities matching the criteria (deduplicated by ID).
      * @memberof
      */
-    public GetSubAgents(agentID: string, status?: AIAgentEntityExtended['Status']): AIAgentEntityExtended[] {
-        return this._agents.filter(a => a.ParentID === agentID && (!status || a.Status === status));
+    public GetSubAgents(
+        agentID: string,
+        status?: AIAgentEntityExtended['Status'],
+        relationshipStatus?: AIAgentRelationshipEntity['Status']
+    ): AIAgentEntityExtended[] {
+        // Get child agents (ParentID relationship)
+        const childAgents = this._agents.filter(a =>
+            a.ParentID === agentID &&
+            (!status || a.Status === status)
+        );
+
+        // Get related agents (AgentRelationships)
+        const relStatus = relationshipStatus ?? 'Active'; // Default to Active for relationships
+        const activeRelationships = this._agentRelationships.filter(ar =>
+            ar.AgentID === agentID &&
+            ar.Status === relStatus
+        );
+
+        // Get the actual agent entities for related agents
+        const relatedAgents = activeRelationships
+            .map(ar => this._agents.find(a => a.ID === ar.SubAgentID))
+            .filter(a => a != null && (!status || a.Status === status));
+
+        // Combine and deduplicate by ID
+        const uniqueAgentIDs = new Set<string>();
+        const allSubAgents: AIAgentEntityExtended[] = [];
+
+        for (const agent of [...childAgents, ...relatedAgents]) {
+            if (!uniqueAgentIDs.has(agent.ID)) {
+                uniqueAgentIDs.add(agent.ID);
+                allSubAgents.push(agent);
+            }
+        }
+
+        return allSubAgents;
     }
 
     public get AgentTypes(): AIAgentTypeEntity[] {
@@ -291,12 +346,20 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         return this._agentNoteTypes;
     }
 
+    public get AgentPermissions(): AIAgentPermissionEntity[] {
+        return this._agentPermissions;
+    }
+
     public AgenteNoteTypeIDByName(agentNoteTypeName: string): string {
         return this._agentNoteTypes.find(a => a.Name.trim().toLowerCase() === agentNoteTypeName.trim().toLowerCase())?.ID;
     }
 
     public get AgentNotes(): AIAgentNoteEntity[] {
         return this._agentNotes;
+    }
+
+    public get AgentExamples(): AIAgentExampleEntity[] {
+        return this._agentExamples;
     }
 
     public get VendorTypeDefinitions(): AIVendorTypeDefinitionEntity[] {
@@ -390,6 +453,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             p.ConfigurationID === configurationId && 
             p.Name.toLowerCase() === paramName.toLowerCase()
         ) || null;
+    }
+
+    public get AgentDataSources(): AIAgentDataSourceEntity[] {
+        return this._agentDataSources;
     }
 
     public get AgentSteps(): AIAgentStepEntity[] {
@@ -499,8 +566,88 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         cacheItem.AIPromptID = prompt.ID;
         cacheItem.PromptText = promptText;
         cacheItem.ResultText = resultText;
-        cacheItem.Status = 'Active';    
+        cacheItem.Status = 'Active';
         cacheItem.RunAt = new Date();
         return await cacheItem.Save();
+    }
+
+    // ==========================================
+    // AI Agent Permission Helper Methods
+    // ==========================================
+
+    /**
+     * Checks if a user has permission to view an agent.
+     * @param agentId - The ID of the agent to check
+     * @param user - The user to check permissions for
+     * @returns True if the user can view the agent
+     */
+    public async CanUserViewAgent(agentId: string, user: UserInfo): Promise<boolean> {
+        return await AIAgentPermissionHelper.HasPermission(agentId, user, 'view');
+    }
+
+    /**
+     * Checks if a user has permission to run an agent.
+     * @param agentId - The ID of the agent to check
+     * @param user - The user to check permissions for
+     * @returns True if the user can run the agent
+     */
+    public async CanUserRunAgent(agentId: string, user: UserInfo): Promise<boolean> {
+        return await AIAgentPermissionHelper.HasPermission(agentId, user, 'run');
+    }
+
+    /**
+     * Checks if a user has permission to edit an agent.
+     * @param agentId - The ID of the agent to check
+     * @param user - The user to check permissions for
+     * @returns True if the user can edit the agent
+     */
+    public async CanUserEditAgent(agentId: string, user: UserInfo): Promise<boolean> {
+        return await AIAgentPermissionHelper.HasPermission(agentId, user, 'edit');
+    }
+
+    /**
+     * Checks if a user has permission to delete an agent.
+     * @param agentId - The ID of the agent to check
+     * @param user - The user to check permissions for
+     * @returns True if the user can delete the agent
+     */
+    public async CanUserDeleteAgent(agentId: string, user: UserInfo): Promise<boolean> {
+        return await AIAgentPermissionHelper.HasPermission(agentId, user, 'delete');
+    }
+
+    /**
+     * Gets all effective permissions a user has for a specific agent.
+     * @param agentId - The ID of the agent
+     * @param user - The user to check permissions for
+     * @returns Object containing all permission flags and ownership status
+     */
+    public async GetUserAgentPermissions(agentId: string, user: UserInfo): Promise<EffectiveAgentPermissions> {
+        return await AIAgentPermissionHelper.GetEffectivePermissions(agentId, user);
+    }
+
+    /**
+     * Gets all agents a user has access to with a specific permission level.
+     * @param user - The user to check permissions for
+     * @param permission - The minimum permission level required ('view', 'run', 'edit', or 'delete')
+     * @returns Array of agents the user can access
+     */
+    public async GetAccessibleAgents(user: UserInfo, permission: 'view' | 'run' | 'edit' | 'delete'): Promise<AIAgentEntityExtended[]> {
+        return await AIAgentPermissionHelper.GetAccessibleAgents(user, permission) as AIAgentEntityExtended[];
+    }
+
+    /**
+     * Clears the agent permissions cache. Call this after modifying permissions.
+     */
+    public ClearAgentPermissionsCache(): void {
+        AIAgentPermissionHelper.ClearCache();
+    }
+
+    /**
+     * Refreshes the permissions cache for a specific agent.
+     * @param agentId - The ID of the agent to refresh
+     * @param user - The user context for server-side operations
+     */
+    public async RefreshAgentPermissionsCache(agentId: string, user: UserInfo): Promise<void> {
+        await AIAgentPermissionHelper.RefreshCache(user);
     }
 }

@@ -1,5 +1,126 @@
 # Change Log - @memberjunction/skip-types
 
+## 2.112.0
+
+### Patch Changes
+
+- e237ca9: - Optimize AIEngine embedding generation to eliminate wasteful auto-refresh regeneration (~3s → <1ms)
+  - Enhance Skip artifact retrieval with optimized query and conversationDetailID for reliable modification workflow
+  - Add Query Parameter Processor to SQLServerDataProvider index exports
+  - Replace 4 RunView calls with single optimized query for Skip artifact retrieval
+  - @memberjunction/core@2.112.0
+  - @memberjunction/data-context@2.112.0
+  - @memberjunction/interactive-component-types@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/data-context@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.110.0
+- @memberjunction/interactive-component-types@2.110.0
+- @memberjunction/core@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.109.0
+- @memberjunction/interactive-component-types@2.109.0
+- @memberjunction/core@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.108.0
+- @memberjunction/interactive-component-types@2.108.0
+- @memberjunction/core@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/data-context@2.107.0
+
+## 2.106.0
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/data-context@2.106.0
+
+## 2.105.0
+
+### Patch Changes
+
+- @memberjunction/data-context@2.105.0
+- @memberjunction/interactive-component-types@2.105.0
+- @memberjunction/core@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- @memberjunction/core@2.104.0
+- @memberjunction/data-context@2.104.0
+- @memberjunction/interactive-component-types@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/interactive-component-types@2.103.0
+  - @memberjunction/data-context@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- Updated dependencies [3cec75a]
+  - @memberjunction/interactive-component-types@2.100.3
+  - @memberjunction/data-context@2.100.3
+  - @memberjunction/core@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/data-context@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/interactive-component-types@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/data-context@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/interactive-component-types@2.100.0
+  - @memberjunction/data-context@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

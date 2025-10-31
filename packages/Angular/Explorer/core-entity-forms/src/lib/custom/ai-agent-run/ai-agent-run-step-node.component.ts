@@ -21,6 +21,18 @@ export class AIAgentRunStepNodeComponent {
     return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'Sub-Agent');
   }
 
+  get isParentStep(): boolean {
+    // Check if this step has children via ParentID relationships (non-Sub-Agent hierarchy)
+    return this.item.type === 'step' &&
+           this.item.data?.StepType !== 'Sub-Agent' &&
+           this.hasChildren;
+  }
+
+  get canExpand(): boolean {
+    // Can expand if it's a sub-agent OR if it's a parent step with children
+    return this.isSubAgent || this.isParentStep;
+  }
+
   get canNavigateToEntity(): boolean {
     // For steps, check if it's a type that has a target and if TargetLogID exists
     if (this.item.type === 'step' && this.item.data) {
@@ -66,7 +78,7 @@ export class AIAgentRunStepNodeComponent {
   }
 
   handleExpandToggle(event: Event) {
-    if (this.isSubAgent) {
+    if (this.canExpand) {
       this.expandToggle.emit(event);
     }
   }
@@ -121,24 +133,31 @@ export class AIAgentRunStepNodeComponent {
     if (this.item.type === 'step' && this.item.data) {
       const step = this.item.data;
       const parts = [];
-      
+
       if (step.TargetActionName) {
         parts.push(`Action: ${step.TargetActionName}`);
       }
       if (step.Error) {
         parts.push('Error occurred');
       }
-      
+
       return parts.join(' • ');
     }
-    
+
     if (this.item.type === 'action' && this.item.data) {
       const log = this.item.data;
       if (log.Message) {
         return log.Message.substring(0, 100) + (log.Message.length > 100 ? '...' : '');
       }
     }
-    
+
     return '';
+  }
+
+  onLogoError(event: Event): void {
+    // Hide the broken image and show the icon instead by clearing logoUrl
+    const imgElement = event.target as HTMLImageElement;
+    imgElement.style.display = 'none';
+    this.item.logoUrl = undefined;
   }
 }

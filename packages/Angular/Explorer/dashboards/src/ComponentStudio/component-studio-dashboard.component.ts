@@ -2,10 +2,10 @@ import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetec
 import { BaseDashboard } from '../generic/base-dashboard';
 import { RegisterClass } from '@memberjunction/global';
 import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
-import { 
-  ComponentEntityExtended, 
-  ConversationArtifactEntity, 
-  ConversationArtifactVersionEntity 
+import {
+  ComponentEntityExtended,
+  ArtifactEntity,
+  ArtifactVersionEntity
 } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -16,6 +16,7 @@ import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { DialogService, DialogRef, DialogCloseResult } from '@progress/kendo-angular-dialog';
 import { TextImportDialogComponent } from './components/text-import-dialog.component';
 import { ArtifactSelectionDialogComponent, ArtifactSelectionResult } from './components/artifact-selection-dialog.component';
+import { ArtifactLoadDialogComponent, ArtifactLoadResult } from './components/artifact-load-dialog.component';
 import { SkipAPIAnalysisCompleteResponse } from '@memberjunction/skip-types';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
@@ -59,7 +60,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   public selectedComponent: DisplayComponent | null = null;
   public expandedComponent: DisplayComponent | null = null; // Track which card is expanded
   public componentSpec: ComponentSpec | null = null;
-  public isLoading = false;
+  public isLoading = true; // Start as true to show loading state initially
   public searchQuery = '';
   public isRunning = false; // Track if component is currently running
   
@@ -71,6 +72,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // Favorites
   public favoriteComponents: Set<string> = new Set(); // Set of component IDs
   public showOnlyFavorites = false; // Filter to show only favorites
+  public showDeprecatedComponents = false; // Filter to show/hide deprecated components
   private metadata: Metadata = new Metadata();
   
   // Error handling
@@ -96,6 +98,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   // Dropdown states
   public importDropdownOpen = false;
   public exportDropdownOpen = false;
+
+  // Filter panel state
+  public isFilterPanelExpanded = false;
   
   // Text import dialog reference
   private textImportDialog?: DialogRef;
@@ -105,7 +110,8 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   constructor(
     private cdr: ChangeDetectorRef,
     private dialogService: DialogService,
-    private viewContainerRef: ViewContainerRef
+    private viewContainerRef: ViewContainerRef,
+    private notificationService: MJNotificationService
   ) {
     super();
   }
@@ -239,6 +245,51 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     this.combineAndFilterComponents();
   }
 
+  /**
+   * Toggle showing deprecated components
+   */
+  public toggleShowDeprecatedComponents(): void {
+    this.showDeprecatedComponents = !this.showDeprecatedComponents;
+    this.combineAndFilterComponents();
+  }
+
+  /**
+   * Get count of deprecated components
+   */
+  public getDeprecatedCount(): number {
+    return this.allComponents.filter(c =>
+      this.getComponentStatus(c) === 'Deprecated'
+    ).length;
+  }
+
+  /**
+   * Toggle filter panel expanded/collapsed
+   */
+  public ToggleFilterPanel(): void {
+    this.isFilterPanelExpanded = !this.isFilterPanelExpanded;
+  }
+
+  /**
+   * Get count of active filters
+   */
+  public GetActiveFilterCount(): number {
+    let count = 0;
+    if (this.showOnlyFavorites) count++;
+    if (this.showDeprecatedComponents) count++;
+    count += this.selectedCategories.size;
+    return count;
+  }
+
+  /**
+   * Clear all filters
+   */
+  public ClearAllFilters(): void {
+    this.clearCategoryFilters();
+    this.showOnlyFavorites = false;
+    this.showDeprecatedComponents = false;
+    this.combineAndFilterComponents();
+  }
+
   public onSearchChange(query: string): void {
     this.searchQuery = query;
     this.combineAndFilterComponents();
@@ -257,7 +308,15 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
     // Apply filters
     let filtered = [...this.allComponents];
 
-    // Apply favorites filter first if enabled
+    // Filter out deprecated components unless explicitly shown
+    if (!this.showDeprecatedComponents) {
+      filtered = filtered.filter(c => {
+        const status = this.getComponentStatus(c);
+        return status !== 'Deprecated';
+      });
+    }
+
+    // Apply favorites filter if enabled
     if (this.showOnlyFavorites) {
       filtered = filtered.filter(c => this.isFavorite(c));
     }
@@ -668,6 +727,74 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
   public importFromText(): void {
     this.closeImportDropdown();
     this.openTextImportDialog();
+  }
+
+  public async importFromArtifact(): Promise<void> {
+    this.closeImportDropdown();
+
+    // Small delay to ensure dropdown is closed before opening dialog
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    try {
+      const dialogRef = this.dialogService.open({
+        content: ArtifactLoadDialogComponent,
+        width: 1200,
+        height: 700,
+        appendTo: this.viewContainerRef
+      });
+
+      const result = await dialogRef.result.toPromise() as ArtifactLoadResult | undefined;
+
+      if (!result) {
+        // User cancelled
+        return;
+      }
+
+      // Create file-loaded component from artifact
+      const artifactComponent: FileLoadedComponent = {
+        id: this.generateId(),
+        name: result.spec.name,
+        description: result.spec.description,
+        specification: result.spec,
+        filename: `${result.artifactName} (v${result.versionNumber})`,
+        loadedAt: new Date(),
+        isFileLoaded: true,
+        type: result.spec.type || 'Component',
+        status: 'Artifact'
+      };
+
+      // Store source reference for potential re-save
+      (artifactComponent as any).sourceArtifactID = result.artifactID;
+      (artifactComponent as any).sourceVersionID = result.versionID;
+
+      // Add to list
+      this.fileLoadedComponents.push(artifactComponent);
+      this.combineAndFilterComponents();
+
+      // Auto-select and run
+      this.expandedComponent = artifactComponent;
+      this.runComponent(artifactComponent);
+
+      console.log(`✅ Loaded component "${result.spec.name}" from artifact version ${result.versionNumber}`);
+
+      this.notificationService.CreateSimpleNotification(
+        `Loaded component "${result.spec.name}" from artifact`,
+        'success',
+        3000
+      );
+
+    } catch (error) {
+      // Only show error if it's actually an error (not a cancel)
+      console.error('Error loading from artifact:', error);
+
+      // Check if this is a real error or just a dialog dismissal
+      if (error && error !== 'cancel' && error !== undefined) {
+        this.notificationService.CreateSimpleNotification(
+          'Failed to load component from artifact',
+          'error'
+        );
+      }
+    }
   }
   
   private openTextImportDialog(): void {
@@ -1159,51 +1286,45 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
 
     try {
       const artifact = result.artifact;
-      let version: ConversationArtifactVersionEntity;
-      let lastVersion: ConversationArtifactVersionEntity | undefined;
+      let version: ArtifactVersionEntity;
 
       if (result.action === 'update-version' && result.versionToUpdate) {
-        // Load and update existing version
-        lastVersion = result.versionToUpdate; // set to the same version as we'll grab its Configuration to parse lower down in the code
+        // Update existing version
         version = result.versionToUpdate;
       } else {
         // Create new version
-        version = await this.metadata.GetEntityObject<ConversationArtifactVersionEntity>('MJ: Conversation Artifact Versions');
-        version.ConversationArtifactID = artifact.ID;
-        
+        version = await this.metadata.GetEntityObject<ArtifactVersionEntity>('MJ: Artifact Versions');
+        version.ArtifactID = artifact.ID;
+        version.UserID = this.metadata.CurrentUser.ID; // Required field
+
         // Get next version number
         const rv = new RunView();
-        const versionsResult = await rv.RunView<ConversationArtifactVersionEntity>({
-          EntityName: 'MJ: Conversation Artifact Versions',
-          ExtraFilter: `ConversationArtifactID = '${artifact.ID}'`,
-          OrderBy: 'Version DESC',
+        const versionsResult = await rv.RunView<ArtifactVersionEntity>({
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ArtifactID = '${artifact.ID}'`,
+          OrderBy: 'VersionNumber DESC',
           MaxRows: 1,
           ResultType: 'entity_object'
         });
 
         if (versionsResult.Success && versionsResult.Results && versionsResult.Results.length > 0) {
-          lastVersion = versionsResult.Results[0];
-          version.Version = versionsResult.Results[0].Version + 1;
-        } 
-        else {
-          throw new Error('No previous version found');
+          version.VersionNumber = versionsResult.Results[0].VersionNumber + 1;
+        } else {
+          // This is the first version
+          version.VersionNumber = 1;
         }
       }
-      
-      // Store the complete spec in Configuration field
-      const fullResponse = JSON.parse(lastVersion!.Configuration) as SkipAPIAnalysisCompleteResponse;
-      fullResponse.componentOptions = [
-        {
-          AIRank: 1,
-          AIRankExplanation: "",
-          UserRankExplanation: "",
-          name: currentSpec.name,
-          option: currentSpec,
-          UserRank: 1
-        }
-      ];
-      version.Configuration = JSON.stringify(fullResponse, null, 2);
-      
+
+      // Store the component spec in Content field
+      version.Content = JSON.stringify(currentSpec, null, 2);
+
+      // Generate SHA-256 hash for content
+      version.ContentHash = await this.generateSHA256Hash(version.Content);
+
+      // Set metadata
+      version.Name = currentSpec.name;
+      version.Description = currentSpec.description || null;
+
       // Add version comments
       const timestamp = new Date().toISOString();
       const actionText = result.action === 'update-version' ? 'Updated' : 'Created';
@@ -1212,19 +1333,40 @@ ${this.currentError.technicalDetails ? '\nTechnical Details:\n' + JSON.stringify
       const versionSaveResult = await version.Save();
       if (versionSaveResult) {
         const componentName = this.getComponentName(this.selectedComponent);
-        console.log(`✅ Saved ${componentName} as artifact version ${version.Version}`);
+        console.log(`✅ Saved ${componentName} as artifact version ${version.VersionNumber}`);
 
-        MJNotificationService.Instance.CreateSimpleNotification(`${componentName} has been saved as artifact version ${version.Version}.`, 'success', 3500);
-      } 
+        this.notificationService.CreateSimpleNotification(
+          `Component saved as artifact version ${version.VersionNumber}`,
+          'success',
+          3000
+        );
+      }
       else {
-        console.error('Failed to save artifact version:', version.LatestResult?.Message);
-        MJNotificationService.Instance.CreateSimpleNotification('Failed to save artifact version. Check console for details.', 'error', 5000);
+        console.error('Failed to save artifact version - Full LatestResult:', version.LatestResult);
+        this.notificationService.CreateSimpleNotification(
+          'Failed to save artifact version',
+          'error'
+        );
       }
 
     } catch (error) {
       console.error('Error saving to artifact:', error);
-      MJNotificationService.Instance.CreateSimpleNotification('Error saving component to artifact. Check console for details.', 'error', 5000);
+      this.notificationService.CreateSimpleNotification(
+        'Error saving component to artifact',
+        'error'
+      );
     }
+  }
+
+  /**
+   * Generate SHA-256 hash for content
+   */
+  private async generateSHA256Hash(content: string): Promise<string> {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(content);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
   /**

@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "Name": "Codesmith Agent Prompt",
+    "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/agents/codesmith.template.md",
+    "ResponseFormat": "JSON",
+    "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "Main prompt for the Codesmith Agent. Expert code generator that creates, tests, and refines JavaScript for data analysis and transformations."
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=Claude Haiku 4.5",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Anthropic",
+          "Priority": 1
+        },
+        "primaryKey": {
+          "ID": "A13702B9-EBE2-4453-A75C-91690390B015"
+        },
+        "sync": {
+          "lastModified": "2025-10-19T19:24:48.103Z",
+          "checksum": "c839e7a8438b7b515a761e8c6e8753b0ccd7156ac144b11a46c63f4aa85176f7"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=GPT 5-mini",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+          "Priority": 2
+        },
+        "primaryKey": {
+          "ID": "97E7D784-B50D-4D3D-BF25-4374964E84B2"
+        },
+        "sync": {
+          "lastModified": "2025-10-19T19:24:48.113Z",
+          "checksum": "ecade5ff91668b6b1ec60deeeed84d863299e9517b6bfb0e972f0b400de33056"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+          "Priority": 3
+        },
+        "primaryKey": {
+          "ID": "B67C4EAB-432C-4328-8C4D-FDAAC616E04F"
+        },
+        "sync": {
+          "lastModified": "2025-10-19T19:24:48.122Z",
+          "checksum": "33436590bd4096f31b95ed5177b646d2c61845f1897322331ace3c6e69ba36f7"
+        }
+      },
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+          "Priority": 4
+        },
+        "primaryKey": {
+          "ID": "22FD7026-521C-4880-98B9-27D9C23512F4"
+        },
+        "sync": {
+          "lastModified": "2025-10-19T19:24:48.131Z",
+          "checksum": "f94ed359ee11696e54d60bb63bf345723784ed7b845364b93b932e89a26df5d1"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "A948FDCD-CB38-49EA-8480-6CC8AAFC0BE8"
+  },
+  "sync": {
+    "lastModified": "2025-10-20T20:12:28.637Z",
+    "checksum": "6dbbc396268579df1cd270f97c7d878ad90cce4d7494eba69c1d75565837ebb5"
+  }
+}

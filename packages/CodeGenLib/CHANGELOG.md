@@ -1,5 +1,283 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 2.112.0
+
+### Patch Changes
+
+- Updated dependencies [e237ca9]
+- Updated dependencies [c126b59]
+  - @memberjunction/sqlserver-dataprovider@2.112.0
+  - @memberjunction/aiengine@2.112.0
+  - @memberjunction/global@2.112.0
+  - @memberjunction/core-entities-server@2.112.0
+  - @memberjunction/actions@2.112.0
+  - @memberjunction/ai@2.112.0
+  - @memberjunction/core@2.112.0
+  - @memberjunction/core-entities@2.112.0
+  - @memberjunction/ai-provider-bundle@2.112.0
+
+## 2.110.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.110.1
+- @memberjunction/aiengine@2.110.1
+- @memberjunction/ai-provider-bundle@2.110.1
+- @memberjunction/actions@2.110.1
+- @memberjunction/core@2.110.1
+- @memberjunction/core-entities@2.110.1
+- @memberjunction/core-entities-server@2.110.1
+- @memberjunction/global@2.110.1
+- @memberjunction/sqlserver-dataprovider@2.110.1
+
+## 2.110.0
+
+### Patch Changes
+
+- 02d72ff: - Sort Zod schema entity field values by sequence in CodeGen for consistent ordering
+  - Add unique constraints to QueryCategory and Query tables to prevent duplicates
+  - Improve concurrent query creation handling in CreateQueryResolver
+  - Fix metadata provider usage in entity server classes
+  - Remove automatic error logging from SQLServerDataProvider
+- Updated dependencies [02d72ff]
+- Updated dependencies [d2d7ab9]
+- Updated dependencies [c8b9aca]
+  - @memberjunction/core-entities@2.110.0
+  - @memberjunction/sqlserver-dataprovider@2.110.0
+  - @memberjunction/core-entities-server@2.110.0
+  - @memberjunction/aiengine@2.110.0
+  - @memberjunction/actions@2.110.0
+  - @memberjunction/ai@2.110.0
+  - @memberjunction/ai-provider-bundle@2.110.0
+  - @memberjunction/core@2.110.0
+  - @memberjunction/global@2.110.0
+
+## 2.109.0
+
+### Patch Changes
+
+- Updated dependencies [6e45c17]
+- Updated dependencies [a38989b]
+  - @memberjunction/core-entities@2.109.0
+  - @memberjunction/aiengine@2.109.0
+  - @memberjunction/actions@2.109.0
+  - @memberjunction/core-entities-server@2.109.0
+  - @memberjunction/sqlserver-dataprovider@2.109.0
+  - @memberjunction/ai@2.109.0
+  - @memberjunction/ai-provider-bundle@2.109.0
+  - @memberjunction/core@2.109.0
+  - @memberjunction/global@2.109.0
+
+## 2.108.0
+
+### Patch Changes
+
+- Updated dependencies [687e2ae]
+- Updated dependencies [656d86c]
+  - @memberjunction/aiengine@2.108.0
+  - @memberjunction/ai@2.108.0
+  - @memberjunction/actions@2.108.0
+  - @memberjunction/core-entities@2.108.0
+  - @memberjunction/core-entities-server@2.108.0
+  - @memberjunction/sqlserver-dataprovider@2.108.0
+  - @memberjunction/ai-provider-bundle@2.108.0
+  - @memberjunction/core@2.108.0
+  - @memberjunction/global@2.108.0
+
+## 2.107.0
+
+### Patch Changes
+
+- @memberjunction/ai@2.107.0
+- @memberjunction/aiengine@2.107.0
+- @memberjunction/ai-provider-bundle@2.107.0
+- @memberjunction/actions@2.107.0
+- @memberjunction/core@2.107.0
+- @memberjunction/core-entities@2.107.0
+- @memberjunction/core-entities-server@2.107.0
+- @memberjunction/global@2.107.0
+- @memberjunction/sqlserver-dataprovider@2.107.0
+
+## 2.106.0
+
+### Minor Changes
+
+- 3ca1b36: Fix: Database default value handling in CodeGen and MetadataSync This changeset fixes issues with non-nullable fields that have database-defined default values. CodeGen now properly handles NULL parameters for these fields by wrapping them in ISNULL checks in stored procedures, and MetadataSync correctly applies defaults from .mj-sync.json configuration files.
+
+### Patch Changes
+
+- @memberjunction/ai@2.106.0
+- @memberjunction/aiengine@2.106.0
+- @memberjunction/ai-provider-bundle@2.106.0
+- @memberjunction/actions@2.106.0
+- @memberjunction/core@2.106.0
+- @memberjunction/core-entities@2.106.0
+- @memberjunction/core-entities-server@2.106.0
+- @memberjunction/global@2.106.0
+- @memberjunction/sqlserver-dataprovider@2.106.0
+
+## 2.105.0
+
+### Minor Changes
+
+- f215288: Add Root fkeys via CodeGen Run - migration
+
+### Patch Changes
+
+- dc50349: Add graphql support for datetime2, smalldatetime
+- 9b67e0c: This release addresses critical stability issues across build processes, runtime execution, and AI model management in the MemberJunction platform. The changes focus on three main areas: production build reliability, database migration consistency, and intelligent AI error handling.
+
+  Resolved critical issues where Angular production builds with optimization enabled would remove essential classes through aggressive tree-shaking. Moved `TemplateEntityExtended` to `@memberjunction/core-entities` and created new `@memberjunction/ai-provider-bundle` package to centralize AI provider loading while maintaining clean separation between core infrastructure and provider implementations. Added `LoadEntityCommunicationsEngineClient()` calls to prevent removal of inherited singleton methods. These changes prevent runtime errors in production deployments where previously registered classes would become inaccessible, while improving architectural separation of concerns.
+
+  Enhanced CodeGen SQL generation to use `IF OBJECT_ID()` patterns instead of `DROP ... IF EXISTS` syntax, fixing silent failures with Flyway placeholder substitution. Improved validator generation to properly handle nullable fields and correctly set `result.Success` status. Centralized GraphQL type name generation using schema-aware naming (`{schema}_{basetable}_`) to eliminate type collisions between entities with identical base table names across different schemas. These changes ensure reliable database migrations and prevent recurring cascade delete regressions.
+
+  Implemented sophisticated error classification with new `NoCredit` error type for billing failures, message-first error detection, and permissive failover for 403 errors. Added hierarchical configuration-aware failover that respects configuration boundaries (Production vs Development models) while maintaining candidate list caching for performance. Enhanced error analysis to properly classify credit/quota issues and enable appropriate failover behavior.
+
+  Improved model selection caching by checking all candidates for valid API keys instead of stopping at first match, ensuring retry logic has access to complete list of viable model/vendor combinations. Added `extractValidCandidates()` method to `AIModelSelectionInfo` class and `buildCandidatesFromSelectionInfo()` helper to properly reconstruct candidate lists from selection metadata during hierarchical template execution.
+
+  Enhanced error-based retry and failover with intelligent handling for authentication and rate limit errors. Authentication errors now trigger vendor-level filtering (excluding all models from vendors with invalid API keys) and immediate failover to different vendors. Rate limit errors now retry the same model/vendor using configurable `MaxRetries` (default: 3) with backoff delay based on `RetryStrategy` (Fixed/Linear/Exponential) before failing over. Improved log messages with human-readable formatting showing model/vendor names, time in seconds, and clear status indicators. Fixed MJCLI sync commands to properly propagate exit codes for CI/CD integration.
+
+- Updated dependencies [4807f35]
+- Updated dependencies [9b67e0c]
+  - @memberjunction/core-entities@2.105.0
+  - @memberjunction/ai@2.105.0
+  - @memberjunction/aiengine@2.105.0
+  - @memberjunction/ai-provider-bundle@2.105.0
+  - @memberjunction/core-entities-server@2.105.0
+  - @memberjunction/sqlserver-dataprovider@2.105.0
+  - @memberjunction/actions@2.105.0
+  - @memberjunction/core@2.105.0
+  - @memberjunction/global@2.105.0
+
+## 2.104.0
+
+### Patch Changes
+
+- 883933e: CodeGen SQL Dependency Ordering and Cascade Delete Fixes Fix critical CodeGen bugs causing SQL dependency errors and preventing cascade delete regeneration for modified entities.
+  - Add TempBatchFile utility class for dependency-ordered SQL execution
+  - Temp batch files maintain CodeGen log order (correct dependency order) for execution
+  - Combined \_all_entities.sql files remain alphabetical for clean git diffs
+  - Add SQL Server severity handling with -V 17 flag (only fail on severity ≥17 system errors)
+  - Fix EntityField sequence collisions with dynamic offset based on max existing sequence per entity
+  - Skip self-referential FKs in cascade delete dependency analysis
+    Enhance topological sort to handle circular dependencies gracefully
+  - Add proper cleanup of temp files on success and error paths
+- 6e7f14a: Fix stored procedure name construction for entities with special characters in
+  names. Changed fallback logic to use `BaseTableCodeName` instead of `ClassName`
+  when `spCreate`, `spUpdate`, or `spDelete` fields are null. This prevents
+  incorrect SP names like `spUpdateMJ_ComponentLibraries` (from ClassName) and
+  ensures correct names like `spUpdateComponentLibrary` (from BaseTableCodeName)
+  that match actual database stored procedures.
+- Updated dependencies [aafa827]
+- Updated dependencies [2ff5428]
+- Updated dependencies [4567af3]
+- Updated dependencies [9ad6353]
+- Updated dependencies [6e7f14a]
+  - @memberjunction/ai-anthropic@2.104.0
+  - @memberjunction/ai-openai@2.104.0
+  - @memberjunction/global@2.104.0
+  - @memberjunction/core-entities-server@2.104.0
+  - @memberjunction/core-entities@2.104.0
+  - @memberjunction/sqlserver-dataprovider@2.104.0
+  - @memberjunction/actions@2.104.0
+  - @memberjunction/ai@2.104.0
+  - @memberjunction/aiengine@2.104.0
+  - @memberjunction/ai-groq@2.104.0
+  - @memberjunction/ai-mistral@2.104.0
+  - @memberjunction/core@2.104.0
+
+## 2.103.0
+
+### Patch Changes
+
+- addf572: Bump all packages to 2.101.0
+- Updated dependencies [bd75336]
+- Updated dependencies [addf572]
+- Updated dependencies [3ba01de]
+- Updated dependencies [a38eec3]
+  - @memberjunction/core@2.103.0
+  - @memberjunction/ai-anthropic@2.103.0
+  - @memberjunction/sqlserver-dataprovider@2.103.0
+  - @memberjunction/ai-mistral@2.103.0
+  - @memberjunction/core-entities-server@2.103.0
+  - @memberjunction/ai-openai@2.103.0
+  - @memberjunction/ai-groq@2.103.0
+  - @memberjunction/actions@2.103.0
+  - @memberjunction/core-entities@2.103.0
+  - @memberjunction/aiengine@2.103.0
+  - @memberjunction/global@2.103.0
+  - @memberjunction/ai@2.103.0
+
+## 2.100.3
+
+### Patch Changes
+
+- @memberjunction/core-entities@2.100.3
+- @memberjunction/aiengine@2.100.3
+- @memberjunction/actions@2.100.3
+- @memberjunction/core-entities-server@2.100.3
+- @memberjunction/sqlserver-dataprovider@2.100.3
+- @memberjunction/ai@2.100.3
+- @memberjunction/ai-anthropic@2.100.3
+- @memberjunction/ai-groq@2.100.3
+- @memberjunction/ai-mistral@2.100.3
+- @memberjunction/ai-openai@2.100.3
+- @memberjunction/core@2.100.3
+- @memberjunction/global@2.100.3
+
+## 2.100.2
+
+### Patch Changes
+
+- @memberjunction/ai@2.100.2
+- @memberjunction/aiengine@2.100.2
+- @memberjunction/ai-anthropic@2.100.2
+- @memberjunction/ai-groq@2.100.2
+- @memberjunction/ai-mistral@2.100.2
+- @memberjunction/ai-openai@2.100.2
+- @memberjunction/actions@2.100.2
+- @memberjunction/core@2.100.2
+- @memberjunction/core-entities@2.100.2
+- @memberjunction/core-entities-server@2.100.2
+- @memberjunction/global@2.100.2
+- @memberjunction/sqlserver-dataprovider@2.100.2
+
+## 2.100.1
+
+### Patch Changes
+
+- @memberjunction/ai@2.100.1
+- @memberjunction/aiengine@2.100.1
+- @memberjunction/ai-anthropic@2.100.1
+- @memberjunction/ai-groq@2.100.1
+- @memberjunction/ai-mistral@2.100.1
+- @memberjunction/ai-openai@2.100.1
+- @memberjunction/actions@2.100.1
+- @memberjunction/core@2.100.1
+- @memberjunction/core-entities@2.100.1
+- @memberjunction/core-entities-server@2.100.1
+- @memberjunction/global@2.100.1
+- @memberjunction/sqlserver-dataprovider@2.100.1
+
+## 2.100.0
+
+### Patch Changes
+
+- Updated dependencies [5f76e3a]
+- Updated dependencies [ffc2c1a]
+  - @memberjunction/core@2.100.0
+  - @memberjunction/core-entities@2.100.0
+  - @memberjunction/aiengine@2.100.0
+  - @memberjunction/actions@2.100.0
+  - @memberjunction/core-entities-server@2.100.0
+  - @memberjunction/sqlserver-dataprovider@2.100.0
+  - @memberjunction/ai@2.100.0
+  - @memberjunction/ai-anthropic@2.100.0
+  - @memberjunction/ai-groq@2.100.0
+  - @memberjunction/ai-mistral@2.100.0
+  - @memberjunction/ai-openai@2.100.0
+  - @memberjunction/global@2.100.0
+
 ## 2.99.0
 
 ### Patch Changes

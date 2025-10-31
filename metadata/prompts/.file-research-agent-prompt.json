@@ -1,0 +1,70 @@
+[
+  {
+    "fields": {
+      "Name": "File Research Agent Prompt",
+      "Description": "System prompt for the File Research Agent sub-agent. Guides the agent in exploring file systems, searching documents, and extracting relevant research information from files.",
+      "CategoryID": "@lookup:AI Prompt Categories.Name=MJ: System",
+      "PromptRole": "System",
+      "TemplateText": "@file:templates/research-agent/file-research-agent.md",
+      "TypeID": "@lookup:AI Prompt Types.Name=Chat",
+      "Status": "Active",
+      "PromptPosition": "First"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Cerebras",
+            "Priority": 10
+          },
+          "primaryKey": {
+            "ID": "BE776374-0DF5-4FCA-8512-B63AC0C1774D"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:31.753Z",
+            "checksum": "7051f42d04e2daa0f10714cebdfd0c3188fa1c4b396af82c9d8744a06ad6495b"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 5
+          },
+          "primaryKey": {
+            "ID": "9303A133-E1F0-4F55-A63F-8221AD61D2F2"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:31.764Z",
+            "checksum": "f9c074f4c7d9339c6b106c21d307d063b62cd5acf7d9e9a2960ffae45591a2bb"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:AI Models.Name=GPT 5-nano",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "7B89273A-6B8D-41FA-9A77-0D33278004C1"
+          },
+          "sync": {
+            "lastModified": "2025-10-15T23:02:31.774Z",
+            "checksum": "790e5d6667fc2216d3ced7d6f2ff8992314650ee4cddb9898d54c8ec9e76cb35"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6DFEC000-BFBC-4689-96E9-24C9F55FD385"
+    },
+    "sync": {
+      "lastModified": "2025-10-19T22:27:13.542Z",
+      "checksum": "1e131b0e7cbfa49abec3b320e1b1b2a6498997ad06b437260ecaf0745ddac59e"
+    }
+  }
+]

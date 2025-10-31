@@ -15,12 +15,17 @@ import {
 import { RegisterClass } from '@memberjunction/global';
 import * as env from 'env-var';
 import * as mime from 'mime-types';
-import { 
-  CreatePreAuthUploadUrlPayload, 
-  FileStorageBase, 
-  StorageListResult, 
-  StorageObjectMetadata 
+import {
+  CreatePreAuthUploadUrlPayload,
+  FileSearchOptions,
+  FileSearchResultSet,
+  FileStorageBase,
+  GetObjectParams,
+  GetObjectMetadataParams,
+  StorageListResult,
+  StorageObjectMetadata
 } from '../generic/FileStorageBase';
+import { getProviderConfig } from '../config';
 
 /**
  * Azure Blob Storage implementation of the FileStorageBase interface.
@@ -78,27 +83,39 @@ export class AzureFileStorage extends FileStorageBase {
   constructor() {
     super();
 
-    this._container = env.get('STORAGE_AZURE_CONTAINER').required().asString();
-    this._accountName = env.get('STORAGE_AZURE_ACCOUNT_NAME').required().asString();
-    const accountKey = env.get('STORAGE_AZURE_ACCOUNT_KEY').required().asString();
+    // Try to get config from centralized configuration
+    const config = getProviderConfig('azure');
+
+    // Extract values from config, fall back to env vars
+    this._container = config?.defaultContainer || env.get('STORAGE_AZURE_CONTAINER').required().asString();
+    this._accountName = config?.accountName || env.get('STORAGE_AZURE_ACCOUNT_NAME').required().asString();
+    const accountKey = config?.accountKey || env.get('STORAGE_AZURE_ACCOUNT_KEY').required().asString();
 
     this._sharedKeyCredential = new StorageSharedKeyCredential(this._accountName, accountKey);
-    
+
     const blobServiceUrl = `https://${this._accountName}.blob.core.windows.net`;
     this._blobServiceClient = new BlobServiceClient(
       blobServiceUrl,
       this._sharedKeyCredential
     );
-    
+
     this._containerClient = this._blobServiceClient.getContainerClient(this._container);
   }
 
   /**
+   * Checks if Azure Blob provider is properly configured.
+   * Returns true if account name and container name are present.
+   */
+  public get IsConfigured(): boolean {
+    return !!(this._accountName && this._container);
+  }
+
+  /**
    * Creates a BlobClient for the specified object.
-   * 
+   *
    * This is a helper method used internally to get a BlobClient instance
    * for a specific blob (file) in the container.
-   * 
+   *
    * @param objectName - The name of the blob for which to create a client
    * @returns A BlobClient instance for the specified blob
    * @private
@@ -464,19 +481,23 @@ export class AzureFileStorage extends FileStorageBase {
 
   /**
    * Retrieves metadata for a specific blob in Azure Blob Storage.
-   * 
+   *
    * This method fetches the properties of a blob without downloading its content,
    * which is more efficient for checking file attributes like size, content type,
    * and last modified date.
-   * 
-   * @param objectName - The name of the blob to get metadata for
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for Azure Blob)
    * @returns A Promise resolving to a StorageObjectMetadata object
    * @throws Error if the blob doesn't exist or cannot be accessed
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const metadata = await azureStorage.GetObjectMetadata('documents/report.pdf');
+   *   // For Azure Blob, objectId and fullPath are the same (both are the blob name)
+   *   const metadata = await azureStorage.GetObjectMetadata({ fullPath: 'documents/report.pdf' });
+   *   // Or equivalently:
+   *   const metadata2 = await azureStorage.GetObjectMetadata({ objectId: 'documents/report.pdf' });
+   *
    *   console.log(`File: ${metadata.name}`);
    *   console.log(`Size: ${metadata.size} bytes`);
    *   console.log(`Last modified: ${metadata.lastModified}`);
@@ -485,15 +506,23 @@ export class AzureFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObjectMetadata(objectName: string): Promise<StorageObjectMetadata> {
+  public async GetObjectMetadata(params: GetObjectMetadataParams): Promise<StorageObjectMetadata> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For Azure Blob, objectId and fullPath are the same (both are the blob name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const blobClient = this._getBlobClient(objectName);
       const properties = await blobClient.getProperties();
-      
+
       const pathParts = objectName.split('/');
       const name = pathParts[pathParts.length - 1];
       const path = pathParts.slice(0, -1).join('/');
-      
+
       return {
         name,
         path,
@@ -509,24 +538,28 @@ export class AzureFileStorage extends FileStorageBase {
     } catch (error) {
       console.error('Error getting object metadata from Azure Blob Storage', { objectName });
       console.error(error);
-      throw new Error(`Object not found: ${objectName}`);
+      throw new Error(`Object not found: ${params.objectId || params.fullPath}`);
     }
   }
 
   /**
    * Downloads a blob's content from Azure Blob Storage.
-   * 
+   *
    * This method retrieves the full content of a blob and returns it as a Buffer
    * for processing in memory.
-   * 
-   * @param objectName - The name of the blob to download
+   *
+   * @param params - Object identifier (objectId and fullPath are equivalent for Azure Blob)
    * @returns A Promise resolving to a Buffer containing the blob's data
    * @throws Error if the blob doesn't exist or cannot be downloaded
-   * 
+   *
    * @example
    * ```typescript
    * try {
-   *   const content = await azureStorage.GetObject('documents/config.json');
+   *   // For Azure Blob, objectId and fullPath are the same (both are the blob name)
+   *   const content = await azureStorage.GetObject({ fullPath: 'documents/config.json' });
+   *   // Or equivalently:
+   *   const content2 = await azureStorage.GetObject({ objectId: 'documents/config.json' });
+   *
    *   // Parse the JSON content
    *   const config = JSON.parse(content.toString('utf8'));
    *   console.log('Configuration loaded:', config);
@@ -535,15 +568,23 @@ export class AzureFileStorage extends FileStorageBase {
    * }
    * ```
    */
-  public async GetObject(objectName: string): Promise<Buffer> {
+  public async GetObject(params: GetObjectParams): Promise<Buffer> {
+    // Validate params
+    if (!params.objectId && !params.fullPath) {
+      throw new Error('Either objectId or fullPath must be provided');
+    }
+
+    // For Azure Blob, objectId and fullPath are the same (both are the blob name/path)
+    const objectName = params.objectId || params.fullPath!;
+
     try {
       const blobClient = this._getBlobClient(objectName);
       const downloadResponse = await blobClient.download();
-      
+
       if (!downloadResponse.readableStreamBody) {
         throw new Error(`Empty response body for object: ${objectName}`);
       }
-      
+
       // Read the stream into a buffer
       const chunks: Buffer[] = [];
       for await (const chunk of downloadResponse.readableStreamBody) {
@@ -553,12 +594,12 @@ export class AzureFileStorage extends FileStorageBase {
           chunks.push(chunk); // already a Buffer
         }
       }
-      
+
       return Buffer.concat(chunks as Uint8Array[]);
     } catch (error) {
       console.error('Error getting object from Azure Blob Storage', { objectName });
       console.error(error);
-      throw new Error(`Failed to get object: ${objectName}`);
+      throw new Error(`Failed to get object: ${params.objectId || params.fullPath}`);
     }
   }
 
@@ -732,28 +773,49 @@ export class AzureFileStorage extends FileStorageBase {
   public async DirectoryExists(directoryPath: string): Promise<boolean> {
     try {
       directoryPath = this._normalizeDirectoryPath(directoryPath);
-      
+
       // Method 1: Check if the directory placeholder exists
       const placeholderExists = await this.ObjectExists(directoryPath);
       if (placeholderExists) {
         return true;
       }
-      
+
       // Method 2: Check if any objects exist with this prefix
       const listOptions = {
         prefix: directoryPath,
         maxPageSize: 1
       };
-      
+
       // Get just one blob to check if any exist
       const iterator = this._containerClient.listBlobsFlat(listOptions);
       const response = await iterator.next();
-      
+
       return !response.done;
     } catch (error) {
       console.error('Error checking if directory exists in Azure Blob Storage', { directoryPath });
       console.error(error);
       return false;
     }
+  }
+
+  /**
+   * Search is not supported by Azure Blob Storage.
+   * Blob Storage is an object storage service without built-in search capabilities.
+   *
+   * To search Azure Blob Storage objects, consider:
+   * - Using Azure Cognitive Search to index blob content
+   * - Maintaining a separate search index (Azure Search, Elasticsearch, etc.)
+   * - Using blob metadata and tags for filtering with ListObjects
+   * - Using Azure Data Lake Analytics for complex queries
+   *
+   * @param query - The search query (not used)
+   * @param options - Search options (not used)
+   * @throws UnsupportedOperationError always
+   */
+  public async SearchFiles(
+    query: string,
+    options?: FileSearchOptions
+  ): Promise<FileSearchResultSet> {
+    this.throwUnsupportedOperationError('SearchFiles');
   }
 }

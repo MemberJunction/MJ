@@ -1,0 +1,33 @@
+<div class="component-artifact-viewer" [ngClass]="cssClass">
+  <!-- Component Preview (full screen) -->
+  <div class="component-preview">
+    @if (hasError) {
+      <div class="error-state">
+        <i class="fa-solid fa-exclamation-triangle"></i>
+        <h3>Component Error</h3>
+        <p>{{ errorMessage }}</p>
+        @if (errorDetails) {
+          <details>
+            <summary>Technical Details</summary>
+            <pre>{{ errorDetails }}</pre>
+          </details>
+        }
+      </div>
+    } @else {
+      @if (component) {
+        <mj-react-component
+          #reactComponent
+          [component]="component"
+          (componentEvent)="onComponentEvent($event)">
+        </mj-react-component>
+      } @else {
+        <div class="error-state">
+          <i class="fa-solid fa-exclamation-circle"></i>
+          <h3>No Component Loaded</h3>
+          <p>The component data is missing or invalid.</p>
+        </div>
+      }
+    }
+  </div>
+</div>
+

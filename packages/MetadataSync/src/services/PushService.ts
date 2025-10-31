@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
-import { BaseEntity, Metadata, UserInfo } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, loadSyncConfig } from '../config';
 import { FileBackupManager } from '../lib/file-backup-manager';
@@ -74,6 +74,14 @@ export class PushService {
     // If dir option is specified, load from that directory, otherwise use original CWD
     const configDir = options.dir ? path.resolve(configManager.getOriginalCwd(), options.dir) : configManager.getOriginalCwd();
     this.syncConfig = await loadSyncConfig(configDir);
+    
+    // Display warnings for special flags that are enabled
+    if (this.syncConfig?.push?.alwaysPush && !options.dryRun) {
+      callbacks?.onWarn?.('\n⚡ WARNING: alwaysPush is enabled - ALL records will be saved to database regardless of changes\n');
+    }
+    if (this.syncConfig?.push?.autoCreateMissingRecords && !options.dryRun) {
+      callbacks?.onWarn?.('\n🔧 WARNING: autoCreateMissingRecords is enabled - Missing records with primaryKey will be created\n');
+    }
     
     if (options.verbose) {
       callbacks?.onLog?.(`Original working directory: ${configManager.getOriginalCwd()}`);
@@ -250,9 +258,9 @@ export class PushService {
       } catch (error) {
         // Rollback transaction on error
         if (!options.dryRun) {
-          callbacks?.onError?.('\n⚠️  Rolling back database transaction due to error...');
+          callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
           await transactionManager.rollbackTransaction();
-          callbacks?.onError?.('✓ Database transaction rolled back successfully');
+          callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
         }
         throw error;
       }
@@ -409,7 +417,8 @@ export class PushService {
                       entityDir,
                       options,
                       batchContext,
-                      callbacks
+                      callbacks,
+                      entityConfig
                     );
                     return { success: true, result };
                   } catch (error) {
@@ -425,17 +434,13 @@ export class PushService {
                   // Fail fast on first error with detailed logging
                   const err = batchResult.error as Error;
                   const rec = batchResult.record as FlattenedRecord;
-                  
-                  callbacks?.onError?.(`\n❌ BATCH PROCESSING FAILED`);
-                  callbacks?.onError?.(`   Processing halted at dependency level ${levelIndex}`);
-                  callbacks?.onError?.(`   Failed record: ${rec.entityName} at ${rec.path}`);
-                  callbacks?.onError?.(`   Error: ${err.message}`);
-                  callbacks?.onError?.(`   Records in this batch: ${batch.length}`);
-                  callbacks?.onError?.(`   Records successfully processed before failure: ${batchResults.filter(r => r.success).length}`);
-                  
-                  // The error has already been logged in detail by processFlattenedRecord
-                  // Now throw to trigger rollback
-                  throw new Error(`Batch processing failed: ${err.message}`);
+
+                  // Log concise summary - detailed error was already logged by processFlattenedRecord
+                  callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
+                  callbacks?.onLog?.(`   ${err.message}\n`);
+
+                  // Throw concise error to trigger rollback
+                  throw err;
                 }
                 
                 // Update stats for successful results
@@ -462,7 +467,8 @@ export class PushService {
                 entityDir,
                 options,
                 batchContext,
-                callbacks
+                callbacks,
+                entityConfig
               );
               
               // Update stats
@@ -494,9 +500,8 @@ export class PushService {
           }
         }
       } catch (fileError) {
-        const errorMsg = `Error reading file ${filePath}: ${fileError}`;
-        callbacks?.onError?.(errorMsg);
-        errors++;
+        // Error details already logged by lower-level handlers, just re-throw
+        throw fileError;
       }
     }
     
@@ -508,7 +513,8 @@ export class PushService {
     entityDir: string,
     options: PushOptions,
     batchContext: Map<string, BaseEntity>,
-    callbacks?: PushCallbacks
+    callbacks?: PushCallbacks,
+    entityConfig?: any
   ): Promise<{ status: 'created' | 'updated' | 'unchanged' | 'error' | 'deleted' | 'skipped'; isDuplicate?: boolean }> {
     const metadata = new Metadata();
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
@@ -573,7 +579,7 @@ export class PushService {
     if (!exists) {
       entity.NewRecord();
       isNew = true;
-      
+
       // Set primary key values for new records if provided
       if (primaryKey) {
         for (const [pkField, pkValue] of Object.entries(primaryKey)) {
@@ -581,7 +587,19 @@ export class PushService {
         }
       }
     }
-    
+
+    // Apply defaults if entityConfig is provided
+    if (entityConfig) {
+      const defaults = await this.syncEngine.buildDefaults(flattenedRecord.path, entityConfig);
+
+      // Apply defaults only to fields not explicitly set in record.fields
+      for (const [field, value] of Object.entries(defaults)) {
+        if (!(field in record.fields) && field in entity) {
+          entity.Set(field, value);
+        }
+      }
+    }
+
     // Store original field values to preserve @ references
     const originalFields = { ...record.fields };
     
@@ -617,39 +635,45 @@ export class PushService {
       } catch (fieldError: any) {
         // Enhanced error reporting for field processing failures
         const primaryKeyInfo = record.primaryKey ? JSON.stringify(record.primaryKey) : 'NEW';
-        
+
+        // Helper to log to both console and callbacks
+        const logError = (msg: string) => {
+          console.error(msg);
+          callbacks?.onLog?.(msg);
+        };
+
         // Check if this is a lookup failure
         if (fieldError.message?.includes('Lookup failed:')) {
-          console.error(`\n❌ LOOKUP FAILURE in ${entityName} (${primaryKeyInfo})`);
-          console.error(`   Field: ${fieldName}`);
-          console.error(`   Value: ${fieldValue}`);
-          console.error(`   Error: ${fieldError.message}`);
-          console.error(`   Tip: Check if the referenced record exists in the target entity\n`);
+          logError(`\n❌ LOOKUP FAILURE in ${entityName} (${primaryKeyInfo})`);
+          logError(`   Field: ${fieldName}`);
+          logError(`   Value: ${fieldValue}`);
+          logError(`   Error: ${fieldError.message}`);
+          logError(`   Tip: Check if the referenced record exists in the target entity\n`);
         } else if (fieldError.message?.includes('Entity not found:')) {
-          console.error(`\n❌ ENTITY NOT FOUND in ${entityName} (${primaryKeyInfo})`);
-          console.error(`   Field: ${fieldName}`);
-          console.error(`   Value: ${fieldValue}`);
-          console.error(`   Error: ${fieldError.message}`);
-          console.error(`   Tip: Check if the entity name is spelled correctly\n`);
+          logError(`\n❌ ENTITY NOT FOUND in ${entityName} (${primaryKeyInfo})`);
+          logError(`   Field: ${fieldName}`);
+          logError(`   Value: ${fieldValue}`);
+          logError(`   Error: ${fieldError.message}`);
+          logError(`   Tip: Check if the entity name is spelled correctly\n`);
         } else if (fieldError.message?.includes('Field') && fieldError.message?.includes('not found')) {
-          console.error(`\n❌ FIELD NOT FOUND in ${entityName} (${primaryKeyInfo})`);
-          console.error(`   Field: ${fieldName}`);
-          console.error(`   Value: ${fieldValue}`);
-          console.error(`   Error: ${fieldError.message}`);
-          console.error(`   Tip: Check if the field name exists in the target entity\n`);
+          logError(`\n❌ FIELD NOT FOUND in ${entityName} (${primaryKeyInfo})`);
+          logError(`   Field: ${fieldName}`);
+          logError(`   Value: ${fieldValue}`);
+          logError(`   Error: ${fieldError.message}`);
+          logError(`   Tip: Check if the field name exists in the target entity\n`);
         } else if (fieldError.message?.includes('File not found:')) {
-          console.error(`\n❌ FILE NOT FOUND in ${entityName} (${primaryKeyInfo})`);
-          console.error(`   Field: ${fieldName}`);
-          console.error(`   Value: ${fieldValue}`);
-          console.error(`   Error: ${fieldError.message}`);
-          console.error(`   Tip: Check if the file path is correct relative to ${entityDir}\n`);
+          logError(`\n❌ FILE NOT FOUND in ${entityName} (${primaryKeyInfo})`);
+          logError(`   Field: ${fieldName}`);
+          logError(`   Value: ${fieldValue}`);
+          logError(`   Error: ${fieldError.message}`);
+          logError(`   Tip: Check if the file path is correct relative to ${entityDir}\n`);
         } else {
-          console.error(`\n❌ FIELD PROCESSING ERROR in ${entityName} (${primaryKeyInfo})`);
-          console.error(`   Field: ${fieldName}`);
-          console.error(`   Value: ${fieldValue}`);
-          console.error(`   Error: ${fieldError.message}\n`);
+          logError(`\n❌ FIELD PROCESSING ERROR in ${entityName} (${primaryKeyInfo})`);
+          logError(`   Field: ${fieldName}`);
+          logError(`   Value: ${fieldValue}`);
+          logError(`   Error: ${fieldError.message}\n`);
         }
-        
+
         // Re-throw with enhanced context
         throw new Error(`Failed to process field '${fieldName}' in ${entityName}: ${fieldError.message}`);
       }
@@ -657,6 +681,12 @@ export class PushService {
     
     // Check if the record is actually dirty before considering it changed
     let isDirty = entity.Dirty;
+    
+    // Force dirty state if alwaysPush is enabled
+    const alwaysPush = this.syncConfig?.push?.alwaysPush ?? false;
+    if (alwaysPush && !isNew) {
+      isDirty = true;
+    }
     
     // Also check if file content has changed (for @file references)
     if (!isDirty && !isNew && record.sync) {
@@ -713,76 +743,90 @@ export class PushService {
     
     let saveResult;
     try {
-      saveResult = await entity.Save();
+      // Pass IgnoreDirtyState option when alwaysPush is enabled
+      const saveOptions = alwaysPush ? { IgnoreDirtyState: true } : undefined;
+      saveResult = await entity.Save(saveOptions);
     } catch (saveError: any) {
-      console.error(`\n❌ SAVE EXCEPTION for ${entityName}`);
-      console.error(`   Record ID: ${entityRecordId || 'NEW'}`);
-      console.error(`   Record Name: ${recordName || 'N/A'}`);
-      console.error(`   File Path: ${flattenedRecord.path}`);
-      console.error(`   Error: ${saveError.message || saveError}`);
-      
+      // Helper to log to both console and callbacks
+      const logError = (msg: string) => {
+        console.error(msg);
+        callbacks?.onLog?.(msg);
+      };
+
+      logError(`\n❌ SAVE EXCEPTION for ${entityName}`);
+      logError(`   Record ID: ${entityRecordId || 'NEW'}`);
+      logError(`   Record Name: ${recordName || 'N/A'}`);
+      logError(`   File Path: ${flattenedRecord.path}`);
+      logError(`   Error: ${saveError.message || saveError}`);
+
       // Check for specific error patterns
       if (saveError.message?.includes('Cannot insert the value NULL')) {
-        console.error(`   Tip: A required field is NULL. Check the entity's required fields.`);
+        logError(`   Tip: A required field is NULL. Check the entity's required fields.`);
       } else if (saveError.message?.includes('FOREIGN KEY constraint')) {
-        console.error(`   Tip: Foreign key constraint violation. Check that referenced records exist.`);
+        logError(`   Tip: Foreign key constraint violation. Check that referenced records exist.`);
       } else if (saveError.message?.includes('duplicate key')) {
-        console.error(`   Tip: Duplicate key violation. A record with these values already exists.`);
+        logError(`   Tip: Duplicate key violation. A record with these values already exists.`);
       } else if (saveError.message?.includes('Incorrect syntax')) {
-        console.error(`   Tip: SQL syntax error. Check for special characters in field values.`);
+        logError(`   Tip: SQL syntax error. Check for special characters in field values.`);
       }
-      
+
       // Log problematic field values for debugging
-      console.error(`\n   Failed entity field values:`);
+      logError(`\n   Failed entity field values:`);
       for (const field of entity.Fields) {
         const value = entity.Get(field.Name);
         if (value !== null && value !== undefined) {
-          const displayValue = typeof value === 'string' && value.length > 100 
-            ? value.substring(0, 100) + '...' 
+          const displayValue = typeof value === 'string' && value.length > 100
+            ? value.substring(0, 100) + '...'
             : value;
-          console.error(`     ${field.Name}: ${displayValue}`);
+          logError(`     ${field.Name}: ${displayValue}`);
         }
       }
-      console.error(''); // Empty line for readability
+      logError(''); // Empty line for readability
       throw saveError;
     }
     
     if (!saveResult) {
-      console.error(`\n❌ SAVE RETURNED FALSE for ${entityName}`);
-      console.error(`   Record ID: ${entityRecordId || 'NEW'}`);
-      console.error(`   Record Name: ${recordName || 'N/A'}`);
-      console.error(`   File Path: ${flattenedRecord.path}`);
-      
+      // Helper to log to both console and callbacks
+      const logError = (msg: string) => {
+        console.error(msg);
+        callbacks?.onLog?.(msg);
+      };
+
+      logError(`\n❌ SAVE RETURNED FALSE for ${entityName}`);
+      logError(`   Record ID: ${entityRecordId || 'NEW'}`);
+      logError(`   Record Name: ${recordName || 'N/A'}`);
+      logError(`   File Path: ${flattenedRecord.path}`);
+
       // Log the LatestResult for debugging
       if (entity.LatestResult) {
         if (entity.LatestResult.Message) {
-          console.error(`   Database Message: ${entity.LatestResult.Message}`);
+          logError(`   Database Message: ${entity.LatestResult.Message}`);
         }
         if (entity.LatestResult.Errors && entity.LatestResult.Errors.length > 0) {
-          console.error(`   Errors:`);
+          logError(`   Errors:`);
           entity.LatestResult.Errors.forEach((err: any, idx: number) => {
             const errorMsg = typeof err === 'string' ? err : (err?.message || JSON.stringify(err));
-            console.error(`     ${idx + 1}. ${errorMsg}`);
+            logError(`     ${idx + 1}. ${errorMsg}`);
           });
         }
         if ((entity.LatestResult as any).SQL) {
           // Don't log the full SQL as it might be huge, just indicate it's available
-          console.error(`   SQL Statement: [Available - check entity.LatestResult.SQL if needed]`);
+          logError(`   SQL Statement: [Available - check entity.LatestResult.SQL if needed]`);
         }
       }
-      
+
       // Log field values that might be problematic
-      console.error(`\n   Entity field values:`);
+      logError(`\n   Entity field values:`);
       for (const field of entity.Fields) {
         const value = entity.Get(field.Name);
         if (value !== null && value !== undefined) {
-          const displayValue = typeof value === 'string' && value.length > 100 
-            ? value.substring(0, 100) + '...' 
+          const displayValue = typeof value === 'string' && value.length > 100
+            ? value.substring(0, 100) + '...'
             : value;
-          console.error(`     ${field.Name}: ${displayValue}`);
+          logError(`     ${field.Name}: ${displayValue}`);
         }
       }
-      console.error(''); // Empty line for readability
+      logError(''); // Empty line for readability
       // Build detailed error information
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
       const primaryKeyInfo: string[] = [];

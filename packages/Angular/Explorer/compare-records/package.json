@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-compare-records",
-  "version": "2.99.0",
+  "version": "2.112.0",
   "description": "MemberJunction: Angular UI Dialog Component to Compare Records",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -24,10 +24,14 @@
     "@angular/forms": "18.0.2"
   },
   "dependencies": {
-    "@memberjunction/core": "2.99.0",
+    "@memberjunction/core": "2.112.0",
     "@progress/kendo-angular-grid": "16.2.0",
-    "@memberjunction/core-entities": "2.99.0",
+    "@memberjunction/core-entities": "2.112.0",
     "tslib": "^2.3.0"
   },
-  "sideEffects": false
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
 }

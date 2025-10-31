@@ -4,7 +4,7 @@
   "type": "Other",
   "location": "embedded",
   "code": "@file:../code/improvement-insights.js",
-  "functionalRequirements": "## Improvement Insights\n\n### Purpose\nProvide actionable recommendations based on analysis.\n\n### Features\n- AI-generated insights\n- Priority recommendations\n- Action items\n- Success metrics",
+  "functionalRequirements": "## Improvement Insights\n\n### Purpose\nProvide actionable recommendations based on analysis using the AIInsightsPanel component.\n\n### Features\n- AI-generated insights with markdown formatting\n- Collapsible interface with copy/export functionality\n- Priority recommendations\n- Action items\n- Success metrics\n- Reusable AI insights display",
   "dataRequirements": {
     "mode": "views",
     "description": "Provides actionable recommendations based on performance analysis",
@@ -12,13 +12,31 @@
     ],
     "queries": []
   },
-  "technicalDesign": "## Implementation\n\n### Props\n- insights: Array of insight recommendations\n- metrics: Success metrics data",
+  "technicalDesign": "## Implementation\n\n### Integration with AIInsightsPanel\nUses the AIInsightsPanel component for displaying insights with markdown formatting, copy/export functionality, and collapsible UI.\n\n### Props\n- insights: String content (markdown formatted) for AIInsightsPanel\n- loading: Boolean state for insights generation\n- error: Error message if insights generation fails\n- onGenerate: Callback to generate/refresh insights\n- metrics: Success metrics data",
   "properties": [
     {
       "name": "insights",
-      "type": "Array<{id: string, title: string, description: string, priority: 'high' | 'medium' | 'low', category: string, impact: number, actions: Array<string>}>",
+      "type": "string",
       "required": true,
-      "description": "Improvement recommendations"
+      "description": "AI-generated insights content (supports markdown)"
+    },
+    {
+      "name": "loading",
+      "type": "boolean",
+      "required": true,
+      "description": "Whether insights are currently being generated"
+    },
+    {
+      "name": "error",
+      "type": "string",
+      "required": true,
+      "description": "Error message if insights generation failed"
+    },
+    {
+      "name": "onGenerate",
+      "type": "function",
+      "required": true,
+      "description": "Callback to generate/refresh insights"
     },
     {
       "name": "metrics",
@@ -28,6 +46,13 @@
     }
   ],
   "events": [],
-  "dependencies": [],
+  "dependencies": [
+    {
+      "name": "AIInsightsPanel",
+      "location": "registry",
+      "namespace": "Generic/UI/AI",
+      "version": "^1.0.0"
+    }
+  ],
   "libraries": []
 }

@@ -17,7 +17,7 @@ import {
   Root,
 } from '@memberjunction/server';
 import { createDownloadUrl, createUploadUrl, deleteObject, moveObject } from '@memberjunction/storage';
-import { CreateFileInput, FileResolver as FileResolverBase, File_, UpdateFileInput } from '../generated/generated.js';
+import { CreateMJFileInput, MJFileResolver as FileResolverBase, MJFile_, UpdateMJFileInput } from '../generated/generated.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
 
@@ -29,8 +29,8 @@ export class CreateUploadURLInput {
 
 @ObjectType()
 export class CreateFilePayload {
-  @Field(() => File_)
-  File: File_;
+  @Field(() => MJFile_)
+  File: MJFile_;
   @Field(() => String)
   UploadUrl: string;
   @Field(() => Boolean)
@@ -38,16 +38,16 @@ export class CreateFilePayload {
 }
 
 @ObjectType()
-export class FileExt extends File_ {
+export class FileExt extends MJFile_ {
   @Field(() => String)
   DownloadUrl: string;
 }
 
-@Resolver(File_)
+@Resolver(MJFile_)
 export class FileResolver extends FileResolverBase {
   @Mutation(() => CreateFilePayload)
   async CreateFile(
-    @Arg('input', () => CreateFileInput) input: CreateFileInput,
+    @Arg('input', () => CreateMJFileInput) input: CreateMJFileInput,
     @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
@@ -86,7 +86,7 @@ export class FileResolver extends FileResolverBase {
   }
 
   @FieldResolver(() => String)
-  async DownloadUrl(@Root() file: File_, @Ctx() { userPayload }: AppContext) {
+  async DownloadUrl(@Root() file: MJFile_, @Ctx() { userPayload }: AppContext) {
     const md = new Metadata();
     const user = this.GetUserFromPayload(userPayload);
     const fileEntity = await md.GetEntityObject<FileEntity>('Files', user);
@@ -100,9 +100,9 @@ export class FileResolver extends FileResolverBase {
     return url;
   }
 
-  @Mutation(() => File_)
+  @Mutation(() => MJFile_)
   async UpdateFile(
-    @Arg('input', () => UpdateFileInput) input: UpdateFileInput,
+    @Arg('input', () => UpdateMJFileInput) input: UpdateMJFileInput,
     @Ctx() context: AppContext,
     @PubSub() pubSub: PubSubEngine
   ) {
@@ -124,11 +124,11 @@ export class FileResolver extends FileResolverBase {
       }
     }
 
-    const updatedFile = await super.UpdateFile(input, context, pubSub);
+    const updatedFile = await super.UpdateMJFile(input, context, pubSub);
     return updatedFile;
   }
 
-  @Mutation(() => File_)
+  @Mutation(() => MJFile_)
   async DeleteFile(
     @Arg('ID', () => String) ID: string,
     @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput,
@@ -152,6 +152,6 @@ export class FileResolver extends FileResolverBase {
       await deleteObject(providerEntity, fileEntity.ProviderKey ?? fileEntity.Name);
     }
 
-    return super.DeleteFile(ID, options, context, pubSub);
+    return super.DeleteMJFile(ID, options, context, pubSub);
   }
 }
